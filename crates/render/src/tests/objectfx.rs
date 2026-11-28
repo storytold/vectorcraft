@@ -1,0 +1,1493 @@
+//! Effects on every object kind: raster effects on type, images and symbol instances through an
+//! offscreen layer of their art, geometry effects through their outlines, and one fill or
+//! stroke's own raster effects.
+
+use std::sync::Arc;
+
+use serde_json::{Value, json};
+use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+use vectorcraft_doc::pattern::{PatternDef, pattern_paint};
+use vectorcraft_doc::text::{CharStyle, TextObject};
+use vectorcraft_doc::{Appearance, AppearanceItem, Effect, FillLayer, ImageBlob, ImageObject, Node, NodeKind, StrokeLayer, Symbol};
+use vectorcraft_geom::{Point, shapes};
+
+use crate::*;
+
+fn fx(id: &str, params: Value) -> Effect {
+    Effect { id: id.into(), params, visible: true }
+}
+
+/// A 100×100 document with `n` (its id allocated) on the first layer.
+fn doc_with(mut d: Document, mut n: Node) -> Document {
+    n.id = d.alloc_id();
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    d
+}
+
+fn render_threads(d: &Document, threads: u16) -> Rendered {
+    let mut r = Renderer::new();
+    r.threads = threads;
+    r.render(d, 100, 100, Affine::IDENTITY, &RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() })
+}
+
+fn render(d: &Document) -> Rendered {
+    render_threads(d, 0)
+}
+
+fn lum(p: [u8; 4]) -> u32 {
+    p[0] as u32 + p[1] as u32 + p[2] as u32
+}
+
+const WHITE: u32 = 765;
+
+#[test]
+fn revolve_caps_cover_the_opening_and_match_export_and_visible_only_expansion() {
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 30 L70 70").unwrap());
+    let mut n = Node::path(NodeId(0), path, Appearance::basic(Paint::solid(Color::rgb(0.9, 0.2, 0.1)), Paint::None, 0.0));
+    for (angle, opacity) in [(360.0, 1.0), (90.0, 1.0), (360.0, 0.5)] {
+        n.opacity = opacity;
+        n.appearance.effects = vec![fx(
+            "threeD.revolve",
+            json!({"offset":20,"rotationX":-35,"lightAzimuth":0,
+            "angle":angle,"segments":32,"cap":false,"expandVisibleOnly":true}),
+        )];
+        let open = render(&doc_with(Document::new(100.0, 100.0), n.clone()));
+        n.appearance.effects[0].params["cap"] = json!(true);
+        let d = doc_with(Document::new(100.0, 100.0), n.clone());
+        let live = render(&d);
+        assert_ne!(live.pixels, open.pixels, "caps change the opening: {angle}, {opacity}");
+        if angle == 360.0 && opacity == 1.0 {
+            let pixel = (34 * 100 + 50) * 4;
+            assert!(live.pixels[pixel] as u16 > open.pixels[pixel] as u16 + 30, "the lit cap covers the visible interior");
+        }
+        assert_eq!(live.pixels, render(&vectorcraft_effects::bake_document(&d).unwrap()).pixels);
+        let mut expanded = d.clone();
+        let id = expanded.layers[0].children().unwrap()[0].id;
+        let source = expanded.node(id).unwrap().clone();
+        let mut stroke = |_: &mut Document, _: &vectorcraft_geom::PathData, _: vectorcraft_geom::FillRule, _: &vectorcraft_doc::StrokeLayer| None;
+        let art = vectorcraft_effects::expand_leaf(&mut expanded, &source, &mut stroke).unwrap();
+        *expanded.node_mut(id).unwrap() = art;
+        let flat = render(&expanded);
+        let difference: u64 = live.pixels.iter().zip(&flat.pixels).map(|(a, b)| a.abs_diff(*b) as u64).sum();
+        assert!(difference as f64 / (live.pixels.len() as f64) < 1.0, "visible-only expansion preserves cap appearance");
+        if opacity < 1.0 {
+            assert_eq!(live.pixels, flat.pixels);
+        }
+    }
+}
+
+#[test]
+fn revolve_canvas_matches_baked_art_and_shades_its_surface() {
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((50.0, 15.0));
+    bp.line_to((75.0, 30.0));
+    bp.line_to((75.0, 75.0));
+    bp.line_to((50.0, 90.0));
+    let mut n = Node::path(
+        NodeId(0),
+        vectorcraft_geom::PathData::from_bezpath(&bp),
+        Appearance::basic(Paint::solid(Color::rgb(0.9, 0.2, 0.1)), Paint::None, 0.0),
+    );
+    n.appearance.effects.push(fx("threeD.revolve", json!({"rotationX":0,"rotationY":0})));
+    let d = doc_with(Document::new(100.0, 100.0), n);
+    let live = render(&d);
+    let baked = vectorcraft_effects::bake_document(&d).unwrap();
+    let exported = render(&baked);
+    assert_eq!(live.pixels, exported.pixels, "canvas and baked/exported faces agree");
+    let reds: Vec<_> =
+        live.pixels.as_chunks::<4>().0.iter().filter(|p| p[0] as u16 > p[1] as u16 * 2 && p[0] as u16 > p[2] as u16 * 2).map(|p| p[0]).collect();
+    assert!(reds.len() > 1500, "a filled surface, rather than the open source path");
+    assert!(reds.iter().max().unwrap() - reds.iter().min().unwrap() > 80, "lighting varies across the surface");
+    assert_eq!(live.pixels, render_threads(&d, 4).pixels);
+}
+
+/// Extrude & Bevel, Inflate (also twisted, tapered and hollow) and Rotate draw on the canvas exactly
+/// as they export, filling more than the flat square with faces of differing shades (Rotate: one
+/// shade, narrower).
+#[test]
+fn solid_effects_canvas_matches_baked_art_and_shades_their_faces() {
+    for (effect, params) in [
+        ("threeD.extrude", json!({"depth": 30, "bevel": "rounded"})),
+        ("threeD.inflate", json!({"depth": 10})),
+        ("threeD.inflate", json!({"depth": 10, "twist": 90, "taper": 60, "cap": false, "rotationX": -20, "rotationY": 35})),
+        ("threeD.rotate", json!({"rotationX": 0, "rotationY": 55, "rotationZ": 0})),
+    ] {
+        let mut n = Node::path(
+            NodeId(0),
+            shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 30.0, 70.0, 70.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.9, 0.2, 0.1)), Paint::None, 0.0),
+        );
+        n.appearance.effects.push(fx(effect, params));
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let live = render(&d);
+        let exported = render(&vectorcraft_effects::bake_document(&d).unwrap());
+        assert_eq!(live.pixels, exported.pixels, "{effect}: canvas and baked/exported faces agree");
+        assert_eq!(live.pixels, render_threads(&d, 4).pixels, "{effect}");
+        let reds: Vec<_> =
+            live.pixels.as_chunks::<4>().0.iter().filter(|p| p[0] as u16 > p[1] as u16 * 2 && p[0] as u16 > p[2] as u16 * 2).map(|p| p[0]).collect();
+        let shades = reds.iter().max().unwrap() - reds.iter().min().unwrap();
+        if effect == "threeD.rotate" {
+            assert!(reds.len() < 40 * 40 && reds.len() > 600, "{effect}: the square foreshortened, {} px", reds.len());
+        } else {
+            assert!(reds.len() > 40 * 40, "{effect}: a solid larger than its front, {} px", reds.len());
+            assert!(shades > 60, "{effect}: lighting varies across the faces ({shades})");
+        }
+    }
+}
+
+/// #4506: a 3D effect on a group draws its members' solids on the canvas as the export does, and
+/// the group's drawn bounds (what a change redraws) hold all of them.
+#[test]
+fn solid_effects_on_a_group_draw_as_exported_within_their_drawn_bounds() {
+    for (effect, params) in [
+        ("threeD.extrude", json!({"depth": 30, "rotationX": -30, "rotationY": 40})),
+        ("threeD.inflate", json!({"depth": 10})),
+        ("threeD.rotate", json!({"rotationX": 0, "rotationY": 55, "rotationZ": 0})),
+    ] {
+        let square = |id: u64, x: f64, c: Color| {
+            Arc::new(Node::path(
+                NodeId(id),
+                shapes::rectangle(vectorcraft_geom::Rect::new(x, 35.0, x + 25.0, 60.0)),
+                Appearance::basic(Paint::solid(c), Paint::None, 0.0),
+            ))
+        };
+        let mut g = Node::group(NodeId(0), vec![square(10, 15.0, Color::rgb(0.9, 0.2, 0.1)), square(11, 60.0, Color::rgb(0.1, 0.3, 0.9))]);
+        g.appearance.effects.push(fx(effect, params));
+        let d = doc_with(Document::new(100.0, 100.0), g);
+        let live = render(&d);
+        let exported = render(&vectorcraft_effects::bake_document(&d).unwrap());
+        assert_eq!(live.pixels, exported.pixels, "{effect}: canvas and baked/exported faces agree");
+        let g = &d.layers[0].children().unwrap()[0];
+        let art = vectorcraft_effects::solid_art(g).unwrap().visual_bounds().unwrap();
+        let drawn = drawn_bounds(&d, g).unwrap();
+        assert_eq!(drawn.union(art), drawn, "{effect}: the drawn bounds hold the art");
+        let blues = live.pixels.as_chunks::<4>().0.iter().filter(|p| p[2] as u16 > p[0] as u16 * 2).count();
+        let reds = live.pixels.as_chunks::<4>().0.iter().filter(|p| p[0] as u16 > p[2] as u16 * 2).count();
+        assert!(blues > 100 && reds > 100, "{effect}: both members drawn ({reds} red, {blues} blue px)");
+    }
+}
+
+#[test]
+fn smooth_revolve_reduces_banding_without_changing_radial_resolution() {
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 20 L70 80").unwrap());
+    let mut n = Node::path(NodeId(0), path, Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
+    n.appearance
+        .effects
+        .push(fx("threeD.revolve", json!({"offset":30,"segments":16,"lightAzimuth":0,"lightElevation":0,"ambient":10,"lightIntensity":80})));
+    let d = doc_with(Document::new(100.0, 100.0), n);
+    let smooth = render(&d);
+    let levels = |r: &Rendered| (14..66).map(|x| r.pixels[(50 * 100 + x) * 4 + 2]).collect::<std::collections::BTreeSet<_>>().len();
+    // More colour levels than radial facets proves interpolation inside the faces.
+    assert!(levels(&smooth) > 16, "default rendering interpolates lighting: {} blue levels", levels(&smooth));
+    let jump = |r: &Rendered| (15..66).map(|x| r.pixels[(50 * 100 + x) * 4 + 2].abs_diff(r.pixels[(50 * 100 + x - 1) * 4 + 2])).max().unwrap();
+    assert!(jump(&smooth) < 20, "default lighting has no abrupt changes between face colours");
+    assert_eq!(smooth.pixels, render(&vectorcraft_effects::bake_document(&d).unwrap()).pixels);
+    assert_eq!(smooth.pixels, render_threads(&d, 4).pixels);
+}
+
+#[test]
+fn revolve_rim_has_no_spikes_at_high_zoom_and_keeps_seams_covered() {
+    use vectorcraft_doc::AppearanceItem;
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 30 L70 70").unwrap());
+    let mut n = Node::path(NodeId(0), path, Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
+    n.appearance.effects.push(fx("threeD.revolve", json!({"offset":20,"rotationX":-18,"segments":24,"cap":true})));
+    let d = doc_with(Document::new(100.0, 100.0), n);
+    let baked = vectorcraft_effects::bake_document(&d).unwrap();
+    let mut fills = baked.clone();
+    fn remove_edges(n: &mut Node) {
+        n.appearance.items.retain(|i| matches!(i, AppearanceItem::Fill(_)));
+        for child in n.children_mut().into_iter().flatten() {
+            remove_edges(Arc::make_mut(child));
+        }
+    }
+    for layer in &mut fills.layers {
+        remove_edges(Arc::make_mut(layer));
+    }
+    let bounds = fills.layers[0].geometric_bounds().unwrap();
+    let zoom = 24.0;
+    let xf = Affine::translate((600.0 - 50.0 * zoom, 50.0 - bounds.y0 * zoom)) * Affine::scale(zoom);
+    let draw =
+        |doc: &Document| Renderer::new().render(doc, 1200, 400, xf, &RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() });
+    let reference = draw(&fills);
+    let live = draw(&d);
+    // The seam stroke may extend half its width, plus antialiasing, past the fill
+    // silhouette. Miter spikes previously reached several times that distance.
+    let reach = (0.375 * zoom) as u32 + 2;
+    let top = |img: &Rendered| (0..1200).map(|x| (0..400).find(|y| lum(img.pixel(x, *y)) < 600).unwrap_or(400)).collect::<Vec<_>>();
+    let fill_top = top(&reference);
+    for (x, y) in top(&live).into_iter().enumerate().filter(|(_, y)| *y < 400) {
+        let near = *fill_top[x.saturating_sub(reach as usize)..=(x + reach as usize).min(1199)].iter().min().unwrap();
+        assert!(y + reach >= near, "rim spike at x {x}: ink starts at {y}, nearest fill at {near}");
+    }
+    assert!((200..1000).all(|x| lum(live.pixel(x, 200)) < 600), "seam coverage leaves no white gaps across the cap");
+    assert_eq!(live.pixels, draw(&baked).pixels, "live and exported geometry agree at high zoom");
+}
+
+#[test]
+fn continuous_revolve_caps_keep_one_colour_along_the_curved_rim_at_high_zoom() {
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M70 30 L70 70").unwrap());
+    for rotation in [-18.0f64, 18.0] {
+        for shade in [false, true] {
+            let mut n = Node::path(NodeId(0), path.clone(), Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0));
+            n.appearance.effects.push(fx("threeD.revolve", json!({"offset":20,"rotationX":rotation,"segments":8,"cap":true,"shade":shade})));
+            let d = doc_with(Document::new(100.0, 100.0), n);
+            let center_y = 50.0 + if rotation < 0.0 { -20.0 } else { 20.0 } * rotation.to_radians().cos();
+            let zoom = 24.0;
+            let xf = Affine::translate((600.0 - 50.0 * zoom, 220.0 - center_y * zoom)) * Affine::scale(zoom);
+            let draw = |doc: &Document| {
+                Renderer::new().render(doc, 1200, 440, xf, &RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() })
+            };
+            let live = draw(&d);
+            let color = live.pixel(600, 220);
+            assert!(lum(color) < 600, "the visible cap is filled");
+            // Sample 0.15 pt inside the projected ellipse. A triangle fan with
+            // seam strokes lets body colours intrude here between mesh corners.
+            for step in 1..80 {
+                let theta = std::f64::consts::PI * step as f64 / 80.0;
+                let p = xf * Point::new(50.0 + 19.85 * theta.cos(), center_y + 19.85 * rotation.to_radians().abs().sin() * theta.sin());
+                let pixel = live.pixel(p.x.round() as u32, p.y.round() as u32);
+                assert!(
+                    pixel.iter().zip(color).all(|(a, b)| a.abs_diff(b) <= 1),
+                    "cap rim is continuous: rotation {rotation}, shade {shade}, theta {theta}, {pixel:?} vs {color:?}"
+                );
+            }
+            assert_eq!(live.pixels, draw(&vectorcraft_effects::bake_document(&d).unwrap()).pixels);
+        }
+    }
+}
+
+#[test]
+fn revolve_visible_surface_expansion_preserves_the_view_and_transparent_art() {
+    let mut bp = vectorcraft_geom::BezPath::new();
+    bp.move_to((50.0, 15.0));
+    bp.curve_to((80.0, 25.0), (80.0, 75.0), (50.0, 90.0));
+    let mut n = Node::path(
+        NodeId(0),
+        vectorcraft_geom::PathData::from_bezpath(&bp),
+        Appearance::basic(Paint::solid(Color::rgb(0.2, 0.55, 0.9)), Paint::None, 0.0),
+    );
+    for (angle, rotation, perspective, opacity, shade) in [
+        (360.0, 0.0, 0.0, 1.0, false),
+        (360.0, -35.0, 55.0, 1.0, false),
+        (150.0, -28.0, 40.0, 1.0, false),
+        (360.0, -35.0, 55.0, 0.5, false),
+        (360.0, -35.0, 55.0, 1.0, true),
+        (150.0, -28.0, 40.0, 1.0, true),
+        (360.0, -35.0, 55.0, 0.5, true),
+    ] {
+        n.opacity = opacity;
+        n.appearance.effects = vec![fx(
+            "threeD.revolve",
+            json!({"angle":angle,"rotationX":rotation,"rotationY":25,"perspective":perspective,"segments":32,"expandVisibleOnly":true,"shade":shade}),
+        )];
+        let d = doc_with(Document::new(100.0, 100.0), n.clone());
+        let live = render(&d);
+        let mut expanded = d.clone();
+        let id = expanded.layers[0].children().unwrap()[0].id;
+        let source = expanded.node(id).unwrap().clone();
+        let mut stroke = |_: &mut Document, _: &vectorcraft_geom::PathData, _: vectorcraft_geom::FillRule, _: &vectorcraft_doc::StrokeLayer| None;
+        let art = vectorcraft_effects::expand_leaf(&mut expanded, &source, &mut stroke).unwrap();
+        *expanded.node_mut(id).unwrap() = art;
+        let flat = render(&expanded);
+        let difference: u64 = live.pixels.iter().zip(&flat.pixels).map(|(a, b)| a.abs_diff(*b) as u64).sum();
+        let average = difference as f64 / live.pixels.len() as f64;
+        assert!(average < 1.0, "appearance differs by {average} channel levels: angle {angle}, rotation {rotation}, opacity {opacity}");
+        if opacity < 1.0 {
+            assert_eq!(live.pixels, flat.pixels);
+        }
+        // Export baking keeps every face, even when the expansion checkbox is checked.
+        assert_eq!(live.pixels, render(&vectorcraft_effects::bake_document(&d).unwrap()).pixels);
+    }
+}
+
+/// A 30×30 red image placed at (20, 20).
+fn image_doc(effects: Vec<Effect>) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let img = image::RgbaImage::from_pixel(30, 30, image::Rgba([255, 0, 0, 255]));
+    let mut png = vec![];
+    {
+        let __dyn: image::DynamicImage = img.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
+    let mut n = Node::new(
+        NodeId(0),
+        NodeKind::Image(Box::new(ImageObject {
+            key: "red".into(),
+            width: 30,
+            height: 30,
+            xf: Affine::translate((20.0, 20.0)),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        })),
+    );
+    n.appearance.effects = effects;
+    doc_with(d, n)
+}
+
+/// An instance at (50, 50) of a symbol whose art is a black 20×20 square centred on its origin.
+fn symbol_doc(effects: Vec<Effect>) -> Document {
+    let mut d = Document::new(100.0, 100.0);
+    let art = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(-10.0, -10.0, 10.0, 10.0)),
+        Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    d.symbols.push(Symbol { dynamic: false, name: "Square".into(), art: Arc::new(art) });
+    let mut n = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Square".into(), xf: Affine::translate((50.0, 50.0)) });
+    n.appearance.effects = effects;
+    doc_with(d, n)
+}
+
+/// Black 40 pt "IIII" with its baseline at (5, 60).
+fn text_doc(effects: Vec<Effect>) -> Document {
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+    let mut n = Node::new(NodeId(0), NodeKind::Text(Box::new(TextObject::point(Point::new(5.0, 60.0), "IIII", style))));
+    n.appearance.effects = effects;
+    doc_with(Document::new(100.0, 100.0), n)
+}
+
+/// Columns (x) holding any dark pixel.
+fn inked_columns(img: &Rendered) -> Vec<u32> {
+    (0..100).filter(|x| (0..100).any(|y| lum(img.pixel(*x, y)) < 300)).collect()
+}
+
+/// "IIII" in `style` with its baseline at (5, 60), its text space scaled or turned there by `xf`.
+fn styled_text_doc(style: CharStyle, xf: Affine) -> Document {
+    let mut t = TextObject::point(Point::new(5.0, 60.0), "IIII", style);
+    t.xf *= xf;
+    doc_with(Document::new(100.0, 100.0), Node::new(NodeId(0), NodeKind::Text(Box::new(t))))
+}
+
+/// Pixels whose color differs by more than 8 levels in a channel between `a` and `b`.
+fn differing(a: &Rendered, b: &Rendered) -> usize {
+    a.pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(b.pixels.as_chunks::<4>().0)
+        .filter(|(p, q)| p.iter().zip(q.iter()).any(|(x, y)| x.abs_diff(*y) > 8))
+        .count()
+}
+
+/// Pixels that change by more than 8 levels in a channel when the first object of `d` gets Offset
+/// Path at 0 pt, a geometry effect that returns its input: the object is then drawn through its
+/// outlines.
+fn changed_by_outlining(d: &Document) -> usize {
+    let mut outlined = d.clone();
+    let id = outlined.layers[0].children().unwrap()[0].id;
+    outlined.node_mut(id).unwrap().appearance.effects.push(fx("path.offsetPath", json!({"offset": 0})));
+    differing(&render(d), &render(&outlined))
+}
+
+#[test]
+fn type_drawn_through_its_outlines_keeps_its_underline() {
+    let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), underline: true, ..Default::default() };
+    let d = styled_text_doc(style, Affine::IDENTITY);
+    // "IIII" has no ink below its baseline: the bar is all that is drawn there.
+    let plain = render(&d);
+    let bar = (61..70).flat_map(|y| (0..100).map(move |x| (x, y))).filter(|&(x, y)| lum(plain.pixel(x, y)) < 300).count();
+    assert!(bar > 50, "{bar} pixels of the bar");
+    let changed = changed_by_outlining(&d);
+    assert!(changed < 10, "{changed} pixels changed");
+}
+
+#[test]
+fn type_drawn_through_its_outlines_keeps_its_stroke_weight_when_scaled() {
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let style = CharStyle { size: 20.0, fill: Paint::solid(Color::BLACK), stroke: red, stroke_width: 2.0, ..Default::default() };
+    // The stroke is 2 pt wide in text space and 4 pt wide in the document.
+    let changed = changed_by_outlining(&styled_text_doc(style, Affine::scale(2.0)));
+    assert!(changed < 10, "{changed} pixels changed");
+}
+
+#[test]
+fn type_drawn_through_its_outlines_keeps_its_gradients_in_place() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    g.angle = 90.0;
+    let ramp = Paint::Gradient(Box::new(g));
+    // On the characters, the gradient fits the layout box in text space and turns with the type.
+    let characters = |xf| styled_text_doc(CharStyle { size: 40.0, fill: ramp.clone(), ..Default::default() }, xf);
+    // On a fill of the type's own, it fits the bounding box of the layout box in the document.
+    let mut own = styled_text_doc(CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() }, Affine::IDENTITY);
+    let id = own.layers[0].children().unwrap()[0].id;
+    own.node_mut(id).unwrap().appearance.items.push(AppearanceItem::Fill(FillLayer::new(ramp.clone())));
+    let changed: Vec<usize> = [characters(Affine::IDENTITY), characters(Affine::rotate(0.3)), own].iter().map(changed_by_outlining).collect();
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+/// "IIII" at 40 pt with its baseline at (5, 60), its characters filled with a red-to-blue gradient
+/// that runs left to right (0°) or bottom to top (90°).
+fn gradient_text_doc(angle: f64) -> Document {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut g = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    g.angle = angle;
+    styled_text_doc(CharStyle { size: 40.0, fill: Paint::Gradient(Box::new(g)), ..Default::default() }, Affine::IDENTITY)
+}
+
+/// The Transform effects the gradient tests apply, each with the transform that does the same to
+/// type `t`: 30 pt right, 20 pt down, and 50 % about the middle of its outlines.
+fn transforms_of(t: &Node) -> [(Value, Affine); 3] {
+    let middle = vectorcraft_effects::outline_text(t).unwrap().geometric_bounds().unwrap().center().to_vec2();
+    [
+        (json!({"moveH": 30}), Affine::translate((30.0, 0.0))),
+        (json!({"moveV": 20}), Affine::translate((0.0, 20.0))),
+        (json!({"scaleH": 50, "scaleV": 50}), Affine::translate(middle) * Affine::scale(0.5) * Affine::translate(-middle)),
+    ]
+}
+
+/// A 100×100 document holding `content` in an envelope that leaves it as it is (an arc with no
+/// bend), with Distort Appearance on or off.
+fn envelope_doc(content: Node, distort_appearance: bool) -> Document {
+    let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 0.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+    let options = vectorcraft_doc::live::EnvelopeOptions { distort_appearance, ..Default::default() };
+    let envelope = NodeKind::Envelope {
+        content: vec![Arc::new(content)],
+        kind: Box::new(kind),
+        fidelity: 50.0,
+        editing: false,
+        options,
+        frame: Box::new(Affine::IDENTITY),
+    };
+    doc_with(Document::new(100.0, 100.0), Node::new(NodeId(0), envelope))
+}
+
+#[test]
+fn a_transform_effect_moves_and_scales_the_gradients_of_type_with_its_outlines() {
+    let mut changed = vec![];
+    for angle in [0.0, 90.0] {
+        let d = gradient_text_doc(angle);
+        let id = d.layers[0].children().unwrap()[0].id;
+        // The type's own transform does the same as the Transform effect in the document it is
+        // compared with.
+        for (params, xf) in transforms_of(d.node(id).unwrap()) {
+            let (mut effect, mut own) = (d.clone(), d.clone());
+            effect.node_mut(id).unwrap().appearance.effects.push(fx("distort.transform", params));
+            own.node_mut(id).unwrap().transform(xf, false);
+            changed.push(differing(&render(&effect), &render(&own)));
+        }
+    }
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn a_transform_effect_that_scales_type_out_of_proportion_scales_its_radial_and_diagonal_gradients() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let mut changed = vec![];
+    // A radial gradient turns into an ellipse, and a linear one at 45° turns its isolines.
+    for (kind, angle) in [(GradientKind::Radial, 0.0), (GradientKind::Linear, 45.0)] {
+        let mut g = GradientPaint::new(Gradient::new(kind, stops.clone()));
+        g.angle = angle;
+        let d = styled_text_doc(CharStyle { size: 40.0, fill: Paint::Gradient(Box::new(g)), ..Default::default() }, Affine::IDENTITY);
+        let id = d.layers[0].children().unwrap()[0].id;
+        let middle = vectorcraft_effects::outline_text(d.node(id).unwrap()).unwrap().geometric_bounds().unwrap().center().to_vec2();
+        // 50 % across and 150 % up and down, about the middle of the outlines.
+        let xf = Affine::translate(middle) * Affine::scale_non_uniform(0.5, 1.5) * Affine::translate(-middle);
+        let (mut effect, mut own) = (d.clone(), d.clone());
+        effect.node_mut(id).unwrap().appearance.effects.push(fx("distort.transform", json!({"scaleH": 50, "scaleV": 150})));
+        own.node_mut(id).unwrap().transform(xf, false);
+        changed.push(differing(&render(&effect), &render(&own)));
+    }
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn a_transform_effect_on_a_group_symbol_or_envelope_moves_and_scales_the_gradients_of_its_type() {
+    // The gradient runs left to right, so a move to the right goes along it and a move down
+    // across it.
+    let d = gradient_text_doc(0.0);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut t = d.node(id).unwrap().clone();
+    t.id = NodeId(500);
+    // The type in a group, as the art of a symbol, and in an envelope that leaves it as it is.
+    let mut symbols = Document::new(100.0, 100.0);
+    symbols.symbols.push(Symbol { dynamic: false, name: "Type".into(), art: Arc::new(t.clone()) });
+    let holders = [
+        doc_with(Document::new(100.0, 100.0), Node::group(NodeId(0), vec![Arc::new(t.clone())])),
+        doc_with(symbols, Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Type".into(), xf: Affine::IDENTITY })),
+        envelope_doc(t.clone(), false),
+    ];
+    let mut changed = vec![];
+    // The Transform effect is on the group, the symbol instance or the envelope. The type's own
+    // transform does the same in the document it is compared with.
+    for (params, xf) in transforms_of(&t) {
+        let mut own = d.clone();
+        own.node_mut(id).unwrap().transform(xf, false);
+        let reference = render(&own);
+        for h in &holders {
+            let mut effect = h.clone();
+            let holder = effect.layers[0].children().unwrap()[0].id;
+            effect.node_mut(holder).unwrap().appearance.effects.push(fx("distort.transform", params.clone()));
+            changed.push(differing(&render(&effect), &reference));
+        }
+    }
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn type_in_an_envelope_moves_and_scales_its_gradients_with_its_own_transform_effect() {
+    let d = gradient_text_doc(0.0);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut changed = vec![];
+    for (params, xf) in transforms_of(d.node(id).unwrap()) {
+        let mut own = d.clone();
+        own.node_mut(id).unwrap().transform(xf, false);
+        let reference = render(&own);
+        let mut t = d.node(id).unwrap().clone();
+        t.id = NodeId(500);
+        t.appearance.effects.push(fx("distort.transform", params));
+        // The envelope leaves the type as it is, with Distort Appearance off and on.
+        for distort in [false, true] {
+            changed.push(differing(&render(&envelope_doc(t.clone(), distort)), &reference));
+        }
+    }
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn type_drawn_through_its_outlines_keeps_its_pattern_tiles_on_the_type() {
+    // Pattern `Checks` is a red 2 × 2 square in a 4 × 4 tile.
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut def = PatternDef::new("Checks", vec![Arc::new(Node::path(NodeId(900), shapes::rectangle(Rect::new(0.0, 0.0, 2.0, 2.0)), red))]);
+    def.tile = Rect::new(0.0, 0.0, 4.0, 4.0);
+    // The type is 40 pt in the document: 20 pt type scaled 2×, or 40 pt type turned.
+    let changed: Vec<usize> = [Affine::scale(2.0), Affine::rotate(0.3)]
+        .into_iter()
+        .map(|xf| {
+            let mut d = styled_text_doc(CharStyle { size: 40.0 / xf.determinant().sqrt(), fill: pattern_paint("Checks"), ..Default::default() }, xf);
+            d.patterns.push(def.clone());
+            changed_by_outlining(&d)
+        })
+        .collect();
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn a_shadow_on_an_image_paints_offset_pixels() {
+    let plain = render(&image_doc(vec![]));
+    assert_eq!(lum(plain.pixel(55, 55)), WHITE);
+    let d = image_doc(vec![fx("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}))]);
+    let img = render(&d);
+    assert!(lum(img.pixel(55, 55)) < 100, "shadow below-right: {:?}", img.pixel(55, 55));
+    assert_eq!(img.pixel(35, 35), [255, 0, 0, 255], "the image stays on top");
+    assert_eq!(lum(img.pixel(15, 15)), WHITE);
+    // The multithreaded pipeline filters offscreen and matches.
+    let mt = render_threads(&d, 3);
+    let worst = img.pixels.iter().zip(&mt.pixels).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+    assert!(worst <= 4, "max channel difference {worst}");
+}
+
+/// A distorted opaque image is drawn opaque between its corners, where the pieces of its mesh
+/// meet too; its drop shadow is the shape between its corners moved, and nothing paints where its
+/// rectangle was.
+#[test]
+fn a_distorted_image_is_opaque_between_its_corners_and_its_shadow_follows_them() {
+    let mut d = image_doc(vec![fx("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 100, "mode": "normal"}))]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().set_image_corners([(35.0, 20.0), (45.0, 20.0), (50.0, 50.0), (20.0, 50.0)].map(|(x, y)| Point::new(x, y))).unwrap();
+    let img = render(&d);
+    let mut faded = vec![];
+    for y in 30..42 {
+        for x in 30..40 {
+            let p = img.pixel(x, y);
+            // A seam shows the white page (green) or the shadow below (darker red) through.
+            if p[0] < 200 || p[1] > 48 {
+                faded.push((x, y, p));
+            }
+        }
+    }
+    assert_eq!(faded, vec![], "the image's red, also where its pieces meet");
+    assert!(lum(img.pixel(40, 55)) < 100, "the shadow below the quad: {:?}", img.pixel(40, 55));
+    assert_eq!(lum(img.pixel(24, 28)), WHITE, "outside the quad, inside the old rectangle");
+    // The rectangle's shadow would reach (58, 36); the quad's shadow ends at x = 56 there.
+    assert_eq!(lum(img.pixel(58, 36)), WHITE, "outside the quad's shadow, inside the rectangle's");
+}
+
+/// A distorted opaque image draws opaque inside its corners at any zoom, where the pieces of its
+/// mesh meet too, and nothing of it draws outside its corners.
+#[test]
+fn a_distorted_image_is_opaque_inside_its_corners_at_every_zoom() {
+    let mut d = image_doc(vec![]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(35.0, 20.0), (45.0, 20.0), (50.0, 50.0), (20.0, 50.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    for scale in [0.5, 1.0, 3.0] {
+        let size = (100.0 * scale) as u32;
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+        let img = Renderer::new().render(&d, size, size, Affine::scale(scale), &opts);
+        let at = |x: f64, y: f64| img.pixel((x * scale) as u32, (y * scale) as u32);
+        let mut faded = vec![];
+        // Points at least 2.5 pt inside the corners: the left side runs from (35, 20) to (20, 50)
+        // and the right side from (45, 20) to (50, 50).
+        for y in [24.0, 30.0, 36.0, 42.0, 47.0] {
+            let t = (y - 20.0) / 30.0;
+            let (left, right) = (35.0 - 15.0 * t + 2.5, 45.0 + 5.0 * t - 2.5);
+            let mid = (left + right) / 2.0;
+            for x in [left, (left + mid) / 2.0, mid, (mid + right) / 2.0, right] {
+                let p = at(x, y);
+                if p[1] > 12 || p[2] > 12 {
+                    faded.push((x, y, p));
+                }
+            }
+        }
+        assert_eq!(faded, vec![], "the image's red at {scale}x");
+        assert_eq!(lum(at(24.0, 28.0)), WHITE, "outside the corners at {scale}x");
+        assert_eq!(lum(at(36.0, 17.0)), WHITE, "above the top edge at {scale}x");
+    }
+}
+
+#[test]
+fn blur_on_a_symbol_instance_softens_its_edges() {
+    let plain = render(&symbol_doc(vec![]));
+    assert_eq!(lum(plain.pixel(38, 50)), WHITE);
+    assert_eq!(lum(plain.pixel(50, 50)), 0);
+    let img = render(&symbol_doc(vec![fx("blur.gaussian", json!({"radius": 8}))]));
+    let edge = lum(img.pixel(38, 50));
+    assert!(edge > 0 && edge < WHITE, "the blur spreads past the edge: {edge}");
+    assert!(lum(img.pixel(50, 50)) < 200, "the centre stays dark");
+}
+
+#[test]
+fn type_in_a_symbols_art_keeps_its_opacity_under_the_instances_effects() {
+    // The symbol's art is 50 % black type. Offset Path 0 and a shadow at 0 % opacity on the
+    // instance paint nothing of their own, so the instance is drawn the same with them as without
+    // them.
+    let doc = |effects| {
+        let mut d = symbol_doc(effects);
+        let style = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), ..Default::default() };
+        let mut t = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(Point::new(-45.0, 10.0), "IIII", style))));
+        t.opacity = 0.5;
+        d.symbols[0].art = Arc::new(t);
+        d
+    };
+    let plain = render(&doc(vec![]));
+    let offset = fx("path.offsetPath", json!({"offset": 0}));
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 10, "blur": 0, "opacity": 0, "mode": "normal"}));
+    for effect in [offset, shadow] {
+        let img = render(&doc(vec![effect.clone()]));
+        let worst = plain.pixels.iter().zip(&img.pixels).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+        assert!(worst <= 4, "{}: max channel difference {worst}", effect.id);
+    }
+}
+
+#[test]
+fn geometry_effects_reshape_type_through_its_outlines() {
+    let plain = inked_columns(&render(&text_doc(vec![])));
+    assert!(!plain.is_empty() && plain[0] < 30, "{plain:?}");
+    // Transform moves the outlines as one piece.
+    let moved = inked_columns(&render(&text_doc(vec![fx("distort.transform", json!({"moveH": 30}))])));
+    assert_eq!(moved.first().copied(), plain.first().map(|x| x + 30));
+    // Roughen redraws the glyphs as rough outlines.
+    let d = text_doc(vec![fx("distort.roughen", json!({"size": 4, "relative": false, "detail": 30, "points": "corner"}))]);
+    let rough = render(&d);
+    let smooth = render(&text_doc(vec![]));
+    let changed = rough.pixels.chunks(4).zip(smooth.pixels.chunks(4)).filter(|(a, b)| a != b).count();
+    assert!(changed > 100, "{changed} pixels changed");
+    // The reshaped art is plain paths painted with the text's fill.
+    let n = &d.layers[0].children().unwrap()[0];
+    let art = vectorcraft_effects::reshape(None, n, None).unwrap();
+    let (mut text, mut black) = (0, 0);
+    art.walk(&mut |m| {
+        text += usize::from(matches!(m.kind, NodeKind::Text(_)));
+        black += usize::from(m.appearance.fill_paint() == Paint::solid(Color::BLACK));
+    });
+    assert!(text == 0 && black > 0, "{art:?}");
+}
+
+/// Pixels that change by more than 8 levels in a channel when the first object of `d` gets
+/// Outline Object.
+fn changed_by_outline_object(d: &Document) -> usize {
+    let mut outlined = d.clone();
+    let id = outlined.layers[0].children().unwrap()[0].id;
+    outlined.node_mut(id).unwrap().appearance.effects.push(fx("path.outlineObject", json!({})));
+    differing(&render(d), &render(&outlined))
+}
+
+#[test]
+fn outline_object_draws_type_as_its_outlines_and_leaves_its_look() {
+    // The type is drawn through its outlines: plain paths painted with the text's fill.
+    let d = text_doc(vec![fx("path.outlineObject", json!({}))]);
+    let n = &d.layers[0].children().unwrap()[0];
+    let art = vectorcraft_effects::reshape(None, n, None).unwrap();
+    let (mut text, mut black) = (0, 0);
+    art.walk(&mut |m| {
+        text += usize::from(matches!(m.kind, NodeKind::Text(_)));
+        black += usize::from(m.appearance.fill_paint() == Paint::solid(Color::BLACK));
+    });
+    assert!(text == 0 && black > 0, "{art:?}");
+    // Plain, underlined and scaled stroked type, and 50 % type in a group that carries the effect,
+    // look the same with it.
+    let underlined = CharStyle { size: 40.0, fill: Paint::solid(Color::BLACK), underline: true, ..Default::default() };
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let stroked = CharStyle { size: 20.0, fill: Paint::solid(Color::BLACK), stroke: red, stroke_width: 2.0, ..Default::default() };
+    let mut t = text_doc(vec![]).layers[0].children().unwrap()[0].as_ref().clone();
+    t.id = NodeId(500);
+    t.opacity = 0.5;
+    let docs = [
+        text_doc(vec![]),
+        styled_text_doc(underlined, Affine::IDENTITY),
+        styled_text_doc(stroked, Affine::scale(2.0)),
+        doc_with(Document::new(100.0, 100.0), Node::group(NodeId(0), vec![Arc::new(t)])),
+    ];
+    let changed: Vec<usize> = docs.iter().map(changed_by_outline_object).collect();
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+}
+
+#[test]
+fn outline_object_leaves_paths_and_images_as_they_are() {
+    let ap = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::solid(Color::BLACK), 4.0);
+    let path = doc_with(Document::new(100.0, 100.0), Node::path(NodeId(0), shapes::ellipse(Rect::new(20.0, 20.0, 80.0, 70.0)), ap));
+    let changed: Vec<usize> = [path, image_doc(vec![])].iter().map(changed_by_outline_object).collect();
+    assert!(changed.iter().all(|&n| n < 10), "pixels changed: {changed:?}");
+    // The image is drawn through its frame, as under any geometry effect.
+    let d = image_doc(vec![fx("path.outlineObject", json!({}))]);
+    assert!(vectorcraft_effects::reshape(None, &d.layers[0].children().unwrap()[0], None).is_some());
+}
+
+#[test]
+fn a_rectangle_on_a_fill_below_type_with_outline_object_fits_the_glyphs() {
+    // "IIII" with a red fill of its own below the characters that carries Convert to Shape ›
+    // Rectangle (the default 18 pt extra width and height).
+    let plain = render(&text_doc(vec![]));
+    let inked = inked_columns(&plain);
+    let gap = (inked[0]..*inked.last().unwrap()).find(|x| !inked.contains(x)).unwrap();
+    let mut d = text_doc(vec![fx("path.outlineObject", json!({}))]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut fill = FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    fill.effects.push(fx("convertToShape.rectangle", json!({})));
+    let ap = &mut d.node_mut(id).unwrap().appearance;
+    ap.items.push(AppearanceItem::Fill(fill));
+    ap.set_contents_at(1);
+    let img = render(&d);
+    // The rectangle is under the glyphs and fills the gap between two of them.
+    assert_eq!(img.pixel(gap, 50), [255, 0, 0, 255], "column {gap}");
+    assert_eq!(lum(img.pixel(inked[0] + 1, 50)), 0);
+    // It reaches 9 pt past the glyph outlines on each side.
+    let glyphs = vectorcraft_effects::outline_text(d.node(id).unwrap()).unwrap().geometric_bounds().unwrap();
+    let (x, y) = (glyphs.center().x as u32, glyphs.center().y as u32);
+    assert_eq!(img.pixel(glyphs.x1 as u32 + 6, y), [255, 0, 0, 255]);
+    assert_eq!(lum(img.pixel(glyphs.x1 as u32 + 12, y)), WHITE);
+    assert_eq!(img.pixel(x, glyphs.y1 as u32 + 6), [255, 0, 0, 255]);
+    assert_eq!(lum(img.pixel(x, glyphs.y1 as u32 + 12)), WHITE);
+}
+
+/// [`image_doc`] with a black 4 pt stroke of its own that carries the effects `row`, below the
+/// image when `below`.
+fn stroked_image_doc(row: Vec<Effect>, below: bool) -> Document {
+    let mut d = image_doc(vec![]);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 4.0);
+    stroke.effects = row;
+    let ap = &mut d.node_mut(id).unwrap().appearance;
+    ap.items.push(AppearanceItem::Stroke(stroke));
+    ap.set_contents_at(usize::from(below));
+    d
+}
+
+#[test]
+fn an_images_stroke_draws_only_the_shape_convert_to_shape_or_outline_object_gives_it() {
+    // The image's frame runs from 20 to 50. Without an effect the stroke draws nothing.
+    for below in [false, true] {
+        let img = render(&stroked_image_doc(vec![], below));
+        assert_eq!((lum(img.pixel(18, 35)), img.pixel(21, 35)), (WHITE, [255, 0, 0, 255]));
+    }
+    let rectangle = fx("convertToShape.rectangle", json!({"relative": true, "extraW": 0, "extraH": 0}));
+    let outline = fx("path.outlineObject", json!({}));
+    for effect in [rectangle, outline] {
+        // Below the image only the stroke's outer half shows, above it both halves.
+        let img = render(&stroked_image_doc(vec![effect.clone()], true));
+        assert_eq!((lum(img.pixel(17, 35)), lum(img.pixel(18, 35)), img.pixel(21, 35)), (WHITE, 0, [255, 0, 0, 255]), "{}", effect.id);
+        let img = render(&stroked_image_doc(vec![effect.clone()], false));
+        assert_eq!((lum(img.pixel(18, 35)), lum(img.pixel(21, 35)), img.pixel(23, 35)), (0, 0, [255, 0, 0, 255]), "{}", effect.id);
+        // An effect before it is left out.
+        let first = fx("path.offsetPath", json!({"offset": 10}));
+        let img = render(&stroked_image_doc(vec![first, effect.clone()], true));
+        assert_eq!((lum(img.pixel(10, 35)), lum(img.pixel(18, 35))), (WHITE, 0), "{}", effect.id);
+    }
+    // An Offset Path of 2 pt after Outline Object moves the stroke 2 pt out.
+    let img = render(&stroked_image_doc(vec![fx("path.outlineObject", json!({})), fx("path.offsetPath", json!({"offset": 2}))], true));
+    assert_eq!((lum(img.pixel(15, 35)), lum(img.pixel(16, 35)), lum(img.pixel(19, 35))), (WHITE, 0, 0));
+}
+
+#[test]
+fn an_images_stroke_is_drawn_when_only_it_is_in_view() {
+    // The stroke runs 8 pt outside the frame, from 10 to 14; the view shows x 15 and less.
+    let row = vec![fx("path.outlineObject", json!({})), fx("path.offsetPath", json!({"offset": 8}))];
+    let d = stroked_image_doc(row, true);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let img = Renderer::new().render(&d, 100, 100, Affine::translate((85.0, 0.0)), &opts);
+    assert_eq!((lum(img.pixel(96, 35)), lum(img.pixel(99, 35))), (0, WHITE));
+}
+
+#[test]
+fn rasterize_on_an_image_takes_in_its_strokes_shape() {
+    // The stroke runs 8 pt outside the frame, from 10 to 14; Rasterize at 72 ppi keeps it.
+    let row = vec![fx("path.outlineObject", json!({})), fx("path.offsetPath", json!({"offset": 8}))];
+    let mut d = stroked_image_doc(row, true);
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().appearance.effects.push(fx("rasterize", json!({"useDocumentResolution": false, "resolution": 72})));
+    let img = render(&d);
+    assert_eq!((lum(img.pixel(8, 35)), lum(img.pixel(12, 35)), img.pixel(35, 35)), (WHITE, 0, [255, 0, 0, 255]));
+}
+
+#[test]
+fn an_images_outline_object_stroke_follows_new_pixels_under_the_same_key() {
+    // The opaque image's stroke runs along its frame, from 18 to 22.
+    let mut d = stroked_image_doc(vec![fx("path.outlineObject", json!({}))], false);
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), img.pixel(26, 35)), (0, [255, 0, 0, 255]));
+    // New pixels under the same key, as Update Link stores them, with the node unchanged: an
+    // opaque disc of radius 8 pixels in the middle. The stroke follows its edge at 26.5.
+    let disc = image::RgbaImage::from_fn(30, 30, |x, y| {
+        let r = (f64::from(x) + 0.5 - 15.0).hypot(f64::from(y) + 0.5 - 15.0);
+        image::Rgba([255, 0, 0, if r <= 8.0 { 255 } else { 0 }])
+    });
+    let mut png = vec![];
+    {
+        let __dyn: image::DynamicImage = disc.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    d.images.insert("red".into(), ImageBlob::new("image/png", png));
+    let img = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert_eq!((lum(img.pixel(19, 35)), lum(img.pixel(26, 35))), (WHITE, 0));
+}
+
+/// A 40 pt square filled with `fill` carrying effect `id`, in a 100×100 document.
+fn glowing_square(fill: Color, id: &str, params: Value) -> Document {
+    let mut n = Node::path(NodeId(0), shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)), Appearance::basic(Paint::solid(fill), Paint::None, 0.0));
+    n.appearance.effects.push(fx(id, params));
+    doc_with(Document::new(100.0, 100.0), n)
+}
+
+/// A glow on the bare page is drawn before the background goes under the art: the pixel is the
+/// transparent render's over that color, also for a background other than white (#6125).
+#[test]
+fn a_screen_outer_glow_on_the_bare_page_shows_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let clear = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions::default()).pixel(27, 50);
+    assert!(clear[0] > 20 && clear[0] == clear[1] && clear[2] == 0, "the glow is yellow: {clear:?}");
+    for (bg, name) in [([255, 255, 255, 255], "white"), ([0, 0, 255, 255], "blue")] {
+        let p = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { background: Some(bg), ..Default::default() }).pixel(27, 50);
+        let a = u32::from(clear[3]);
+        let want: Vec<u32> = (0..3).map(|c| (u32::from(clear[c]) * a + u32::from(bg[c]) * (255 - a)) / 255).collect();
+        assert!(a > 0 && (0..3).all(|c| u32::from(p[c]).abs_diff(want[c]) <= 2), "{name}: {p:?}, want {want:?}");
+        assert_eq!(p[3], 255, "{name}: opaque");
+    }
+}
+
+/// A thumbnail with a background shows a Screen glow on the bare page, opaque (#6125).
+#[test]
+fn a_screen_outer_glow_is_in_a_thumbnail_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let n = d.layers[0].children().unwrap()[0].clone();
+    let img = Renderer::new().render_node_thumbnail(&d, &n, 100, Some([255; 4])).unwrap();
+    let pixels = img.pixels.as_chunks::<4>().0;
+    assert!(pixels.iter().all(|p| p[3] == 255), "every pixel is opaque");
+    assert!(pixels.iter().any(|p| p[0] > 235 && p[1] > 235 && p[2] < 235), "the glow shows as yellow on white");
+}
+
+/// The ink planes put the background under the art too: on a white background a Screen glow on
+/// the bare page prints yellow ink, and the bare page around it prints none (#6125).
+#[test]
+fn a_screen_outer_glow_prints_ink_on_a_background() {
+    let d = glowing_square(Color::WHITE, "stylize.outerGlow", json!({}));
+    let opts = RenderOptions { background: Some([255; 4]), ..Default::default() };
+    let inks = Renderer::new().render_region_inks(&d, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, &opts);
+    let at = |x: usize, y: usize| &inks[(y * 100 + x) * 4..][..4];
+    assert!(at(27, 50)[2] > 10, "yellow ink in the glow: {:?}", at(27, 50));
+    assert_eq!(at(5, 50), [0; 4], "no ink on the bare page");
+}
+
+/// An Inner Glow blends with the object's own fill whatever is under the page: white Screen
+/// lightens a black square, red Screen leaves a white one white, and red Normal shows on it.
+#[test]
+fn an_inner_glow_blends_with_its_own_fill_on_a_background() {
+    let red = |mode: &str| json!({"color": "#ff0000", "mode": mode, "opacity": 100});
+    let dark = render(&glowing_square(Color::BLACK, "stylize.innerGlow", json!({"color": "#ffffff", "opacity": 100}))).pixel(32, 50);
+    assert!(dark[0] > 20 && dark[0] == dark[1], "the white glow lightens the black edge: {dark:?}");
+    assert_eq!(render(&glowing_square(Color::WHITE, "stylize.innerGlow", red("screen"))).pixel(32, 50), [255, 255, 255, 255]);
+    let normal = render(&glowing_square(Color::WHITE, "stylize.innerGlow", red("normal"))).pixel(32, 50);
+    assert!(normal[0] == 255 && normal[1] < 245, "red on the white edge: {normal:?}");
+}
+
+#[test]
+fn a_strokes_own_glow_paints_around_that_stroke_only() {
+    let mut d = Document::new(100.0, 100.0);
+    let mut n = Node::path(
+        NodeId(0),
+        shapes::rectangle(Rect::new(30.0, 30.0, 70.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::WHITE), Paint::solid(Color::BLACK), 2.0),
+    );
+    n.appearance.items[1].effects_mut().push(fx("stylize.outerGlow", json!({"color": "#00ff00", "mode": "normal", "opacity": 100, "blur": 6})));
+    d = doc_with(d, n);
+    let img = render(&d);
+    let g = img.pixel(27, 50);
+    assert!(g[1] > g[0] + 20 && g[1] > g[2] + 20, "green glow outside the stroke: {g:?}");
+    assert_eq!(img.pixel(50, 50), [255, 255, 255, 255], "the fill has no glow");
+    let mt = render_threads(&d, 3);
+    let worst = img.pixels.iter().zip(&mt.pixels).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+    assert!(worst <= 4, "max channel difference {worst}");
+}
+
+#[test]
+fn a_path_with_its_own_transform_paints_each_copy_with_its_own_gradient() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let geom = GradientGeom { start: Point::new(0.0, 50.0), end: Point::new(20.0, 50.0), aspect: 1.0, focal: None };
+    // Fitted to the box on each render, and placed on the object.
+    for paint in [ramp.clone(), GradientPaint { geom: Some(geom), ..ramp }] {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(0.0, 40.0, 20.0, 60.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint)), Paint::None, 0.0));
+        n.appearance.effects = vec![fx("distort.transform", json!({"moveH": 40, "copies": 1}))];
+        let img = render(&doc_with(Document::new(100.0, 100.0), n));
+        let at = |x: usize| img.pixels.chunks(4).nth(50 * 100 + x).map(|p| (p[0], p[2])).unwrap_or_default();
+        // The left edge of each copy is red, its right edge blue.
+        for (left, right) in [(1, 18), (41, 58)] {
+            assert!(at(left).0 > 200 && at(left).1 < 60, "{:?} at {left}", at(left));
+            assert!(at(right).1 > 200 && at(right).0 < 60, "{:?} at {right}", at(right));
+        }
+    }
+}
+
+#[test]
+fn a_paths_gradient_moves_with_its_transform_and_free_distort() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    // Placed across the square from its left edge (red) to its right edge (blue).
+    let geom = GradientGeom { start: Point::new(10.0, 50.0), end: Point::new(40.0, 50.0), aspect: 1.0, focal: None };
+    let draw = |paint: &GradientPaint, e: Option<Effect>| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint.clone())), Paint::None, 0.0));
+        n.appearance.effects = e.into_iter().collect();
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    let placed = GradientPaint { geom: Some(geom), ..ramp.clone() };
+    let rb = |img: &Rendered, x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        (p[0], p[2])
+    };
+    let red = |(r, b): (u8, u8)| r > 200 && b < 60;
+    let blue = |(r, b): (u8, u8)| b > 200 && r < 60;
+    // Moved 40 pt right by Transform, and 30 pt (one width) right by a Free Distort that moves
+    // every corner.
+    let corners = json!({"corners": [[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]]});
+    for e in [fx("distort.transform", json!({"moveH": 40})), fx("distort.freeDistort", corners)] {
+        let img = draw(&placed, Some(e.clone()));
+        let moved = if e.id == "distort.transform" { 40 } else { 30 };
+        let (left, right) = (11 + moved, 38 + moved);
+        assert!(red(rb(&img, left, 50)) && blue(rb(&img, right, 50)), "{}: {:?} {:?}", e.id, rb(&img, left, 50), rb(&img, right, 50));
+    }
+    // Turned a quarter: the gradient runs from top to bottom (or bottom to top).
+    let turn = fx("distort.transform", json!({"rotate": 90}));
+    let img = draw(&placed, Some(turn));
+    let (top, bottom) = (rb(&img, 25, 36), rb(&img, 25, 63));
+    assert!((red(top) && blue(bottom)) || (blue(top) && red(bottom)), "{top:?} {bottom:?}");
+    assert_eq!(rb(&img, 12, 50), rb(&img, 38, 50), "the same color across");
+    // Scaled to half its width about its center: the gradient spans the narrower square.
+    let img = draw(&placed, Some(fx("distort.transform", json!({"scaleH": 50}))));
+    assert!(red(rb(&img, 18, 50)) && blue(rb(&img, 31, 50)), "{:?} {:?}", rb(&img, 18, 50), rb(&img, 31, 50));
+    // The fill's own Transform moves its gradient too.
+    let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+    let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(placed.clone())), Paint::None, 0.0));
+    n.appearance.items[0].effects_mut().push(fx("distort.transform", json!({"moveH": 40})));
+    let img = render(&doc_with(Document::new(100.0, 100.0), n));
+    assert!(red(rb(&img, 51, 50)) && blue(rb(&img, 78, 50)), "{:?} {:?}", rb(&img, 51, 50), rb(&img, 78, 50));
+}
+
+/// The canvas turns and reflects a gradient fitted to the square with its Transform effect, on the
+/// object and as the fill's own effect.
+#[test]
+fn a_fitted_gradient_turns_and_reflects_with_its_transform_on_the_canvas() {
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let fitted = Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, stops))));
+    let draw = |e: Effect, own: bool| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 35.0, 40.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(fitted.clone(), Paint::None, 0.0));
+        if own {
+            n.appearance.items[0].effects_mut().push(e);
+        } else {
+            n.appearance.effects.push(e);
+        }
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    let rb = |img: &Rendered, x: u32, y: u32| {
+        let p = img.pixel(x, y);
+        (p[0], p[2])
+    };
+    let red = |(r, b): (u8, u8)| r > 200 && b < 60;
+    let blue = |(r, b): (u8, u8)| b > 200 && r < 60;
+    for own in [false, true] {
+        // A quarter turn: the left (red) to right (blue) ramp runs from the bottom up.
+        let img = draw(fx("distort.transform", json!({"rotate": 90})), own);
+        let (top, bottom) = (rb(&img, 25, 36), rb(&img, 25, 63));
+        assert!(blue(top) && red(bottom), "own {own}: {top:?} {bottom:?}");
+        assert_eq!(rb(&img, 12, 50), rb(&img, 38, 50), "own {own}: the same color across");
+        // Reflected left to right: blue on the left, red on the right.
+        let img = draw(fx("distort.transform", json!({"reflectX": true})), own);
+        let (left, right) = (rb(&img, 11, 50), rb(&img, 38, 50));
+        assert!(blue(left) && red(right), "own {own}: {left:?} {right:?}");
+    }
+}
+
+#[test]
+fn a_paths_gradient_moves_and_scales_with_its_warped_bounds() {
+    use vectorcraft_color::GradientGeom;
+    let stops = vec![GradientStop::new(0.0, Color::rgb(1.0, 0.0, 0.0)), GradientStop::new(1.0, Color::rgb(0.0, 0.0, 1.0))];
+    let ramp = GradientPaint::new(Gradient::new(GradientKind::Linear, stops));
+    let draw = |paint: &GradientPaint, e: Effect| {
+        let square = shapes::rectangle(vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0));
+        let mut n = Node::path(NodeId(0), square, Appearance::basic(Paint::Gradient(Box::new(paint.clone())), Paint::None, 0.0));
+        n.appearance.effects = vec![e];
+        render(&doc_with(Document::new(100.0, 100.0), n))
+    };
+    // Placed from the square's left edge to its right edge, the gradient is drawn as one fitted to
+    // the square is: after a warp both run from the warped outline's left edge to its right edge.
+    let placed = GradientPaint {
+        geom: Some(GradientGeom { start: Point::new(30.0, 50.0), end: Point::new(60.0, 50.0), aspect: 1.0, focal: None }),
+        ..ramp.clone()
+    };
+    let styles = [
+        ("arc", json!({"bend": 50})),
+        ("bulge", json!({"bend": 60, "orientation": "vertical"})),
+        ("rise", json!({"bend": 40, "vertical": 50, "orientation": "vertical"})),
+    ];
+    for (style, params) in styles.clone() {
+        let e = fx(&format!("warp.{style}"), params.clone());
+        let (got, want) = (draw(&placed, e.clone()), draw(&ramp, e));
+        // The warp moves the outline's left or right edge, so a gradient left in place would not
+        // run from edge to edge.
+        let square = vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0);
+        let path = shapes::rectangle(square);
+        let b = vectorcraft_effects::apply_geometry(&[fx(&format!("warp.{style}"), params.clone())], &path, square).bounds().unwrap();
+        assert!((b.x0 - 30.0).abs() > 0.5 || (b.x1 - 60.0).abs() > 0.5, "warp.{style}: the outline spans {b:?}");
+        let mut worst = 0;
+        for y in 0..100 {
+            for x in 0..100 {
+                let (a, b) = (got.pixel(x, y), want.pixel(x, y));
+                worst = worst.max((0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0));
+            }
+        }
+        assert!(worst <= 3, "warp.{style}: worst channel difference {worst}");
+    }
+    // A stroke's own Warp: the canvas draws its gradient moved and scaled from the stroke-inflated
+    // bounds before the warp to those after it, as on the warped path with that gradient.
+    let geom = GradientGeom { start: Point::new(35.0, 50.0), end: Point::new(55.0, 50.0), aspect: 1.0, focal: None };
+    let stroked = Paint::Gradient(Box::new(GradientPaint { geom: Some(geom), ..ramp.clone() }));
+    let square = vectorcraft_geom::Rect::new(30.0, 35.0, 60.0, 65.0);
+    let follow = |p: Point, from: vectorcraft_geom::Rect, to: vectorcraft_geom::Rect| {
+        Point::new(to.x0 + (p.x - from.x0) / from.width() * to.width(), to.y0 + (p.y - from.y0) / from.height() * to.height())
+    };
+    for (style, params) in styles {
+        let mut n = Node::path(NodeId(0), shapes::rectangle(square), Appearance::basic(Paint::None, stroked.clone(), 6.0));
+        let Some(AppearanceItem::Stroke(layer)) = n.appearance.items.iter().find(|i| matches!(i, AppearanceItem::Stroke(_))).cloned() else {
+            panic!("a stroke")
+        };
+        let Some(item) = n.appearance.items.iter_mut().find(|i| matches!(i, AppearanceItem::Stroke(_))) else { panic!("a stroke") };
+        item.effects_mut().push(fx(&format!("warp.{style}"), params));
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let live = render(&d);
+        let baked = vectorcraft_effects::bake_document(&d).unwrap();
+        let mut warped = None;
+        for l in &baked.layers {
+            l.walk(&mut |c: &Node| {
+                if let (Some(path), true) = (c.path_data(), c.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_)))) {
+                    warped.get_or_insert_with(|| path.clone());
+                }
+            });
+        }
+        let path = warped.unwrap();
+        let b = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
+        assert_ne!(b, square, "warp.{style}: the warp changes the bounds");
+        let (from, to) = (layer.paint_bounds(square), layer.paint_bounds(b));
+        let moved = GradientGeom { start: follow(geom.start, from, to), end: follow(geom.end, from, to), ..geom };
+        let want_node = Node::path(
+            NodeId(0),
+            path,
+            Appearance::basic(Paint::None, Paint::Gradient(Box::new(GradientPaint { geom: Some(moved), ..ramp.clone() })), 6.0),
+        );
+        let want = render(&doc_with(Document::new(100.0, 100.0), want_node));
+        let mut worst = 0;
+        for y in 0..100 {
+            for x in 0..100 {
+                let (a, b) = (live.pixel(x, y), want.pixel(x, y));
+                worst = worst.max((0..3).map(|i| a[i].abs_diff(b[i])).max().unwrap_or(0));
+            }
+        }
+        assert!(worst <= 3, "warp.{style} on the stroke: worst channel difference {worst}");
+    }
+}
+
+#[test]
+fn darkness_subtracts_from_rgb_before_shadow_opacity() {
+    for opacity in [50.0, 100.0] {
+        let mut n = Node::path(
+            NodeId(0),
+            shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+            Appearance::basic(Paint::solid(Color::rgb(0.8, 0.4, 0.2)), Paint::None, 0.0),
+        );
+        n.appearance
+            .effects
+            .push(fx("stylize.dropShadow", json!({"shade":"darkness", "darkness":25, "x":40, "y":0, "blur":0, "opacity":opacity, "mode":"normal"})));
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        for threads in [0, 2] {
+            let p = render_threads(&d, threads).pixel(60, 20);
+            let expected = if opacity == 100.0 { [140u8, 38, 0, 255] } else { [198, 147, 127, 255] };
+            assert!(p.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 2), "{p:?}, expected {expected:?}");
+        }
+    }
+}
+
+#[test]
+fn darkness_adds_black_without_changing_cmy_inks() {
+    let mut n = Node::path(
+        NodeId(0),
+        shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+        Appearance::basic(Paint::solid(Color::cmyk(0.15, 0.3, 0.4, 0.2)), Paint::None, 0.0),
+    );
+    n.appearance
+        .effects
+        .push(fx("stylize.dropShadow", json!({"shade":"darkness", "darkness":25, "x":40, "y":0, "blur":0, "opacity":100, "mode":"normal"})));
+    let mut d = Document::new(100.0, 100.0);
+    d.color_mode = vectorcraft_doc::ColorMode::Cmyk;
+    let d = doc_with(d, n);
+    let want = Color::cmyk(0.15, 0.3, 0.4, 0.45).to_rgba8(1.0);
+    for threads in [0, 2] {
+        let got = render_threads(&d, threads).pixel(60, 20);
+        assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 3), "{got:?}, expected {want:?}");
+    }
+}
+
+#[test]
+fn darkness_uses_the_source_color_model_before_document_conversion() {
+    for (mode, source, dark) in [
+        (vectorcraft_doc::ColorMode::Rgb, Color::cmyk(0.15, 0.3, 0.4, 0.2), Color::cmyk(0.15, 0.3, 0.4, 0.45)),
+        (vectorcraft_doc::ColorMode::Cmyk, Color::rgb(0.8, 0.4, 0.2), Color::rgb(0.55, 0.15, 0.0)),
+    ] {
+        let mut d = Document::new(100.0, 100.0);
+        d.color_mode = mode;
+        let mut n =
+            Node::path(NodeId(0), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), Appearance::basic(Paint::solid(source), Paint::None, 0.0));
+        n.appearance
+            .effects
+            .push(fx("stylize.dropShadow", json!({"shade":"darkness","darkness":25,"x":40,"y":0,"blur":0,"opacity":100,"mode":"normal"})));
+        let actual = doc_with(d.clone(), n);
+        let mut control =
+            Node::path(NodeId(0), shapes::rectangle(Rect::new(50.0, 10.0, 70.0, 30.0)), Appearance::basic(Paint::solid(dark), Paint::None, 0.0));
+        // The neutral effect selects the same CMYK compositing pipeline without changing paint.
+        control.appearance.effects.push(fx("blur.gaussian", json!({"radius":0})));
+        let expected = doc_with(d, control);
+        for threads in [0, 2] {
+            let got = render_threads(&actual, threads).pixel(60, 20);
+            let want = render_threads(&expected, threads).pixel(60, 20);
+            assert!(got.iter().zip(want).all(|(a, b)| a.abs_diff(b) <= 3), "{mode:?}, {source:?}: {got:?} vs {want:?}");
+        }
+    }
+}
+
+#[test]
+fn darkness_adjusts_gradient_stop_colors_before_interpolation() {
+    use vectorcraft_color::GradientMethod;
+    for method in [GradientMethod::Classic, GradientMethod::Perceptual] {
+        for dither in [false, true] {
+            let ramp = |end: Color| {
+                let mut g = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, Color::BLACK), GradientStop::new(1.0, end)]);
+                g.method = method;
+                g.dither = dither;
+                Paint::Gradient(Box::new(GradientPaint::new(g)))
+            };
+            let mut n = Node::path(
+                NodeId(0),
+                shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)),
+                Appearance::basic(ramp(Color::rgb(0.8, 0.4, 0.2)), Paint::None, 0.0),
+            );
+            n.appearance
+                .effects
+                .push(fx("stylize.dropShadow", json!({"shade":"darkness","darkness":25,"x":40,"y":0,"blur":0,"opacity":100,"mode":"normal"})));
+            let actual = doc_with(Document::new(100.0, 100.0), n);
+            let control = Node::path(
+                NodeId(0),
+                shapes::rectangle(Rect::new(50.0, 10.0, 70.0, 30.0)),
+                Appearance::basic(ramp(Color::rgb(0.55, 0.15, 0.0)), Paint::None, 0.0),
+            );
+            let expected = doc_with(Document::new(100.0, 100.0), control);
+            let (got, want) = (render(&actual), render(&expected));
+            for x in 52..68 {
+                assert!(
+                    got.pixel(x, 20).iter().zip(want.pixel(x, 20)).all(|(a, b)| a.abs_diff(b) <= if dither { 8 } else { 3 }),
+                    "{method:?} dither={dither} x={x}: {:?} vs {:?}",
+                    got.pixel(x, 20),
+                    want.pixel(x, 20)
+                );
+            }
+        }
+    }
+}
+
+/// A symbol instance with object effects is charged to the frame's symbol budget like one
+/// without: past the budget it isn't expanded.
+#[test]
+fn symbol_instances_with_effects_are_charged_to_the_symbol_budget() {
+    let d = symbol_doc(vec![fx("distort.roughen", json!({}))]);
+    let inst = d.layers[0].children().unwrap()[0].clone();
+    let mut r = Renderer::new();
+    r.symbol_nodes = vectorcraft_doc::MAX_SYMBOL_NODES - 1;
+    let symbols = d.symbol_boxes();
+    assert!(r.charge_fx_instance(&symbols, &inst), "one object fits");
+    assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+    assert!(!r.charge_fx_instance(&symbols, &inst), "the next does not");
+    assert_eq!(r.symbol_nodes, vectorcraft_doc::MAX_SYMBOL_NODES);
+}
+
+/// A closed path of 30,000 curves along the x axis, 2 pt apart: drawn with about 420,000 lines,
+/// and with more than the effect budget's 8 million once scaled 1000 times.
+fn wavy() -> vectorcraft_geom::PathData {
+    use vectorcraft_geom::{Anchor, PathData, SubPath};
+    let anchors = (0..=30_000)
+        .map(|i| {
+            let x = 2.0 * f64::from(i);
+            Anchor::with_handles(Point::new(x, 0.0), Point::new(x - 0.5, -20.0), Point::new(x + 0.5, 20.0))
+        })
+        .collect();
+    PathData::single(SubPath::new(anchors, true))
+}
+
+/// A Transform effect left out past the effect budget leaves the art where it is, and the drop
+/// shadow before it (the object's, or the fill's before the fill's own Transform effect) reaches
+/// as far as it is drawn: by its own offset, not by a thousand times it.
+#[test]
+fn a_shadow_before_a_skipped_transform_reaches_as_far_as_it_is_drawn() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 5, "blur": 0}));
+    let big = fx("distort.transform", json!({"scaleH": 100000, "scaleV": 100000}));
+    let path = wavy();
+    let art = path.bounds().unwrap();
+    let mut object = Node::path(NodeId(1), path.clone(), Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0));
+    let mut fill = object.clone();
+    object.appearance.effects = vec![shadow.clone(), big.clone()];
+    if let Some(item) = fill.appearance.items.first_mut() {
+        *item.effects_mut() = vec![shadow, big];
+    }
+    let d = Document::new(100.0, 100.0);
+    let symbols = d.symbol_boxes();
+    // Within the shadow's 10 pt on every side (the visual bounds grow each side by the most any
+    // side reaches).
+    let within = |b: Rect| b.x0 >= art.x0 - 11.0 && b.y0 >= art.y0 - 11.0 && b.x1 <= art.x1 + 11.0 && b.y1 <= art.y1 + 11.0;
+    for (what, n) in [("object", &object), ("fill", &fill)] {
+        let b = crate::fx::visual_bounds(&symbols, n).unwrap();
+        assert!(within(b), "{what}: visual {b:?} for art {art:?}");
+        let b = crate::fx::painted_reach(&symbols, n).unwrap();
+        assert!(within(b), "{what}: painted {b:?} for art {art:?}");
+    }
+}
+
+/// Each copy of a Transform effect draws the drop shadow listed before the effect under itself,
+/// scaled with it: the red square (10..30) and its copy scaled 200 % and moved 60 pt down (0..40
+/// across, 60..100 down) each have a green shadow to their right, 20 pt for the square and 40 pt
+/// for the copy. The bounds reach as far as the copy's shadow.
+#[test]
+fn each_copy_of_a_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}));
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    let mut n = Node::path(NodeId(0), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), red);
+    n.appearance.effects = vec![shadow, copies];
+    let d = doc_with(Document::new(100.0, 100.0), n);
+    let img = render(&d);
+    assert_eq!(img.pixel(20, 20), [255, 0, 0, 255], "the square");
+    assert_eq!(img.pixel(45, 20), [0, 255, 0, 255], "the square's shadow");
+    assert_eq!(img.pixel(20, 80), [255, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(70, 80), [0, 255, 0, 255], "the copy's shadow, 40 pt to its right");
+    assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "past the copy's shadow");
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::fx::visual_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9, "{b:?}");
+}
+
+/// Each copy of a fill's own Transform effect, and each copy of its object's Transform effect,
+/// draws the fill's drop shadow under itself, scaled with it: as for the object's own shadow
+/// above, the copy's green shadow is 40 pt to its right. A 4 pt stroke's own Transform effect
+/// gives each copy the shadow of its stroke: the copy's right edge (38..42 across) casts it at
+/// 78..82. The bounds reach as far as the copy's shadow.
+#[test]
+fn each_copy_of_a_fills_or_strokes_transform_draws_its_own_shadow() {
+    let shadow = || fx("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = || fx("distort.transform", json!({"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}));
+    let square = |item: AppearanceItem| {
+        Node::path(NodeId(0), shapes::rectangle(Rect::new(10.0, 10.0, 30.0, 30.0)), Appearance { items: vec![item], ..Default::default() })
+    };
+    let mut red = FillLayer::new(Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    red.effects = vec![shadow(), copies()];
+    let own = square(AppearanceItem::Fill(red.clone()));
+    red.effects = vec![shadow()];
+    let mut owner = square(AppearanceItem::Fill(red));
+    owner.appearance.effects = vec![copies()];
+    for (what, n) in [("own", own), ("object's", owner)] {
+        let d = doc_with(Document::new(100.0, 100.0), n);
+        let img = render(&d);
+        assert_eq!(img.pixel(20, 20), [255, 0, 0, 255], "{what}: the square");
+        assert_eq!(img.pixel(45, 20), [0, 255, 0, 255], "{what}: the square's shadow");
+        assert_eq!(img.pixel(20, 80), [255, 0, 0, 255], "{what}: the copy");
+        assert_eq!(img.pixel(70, 80), [0, 255, 0, 255], "{what}: the copy's shadow, 40 pt to its right");
+        assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "{what}: past the copy's shadow");
+        let n = &d.layers[0].children().unwrap()[0];
+        let b = crate::fx::visual_bounds(&d.symbol_boxes(), n).unwrap();
+        assert!(b.x1 >= 80.0 - 1e-9, "{what}: {b:?}");
+    }
+    let mut blue = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 4.0);
+    blue.effects = vec![shadow(), copies()];
+    let d = doc_with(Document::new(100.0, 100.0), square(AppearanceItem::Stroke(blue)));
+    let img = render(&d);
+    assert_eq!(img.pixel(50, 20), [0, 255, 0, 255], "the square's stroke shadow");
+    assert_eq!(img.pixel(80, 80), [0, 255, 0, 255], "the copy's stroke shadow, 40 pt to the right of its edge");
+    assert_eq!(img.pixel(60, 80), [255, 255, 255, 255], "inside the copy's stroke shadow");
+}
+
+/// Each copy of a group's or layer's Transform effect draws the drop shadow listed before the
+/// effect under itself, of all its members together and scaled with it: two red squares side by
+/// side (10..30 together) have one green shadow 20 pt to their right, and their copy scaled 200 %
+/// and moved 60 pt down (0..40 across, 60..100 down) has its own 40 pt to its right. The bounds
+/// reach as far as the copy's shadow, and no further.
+#[test]
+fn each_copy_of_a_groups_or_layers_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 20, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 200, "scaleV": 200, "moveV": 60, "copies": 1}));
+    let red = Appearance::basic(Paint::solid(Color::rgb(1.0, 0.0, 0.0)), Paint::None, 0.0);
+    for layer in [false, true] {
+        let mut d = Document::new(100.0, 100.0);
+        let members: Vec<Arc<Node>> = [Rect::new(10.0, 10.0, 20.0, 30.0), Rect::new(20.0, 10.0, 30.0, 30.0)]
+            .into_iter()
+            .map(|r| Arc::new(Node::path(d.alloc_id(), shapes::rectangle(r), red.clone())))
+            .collect();
+        if layer {
+            let l = Arc::make_mut(&mut d.layers[0]);
+            if let Some(ch) = l.children_mut() {
+                *ch = members;
+            }
+            l.appearance.effects = vec![shadow.clone(), copies.clone()];
+        } else {
+            let mut g = Node::group(d.alloc_id(), members);
+            g.appearance.effects = vec![shadow.clone(), copies.clone()];
+            let l = d.layers[0].id;
+            d.insert(Some(l), 0, g).unwrap();
+        }
+        let img = render(&d);
+        assert_eq!(img.pixel(20, 20), [255, 0, 0, 255], "layer {layer}: the squares");
+        assert_eq!(img.pixel(45, 20), [0, 255, 0, 255], "layer {layer}: the squares' shadow");
+        assert_eq!(img.pixel(20, 80), [255, 0, 0, 255], "layer {layer}: the copy");
+        assert_eq!(img.pixel(70, 80), [0, 255, 0, 255], "layer {layer}: the copy's shadow, 40 pt to its right");
+        assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "layer {layer}: past the copy's shadow");
+        let n = if layer { d.layers[0].clone() } else { d.layers[0].children().unwrap()[0].clone() };
+        let b = crate::brush_fx::cull_bounds(&d.symbol_boxes(), &n).unwrap();
+        assert!((b.x1 - 80.0).abs() < 1e-9, "layer {layer}: {b:?}");
+    }
+}
+
+/// Each copy of an image's Transform effect draws the drop shadow listed before the effect under
+/// itself, scaled with it: the red image (20..50) has its green shadow 10 pt to its right, and its
+/// copy scaled 50 % and moved 40 pt down (27.5..42.5 across, 67.5..82.5 down) has its own 5 pt to
+/// its right.
+#[test]
+fn each_copy_of_an_images_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 50, "scaleV": 50, "moveV": 40, "copies": 1}));
+    let img = render(&image_doc(vec![shadow, copies]));
+    assert_eq!(img.pixel(35, 35), [255, 0, 0, 255], "the image");
+    assert_eq!(img.pixel(55, 35), [0, 255, 0, 255], "the image's shadow");
+    assert_eq!(img.pixel(35, 75), [255, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(45, 75), [0, 255, 0, 255], "the copy's shadow, 5 pt to its right");
+    assert_eq!(img.pixel(50, 75), [255, 255, 255, 255], "past the copy's shadow");
+}
+
+/// Each copy of a symbol instance's Transform effect draws the drop shadow listed before the effect
+/// under itself, scaled with it: the black square (40..60) has its green shadow 10 pt to its right,
+/// and its copy scaled 150 % and moved 30 pt down (35..65 across, 65..95 down) has its own 15 pt to
+/// its right. The bounds reach as far as the copy's shadow, and as far as a shadow listed after the
+/// Transform effect paints below all of them.
+#[test]
+fn each_copy_of_a_symbol_instances_transform_effect_draws_its_own_shadow() {
+    let shadow = fx("stylize.dropShadow", json!({"x": 10, "y": 0, "blur": 0, "opacity": 100, "mode": "normal", "color": "#00ff00"}));
+    let copies = fx("distort.transform", json!({"scaleH": 150, "scaleV": 150, "moveV": 30, "copies": 1}));
+    let below = fx("stylize.dropShadow", json!({"x": 0, "y": 20, "blur": 0, "opacity": 100, "mode": "normal", "color": "#0000ff"}));
+    let d = symbol_doc(vec![shadow.clone(), copies.clone(), below]);
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::brush_fx::cull_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9 && b.y1 >= 115.0 - 1e-9, "{b:?}");
+    let d = symbol_doc(vec![shadow, copies]);
+    let img = render(&d);
+    assert_eq!(img.pixel(50, 50), [0, 0, 0, 255], "the instance");
+    assert_eq!(img.pixel(65, 50), [0, 255, 0, 255], "the instance's shadow");
+    assert_eq!(img.pixel(50, 80), [0, 0, 0, 255], "the copy");
+    assert_eq!(img.pixel(77, 80), [0, 255, 0, 255], "the copy's shadow, 15 pt to its right");
+    assert_eq!(img.pixel(85, 80), [255, 255, 255, 255], "past the copy's shadow");
+    let n = &d.layers[0].children().unwrap()[0];
+    let b = crate::brush_fx::cull_bounds(&d.symbol_boxes(), n).unwrap();
+    assert!(b.x1 >= 80.0 - 1e-9, "{b:?}");
+}

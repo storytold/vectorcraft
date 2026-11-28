@@ -1,0 +1,666 @@
+//! Background Save and Background Export: the file is written from a snapshot off the UI thread,
+//! and the document counts as saved as of that snapshot.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+
+use craft::automation::ControlRequest;
+use serde_json::{Value, json};
+use vectorcraft_doc::{Appearance, Document, Node};
+use vectorcraft_engine::Session;
+use vectorcraft_geom::{Rect, shapes};
+
+use super::nativeoptions::{answer, host, pass, replace_files};
+use crate::{Services, VectorcraftApp, background, io};
+
+pub(crate) type Files = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
+/// Holds the background writer until opened.
+#[derive(Clone, Default)]
+pub(crate) struct Gate(Arc<AtomicBool>);
+
+impl Gate {
+    pub(crate) fn open(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+    pub(crate) fn wait(&self) {
+        while !self.0.load(Ordering::SeqCst) {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+}
+
+/// Gives `app` a window host over `jobs`, as the window installs it, so its background work runs
+/// where the test says.
+pub(crate) fn with_jobs(app: &mut VectorcraftApp, jobs: Arc<dyn craft::host::Jobs>) {
+    let ctx = crate::testing::ui_context();
+    craft::host::Host::builder(craft::host::AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") })
+        .jobs(jobs)
+        .install(&ctx);
+    app.ui_ctx = Some(ctx);
+}
+
+/// Background work on a thread per job, so a writer that waits on a [`Gate`] doesn't hold the test.
+pub(crate) fn threaded(app: &mut VectorcraftApp) {
+    with_jobs(app, Arc::new(craft::host::ThreadJobs));
+}
+
+/// An app whose thread-safe writer records files once `gate` opens.
+fn app(gate: Gate) -> (VectorcraftApp, Files) {
+    let files = Files::default();
+    let f = files.clone();
+    let services = Services {
+        write: Some(Box::new(|_: &str, _: &[u8]| Err("the UI thread must not write here".into()))),
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            gate.wait();
+            f.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    threaded(&mut app);
+    (app, files)
+}
+
+/// A document of `n` paths.
+fn paths(n: usize) -> Document {
+    let mut d = Document::new(1000.0, 1000.0);
+    let layer = d.layers[0].id;
+    for i in 0..n {
+        let id = d.alloc_id();
+        let (x, y) = ((i % 250) as f64 * 4.0, (i / 250) as f64 * 4.0);
+        d.insert(Some(layer), i, Node::path(id, shapes::ellipse(Rect::new(x, y, x + 3.0, y + 3.0)), Appearance::default_art())).unwrap();
+    }
+    d
+}
+
+pub(crate) fn written(files: &Files) -> Vec<String> {
+    files.lock().unwrap().iter().map(|(p, _)| p.clone()).collect()
+}
+
+#[test]
+fn a_50k_path_save_returns_at_once_and_the_file_appears_later() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.session.add_document(paths(50_000), None);
+    let r = app.run("file.save", json!({"path": "/docs/big.vectorcraft"})).unwrap();
+    assert_eq!((r["background"].as_bool(), r["path"].as_str()), (Some(true), Some("/docs/big.vectorcraft")));
+    assert!(written(&files).is_empty(), "nothing written yet");
+    assert_eq!(app.background.jobs.len(), 1);
+    assert!(app.ui.status.starts_with("Saving big.vectorcraft"));
+    // The file is the document's once it is written (and its dates are stamped then, #1721: until
+    // then this document, never edited, is as it was).
+    assert!(!app.session.doc().unwrap().is_dirty() && app.session.doc().unwrap().path.is_none());
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/big.vectorcraft"]);
+    let st = app.session.doc().unwrap();
+    assert!(!st.is_dirty());
+    assert_eq!(st.path.as_deref(), Some("/docs/big.vectorcraft"));
+    assert_eq!(app.ui.status, "Saved /docs/big.vectorcraft");
+    let bytes = files.lock().unwrap()[0].1.clone();
+    assert_eq!(vectorcraft_format::load(&bytes).unwrap().node_count(), 50_001);
+}
+
+#[test]
+fn the_dirty_state_follows_the_snapshot() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.run("file.save", json!({"path": "/docs/a.vectorcraft"})).unwrap();
+    // Edited while the file is written: still modified afterwards.
+    app.run("shape.rectangle", json!({"x": 20, "y": 0, "width": 10, "height": 10})).unwrap();
+    gate.open();
+    background::wait_all(&mut app);
+    assert!(app.session.doc().unwrap().is_dirty(), "the edit came after the snapshot");
+    let saved = vectorcraft_format::load(&files.lock().unwrap()[0].1).unwrap();
+    assert_eq!(saved.node_count(), 2, "the file holds the snapshot");
+    // Undoing back to the snapshot is clean again.
+    app.run("edit.undo", json!({})).unwrap();
+    assert!(!app.session.doc().unwrap().is_dirty());
+}
+
+#[test]
+fn exports_run_in_the_background_and_the_preference_turns_both_off() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let r = io::export(&mut app, Some("svg"), Some("/out/a.svg".into()), &json!({})).unwrap();
+    assert_eq!((r["background"].as_bool(), r["path"].as_str()), (Some(true), Some("/out/a.svg")));
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/out/a.svg"]);
+    assert_eq!(app.ui.status, "Exported /out/a.svg");
+    // Preferences off: at once, through the ordinary writer (which this app refuses).
+    app.session.execute("prefs.set", &json!({"values": {"backgroundSave": false, "backgroundExport": false}})).unwrap();
+    assert!(io::export(&mut app, Some("svg"), Some("/out/b.svg".into()), &json!({})).is_err());
+    assert!(app.run("file.save", json!({"path": "/docs/x.vectorcraft"})).is_err());
+    assert!(app.background.jobs.is_empty());
+}
+
+/// A Background Export with a file per artboard checks for files there from its worker: one with
+/// an artboard file's name is asked about once the export ends, before anything is written, and
+/// the question's OK writes every file.
+#[test]
+fn a_background_export_asks_before_replacing_an_artboard_file() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.services.exists = Some(Arc::new(|p: &str| p == "/out/a-B.png"));
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("artboard.new", json!({"x": 200, "y": 0, "width": 100, "height": 80, "name": "B"})).unwrap();
+    let r = io::export(&mut app, Some("png"), Some("/out/a.png".into()), &json!({"useArtboards": true})).unwrap();
+    assert_eq!(r["background"].as_bool(), Some(true), "{r}");
+    gate.open();
+    background::wait_all(&mut app);
+    assert!(files.lock().unwrap().is_empty(), "nothing is written while it asks");
+    host(&mut app);
+    pass(&mut app);
+    assert_eq!(replace_files(&app), Some(vec!["/out/a-B.png".to_string()]), "the question names the artboard file that is there");
+    answer(&mut app, &[], true);
+    background::wait_all(&mut app);
+    let names: Vec<String> = files.lock().unwrap().iter().map(|(p, _)| p.clone()).collect();
+    assert_eq!(names, ["/out/a-Artboard-1.png", "/out/a-B.png"]);
+}
+
+/// A save that returns before the file is written still says what it writes and which options it
+/// does not use, as `app.save` (MCP's `save_file`) replies with it: what the format loses first, as
+/// the reply of a save written at once.
+#[test]
+fn a_background_save_names_its_format_and_unused_options_at_once() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let r = app.run("file.save", json!({"path": "/out/a.svg", "compress": true})).unwrap();
+    assert_eq!((r["background"].as_bool(), r["format"].as_str()), (Some(true), Some("svg")), "{r}");
+    let warnings = r["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 2, "{r}");
+    assert!(warnings[0].as_str().unwrap().starts_with("SVG keeps the artwork but not everything"), "{r}");
+    assert_eq!(warnings[1], "`compress` was not used: SVG files don't read it", "{r}");
+    gate.open();
+    background::wait_all(&mut app);
+    let r = app.run("file.save", json!({"path": "/out/b.vectorcraft", "compress": true})).unwrap();
+    assert_eq!((r["background"].as_bool(), r["format"].as_str()), (Some(true), Some("vectorcraft")), "{r}");
+    assert_eq!(r["warnings"], json!([]), "{r}");
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/out/a.svg", "/out/b.vectorcraft"]);
+}
+
+#[test]
+fn a_cancelled_export_writes_nothing() {
+    let (gate, writing) = (Gate::default(), Gate::default());
+    let files = Files::default();
+    let (f, g, w) = (files.clone(), gate.clone(), writing.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            w.open();
+            g.wait();
+            f.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    threaded(&mut app);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    // The first export holds the worker at the gate, past its last check: it still writes.
+    io::export(&mut app, Some("svg"), Some("/out/first.svg".into()), &json!({})).unwrap();
+    writing.wait();
+    io::export(&mut app, Some("png"), Some("/out/second.png".into()), &json!({})).unwrap();
+    assert_eq!(app.run("file.cancelExport", json!({})).unwrap()["cancelled"], 2);
+    assert_eq!(app.run("file.cancelExport", json!({})).unwrap()["cancelled"], 0, "nothing left to cancel");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/out/first.svg"]);
+    assert_eq!(app.ui.status, io::EXPORT_CANCELLED);
+}
+
+/// Background Save's Cancel (`file.cancelSave`): a save canceled before it replaces its file writes
+/// nothing, and its document keeps its file, format and modified state, with no recent file noted
+/// and no error shown. A save already writing its file when Cancel came finishes and counts as
+/// saved. An export waiting with them goes on.
+#[test]
+fn a_canceled_save_writes_nothing_and_keeps_the_document_modified() {
+    let (gate, writing) = (Gate::default(), Gate::default());
+    let files = Files::default();
+    let (f, g, w) = (files.clone(), gate.clone(), writing.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            w.open();
+            g.wait();
+            f.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    threaded(&mut app);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let first = app.session.active().unwrap().uid;
+    // The first save holds the worker at the gate, past its last check: it still writes.
+    app.run("file.save", json!({"path": "/docs/first.vectorcraft"})).unwrap();
+    writing.wait();
+    assert!(!crate::menus::enabled(&app, "file.cancelExport"), "a save is not an export");
+    io::export(&mut app, Some("svg"), Some("/out/c.svg".into()), &json!({})).unwrap();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let second = app.session.active().unwrap().uid;
+    let r = app.run("file.save", json!({"path": "/docs/second.svg"})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    assert!(crate::menus::enabled(&app, "file.cancelSave") && crate::menus::enabled(&app, "file.saveInBackground"));
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 2);
+    assert_eq!(app.ui.status, io::SAVE_CANCELED);
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 0, "nothing left to cancel");
+    assert!(!crate::menus::enabled(&app, "file.cancelSave"));
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/first.vectorcraft", "/out/c.svg"]);
+    fn doc(app: &VectorcraftApp, uid: u64) -> &vectorcraft_engine::DocState {
+        app.session.documents().iter().find(|d| d.uid == uid).unwrap()
+    }
+    let st = doc(&app, first);
+    assert_eq!(st.path.as_deref(), Some("/docs/first.vectorcraft"), "written before the Cancel took effect");
+    let st = doc(&app, second);
+    assert!(st.is_dirty() && st.path.is_none(), "the canceled save left the document as it was");
+    assert_eq!(st.format, "vectorcraft");
+    assert!(io::recent_files(&app).iter().any(|p| p == "/docs/first.vectorcraft"));
+    assert!(!io::recent_files(&app).iter().any(|p| p == "/docs/second.svg"));
+    assert!(app.told.0.is_empty(), "no error is shown");
+    // The export's line came after the Cancel: the canceled save leaves it.
+    assert_eq!(app.ui.status, "Exported /out/c.svg");
+}
+
+/// A line set after Cancel Save (another command's) stays: neither the save that was already
+/// replacing its file nor the one Cancel stopped writes over it once it finishes.
+#[test]
+fn a_line_set_after_cancel_save_stays() {
+    let (gate, writing) = (Gate::default(), Gate::default());
+    let files = Files::default();
+    let (f, g, w) = (files.clone(), gate.clone(), writing.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            w.open();
+            g.wait();
+            f.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    threaded(&mut app);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let first = app.session.active().unwrap().uid;
+    // The first save holds the worker at the gate, past its last check: it still writes.
+    app.run("file.save", json!({"path": "/docs/first.vectorcraft"})).unwrap();
+    writing.wait();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.save", json!({"path": "/docs/second.vectorcraft"})).unwrap();
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 2);
+    assert_eq!(app.ui.status, io::SAVE_CANCELED);
+    app.status("Another command's line");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/first.vectorcraft"]);
+    let st = app.session.documents().iter().find(|d| d.uid == first).unwrap();
+    assert_eq!(st.path.as_deref(), Some("/docs/first.vectorcraft"), "the first save still finished");
+    assert_eq!(app.ui.status, "Another command's line");
+}
+
+/// A Cancel that comes once the encoder has filled a streamed save, while the host's writer is still
+/// flushing it, stops the save as any other Cancel does: the writer's last check refuses to put the
+/// file in place, and the save reports it canceled, not failed.
+#[test]
+fn a_cancel_after_a_streamed_save_is_filled_cancels_it() {
+    let (gate, filled) = (Gate::default(), Gate::default());
+    let (g, w) = (gate.clone(), filled.clone());
+    let services = Services {
+        write_shared: Some(Arc::new(|_: &str, _: &[u8]| Ok(()))),
+        stream_shared: Some(Arc::new(move |_: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
+            fill(&mut Vec::new()).map_err(|e| e.to_string())?;
+            w.open();
+            g.wait();
+            // The atomic writer's last check before the file is put in place.
+            vectorcraft_engine::cancel::check().map_err(|e| std::io::Error::other(e).to_string())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    threaded(&mut app);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    let r = app.run("file.save", json!({"path": "/docs/streamed.vectorcraft"})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    filled.wait();
+    assert_eq!(app.run("file.cancelSave", json!({})).unwrap()["cancelled"], 1);
+    gate.open();
+    background::wait_all(&mut app);
+    assert!(app.told.0.is_empty(), "no error is shown");
+    assert_eq!(app.ui.status, io::SAVE_CANCELED);
+    let st = app.session.active().unwrap();
+    assert!(st.is_dirty() && st.path.is_none(), "the canceled save left the document as it was");
+}
+
+#[test]
+fn quitting_waits_for_background_saves() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.save", json!({"path": "/docs/q.vectorcraft"})).unwrap();
+    let opener = gate.clone();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        opener.open();
+    });
+    // Without waiting, the document would still count as modified and Quit would ask about it.
+    let r: Value = app.run("app.quit", json!({})).unwrap();
+    release.join().unwrap();
+    assert!(r.is_null(), "{r}");
+    assert_eq!(app.ui.status, "quit");
+    assert_eq!(written(&files), ["/docs/q.vectorcraft"]);
+}
+
+/// The status bar's texts in one headless frame.
+pub(super) fn status_bar_texts(app: &mut VectorcraftApp) -> Vec<String> {
+    fn texts(s: &egui::Shape, out: &mut Vec<String>) {
+        match s {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_string()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    let ctx = crate::testing::ui_context();
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| crate::chrome::status_bar(app, ui));
+    out.textures_delta.clear();
+    let mut v = vec![];
+    out.shapes.iter().for_each(|c| texts(&c.shape, &mut v));
+    v
+}
+
+#[test]
+fn the_status_bar_shows_progress() {
+    let gate = Gate::default();
+    let (mut app, _) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.save", json!({"path": "/docs/p.vectorcraft"})).unwrap();
+    io::export(&mut app, Some("svg"), Some("/out/p.svg".into()), &json!({})).unwrap();
+    let busy = status_bar_texts(&mut app);
+    assert!(busy.iter().any(|t| t == "Saving p.vectorcraft… (+1)"), "{busy:?}");
+    gate.open();
+    background::wait_all(&mut app);
+    let done = status_bar_texts(&mut app);
+    assert!(done.iter().any(|t| t == "Exported /out/p.svg") && !done.iter().any(|t| t.contains('…')), "{done:?}");
+}
+
+/// An app whose thread-safe writer fails with `e` once `gate` opens.
+fn failing(gate: Gate, e: &'static str) -> VectorcraftApp {
+    let services = Services {
+        write: Some(Box::new(|_: &str, _: &[u8]| Err("the UI thread must not write here".into()))),
+        write_shared: Some(Arc::new(move |_: &str, _: &[u8]| {
+            gate.wait();
+            Err(e.into())
+        })),
+        ..Default::default()
+    };
+    let mut app = VectorcraftApp::new(Session::new(), services);
+    threaded(&mut app);
+    app
+}
+
+#[test]
+fn a_background_save_keeps_a_newer_status_on_success() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.save", json!({"path": "/docs/n.vectorcraft"})).unwrap();
+    assert_eq!(app.ui.status, "Saving n.vectorcraft…");
+    io::show_with_notes(&mut app, "Newer".into(), vec!["a note".into()]);
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(app.ui.status, "Newer");
+    assert_eq!(app.ui.status_notes, Some(("Newer".to_string(), vec!["a note".to_string()])));
+    // The save itself completes all the same.
+    assert_eq!(written(&files), ["/docs/n.vectorcraft"]);
+    let st = app.session.doc().unwrap();
+    assert!(!st.is_dirty());
+    assert_eq!(st.path.as_deref(), Some("/docs/n.vectorcraft"));
+    assert_eq!(app.ui.recent_files.first().map(String::as_str), Some("/docs/n.vectorcraft"));
+}
+
+#[test]
+fn a_background_save_keeps_a_newer_status_on_failure() {
+    let gate = Gate::default();
+    let mut app = failing(gate.clone(), "disk full");
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+    app.run("file.save", json!({"path": "/docs/f.vectorcraft"})).unwrap();
+    app.status("Newer");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(app.ui.status, "Newer");
+    // Not saved, and the write error's message still says so.
+    let st = app.session.doc().unwrap();
+    assert!(st.is_dirty() && st.path.is_none(), "not saved");
+    let (message, detail) = app.told.0.last().expect("the write error's message");
+    assert_eq!(message, "Can't save “f.vectorcraft”.");
+    assert!(detail.contains("disk full"), "{detail}");
+}
+
+#[test]
+fn a_background_save_reports_when_its_progress_line_is_current() {
+    // Success and failure, nothing set meanwhile: the save's own result.
+    let gate = Gate::default();
+    let (mut good, _) = app(gate.clone());
+    good.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    good.run("file.save", json!({"path": "/docs/c.vectorcraft"})).unwrap();
+    gate.open();
+    background::wait_all(&mut good);
+    assert_eq!(good.ui.status, "Saved /docs/c.vectorcraft");
+    let gate = Gate::default();
+    let mut bad = failing(gate.clone(), "disk full");
+    bad.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    bad.run("file.save", json!({"path": "/docs/f.vectorcraft"})).unwrap();
+    gate.open();
+    background::wait_all(&mut bad);
+    assert!(bad.ui.status.starts_with("Saving f.vectorcraft failed: ") && bad.ui.status.contains("disk full"), "{}", bad.ui.status);
+    // Another line, then one with the same text as the save's: the later line is not the save's.
+    for ok in [true, false] {
+        let gate = Gate::default();
+        let mut app = if ok { app(gate.clone()).0 } else { failing(gate.clone(), "disk full") };
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("file.save", json!({"path": "/docs/s.vectorcraft"})).unwrap();
+        app.status("Other");
+        app.status("Saving s.vectorcraft…");
+        gate.open();
+        background::wait_all(&mut app);
+        assert_eq!(app.ui.status, "Saving s.vectorcraft…", "ok: {ok}");
+    }
+}
+
+#[test]
+fn a_background_failure_does_not_replace_a_newer_status() {
+    for newer in [true, false] {
+        let gate = Gate::default();
+        let (mut app, _) = app(gate.clone());
+        let ran = std::rc::Rc::new(std::cell::Cell::new(false));
+        let (g, seen) = (gate.clone(), ran.clone());
+        let r = background::run(
+            &mut app,
+            true,
+            "Exporting x.svg".into(),
+            None,
+            move |_| {
+                g.wait();
+                Err("broke".into())
+            },
+            move |_, r| {
+                seen.set(true);
+                r
+            },
+        )
+        .unwrap();
+        assert_eq!(r["background"], true);
+        if newer {
+            app.status("Newer");
+        }
+        gate.open();
+        background::wait_all(&mut app);
+        assert!(ran.get(), "the job's callback runs");
+        assert_eq!(app.ui.status, if newer { "Newer" } else { "Exporting x.svg failed: broke" });
+    }
+}
+
+/// An app with a control channel: its UI-thread writer records files (or fails with `fail`), and
+/// its thread-safe writer does the same once `gate` opens.
+fn controlled(gate: Gate, fail: Option<&'static str>) -> (VectorcraftApp, std::sync::mpsc::Sender<ControlRequest>, Files) {
+    controlled_with(gate, fail, None)
+}
+
+/// [`controlled`], with `wrote` told each time the UI-thread writer has recorded a file.
+fn controlled_with(
+    gate: Gate,
+    fail: Option<&'static str>,
+    wrote: Option<std::sync::mpsc::Sender<()>>,
+) -> (VectorcraftApp, std::sync::mpsc::Sender<ControlRequest>, Files) {
+    let files = Files::default();
+    let (f, g) = (files.clone(), files.clone());
+    let services = Services {
+        write: Some(Box::new(move |p: &str, b: &[u8]| match fail {
+            Some(e) => Err(e.into()),
+            None => {
+                f.lock().unwrap().push((p.to_string(), b.to_vec()));
+                if let Some(w) = &wrote {
+                    let _ = w.send(());
+                }
+                Ok(())
+            }
+        })),
+        write_shared: Some(Arc::new(move |p: &str, b: &[u8]| {
+            gate.wait();
+            if let Some(e) = fail {
+                return Err(e.into());
+            }
+            g.lock().unwrap().push((p.to_string(), b.to_vec()));
+            Ok(())
+        })),
+        ..Default::default()
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut app = VectorcraftApp::new(Session::new(), services).with_control(rx);
+    threaded(&mut app);
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    (app, tx, files)
+}
+
+/// One request through the control channel, as the app's frame drains it.
+fn request(app: &mut VectorcraftApp, tx: &std::sync::mpsc::Sender<ControlRequest>, method: &str, params: Value) -> Value {
+    let (req, reply) = ControlRequest::new(method, params);
+    tx.send(req).unwrap();
+    app.run_control(&crate::testing::ui_context());
+    reply.try_recv().unwrap()
+}
+
+/// `app.save` and `app.export` with `wait: true` (MCP's `save_file` in the app) write the file before
+/// they reply, with Background Save and Background Export on; without it they still reply at once.
+#[test]
+fn control_saves_and_exports_with_wait_reply_once_written() {
+    let gate = Gate::default();
+    let (mut app, tx, files) = controlled(gate.clone(), None);
+    let r = request(&mut app, &tx, "app.save", json!({"path": "/docs/w.vectorcraft", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r["result"].get("background").is_none() && r["result"]["path"] == "/docs/w.vectorcraft", "{r}");
+    assert_eq!(written(&files), ["/docs/w.vectorcraft"], "written before the reply");
+    let st = app.session.doc().unwrap();
+    assert!(!st.is_dirty() && st.path.as_deref() == Some("/docs/w.vectorcraft"));
+    assert_eq!(app.ui.status, "Saved /docs/w.vectorcraft");
+    let r = request(&mut app, &tx, "app.export", json!({"path": "/out/w.svg", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(r["result"].get("background").is_none() && r["result"]["path"] == "/out/w.svg", "{r}");
+    assert_eq!(written(&files), ["/docs/w.vectorcraft", "/out/w.svg"]);
+    assert!(app.background.jobs.is_empty());
+
+    for (method, path) in [("app.save", "/docs/later.vectorcraft"), ("app.export", "/out/later.svg")] {
+        let r = request(&mut app, &tx, method, json!({"path": path, "wait": false}));
+        assert_eq!(r["result"]["background"], true, "{method}: {r}");
+    }
+    assert_eq!(written(&files).len(), 2, "the gate holds the worker");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/w.vectorcraft", "/out/w.svg", "/docs/later.vectorcraft", "/out/later.svg"]);
+}
+
+/// An export with `wait: true` to the file a background export is still writing replies after both
+/// are written, so the older one doesn't write over it afterwards.
+#[test]
+fn control_exports_with_wait_follow_the_jobs_already_running() {
+    let gate = Gate::default();
+    let (wrote, waiting_wrote) = std::sync::mpsc::channel();
+    let (mut app, tx, files) = controlled_with(gate.clone(), None, Some(wrote));
+    let r = request(&mut app, &tx, "app.export", json!({"path": "/out/same.svg"}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    // The waiting export draws one more rectangle than the background export's snapshot.
+    app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 30, "height": 30})).unwrap();
+    // The background export is let go as soon as the waiting export has written its file, or after
+    // a second while the waiting export waits for it.
+    let opener = gate.clone();
+    let release = std::thread::spawn(move || {
+        let _ = waiting_wrote.recv_timeout(std::time::Duration::from_secs(1));
+        opener.open();
+    });
+    let r = request(&mut app, &tx, "app.export", json!({"path": "/out/same.svg", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(app.background.jobs.is_empty(), "the background export finished before the reply");
+    release.join().unwrap();
+    background::wait_all(&mut app);
+    let both = files.lock().unwrap().clone();
+    assert_eq!(written(&files), ["/out/same.svg", "/out/same.svg"]);
+    assert_ne!(both[0].1, both[1].1, "the two exports draw different art");
+    let r = request(&mut app, &tx, "app.export", json!({"path": "/out/check.svg", "wait": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(files.lock().unwrap()[2].1, both[1].1, "the waiting export wrote last");
+}
+
+/// A panic during a save with `wait: true`, caught further up, leaves Background Save on.
+#[test]
+fn a_panic_while_waiting_leaves_background_saves_on() {
+    let gate = Gate::default();
+    let (mut app, files) = app(gate.clone());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| background::in_foreground(&mut app, |_| panic!("an encoder bug"))));
+    assert!(r.is_err());
+    let r = app.run("file.save", json!({"path": "/docs/after.vectorcraft"})).unwrap();
+    assert_eq!(r["background"], true, "{r}");
+    gate.open();
+    background::wait_all(&mut app);
+    assert_eq!(written(&files), ["/docs/after.vectorcraft"]);
+}
+
+/// A save or export with `wait: true` that fails replies with the error.
+#[test]
+fn control_saves_and_exports_with_wait_reply_with_the_error() {
+    let gate = Gate::default();
+    gate.open();
+    let (mut app, tx, files) = controlled(gate, Some("disk full"));
+    for (method, path) in [("app.save", "/docs/f.vectorcraft"), ("app.export", "/out/f.svg")] {
+        let r = request(&mut app, &tx, method, json!({"path": path, "wait": true}));
+        assert_eq!(r["ok"], false, "{method}: {r}");
+        assert!(r["error"].as_str().unwrap().contains("disk full"), "{method}: {r}");
+    }
+    assert!(app.session.doc().unwrap().path.is_none(), "the document keeps no file");
+    // Without it the reply comes first, and the failure only reaches the status bar.
+    let r = request(&mut app, &tx, "app.save", json!({"path": "/docs/f.vectorcraft"}));
+    assert_eq!(r["result"]["background"], true, "{r}");
+    background::wait_all(&mut app);
+    assert!(written(&files).is_empty());
+}
+
+#[test]
+fn bad_options_fail_before_going_to_the_background() {
+    let (mut app, files) = app(Gate::default());
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    for bad in [json!({"path": "/docs/v.vectorcraft", "version": 9}), json!({"path": "/docs/v.vectorcraft", "version": 1, "compress": true})] {
+        assert!(app.run("file.save", bad.clone()).is_err(), "{bad}");
+    }
+    assert!(app.background.jobs.is_empty() && written(&files).is_empty());
+}

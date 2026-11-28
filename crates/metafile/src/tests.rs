@@ -11,6 +11,9 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, shapes};
 
 use crate::*;
 
+mod import;
+mod pict;
+
 /// Add `n` (with a fresh id) on top of `d`'s first layer.
 pub(crate) fn add(d: &mut Document, mut n: Node) {
     n.id = d.alloc_id();
@@ -40,10 +43,43 @@ pub(crate) fn blue() -> Paint {
 
 /// A `w` × `h` PNG of `rgba`.
 pub(crate) fn png(w: u32, h: u32, rgba: [u8; 4]) -> Vec<u8> {
-    let img = image::RgbaImage::from_pixel(w, h, image::Rgba(rgba));
-    let mut out = vec![];
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png).unwrap();
-    out
+    let img = craft_image_codecs::Image::from_raw(
+        w,
+        h,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        rgba.repeat((w * h) as usize),
+    )
+    .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+}
+
+/// CRC-32 of a PNG chunk.
+pub(crate) fn crc32(data: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for &b in data {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+        }
+    }
+    !crc
+}
+
+/// A 1 × 1 PNG whose IHDR claims `w` × `h` (and whose CRC matches): its size reads from the header,
+/// but its pixel data no longer matches, so decoding it fails.
+pub(crate) fn png_claiming(w: u32, h: u32) -> Vec<u8> {
+    let mut png = craft_image_codecs::encode(
+        &craft_image_codecs::Image::from_raw(1, 1, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![0]).unwrap(),
+        craft_image_codecs::Format::Png,
+        &craft_image_codecs::EncodeOptions::default(),
+    )
+    .unwrap();
+    png[16..20].copy_from_slice(&w.to_be_bytes());
+    png[20..24].copy_from_slice(&h.to_be_bytes());
+    let crc = crc32(&png[12..29]);
+    png[29..33].copy_from_slice(&crc.to_be_bytes());
+    png
 }
 
 /// An image node of `bytes` placed by `xf`, its blob added to `d`.
@@ -252,6 +288,82 @@ fn emf_clips_gradients_and_images() {
     assert_eq!((count(&k, 35), count(&k, 36)), (3, 3));
 }
 
+/// An image changed by Perspective Distort is written as the clipped pieces of its mesh where
+/// the format clips (EMF), and as one image at the placement nearest its corners, with a warning,
+/// where it does not (WMF).
+#[test]
+fn a_distorted_image_is_its_mesh_with_clips_and_its_nearest_parallelogram_without() {
+    let mut d = doc_with(100.0, 100.0, vec![]);
+    let img = image_node(&mut d, png(4, 4, [10, 20, 30, 255]), 4, 4, Affine::scale(10.0));
+    add(&mut d, img);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(16.0, 0.0), (24.0, 0.0), (40.0, 40.0), (0.0, 40.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let images = |ops: &[crate::scene::Op]| ops.iter().filter(|o| matches!(o, crate::scene::Op::Image { .. })).count();
+    let warned = |w: &[String]| w.iter().any(|w| w.contains("Perspective Distort or Free Distort"));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(images(&ops) > 2 && !warned(&warnings), "{} images, {warnings:?}", images(&ops));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, false).run();
+    assert!(images(&ops) == 1 && warned(&warnings), "{} images, {warnings:?}", images(&ops));
+    // Without clips, the image is placed by the affine map nearest its corners.
+    let near = vectorcraft_doc::image_quad::nearest_affine(d.node(id).unwrap()).unwrap();
+    let placed = ops.iter().find_map(|o| match o {
+        crate::scene::Op::Image { xf, .. } => Some(*xf),
+        _ => None,
+    });
+    assert!(placed.unwrap().as_coeffs().iter().zip(near.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9), "{placed:?} against {near:?}");
+}
+
+/// Each piece of a distorted image's mesh in EMF stores the pixels inside its clips, not the
+/// whole image, placed where the uncropped piece puts them.
+#[test]
+fn the_pieces_of_a_distorted_image_store_only_the_pixels_they_show() {
+    let mut pixels = vec![];
+    for y in 0..64u8 {
+        for x in 0..64u8 {
+            pixels.extend_from_slice(&[x * 4, y * 4, 0, 255]);
+        }
+    }
+    let img =
+        craft_image_codecs::Image::from_raw(64, 64, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, pixels).unwrap();
+    let bytes = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    let mut d = doc_with(100.0, 100.0, vec![]);
+    let n = image_node(&mut d, bytes, 64, 64, Affine::scale(1.5));
+    add(&mut d, n);
+    let id = d.layers[0].children().unwrap()[0].id;
+    let q = [(30.0, 0.0), (66.0, 0.0), (96.0, 96.0), (0.0, 96.0)].map(|(x, y)| Point::new(x, y));
+    d.node_mut(id).unwrap().set_image_corners(q).unwrap();
+    let art = vectorcraft_doc::image_quad::distorted_art(d.node(id).unwrap()).unwrap();
+    let whole: Vec<Affine> = vectorcraft_doc::image_quad::distorted_pieces(&art)
+        .iter()
+        .filter_map(|p| match &p.children()?.get(1)?.kind {
+            NodeKind::Image(im) => Some(im.xf),
+            _ => None,
+        })
+        .collect();
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    let parts: Vec<(&craft_metafile::write::Image, Affine)> = ops
+        .iter()
+        .filter_map(|o| match o {
+            crate::scene::Op::Image { image, xf, .. } => Some((&**image, *xf)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(parts.len(), whole.len());
+    assert!(parts.len() > 8, "{}", parts.len());
+    let stored: u64 = parts.iter().map(|(i, _)| u64::from(i.width) * u64::from(i.height)).sum();
+    assert!(stored * 4 < 64 * 64 * parts.len() as u64, "{stored} pixels in {} pieces", parts.len());
+    for ((part, xf), full) in parts.iter().zip(&whole) {
+        // The part's first pixel names where it starts in the image.
+        let (x0, y0) = (f64::from(part.rgba[0] / 4), f64::from(part.rgba[1] / 4));
+        let want = *full * Affine::translate((x0, y0));
+        assert!(xf.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{xf:?} against {want:?}");
+        // Each row runs on from that pixel.
+        let last = (part.width as usize - 1) * 4;
+        assert_eq!(f64::from(part.rgba[last] / 4), x0 + f64::from(part.width - 1));
+    }
+}
+
 #[test]
 fn type_is_written_as_outlines() {
     let t = TextObject::point(Point::new(10.0, 50.0), "Hi", CharStyle { fill: red(), ..CharStyle::default() });
@@ -282,7 +394,7 @@ fn ruby_is_written_with_its_type() {
     let reading = contours(&lay.ruby);
     assert!(reading >= 3, "the reading has ink: {reading}");
     let doc = |ruby: bool| doc_with(100.0, 100.0, vec![Node::new(NodeId(0), NodeKind::Text(Box::new(typed(ruby))))]);
-    let moves = |d: &Document| count(&kinds(&emf_records(&emf(d).bytes)), crate::emf::MOVETOEX);
+    let moves = |d: &Document| count(&kinds(&emf_records(&emf(d).bytes)), 27 /* EMR_MOVETOEX */);
     assert_eq!(moves(&doc(true)), moves(&doc(false)) + reading, "the reading's contours are written");
     assert!(wmf(&doc(true)).bytes.len() > wmf(&doc(false)).bytes.len(), "WMF writes the reading too");
 }
@@ -299,7 +411,6 @@ fn wmf_placeable_header_checksum_and_record_sizes() {
     assert_eq!(u16_at(b, 14), 1440);
     let xor = (0..10).fold(0u16, |a, i| a ^ u16_at(b, 2 * i));
     assert_eq!(u16_at(b, 20), xor, "the checksum");
-    assert_eq!(crate::wmf::checksum(&b[..20]), xor);
     // The WMF header: a memory metafile of 9 words, its size in words, the largest record.
     assert_eq!([u16_at(b, 22), u16_at(b, 24), u16_at(b, 26)], [1, 9, 0x0300]);
     assert_eq!(u32_at(b, 28) as usize * 2, b.len() - 22);
@@ -319,12 +430,12 @@ fn wmf_placeable_header_checksum_and_record_sizes() {
 
 #[test]
 fn wmf_sizes_fit_sixteen_bits() {
-    assert_eq!(crate::wmf::units_per_inch(612.0, 792.0), 1440);
-    let inch = crate::wmf::units_per_inch(3000.0, 1000.0);
-    assert!(inch < 1440 && f64::from(inch) * 3000.0 / 72.0 <= 32767.0);
+    let ordinary = wmf(&doc_with(612.0, 792.0, Vec::new())).bytes;
+    assert_eq!(u16_at(&ordinary, 14), 1440);
     let d = doc_with(3000.0, 1000.0, vec![path(shapes::rectangle(Rect::new(0.0, 0.0, 3000.0, 1000.0)), red(), Paint::None, 0.0)]);
     let b = wmf(&d).bytes;
-    assert_eq!(u16_at(&b, 14), inch);
+    let inch = u16_at(&b, 14);
+    assert!(inch < 1440 && f64::from(inch) * 3000.0 / 72.0 <= 32767.0);
     assert!(u16_at(&b, 10) <= 32767);
 }
 
@@ -360,6 +471,174 @@ fn hidden_and_offboard_art_is_left_out() {
     assert!(export(&d, Rect::new(0.0, 0.0, 0.0, 10.0), Kind::Emf).is_err(), "an empty region");
 }
 
+/// One metafile of `doc` over `region`, applying the live effects for this region alone: what
+/// [`export`] did for each region before [`export_regions`] applied them once for all regions.
+fn export_baking_each_region(doc: &Document, region: Rect, kind: Kind) -> Result<Output, String> {
+    let r = region.abs();
+    if ![r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()) || r.width() <= 0.0 || r.height() <= 0.0 {
+        return Err("the export region is empty".into());
+    }
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, kind == Kind::Emf, layers);
+    let doc = baked.as_ref().unwrap_or(doc);
+    let (ops, mut warnings) = crate::scene::Scene::new(doc, r, kind == Kind::Emf).run();
+    let bytes = crate::encode::write(ops, r, kind, doc.info_title(), &mut warnings)?;
+    Ok(Output { bytes, warnings })
+}
+
+/// A Zig Zag effect with its default settings.
+fn zig_zag() -> vectorcraft_doc::Effect {
+    vectorcraft_doc::Effect { id: "distort.zigZag".into(), params: Default::default(), visible: true }
+}
+
+/// `boards` 100 pt squares side by side, each holding `paths` rectangles with a live Zig Zag
+/// and a gradient-filled one, and every second one an instance of a symbol whose art has a Zig
+/// Zag too; `boards` regions, one over each square.
+fn zig_zag_boards(boards: usize, paths: usize) -> (Document, Vec<Rect>) {
+    let mut d = Document::new(100.0 * boards as f64, 100.0);
+    let mut art = path(shapes::rectangle(Rect::new(0.0, 0.0, 30.0, 20.0)), blue(), red(), 1.0);
+    art.appearance.effects.push(zig_zag());
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Zig".into(), art: Arc::new(art) });
+    let g = Paint::Gradient(Box::new(GradientPaint::new(Gradient::default())));
+    for b in 0..boards {
+        let x = 100.0 * b as f64;
+        for i in 0..paths {
+            let at = (i % 9) as f64 * 9.0;
+            let mut n = path(shapes::rectangle(Rect::new(x + at + 2.0, at + 2.0, x + at + 20.0, at + 15.0)), red(), blue(), 0.5);
+            n.appearance.effects.push(zig_zag());
+            add(&mut d, n);
+        }
+        add(&mut d, path(shapes::rectangle(Rect::new(x + 60.0, 60.0, x + 90.0, 90.0)), g.clone(), Paint::None, 0.0));
+        if b % 2 == 1 {
+            let inst = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Zig".into(), xf: Affine::translate((x + 50.0, 10.0)) });
+            add(&mut d, inst);
+        }
+    }
+    let regions = (0..boards).map(|b| Rect::new(100.0 * b as f64, 0.0, 100.0 * (b + 1) as f64, 100.0)).collect();
+    (d, regions)
+}
+
+/// Each region's metafile is byte for byte, and warning for warning, what a separate export of
+/// that region writes, in EMF and WMF, in the regions' order and in reverse.
+#[test]
+fn export_regions_writes_what_each_region_writes_alone() {
+    let (d, mut regions) = zig_zag_boards(3, 2);
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    assert!(vectorcraft_effects::bake_document_placing_symbols(&d, true, layers).is_some(), "the document has live effects to apply");
+    for _ in 0..2 {
+        for kind in [Kind::Emf, Kind::Wmf] {
+            let outs = export_regions(&d, &regions, kind).unwrap();
+            assert_eq!(outs.len(), regions.len());
+            for (r, out) in regions.iter().zip(&outs) {
+                let alone = export_baking_each_region(&d, *r, kind).unwrap();
+                assert!(out.bytes == alone.bytes, "{kind:?} over {r:?}: the bytes differ");
+                assert_eq!(out.warnings, alone.warnings, "{kind:?} over {r:?}");
+                let one = export(&d, *r, kind).unwrap();
+                assert!(one.bytes == alone.bytes, "{kind:?} over {r:?}: export's bytes differ");
+                assert_eq!(one.warnings, alone.warnings, "{kind:?} over {r:?}");
+            }
+            if kind == Kind::Wmf {
+                assert!(outs.iter().all(|o| o.warnings.iter().any(|w| w.contains("gradients"))), "{:?}", outs[0].warnings);
+            }
+        }
+        regions.reverse();
+    }
+}
+
+/// An empty region among valid ones writes nothing and is the one error; no region writes no
+/// metafile.
+#[test]
+fn export_regions_with_an_empty_region_writes_nothing() {
+    let (d, regions) = zig_zag_boards(2, 1);
+    for kind in [Kind::Emf, Kind::Wmf] {
+        for empty in [Rect::new(10.0, 10.0, 10.0, 50.0), Rect::new(0.0, 0.0, f64::NAN, 10.0), Rect::new(0.0, 0.0, f64::INFINITY, 10.0)] {
+            let with_empty = [regions[0], empty, regions[1]];
+            assert_eq!(export_regions(&d, &with_empty, kind).map(|o| o.len()), Err("the export region is empty".to_string()), "{kind:?}");
+        }
+        assert!(export_regions(&d, &[], kind).unwrap().is_empty(), "{kind:?}");
+        // A region given right to left or bottom to top is the same region.
+        let flipped = Rect::new(regions[1].x1, regions[1].y1, regions[1].x0, regions[1].y0);
+        let outs = export_regions(&d, &[flipped], kind).unwrap();
+        assert!(outs[0].bytes == export(&d, regions[1], kind).unwrap().bytes, "{kind:?}");
+    }
+}
+
+/// The CPU time all of this process's threads have used, from Linux's scheduler statistics; `None`
+/// elsewhere.
+fn process_cpu() -> Option<std::time::Duration> {
+    let mut ns = 0u64;
+    for task in std::fs::read_dir("/proc/self/task").ok()? {
+        let stat = std::fs::read_to_string(task.ok()?.path().join("schedstat")).ok()?;
+        ns += stat.split_whitespace().next()?.parse::<u64>().ok()?;
+    }
+    Some(std::time::Duration::from_nanos(ns))
+}
+
+/// The time `f` takes: this process's CPU time where Linux reports it, otherwise the wall clock.
+fn time<T>(f: impl FnOnce() -> T) -> (std::time::Duration, T) {
+    match process_cpu() {
+        Some(before) => {
+            let t = f();
+            (process_cpu().map_or(std::time::Duration::ZERO, |after| after.saturating_sub(before)), t)
+        }
+        None => {
+            let start = std::time::Instant::now();
+            let t = f();
+            (start.elapsed(), t)
+        }
+    }
+}
+
+/// Timings of an export of 1, 2 and 8 artboards that applies the live effects once for each
+/// artboard and of [`export_regions`], which applies them once, in EMF and WMF: 500 rectangles with
+/// a live Zig Zag on each artboard. The two take turns going first, 7 runs each, and every run's
+/// files are compared. Ignored by default; it prints the median, fastest and slowest run and sets
+/// no bound on them:
+/// `cargo test --release -p vectorcraft-metafile --lib export_regions_perf -- --ignored --nocapture`.
+#[test]
+#[ignore = "a benchmark: run with --ignored --nocapture"]
+fn export_regions_perf() {
+    const RUNS: usize = 7;
+    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    eprintln!("export_regions_perf: {}", if process_cpu().is_some() { "process CPU time" } else { "wall clock" });
+    eprintln!("export_regions_perf: {:>6} {:<4} {:>32} {:>32}", "boards", "kind", "bake per board ms (min-max)", "bake once ms (min-max)");
+    for boards in [1, 2, 8] {
+        let (d, regions) = zig_zag_boards(boards, 500);
+        for kind in [Kind::Emf, Kind::Wmf] {
+            let each = || regions.iter().map(|r| export_baking_each_region(&d, *r, kind).unwrap()).collect::<Vec<_>>();
+            let once = || export_regions(&d, &regions, kind).unwrap();
+            let (mut old, mut new) = (Vec::new(), Vec::new());
+            for run in 0..RUNS {
+                let ((to, a), (tn, b)) = if run % 2 == 0 {
+                    let o = time(each);
+                    (o, time(once))
+                } else {
+                    let n = time(once);
+                    (time(each), n)
+                };
+                old.push(to);
+                new.push(tn);
+                assert_eq!(a.len(), b.len());
+                for (a, b) in a.iter().zip(&b) {
+                    assert!(a.bytes == b.bytes && a.warnings == b.warnings, "{boards} boards, {kind:?}");
+                }
+            }
+            old.sort();
+            new.sort();
+            eprintln!(
+                "export_regions_perf: {boards:>6} {:<4} {:>12.1} ({:>8.1}-{:>8.1}) {:>12.1} ({:>8.1}-{:>8.1})",
+                kind.id(),
+                ms(old[RUNS / 2]),
+                ms(old[0]),
+                ms(old[RUNS - 1]),
+                ms(new[RUNS / 2]),
+                ms(new[0]),
+                ms(new[RUNS - 1]),
+            );
+        }
+    }
+}
+
 #[test]
 fn an_instance_whose_art_reaches_the_artboard_is_written() {
     // The symbol's red rectangle, (100, 100) to (140, 140), drawn from (-50, -50): on the artboard,
@@ -367,9 +646,25 @@ fn an_instance_whose_art_reaches_the_artboard_is_written() {
     let inst = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Far".into(), xf: Affine::translate((-50.0, -50.0)) });
     let mut d = doc_with(100.0, 100.0, vec![inst]);
     let art = path(shapes::rectangle(Rect::new(100.0, 100.0, 140.0, 140.0)), red(), Paint::None, 0.0);
-    d.symbols.push(vectorcraft_doc::Symbol { name: "Far".into(), art: Arc::new(art) });
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Far".into(), art: Arc::new(art) });
     let k = kinds(&emf_records(&emf(&d).bytes));
     assert!(k.contains(&39), "a brush fills the art: {k:?}");
+}
+
+/// An instance stained blue by its fill writes its symbol's red art in blue, as the canvas draws it,
+/// in EMF (clipped) and in WMF (unclipped).
+#[test]
+fn a_stained_instance_is_written_in_its_stained_color() {
+    let mut inst = Node::new(NodeId(0), NodeKind::SymbolInstance { symbol: "Mark".into(), xf: Affine::translate((30.0, 30.0)) });
+    inst.appearance = Appearance::basic(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), Paint::None, 0.0).into();
+    let mut d = doc_with(100.0, 100.0, vec![inst]);
+    let art = path(shapes::rectangle(Rect::new(0.0, 0.0, 40.0, 40.0)), red(), Paint::None, 0.0);
+    d.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Mark".into(), art: Arc::new(art) });
+    for clips in [true, false] {
+        let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, clips).run();
+        let colors: Vec<[u8; 3]> = fills(&ops).into_iter().map(|(_, rgb)| rgb).collect();
+        assert_eq!(colors, [[0, 0, 255]], "clips: {clips}");
+    }
 }
 
 /// A pattern `name` repeating `art` every point.
@@ -403,4 +698,96 @@ fn patterns_inside_pattern_tiles_share_one_tile_budget() {
     d.patterns.push(point_tiles("self", square));
     let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
     assert!(ops.len() < 300_000, "{} operations", ops.len());
+}
+
+/// A 24 pt tile clipped to itself, red on its left half and white on its right: the striped
+/// pattern of #3911.
+fn stripes(name: &str, extra: Option<Node>) -> PatternDef {
+    let cell = Rect::new(0.0, 0.0, 24.0, 24.0);
+    let clip = Node::new(
+        NodeId(0),
+        NodeKind::Path { path: shapes::rectangle(cell), rule: vectorcraft_geom::FillRule::NonZero, live: None, clipping: true, guide: false },
+    );
+    let mut children = vec![
+        Arc::new(clip),
+        Arc::new(path(shapes::rectangle(Rect::new(0.0, 0.0, 12.0, 24.0)), red(), Paint::None, 0.0)),
+        Arc::new(path(shapes::rectangle(Rect::new(12.0, 0.0, 24.0, 24.0)), Paint::solid(Color::rgb8(255, 255, 255)), Paint::None, 0.0)),
+    ];
+    children.extend(extra.map(Arc::new));
+    let group = Node::new(NodeId(0), NodeKind::Group { children, clip: true });
+    let mut def = PatternDef::new(name, vec![Arc::new(group)]);
+    def.tile = cell;
+    def
+}
+
+/// A 360 × 260 pt rectangle filled with `def`, turned 45°.
+fn striped_doc(def: PatternDef) -> Document {
+    let paint = Paint::Pattern { pattern: def.name.clone(), xf: Affine::rotate(std::f64::consts::FRAC_PI_4) };
+    let mut d = doc_with(400.0, 300.0, vec![path(shapes::rectangle(Rect::new(20.0, 20.0, 380.0, 280.0)), paint, Paint::None, 0.0)]);
+    d.patterns.push(def);
+    d
+}
+
+fn fills(ops: &[crate::scene::Op]) -> Vec<(&vectorcraft_geom::BezPath, [u8; 3])> {
+    ops.iter()
+        .filter_map(|op| match op {
+            crate::scene::Op::Fill { path, rgb, .. } => Some((path, *rgb)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn clips(ops: &[crate::scene::Op]) -> usize {
+    ops.iter().filter(|op| matches!(op, crate::scene::Op::Clip { .. })).count()
+}
+
+/// #3911: a pattern whose tiles stay apart is written as one shape for each part of its tile,
+/// clipped once to what it fills, instead of every tile's parts in a clip of their own.
+#[test]
+fn pattern_tiles_that_stay_apart_are_one_shape_for_each_part() {
+    let d = striped_doc(stripes("stripes", None));
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    let f = fills(&ops);
+    assert_eq!(f.iter().map(|(_, rgb)| *rgb).collect::<Vec<_>>(), [[255, 0, 0], [255, 255, 255]], "red, then white");
+    assert_eq!(clips(&ops), 2, "the page's clip and one to the filled rectangle");
+    // Every tile's half is in the merged shape: one figure for each tile, red and white alike.
+    let figures = |bp: &vectorcraft_geom::BezPath| bp.elements().iter().filter(|e| matches!(e, kurbo::PathEl::MoveTo(_))).count();
+    let tiles = d.pattern("stripes").unwrap().instances_in(Affine::rotate(std::f64::consts::FRAC_PI_4), Rect::new(20.0, 20.0, 380.0, 280.0)).len();
+    assert!(tiles > 200, "{tiles} tiles");
+    assert_eq!((figures(f[0].0), figures(f[1].0)), (tiles, tiles));
+    assert!(warnings.iter().any(|w| w.contains("one shape for each part of the tile")), "{warnings:?}");
+    // The EMF: two fills and one saved clip, about half the bytes the tiles took apart.
+    let bytes = emf(&d).bytes;
+    let k = kinds(&emf_records(&bytes));
+    assert_eq!((count(&k, 62), count(&k, 33)), (2, 2), "FILLPATH and SAVEDC records");
+}
+
+/// Art reaching past its tile overlaps the next tile's, so the tiles keep their own shapes and
+/// clips, in paint order.
+#[test]
+fn pattern_art_past_its_tile_keeps_each_tile_apart() {
+    let mut def = stripes("wide", None);
+    // The tile is smaller than the art: neighbours overlap.
+    def.tile = Rect::new(0.0, 0.0, 20.0, 20.0);
+    let d = striped_doc(def);
+    let (ops, warnings) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400, "{} fills", fills(&ops).len());
+    assert!(clips(&ops) > 200, "each tile's clip stays");
+    assert!(warnings.iter().any(|w| w.contains("one shape each")), "{warnings:?}");
+}
+
+/// Hex tilings overlap their tiles' boxes, and a stroke may reach past a clip: both keep each
+/// tile apart.
+#[test]
+fn hex_tilings_and_stroked_tiles_keep_each_tile_apart() {
+    let mut hex = stripes("hex", None);
+    hex.tile_type = vectorcraft_doc::TileType::HexByRow;
+    let d = striped_doc(hex);
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400, "hex: {} fills", fills(&ops).len());
+
+    let line = path(shapes::rectangle(Rect::new(4.0, 4.0, 20.0, 20.0)), Paint::None, blue(), 2.0);
+    let d = striped_doc(stripes("stroked", Some(line)));
+    let (ops, _) = crate::scene::Scene::new(&d, d.artboards[0].rect, true).run();
+    assert!(fills(&ops).len() > 400 && clips(&ops) > 200, "stroked: {} fills, {} clips", fills(&ops).len(), clips(&ops));
 }

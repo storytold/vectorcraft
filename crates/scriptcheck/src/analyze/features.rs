@@ -1,6 +1,6 @@
 //! The platform features, menu commands and later syntax the analysis recognises.
 
-use super::*;
+use super::{Analyzer, COMPOUND, FeatureId, NEWER, OutsideId, Pending, Sig, T, catalog, is, member_mark, newer_number, report, unquote, word};
 
 /// A global name of the platform the report looks for (`$`, `File`, `Socket`, `alert`, `eval`…).
 pub(super) fn platform_name(n: &str) -> bool {
@@ -66,10 +66,22 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     self.menu(None, l);
                 }
             }
-            Pending::MenuString(l, s) => self.menu(t.is(")").then_some(s), l),
+            Pending::MenuString(l, s) if t.is(",") => self.pending = Pending::MenuStringComma(l, s),
+            Pending::MenuString(l, s) | Pending::MenuStringComma(l, s) => self.menu(t.is(")").then_some(s), l),
             Pending::Open(l) => {
                 if t.kind == T::Str {
                     self.open_mode(&unquote(t.text, 2), l);
+                }
+            }
+            Pending::Setter(l, prefix) => {
+                let sets = if prefix {
+                    !t.is(".") && !t.is("[") && !t.is("(")
+                } else {
+                    // An update operator after a line break belongs to the next line's operand.
+                    t.kind == T::Punct && (t.text == "=" || COMPOUND.contains(&t.text) || (matches!(t.text, "++" | "--") && !t.nl))
+                };
+                if sets {
+                    self.file_setter(l);
                 }
             }
         }
@@ -112,8 +124,32 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
         match pending {
             Pending::Window(l) | Pending::WindowType(l) => self.acc.feature(FeatureId::ScriptuiWindow, l),
-            Pending::Menu(l) | Pending::MenuString(l, _) => self.menu(None, l),
-            Pending::Open(_) | Pending::Name(..) | Pending::None => {}
+            Pending::Menu(l) | Pending::MenuString(l, _) | Pending::MenuStringComma(l, _) => self.menu(None, l),
+            Pending::Setter(l, true) => self.file_setter(l),
+            Pending::Open(_) | Pending::Setter(_, false) | Pending::Name(..) | Pending::None => {}
+        }
+    }
+
+    /// A File object's `length`, `hidden` or `readonly` set at `line`: the file changes.
+    fn file_setter(&mut self, line: Option<usize>) {
+        self.acc.feature(FeatureId::FileWrite, line);
+        self.acc.outside(OutsideId::FilesWritten, line, None);
+    }
+
+    /// `name`, a property of `receiver` read with `.` or as a string literal in brackets, `before`
+    /// coming before the receiver: when it is the setter of an object that may be a File object (not
+    /// of one that is a Folder object whatever the path names), the next token says whether it is set
+    /// ([`Pending::Setter`]). An update operator in `before` is a prefix
+    /// (`++f.length`) when the receiver is on its line, or when it starts a line or comes where an
+    /// expression may start; otherwise it ends the operand before it (`i++` and a line break, then
+    /// `f.length`).
+    fn setter(&mut self, name: &str, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>, line: Option<usize>) {
+        if catalog::FILE_SETTERS.contains(&name) && self.held_file(receiver, before) == Some(false) {
+            // Before a receiver that ends in `)` (`new File(i++).length`), the operator is inside the
+            // parentheses.
+            let update = before.filter(|b| (b.is("++") || b.is("--")) && receiver.is_some_and(|r| r.kind == T::Ident));
+            let prefix = update.is_some_and(|b| b.nl || b.expr || receiver.is_some_and(|r| !r.nl));
+            self.pending = Pending::Setter(line, prefix);
         }
     }
 
@@ -156,8 +192,6 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 } else if n == catalog::DOLLAR_EVAL_FILE {
                     self.acc.feature(FeatureId::DollarEvalFile, line);
                     self.acc.outside(OutsideId::UnseenCode, line, None);
-                } else if n == catalog::LOCALIZE {
-                    self.acc.feature(FeatureId::Localize, line);
                 } else {
                     self.acc.feature(FeatureId::Dollar, line);
                 }
@@ -172,6 +206,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             if n == catalog::REFLECT {
                 self.acc.feature(FeatureId::Reflection, line);
             }
+            self.setter(n, h1, h2, line);
             return;
         }
         if member_mark(h0) {
@@ -233,6 +268,11 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn punct(&mut self, t: &Sig<'s>, line: Option<usize>) {
         let [h0, h1, h2, h3] = self.h;
         match t.text {
+            // `f['length']`: a File object's setter may follow.
+            "]" if is(h1, "[") && h0.is_some_and(|s| s.kind == T::Str) => {
+                let name = h0.map(|s| unquote(s.text, 16)).unwrap_or_default();
+                self.setter(&name, h2, h3, line);
+            }
             "(" => self.call(line),
             // `Name.prototype["+"] = …` defines an operator.
             "=" => {
@@ -250,13 +290,26 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// `(` after a name: a call.
     fn call(&mut self, line: Option<usize>) {
         let [h0, h1, h2, h3] = self.h;
+        // `doc['exportVariables'](f)`: a document method named by a string literal in brackets.
+        if is(h0, "]")
+            && is(h2, "[")
+            && let Some(name) = h1.filter(|s| s.kind == T::Str)
+            && catalog::DOM_FILE_WRITES.contains(&unquote(name.text, 32).as_str())
+        {
+            self.acc.feature(FeatureId::FileWrite, line);
+            self.acc.outside(OutsideId::FilesWritten, line, None);
+            return;
+        }
         let Some(callee) = h0.filter(|s| s.kind == T::Ident) else { return };
         let n = callee.text;
         if is(h1, ".") {
-            // The receiver is a variable holding a File or Folder object (not a property of the same
-            // name), or a File or Folder object made in place or held in grouping parentheses
-            // ([`Sig::file`]).
-            let file = h2.is_some_and(|r| r.file || (r.kind == T::Ident && !member_mark(h3) && self.files.contains(r.text)));
+            let held = self.held_file(h2, h3);
+            // A Folder object whatever the path names has no File-only function: the call does not
+            // reach the file system.
+            if held == Some(true) && catalog::FILE_ONLY.contains(&n) {
+                return;
+            }
+            let file = held.is_some();
             if n == catalog::MENU_COMMAND {
                 self.pending = Pending::Menu(line);
             } else if n == catalog::OPEN && file {
@@ -267,7 +320,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
                 self.acc.feature(FeatureId::FileRead, line);
-            } else if file && catalog::FILE_WRITES.contains(&n) {
+            } else if (file && catalog::FILE_WRITES.contains(&n)) || catalog::DOM_FILE_WRITES.contains(&n) {
                 self.acc.feature(FeatureId::FileWrite, line);
                 self.acc.outside(OutsideId::FilesWritten, line, None);
             } else if n == catalog::EXECUTE {
@@ -287,6 +340,23 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::DynamicCode, line);
                 self.acc.outside(OutsideId::UnseenCode, line, None);
             }
+        }
+    }
+
+    /// Whether `receiver`, which `before` comes before, is a variable holding a File or Folder object
+    /// (not a property of the same name), or a File or Folder object made in place or held in
+    /// grouping parentheses ([`Sig::file`]): `Some(true)` for a Folder object whatever the path names
+    /// ([`Sig::folder`], [`Analyzer::folder`]), unless the file gives names values the analysis
+    /// doesn't read ([`Analyzer::unsure`]), `Some(false)` for an object that may be a File object, and
+    /// `None` for anything else.
+    fn held_file(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> Option<bool> {
+        let r = receiver?;
+        if r.file {
+            Some(r.folder && !self.unsure)
+        } else if r.kind == T::Ident && !member_mark(before) && self.alias(&r) {
+            Some(self.folder(r.text))
+        } else {
+            None
         }
     }
 

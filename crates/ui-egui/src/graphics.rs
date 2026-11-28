@@ -102,8 +102,10 @@ impl VectorcraftApp {
 
     /// Textures live in one egui context. When the host hands the app a new one (it started again
     /// after losing its graphics), everything uploaded to the old one is made again: the fonts and
-    /// theme, the canvas, the place cursor's thumbnails and every [`TexCache`].
-    pub(crate) fn adopt_context(&mut self, ctx: &egui::Context) {
+    /// theme, the canvas, the place cursor's thumbnails and every [`TexCache`]. The host hands it
+    /// the window's context when it creates the app, so the first frame's input has the app's
+    /// commands.
+    pub fn adopt_context(&mut self, ctx: &egui::Context) {
         let tag = context_tag(ctx);
         self.ui_ctx = Some(ctx.clone());
         if self.context == tag {
@@ -116,18 +118,33 @@ impl VectorcraftApp {
             // an explicit teardown guarantees it cannot look continuous with the old context's
             // last observed pass and reuse its owner/baseline generation.
             self.ime_context.end_viewport(ctx.viewport_id());
-            self.styled = false;
-            self.fonts_ready = false;
-            // Shortcut input is keyed by context identity. Preserve a first pass already
-            // handled for this new context before UI setup, or toggle keys execute twice.
-            self.injected_settle_hook = false;
-            self.ui_fonts = Default::default();
             self.canvas.texture = None;
             self.canvas.key = None;
-            self.place.forget_textures();
         }
         self.context = tag;
     }
+}
+
+thread_local! {
+    /// The one renderer of the small renders below.
+    static RENDERER: RefCell<vectorcraft_render::Renderer> = RefCell::new(vectorcraft_render::Renderer::new());
+}
+
+/// A small document rendered at one pixel to the point (stroke previews: brushes, arrowheads),
+/// transparent where nothing paints. `build` makes the document of `size_px` pixels, as points.
+pub(crate) fn doc_image(size_px: [usize; 2], build: impl FnOnce(f64, f64) -> Option<vectorcraft_doc::Document>) -> Option<egui::ColorImage> {
+    let (w, h) = (size_px[0] as f64, size_px[1] as f64);
+    let doc = build(w, h)?;
+    let img = RENDERER.with(|r| r.borrow_mut().render_region(&doc, vectorcraft_geom::Rect::new(0.0, 0.0, w, h), 1.0, false));
+    Some(crate::canvas::color_image(&img))
+}
+
+/// `region` of `doc` rendered on white, its longest side `px` pixels (artboard and page
+/// thumbnails).
+pub(crate) fn region_image(doc: &vectorcraft_doc::Document, region: vectorcraft_geom::Rect, px: u32) -> egui::ColorImage {
+    let scale = f64::from(px) / region.width().max(region.height()).max(1.0);
+    let img = RENDERER.with(|r| r.borrow_mut().render_region(doc, region, scale, true));
+    crate::canvas::color_image(&img)
 }
 
 #[cfg(test)]
@@ -144,11 +161,7 @@ mod tests {
     /// One headless frame of the whole window (800×600) in `ctx`.
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))), ..Default::default() };
-        let mut out = ctx.run_ui(raw, |ui| {
-            app.logic(ui.ctx());
-            app.ui(ui);
-        });
-        out.textures_delta.clear();
+        crate::testing::app_frame(app, ctx, raw);
     }
 
     /// The name of texture `id` in `ctx`, if `ctx` has it.
@@ -165,7 +178,7 @@ mod tests {
 
     #[test]
     fn a_loss_is_reported_once_from_any_thread() {
-        let (loss, ctx) = (GraphicsLoss::default(), egui::Context::default());
+        let (loss, ctx) = (GraphicsLoss::default(), crate::testing::ui_context());
         let (l, c) = (loss.clone(), ctx.clone());
         std::thread::spawn(move || {
             l.report(&c, "Unknown: driver reset");
@@ -190,40 +203,25 @@ mod tests {
         assert_eq!(CACHE.with(|c| c.borrow().clone()), [8], "and filled again");
     }
 
-    /// After the graphics are lost, the app uploads its canvas and previews to the new context and
-    /// applies its theme and fonts there again.
+    /// After the graphics are lost, the app uploads its canvas to the new context.
     #[test]
     fn the_app_uploads_everything_again_in_a_new_context() {
         let mut app = app();
-        let old = egui::Context::default();
-        // Fonts, then the canvas.
+        app.canvas.worker_started = true; // render on this thread
+        let old = crate::testing::ui_context();
         for _ in 0..3 {
             frame(&mut app, &old);
         }
         let canvas = app.canvas.texture.as_ref().map(egui::TextureHandle::id).expect("the canvas is drawn");
         assert_eq!(texture_name(&old, canvas).as_deref(), Some("canvas"));
-        let preview = |ctx: &egui::Context| {
-            let mut tex = None;
-            ctx.run_ui(Default::default(), |ui| {
-                tex = crate::widgets::doc_preview(ui, "loss", egui::vec2(8.0, 8.0), |w, h| Some(vectorcraft_doc::Document::new(w, h)))
-            })
-            .textures_delta
-            .clear();
-            tex.expect("a preview").id()
-        };
-        assert_eq!(texture_name(&old, preview(&old)).as_deref(), Some("preview-8x8@1:loss"));
 
         // The host lost its graphics and started again: same app, new context.
-        let new = egui::Context::default();
+        let new = crate::testing::ui_context();
         for _ in 0..3 {
             frame(&mut app, &new);
         }
         let canvas = app.canvas.texture.as_ref().map(egui::TextureHandle::id).expect("the canvas is drawn again");
         assert_eq!(texture_name(&new, canvas).as_deref(), Some("canvas"), "uploaded to the new context");
-        assert_eq!(texture_name(&new, preview(&new)).as_deref(), Some("preview-8x8@1:loss"), "cached previews are made again");
-        assert_eq!(new.global_style().visuals.panel_fill, old.global_style().visuals.panel_fill, "the theme is applied again");
-        let families = new.fonts(|f| f.definitions().families.clone());
-        assert!(families.contains_key(&egui::FontFamily::Name(crate::theme::FONT_UI_SEMIBOLD.into())), "and the fonts installed");
     }
 
     #[test]

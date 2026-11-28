@@ -1,16 +1,18 @@
 //! Art, scatter and pattern brushes: art bent along the path by arc length.
 //!
 //! Art coordinates `(x, y)` map to the path point at arc length `s(x)` offset by
-//! `(y - centre) × cross` along the path's left normal. Art outlines are flattened and
-//! subdivided first so long straight edges bend with the path instead of cutting chords.
+//! `(y - centre) × cross` along the path's left normal. Art outlines come out as cubics fitted
+//! to the bent art, so curves stay curves and long straight edges bend with the path (#3926);
+//! where that would take more anchors than chords, they are flattened and subdivided instead.
 
 use std::sync::Arc;
 
-use vectorcraft_doc::{Node, NodeKind, PressureProfile};
-use vectorcraft_geom::{Affine, BezPath, PathData, PathEl, Point, Rect, SubPath};
+use kurbo::ParamCurveNearest;
+use vectorcraft_doc::{Appearance, Node, NodeId, NodeKind, StrokeLayer};
+use vectorcraft_geom::{Affine, BezPath, CubicBez, ParamCurve, PathData, PathEl, Point, Rect, SubPath, Vec2};
 
-use crate::track::{Rng, Track, seed_of, tracks};
-use crate::{ArtBrush, ArtScale, Direction, PatternBrush, PatternFit, Scatter, Variation, tolerance};
+use crate::track::{Rng, Track, normal, seed_of, tracks};
+use crate::{ArtBrush, ArtScale, CornerSource, Direction, PatternBrush, PatternFit, PenAt, Scatter, Variation, tolerance};
 
 /// Longest mapped segment (points in document space).
 const MAX_SEG: f64 = 1.5;
@@ -31,23 +33,30 @@ const MAX_SUB: usize = 4000;
 const MAX_ANCHORS: usize = 2_000_000;
 /// Nodes [`anchors_of`] walks into before it gives up and charges the whole budget.
 const MAX_WALK: usize = 10_000;
+/// Points on each side of the box an Auto-Sliced pattern brush corner masks its tiles with.
+const MASK_STEPS: usize = 32;
 
-/// Bend every path under `n` through `f`. Paths are flattened with `flat_tol` (art space) and
-/// segments subdivided so none is longer than `max_du` along x. Stroke widths scale by
-/// `width_scale`. Text, images and symbol instances can't bend and are dropped.
-pub(crate) fn warp_node(n: &Node, f: &dyn Fn(Point) -> Point, flat_tol: f64, max_du: f64, width_scale: f64) -> Option<Node> {
+/// Bend every path under `n` through `f`. Each art segment comes out as cubics that follow it
+/// through the bend to within [`fit_tol`] of `doc_tol`, the flattening tolerance in document
+/// space, so the art keeps its curves (#3926). Where that cannot be done in no more anchors than
+/// chords would take, the path is flattened with `flat_tol` (art space) and subdivided so no chord
+/// is longer than `max_du` along x, as it always was. Stroke widths scale by `width_scale`.
+/// Text, images and symbol instances can't bend and are dropped. The art of a linked opacity mask
+/// bends with the object it masks.
+pub(crate) fn warp_node(n: &Node, f: &dyn Fn(Point) -> Point, flat_tol: f64, max_du: f64, doc_tol: f64, width_scale: f64) -> Option<Node> {
     let mut out = n.clone();
     out.appearance.scale_strokes(width_scale);
     match &mut out.kind {
         NodeKind::Path { path, live, .. } => {
             *live = None;
-            *path = warp_path(path, f, flat_tol, max_du);
+            *path = warp_path(path, f, flat_tol, max_du, fit_tol(doc_tol));
             if path.is_empty() {
                 return None;
             }
         }
         NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } => {
-            let kids: Vec<Arc<Node>> = children.iter().filter_map(|c| warp_node(c, f, flat_tol, max_du, width_scale)).map(Arc::new).collect();
+            let kids: Vec<Arc<Node>> =
+                children.iter().filter_map(|c| warp_node(c, f, flat_tol, max_du, doc_tol, width_scale)).map(Arc::new).collect();
             if kids.is_empty() {
                 return None;
             }
@@ -55,55 +64,169 @@ pub(crate) fn warp_node(n: &Node, f: &dyn Fn(Point) -> Point, flat_tol: f64, max
         }
         _ => return None,
     }
+    map_mask(&mut out, |art| warp_node(art, f, flat_tol, max_du, doc_tol, width_scale));
     Some(out)
 }
 
-fn warp_path(p: &PathData, f: &dyn Fn(Point) -> Point, flat_tol: f64, max_du: f64) -> PathData {
-    let bp = p.to_bezpath();
+/// Replace the art of `n`'s linked opacity mask, if it has one, with what `map` makes of it. Where
+/// `map` draws nothing, the mask's art becomes an empty group.
+fn map_mask(n: &mut Node, map: impl FnOnce(&Node) -> Option<Node>) {
+    if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut())
+        && m.linked
+    {
+        let id = m.art.id;
+        m.art = Arc::new(map(&m.art).unwrap_or_else(|| Node::group(id, vec![])));
+    }
+}
+
+/// Each subpath of `p` through `f`: fitted cubics when they take no more anchors than the chords
+/// would, else the chords. Points `f` cannot place (not finite) are left out of the chords.
+fn warp_path(p: &PathData, f: &dyn Fn(Point) -> Point, flat_tol: f64, max_du: f64, fit_tol: f64) -> PathData {
     let mut subs = vec![];
-    let mut cur: Vec<Point> = vec![];
-    let mut els = vec![];
-    kurbo::flatten(bp.iter(), flat_tol.max(1e-4), |e| els.push(e));
-    let finish = |cur: &mut Vec<Point>, closed: bool, subs: &mut Vec<SubPath>| {
-        let pts = std::mem::take(cur);
-        if pts.len() < 2 {
-            return;
+    for sp in &p.subpaths {
+        let Some(dense) = densified(sp, flat_tol, max_du) else { continue };
+        if let Some(fit) = fitted(sp, f, fit_tol, dense.len()) {
+            subs.push(fit);
+            continue;
         }
-        let mut dense = vec![pts[0]];
-        let n = pts.len();
-        let segs = if closed { n } else { n - 1 };
-        for i in 0..segs {
-            let (a, b) = (pts[i], pts[(i + 1) % n]);
-            let k = (((b.x - a.x).abs() / max_du).ceil() as usize).clamp(1, MAX_SUB);
-            for j in 1..=k {
-                let q = a.lerp(b, j as f64 / k as f64);
-                if closed && i == segs - 1 && j == k {
-                    break;
-                }
-                dense.push(q);
-            }
-        }
-        let mapped: Vec<Point> = dense.into_iter().map(f).collect();
-        subs.push(SubPath::polyline(&mapped, closed));
-    };
-    for e in els {
-        match e {
-            PathEl::MoveTo(q) => {
-                finish(&mut cur, false, &mut subs);
-                cur.push(q);
-            }
-            PathEl::LineTo(q) => cur.push(q),
-            PathEl::ClosePath => {
-                if cur.len() > 1 && cur[0].distance(cur[cur.len() - 1]) < 1e-9 {
-                    cur.pop();
-                }
-                finish(&mut cur, true, &mut subs);
-            }
-            _ => {}
+        let mapped: Vec<Point> = dense.into_iter().map(f).filter(|q| q.is_finite()).collect();
+        if mapped.len() >= 2 {
+            subs.push(SubPath::polyline(&mapped, sp.closed));
         }
     }
-    finish(&mut cur, false, &mut subs);
     PathData::new(subs)
+}
+
+/// `sp` flattened with `flat_tol` and its chords subdivided so none is longer than `max_du` along
+/// x, in art space: the points the chord route maps. `None` below two points.
+fn densified(sp: &SubPath, flat_tol: f64, max_du: f64) -> Option<Vec<Point>> {
+    let mut bp = BezPath::new();
+    sp.to_bezpath_into(&mut bp);
+    let mut pts = vec![];
+    vectorcraft_geom::flatten(bp.iter(), flat_tol.max(1e-4), |e| {
+        if let PathEl::MoveTo(q) | PathEl::LineTo(q) = e {
+            pts.push(q);
+        }
+    });
+    if sp.closed && pts.len() > 1 && pts.first()?.distance(*pts.last()?) < 1e-9 {
+        pts.pop();
+    }
+    if pts.len() < 2 {
+        return None;
+    }
+    let segs = if sp.closed { pts.len() } else { pts.len() - 1 };
+    let mut dense = vec![*pts.first()?];
+    for (i, (&a, &b)) in pts.iter().zip(pts.iter().cycle().skip(1)).take(segs).enumerate() {
+        let k = (((b.x - a.x).abs() / max_du).ceil() as usize).clamp(1, MAX_SUB);
+        for j in 1..=k {
+            if sp.closed && i == segs - 1 && j == k {
+                break;
+            }
+            dense.push(a.lerp(b, j as f64 / k as f64));
+        }
+    }
+    Some(dense)
+}
+
+/// Times an art segment is halved at most while looking for cubics that fit it.
+const FIT_DEPTH: u32 = 12;
+/// Parameter step of the finite differences that stand in for the bend's derivative.
+const FIT_DT: f64 = 1e-6;
+/// Sections a fitted piece is checked at the ends of (the ends themselves are exact).
+const FIT_CHECKS: usize = 8;
+/// Share of the flattening tolerance the fitted curves hold to. The chords were exact at their
+/// points and a few hundredths off between them, so a straight edge bends about as closely.
+const FIT_SHARE: f64 = 0.25;
+/// Tolerance paths are flattened to before art is laid along them.
+const TRACK_TOL: f64 = 0.05;
+
+/// The distance (document space) fitted curves keep to the bent art, for flattening tolerance
+/// `doc_tol`: never below [`TRACK_TOL`], since following the flattened path more closely than it
+/// follows the real one only traces its chords.
+fn fit_tol(doc_tol: f64) -> f64 {
+    (doc_tol * FIT_SHARE).max(TRACK_TOL)
+}
+
+/// `sp` through `f` as cubics within `tol` (document space), one or more per art segment so its
+/// anchors, corners included, stay anchors. `None` when that takes more than `most` anchors, when
+/// a piece still does not fit after [`FIT_DEPTH`] halvings, or when `f` cannot place a point.
+///
+/// Each piece is the cubic with the bent piece's ends and their derivatives, which is the piece
+/// itself where the bend is affine and converges fast where it is not. It is checked against the
+/// bend at the same parameters, so the distance measured is never less than the true one. The
+/// halving is our own rather than kurbo's `fit_to_bezpath`, which halves until the floats run out
+/// on a map that never fits; the depth and the anchor count bound this one.
+fn fitted(sp: &SubPath, f: &dyn Fn(Point) -> Point, tol: f64, most: usize) -> Option<SubPath> {
+    if !(tol.is_finite() && tol > 0.0) {
+        return None;
+    }
+    let start = f(sp.anchors.first()?.p);
+    if !start.is_finite() {
+        return None;
+    }
+    let mut bp = BezPath::new();
+    bp.move_to(start);
+    // Pieces allowed: an open subpath's first anchor is one more, a closed one's last piece ends on it.
+    let mut room = if sp.closed { most } else { most.checked_sub(1)? };
+    for i in 0..sp.segment_count() {
+        let c = sp.segment(i);
+        let line = sp.segment_is_line(i);
+        // A line's handles sit on its ends, which stalls its parameter there; thirds keep it even.
+        let c = if line { CubicBez::new(c.p0, c.p0.lerp(c.p3, 1.0 / 3.0), c.p0.lerp(c.p3, 2.0 / 3.0), c.p3) } else { c };
+        let at = |t: f64| Some(f(c.eval(t))).filter(|q| q.is_finite());
+        fit_into(&at, (0.0, 1.0), line, tol, FIT_DEPTH, &mut bp, &mut room)?;
+    }
+    if sp.closed {
+        bp.close_path();
+    }
+    // The last piece ends on the first anchor's image, so a closed subpath merges it back in; the
+    // count is checked again for a map that jumps right there and keeps the two apart.
+    PathData::from_bezpath(&bp).subpaths.into_iter().next().filter(|s| s.anchors.len() <= most)
+}
+
+/// Pieces for parameters `t0..t1` of the bent segment `at` onto `bp`, which ends at `at(t0)`:
+/// halved until each is within `tol`, at most `depth` times and `room` pieces. A `line` that is
+/// still straight within `tol` stays a line.
+fn fit_into(
+    at: &dyn Fn(f64) -> Option<Point>,
+    (t0, t1): (f64, f64),
+    line: bool,
+    tol: f64,
+    depth: u32,
+    bp: &mut BezPath,
+    room: &mut usize,
+) -> Option<()> {
+    let span = t1 - t0;
+    let (p0, p3) = (at(t0)?, at(t1)?);
+    // Derivatives read from inside the piece, so a kink at either end (a corner, a turn of the
+    // track) stays one.
+    let d0 = (at(t0 + FIT_DT)? - p0) * (span / FIT_DT);
+    let d1 = (p3 - at(t1 - FIT_DT)?) * (span / FIT_DT);
+    let c = CubicBez::new(p0, p0 + d0 / 3.0, p3 - d1 / 3.0, p3);
+    let chord = kurbo::Line::new(p0, p3);
+    let (mut curve_fits, mut line_fits) = (c.is_finite(), line);
+    for k in 1..FIT_CHECKS {
+        if !(curve_fits || line_fits) {
+            break;
+        }
+        let u = k as f64 / FIT_CHECKS as f64;
+        let q = at(t0 + span * u)?;
+        curve_fits &= q.distance(c.eval(u)) <= tol;
+        line_fits &= chord.nearest(q, 1e-9).distance_sq <= tol * tol;
+    }
+    if line_fits || curve_fits {
+        *room = room.checked_sub(1)?;
+        if line_fits {
+            bp.line_to(p3);
+        } else {
+            bp.curve_to(c.p1, c.p2, p3);
+        }
+        return Some(());
+    }
+    let depth = depth.checked_sub(1)?;
+    let mid = t0 + span / 2.0;
+    fit_into(at, (t0, mid), line, tol, depth, bp, room)?;
+    fit_into(at, (mid, t1), line, tol, depth, bp, room)
 }
 
 /// Art turned so it runs left → right, flipped as requested; returns it with its bounds.
@@ -122,6 +245,16 @@ fn oriented(art: &Node, dir: Direction, flip_along: bool, flip_across: bool) -> 
     }
     let b = a.geometric_bounds()?;
     (b.width() > 1e-9).then_some((a, b))
+}
+
+/// Orient a tile's repeat frame with its art. The frame can be smaller than the art.
+fn oriented_tile(art: &Node, frame: Option<Rect>, flip_along: bool, flip_across: bool) -> Option<(Node, Rect)> {
+    let (node, bounds) = oriented(art, Direction::LeftToRight, flip_along, flip_across)?;
+    let Some(frame) = frame else { return Some((node, bounds)) };
+    let x = if flip_along { (-frame.x1, -frame.x0) } else { (frame.x0, frame.x1) };
+    let y = if flip_across { (-frame.y1, -frame.y0) } else { (frame.y0, frame.y1) };
+    let frame = Rect::new(x.0, y.0, x.1, y.1);
+    (frame.width() > 1e-9 && frame.height() > 1e-9).then_some((node, frame))
 }
 
 /// Piecewise-linear map from art x (offset from the art's left edge) to arc length.
@@ -153,10 +286,111 @@ impl AlongMap {
         let w = self.xs[i + 1] - self.xs[i];
         if w <= 1e-12 { 1.0 } else { (self.ss[i + 1] - self.ss[i]) / w }
     }
+    /// Whether `at` is one linear function across the art, so it adds no bend of its own.
+    ///
+    /// [`AlongMap::linear`] always is: its outer two pieces have no width and the middle one
+    /// spans everything. Between Guides is not, once its three pieces really do differ, which is
+    /// the whole point of it.
+    fn is_linear(&self) -> bool {
+        let mut slope: Option<f64> = None;
+        for i in 0..3 {
+            // A piece with no width constrains nothing: no art x lands inside it.
+            if self.xs[i + 1] - self.xs[i] <= 1e-12 {
+                continue;
+            }
+            let s = self.slope(i);
+            if slope.is_some_and(|first: f64| (first - s).abs() > 1e-9 * first.abs().max(1.0)) {
+                return false;
+            }
+            slope = Some(s);
+        }
+        slope.is_some()
+    }
+
+    /// The arc lengths the art spans, low to high.
+    fn span(&self) -> (f64, f64) {
+        (self.ss[0].min(self.ss[3]), self.ss[0].max(self.ss[3]))
+    }
+
     /// Largest along-scale (arc length per art unit) of the pieces.
     fn max_scale(&self) -> f64 {
         (0..3).map(|i| self.slope(i).abs()).fold(1e-6, f64::max)
     }
+}
+
+/// The affine that reproduces `f` over `b` to within `tol`, if one does.
+///
+/// Bending is only non-linear where the track bends. On a straight run the arc-length map and the
+/// normal offset are both linear, so the art is just moved, turned and scaled, and flattening it
+/// into chords throws its curves away for nothing (#3926).
+///
+/// Derived from three corners and then checked against a grid. The check is a second opinion, not
+/// the gate: `bend` only calls this once the track and the along map have been read and found
+/// straight, because sampling can reject a bend and cannot promise there is none (#3926 review).
+fn affine_fit(f: &dyn Fn(Point) -> Point, b: Rect, tol: f64) -> Option<Affine> {
+    let (w, h) = (b.width(), b.height());
+    if !(w > 1e-9 && h > 1e-9 && tol.is_finite() && tol > 0.0) {
+        return None;
+    }
+    let origin = Point::new(b.x0, b.y0);
+    let q0 = f(origin);
+    // Images of the unit x and y directions.
+    let u = (f(Point::new(b.x1, b.y0)) - q0) / w;
+    let v = (f(Point::new(b.x0, b.y1)) - q0) / h;
+    if ![q0.x, q0.y, u.x, u.y, v.x, v.y].iter().all(|k| k.is_finite()) {
+        return None;
+    }
+    let a = Affine::translate(q0.to_vec2()) * Affine::new([u.x, u.y, v.x, v.y, 0.0, 0.0]) * Affine::translate(-origin.to_vec2());
+    // Five by five including the corners the fit came from, so a map that merely agrees at those
+    // three is rejected.
+    for i in 0..=4 {
+        for j in 0..=4 {
+            let p = Point::new(b.x0 + w * i as f64 / 4.0, b.y0 + h * j as f64 / 4.0);
+            let (want, got) = (f(p), a * p);
+            if !(want.x.is_finite() && want.y.is_finite()) || want.distance(got) > tol {
+                return None;
+            }
+        }
+    }
+    Some(a)
+}
+
+/// [`warp_node`] for a map that is affine: the art is transformed rather than flattened, so its
+/// curves survive.
+///
+/// Everything else matches [`warp_node`] deliberately, so curves are the only difference between
+/// the two routes: the same node kinds are kept and the rest dropped, `live` is cleared on every
+/// path, an empty path or a group left with no children is dropped, and strokes are scaled by
+/// `width_scale` at every level rather than by the transform's own factor, the art of linked
+/// opacity masks included.
+fn affine_node(n: &Node, a: Affine, width_scale: f64) -> Option<Node> {
+    let mut out = prepared(n, width_scale)?;
+    out.transform(a, false);
+    Some(out)
+}
+
+/// The part of [`affine_node`] that mirrors [`warp_node`]'s walk, before the single transform.
+fn prepared(n: &Node, width_scale: f64) -> Option<Node> {
+    let mut out = n.clone();
+    out.appearance.scale_strokes(width_scale);
+    match &mut out.kind {
+        NodeKind::Path { path, live, .. } => {
+            *live = None;
+            if path.is_empty() {
+                return None;
+            }
+        }
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } => {
+            let kids: Vec<Arc<Node>> = children.iter().filter_map(|c| prepared(c, width_scale)).map(Arc::new).collect();
+            if kids.is_empty() {
+                return None;
+            }
+            *children = kids;
+        }
+        _ => return None,
+    }
+    map_mask(&mut out, |art| prepared(art, width_scale));
+    Some(out)
 }
 
 /// Bend `art` (already oriented, bounds `b`) along `t` using `along` and cross scale `cross`.
@@ -166,7 +400,49 @@ fn bend(t: &Track, art: &Node, b: Rect, along: AlongMap, cross: f64) -> Option<N
     let f = move |p: Point| t.map(along.at(p.x - x0), (p.y - cy) * cross);
     let scale = along.max_scale().max(cross.abs()).max(1e-6);
     let flat_tol = tolerance(b.height().max(b.width()) * scale) / scale;
-    warp_node(art, &f, flat_tol, MAX_SEG / along.max_scale(), cross.abs())
+    // A straight run needs no bending: move the art and keep its curves.
+    //
+    // Straightness is read off the track and the along map, not sampled. A bend anywhere in the
+    // span is two segment directions that differ, so this cannot miss one however short the bent
+    // part is; the five by five grid below could, since a wiggle narrower than its spacing passes
+    // between the samples (#3926 review). The grid now only checks the affine that structure has
+    // already said exists, so it can reject and never admit.
+    let (s_lo, s_hi) = along.span();
+    if along.is_linear()
+        && t.is_straight(s_lo, s_hi)
+        && let Some(a) = affine_fit(&f, b, flat_tol.max(1e-9))
+    {
+        return affine_node(art, a, cross.abs());
+    }
+    warp_node(art, &f, flat_tol, MAX_SEG / along.max_scale(), flat_tol * scale, cross.abs())
+}
+
+/// [`bend`], with the cross scale at arc length `s` multiplied by `widen(s)` (0..=1). The strokes
+/// of each object in the art take the factor at the middle of the object.
+fn bend_widened(t: &Track, art: &Node, b: Rect, along: AlongMap, cross: f64, widen: &dyn Fn(f64) -> f64) -> Option<Node> {
+    let cy = b.center().y;
+    let x0 = b.x0;
+    let f = move |p: Point| {
+        let s = along.at(p.x - x0);
+        t.map(s, (p.y - cy) * cross * widen(s))
+    };
+    let factor = |n: &Node| n.geometric_bounds().map_or(1.0, |r| widen(along.at(r.center().x - x0)));
+    let art = widen_strokes(art, &factor);
+    let scale = along.max_scale().max(cross.abs()).max(1e-6);
+    let flat_tol = tolerance(b.height().max(b.width()) * scale) / scale;
+    warp_node(&art, &f, flat_tol, MAX_SEG / along.max_scale(), flat_tol * scale, cross.abs())
+}
+
+/// `n` with the strokes of it and of everything inside it scaled by `factor` of the object they
+/// belong to.
+fn widen_strokes(n: &Node, factor: &dyn Fn(&Node) -> f64) -> Node {
+    let mut out = n.clone();
+    out.appearance.scale_strokes(factor(n));
+    if let NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } | NodeKind::Compound { children, .. } = &mut out.kind {
+        *children = children.iter().map(|c| Arc::new(widen_strokes(c, factor))).collect();
+    }
+    map_mask(&mut out, |art| Some(widen_strokes(art, factor)));
+    out
 }
 
 /// Arc-length spans to place art on when [`ArtBrush::overlap`] is on: one run between each sharp
@@ -189,7 +465,8 @@ fn art_runs(t: &Track) -> Vec<(f64, f64)> {
     bounds.windows(2).map(|w| (w[0], w[1])).collect()
 }
 
-fn art_on_run(a: &ArtBrush, t: &Track, s0: f64, s1: f64, art: &Node, b: Rect, cross: f64) -> Option<Node> {
+/// The art on [s0, s1] of `t`, `cross` across where `widen` (0..=1, by arc length) is 1.
+fn art_on_run(t: &Track, (s0, s1): (f64, f64), a: &ArtBrush, (art, b): (&Node, Rect), cross: f64, widen: &dyn Fn(f64) -> f64) -> Option<Node> {
     let l = s1 - s0;
     if l <= 1e-9 {
         return None;
@@ -197,35 +474,50 @@ fn art_on_run(a: &ArtBrush, t: &Track, s0: f64, s1: f64, art: &Node, b: Rect, cr
     let w = b.width();
     let (along, cross) = match a.scale {
         ArtScale::Stretch => (AlongMap::linear(w, s0, s1), cross),
-        ArtScale::Proportional => {
-            let k = l / w;
-            (AlongMap::linear(w, s0, s1), k * a.width / 100.0)
-        }
+        // Scaled across as much as along, times the stroke weight and the width, as the other modes are.
+        ArtScale::Proportional => (AlongMap::linear(w, s0, s1), l / w * cross),
         ArtScale::BetweenGuides { start, end } => {
             let (g0, g1) = (start.clamp(0.0, 1.0) * w, end.clamp(0.0, 1.0) * w);
             let (g0, g1) = (g0.min(g1), g0.max(g1));
-            let fixed = (g0 + (w - g1)) * cross;
+            // The ends keep the proportions of the width at their end of the run.
+            let (c0, c1) = (cross * widen(s0), cross * widen(s1));
+            let fixed = g0 * c0 + (w - g1) * c1;
             if fixed >= l || g1 - g0 < 1e-9 {
                 (AlongMap::linear(w, s0, s1), cross)
             } else {
-                (AlongMap { xs: [0.0, g0, g1, w], ss: [s0, s0 + g0 * cross, s1 - (w - g1) * cross, s1] }, cross)
+                (AlongMap { xs: [0.0, g0, g1, w], ss: [s0, s0 + g0 * c0, s1 - (w - g1) * c1, s1] }, cross)
             }
         }
     };
-    bend(t, art, b, along, cross)
+    bend_widened(t, art, b, along, cross, widen)
 }
 
-pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
+/// An art brush's art along `bp`. With a width that follows the pen (its pressure, tilt, bearing
+/// or rotation), the art is as wide as what `stroke` recorded at each point gives (half way
+/// without a recording).
+pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64, stroke: &StrokeLayer) -> Vec<Node> {
     let Some((art, b)) = oriented(&a.art, a.direction, a.flip_along, a.flip_across) else { return vec![] };
-    let cross = weight * a.width / 100.0;
+    let (light, heavy) = a.width_range();
+    let width = light.max(heavy);
+    let cross = weight * width / 100.0;
     let mut out = vec![];
-    for t in tracks(bp, 0.05) {
-        if t.len() <= 1e-9 {
+    for t in tracks(bp, TRACK_TOL) {
+        let l = t.len();
+        if l <= 1e-9 {
             continue;
         }
-        let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, t.len())] };
-        for (s0, s1) in runs {
-            if let Some(n) = art_on_run(a, &t, s0, s1, &art, b, cross) {
+        let widen = |s: f64| {
+            if light == heavy || width <= 0.0 {
+                return 1.0;
+            }
+            // A run past the start of a closed track wraps round to it.
+            let at = if s > l { s - l } else { s };
+            let p = a.width_mode.and_then(|m| PenAt::of(stroke, at / l).control(m)).unwrap_or(0.5);
+            (light + (heavy - light) * p) / width
+        };
+        let runs = if a.overlap { art_runs(&t) } else { vec![(0.0, l)] };
+        for run in runs {
+            if let Some(n) = art_on_run(&t, run, a, (&art, b), cross, &widen) {
                 out.push(n);
             }
         }
@@ -234,30 +526,34 @@ pub(crate) fn art(a: &ArtBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
 }
 
 /// One of a scatter brush's values for the next copy: Fixed takes the first of `(a, b)`, Random a
-/// value between them, Pressure the first at pen pressure 0 and the second at 1. Every value
-/// draws, so a copy's random values stay the same whatever the other modes.
-fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pressure: f64) -> f64 {
+/// value between them, and a mode that follows the pen the first where `pen` reads 0 for it and
+/// the second where it reads 1. Every value draws, so a copy's random values stay the same
+/// whatever the other modes.
+fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pen: PenAt) -> f64 {
     let r = rng.range(a, b);
-    match mode {
-        Variation::Fixed => a,
-        Variation::Random => r,
-        Variation::Pressure => a + (b - a) * pressure.clamp(0.0, 1.0),
+    match pen.control(mode) {
+        Some(c) => a + (b - a) * c,
+        None if mode == Variation::Random => r,
+        None => a,
     }
 }
 
-pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<&PressureProfile>, name: &str) -> Vec<Node> {
+pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
-    let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
+    // Copies are spaced by the width of the art with its strokes, so at 100% spacing stroked
+    // copies touch instead of overlapping by the stroke.
+    let aw = sc.art.visual_bounds().unwrap_or(b).width().max(1e-3);
+    let ah = b.height().max(1e-3);
     let mut rng = Rng::new(seed_of(bp, name));
     let [size_mode, spacing_mode, scatter_mode, rotation_mode] = sc.modes();
     let mut out = Budget::default();
-    for t in tracks(bp, 0.05) {
+    for t in tracks(bp, TRACK_TOL) {
         if out.full() {
             break;
         }
         let l = t.len();
-        // The pen pressure at arc length `at` (half way without a recorded one).
-        let pressure_at = |at: f64| pressure.map_or(PressureProfile::MID, |p| p.at(if l > 1e-9 { at / l } else { 0.0 }));
+        // What the pen recorded at arc length `at` (the values themselves without a recording).
+        let pen_at = |at: f64| PenAt::of(stroke, if l > 1e-9 { at / l } else { 0.0 });
         let mut s: Option<f64> = None;
         let mut guard = 0;
         loop {
@@ -265,8 +561,8 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
             if guard > 20000 {
                 break;
             }
-            // Size and spacing place the next copy, so they take the pressure at the last one.
-            let p = pressure_at(s.unwrap_or(0.0));
+            // Size and spacing place the next copy, so they take the pen at the last one.
+            let p = pen_at(s.unwrap_or(0.0));
             let size = vary(&mut rng, sc.size, size_mode, p).max(1.0) / 100.0 * weight;
             let spacing = vary(&mut rng, sc.spacing, spacing_mode, p).max(1.0) / 100.0;
             let step = aw * size * spacing;
@@ -278,7 +574,7 @@ pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, pressure: Option<
                 break;
             }
             s = Some(pos);
-            let p = pressure_at(pos);
+            let p = pen_at(pos);
             let off = vary(&mut rng, sc.scatter, scatter_mode, p) / 100.0 * ah * size;
             let rot = vary(&mut rng, sc.rotation, rotation_mode, p).to_radians();
             let (p, tg) = t.frame(pos);
@@ -313,6 +609,9 @@ fn anchors_of(n: &Node) -> usize {
         }
         if let Some(c) = n.children() {
             stack.extend(c.iter().map(Arc::as_ref));
+        }
+        if let Some(m) = &n.extras().mask {
+            stack.push(&m.art);
         }
     }
     total
@@ -350,18 +649,427 @@ fn tile_on(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, cross: f64) -> Opti
     bend(t, &tile.0, tile.1, AlongMap::linear(tile.1.width(), s0, s1), cross)
 }
 
-pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
-    let orient = |n: &Node| oriented(n, Direction::LeftToRight, pb.flip_along, pb.flip_across);
-    let Some(side) = orient(&pb.side) else { return vec![] };
-    let k = weight * pb.scale.max(1.0) / 100.0;
-    let outer = pb.outer_corner.as_ref().and_then(orient);
-    let inner = pb.inner_corner.as_ref().and_then(orient);
-    let start = pb.start.as_ref().and_then(orient);
-    let end = pb.end.as_ref().and_then(orient);
+/// A tile placed on [s0, s1] of the track, `k(s)` across at arc length `s` when the scale varies
+/// (`marks`: the arc lengths of the recorded pen samples in order, between which the scale runs
+/// in a straight line), else `k` at the middle of the span across all of it ([`tile_on`]), as it
+/// is too when the scale is the same at both ends of the span, at every sample within it and, at
+/// a closed track's start within it, on both sides of the start.
+fn tile_scaled(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, k: &dyn Fn(f64) -> f64, marks: Option<&[f64]>) -> Option<Node> {
+    let mid = k((s0 + s1) / 2.0);
+    // Only the samples within the span are looked at.
+    let within = |marks: &[f64]| {
+        let from = marks.partition_point(|&s| s <= s0);
+        let to = from + marks[from..].partition_point(|&s| s < s1);
+        marks[from..to].iter().all(|&s| k(s) == mid)
+    };
+    // A closed track's scale goes from the one at its end to the one at its start where it wraps
+    // round, so a span over its start (or a track's length before or after it) takes both.
+    let l = t.len();
+    let seam = t.closed && l > 0.0 && (s0 / l).ceil() <= (s1 / l).floor();
+    let ends = || !seam || (k(0.0) == mid && k(l) == mid);
+    let even = |marks: &[f64]| k(s0) == mid && k(s1) == mid && within(marks) && ends();
+    if mid <= 0.0 || marks.is_none_or(even) {
+        return tile_on(t, tile, s0, s1, mid);
+    }
+    bend_widened(t, &tile.0, tile.1, AlongMap::linear(tile.1.width(), s0, s1), mid, &|s| k(s) / mid)
+}
+
+/// The most side tiles a run of a pattern brush places.
+const MAX_TILES: usize = 20000;
+
+/// How many times a pattern brush whose scale varies measures its side tiles again where the fit
+/// puts them.
+const REFITS: usize = 3;
+
+/// How many times a pattern brush whose scale varies halves the range a start or end tile's
+/// length lies in.
+const END_SOLVE_STEPS: usize = 48;
+
+/// How many evenly spaced lengths a pattern brush whose scale varies tries for a start or end
+/// tile before it halves the range the tile's length lies in.
+const END_SCAN_STEPS: usize = 64;
+
+/// The side tiles of a pattern brush on a run `avail` long from `a` when the scale varies along
+/// it: each tile's length and the gap after it, as `natural` gives them at the tile's start, and
+/// how many tiles fit whole and what fraction of the next one fits after them. The tiles include
+/// that next one when there is room for part of it.
+fn varied_tiles(a: f64, avail: f64, natural: &dyn Fn(f64) -> (f64, f64)) -> (Vec<(f64, f64)>, f64) {
+    let mut tiles = vec![];
+    let mut pos = 0.0;
+    while tiles.len() < MAX_TILES {
+        let (w, g) = natural(a + pos);
+        if !(w > 1e-9 && w.is_finite() && g.is_finite() && g >= 0.0) {
+            break;
+        }
+        tiles.push((w, g));
+        if pos + w > avail {
+            let whole = (tiles.len() - 1) as f64;
+            return (tiles, whole + ((avail - pos + g) / (w + g)).clamp(0.0, 1.0));
+        }
+        pos += w + g;
+    }
+    let whole = tiles.len() as f64;
+    (tiles, whole)
+}
+
+/// The size factor of a pattern brush's tiles at `weight` where its scale's pen input is `p`
+/// (0 at the first scale, 1 at the second).
+fn pattern_scale_at(pb: &PatternBrush, weight: f64, p: f64) -> f64 {
+    let (light, heavy) = pb.scale_range();
+    weight * (light + (heavy - light) * p).max(1.0) / 100.0
+}
+
+/// A pattern brush's size factor on `stroke` at `weight`, and whether it varies along the stroke.
+/// A stroke with no recording of the input the scale follows is drawn at one scale, the one that
+/// input's missing value gives.
+fn pattern_scale(pb: &PatternBrush, weight: f64, stroke: &StrokeLayer) -> (f64, bool) {
+    let (light, heavy) = pb.scale_range();
+    match pb.scale_mode {
+        Some(m) if light != heavy && pen_recorded(stroke, m) => (weight * pb.scale.max(1.0) / 100.0, true),
+        Some(m) if light != heavy => (pattern_scale_at(pb, weight, PenAt::of(stroke, 0.0).control(m).unwrap_or(0.5)), false),
+        _ => (weight * pb.scale.max(1.0) / 100.0, false),
+    }
+}
+
+/// The length of a start or end tile `width` wide at its art's size, at the scale `k_mid(w)` at
+/// the middle of the tile when it is `w` long: the shortest length that is as long as the scale at
+/// its own middle. The scale can rise and fall along the stroke, so the lengths up to `room` are
+/// tried in order (evenly spaced ones, and `breaks`, the lengths whose middle falls on a recorded
+/// pen sample), and the range between the last one the tile is too long for and the first one it
+/// fits is halved. A tile that fits at no length up to `room` gets the length it needs at `room`,
+/// longer than `room`. `breaks` is `None` when the scale is the same along the whole track, and
+/// the tile then takes its length at that scale.
+fn end_tile_length(width: f64, room: f64, k_mid: &dyn Fn(f64) -> f64, breaks: Option<&[f64]>) -> f64 {
+    let length = |w: f64| width * k_mid(w);
+    let first = length(0.0);
+    let Some(breaks) = breaks.filter(|_| !room.is_nan() && room > 0.0) else {
+        return first;
+    };
+    let mut tries: Vec<f64> = (1..=END_SCAN_STEPS).map(|i| room * i as f64 / END_SCAN_STEPS as f64).collect();
+    tries.extend(breaks.iter().copied().filter(|&w| w > 0.0 && w < room));
+    tries.sort_by(f64::total_cmp);
+    let Some(i) = tries.iter().position(|&w| length(w) <= w) else {
+        return length(room);
+    };
+    let (mut short, mut long) = (if i == 0 { 0.0 } else { tries[i - 1] }, tries[i]);
+    for _ in 0..END_SOLVE_STEPS {
+        let mid = (short + long) / 2.0;
+        if length(mid) > mid {
+            short = mid;
+        } else {
+            long = mid;
+        }
+    }
+    long
+}
+
+/// Where along a track `l` long `stroke` recorded the pen input `mode` follows: each sample at its
+/// arc length, and again a track's length before and after it, for tiles of a closed track that
+/// wrap round, in order.
+fn pen_marks(stroke: &StrokeLayer, mode: Variation, l: f64) -> Vec<f64> {
+    let points = match mode {
+        Variation::Fixed | Variation::Random => None,
+        Variation::Pressure => stroke.pressure.as_ref().map(|p| &p.points),
+        Variation::Tilt => stroke.tilt.as_ref().map(|p| &p.points),
+        Variation::Bearing => stroke.bearing.as_ref().map(|p| &p.points),
+        Variation::Rotation => stroke.rotation.as_ref().map(|p| &p.points),
+        Variation::StylusWheel => stroke.wheel.as_ref().map(|p| &p.points),
+    };
+    let mut marks: Vec<f64> = points.into_iter().flatten().flat_map(|&(f, _)| [f * l - l, f * l, f * l + l]).collect();
+    marks.sort_by(f64::total_cmp);
+    marks
+}
+
+/// Whether `stroke` recorded the pen input `mode` follows.
+fn pen_recorded(stroke: &StrokeLayer, mode: Variation) -> bool {
+    match mode {
+        Variation::Fixed | Variation::Random => false,
+        Variation::Pressure => stroke.pressure.is_some(),
+        Variation::Tilt => stroke.tilt.is_some(),
+        Variation::Bearing => stroke.bearing.is_some(),
+        Variation::Rotation => stroke.rotation.is_some(),
+        Variation::StylusWheel => stroke.wheel.is_some(),
+    }
+}
+
+/// Leaves out or adds tiles at the end of `tiles` (each a length and the gap after it) once they
+/// have been measured again: with `add_space` as many as fit in `avail` with the gaps between
+/// them, at least one, otherwise the count whose lengths and gaps between them come nearest to
+/// `avail`. An added tile is
+/// `natural(s)` long at `s` from the run's start.
+fn recount(tiles: &mut Vec<(f64, f64)>, avail: f64, add_space: bool, natural: &dyn Fn(f64) -> (f64, f64)) {
+    let mut length: f64 = tiles.iter().map(|t| t.0).sum();
+    let mut gaps: f64 = tiles.split_last().map_or(0.0, |(_, before)| before.iter().map(|t| t.1).sum());
+    // How much of the run the tiles and the spacing between them take.
+    let run = |length: f64, gaps: f64| length + gaps;
+    while let [.., (_, before), (w, _)] = tiles.as_slice() {
+        let (w, before) = (*w, *before);
+        let (now, without) = (run(length, gaps), run(length - w, gaps - before));
+        let drop = if add_space { now > avail } else { (without - avail).abs() < (now - avail).abs() };
+        if !drop {
+            break;
+        }
+        tiles.pop();
+        length -= w;
+        gaps -= before;
+    }
+    while tiles.len() < MAX_TILES {
+        let last_gap = tiles.last().map_or(0.0, |t| t.1);
+        let now = run(length, gaps);
+        let (w, g) = natural(run(length, gaps + last_gap));
+        if w.is_nan() || w <= 1e-9 {
+            break;
+        }
+        let with = run(length + w, gaps + last_gap);
+        let add = if add_space { with <= avail } else { (with - avail).abs() < (now - avail).abs() };
+        if !add {
+            break;
+        }
+        tiles.push((w, g));
+        length += w;
+        gaps += last_gap;
+    }
+}
+
+/// A pattern brush's side tiles on the run `avail` long from `a` of `t` (`marks` as
+/// [`tile_scaled`] takes them), at the scale `k(s)` at
+/// arc length `s` ([`varied_tiles`]), fitted as `pb.fit` says: Stretch scales the lengths and gaps
+/// to fill the run, Add Space keeps the lengths and shares out what is left between the tiles
+/// (around a lone tile), and Approximate keeps both and centers the tiles on the run.
+fn varied_side_tiles(
+    out: &mut Budget,
+    t: &Track,
+    pb: &PatternBrush,
+    side: &(Node, Rect),
+    (a, avail): (f64, f64),
+    k: &dyn Fn(f64) -> f64,
+    marks: &[f64],
+) {
+    let tw = side.1.width();
+    // Each side tile and the gap after it as long as the scale at the tile's middle.
+    let natural = |s: f64| {
+        let w = tw * k(s + tw * k(s) / 2.0);
+        (w, w * pb.spacing.max(0.0) / 100.0)
+    };
+    let (tiles, count) = varied_tiles(a, avail, &natural);
+    let n = match pb.fit {
+        PatternFit::AddSpace => count.floor(),
+        PatternFit::Stretch | PatternFit::Approximate => count.round(),
+    }
+    .max(1.0) as usize;
+    let mut tiles = tiles[..n.min(tiles.len())].to_vec();
+    // How far the fit stretches the tiles and gaps, where the first tile starts, and the space
+    // between tiles when the fit sets it.
+    let fitted = |tiles: &[(f64, f64)]| {
+        let length: f64 = tiles.iter().map(|t| t.0).sum();
+        // The gaps between the tiles: after every tile but the last.
+        let gaps: f64 = tiles.split_last().map_or(0.0, |(_, before)| before.iter().map(|t| t.1).sum());
+        match pb.fit {
+            PatternFit::Stretch => (avail / (length + gaps), 0.0, None),
+            PatternFit::AddSpace if tiles.len() > 1 => (1.0, 0.0, Some(((avail - length) / (tiles.len() - 1) as f64).max(0.0))),
+            PatternFit::AddSpace => (1.0, (avail - tiles.first().map_or(0.0, |t| t.0)) / 2.0, None),
+            PatternFit::Approximate => (1.0, (avail - length - gaps) / 2.0, None),
+        }
+    };
+    // The fit moves the tiles from where they were measured, so each is measured again at the
+    // middle of where the fit puts it, and the fit worked out again, a few times over.
+    for _ in 0..REFITS {
+        let (stretch, lead, space) = fitted(&tiles);
+        let mut s0 = a + lead;
+        for tile in &mut tiles {
+            let placed = tile.0 * stretch;
+            let w = tw * k(s0 + placed / 2.0);
+            s0 += placed + space.unwrap_or(tile.1 * stretch);
+            *tile = (w, w * pb.spacing.max(0.0) / 100.0);
+        }
+        recount(&mut tiles, avail, pb.fit == PatternFit::AddSpace, &|s| natural(a + s));
+    }
+    let (stretch, lead, space) = fitted(&tiles);
+    let mut s0 = a + lead;
+    for &(w, g) in &tiles {
+        let w = w * stretch;
+        out.take(tile_scaled(t, side, s0, s0 + w, k, Some(marks)));
+        if out.full() {
+            break;
+        }
+        s0 += w + space.unwrap_or(g * stretch);
+    }
+}
+
+/// What a pattern brush draws at a corner: corner tile art (oriented, with its bounds), or what
+/// [`CornerSource`] gives.
+#[derive(Clone, Copy)]
+enum Corner<'a> {
+    Art(&'a (Node, Rect)),
+    Source(CornerSource),
+}
+
+/// The pieces of the corner tile that `source` makes at corner `i` of `t` from `side` (oriented,
+/// with its bounds) at scale `k`, and the length of path on each side of the corner they cover,
+/// which is at most `room`.
+///
+/// At the corner, the pieces run straight along the directions the path arrives at and leaves
+/// the corner in, and towards their far ends they move onto the path itself, so they meet the side
+/// tiles where the path curves. The corner's diagonal is the line through the corner that halves
+/// the turn, where the two offset edges of the band meet. [`CornerSource::None`] and a turn of
+/// nearly 180° get no pieces.
+fn auto_corner(t: &Track, i: usize, source: CornerSource, side: &(Node, Rect), k: f64, room: f64) -> (Vec<Node>, f64) {
+    let (art, b) = side;
+    let (a_dir, b_dir) = t.in_out(i);
+    let (Some(&p), Some(&sc)) = (t.verts.get(i), t.cum.get(i)) else { return (vec![], 0.0) };
+    let bt = a_dir + b_dir;
+    if source == CornerSource::None || a_dir.dot(bt) < 1e-3 {
+        return (vec![], 0.0);
+    }
+    let (tw, r) = (b.width() * k, b.height() * k / 2.0);
+    let (x0, cy) = (b.x0, b.center().y);
+    // Art point → (distance along from the left edge, offset across), in points.
+    let local = move |q: Point| ((q.x - x0) * k, (q.y - cy) * k);
+    // How far along `d` (from the corner) the diagonal is at offset `y` across `d`'s left normal.
+    let diag = move |d: Vec2, y: f64| -y * normal(d).dot(bt) / d.dot(bt);
+    // `u` along `d` from the corner and `y` across, moved from the straight line onto the path as
+    // `u` goes from `from` to `far` (signed: negative before the corner; `from` is the corner or
+    // a point between it and `far`).
+    let on_path = move |d: Vec2, u: f64, y: f64, from: f64, far: f64| {
+        let straight = p + d * u + normal(d) * y;
+        let span = far - from;
+        let w = if span.abs() > 1e-9 { ((u - from) / span).clamp(0.0, 1.0) } else { 0.0 };
+        if w > 0.0 { straight.lerp(t.map(sc + u, y), w) } else { straight }
+    };
+    // The most the diagonal is ahead of the corner, along either direction, within the band. Each
+    // source stretches the side tile along to `len` where the band is too tall for the tile to
+    // reach the diagonal, so the two sides always meet on it.
+    let ahead = r * normal(a_dir).dot(bt).abs() / a_dir.dot(bt);
+    // Before the corner, `u` in [-len, 0] maps onto [-len, diagonal]; after it, [0, len] onto
+    // [diagonal, len]. Both ends stay on the diagonal when `len` is shorter than `ahead`, and the
+    // points on the diagonal stay on the straight lines, where the two sides meet.
+    let into = move |u: f64, y: f64, len: f64| {
+        let reach = len.max(ahead);
+        let e = diag(a_dir, y).clamp(-reach, reach);
+        on_path(a_dir, -len + (u + len) * (e + len) / len.max(1e-9), y, e.min(0.0), -len)
+    };
+    let out_of = move |u: f64, y: f64, len: f64| {
+        let reach = len.max(ahead);
+        let e = diag(b_dir, y).clamp(-reach, reach);
+        on_path(b_dir, e + u * (len - e) / len.max(1e-9), y, e.max(0.0), len)
+    };
+    let flat_tol = tolerance(b.height().max(b.width()) * k) / k;
+    // The tile is squeezed along so that it covers at most `room` of the path on each side.
+    let room = room.max(0.0);
+    let len = tw.max(2.0 * ahead).min(match source {
+        CornerSource::AutoCentered => 2.0 * room,
+        CornerSource::AutoBetween => room,
+        _ => room + ahead,
+    });
+    if len <= 1e-9 {
+        return (vec![], 0.0);
+    }
+    let s = if tw > 1e-9 { len / tw } else { 1.0 };
+    let max_du = MAX_SEG / (2.0 * k * s.max(1.0));
+    let warp = |f: &dyn Fn(Point) -> Point| warp_node(art, f, flat_tol, max_du, flat_tol * k, k);
+    // Art point → (distance along from the left edge, stretched to `len`, and offset across).
+    let along = move |q: Point| {
+        let (x, y) = local(q);
+        (x * s, y)
+    };
+    match source {
+        CornerSource::None => (vec![], 0.0),
+        CornerSource::AutoCentered => {
+            let half = len / 2.0;
+            let f = move |q: Point| {
+                let (x, y) = along(q);
+                let u = x - half;
+                if u < 0.0 { into(u, y, half) } else { out_of(u, y, half) }
+            };
+            (warp(&f).into_iter().collect(), half)
+        }
+        CornerSource::AutoBetween => {
+            let before = move |q: Point| {
+                let (x, y) = along(q);
+                into(x - len, y, len)
+            };
+            let after = move |q: Point| {
+                let (x, y) = along(q);
+                out_of(x, y, len)
+            };
+            (warp(&before).into_iter().chain(warp(&after)).collect(), len)
+        }
+        CornerSource::AutoSliced | CornerSource::AutoOverlap => {
+            // Each side's tile runs `ahead` past the corner.
+            let far = len - ahead;
+            let before = move |q: Point| {
+                let (x, y) = along(q);
+                on_path(a_dir, x - far, y, 0.0, -far)
+            };
+            let after = move |q: Point| {
+                let (x, y) = along(q);
+                on_path(b_dir, x - ahead, y, 0.0, far)
+            };
+            let (first, second) = (warp(&before), warp(&after));
+            if source == CornerSource::AutoOverlap {
+                return (first.into_iter().chain(second).collect(), far);
+            }
+            // Auto-Sliced masks each tile by the part of the outline of the box round its art
+            // (strokes included), placed as the tile is, on its own side of the diagonal. A tile
+            // squeezed along keeps its stroke width, so the box's margins at its ends grow by as
+            // much as the tile is squeezed.
+            let vb = art.visual_bounds().unwrap_or(*b);
+            let grow = 1.0 / s.min(1.0);
+            let (x0, x1) = (b.x0 - (b.x0 - vb.x0).max(0.0) * grow, b.x1 + (vb.x1 - b.x1).max(0.0) * grow);
+            let corners = [(x0, vb.y0), (x1, vb.y0), (x1, vb.y1), (x0, vb.y1), (x0, vb.y0)].map(|(x, y)| Point::new(x, y));
+            let outline = |f: &dyn Fn(Point) -> Point| -> Vec<Point> {
+                let steps = (0..MASK_STEPS).map(|j| j as f64 / MASK_STEPS as f64);
+                corners.windows(2).flat_map(|w| steps.clone().map(move |s| w[0].lerp(w[1], s))).map(f).collect()
+            };
+            let pieces =
+                first.and_then(|n| masked(n, &outline(&before), p, bt)).into_iter().chain(second.and_then(|n| masked(n, &outline(&after), p, -bt)));
+            (pieces.collect(), far)
+        }
+    }
+}
+
+/// `n` in a clipping group whose mask is the part of polygon `quad` on the side of the line through
+/// `p` that `towards` points away from. `None` when nothing of `quad` is on that side.
+fn masked(n: Node, quad: &[Point], p: Point, towards: Vec2) -> Option<Node> {
+    let side = |q: Point| (q - p).dot(towards);
+    let mut kept = vec![];
+    for (j, &a) in quad.iter().enumerate() {
+        let b = quad.get(j + 1).or(quad.first()).copied().unwrap_or(a);
+        let (da, db) = (side(a), side(b));
+        if da <= 0.0 {
+            kept.push(a);
+        }
+        if (da <= 0.0) != (db <= 0.0) {
+            kept.push(a.lerp(b, da / (da - db)));
+        }
+    }
+    if kept.len() < 3 {
+        return None;
+    }
+    let mask = Node::path(NodeId(0), PathData::new(vec![SubPath::polyline(&kept, true)]), Appearance::default());
+    Some(Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(mask), Arc::new(n)], clip: true }))
+}
+
+/// A pattern brush's tiles along `bp`. With a scale that follows the pen (its pressure, tilt,
+/// bearing, rotation or wheel), the tiles are as tall as what `stroke` recorded at each point gives
+/// (half way without a recording), each tile and the gap after it as long as the scale at its
+/// middle, and each corner tile at the scale at its corner.
+pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64, stroke: &StrokeLayer) -> Vec<Node> {
+    let orient = |n: &Node, frame| oriented_tile(n, frame, pb.flip_along, pb.flip_across);
+    let Some(side) = orient(&pb.side, pb.side_frame) else { return vec![] };
+    let scale_at = |p: f64| pattern_scale_at(pb, weight, p);
+    let (k, varies) = pattern_scale(pb, weight, stroke);
+    let outer = pb.outer_corner.as_ref().and_then(|n| orient(n, pb.outer_corner_frame));
+    let inner = pb.inner_corner.as_ref().and_then(|n| orient(n, pb.inner_corner_frame));
+    let start = pb.start.as_ref().and_then(|n| orient(n, pb.start_frame));
+    let end = pb.end.as_ref().and_then(|n| orient(n, pb.end_frame));
     let tw = side.1.width() * k;
     let gap = tw * pb.spacing.max(0.0) / 100.0;
+    // Each kind of corner takes its own art, else its source, else the other kind's art.
+    let outer_tile = outer.as_ref().map(Corner::Art).or(pb.outer_source.map(Corner::Source));
+    let inner_tile = inner.as_ref().map(Corner::Art).or(pb.inner_source.map(Corner::Source));
     let mut out = Budget::default();
-    for t in tracks(bp, 0.05) {
+    for t in tracks(bp, TRACK_TOL) {
         if out.full() {
             break;
         }
@@ -369,56 +1077,114 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
         if l <= 1e-9 {
             continue;
         }
+        // The scale at arc length `s` of the track; on a closed track a point before its start or
+        // past its end wraps round as `Track::frame` places it (its end itself keeps the scale at
+        // the end), and on an open track a point past either end takes the scale at that end.
+        let ks = |s: f64| {
+            if !varies {
+                return k;
+            }
+            let at = if t.closed && !(0.0..=l).contains(&s) { s.rem_euclid(l) } else { s.clamp(0.0, l) };
+            scale_at(pb.scale_mode.and_then(|m| PenAt::of(stroke, at / l).control(m)).unwrap_or(0.5))
+        };
+        let marks = pb.scale_mode.filter(|_| varies).map(|m| pen_marks(stroke, m, l));
         let corners = t.corner_positions();
-        // Corner tiles, centred on the corner and turned to the bisector.
+        // Corner tiles, centred on the corner and turned to the bisector. The path on each side of
+        // a corner is shortened by `trims` (`None`: half the widest corner tile art).
         let mut corner_half = 0.0_f64;
-        for &(i, _) in &corners {
+        let mut trims: Vec<Option<f64>> = Vec::with_capacity(corners.len());
+        // The path a tile made at corner `ci` may cover on each side: up to the ends of an open
+        // track, and half the way to the next corner.
+        let room = |ci: usize| {
+            let at = |j: usize| corners.get(j).map(|c| c.1);
+            let s = at(ci).unwrap_or(0.0);
+            let last = corners.len().saturating_sub(1);
+            let before = match (ci.checked_sub(1).and_then(at), t.closed) {
+                (Some(prev), _) => (s - prev) / 2.0,
+                (None, true) => (s - (at(last).unwrap_or(s) - l)) / 2.0,
+                (None, false) => s,
+            };
+            let after = match (at(ci + 1), t.closed) {
+                (Some(next), _) => (next - s) / 2.0,
+                (None, true) => (at(0).unwrap_or(s) + l - s) / 2.0,
+                (None, false) => l - s,
+            };
+            before.min(after)
+        };
+        for (ci, &(i, at)) in corners.iter().enumerate() {
+            if out.full() {
+                break;
+            }
+            let kc = ks(at);
             let (a, b) = t.in_out(i);
             // Turning towards the left normal puts the tile's +y side on the inside.
-            let tile = if a.cross(b) > 0.0 { inner.as_ref().or(outer.as_ref()) } else { outer.as_ref().or(inner.as_ref()) };
-            let Some((art, bb)) = tile else { continue };
-            corner_half = corner_half.max(bb.width() * k / 2.0);
-            let bis = a + b;
-            let bis = if bis.hypot() < 1e-9 { a } else { bis / bis.hypot() };
-            let xf = Affine::translate(t.verts[i].to_vec2())
-                * Affine::rotate(bis.y.atan2(bis.x))
-                * Affine::scale(k)
-                * Affine::translate(-bb.center().to_vec2());
+            let tile = if a.cross(b) > 0.0 { inner_tile.or(outer.as_ref().map(Corner::Art)) } else { outer_tile.or(inner.as_ref().map(Corner::Art)) };
+            let (art, bb) = match tile {
+                Some(Corner::Art(tile)) => tile,
+                Some(Corner::Source(source)) => {
+                    let (pieces, trim) = auto_corner(&t, i, source, &side, kc, room(ci));
+                    for n in pieces {
+                        out.take(Some(n));
+                    }
+                    trims.push(Some(trim));
+                    continue;
+                }
+                None => {
+                    trims.push(Some(0.0));
+                    continue;
+                }
+            };
+            // With a scale that varies, each corner's tile is its own size, so the path beside it
+            // is shortened by half of that tile.
+            trims.push(varies.then_some(bb.width() * kc / 2.0));
+            corner_half = corner_half.max(bb.width() * kc / 2.0);
+            // Inner and outer corner art is the corner that joins a side tile on its right to one
+            // below it, so its arms point along +x and +y (as the flips leave them). The tile is
+            // turned so that the line halving its arms lies on the line halving the sides at the
+            // corner, back along the incoming side and on along the outgoing one: at a right angle
+            // the arms meet the side tiles, and at other angles the difference is split between
+            // the two sides (#6110).
+            let arms = Vec2::new(if pb.flip_along { -1.0 } else { 1.0 }, if pb.flip_across { -1.0 } else { 1.0 });
+            let sides = b - a;
+            let angle = sides.y.atan2(sides.x) - arms.y.atan2(arms.x);
+            let xf = Affine::translate(t.verts[i].to_vec2()) * Affine::rotate(angle) * Affine::scale(kc) * Affine::translate(-bb.center().to_vec2());
             let mut n = art.clone();
             n.transform(xf, true);
             out.take(Some(n));
         }
-        // Runs between corners (closed tracks wrap past the end).
+        let trim = |c: Option<usize>| c.and_then(|c| trims.get(c).copied()).map_or(0.0, |t| t.unwrap_or(corner_half));
+        // Runs between corners (closed tracks wrap past the end), with the corners they start and
+        // end at.
         let mut bounds: Vec<f64> = corners.iter().map(|c| c.1).collect();
-        let runs: Vec<(f64, f64, bool, bool)> = if bounds.is_empty() {
-            vec![(0.0, l, false, false)]
+        let nc = bounds.len();
+        let runs: Vec<(f64, f64, Option<usize>, Option<usize>)> = if bounds.is_empty() {
+            vec![(0.0, l, None, None)]
         } else if t.closed {
             let first = bounds[0];
             bounds.push(first + l);
-            bounds.windows(2).map(|w| (w[0], w[1], true, true)).collect()
+            bounds.windows(2).enumerate().map(|(i, w)| (w[0], w[1], Some(i), Some((i + 1) % nc))).collect()
         } else {
             let mut v = vec![0.0];
             v.extend(bounds);
             v.push(l);
-            let n = v.len();
-            v.windows(2).enumerate().map(|(i, w)| (w[0], w[1], i > 0, i + 2 < n)).collect()
+            v.windows(2).enumerate().map(|(i, w)| (w[0], w[1], i.checked_sub(1), (i < nc).then_some(i))).collect()
         };
         let nruns = runs.len();
-        let corner_tiles = inner.is_some() || outer.is_some();
         for (ri, (mut a, mut b, ca, cb)) in runs.into_iter().enumerate() {
-            if ca && corner_tiles {
-                a += corner_half;
+            if out.full() {
+                break;
             }
-            if cb && corner_tiles {
-                b -= corner_half;
-            }
+            a += trim(ca);
+            b -= trim(cb);
             if !t.closed
                 && ri == 0
                 && let Some(st) = &start
             {
-                let w = st.1.width() * k;
+                // As long as the scale at its middle.
+                let breaks: Option<Vec<f64>> = marks.as_ref().map(|m| m.iter().map(|&m| 2.0 * (m - a)).collect());
+                let w = end_tile_length(st.1.width(), b - a, &|w| ks(a + w / 2.0), breaks.as_deref());
                 if b - a > w {
-                    out.take(tile_on(&t, st, a, a + w, k));
+                    out.take(tile_scaled(&t, st, a, a + w, &ks, marks.as_deref()));
                     a += w;
                 }
             }
@@ -426,14 +1192,19 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
                 && ri + 1 == nruns
                 && let Some(en) = &end
             {
-                let w = en.1.width() * k;
+                let breaks: Option<Vec<f64>> = marks.as_ref().map(|m| m.iter().map(|&m| 2.0 * (b - m)).collect());
+                let w = end_tile_length(en.1.width(), b - a, &|w| ks(b - w / 2.0), breaks.as_deref());
                 if b - a > w {
-                    out.take(tile_on(&t, en, b - w, b, k));
+                    out.take(tile_scaled(&t, en, b - w, b, &ks, marks.as_deref()));
                     b -= w;
                 }
             }
             let avail = b - a;
             if avail <= 1e-6 {
+                continue;
+            }
+            if let Some(marks) = &marks {
+                varied_side_tiles(&mut out, &t, pb, &side, (a, avail), &ks, marks);
                 continue;
             }
             let unit = tw + gap;
@@ -478,4 +1249,253 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
         }
     }
     out.out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::track::tracks;
+
+    /// #3926 review: the five by five grid cannot promise a run is straight, only that it looks
+    /// straight where it was asked. A zigzag whose vertices land on the sample positions is
+    /// invisible to it: every sample sits on a y = 0 vertex whose blended tangent is flat, so all
+    /// 25 points agree with the affine exactly, while the art between them is thrown 4 pt off.
+    ///
+    /// This is why the gate is `Track::is_straight` and the grid is only a second opinion.
+    #[test]
+    fn a_bend_shorter_than_the_sample_grid_is_still_a_bend() {
+        // Half-period 20 pt, amplitude 4 pt. The 11.3 degree turn is under `CORNER_DEG`, so the
+        // vertices are not corners and their tangents blend flat, which is what hides them.
+        let (d, a) = (20.0, 4.0);
+        let mut bp = BezPath::new();
+        bp.move_to((0.0, 0.0));
+        for i in 1..=16 {
+            bp.line_to((d * i as f64, if i % 2 == 1 { a } else { 0.0 }));
+        }
+        let t = tracks(&bp, 0.01).remove(0);
+        assert_eq!(t.corner.iter().filter(|c| **c).count(), 0, "no vertex is a corner, so every tangent is blended");
+
+        // A span over four full periods, held clear of both ends so no sample hits the
+        // extrapolation branch: the five samples land on vertices 4, 6, 8, 10 and 12, all at y = 0.
+        let seglen = (d * d + a * a).sqrt();
+        let (s0, s1) = (4.0 * seglen, 12.0 * seglen);
+        let b = Rect::new(0.0, -20.0, 40.0, 20.0);
+        let along = AlongMap::linear(b.width(), s0, s1);
+        let (cy, x0, cross) = (b.center().y, b.x0, 1.0);
+        let f = |p: Point| t.map(along.at(p.x - x0), (p.y - cy) * cross);
+        let scale = along.max_scale().max(cross.abs()).max(1e-6);
+        let flat_tol = tolerance(b.height().max(b.width()) * scale) / scale;
+
+        // The grid is satisfied, and it should not be.
+        let fit = affine_fit(&f, b, flat_tol.max(1e-9)).expect("the sampled check accepts this bend");
+
+        // How wrong it is: an art x landing on a peak of the zigzag, which no sample reaches.
+        let peak_x = x0 + (5.0 * seglen - s0) / (s1 - s0) * b.width();
+        let at_peak = Point::new(peak_x, cy);
+        let off = (f(at_peak) - fit * at_peak).hypot();
+        assert!(
+            off > 3.0 && off > flat_tol * 20.0,
+            "the affine the grid approved is {off:.3} pt out at the peak, against a {flat_tol:.4} pt tolerance"
+        );
+
+        // Reading the track instead refuses it, and still admits the straight run it is made of.
+        assert!(!t.is_straight(s0, s1), "a bend between the samples is still a bend");
+        let straight = tracks(
+            &{
+                let mut bp = BezPath::new();
+                bp.move_to((0.0, 0.0));
+                bp.line_to((320.0, 0.0));
+                bp
+            },
+            0.01,
+        )
+        .remove(0);
+        assert!(straight.is_straight(s0, s1), "and the same span of an actually straight track is straight");
+
+        // End to end through `bend`: the aliased bend is subdivided, the straight run keeps its
+        // curves. This is the gate itself, not the two predicates it is made of.
+        let anchors = |n: &Node| match &n.kind {
+            NodeKind::Path { path, .. } => path.subpaths.iter().map(|s| s.anchors.len()).sum::<usize>(),
+            _ => 0,
+        };
+        let circle = Node::path(
+            vectorcraft_doc::NodeId(0),
+            vectorcraft_geom::shapes::ellipse(b),
+            vectorcraft_doc::Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0),
+        );
+        assert_eq!(anchors(&circle), 4, "the art is a 4-anchor circle to begin with");
+        let bent = bend(&t, &circle, b, along, cross).expect("the zigzag still draws something");
+        assert!(anchors(&bent) > 8, "the aliased bend is subdivided, not affine-mapped: {} anchors", anchors(&bent));
+        let moved = bend(&straight, &circle, b, along, cross).expect("the straight run still draws something");
+        assert_eq!(anchors(&moved), 4, "the straight run keeps the tile's curves");
+    }
+
+    /// A 4-anchor circle tile filling `b`.
+    fn circle_tile(b: Rect) -> Node {
+        Node::path(
+            NodeId(0),
+            vectorcraft_geom::shapes::ellipse(b),
+            Appearance::basic(vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK), vectorcraft_color::Paint::None, 0.0),
+        )
+    }
+
+    /// `per` points along each segment of `sp`, through `f`.
+    fn traced(sp: &SubPath, f: &dyn Fn(Point) -> Point, per: usize) -> Vec<Point> {
+        (0..sp.segment_count())
+            .flat_map(|i| {
+                let c = sp.segment(i);
+                (0..per).map(move |j| f(c.eval(j as f64 / per as f64)))
+            })
+            .collect()
+    }
+
+    /// How far apart two closed outlines get (Hausdorff distance, each taken as a polygon).
+    fn apart(a: &[Point], b: &[Point]) -> f64 {
+        let to = |q: Point, pts: &[Point]| {
+            pts.iter()
+                .zip(pts.iter().cycle().skip(1))
+                .map(|(&a, &b)| {
+                    let ab = b - a;
+                    let t = ((q - a).dot(ab) / ab.hypot2().max(1e-18)).clamp(0.0, 1.0);
+                    q.distance(a + ab * t)
+                })
+                .fold(f64::MAX, f64::min)
+        };
+        let one_way = |a: &[Point], b: &[Point]| a.iter().map(|&q| to(q, b)).fold(0.0, f64::max);
+        one_way(a, b).max(one_way(b, a))
+    }
+
+    /// #3926: on a bend the tile is fitted with cubics instead of flattened into chords. A circle
+    /// tile bent round a circle stays a handful of smooth curves, closer to the bent art than the
+    /// chords were, in a small fraction of their anchors.
+    #[test]
+    fn a_circle_tile_bent_round_a_circle_stays_a_few_curves() {
+        let round = vectorcraft_geom::shapes::ellipse(Rect::new(0.0, 0.0, 400.0, 400.0)).to_bezpath();
+        let t = tracks(&round, 0.05).remove(0);
+        let b = Rect::new(0.0, -20.0, 40.0, 20.0);
+        let along = AlongMap::linear(b.width(), 100.0, 140.0);
+        let tile = circle_tile(b);
+        let NodeKind::Path { path: art, .. } = &tile.kind else { panic!("the tile is a path") };
+        let art = &art.subpaths[0];
+
+        let bent = bend(&t, &tile, b, along, 1.0).expect("the tile is drawn");
+        let NodeKind::Path { path, .. } = &bent.kind else { panic!("a bent path is a path") };
+        assert_eq!(path.subpaths.len(), 1);
+        let sp = &path.subpaths[0];
+        assert!(sp.closed, "still a closed outline");
+        let n = sp.anchors.len();
+        assert!((4..=16).contains(&n), "a few anchors, the tile's own four among them: {n}");
+        assert!(sp.anchors.iter().all(|a| a.has_in() && a.has_out()), "every anchor keeps both handles");
+        assert!(sp.anchors.first().map(|a| a.p) != sp.anchors.last().map(|a| a.p), "closed without a duplicate anchor");
+
+        // The same map `bend` uses, at scale 1, and the tolerance it fits to.
+        let (cy, x0) = (b.center().y, b.x0);
+        let f = |p: Point| t.map(along.at(p.x - x0), p.y - cy);
+        let tol = tolerance(b.height().max(b.width()));
+        let exact = traced(art, &f, 1000);
+        let chords: Vec<Point> = densified(art, tol, MAX_SEG).expect("the tile flattens").into_iter().map(f).collect();
+        let curves = traced(sp, &|p| p, 200);
+        let (e_curves, e_chords) = (apart(&curves, &exact), apart(&chords, &exact));
+        // Checked at eight points a piece, so a little room between them.
+        assert!(e_curves <= fit_tol(tol) * 1.5, "the curves follow the bent art within {}: {e_curves:.4}", fit_tol(tol));
+        assert!(e_curves < e_chords, "closer than the chords were: {e_curves:.4} against {e_chords:.4}");
+        assert!(chords.len() >= 4 * n, "far fewer anchors than the {} chords took: {n}", chords.len());
+    }
+
+    /// Fitting is bounded however badly the map behaves: where it gives points that are not finite
+    /// the tile falls back to chords with those points left out (or to nothing), and where it never
+    /// fits (a map that jumps everywhere) the halving stops at its depth and anchor count. Either
+    /// way the call comes back with finite geometry, having called the map a bounded number of
+    /// times.
+    #[test]
+    fn a_map_that_misbehaves_still_returns_promptly_and_finite() {
+        let b = Rect::new(0.0, -20.0, 40.0, 20.0);
+        let tile = circle_tile(b);
+        // Each piece the fitting tries reads its two ends, the derivatives there and the checks
+        // between them. Fitted pieces are at most the chords, so the halving tries at most twice
+        // as many pieces plus those on the way down to the one that gives up. The chord route
+        // maps each chord point once more.
+        let NodeKind::Path { path, .. } = &tile.kind else { panic!("the tile is a path") };
+        let allowed: usize = path
+            .subpaths
+            .iter()
+            .filter_map(|sp| densified(sp, 0.25, 1.5))
+            .map(|dense| 1 + (FIT_CHECKS + 3) * (2 * dense.len() + FIT_DEPTH as usize + 1) + dense.len())
+            .sum();
+        let finite = |n: &Node| match &n.kind {
+            NodeKind::Path { path, .. } => {
+                path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite())
+            }
+            _ => false,
+        };
+        let maps: [&dyn Fn(Point) -> Point; 4] = [
+            &|p| if p.x > 25.0 { Point::new(f64::NAN, p.y) } else { p },
+            &|p| if p.y > 10.0 { Point::new(f64::INFINITY, p.y) } else { p + Vec2::new(p.x.sin(), 0.0) },
+            &|p| Point::new(p.x, p.y + if (p.x * 1e3).sin() > 0.0 { 5.0 } else { 0.0 }),
+            &|_| Point::new(f64::NAN, f64::NAN),
+        ];
+        for (i, f) in maps.iter().enumerate() {
+            // Past the allowance the map places nothing, so a warp that keeps calling it stops.
+            let calls = std::cell::Cell::new(0usize);
+            let counted = |p: Point| {
+                calls.set(calls.get() + 1);
+                if calls.get() > allowed { Point::new(f64::NAN, f64::NAN) } else { f(p) }
+            };
+            let out = warp_node(&tile, &counted, 0.25, 1.5, 0.25, 1.0);
+            assert!(calls.get() <= allowed, "map {i} was called {} times, {allowed} allowed", calls.get());
+            match (i, &out) {
+                (3, out) => assert!(out.is_none(), "a map that places nothing draws nothing"),
+                (_, Some(n)) => assert!(finite(n), "map {i} drew non-finite geometry"),
+                (_, None) => panic!("map {i} places most points, so something is drawn"),
+            }
+        }
+    }
+
+    /// A linked opacity mask on brush art bends and widens with the art, on a bent run and on a
+    /// straight one, so a mask drawn over the art still covers it. An unlinked mask stays put.
+    #[test]
+    fn a_linked_opacity_mask_bends_with_the_art() {
+        let b = Rect::new(0.0, -20.0, 40.0, 20.0);
+        let stroked = |id: u64| {
+            Node::path(
+                NodeId(id),
+                vectorcraft_geom::shapes::ellipse(b),
+                Appearance::basic(
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    vectorcraft_color::Paint::solid(vectorcraft_color::Color::BLACK),
+                    2.0,
+                ),
+            )
+        };
+        let masked = |linked: bool| {
+            let mut n = stroked(0);
+            let mut mask = vectorcraft_doc::OpacityMask::new(stroked(1), true);
+            mask.linked = linked;
+            n.extras_mut().mask = Some(Box::new(mask));
+            n
+        };
+        let round = vectorcraft_geom::shapes::ellipse(Rect::new(0.0, 0.0, 400.0, 400.0)).to_bezpath();
+        let bent_track = tracks(&round, 0.05).remove(0);
+        let mut line = BezPath::new();
+        line.move_to((0.0, 0.0));
+        line.line_to((320.0, 0.0));
+        let straight_track = tracks(&line, 0.01).remove(0);
+        let along = AlongMap::linear(b.width(), 100.0, 140.0);
+        for (name, t) in [("bent", &bent_track), ("straight", &straight_track)] {
+            let out = bend(t, &masked(true), b, along, 2.0).expect("the art is drawn");
+            let mask = out.extras().mask.as_ref().expect("the mask is kept");
+            assert_eq!(mask.art.kind, out.kind, "{name} run: the mask's art bends with the art it was drawn over");
+            assert_eq!(mask.art.appearance, out.appearance, "{name} run: the mask's strokes widen with the art's");
+
+            let out = bend(t, &masked(false), b, along, 2.0).expect("the art is drawn");
+            let mask = out.extras().mask.as_ref().expect("the mask is kept");
+            assert_eq!(*mask.art, stroked(1), "{name} run: an unlinked mask stays where it was");
+
+            let out = bend_widened(t, &masked(true), b, along, 2.0, &|_| 0.5).expect("the art is drawn");
+            let mask = out.extras().mask.as_ref().expect("the mask is kept");
+            assert_eq!(mask.art.kind, out.kind, "{name} run, widened: the mask's art bends with the art");
+            assert_eq!(mask.art.appearance, out.appearance, "{name} run, widened: the mask's strokes narrow with the art's");
+        }
+        assert_eq!(anchors_of(&masked(true)), 8, "the anchor budget counts the mask's art");
+    }
 }

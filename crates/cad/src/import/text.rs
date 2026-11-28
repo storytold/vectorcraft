@@ -62,6 +62,33 @@ fn until_semicolon(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Stri
     arg
 }
 
+/// The character a `\U+XXXX` escape writes (`after` is the text just after its backslash), with
+/// the escape's length; a UTF-16 surrogate pair written as two escapes is one character.
+fn unicode_escape(after: &str) -> Option<(char, usize)> {
+    let hex = after.strip_prefix("U+").or_else(|| after.strip_prefix("u+"))?.get(..4)?;
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let value = u32::from_str_radix(hex, 16).ok()?;
+    if (0xD800..=0xDBFF).contains(&value) {
+        let next = after.get(6..)?;
+        let low = next.strip_prefix("\\U+").or_else(|| next.strip_prefix("\\u+"))?.get(..4)?;
+        if !low.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let low = u32::from_str_radix(low, 16).ok()?;
+        if !(0xDC00..=0xDFFF).contains(&low) {
+            return None;
+        }
+        let scalar = 0x1_0000 + ((value - 0xD800) << 10) + (low - 0xDC00);
+        return char::from_u32(scalar).map(|ch| (ch, 13));
+    }
+    if (0xDC00..=0xDFFF).contains(&value) {
+        return None;
+    }
+    char::from_u32(value).map(|ch| (ch, 6))
+}
+
 /// `\U+XXXX` Unicode escapes (how files before DXF 2007 hold characters outside their code page)
 /// and caret escapes: `^ ` is a caret, `^I` a tab; other control characters are dropped. In
 /// multiline text (`mtext`) `\\` is an escaped backslash and is kept as is, so that a `U+` after
@@ -77,12 +104,10 @@ fn escapes(s: &str, mtext: bool) -> String {
             continue;
         }
         if c == '\\'
-            && let Some(hex) = after.strip_prefix("U+").or_else(|| after.strip_prefix("u+")).and_then(|h| h.get(..4))
-            && hex.bytes().all(|b| b.is_ascii_hexdigit())
-            && let Some(ch) = u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
+            && let Some((ch, consumed)) = unicode_escape(after)
         {
             out.push(ch);
-            rest = after.get(6..).unwrap_or("");
+            rest = after.get(consumed..).unwrap_or("");
             continue;
         }
         if mtext
@@ -159,6 +184,14 @@ mod tests {
         assert_eq!(plain("\\U+00G1"), "\\U+00G1");
         assert_eq!(plain("\\U+ 041"), "\\U+ 041");
         assert_eq!(plain("\\U+00C9"), "É");
+    }
+
+    #[test]
+    fn unicode_escape_decodes_surrogate_pairs() {
+        assert_eq!(plain("\\U+D83D\\U+DE00"), "😀");
+        assert_eq!(plain("\\U+D83D"), "\\U+D83D");
+        assert_eq!(plain("\\U+DE00"), "\\U+DE00");
+        assert_eq!(plain("\\U+D83D\\U+0041"), "\\U+D83DA");
     }
 
     #[test]

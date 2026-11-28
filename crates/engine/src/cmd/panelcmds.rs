@@ -2,12 +2,13 @@
 //! Character/Paragraph attributes.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Composer, JustificationOptions, NodeKind, Scaling, SingleWordJustify};
+use vectorcraft_doc::{Composer, JustificationOptions, NodeKind, Scaling, SingleWordJustify, TextRun};
 use vectorcraft_geom::{Rect, Vec2};
 
-use super::*;
+use super::{Affine, CommandSpec, NodeId, Result, Session, bad, bool_or, check_switches, cmd, has_doc, index, ok, switch_or};
 use crate::{Clipboard, EngineError};
 
+/// The panel command specifications registered with the engine.
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         cmd!("artboard.reorder", "Move Artboard Up/Down", [], None, "{index, to} change an artboard's number", has_doc, artboard_reorder),
@@ -16,7 +17,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Duplicate Artboard",
             ["Window", "Artboards"],
             None,
-            "{index?: n | indices?: [n…] (default: the artboards the Artboard tool has selected), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles)} a copy of each artboard, the copies placed together right of the last artboard as they lay, with copies of the art fully inside each when `art` (locked and hidden art only with prefs moveLockedWithArtboard), in one undo step → {index: the first copy's index, indices: the copies' indices, ids: the art's copies}",
+            "{index?: n | indices?: [n…] (default: the artboards the Artboard tool has selected), selectedArtboards?: [n…] (the journal records that default here, for a replay), art?: bool (default: the Artboard tool's moveArt option), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (locked and hidden art goes too; default: prefs moveLockedWithArtboard), side?: \"left\"|\"right\"|\"top\"|\"bottom\" (the copies go together on that side of the artboards they copy, 20 pt away)} a copy of each artboard, the copies placed together right of the last artboard as they lay (or on `side`), with copies of the art on each (fully inside, within its bleed or centered/overlapping on it, #4479) when `art`, in one undo step → {index: the first copy's index, indices: the copies' indices, ids: the art's copies}",
             has_doc,
             artboard_duplicate
         ),
@@ -25,27 +26,60 @@ pub fn specs() -> Vec<CommandSpec> {
             "Copy Artboard",
             [],
             None,
-            "{index? | indices?, art?} (defaults as artboard.duplicate) put the artboards, and the art fully inside each when `art`, on the clipboard: edit.paste adds a copy of each, together right of the last artboard as they lay, edit.pasteInPlace/InFront/InBack where they were, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
+            "{index? | indices?, selectedArtboards?, art?, lockedAndHidden?} (defaults as artboard.duplicate) put the artboards, and the art on each (fully inside, within its bleed or centered/overlapping on it, #4479) when `art`, on the clipboard: edit.paste adds a copy of each, together right of the last artboard as they lay, edit.pasteInPlace/InFront/InBack where they were, in this or another document (one undo step; edit.pasteOnAllArtboards pastes only the art); edit.copy runs this while the Artboard tool is chosen → {copied: objects}",
             has_doc,
-            |s, p| artboard_copy(s, p, false)
+            |s, p| {
+                boards_and_art_noted(s, p, "artboard.copy")?;
+                artboard_copy(s, p, false)
+            }
         ),
         cmd!(
             "artboard.cut",
             "Cut Artboard",
             [],
             None,
-            "{index? | indices?, art?} artboard.copy, then delete the artboards and that art in one undo step (one artboard is always left: the cut fails when it names every artboard, or a locked one; art also on another locked artboard stays, and is left off the clipboard, unless prefs moveLockedWithArtboard); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
+            "{index? | indices?, selectedArtboards?, art?, lockedAndHidden?} put the artboards and the art fully inside each on the clipboard (leaving oversized or overhanging art on the canvas and off the clipboard), then delete the artboards and that art in one undo step (one artboard is always left: the cut fails when it names every artboard, or a locked one; art also on another locked artboard stays, and is left off the clipboard, unless lockedAndHidden); edit.cut runs this while the Artboard tool is chosen → {copied: objects}",
             has_doc,
-            |s, p| artboard_copy(s, p, true)
+            |s, p| {
+                boards_and_art_noted(s, p, "artboard.cut")?;
+                artboard_copy(s, p, true)
+            }
+        ),
+        cmd!(
+            "artboard.rename",
+            "Rename Artboards",
+            [],
+            None,
+            "{index? | indices?, selectedArtboards?: [n…] (as artboard.duplicate), name} (default: the artboards the Artboard tool has selected, else its active one) rename the artboards in one undo step: one takes `name` (trimmed), and several take it numbered in artboard order, `name-1`, `name-2` and so on; a locked artboard is renamed too. An empty name is an error, and when every artboard already has its new name nothing changes and no undo step is recorded → {renamed: [index…]}",
+            has_doc,
+            artboard_rename
+        ),
+        cmd!(
+            "artboard.switchOrientation",
+            "Switch Orientation",
+            [],
+            None,
+            "{index? | indices?, selectedArtboards?: [n…] (as artboard.duplicate), scaleArt?: bool (default: the Artboard tool's Scale Artwork with Artboard option), patterns?, lockedAndHidden?: bool (as artboard.setProps)} (default: the artboards the Artboard tool has selected, else its active one) each artboard swaps its width and height and keeps its top-left corner, in one undo step; a square artboard and a locked one stay as they are, the call fails with `the artboard is locked` when every artboard it names is locked, and when nothing else changes no undo step is recorded → {switched: [index…]}",
+            has_doc,
+            artboard_switch_orientation
         ),
         cmd!(
             "text.setFormat",
             "Character / Paragraph",
             [],
             None,
-            "{ids?|id?, kerning?: 1/1000 em|\"auto\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg, underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), list?: \"none\"|\"bullet\"|\"number\", bullet?: \"none\"|\"dot\"|\"dash\"|\"circle\"|\"square\", number?: \"none\"|\"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\" (Paragraph panel › Bullets and Numbered List: each paragraph of a list starts with its marker, drawn in the font, size and color of the paragraph's first character, and its text starts at the next tab stop after the marker, the left indent counting as a stop; a bulleted list's marker is its bullet, and a numbered list's is the paragraph's number and a period: 1, 2, 3; A to Z, then AA, BB; a to z, then aa, bb; I, II, III; i, ii, iii; 01 to 99, then 100; 001 to 999, then 1000; letters and roman numerals past 3999 in Arabic digits; the numbers count the story's numbered paragraphs, its threaded frames included, from 1 after a paragraph in no list, and an empty or bulleted paragraph is not counted; list \"bullet\" keeps a list's bullet, else a dot, and list \"number\" keeps a numbered list's style, else arabic; without list, a number style makes a numbered list and a bullet makes a bulleted one; \"none\" in any of the three turns the list off; a paragraph that joins a list with left and first-line indents of 0 gets 18 and -18 unless the call sets an indent; a horizontal right-to-left list paragraph has its indents mirrored, measured from the right), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"lineEndHalf\" (Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\" (Kinsoku Set: Soft lets 々, ー and small kana start a line), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: an East Asian comma or full stop ending an area type line hangs outside it: when it doesn't fit, or always; new type: \"standard\"), romanHangingPunctuation?: bool (Paragraph panel menu › Roman Hanging Punctuation: quotation marks, hyphens, full stops and commas starting or ending a line hang outside the margin, asterisks, tildes, ellipses, dashes, colons and semicolons by half; off by default), kashida?: \"none\"|\"short\"|\"medium\"|\"long\"|\"stylistic\" (Paragraph panel › Insert Kashidas: justified lines of horizontal area type lengthen each Arabic word with a kashida between its last pair of joined letters, at most a quarter, half or whole em long, or whole tatweels up to an em for stylistic, before they widen their word spaces; none by default), composer?: \"singleLine\"|\"everyLine\" (line breaking, Every-line by default), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text)",
+            "{ids?|id?, kerning?: 1/1000 em|\"auto\"|\"optical\", baselineShift?: pt, hScale?: %, vScale?: %, rotation?: deg counter-clockwise (0: upright), underline?, strikethrough?, allCaps?, smallCaps?: bool, position?: \"normal\"|\"superscript\"|\"subscript\" (sizes from Document Setup), antiAlias?: \"none\"|\"sharp\"|\"crisp\"|\"strong\" (Character panel › Anti-aliasing Method, how the type's edges are drawn as pixels; it sets each targeted type object, with or without a range; each frame of a thread keeps its own method; graph labels keep it for every label of their kind when the graph is drawn again; new type: \"sharp\"), leftIndent?, rightIndent?, firstLineIndent?, spaceBefore?, spaceAfter?: pt (±1296), list?: \"none\"|\"bullet\"|\"number\", bullet?: \"none\"|\"dot\"|\"dash\"|\"circle\"|\"square\", number?: \"none\"|\"arabic\"|\"upperLetters\"|\"lowerLetters\"|\"upperRoman\"|\"lowerRoman\"|\"twoDigits\"|\"threeDigits\", listAlign?: \"left\"|\"right\", listLevel?: 1..9 (Paragraph panel › Bullets and Numbered List: each paragraph of a list starts with its marker, drawn in the font, size and color of the paragraph's first character, and its text starts at the next tab stop after the marker, the left indent counting as a stop; a bulleted list's marker is its bullet, and a numbered list's is the paragraph's number and a period: 1, 2, 3; A to Z, then AA, BB; a to z, then aa, bb; I, II, III; i, ii, iii; 01 to 99, then 100; 001 to 999, then 1000; letters and roman numerals past 3999 in Arabic digits; the numbers count the story's numbered paragraphs, its threaded frames included, from 1 after a paragraph in no list, and an empty or bulleted paragraph is not counted; list \"bullet\" keeps a list's bullet, else a dot, and list \"number\" keeps a numbered list's style, else arabic; without list, a number style makes a numbered list and a bullet makes a bulleted one; \"none\" in any of the three turns the list off; a paragraph that joins a list with left and first-line indents of 0 gets 18 and -18 unless the call sets an indent; a horizontal right-to-left list paragraph has its indents mirrored, measured from the right; listAlign \"right\" (Bullets and Numbering…'s Alignment) puts the marker against the text, and \"left\" (the default) puts it at the first line's start, the text starting at the same place with either; it sets the paragraphs that are in a list or that the call puts in one, and a list keeps it when it changes between bullets and numbers; listLevel (Tab and Shift+Tab at the start of a list paragraph, Bullets and Numbering…'s Level) is a whole number from 1 to 9 that sets the paragraphs in a list or that the call puts in one, a list keeping it when it changes between bullets and numbers, and a list turned on without listLevel starting at level 1; each level past the first sets the paragraph 18 pt further in than its left indent, and each level counts its own numbers: a list paragraph with text sets the counts of the levels deeper than its own back to 0, so a deeper numbered paragraph after it counts from 1, and a paragraph back at a shallower level goes on with that level's count), startNumber?: 1..999999999, restartNumbering?: bool (Bullets and Numbering…'s Start At, VectorCraft's own: startNumber gives the first numbered paragraph the call touches, the first that holds text or else the first, taking the type objects in the order of `ids` and passing over a threaded frame's first paragraph when it continues from the frame before, that number, and the numbered paragraphs after it at its level count on from it, through the story's threaded frames; restartNumbering true gives it 1, and false takes the number away from every paragraph the call touches but such a continued first paragraph, which then count on from the paragraph before; giving both fails the call, and when the call touches no numbered paragraph nothing changes; a paragraph made with Return does not take the number, a paragraph made bulleted keeps none, and a paragraph style made from the paragraph does not keep it, nor does a graph label when the graph is drawn again), hyphenate?: bool, wordsLongerThan?: letters 1..25 (5), afterFirst?, beforeLast?: letters 1..15 (3), hyphenLimit?: lines 0..25 (0: no limit), hyphenationZone?: pt 0..1296 (0; Single-line Composer only), hyphenateCapitalized?: bool (true) (Paragraph panel menu › Hyphenation…: only words longer than wordsLongerThan break, keeping afterFirst letters before the hyphen and beforeLast after it; at most hyphenLimit lines in a row end with a hyphen; a line whose text already ends within hyphenationZone of its right edge breaks before the next word instead of hyphenating it; the counts are rounded, and every value is clamped to its range), wordSpacing?: % 0..1000 (80, 100, 133), letterSpacing?: % of a word space -100..500 (0, 0, 0), glyphScaling?: % 50..200 (100, 100, 100): each [min, desired, max] or {min?, desired?, max?} (Paragraph panel menu › Justification…: Desired applies to every line, Minimum and Maximum bound what justified lines may use; values are clamped to their range, and Minimum ≤ Desired ≤ Maximum must hold afterwards or nothing changes), autoLeading?: % of the size 0..500 (120; the leading of characters whose leading is Auto), singleWordJustification?: \"fullJustify\"|\"alignLeft\"|\"alignCenter\"|\"alignRight\" (a justified line holding one word), mojikumi?: \"none\"|\"yakumonoHankaku\"|\"gyomatsuYakumonoHankaku\"|\"gyomatsuYakumonoZenkaku\"|\"yakumonoZenkaku\"|\"lineEndHalf\" (Mojikumi Set: Japanese punctuation spacing), kinsoku?: \"none\"|\"hard\"|\"soft\"|name of a custom set (Kinsoku Set: Soft lets 々, ー and small kana start a line; a custom set of type.kinsokuSets.list, any case, keeps its own characters off a line's start and end, hangs its own hanging punctuation with burasagari and keeps its own inseparable sequences with bunriKinshi; a name the document has no set of fails the call), kinsokuType?: \"pushInFirst\"|\"pushOutFirst\"|\"pushOutOnly\" (Paragraph panel menu › Kinsoku Shori Type: how area type keeps those characters off a line's ends; pushInFirst sets them on the line when its gaps next to CJK characters can close up enough, by at most a tenth of an em each, pushOutFirst does so only when moving the character before them to the next line would leave the line more than an em short, and pushOutOnly, the default, moves it unless Burasagari hangs the Kinsoku Set's overflowing hanging punctuation; no effect with kinsoku \"none\"), bunriKinshi?: bool (Paragraph panel menu › Bunri-Kinshi: a line never breaks inside an inseparable pair, two em dashes, two horizontal ellipses, two two-dot leaders or the two halves of a vertical kana repeat mark, or with a custom set inside one of its inseparable sequences, and justification adds no space inside one; kept but without effect with kinsoku \"none\"; off by default), kurikaeshiMojiShori?: bool (Paragraph panel menu › Kurikaeshi Moji Shori: a repeat mark 々, ゝ, ゞ, ヽ or ヾ that starts a line is drawn as the character before it, the voiced marks ゞ and ヾ as its voiced form when it has one, and the text keeps the mark; off by default), direction?: \"auto\"|\"leftToRight\"|\"rightToLeft\" (paragraph direction; auto: from each paragraph's first strong character), leadingModel?: \"romanBaseline\"|\"emBoxTop\" (leading measured baseline to baseline, or em box top to top), charAlign?: \"romanBaseline\"|\"emBoxTop\"|\"emBoxCenter\"|\"emBoxBottom\"|\"icfTop\"|\"icfBottom\" (where characters smaller than the largest on their line line up with it), proportionalMetrics?: bool (full-width glyphs on the font's proportional widths: `palt` in horizontal type, `vpal` in vertical type), tateChuYoko?: bool (Character panel menu › Tate-chu-yoko, with Show East Asian Options: in vertical type those characters stand side by side across one em of the column; kept on the characters and ignored in horizontal type), tcyUpDown?, tcyLeftRight?: pt -1296..1296 (Character panel menu › Tate-chu-yoko Settings, as text.setRangeStyle: a tate-chu-yoko block moves up or down, right or left, and on a vertical path toward or away from the path's start, to its left or right), warichu?: bool, warichuLines?: 1..6, warichuGap?: pt 0..100, warichuScale?: % 10..100, warichuAlign?: \"auto\"|\"left\"|\"center\"|\"right\"|\"justifyLeft\"|\"justifyCenter\"|\"justifyRight\"|\"justifyAll\" (Character panel menu › Warichu and Warichu Settings, as text.setRangeStyle: the characters set smaller and stacked on lines inside their line), akiLeft?, akiRight?: 1/1000 em 0..1000 (Character panel › Insert Aki Left and Right, with Show East Asian Options, as text.setRangeStyle: space before and after each character in reading order), tsume?: % 0..100 (Character panel › Tsume, with Show East Asian Options, as text.setRangeStyle: the share of the blank space beside each character's ink taken away, down the column for an upright character in vertical type), diacriticHorizontal?, diacriticVertical?: 1/1000 em -1000..1000 (Character panel › Adjust Horizontal and Vertical Diacritic Position, with Show Indic Options, as text.setRangeStyle: the mark glyphs among the characters move right or up relative to their letters), standardVerticalRoman?: bool (Character panel menu › Standard Vertical Roman Alignment, as text.setRangeStyle), noBreak?: bool (Character panel menu › No Break: these characters stay on one line, including across a space inside the run), kashidas?: bool (Character panel menu › Kashidas: selected characters allow insertion only when both joined neighbors have it on; on by default), charDirection?: \"default\"|\"leftToRight\"|\"rightToLeft\" (Character panel menu › Character Direction: the characters are set left to right or right to left inside their paragraph, as a Unicode bidi embedding; default: as the bidi algorithm sets them), digits?: \"default\"|\"arabic\"|\"hindi\"|\"farsi\"|\"devanagari\"|\"bengali\"|\"gurmukhi\"|\"gujarati\"|\"odia\"|\"tamil\"|\"telugu\"|\"kannada\"|\"malayalam\" (Character panel menu › Digits: the numeral system every digit is drawn in, whatever was typed: Western, Arabic-Indic (hindi), Eastern Arabic-Indic (farsi) or an Indic script's own digits), glyphForm?: \"traditional\"|\"expert\"|\"jis04\"|\"jis90\"|\"jis78\"|\"jis83\"|\"fullWidth\"|\"halfWidth\"|\"thirdWidth\"|\"quarterWidth\"|\"default\" (Glyphs panel menu, with Show East Asian Options, as text.setRangeStyle: the characters drawn in one OpenType form of the font, or its default glyphs; a form other than \"default\" takes away their glyph choice), fontHeightReference?: \"emBox\"|\"capHeight\"|\"xHeight\"|\"icfBox\" (Character panel › Set Font Height Reference, as text.setRangeStyle: the height of the font that the size measures), language?: name|tag (Character panel › Language, as text.setRangeStyle), fontAxes?: {\"wght\": 650, …} (Character panel › Variable Font, as text.setRangeStyle: each axis named set in its units and clamped to its range, null back to the style's own setting), burasagari?: \"none\"|\"standard\"|\"forced\" (Paragraph panel menu › Burasagari None/Regular/Force: the Kinsoku Set's hanging punctuation ending an area type line hangs outside it: when it doesn't fit, or always; with None, Hard and Soft that is an East Asian comma or full stop, and a custom set hangs its own hanging characters; new type: \"standard\"), romanHangingPunctuation?: bool (Paragraph panel menu › Roman Hanging Punctuation: quotation marks, hyphens, full stops and commas starting or ending a line hang outside the margin, asterisks, tildes, ellipses, dashes, colons and semicolons by half; off by default), koreanLineBreakAnywhere?: bool (Paragraph panel menu › Korean Line Break Anywhere: a line may break between any two Hangul syllables; off, a word with Hangul in it breaks only at its spaces and punctuation, or where it is wider than the line; new type: false, paragraphs saved before the option: true), kashida?: \"none\"|\"short\"|\"medium\"|\"long\"|\"stylistic\" (Paragraph panel › Insert Kashidas: justified lines of horizontal area type lengthen each Arabic word with a kashida between its last pair of joined letters, at most a quarter, half or whole em long, or whole tatweels up to an em for stylistic, before they widen their word spaces; none by default), composer?: \"singleLine\"|\"everyLine\"|\"standardSingleLine\"|\"standardEveryLine\" (line breaking, Every-line by default; singleLine and everyLine are the Middle Eastern & South Asian composers, which shape Indic, Arabic and Hebrew type; the standard ones set it glyph by glyph as the font maps its characters, for legacy fonts that keep a script on Latin character codes), start?: byte, end?: byte} (baselineShift is in document points and hScale includes the object transform; groups include their text descendants; with a range: the character attributes style that range and the paragraph attributes apply to the paragraphs it touches; without: all the text, and graph labels keep the character and paragraph attributes for every label of their kind when the graph is drawn again, the graph still setting each label's alignment; a number or switch given as another type fails the call, and a null value leaves its attribute as it is, so a call with only null values fails with nothing to change; a call that gives the values the text already has records no undo step). Or {paragraphIndents: [{id, start: byte where the paragraph starts, leftIndent?, firstLineIndent?: pt -1296..1296}…]} alone (Tabs panel indent markers over paragraphs with indents of their own): each entry sets one paragraph of a type object, at least one indent each, at most 100000 entries; every entry is checked before anything changes, and an unknown key, a value out of range, an object that is not type, a byte where no paragraph starts or two entries for one paragraph with other values fail the call; all of it is one edit, a threaded story flowing again once, and when no paragraph's indents change nothing is recorded → {ids}",
             has_doc,
             set_format
+        ),
+        cmd!(
+            "text.convertListToText",
+            "Convert to Text",
+            ["Type"],
+            None,
+            "{ids?|id?, start?: byte, end?: byte} (Type › Bullets and Numbering › Convert to Text: the paragraphs of the selected type, or of `ids`, or those a start/end range touches; after Select All in a frame of threaded text, without `ids`, `id` or a range, every paragraph of every frame of the story, locked and hidden frames included) the marker of each list paragraph becomes characters of its text: the bullet, or the number and its period as the paragraph showed it, then a tab, at the start of the paragraph in the marker's font, size and color; the list is turned off. When the marker's tab went to the left indent, the paragraph gets a left-aligned tab stop without a leader there, in place of any stop there, which keeps the text after the tab where it started; when it went to a tab stop and a stop there or past it has a leader or is not left-aligned, or a right, center or decimal stop lies between the marker and that place, the paragraph gets a left-aligned stop without a leader where the marker's tab ended, in place of any stop there and of those right, center and decimal stops before it (past the left indent only in a paragraph with no tab of its own). In threaded type the numbers are those counted through the story's frames, and a paragraph that continues into a later frame is converted where its text starts. An empty list paragraph has no marker and only leaves the list. A paragraph with no direction set gets the direction it ran in when the characters would change it (a letter or roman numeral before right-to-left text). With the Every-line Composer, a paragraph with a tab is broken line by line, so a converted paragraph can break its lines at other places. While the Type tool edits, its typing ends first and its anchor and caret move past the characters inserted at or before them (a whole story that Select All selected stays selected when the call converts all of it); in threaded type, when the caret's character moved to another frame, the tool edits that frame, which becomes the selection when it was not selected. One undo step → {ids, converted: paragraphs, inserted: [{id, at: byte before the change, length: bytes}]}",
+            has_doc,
+            convert_list_to_text
         ),
     ]
 }
@@ -55,7 +89,7 @@ pub fn specs() -> Vec<CommandSpec> {
 fn artboard_reorder(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "artboard.reorder";
     let i = artboard_index(&s.doc()?.doc, p, C)?;
-    let to = p.get("to").and_then(Value::as_u64).map(index).ok_or_else(|| bad(C, "missing to"))?;
+    let to = super::index_opt(p, "to", C)?.ok_or_else(|| bad(C, "missing to"))?;
     s.edit("Reorder Artboards", |d, _| {
         if i >= d.artboards.len() {
             return Err(EngineError::Other("no such artboard".into()));
@@ -73,43 +107,163 @@ fn artboard_reorder(s: &mut Session, p: &Value) -> Result<Value> {
 /// of them is in the document) and its Move/Copy Artwork with Artboard option.
 fn boards_and_art(s: &Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool)> {
     check_switches(p, &["art"], cmd)?;
-    let t = s.tool_options_of("artboard");
-    let d = &s.doc()?.doc;
-    let indices = if p.get("index").is_some() || p.get("indices").is_some() {
-        artboard_indices(d, p, cmd)?
-    } else {
-        let mut picked: Vec<u64> = t["selected"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_u64)
-            .filter(|i| usize::try_from(*i).is_ok_and(|i| i < d.artboards.len()))
-            .collect();
-        if picked.is_empty() {
-            picked.push(t["active"].as_u64().unwrap_or(0));
-        }
-        artboard_indices(d, &json!({ "indices": picked }), cmd)?
-    };
-    Ok((indices, bool_or(p, "art", t["moveArt"].as_bool().unwrap_or(true))))
+    let indices = named_or_selected(s, p, cmd)?;
+    Ok((indices, bool_or(p, "art", s.tool_options_of("artboard")["moveArt"].as_bool().unwrap_or(true))))
 }
 
-/// The one artboard `cmd` acts on: `index`, an artboard of `d`, with the errors of
-/// [`artboard_indices`] (`missing index`, `no such artboard`).
+/// [`boards_and_art`], with both values added to the running command's journal entry, so a replay
+/// acts on the same artboards and art whatever the Artboard tool's state is then.
+pub(crate) fn boards_and_art_noted(s: &mut Session, p: &Value, cmd: &str) -> Result<(Vec<usize>, bool)> {
+    let (indices, art) = boards_and_art(s, p, cmd)?;
+    note_artboards(s, p, &indices);
+    s.note_journal("art", json!(art));
+    Ok((indices, art))
+}
+
+/// Add `selectedArtboards` to the running command's journal entry when `p` names no artboard, so a
+/// replay acts on the artboards the Artboard tool had selected. An action leaves it out
+/// (`REPLAY_ONLY`) and keeps an `index` or `indices` the call gave.
+pub(crate) fn note_artboards(s: &mut Session, p: &Value, indices: &[usize]) {
+    if p.get("index").is_none() && p.get("indices").is_none() {
+        s.note_journal("selectedArtboards", json!(indices));
+    }
+}
+
+/// The artboards `cmd` acts on: `index` or `indices`, else `selectedArtboards` (a replay of the
+/// journal), else those the Artboard tool has selected, else its active one.
+pub(crate) fn named_or_selected(s: &Session, p: &Value, cmd: &str) -> Result<Vec<usize>> {
+    let t = s.tool_options_of("artboard");
+    let d = &s.doc()?.doc;
+    if p.get("index").is_some() || p.get("indices").is_some() {
+        return artboard_indices(d, p, cmd);
+    }
+    if let Some(recorded) = p.get("selectedArtboards") {
+        return listed_artboards(d, recorded, "selectedArtboards", cmd);
+    }
+    let mut picked: Vec<usize> =
+        t["selected"].as_array().into_iter().flatten().filter_map(Value::as_u64).map(index).filter(|i| *i < d.artboards.len()).collect();
+    if picked.is_empty() {
+        picked.push(on_board(d, t["active"].as_u64().map_or(0, index))?);
+    }
+    picked.sort_unstable();
+    picked.dedup();
+    Ok(picked)
+}
+
+/// Rename Artboards: one artboard takes the name, and several take it numbered in artboard order, in
+/// one undo step. Nothing runs when each already has its new name.
+fn artboard_rename(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.rename";
+    let name = match p.get("name") {
+        Some(Value::String(n)) if !n.trim().is_empty() => n.trim(),
+        Some(Value::String(_)) => return Err(bad(C, "`name` must not be empty")),
+        _ => return Err(bad(C, "`name` must be a string")),
+    };
+    let indices = named_or_selected(s, p, C)?;
+    note_artboards(s, p, &indices);
+    let d = &s.doc()?.doc;
+    let several = indices.len() > 1;
+    let entries: Vec<(usize, String)> = indices
+        .iter()
+        .enumerate()
+        .map(|(k, i)| (*i, if several { format!("{name}-{}", k + 1) } else { name.to_string() }))
+        .filter(|(i, new)| d.artboards.get(*i).is_some_and(|a| a.name != *new))
+        .collect();
+    let renamed: Vec<usize> = entries.iter().map(|(i, _)| *i).collect();
+    if !entries.is_empty() {
+        let list: Vec<Value> = entries.iter().map(|(i, new)| json!({"index": i, "name": new})).collect();
+        s.execute("artboard.setProps", &json!({ "artboards": list }))?;
+    }
+    Ok(json!({ "renamed": renamed }))
+}
+
+/// Switch Orientation: each artboard that is neither square nor locked swaps its width and height
+/// and keeps its top-left corner, in one undo step. Nothing runs when none of them changes.
+fn artboard_switch_orientation(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "artboard.switchOrientation";
+    // Swapping width and height keeps the area, so `artboard.setProps` scales no strokes or corners.
+    const FROM_PREFS: [&str; 2] = ["patterns", "lockedAndHidden"];
+    check_switches(p, &["scaleArt"], C)?;
+    check_switches(p, &FROM_PREFS, C)?;
+    let indices = named_or_selected(s, p, C)?;
+    note_artboards(s, p, &indices);
+    let d = &s.doc()?.doc;
+    if indices.iter().all(|i| d.artboards.get(*i).is_some_and(|a| a.locked)) {
+        refuse_locked(d, &indices)?;
+    }
+    let turned: Vec<(usize, Rect)> = indices
+        .iter()
+        .filter_map(|i| d.artboards.get(*i).map(|a| (*i, a)))
+        .filter(|(_, a)| !a.locked && (a.rect.width() - a.rect.height()).abs() > 1e-6)
+        .map(|(i, a)| (i, a.rect))
+        .collect();
+    let switched: Vec<usize> = turned.iter().map(|(i, _)| *i).collect();
+    if !turned.is_empty() {
+        let list: Vec<Value> = turned.iter().map(|(i, r)| json!({"index": i, "width": r.height(), "height": r.width()})).collect();
+        let scale = bool_or(p, "scaleArt", s.tool_options_of("artboard")["scaleArt"].as_bool().unwrap_or(false));
+        s.note_journal("scaleArt", json!(scale));
+        let mut set = json!({ "artboards": list, "scaleArt": scale });
+        for key in FROM_PREFS {
+            if let Some(v) = p.get(key) {
+                set[key] = v.clone();
+            }
+        }
+        // What the step takes from the preferences joins this command's journal entry.
+        let (_, noted) = s.execute_step("artboard.setProps", &set)?;
+        for key in FROM_PREFS {
+            if let Some(v) = noted.get(key) {
+                s.note_journal(key, v.clone());
+            }
+        }
+    }
+    Ok(json!({ "switched": switched }))
+}
+
+/// The one artboard `cmd` acts on: `index`, an artboard of `d`. Left out or null, it is
+/// `missing index`; a value that is not a whole number is "`index` must be a whole number"; a
+/// whole number past the last artboard is `no such artboard`.
 pub(crate) fn artboard_index(d: &vectorcraft_doc::Document, p: &Value, cmd: &str) -> Result<usize> {
-    let i = p.get("index").ok_or_else(|| bad(cmd, "missing index"))?;
-    artboard_indices(d, &json!({ "index": i }), cmd)?.into_iter().next().ok_or_else(|| EngineError::Other("no such artboard".into()))
+    artboard_at(d, p, "index", cmd)?.ok_or_else(|| bad(cmd, "missing index"))
+}
+
+/// The artboard of `d` that `key` of `p` names, or `None` when `p` leaves it out or gives null. A
+/// value that is not a whole number is "`{key}` must be a whole number", and a whole number past the
+/// last artboard is `no such artboard`.
+pub(crate) fn artboard_at(d: &vectorcraft_doc::Document, p: &Value, key: &str, cmd: &str) -> Result<Option<usize>> {
+    super::index_opt(p, key, cmd)?.map(|i| on_board(d, i)).transpose()
+}
+
+/// `i` when it is an artboard of `d`, else `no such artboard`.
+pub(crate) fn on_board(d: &vectorcraft_doc::Document, i: usize) -> Result<usize> {
+    match i < d.artboards.len() {
+        true => Ok(i),
+        false => Err(EngineError::Other("no such artboard".into())),
+    }
 }
 
 /// The artboards `cmd` acts on: `indices` (several), else `index` (one), each an artboard of `d`,
-/// in order and once each.
+/// in order and once each. `indices` is read as [`listed_artboards`] reads it, and `index` as
+/// [`artboard_index`] reads it.
 pub(crate) fn artboard_indices(d: &vectorcraft_doc::Document, p: &Value, cmd: &str) -> Result<Vec<usize>> {
-    let listed = match (p.get("indices"), p.get("index")) {
-        (Some(v), _) => point_indices(v),
-        (None, Some(i)) => point_indices(&json!([i])),
-        (None, None) => return Err(bad(cmd, "missing index")),
-    };
-    let mut indices =
-        listed.filter(|v| !v.is_empty() && v.iter().all(|i| *i < d.artboards.len())).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
+    match p.get("indices") {
+        Some(v) => listed_artboards(d, v, "indices", cmd),
+        None => Ok(vec![artboard_index(d, p, cmd)?]),
+    }
+}
+
+/// `v`, the value of `key`, as artboards of `d`, in order and once each. A value that is not a list
+/// is "`{key}` must be a list of artboard indices", an empty list is "`{key}` must be a non-empty
+/// list of artboard indices", and a list with an entry that is not a whole number is "`{key}` must
+/// contain whole numbers"; a whole number past the last artboard is `no such artboard`. Every entry
+/// is checked for its form before any is checked against the artboards.
+pub(crate) fn listed_artboards(d: &vectorcraft_doc::Document, v: &Value, key: &str, cmd: &str) -> Result<Vec<usize>> {
+    let entries = v.as_array().ok_or_else(|| bad(cmd, format!("`{key}` must be a list of artboard indices")))?;
+    if entries.is_empty() {
+        return Err(bad(cmd, format!("`{key}` must be a non-empty list of artboard indices")));
+    }
+    let listed = entries.iter().map(Value::as_u64).collect::<Option<Vec<u64>>>();
+    let listed = listed.ok_or_else(|| bad(cmd, format!("`{key}` must contain whole numbers")))?;
+    let mut indices = listed.into_iter().map(|i| on_board(d, index(i))).collect::<Result<Vec<usize>>>()?;
     indices.sort_unstable();
     indices.dedup();
     Ok(indices)
@@ -124,28 +278,41 @@ pub(crate) fn refuse_locked(d: &vectorcraft_doc::Document, indices: &[usize]) ->
     }
 }
 
-/// The art that goes with artboard `i` when `art`: the objects fully inside it (locked and hidden
-/// ones only with prefs moveLockedWithArtboard), in paint order. With `moving` (a move or a cut),
-/// the art also on another locked artboard stays unless prefs moveLockedWithArtboard
+/// Does locked and hidden art go with an artboard (`lockedAndHidden` param, else prefs
+/// moveLockedWithArtboard)? Noted in the journal when `art` goes along, so a replay takes the same
+/// art whatever the preference is then.
+pub(crate) fn locked_and_hidden(s: &mut Session, p: &Value, art: bool, cmd: &str) -> Result<bool> {
+    let all = switch_or(p, "lockedAndHidden", s.prefs.move_locked_with_artboard, cmd)?;
+    if art {
+        s.note_journal("lockedAndHidden", json!(all));
+    }
+    Ok(all)
+}
+
+/// The art that goes with artboard `i` when `art`: when copying, the art on the artboard (fully
+/// inside, within its bleed or centered/overlapping on it, #4479); with `moving` (a move or a cut),
+/// the objects fully inside it (locked and hidden ones only when `all`), in paint order. With
+/// `moving`, the art also on another locked artboard stays unless `all`
 /// ([`vectorcraft_doc::Document::art_moving_with`]); a copy takes it.
-pub(crate) fn artboard_art(s: &Session, i: usize, art: bool, moving: bool) -> Result<Vec<NodeId>> {
+pub(crate) fn artboard_art(s: &Session, i: usize, art: bool, all: bool, moving: bool) -> Result<Vec<NodeId>> {
     let d = &s.doc()?.doc;
-    let rect = d.artboards.get(i).map(|a| a.rect).ok_or_else(|| EngineError::Other("no such artboard".into()))?;
-    let all = s.prefs.move_locked_with_artboard;
+    if i >= d.artboards.len() {
+        return Err(EngineError::Other("no such artboard".into()));
+    }
     Ok(match (art, moving) {
         (false, _) => vec![],
-        (true, false) => d.art_on_artboard(rect, all),
+        (true, false) => d.art_for_artboard_copy(i, all),
         (true, true) => d.art_moving_with(i, all),
     })
 }
 
 /// Each of `indices` with the art that goes with it when `art` ([`artboard_art`]), an object
 /// counted once, with the first of them it is on (artboards can overlap).
-pub(crate) fn artboards_art(s: &Session, indices: &[usize], art: bool, moving: bool) -> Result<Vec<(usize, Vec<NodeId>)>> {
+pub(crate) fn artboards_art(s: &Session, indices: &[usize], art: bool, all: bool, moving: bool) -> Result<Vec<(usize, Vec<NodeId>)>> {
     let mut seen = std::collections::HashSet::new();
     let mut arts = vec![];
     for &i in indices {
-        let art = artboard_art(s, i, art, moving)?.into_iter().filter(|id| seen.insert(*id)).collect();
+        let art = artboard_art(s, i, art, all, moving)?.into_iter().filter(|id| seen.insert(*id)).collect();
         arts.push((i, art));
     }
     Ok(arts)
@@ -158,11 +325,14 @@ pub(crate) fn beside_artboards(d: &vectorcraft_doc::Document, rect: Rect) -> Vec
 }
 
 /// Duplicate Artboards: a copy of each artboard with its art, in one undo step. The copies keep
-/// their places relative to each other, together right of the last artboard.
+/// their places relative to each other, together right of the last artboard, or with `side`
+/// together on that side of the artboards they copy.
 fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &["patterns"], "artboard.duplicate")?;
-    let (indices, art) = boards_and_art(s, p, "artboard.duplicate")?;
-    let arts = artboards_art(s, &indices, art, false)?;
+    let side = super::layer::artboard_side(p, "artboard.duplicate")?;
+    let (indices, art) = boards_and_art_noted(s, p, "artboard.duplicate")?;
+    let locked_art = locked_and_hidden(s, p, art, "artboard.duplicate")?;
+    let arts = artboards_art(s, &indices, art, locked_art, false)?;
     let all: Vec<NodeId> = arts.iter().flat_map(|(_, a)| a.iter().copied()).collect();
     let sc = Scaling { patterns: super::object::transform_patterns(s, p, &all)?, ..Scaling::default() };
     let (index, ids) = s.edit("Duplicate Artboard", |d, _| {
@@ -171,7 +341,7 @@ fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
             .filter_map(|(i, _)| d.artboards.get(*i))
             .map(|a| a.rect)
             .reduce(|a, b| a.union(b))
-            .map(|r| beside_artboards(d, r))
+            .map(|r| side.map_or_else(|| beside_artboards(d, r), |side| side.offset(r)))
             .unwrap_or_default();
         let (mut index, mut ids) = (vec![], vec![]);
         for (i, art) in &arts {
@@ -187,8 +357,10 @@ fn artboard_duplicate(s: &mut Session, p: &Value) -> Result<Value> {
 /// Artboard Copy / Cut: the artboards and their art onto the clipboard (pasting brings them all);
 /// a cut then deletes them.
 pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Value> {
-    let (indices, art) = boards_and_art(s, p, if cut { "artboard.cut" } else { "artboard.copy" })?;
-    let arts = artboards_art(s, &indices, art, cut)?;
+    let cmd = if cut { "artboard.cut" } else { "artboard.copy" };
+    let (indices, art) = boards_and_art(s, p, cmd)?;
+    let locked_art = locked_and_hidden(s, p, art, cmd)?;
+    let arts = artboards_art(s, &indices, art, locked_art, cut)?;
     let st = s.doc()?;
     if cut && st.doc.artboards.len() <= indices.len() {
         return Err(EngineError::Other("a document needs at least one artboard".into()));
@@ -198,19 +370,11 @@ pub(crate) fn artboard_copy(s: &mut Session, p: &Value, cut: bool) -> Result<Val
     }
     let art = st.doc.paint_order(arts.into_iter().flat_map(|(_, a)| a));
     let boards: Vec<_> = indices.iter().filter_map(|i| st.doc.artboards.get(*i).cloned()).collect();
-    let clip = Clipboard { source_artboard: boards.first().map(|a| a.rect), artboards: boards, ..Clipboard::copy(st, &art) };
+    let clip = Clipboard { source_artboard: boards.first().map(|a| a.rect), artboards: boards, ..Clipboard::copy(st, &art, false) };
     let copied = clip.nodes.len();
     if cut {
         s.edit("Cut Artboard", |d, sel| {
-            if indices.iter().any(|i| *i >= d.artboards.len()) {
-                return Err(EngineError::Other("no such artboard".into()));
-            }
-            // The last first, so the others keep their places; their guides go with them.
-            for &i in indices.iter().rev() {
-                let gone = d.artboards.remove(i).id;
-                d.retire_artboard_id(gone);
-                d.retain_guides(sel, |_, g| g.artboard != Some(gone));
-            }
+            super::layer::remove_artboards(d, sel, &indices)?;
             d.remove_many(&art)?;
             sel.prune(d);
             Ok(())
@@ -233,7 +397,10 @@ pub(crate) fn copy_artboard(d: &mut vectorcraft_doc::Document, i: usize, dv: Vec
     if let Some(id) = d.artboards.get(index).map(|a| a.id) {
         d.copy_artboard_guides(src.id, id, dv);
     }
-    let copies = super::edit::copy_above(d, art, |_, _, c| c.transform(Affine::translate(dv), sc))?;
+    let copies = super::edit::copy_above(d, art, |_, _, c| {
+        c.transform(Affine::translate(dv), sc);
+        super::object::keep_pixel_aligned(c, sc);
+    })?;
     Ok((index, copies))
 }
 
@@ -257,7 +424,7 @@ pub(crate) fn push_artboard_copy(d: &mut vectorcraft_doc::Document, src: &vector
 // ---------- text ----------
 
 /// Largest indent or paragraph spacing (points; Illustrator's limit).
-const MAX_PARA: f64 = 1296.0;
+const MAX_PARA: f64 = vectorcraft_doc::text::MAX_PARA_DISTANCE;
 
 /// `text.setFormat`'s `bullet` values and the bullets they pick.
 const BULLETS: [(&str, vectorcraft_doc::text::Bullet); 4] = [
@@ -306,15 +473,157 @@ fn spacing_param(p: &Value, key: &str, c: &str) -> Result<Option<[Option<f64>; 3
     }
 }
 
+/// The list level `listLevel` gives (None without one): a whole number from 1 to
+/// [`vectorcraft_doc::text::LIST_LEVELS`], written `2` or `2.0`.
+fn list_level_param(p: &Value, cmd: &str) -> Result<Option<u8>> {
+    let key = "listLevel";
+    let Some(v) = p.get(key).filter(|v| !v.is_null()) else { return Ok(None) };
+    let (min, max) = (1, vectorcraft_doc::text::LIST_LEVELS);
+    match v.as_f64() {
+        Some(x) if x.fract() == 0.0 && (min as f64..=max as f64).contains(&x) => Ok(Some(x as u8)),
+        Some(x) => Err(bad(cmd, format!("`{key}` must be a whole number between {min} and {max} (got {x})"))),
+        None => Err(bad(cmd, format!("`{key}` must be a whole number"))),
+    }
+}
+
+/// The number a numbered paragraph is given, from `startNumber` (a whole number from 1 to
+/// [`vectorcraft_doc::text::MAX_LIST_START`]) or `restartNumbering` (true: 1): `Some(Some(n))`,
+/// or `Some(None)` for `restartNumbering` false, which numbers paragraphs on from the one before.
+/// None without either; giving both is an error.
+fn list_start_param(p: &Value, cmd: &str) -> Result<Option<Option<u32>>> {
+    let (key, other) = ("startNumber", "restartNumbering");
+    let start = p.get(key).filter(|v| !v.is_null());
+    let restart = p.get(other).filter(|v| !v.is_null());
+    if start.is_some() && restart.is_some() {
+        return Err(bad(cmd, format!("give `{key}` or `{other}`, not both")));
+    }
+    if let Some(v) = start {
+        let (min, max) = (1, vectorcraft_doc::text::MAX_LIST_START);
+        return match v.as_f64() {
+            Some(x) if x.fract() == 0.0 && (f64::from(min)..=f64::from(max)).contains(&x) => Ok(Some(Some(x as u32))),
+            Some(x) => Err(bad(cmd, format!("`{key}` must be a whole number between {min} and {max} (got {x})"))),
+            None => Err(bad(cmd, format!("`{key}` must be a whole number"))),
+        };
+    }
+    // `check_switches` has already refused a value that is not true or false.
+    Ok(restart.and_then(Value::as_bool).map(|on| on.then_some(1)))
+}
+
+/// Take the number its list gives a paragraph away from paragraphs `paras` of `t` (indices;
+/// None: every paragraph), so they count on from the paragraph before. A first paragraph that
+/// continues from the frame before ([`TextObject::first_para_continues`]) keeps its number: its
+/// item begins in that frame.
+///
+/// [`TextObject::first_para_continues`]: vectorcraft_doc::text::TextObject::first_para_continues
+fn clear_list_start(t: &mut vectorcraft_doc::text::TextObject, paras: Option<std::ops::Range<usize>>) {
+    let mut paras = paras.unwrap_or(0..t.paragraph_count());
+    if paras.start == 0 && t.first_para_continues {
+        paras.start = 1;
+    }
+    if paras.is_empty() {
+        return;
+    }
+    t.edit_paras(Some(paras), |p| {
+        if let Some(l) = p.list.as_mut() {
+            l.start = None;
+        }
+    });
+}
+
+/// Among paragraphs `paras` of `t` (indices; None: every paragraph), the first numbered paragraph
+/// that holds text and the first numbered paragraph: where a number from [`list_start_param`] can go.
+/// A first paragraph that continues from the frame before ([`TextObject::first_para_continues`]) is
+/// skipped: its item begins in that frame.
+///
+/// [`TextObject::first_para_continues`]: vectorcraft_doc::text::TextObject::first_para_continues
+fn list_start_candidates(t: &vectorcraft_doc::text::TextObject, paras: Option<std::ops::Range<usize>>) -> (Option<usize>, Option<usize>) {
+    let paras = paras.unwrap_or(0..t.paragraph_count());
+    let text = t.plain_text();
+    let pieces: Vec<&str> = text.split('\n').collect();
+    let mut numbered = paras.filter(|&i| !(i == 0 && t.first_para_continues) && t.para_at(i).list.is_some_and(|l| l.number.is_some())).peekable();
+    let first = numbered.peek().copied();
+    let with_text = numbered.find(|&i| pieces.get(i).is_some_and(|s| !s.is_empty()));
+    (with_text, first)
+}
+
+/// Set the Warichu and Warichu Settings of `st` that are given: Warichu on or off, Lines, Line Gap
+/// (in the type's own units), Scale and Alignment.
+fn set_warichu(
+    st: &mut vectorcraft_doc::CharStyle,
+    on: Option<bool>,
+    lines: Option<u8>,
+    gap: Option<f64>,
+    scale: Option<f64>,
+    align: Option<vectorcraft_doc::WarichuAlign>,
+) {
+    st.warichu = on.unwrap_or(st.warichu);
+    st.warichu_lines = lines.unwrap_or(st.warichu_lines);
+    st.warichu_gap = gap.unwrap_or(st.warichu_gap);
+    st.warichu_scale = scale.unwrap_or(st.warichu_scale);
+    st.warichu_align = align.unwrap_or(st.warichu_align);
+}
+
 fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setFormat";
+    if p.get("paragraphIndents").is_some() {
+        return set_paragraph_indents(s, p);
+    }
     let ids = super::typecmd::text_targets(s, p, C)?;
+    check_switches(
+        p,
+        &[
+            "underline",
+            "strikethrough",
+            "allCaps",
+            "proportionalMetrics",
+            "tateChuYoko",
+            "warichu",
+            "standardVerticalRoman",
+            "noBreak",
+            "kashidas",
+            "hyphenate",
+            "hyphenateCapitalized",
+            "romanHangingPunctuation",
+            "koreanLineBreakAnywhere",
+            "bunriKinshi",
+            "kurikaeshiMojiShori",
+            "restartNumbering",
+        ],
+        C,
+    )?;
+    // Each value that `num` reads below must be a number or null.
+    super::check_numbers(
+        p,
+        &[
+            "baselineShift",
+            "hScale",
+            "vScale",
+            "rotation",
+            "leftIndent",
+            "rightIndent",
+            "firstLineIndent",
+            "spaceBefore",
+            "spaceAfter",
+            "wordsLongerThan",
+            "afterFirst",
+            "beforeLast",
+            "hyphenLimit",
+            "hyphenationZone",
+        ],
+        C,
+    )?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64);
     let flag = |k: &str| p.get(k).and_then(Value::as_bool);
     let kerning = match p.get("kerning") {
         None | Some(Value::Null) => None,
-        Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(v) => Some(Some(v.as_f64().ok_or_else(|| bad(C, "kerning must be a number or \"auto\""))?.clamp(-1000.0, 10000.0))),
+        // Auto and Optical both clear manual pair values.
+        Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") || a.eq_ignore_ascii_case("optical") => Some(None),
+        Some(v) => Some(Some(v.as_f64().ok_or_else(|| bad(C, "kerning must be a number, \"auto\", or \"optical\""))?.clamp(-1000.0, 10000.0))),
+    };
+    let optical_kerning = match p.get("kerning") {
+        Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(false),
+        Some(Value::String(a)) if a.eq_ignore_ascii_case("optical") => Some(true),
+        _ => None,
     };
     let keys = [
         "kerning",
@@ -327,6 +636,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "allCaps",
         "smallCaps",
         "position",
+        "antiAlias",
         "leftIndent",
         "rightIndent",
         "firstLineIndent",
@@ -335,6 +645,10 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "list",
         "bullet",
         "number",
+        "listAlign",
+        "listLevel",
+        "startNumber",
+        "restartNumbering",
         "hyphenate",
         "wordsLongerThan",
         "afterFirst",
@@ -349,55 +663,130 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         "singleWordJustification",
         "mojikumi",
         "kinsoku",
+        "kinsokuType",
+        "bunriKinshi",
+        "kurikaeshiMojiShori",
         "direction",
         "leadingModel",
         "charAlign",
         "charDirection",
+        "kashidas",
         "proportionalMetrics",
         "tateChuYoko",
+        "tcyUpDown",
+        "tcyLeftRight",
+        "warichu",
+        "warichuLines",
+        "warichuGap",
+        "warichuScale",
+        "warichuAlign",
+        "akiLeft",
+        "akiRight",
+        "tsume",
+        "diacriticHorizontal",
+        "diacriticVertical",
+        "standardVerticalRoman",
         "noBreak",
         "digits",
+        "glyphForm",
+        "fontHeightReference",
+        "language",
         "fontAxes",
         "burasagari",
         "romanHangingPunctuation",
+        "koreanLineBreakAnywhere",
         "kashida",
         "composer",
     ];
-    if !keys.iter().any(|k| p.get(*k).is_some()) {
+    // A null value leaves its attribute as it is, as an omitted one does.
+    if !keys.iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null())) {
         return Err(bad(C, "nothing to change"));
     }
+    // The anti-aliasing method belongs to the whole type object; each frame keeps its own method.
+    let anti_alias = match p.get("antiAlias") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_str()
+                .and_then(vectorcraft_doc::text::TypeAntiAlias::from_id)
+                .ok_or_else(|| bad(C, "`antiAlias` must be \"none\", \"sharp\", \"crisp\" or \"strong\""))?,
+        ),
+    };
     let composer = match p.get("composer") {
         None | Some(Value::Null) => None,
         Some(v) => Some(match v.as_str() {
             Some("singleLine") => Composer::SingleLine,
             Some("everyLine") => Composer::EveryLine,
-            _ => return Err(bad(C, "composer must be \"singleLine\" or \"everyLine\"")),
+            Some("standardSingleLine") => Composer::StandardSingleLine,
+            Some("standardEveryLine") => Composer::StandardEveryLine,
+            _ => return Err(bad(C, "composer must be \"singleLine\", \"everyLine\", \"standardSingleLine\" or \"standardEveryLine\"")),
         }),
     };
     let (position, small_caps) = super::docsetup::script_params(p, &s.doc()?.doc.setup, C)?;
     let char_align = super::textedit::char_align_param(p, C)?;
     let char_direction = super::textedit::char_direction_param(p, C)?;
     let digits = super::textedit::digits_param(p, C)?;
+    let glyph_form = super::textedit::glyph_form_param(p, C)?;
+    let language = super::textedit::language_param(p, C)?;
     let font_axes = super::textedit::font_axes_param(p, C)?;
+    let font_height_reference = super::textedit::font_height_reference_param(p, C)?;
+    let tcy_up_down = super::textedit::tcy_offset_param(p, "tcyUpDown", C)?;
+    let tcy_left_right = super::textedit::tcy_offset_param(p, "tcyLeftRight", C)?;
+    let aki_left = super::textedit::aki_param(p, "akiLeft", C)?;
+    let aki_right = super::textedit::aki_param(p, "akiRight", C)?;
+    let tsume = super::textedit::tsume_param(p, C)?;
+    let diacritic_horizontal = super::textedit::diacritic_param(p, "diacriticHorizontal", C)?;
+    let diacritic_vertical = super::textedit::diacritic_param(p, "diacriticVertical", C)?;
+    let warichu_lines = super::textedit::warichu_lines_param(p, C)?;
+    let warichu_gap = super::textedit::warichu_number_param(p, "warichuGap", C)?;
+    let warichu_scale = super::textedit::warichu_number_param(p, "warichuScale", C)?;
+    let warichu_align = super::textedit::warichu_align_param(p, C)?;
     let mojikumi = match p.get("mojikumi") {
-        None => None,
+        None | Some(Value::Null) => None,
         Some(v) => Some(match v.as_str() {
             Some("none") => vectorcraft_doc::Mojikumi::None,
             Some("lineEndHalf") => vectorcraft_doc::Mojikumi::LineEndHalf,
-            _ => return Err(bad(C, "`mojikumi` must be \"none\" or \"lineEndHalf\"")),
+            Some("yakumonoHankaku") => vectorcraft_doc::Mojikumi::YakumonoHankaku,
+            Some("gyomatsuYakumonoHankaku") => vectorcraft_doc::Mojikumi::GyomatsuYakumonoHankaku,
+            Some("gyomatsuYakumonoZenkaku") => vectorcraft_doc::Mojikumi::GyomatsuYakumonoZenkaku,
+            Some("yakumonoZenkaku") => vectorcraft_doc::Mojikumi::YakumonoZenkaku,
+            _ => {
+                return Err(bad(
+                    C,
+                    "`mojikumi` must be \"none\", \"yakumonoHankaku\", \"gyomatsuYakumonoHankaku\", \"gyomatsuYakumonoZenkaku\", \"yakumonoZenkaku\" or \"lineEndHalf\"",
+                ));
+            }
         }),
     };
     let kinsoku = match p.get("kinsoku") {
-        None => None,
+        None | Some(Value::Null) => None,
+        // A custom set (Type › Kinsoku Shori Settings…) by name: the paragraph holds a copy of it
+        // and keeps Hard, which builds without custom sets read.
         Some(v) => Some(match v.as_str() {
-            Some("none") => vectorcraft_doc::Kinsoku::None,
-            Some("hard") => vectorcraft_doc::Kinsoku::Hard,
-            Some("soft") => vectorcraft_doc::Kinsoku::Soft,
-            _ => return Err(bad(C, "`kinsoku` must be \"none\", \"hard\" or \"soft\"")),
+            Some("none") => (vectorcraft_doc::Kinsoku::None, None),
+            Some("hard") => (vectorcraft_doc::Kinsoku::Hard, None),
+            Some("soft") => (vectorcraft_doc::Kinsoku::Soft, None),
+            name => match name.map(|n| super::kinsokusets::chosen(s, n)).transpose()?.flatten() {
+                Some(set) => (vectorcraft_doc::Kinsoku::Hard, Some(set)),
+                None => {
+                    return Err(bad(
+                        C,
+                        "`kinsoku` must be \"none\", \"hard\", \"soft\" or the name of a Kinsoku set of the document (type.kinsokuSets.list)",
+                    ));
+                }
+            },
+        }),
+    };
+    let kinsoku_type = match p.get("kinsokuType") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(match v.as_str() {
+            Some("pushInFirst") => vectorcraft_doc::KinsokuShoriType::PushInFirst,
+            Some("pushOutFirst") => vectorcraft_doc::KinsokuShoriType::PushOutFirst,
+            Some("pushOutOnly") => vectorcraft_doc::KinsokuShoriType::PushOutOnly,
+            _ => return Err(bad(C, "`kinsokuType` must be \"pushInFirst\", \"pushOutFirst\" or \"pushOutOnly\"")),
         }),
     };
     let direction = match p.get("direction") {
-        None => None,
+        None | Some(Value::Null) => None,
         Some(v) => Some(match v.as_str() {
             Some("auto") => None,
             Some("leftToRight") => Some(vectorcraft_doc::ParaDirection::LeftToRight),
@@ -406,7 +795,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         }),
     };
     let leading_model = match p.get("leadingModel") {
-        None => None,
+        None | Some(Value::Null) => None,
         Some(v) => Some(match v.as_str() {
             Some("romanBaseline") => vectorcraft_doc::LeadingModel::RomanBaseline,
             Some("emBoxTop") => vectorcraft_doc::LeadingModel::EmBoxTop,
@@ -414,7 +803,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         }),
     };
     let burasagari = match p.get("burasagari") {
-        None => None,
+        None | Some(Value::Null) => None,
         Some(v) => Some(match v.as_str() {
             Some("none") => vectorcraft_doc::Burasagari::None,
             Some("standard") => vectorcraft_doc::Burasagari::Standard,
@@ -423,7 +812,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         }),
     };
     let kashida = match p.get("kashida") {
-        None => None,
+        None | Some(Value::Null) => None,
         Some(v) => Some(match v.as_str() {
             Some("none") => vectorcraft_doc::text::Kashida::None,
             Some("short") => vectorcraft_doc::text::Kashida::Short,
@@ -445,11 +834,18 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         &["none", "arabic", "upperLetters", "lowerLetters", "upperRoman", "lowerRoman", "twoDigits", "threeDigits"],
     )?
     .map(|n| NUMBERS.iter().find(|(k, _)| *k == n).map(|&(_, style)| style));
+    // …and `listAlign` where the marker stands before the text, in every list paragraph.
+    let list_align = super::object::choice(p, C, "listAlign", &["left", "right"])?
+        .map(|a| if a == "right" { vectorcraft_doc::text::ListAlign::Right } else { vectorcraft_doc::text::ListAlign::Left });
+    // …and `listLevel` the level of every list paragraph, 1 to 9.
+    let list_level = list_level_param(p, C)?;
+    // …and `startNumber` or `restartNumbering` the number of the first numbered paragraph.
+    let list_start = list_start_param(p, C)?;
     let indents_given = num("leftIndent").is_some() || num("firstLineIndent").is_some();
     let spacing = |k: &str| spacing_param(p, k, C);
     let (word_spacing, letter_spacing, glyph_scaling) = (spacing("wordSpacing")?, spacing("letterSpacing")?, spacing("glyphScaling")?);
     let single_word = match p.get("singleWordJustification") {
-        None => None,
+        None | Some(Value::Null) => None,
         Some(v) => Some(match v.as_str() {
             Some("fullJustify") => SingleWordJustify::FullJustify,
             Some("alignLeft") => SingleWordJustify::AlignLeft,
@@ -459,16 +855,24 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         }),
     };
     let auto_leading = match p.get("autoLeading") {
-        None => None,
+        None | Some(Value::Null) => None,
         Some(v) => Some(v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(C, "`autoLeading` must be a number"))?),
     };
     // A paragraph whose Minimum, Desired and Maximum would no longer be in order.
     let mut out_of_order: Option<&str> = None;
     let range = super::typecmd::TextRange::parse(p, C)?;
-    // The character attributes, given the baseline shift and horizontal scale in the type's own units.
-    let chars = |st: &mut vectorcraft_doc::CharStyle, baseline_shift: Option<f64>, h_scale: Option<f64>| {
+    // The character attributes, given the baseline shift, horizontal scale, Tate-chu-yoko offsets
+    // and warichu Line Gap in the type's own units.
+    let chars = |st: &mut vectorcraft_doc::CharStyle,
+                 baseline_shift: Option<f64>,
+                 h_scale: Option<f64>,
+                 tcy: (Option<f64>, Option<f64>),
+                 gap: Option<f64>| {
         if let Some(k) = kerning {
             st.kerning = k;
+        }
+        if let Some(v) = optical_kerning {
+            st.optical_kerning = v;
         }
         if let Some(v) = baseline_shift {
             st.baseline_shift = v;
@@ -506,27 +910,105 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
         if let Some(v) = digits {
             st.digits = v;
         }
+        if let Some(v) = glyph_form {
+            st.set_glyph_form(v);
+        }
+        if let Some(v) = &language {
+            st.language.clone_from(v);
+        }
         if let Some(v) = flag("proportionalMetrics") {
             st.proportional_metrics = v;
         }
         if let Some(v) = flag("tateChuYoko") {
             st.tate_chu_yoko = v;
         }
+        if let Some(v) = tcy.0 {
+            st.tcy_up_down = v;
+        }
+        if let Some(v) = tcy.1 {
+            st.tcy_left_right = v;
+        }
+        set_warichu(st, flag("warichu"), warichu_lines, gap, warichu_scale, warichu_align);
+        if let Some(v) = aki_left {
+            st.aki_left = v;
+        }
+        if let Some(v) = aki_right {
+            st.aki_right = v;
+        }
+        if let Some(v) = tsume {
+            st.tsume = v;
+        }
+        st.diacritic_horizontal = diacritic_horizontal.unwrap_or(st.diacritic_horizontal);
+        st.diacritic_vertical = diacritic_vertical.unwrap_or(st.diacritic_vertical);
+        if let Some(v) = flag("standardVerticalRoman") {
+            st.standard_vertical_roman = v;
+        }
         if let Some(v) = flag("noBreak") {
             st.no_break = v;
+        }
+        if let Some(v) = flag("kashidas") {
+            st.kashidas = v;
         }
         if let Some(v) = &font_axes {
             super::textedit::change_font_axes(st, v);
         }
+        if let Some(v) = font_height_reference {
+            st.font_height_reference = v;
+        }
     };
-    s.edit("Character", |d, _| {
+    // The list settings of one paragraph: `list`, `bullet`, `number`, `listAlign` and `listLevel`.
+    let lists = |para: &mut vectorcraft_doc::ParaStyle| {
+        if list.is_some() || bullet.is_some() || number.is_some() {
+            let on = list != Some("none") && bullet != Some(None) && number != Some(None);
+            let had = para.list;
+            // A numbered list for list "number", or without `list` for a number style.
+            let numbered = list == Some("number") || (list.is_none() && number.is_some());
+            // The list's other settings (the marker's alignment) stay as they were.
+            // A paragraph made bulleted keeps no number of its own.
+            para.list = on.then(|| vectorcraft_doc::text::ParaList {
+                bullet: bullet.flatten().or(had.map(|l| l.bullet)).unwrap_or_default(),
+                number: numbered.then(|| number.flatten().or(had.and_then(|l| l.number)).unwrap_or_default()),
+                start: had.and_then(|l| l.start).filter(|_| numbered),
+                ..had.unwrap_or_default()
+            });
+            // A paragraph that joins a list with no left or first-line indent gets a
+            // hanging indent, unless the call sets an indent.
+            if on && had.is_none() && !indents_given && para.left_indent == 0.0 && para.first_line_indent == 0.0 {
+                para.left_indent = vectorcraft_doc::text::LIST_HANGING_INDENT;
+                para.first_line_indent = -vectorcraft_doc::text::LIST_HANGING_INDENT;
+            }
+        }
+        if let Some(l) = para.list.as_mut() {
+            l.align = list_align.unwrap_or(l.align);
+            l.level = list_level.unwrap_or(l.level);
+        }
+    };
+    // The change is made on a copy first: a call whose values are the ones the text already has
+    // records no edit, undo step or revision. Only the type objects and graph label styles the call
+    // changes are compared, not the whole document.
+    super::variablecmds::settle_typing(s)?;
+    let mut doc = (*s.doc()?.doc).clone();
+    let mut changed = false;
+    {
+        let d = &mut doc;
+        // The paragraph change, for the graph labels to keep.
+        let mut para_change = None;
+        // Where the number `startNumber` or `restartNumbering` gives goes: the first numbered
+        // paragraph with text the call touches, through every target, else the first numbered one.
+        let (mut start_with_text, mut start_first) = (None, None);
+        let out_of_order_error = |name: &str| bad(C, format!("`{name}`: Minimum must not exceed Desired, nor Desired Maximum"));
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
+            let before = t.clone();
             let baseline_shift = num("baselineShift").map(|v| super::typecmd::local_type_value(t, v, (-1296.0, 1296.0), false, C)).transpose()?;
             let h_scale = num("hScale").map(|v| super::typecmd::local_type_value(t, v, (1.0, 10000.0), true, C)).transpose()?;
-            super::typecmd::style_chars(t, range, |st| chars(st, baseline_shift, h_scale));
+            let local = |v: Option<f64>| v.map(|v| super::typecmd::local_type_value(t, v, (-1296.0, 1296.0), false, C)).transpose();
+            let tcy = (local(tcy_up_down)?, local(tcy_left_right)?);
+            let gap =
+                warichu_gap.map(|v| super::typecmd::local_type_value(t, v, (0.0, vectorcraft_doc::text::MAX_WARICHU_GAP), false, C)).transpose()?;
+            super::typecmd::style_chars(t, range, |st| chars(st, baseline_shift, h_scale, tcy, gap));
             let span = super::typecmd::para_span(range, t);
-            t.edit_paras(span, |para| {
+            let paras = |para: &mut vectorcraft_doc::ParaStyle, out_of_order: &mut Option<&'static str>| {
                 if let Some(v) = num("leftIndent") {
                     para.left_indent = v.clamp(-MAX_PARA, MAX_PARA);
                 }
@@ -542,22 +1024,7 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(v) = num("spaceAfter") {
                     para.space_after = v.clamp(-MAX_PARA, MAX_PARA);
                 }
-                if list.is_some() || bullet.is_some() || number.is_some() {
-                    let on = list != Some("none") && bullet != Some(None) && number != Some(None);
-                    let had = para.list;
-                    // A numbered list for list "number", or without `list` for a number style.
-                    let numbered = list == Some("number") || (list.is_none() && number.is_some());
-                    para.list = on.then(|| vectorcraft_doc::text::ParaList {
-                        bullet: bullet.flatten().or(had.map(|l| l.bullet)).unwrap_or_default(),
-                        number: numbered.then(|| number.flatten().or(had.and_then(|l| l.number)).unwrap_or_default()),
-                    });
-                    // A paragraph that joins a list with no left or first-line indent gets a
-                    // hanging indent, unless the call sets an indent.
-                    if on && had.is_none() && !indents_given && para.left_indent == 0.0 && para.first_line_indent == 0.0 {
-                        para.left_indent = vectorcraft_doc::text::LIST_HANGING_INDENT;
-                        para.first_line_indent = -vectorcraft_doc::text::LIST_HANGING_INDENT;
-                    }
-                }
+                lists(para);
                 if let Some(v) = flag("hyphenate") {
                     para.hyphenate = v;
                 }
@@ -605,9 +1072,18 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(v) = mojikumi {
                     para.mojikumi = v;
                 }
-                if let Some(v) = kinsoku {
-                    para.kinsoku = v;
+                if let Some((v, set)) = &kinsoku {
+                    para.kinsoku = *v;
+                    para.kinsoku_set = set.clone();
                 }
+                if let Some(v) = kinsoku_type {
+                    para.kinsoku_type = v;
+                }
+                if let Some(v) = flag("bunriKinshi") {
+                    para.bunri_kinshi = v;
+                }
+                // An omitted or null value keeps the paragraph's own.
+                para.kurikaeshi_moji_shori = flag("kurikaeshiMojiShori").unwrap_or(para.kurikaeshi_moji_shori);
                 if let Some(v) = direction {
                     para.direction = v;
                 }
@@ -620,25 +1096,573 @@ fn set_format(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(v) = flag("romanHangingPunctuation") {
                     para.roman_hanging = v;
                 }
+                if let Some(v) = flag("koreanLineBreakAnywhere") {
+                    para.korean_line_break_anywhere = v;
+                }
                 if let Some(v) = kashida {
                     para.kashida = v;
                 }
                 if let Some(v) = composer {
                     para.composer = v;
                 }
-            });
+            };
+            t.edit_paras(span.clone(), |para| paras(para, &mut out_of_order));
             if let Some(name) = out_of_order {
-                return Err(bad(C, format!("`{name}`: Minimum must not exceed Desired, nor Desired Maximum")));
+                return Err(out_of_order_error(name));
+            }
+            match list_start {
+                Some(None) => clear_list_start(t, span),
+                Some(Some(_)) if start_with_text.is_none() => {
+                    let (with_text, first) = list_start_candidates(t, span);
+                    start_with_text = with_text.map(|i| (*id, i));
+                    start_first = start_first.or(first.map(|i| (*id, i)));
+                }
+                _ => {}
             }
             super::typecmd::refresh_bounds(t);
+            changed |= *t != before;
+            para_change = Some(paras);
+        }
+        if let Some(Some(n)) = list_start
+            && let Some((id, i)) = start_with_text.or(start_first)
+            && let Some(NodeKind::Text(t)) = d.node_mut(id).map(|node| &mut node.kind)
+        {
+            let before = t.clone();
+            t.edit_paras(Some(i..i + 1), |p| {
+                if let Some(l) = p.list.as_mut() {
+                    l.start = Some(n);
+                }
+            });
+            super::typecmd::refresh_bounds(t);
+            changed |= *t != before;
         }
         // Graph labels keep a change made to all of their text through the graph being drawn again.
         if range.is_none() {
             let shift = num("baselineShift").map(|v| v.clamp(-1296.0, 1296.0));
             let scale = num("hScale").map(|v| v.clamp(1.0, 10000.0));
-            super::graph::capture_label_styles(d, &ids, &|st| chars(st, shift, scale));
+            changed |= super::graph::capture_label_styles(d, &ids, &|st| chars(st, shift, scale, (tcy_up_down, tcy_left_right), warichu_gap));
+            if let Some(paras) = para_change {
+                // The kept attributes are checked too: they may differ from the labels'.
+                changed |= super::graph::capture_label_paragraphs(d, &ids, &|para| {
+                    let mut out_of_order = None;
+                    paras(para, &mut out_of_order);
+                    out_of_order.map_or(Ok(()), |name| Err(out_of_order_error(name)))
+                })?;
+            }
+        }
+        if let Some(v) = anti_alias {
+            for id in &ids {
+                if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
+                    changed |= t.anti_alias != v;
+                    t.anti_alias = v;
+                }
+            }
+            // Graph labels keep the method through the graph being drawn again.
+            changed |= super::graph::capture_label_anti_alias(d, &ids, v);
+        }
+    }
+    if changed {
+        s.edit("Character", |d, _| {
+            *d = doc;
+            Ok(())
+        })?;
+    }
+    let mut result = json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() });
+    if let Some(kerning) = p.get("kerning") {
+        result["kerning"] = kerning.clone();
+    }
+    Ok(result)
+}
+
+/// The most entries `paragraphIndents` takes in one `text.setFormat` call.
+pub(crate) const MAX_PARAGRAPH_INDENTS: usize = 100_000;
+
+/// The indents one `paragraphIndents` entry gives its paragraph.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ParagraphIndent {
+    left: Option<f64>,
+    first_line: Option<f64>,
+}
+
+/// A type object that `paragraphIndents` names: the bytes where its paragraphs start and the
+/// indents its entries give them, by paragraph index.
+struct IndentedFrame {
+    id: NodeId,
+    starts: Vec<usize>,
+    changes: Vec<(usize, ParagraphIndent)>,
+}
+
+/// `text.setFormat` with `paragraphIndents`: each entry names one paragraph of a type object, by
+/// the object and the byte where the paragraph starts, and sets its left and first-line indents.
+/// Every entry is checked against the document before anything changes. Each type object's
+/// paragraph styles are rebuilt once and the whole change is one edit, so a threaded story flows
+/// again once however many of its paragraphs change. When no entry changes its paragraph, nothing
+/// is edited.
+fn set_paragraph_indents(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.setFormat";
+    const KEY: &str = "paragraphIndents";
+    if let Some(other) = p.as_object().and_then(|o| o.keys().find(|k| *k != KEY)) {
+        return Err(bad(C, format!("`{KEY}` takes no `{other}` beside it")));
+    }
+    let entries = p.get(KEY).and_then(Value::as_array).ok_or_else(|| bad(C, format!("`{KEY}` must be a list")))?;
+    if entries.is_empty() {
+        return Err(bad(C, format!("`{KEY}` is empty")));
+    }
+    if entries.len() > MAX_PARAGRAPH_INDENTS {
+        return Err(bad(C, format!("`{KEY}` takes at most {MAX_PARAGRAPH_INDENTS} entries (got {})", entries.len())));
+    }
+    let d = &s.doc()?.doc;
+    // The type objects in the order they first appear.
+    let mut frames: Vec<IndentedFrame> = vec![];
+    let mut frame_at: std::collections::HashMap<NodeId, usize> = std::collections::HashMap::new();
+    let mut given: std::collections::HashMap<(NodeId, usize), ParagraphIndent> = std::collections::HashMap::new();
+    for (n, e) in entries.iter().enumerate() {
+        let e = e.as_object().ok_or_else(|| bad(C, format!("`{KEY}` entry {n} must be an object")))?;
+        if let Some(k) = e.keys().find(|k| !["id", "start", "leftIndent", "firstLineIndent"].contains(&k.as_str())) {
+            return Err(bad(C, format!("`{KEY}` entry {n}: unknown key `{k}`")));
+        }
+        let indent = |k: &str| -> Result<Option<f64>> {
+            match e.get(k) {
+                None => Ok(None),
+                Some(v) => match v.as_f64() {
+                    Some(x) if x.is_finite() && x.abs() <= MAX_PARA => Ok(Some(x)),
+                    _ => Err(bad(C, format!("`{KEY}` entry {n}: `{k}` must be a number from -{MAX_PARA} to {MAX_PARA} pt"))),
+                },
+            }
+        };
+        let change = ParagraphIndent { left: indent("leftIndent")?, first_line: indent("firstLineIndent")? };
+        if change.left.is_none() && change.first_line.is_none() {
+            return Err(bad(C, format!("`{KEY}` entry {n} sets neither `leftIndent` nor `firstLineIndent`")));
+        }
+        let id = NodeId(e.get("id").and_then(Value::as_u64).ok_or_else(|| bad(C, format!("`{KEY}` entry {n}: `id` must be an object id")))?);
+        let start = index(e.get("start").and_then(Value::as_u64).ok_or_else(|| bad(C, format!("`{KEY}` entry {n}: `start` must be a byte offset")))?);
+        let k = match frame_at.get(&id) {
+            Some(k) => *k,
+            None => {
+                let Some(NodeKind::Text(t)) = d.node(id).map(|n| &n.kind) else {
+                    return Err(bad(C, format!("`{KEY}` entry {n}: {} is not a type object", id.0)));
+                };
+                let plain = t.plain_text();
+                let mut starts = vec![0];
+                starts.extend(plain.bytes().enumerate().filter_map(|(i, c)| (c == b'\n').then_some(i + 1)));
+                frames.push(IndentedFrame { id, starts, changes: vec![] });
+                frame_at.insert(id, frames.len() - 1);
+                frames.len() - 1
+            }
+        };
+        let Some(IndentedFrame { starts, changes, .. }) = frames.get_mut(k) else { continue };
+        let para = starts.binary_search(&start).map_err(|_| bad(C, format!("`{KEY}` entry {n}: no paragraph of {} starts at byte {start}", id.0)))?;
+        match given.insert((id, para), change) {
+            None => changes.push((para, change)),
+            Some(was) if was == change => {}
+            Some(_) => {
+                return Err(bad(
+                    C,
+                    format!("`{KEY}` entry {n} gives the paragraph at byte {start} of {} other indents than an entry before it", id.0),
+                ));
+            }
+        }
+    }
+    let ids = json!({ "ids": frames.iter().map(|f| f.id.0).collect::<Vec<_>>() });
+    // Only the type objects with a paragraph whose indents change are edited.
+    let differs = |t: &vectorcraft_doc::TextObject, i: usize, c: &ParagraphIndent| {
+        let para = t.para_at(i);
+        c.left.is_some_and(|v| v != para.left_indent) || c.first_line.is_some_and(|v| v != para.first_line_indent)
+    };
+    frames.retain(|f| match d.node(f.id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => f.changes.iter().any(|(i, c)| differs(t, *i, c)),
+        _ => false,
+    });
+    if frames.is_empty() {
+        return Ok(ids);
+    }
+    s.edit("Character", |d, _| {
+        for f in &frames {
+            let Some(NodeKind::Text(t)) = d.node_mut(f.id).map(|n| &mut n.kind) else { continue };
+            let mut styles = t.paragraph_styles();
+            for (i, c) in &f.changes {
+                if let Some(para) = styles.get_mut(*i) {
+                    para.left_indent = c.left.unwrap_or(para.left_indent);
+                    para.first_line_indent = c.first_line.unwrap_or(para.first_line_indent);
+                }
+            }
+            t.set_paragraph_styles(styles);
+            super::typecmd::refresh_bounds(t);
         }
         Ok(())
     })?;
-    Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+    Ok(ids)
+}
+
+/// The part of a story paragraph in one frame, as [`convert_list_to_text`] reads it: the frame,
+/// the frame's paragraph, its bytes there, its list, the marker the frame's layout draws for it
+/// and the numbered paragraphs the frame counts before it at each list level.
+struct ParagraphPart {
+    frame: usize,
+    index: usize,
+    bytes: std::ops::Range<usize>,
+    list: Option<vectorcraft_doc::text::ParaList>,
+    marker: Option<String>,
+    count: vectorcraft_doc::text::ListCounts,
+}
+
+/// A paragraph of a story: its parts in thread order (a later frame's first paragraph goes on
+/// with the paragraph the frame before it ends in, which may be an empty part after a paragraph
+/// break), and whether the call converts it (a part of it is in a paragraph the call names).
+struct StoryParagraph {
+    parts: Vec<ParagraphPart>,
+    converts: bool,
+}
+
+impl StoryParagraph {
+    /// The part whose style a re-flowed thread gives the whole paragraph
+    /// (`vectorcraft_text::thread::story_paras`) and whose marker the layout draws: the first part
+    /// with text, else the last part.
+    fn main_part(&self) -> Option<&ParagraphPart> {
+        self.parts.iter().find(|p| !p.bytes.is_empty()).or(self.parts.last())
+    }
+}
+
+/// The style of the character at byte `b` of `t`, as the layout reads it: the run that holds `b`,
+/// else the one before it, else the first.
+fn char_style_at(t: &vectorcraft_doc::TextObject, b: usize) -> vectorcraft_doc::CharStyle {
+    let mut runs = vec![];
+    let mut off = 0;
+    for r in &t.runs {
+        runs.push((off..off + r.text.len(), &r.style));
+        off += r.text.len();
+    }
+    let find = |b: usize| runs.iter().find(|(r, _)| r.contains(&b)).map(|(_, s)| (*s).clone());
+    find(b).or_else(|| b.checked_sub(1).and_then(find)).unwrap_or_else(|| t.first_style())
+}
+
+/// The list marker that `lay` (the layout of `t`) draws before paragraph `index` (bytes `bytes`):
+/// the width of its characters and the width of the tab after them. A paragraph the layout leaves
+/// out (overset text) is laid out on its own, as a paragraph that starts there, numbered on from
+/// `count`.
+fn marker_extent(
+    t: &vectorcraft_doc::TextObject,
+    lay: &vectorcraft_text::TextLayout,
+    index: usize,
+    bytes: std::ops::Range<usize>,
+    count: vectorcraft_doc::text::ListCounts,
+) -> (f64, f64) {
+    let width = |lay: &vectorcraft_text::TextLayout, start: usize| {
+        lay.markers.iter().find(|m| lay.glyphs.get(m.glyphs.start).is_some_and(|g| g.byte == start)).map(|m| {
+            let advance = |g: usize| lay.glyphs.get(g).map_or(0.0, |g| g.advance);
+            (m.glyphs.clone().filter(|&g| g != m.tab).map(advance).sum::<f64>(), advance(m.tab))
+        })
+    };
+    width(lay, bytes.start).unwrap_or_else(|| {
+        let mut probe = t.clone();
+        probe.kind = vectorcraft_doc::TextKind::Point;
+        probe.runs = vectorcraft_text::edit::slice_runs(&t.runs, bytes.start, bytes.end);
+        probe.ruby.clear();
+        probe.set_all_paras(t.para_at(index).clone());
+        probe.set_list_counts(count);
+        probe.first_para_continues = false;
+        width(&vectorcraft_text::layout(vectorcraft_text::FontDb::global(), &probe), 0).unwrap_or((0.0, 0.0))
+    })
+}
+
+/// Whether tab stop `tab` is at position `x`.
+fn stop_at(tab: &vectorcraft_doc::TabStop, x: f64) -> bool {
+    (tab.position - x).abs() <= 1e-6
+}
+
+/// Whether `tabs` hold one stop at position `x`, left-aligned and without a leader.
+fn plain_stop_at(tabs: &[vectorcraft_doc::TabStop], x: f64) -> bool {
+    let there: Vec<&vectorcraft_doc::TabStop> = tabs.iter().filter(|tab| stop_at(tab, x)).collect();
+    matches!(there.as_slice(), [only] if only.align == vectorcraft_doc::TabAlign::Left && only.leader.is_empty())
+}
+
+/// Whether tab stop `tab` lies between positions `from` and `x` and is not left-aligned.
+fn aligned_between(tab: &vectorcraft_doc::TabStop, from: f64, x: f64) -> bool {
+    tab.align != vectorcraft_doc::TabAlign::Left && tab.position > from + 1e-6 && tab.position < x - 1e-6
+}
+
+/// The frames of the story that type object `id` belongs to (its thread in thread order, else `id`
+/// alone), each with the length of its text in bytes.
+pub(crate) fn story_frames(s: &Session, id: NodeId) -> Vec<(NodeId, usize)> {
+    let Some(st) = s.active() else { return vec![] };
+    let d = &st.doc;
+    let frames = d.text_threads.iter().find(|thread| thread.contains(&id)).cloned().unwrap_or_else(|| vec![id]);
+    frames
+        .into_iter()
+        .filter_map(|f| match d.node(f).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some((f, t.plain_text().len())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// After Convert to Text inserted `inserted` (each a frame, the byte it went in at and its length),
+/// the Type tool's anchor and caret in frame `id` (`editing`, read before the call, in a story
+/// whose frames had the lengths `before`) move past the characters inserted at or before them in
+/// the story. In threaded type the caret stays in the frame it was in while its place is still
+/// there, and else goes to the frame its character moved to, with the anchor in that frame; that
+/// frame becomes the selection when it was not selected.
+fn move_editing_selection(
+    s: &mut Session,
+    (id, anchor, caret): (NodeId, usize, usize),
+    before: &[(NodeId, usize)],
+    inserted: &[(NodeId, usize, usize)],
+) -> Result<()> {
+    // Story positions: the bytes of the frames before a frame, then the byte in it.
+    let start_of = |frames: &[(NodeId, usize)], f: NodeId| frames.iter().take_while(|(g, _)| *g != f).map(|(_, n)| n).sum::<usize>();
+    let len_of = |frames: &[(NodeId, usize)], f: NodeId| frames.iter().find(|(g, _)| *g == f).map_or(0, |(_, n)| *n);
+    let inserted: Vec<(usize, usize)> =
+        inserted.iter().filter(|(f, _, _)| before.iter().any(|(g, _)| g == f)).map(|&(f, at, n)| (start_of(before, f) + at, n)).collect();
+    if inserted.is_empty() {
+        return Ok(());
+    }
+    let story = |at: usize| {
+        let at = start_of(before, id) + at.min(len_of(before, id));
+        at + inserted.iter().filter(|(b, _)| *b <= at).map(|(_, n)| n).sum::<usize>()
+    };
+    let (anchor, caret) = (story(anchor), story(caret));
+    select_story_range(s, id, anchor, caret)
+}
+
+/// The Type tool's anchor and caret become story positions `anchor` and `caret` of the story that
+/// frame `id` belongs to, as its frames are now. The caret stays in `id` while its place is there,
+/// and else goes to the frame that holds it, with the anchor in that frame; that frame becomes the
+/// selection when it was not selected.
+pub(crate) fn select_story_range(s: &mut Session, id: NodeId, anchor: usize, caret: usize) -> Result<()> {
+    let start_of = |frames: &[(NodeId, usize)], f: NodeId| frames.iter().take_while(|(g, _)| *g != f).map(|(_, n)| n).sum::<usize>();
+    let len_of = |frames: &[(NodeId, usize)], f: NodeId| frames.iter().find(|(g, _)| *g == f).map_or(0, |(_, n)| *n);
+    let after = story_frames(s, id);
+    let fits = |f: NodeId| (start_of(&after, f)..=start_of(&after, f) + len_of(&after, f)).contains(&caret);
+    let frame = if fits(id) { Some(id) } else { after.iter().map(|(f, _)| *f).find(|f| fits(*f)) };
+    let Some(frame) = frame else { return Ok(()) };
+    let (start, len) = (start_of(&after, frame), len_of(&after, frame));
+    let local = |at: usize| at.saturating_sub(start).min(len);
+    if frame == id {
+        s.set_tool_option("select", &json!({"start": local(anchor), "end": local(caret)}));
+        return Ok(());
+    }
+    s.set_tool_option("textSelection", &json!({"editing": frame.0, "anchor": local(anchor), "caret": local(caret)}));
+    // The Type tool ends editing after a command when the frame it edits is not selected, itself
+    // or through a selected group, so that frame becomes the selection, as a click in it does.
+    let selected = s.active().is_some_and(|st| {
+        let mut cur = Some(frame);
+        while let Some(c) = cur {
+            if st.selection.contains(c) {
+                return true;
+            }
+            cur = st.doc.parent_of(c);
+        }
+        false
+    });
+    if !selected {
+        s.select(|_, sel| sel.set([frame]))?;
+    }
+    Ok(())
+}
+
+/// Type › Bullets and Numbering › Convert to Text (`text.convertListToText`): the markers of the
+/// list paragraphs the call names become characters of the text, and the lists are turned off.
+/// While the Type tool edits, its typing ends first and its anchor and caret move past the
+/// characters inserted at or before them ([`move_editing_selection`]).
+fn convert_list_to_text(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.convertListToText";
+    use vectorcraft_doc::text::ParaList;
+    let range = super::typecmd::TextRange::parse(p, C)?;
+    // After Select All in a frame of threaded text, a call that names no type and no range takes
+    // every paragraph of every frame of the story, its locked and hidden frames included: the story
+    // is one text.
+    let story = super::textedit::editing_story(s);
+    let named = ["ids", "id"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
+    let ids = if !story.is_empty() && !named && range.is_none() { story.clone() } else { super::typecmd::text_targets(s, p, C)? };
+    // Converting the whole story leaves it selected.
+    let whole_story = !story.is_empty() && range.is_none() && story.iter().all(|f| ids.contains(f));
+    let editing = match super::textedit::editing_range(s)? {
+        Some((id, _, _)) => {
+            let options = s.tool_options();
+            let at = |k: &str| options.get(k).and_then(Value::as_u64).and_then(|v| usize::try_from(v).ok());
+            at("anchor").zip(at("caret")).map(|(anchor, caret)| (id, anchor, caret))
+        }
+        None => None,
+    };
+    let story_before = editing.map(|(id, _, _)| story_frames(s, id)).unwrap_or_default();
+    let d = &s.doc()?.doc;
+    let text = |id: NodeId| match d.node(id).map(|n| &n.kind) {
+        Some(NodeKind::Text(t)) => Some(t.as_ref()),
+        _ => None,
+    };
+    // Each story once: the frames of a thread in thread order, or one type object.
+    let mut stories: Vec<Vec<NodeId>> = vec![];
+    for id in &ids {
+        if stories.iter().any(|story| story.contains(id)) {
+            continue;
+        }
+        let thread = d.text_threads.iter().find(|thread| thread.contains(id));
+        stories.push(thread.map_or_else(|| vec![*id], |thread| thread.iter().copied().filter(|f| text(*f).is_some()).collect()));
+    }
+    // Per frame: the paragraphs whose list goes (with the style each gets) and the characters that
+    // go in at a byte.
+    type Stops = Vec<(usize, vectorcraft_doc::ParaStyle)>;
+    type Inserts = Vec<(usize, TextRun)>;
+    let mut edits: Vec<(NodeId, Stops, Inserts)> = vec![];
+    let mut converted = 0;
+    for story in &stories {
+        let frames: Vec<&vectorcraft_doc::TextObject> = story.iter().filter_map(|id| text(*id)).collect();
+        let mut paras: Vec<StoryParagraph> = vec![];
+        let mut named_parts = vec![];
+        let plains: Vec<String> = frames.iter().map(|t| t.plain_text()).collect();
+        for (f, ((id, t), plain)) in story.iter().zip(&frames).zip(&plains).enumerate() {
+            let named = if ids.contains(id) { range.map_or(0..t.paragraph_count(), |r| r.paras(t)) } else { 0..0 };
+            let mut count = t.list_counts();
+            let mut start = 0;
+            for (k, piece) in plain.split('\n').enumerate() {
+                let bytes = start..start + piece.len();
+                start = bytes.end + 1;
+                let before = count;
+                let list = t.para_at(k).list;
+                let marker = ParaList::next_marker(list, piece.is_empty(), &mut count);
+                // A later frame's first paragraph goes on with the one the frame before it ends in.
+                if !(k == 0 && f > 0) || paras.is_empty() {
+                    paras.push(StoryParagraph { parts: vec![], converts: false });
+                }
+                if let Some(para) = paras.last_mut() {
+                    para.parts.push(ParagraphPart { frame: f, index: k, bytes, list, marker, count: before });
+                    named_parts.push((paras.len() - 1, named.contains(&k)));
+                }
+            }
+        }
+        for (i, named) in named_parts {
+            if let Some(para) = paras.get_mut(i) {
+                let listed = para.main_part().is_some_and(|p| p.list.is_some());
+                para.converts |= named && listed;
+            }
+        }
+        // Each converted paragraph's main part, whether the paragraph holds a tab of its own, and
+        // the paragraph.
+        let main_parts: Vec<(&ParagraphPart, bool, &StoryParagraph)> = paras
+            .iter()
+            .filter(|p| p.converts)
+            .filter_map(|p| {
+                let tabs = p.parts.iter().any(|q| plains.get(q.frame).and_then(|s| s.get(q.bytes.clone())).is_some_and(|s| s.contains('\t')));
+                p.main_part().map(|m| (m, tabs, p))
+            })
+            .collect();
+        let layouts: Vec<Option<vectorcraft_text::TextLayout>> = frames
+            .iter()
+            .enumerate()
+            .map(|(f, t)| {
+                main_parts
+                    .iter()
+                    .any(|(p, _, _)| p.marker.is_some() && p.frame == f)
+                    .then(|| vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t))
+            })
+            .collect();
+        let mut frame_edits: Vec<(Stops, Inserts)> = vec![(vec![], vec![]); frames.len()];
+        for (para, own_tabs, story_para) in main_parts {
+            converted += 1;
+            let mut stop = None;
+            let mut direction = None;
+            if let (Some(marker), Some(t), Some(Some(lay))) = (&para.marker, frames.get(para.frame), layouts.get(para.frame)) {
+                // The marker's tab went to the left indent when it was ahead of the marker and no
+                // explicit stop came first, as the layout sets it; otherwise to the next tab stop,
+                // without the stop's leader, and for a right, center or decimal stop measured with
+                // the whole paragraph after it, where a converted tab measures the rest of its line.
+                // A plain left stop where the marker's tab ended takes the converted tab there: one
+                // at the left indent in the first case, and in the second, where a stop there or
+                // past it has a leader or is not left-aligned, or a right, center or decimal stop
+                // lies between the marker and that place. Those right, center and decimal stops
+                // between the marker and that place are removed. No other tab reaches a stop before
+                // the left indent, nor one past it in a paragraph with no tab of its own.
+                let style = t.para_at(para.index);
+                let (width, gap) = marker_extent(t, lay, para.index, para.bytes.clone(), para.count);
+                // A list level past the first sets the paragraph further in than its left indent.
+                let indent = style.laid_out_left_indent();
+                let pen = indent + style.first_line_indent + width;
+                let before = style.tabs.iter().any(|tab| tab.position > pen + 1e-6 && tab.position < indent - 1e-6);
+                let end = pen + gap;
+                let needed = |x: f64| !plain_stop_at(&style.tabs, x) || style.tabs.iter().any(|tab| aligned_between(tab, pen, x));
+                if indent - pen > 1e-6 && !before {
+                    stop = Some((pen, indent)).filter(|&(_, x)| needed(x));
+                } else if (end < indent - 1e-6 || !own_tabs)
+                    && style.tabs.iter().any(|tab| {
+                        let past = tab.position > end - 1e-6 && (!tab.leader.is_empty() || tab.align != vectorcraft_doc::TabAlign::Left);
+                        past || aligned_between(tab, pen, end)
+                    })
+                {
+                    stop = Some((pen, end)).filter(|&(_, x)| needed(x));
+                }
+                // A paragraph with no direction set runs the way its first strong character does.
+                // When the marker's characters would change that (a letter or a roman numeral
+                // before right-to-left text), the paragraph gets the direction it ran in.
+                if style.direction.is_none() {
+                    let body = plains.get(para.frame).and_then(|s| s.get(para.bytes.clone())).unwrap_or_default();
+                    let was = vectorcraft_text::paragraph_is_rtl(body, None);
+                    if vectorcraft_text::paragraph_is_rtl(&format!("{marker}\t{body}"), None) != was {
+                        direction = Some(if was { vectorcraft_doc::ParaDirection::RightToLeft } else { vectorcraft_doc::ParaDirection::LeftToRight });
+                    }
+                }
+                let run = TextRun { text: format!("{marker}\t"), style: ParaList::marker_style(&char_style_at(t, para.bytes.start)), inline: None };
+                if let Some((_, inserts)) = frame_edits.get_mut(para.frame) {
+                    inserts.push((para.bytes.start, run));
+                }
+            }
+            // A paragraph in several frames is changed in its main part and in its empty parts:
+            // re-flowing the thread gives the other parts with text the main part's style.
+            let Some(mut style) = frames.get(para.frame).map(|t| t.para_at(para.index).clone()) else { continue };
+            // The paragraph keeps the indent its list level set it at.
+            style.left_indent = style.laid_out_left_indent();
+            style.list = None;
+            if direction.is_some() {
+                style.direction = direction;
+            }
+            // A plain left stop at `x`, in place of any stop there and of the right, center and
+            // decimal stops between the marker's end `from` and `x`.
+            if let Some((from, x)) = stop {
+                style.tabs.retain(|tab| !stop_at(tab, x) && !aligned_between(tab, from, x));
+                let i = style.tabs.iter().position(|tab| tab.position > x).unwrap_or(style.tabs.len());
+                let tab = vectorcraft_doc::TabStop { position: x, align: vectorcraft_doc::TabAlign::Left, leader: String::new(), align_on: '.' };
+                style.tabs.insert(i, tab);
+            }
+            for part in story_para.parts.iter().filter(|q| std::ptr::eq(*q, para) || q.bytes.is_empty()) {
+                if let Some((stops, _)) = frame_edits.get_mut(part.frame) {
+                    stops.push((part.index, style.clone()));
+                }
+            }
+        }
+        for (id, (stops, inserts)) in story.iter().zip(frame_edits) {
+            if !stops.is_empty() {
+                edits.push((*id, stops, inserts));
+            }
+        }
+    }
+    let changed: Vec<u64> = edits.iter().map(|(id, _, _)| id.0).collect();
+    let inserted: Vec<Value> = edits
+        .iter()
+        .flat_map(|(id, _, inserts)| inserts.iter().map(move |(at, run)| json!({"id": id.0, "at": at, "length": run.text.len()})))
+        .collect();
+    let insertions: Vec<(NodeId, usize, usize)> =
+        edits.iter().flat_map(|(id, _, inserts)| inserts.iter().map(move |(at, run)| (*id, *at, run.text.len()))).collect();
+    if !edits.is_empty() {
+        s.edit("Convert to Text", |d, _| {
+            for (id, stops, mut inserts) in edits {
+                let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind) else { continue };
+                for (k, style) in stops {
+                    t.edit_paras(Some(k..k + 1), |para| *para = style.clone());
+                }
+                // From the last paragraph to the first, so that each byte still names its place.
+                inserts.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
+                for (at, run) in inserts {
+                    let len = run.text.len();
+                    vectorcraft_text::edit::replace_range_styled(&mut t.runs, at, at, &[run]);
+                    t.ruby_after_replace(at, at, len);
+                }
+                super::typecmd::refresh_bounds(t);
+            }
+            Ok(())
+        })?;
+        // A whole story selected by Select All stays selected, with the characters inserted.
+        if let Some(editing) = editing.filter(|_| !whole_story) {
+            move_editing_selection(s, editing, &story_before, &insertions)?;
+        }
+    }
+    Ok(json!({ "ids": changed, "converted": converted, "inserted": inserted }))
 }

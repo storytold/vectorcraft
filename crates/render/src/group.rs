@@ -84,6 +84,7 @@ impl Renderer {
             if c.mask.is_some() || self.offscreen_fits(ctx, r, c.isolated) {
                 return self.group_offscreen(ctx, f, c, r, draw);
             }
+            self.stats.view_sized += 1;
         }
         if c.mask.is_some() {
             // Its backdrop out of reach (or not needed), a masked group starts from transparency.
@@ -113,6 +114,9 @@ impl Renderer {
     }
 
     fn group_offscreen(&mut self, ctx: &mut RenderContext, f: &Frame, c: Composite, r: Region, draw: &mut Content) {
+        if f.reject_patch() {
+            return;
+        }
         let Composite { clip, blend, opacity, mask, isolated, .. } = c;
         // A group that blends with its backdrop is drawn twice (over the backdrop, and alone for
         // its coverage), and so is everything in it, so such groups nested in each other cost 2ⁿ.
@@ -283,9 +287,20 @@ impl Renderer {
         ctx.push_layer(None, Some(BlendMode::new(Mix::Normal, compose)), None, None, None);
         self.nested += 1;
         let shape = compose != Compose::Plus && !c.knockout_shape;
-        self.shape_of = if shape { Arc::as_ptr(c) as usize } else { 0 };
-        self.draw_arc(ctx, f, c);
-        self.shape_of = 0;
+        // A piece of a mesh-warped image knocks out its whole triangle, where its neighbors
+        // overlap it, at full coverage whatever the image's own alpha there.
+        if shape && let Some(outline) = c.knockout_outline() {
+            if let Some(region) = self.clip_of(outline) {
+                ctx.set_transform(f.view);
+                ctx.set_paint(f.ink.fixed([255, 255, 255, 255]));
+                ctx.set_fill_rule(fill_rule(region.1));
+                ctx.fill_path(&region.0);
+            }
+        } else {
+            self.shape_of = if shape { Arc::as_ptr(c) as usize } else { 0 };
+            self.draw_arc(ctx, f, c);
+            self.shape_of = 0;
+        }
         self.nested -= 1;
         ctx.pop_layer();
     }
@@ -297,7 +312,10 @@ impl Renderer {
     /// `c` over the backdrop and its shape are drawn offscreen over `c`'s bounds, and `c` is drawn
     /// as in the other knockout passes (groups in it can't copy their backdrop).
     pub(crate) fn knockout_over(&mut self, ctx: &mut RenderContext, f: &Frame, c: &Arc<Node>, backdrop: &Arc<Pixmap>) {
-        let bounds = self.bounds_of(f.symbols, c);
+        let bounds = self.frame_bounds_of(f, c);
+        if f.patch_rejected() {
+            return;
+        }
         let Some(r) = region(ctx, f, bounds) else { return };
         let view = Affine::translate((-(r.x as f64), -(r.y as f64))) * f.view;
         let visible = view.inverse().transform_rect_bbox(Rect::new(0.0, 0.0, r.w as f64, r.h as f64));

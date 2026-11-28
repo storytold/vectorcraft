@@ -1,8 +1,8 @@
 //! Curved projected rings shared by a cap and its adjoining body faces.
 
-use vectorcraft_geom::{CubicBez, Shape};
+use vectorcraft_geom::{CubicBez, ParamCurve, Shape};
 
-use super::*;
+use super::{BezPath, Face, PathData, Point, Rect, Revolve, V3, Vec2, eye_distance, perspective_scale, project_face};
 
 const CURVE_TOLERANCE: f64 = 0.001;
 const MAX_RING_CURVES: usize = 32_768;

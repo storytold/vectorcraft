@@ -1,18 +1,29 @@
 //! Character Styles and Paragraph Styles panels (one implementation, two kinds).
 //!
-//! Click a style to apply it to the selected text (or the Type tool's selected characters);
-//! Alt-click applies it and clears overrides. The style of the selection is highlighted, with a
-//! "+" when the text overrides some of its attributes.
+//! The framework's [`TextStylesPanel`] draws the list and footer and reports what the user asked for; this
+//! module runs it as commands on the document ([`run_action`]) and keeps what each panel highlights
+//! ([`StylesPanels`]). Alt on New first asks for the style's name (`ui.newCharStyle`, `ui.newParaStyle`).
 
-use egui::{Sense, Ui, vec2};
+use std::cell::RefCell;
+
+// PLAN: the framework import paths below are assumed from the crate names; adjust to the app's re-exports.
+use craft::behavior::Selection;
+use craft::host::{PickKind, PickRequest};
+use craft::text::ui::style_panel::{TextStyleAction, TextStyleKind, TextStyleRow, TextStylesPanel};
+use craft::ui::contract::Bind;
+use craft::ui::menu::PanelRow;
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use egui::Ui;
 use serde_json::{Map, Value, json};
-use vectorcraft_engine::cmd::textstyles;
+use vectorcraft_doc::Document;
+use vectorcraft_engine::cmd::{fileio, textstyles};
 
-use super::character::{end_typing, text_editing, text_style};
-use super::{pstate, selection_len, set_pstate};
+use super::character::{end_typing, shared, text_editing, text_style};
+use super::memo::Memo;
+use super::paragraph::shared_para;
+use super::selection_len;
 use crate::VectorcraftApp;
-use crate::theme::Tokens;
-use crate::widgets::{self, menu_item};
+use crate::file_asks::{self, Owner};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Kind {
@@ -24,21 +35,109 @@ impl Kind {
     fn prefix(self) -> &'static str {
         if self == Kind::Char { "charStyle" } else { "paraStyle" }
     }
+    #[cfg(test)]
     fn what(self) -> &'static str {
         if self == Kind::Char { "Character" } else { "Paragraph" }
     }
-    /// `what` in the UI language, for text shown to the user.
-    fn what_label(self) -> &'static str {
-        if self == Kind::Char { tl!("Character") } else { tl!("Paragraph") }
-    }
-    fn key(self) -> &'static str {
-        if self == Kind::Char { "char-style-sel" } else { "para-style-sel" }
+    /// The framework panel's kind.
+    fn panel_kind(self) -> TextStyleKind {
+        if self == Kind::Char { TextStyleKind::Character } else { TextStyleKind::Paragraph }
     }
 }
 
-/// (name, attrs, uses) for every style, Normal first.
+/// What the two styles panels keep between frames.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct StylesPanels {
+    pub char: StylesPanel,
+    pub para: StylesPanel,
+    /// Pending new style highlights: document uid, paragraph-style flag, and name. Each document and style
+    /// kind has at most one pending highlight.
+    pub made: Vec<(u64, bool, String)>,
+}
+
+impl StylesPanels {
+    fn of(&mut self, kind: Kind) -> &mut StylesPanel {
+        if kind == Kind::Char { &mut self.char } else { &mut self.para }
+    }
+}
+
+/// One panel's highlight. Names are the stored form: row ids are list positions, rebuilt every pass.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct StylesPanel {
+    /// The uid of the document the highlight was made in.
+    document: Option<u64>,
+    /// Changes when the panel switches documents, so reopening a document cannot restore its old popup.
+    scope_generation: u64,
+    /// The highlighted styles, in the order they were picked.
+    highlight: Vec<String>,
+    /// The selection's lead style.
+    lead: Option<String>,
+    /// The style a Shift-click extends the highlight from.
+    anchor: Option<String>,
+    /// The style row the panel scrolls into view the next time it draws.
+    reveal: Option<String>,
+}
+
+/// The styles highlighted in the panel, in the order they were picked, among the styles `listed`; a
+/// highlight made in another document is dropped. A highlight made before the panel first read one (an
+/// action from the panel menu before the list drew) is the active document's.
+fn highlighted(app: &mut VectorcraftApp, kind: Kind, listed: &[&str]) -> Vec<String> {
+    let document = app.session.active().map(|st| st.uid);
+    let panel = app.ui.text_styles.of(kind);
+    if panel.document.is_some_and(|made| Some(made) != document) {
+        *panel = StylesPanel { scope_generation: panel.scope_generation.wrapping_add(1), ..StylesPanel::default() };
+    }
+    panel.document = document;
+    panel.highlight.retain(|n| listed.contains(&n.as_str()));
+    panel.highlight.clone()
+}
+
+/// Highlights `names` in the panel; the first of them leads.
+fn set_highlighted(app: &mut VectorcraftApp, kind: Kind, names: Vec<String>) {
+    let panel = app.ui.text_styles.of(kind);
+    panel.lead = names.first().cloned();
+    panel.anchor = panel.lead.clone();
+    panel.highlight = names;
+}
+
+/// Highlights the styles the panel just made and scrolls the first one's row into view.
+fn highlight_made(app: &mut VectorcraftApp, kind: Kind, names: Vec<String>) {
+    let first = names.first().cloned();
+    set_highlighted(app, kind, names);
+    app.ui.text_styles.of(kind).reveal = first;
+}
+
+/// Duplicates the styles `names` (`charStyle.duplicate`, `paraStyle.duplicate`) in one undo step
+/// and highlights the copies; none runs nothing.
+fn duplicate(app: &mut VectorcraftApp, kind: Kind, names: &[String]) {
+    if names.is_empty() {
+        return;
+    }
+    let p = kind.prefix();
+    let made = if let [name] = names {
+        app.run(&format!("{p}.duplicate"), json!({ "name": name })).map(|r| vec![r])
+    } else {
+        let commands: Vec<Value> = names.iter().map(|n| json!({ "command": format!("{p}.duplicate"), "params": { "name": n } })).collect();
+        let label = if kind == Kind::Char { "New Character Style" } else { "New Paragraph Style" };
+        app.run("command.batch", json!({ "label": label, "commands": commands })).map(|r| r["results"].as_array().cloned().unwrap_or_default())
+    };
+    if let Ok(made) = made {
+        highlight_made(app, kind, made.iter().filter_map(|r| r["name"].as_str().map(str::to_string)).collect());
+    }
+}
+
+/// (name, attrs, uses) for every style, Normal first, listed once per document version.
 fn styles(app: &mut VectorcraftApp, kind: Kind) -> Vec<(String, Map<String, Value>, u64)> {
-    let v = app.session.execute(&format!("{}.list", kind.prefix()), &json!({})).unwrap_or_default();
+    thread_local! {
+        static MEMO: RefCell<[Memo<Document, Value>; 2]> = RefCell::new([Memo::default(), Memo::default()]);
+    }
+    let Some((doc, revision)) = app.session.active().map(|st| (st.doc.clone(), st.revision)) else { return vec![] };
+    let list = || {
+        #[cfg(test)]
+        LISTED.with(|n| n.set(n.get() + 1));
+        app.session.execute(&format!("{}.list", kind.prefix()), &json!({})).unwrap_or_default()
+    };
+    let v = MEMO.with(|m| m.borrow_mut()[kind as usize].get(&doc, revision, list));
     v["styles"]
         .as_array()
         .map(|a| {
@@ -55,14 +154,31 @@ fn styles(app: &mut VectorcraftApp, kind: Kind) -> Vec<(String, Map<String, Valu
         .unwrap_or_default()
 }
 
-/// The selection's style name (Normal when none) and every one of its attributes, written as a
-/// style holds them, if text is selected.
-fn current(app: &VectorcraftApp, kind: Kind) -> Option<(Option<String>, Map<String, Value>)> {
-    let (c, p) = text_style(app)?;
-    Some(match kind {
-        Kind::Char => (c.style_name.clone(), textstyles::char_attrs(&c)),
-        Kind::Para => (p.style_name.clone(), textstyles::para_attrs(&p)),
-    })
+#[cfg(test)]
+thread_local! {
+    /// How many times [`styles`] has run `charStyle.list` or `paraStyle.list` on this thread.
+    static LISTED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The style name (`None`: the Normal style) that every character the panel acts on has (paragraph
+/// styles: every paragraph), with the Selection tool in every frame of the selected stories;
+/// `None` when they differ or no type is selected.
+fn current(app: &VectorcraftApp, kind: Kind) -> Option<Option<String>> {
+    match kind {
+        Kind::Char => shared(app, |s| s.style_name.clone()),
+        Kind::Para => shared_para(app, |p| p.style_name.clone()),
+    }
+}
+
+/// Whether any character (paragraph styles: paragraph) the panel acts on differs from the style
+/// attributes `attrs` in one of them.
+fn has_overrides(app: &VectorcraftApp, kind: Kind, attrs: &Map<String, Value>) -> bool {
+    let differs = |m: Map<String, Value>| attrs.iter().any(|(k, v)| m.get(k) != Some(v));
+    let same = match kind {
+        Kind::Char => shared(app, |s| differs(textstyles::char_attrs(s))),
+        Kind::Para => shared_para(app, |p| differs(textstyles::para_attrs(p))),
+    };
+    same != Some(false)
 }
 
 /// Parameters targeting the selection: the Type tool's selected characters (paragraph styles: the
@@ -78,599 +194,216 @@ fn target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
     p
 }
 
-pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
-    let t = Tokens::get(ui.ctx());
-    let all = styles(app, kind);
-    let cur = current(app, kind);
-    let normal = all.first().map(|s| s.0.clone()).unwrap_or_default();
-    let cur_name = cur.as_ref().map(|(n, _)| n.clone().unwrap_or_else(|| normal.clone()));
-    let mut clicked: Option<(String, bool)> = None;
-    let mut sel: Option<String> = pstate(ui.ctx(), kind.key());
-    widgets::list_box(ui, |ui| {
-        for (name, attrs, _) in &all {
-            let is_cur = cur_name.as_deref() == Some(name.as_str());
-            // Overrides: an attribute the style sets that the selection doesn't match.
-            let overridden = is_cur && cur.as_ref().is_some_and(|(_, m)| attrs.iter().any(|(k, v)| m.get(k) != Some(v)));
-            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::click());
-            if is_cur || sel.as_deref() == Some(name.as_str()) {
-                ui.painter().rect_filled(r, 0.0, if is_cur { t.row_selected } else { t.hover });
-            } else if resp.hovered() {
-                ui.painter().rect_filled(r, 0.0, t.hover);
-            }
-            // The built-in "[Normal … Style]" (listed first) is translated where painted; other names
-            // are user data, brackets or not.
-            let shown = super::label_or_name(name, *name == normal);
-            let label = if overridden { format!("{shown}+") } else { shown.to_string() };
-            ui.painter().text(r.left_center() + vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), t.text);
-            if resp.clicked() {
-                clicked = Some((name.clone(), ui.input(|i| i.modifiers.alt)));
-            }
-        }
-    });
-    let has_text = cur.is_some();
-    if let Some((name, clear)) = clicked {
-        sel = Some(name.clone());
-        if has_text {
-            let p = target(app, kind, json!({ "name": name, "clearOverrides": clear }));
-            app.run(&format!("{}.apply", kind.prefix()), p).ok();
-        }
+/// [`target`] for applying a style: after Select All in threaded text, all the text of every
+/// frame of the story; with the Selection tool, every frame of the selected stories
+/// ([`super::character::selected_stories`]).
+fn apply_target(app: &VectorcraftApp, kind: Kind, mut p: Value) -> Value {
+    if text_editing(app).is_none() {
+        super::character::target_selected_stories(app, &mut p);
+        return p;
     }
-    set_pstate(ui.ctx(), kind.key(), sel.clone());
-    let deletable = sel.as_ref().is_some_and(|s| *s != normal);
-    widgets::bottom_bar(ui, |ui| {
-        ui.add_space((ui.available_width() - 2.0 * 28.0).max(0.0));
-        if widgets::icon_button_enabled(
-            ui,
-            "dc-new-item",
-            &crate::i18n::fmt(tl!("Create New {kind} Style"), &[("kind", kind.what_label())]),
-            false,
-            true,
-            24.0,
-        )
-        .clicked()
-        {
-            end_typing(app);
-            if let Ok(r) = app.run(&format!("{}.new", kind.prefix()), target(app, kind, json!({}))) {
-                set_pstate(ui.ctx(), kind.key(), r["name"].as_str().map(str::to_string));
-            }
+    match super::character::text_story(app) {
+        Some(story) => {
+            p["ids"] = json!(story.iter().map(|f| f.0).collect::<Vec<_>>());
+            p
         }
-        if widgets::icon_button_enabled(
-            ui,
-            "trash-2",
-            &crate::i18n::fmt(tl!("Delete {kind} Style"), &[("kind", kind.what_label())]),
-            false,
-            deletable,
-            24.0,
-        )
-        .clicked()
-            && let Some(n) = &sel
-            && app.run(&format!("{}.delete", kind.prefix()), json!({ "name": n })).is_ok()
-        {
-            set_pstate::<Option<String>>(ui.ctx(), kind.key(), None);
-        }
-    });
+        None => target(app, kind, p),
+    }
 }
 
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
-    let sel: Option<String> = pstate(ui.ctx(), kind.key());
-    let normal = if kind == Kind::Char { "[Normal Character Style]" } else { "[Normal Paragraph Style]" };
-    let user = sel.as_ref().is_some_and(|s| s != normal);
-    let has_text = current(app, kind).is_some() || selection_len(app) > 0;
+/// Open New Character Style (`Kind::Para`: New Paragraph Style) to name a style made from the
+/// selected text: `ui.newCharStyle` and `ui.newParaStyle`.
+pub(crate) fn open_new(app: &mut VectorcraftApp, kind: Kind) -> Result<Value, String> {
+    // A later typing preview must not restore the document from before this capture.
+    end_typing(app);
+    let t = target(app, kind, json!({}));
+    crate::dialogs::new_text_style::open(app, kind == Kind::Para, t)
+}
+
+/// Opens `name`'s options: Character Style Options for a character style, Paragraph Style Options
+/// for a paragraph style.
+fn open_style_options(app: &mut VectorcraftApp, kind: Kind, name: &str) {
+    let command = if kind == Kind::Char { "ui.charStyleOptions" } else { "ui.paraStyleOptions" };
+    app.run(command, json!({ "name": name })).ok();
+}
+
+/// Takes the style a New style dialog made for this kind's panel on its own document, and drops the entries of
+/// documents that have closed.
+fn take_made(app: &mut VectorcraftApp, kind: Kind) -> Option<String> {
+    app.ui.text_styles.made.retain(|(uid, _, _)| app.session.documents().iter().any(|doc| doc.uid == *uid));
+    let index = app
+        .ui
+        .text_styles
+        .made
+        .iter()
+        .position(|(uid, para, _)| *para == (kind == Kind::Para) && app.session.active().is_some_and(|doc| doc.uid == *uid))?;
+    Some(app.ui.text_styles.made.remove(index).2)
+}
+
+/// The style list and its footer: the framework panel over this document's styles. Shift-click and Cmd/Ctrl-click
+/// highlight several styles without touching the text; the footer's Delete deletes every highlighted style but
+/// the Normal style.
+pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
+    let all = styles(app, kind);
+    let listed: Vec<&str> = all.iter().map(|s| s.0.as_str()).collect();
+    let id_of = |name: &str| listed.iter().position(|n| *n == name).map(|i| i as u64);
+    // Drops a highlight made in another document before the made style replaces it.
+    highlighted(app, kind, &listed);
+    if let Some(name) = take_made(app, kind) {
+        highlight_made(app, kind, vec![name]);
+    }
+    let names = highlighted(app, kind, &listed);
+    let panel = app.ui.text_styles.of(kind);
+    let (lead, anchor, reveal) = (panel.lead.clone(), panel.anchor.clone(), panel.reveal.take());
+    let scope = (panel.document, panel.scope_generation);
+    let mut sel = Selection::new(names.iter().filter_map(|n| id_of(n)).collect(), lead.as_deref().and_then(id_of), anchor.as_deref().and_then(id_of));
+    let rows: Vec<TextStyleRow> =
+        listed.iter().enumerate().map(|(i, name)| TextStyleRow::new(i as u64, super::label_or_name(name, i == 0))).collect();
+    let cur_id = current(app, kind).and_then(|n| match n {
+        None => Some(0),
+        Some(n) => id_of(&n),
+    });
+    let overridden = cur_id.and_then(|i| all.get(i as usize)).is_some_and(|s| has_overrides(app, kind, &s.1));
+    let label = if kind == Kind::Char { tl!("Character Styles") } else { tl!("Paragraph Styles") };
+    let mut list = TextStylesPanel::new(label, kind.panel_kind(), &rows, Bind::bound(&mut sel))
+        .current(cur_id, overridden)
+        .target(text_style(app).is_some() || selection_len(app) > 0)
+        // A character style has nothing to apply to at a bare caret; the panel then reports a status instead.
+        .text_selected(text_editing(app).is_none_or(|(_, a, b)| a != b))
+        // [Normal Character Style] takes Style Options, Duplicate and Redefine, as [Normal Paragraph Style] does.
+        .base_character_style(true)
+        .highlighting(true);
+    if let Some(id) = reveal.as_deref().and_then(id_of) {
+        list = list.reveal(id);
+    }
+    // The framework's row menu and footer drag use list indices that are local to this document.
+    let out = ui.push_id(("text-styles-document", kind.panel_kind(), scope), |ui| list.show(ui)).inner;
+    let name_of = |id: &u64| listed.get(*id as usize).map(|n| n.to_string());
+    let panel = app.ui.text_styles.of(kind);
+    panel.highlight = sel.items.iter().filter_map(name_of).collect();
+    panel.lead = sel.lead.as_ref().and_then(name_of);
+    panel.anchor = sel.anchor.as_ref().and_then(name_of);
+    if let Some(msg) = out.status {
+        app.status(msg.text.as_str());
+    }
+    if let Some(action) = out.action {
+        run_action(app, kind, action);
+    }
+}
+
+/// Runs what a styles panel asked for on the document.
+pub(crate) fn run_action(app: &mut VectorcraftApp, kind: Kind, action: TextStyleAction) {
+    let all = styles(app, kind);
+    let listed: Vec<&str> = all.iter().map(|s| s.0.as_str()).collect();
+    let name = |id: u64| listed.get(id as usize).map(|n| n.to_string());
+    let normal = listed.first().map(|n| n.to_string()).unwrap_or_default();
+    let current_name = current(app, kind).map(|n| n.unwrap_or_else(|| normal.clone()));
     let p = kind.prefix();
-    if menu_item(ui, &crate::i18n::fmt(tl!("New {kind} Style…"), &[("kind", kind.what_label())]), true, false) {
-        // A later typing preview must not restore the document from before this capture.
-        end_typing(app);
-        app.run(&format!("{p}.new"), target(app, kind, json!({}))).ok();
+    // The highlighted styles in list order, with or without Normal.
+    let marked = |app: &mut VectorcraftApp, with_normal: bool| -> Vec<String> {
+        let picked = highlighted(app, kind, &listed);
+        listed.iter().enumerate().filter(|(i, n)| (with_normal || *i != 0) && picked.iter().any(|s| s == *n)).map(|(_, n)| n.to_string()).collect()
+    };
+    match action {
+        TextStyleAction::Apply { id, clear_overrides, .. } => {
+            if let Some(n) = name(id) {
+                app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": clear_overrides }))).ok();
+            }
+        }
+        TextStyleAction::ClearOverride => {
+            if let Some(n) = current_name {
+                app.run(&format!("{p}.apply"), apply_target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
+            }
+        }
+        TextStyleAction::Redefine(id) => {
+            if let Some(n) = name(id) {
+                end_typing(app);
+                app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": n }))).ok();
+            }
+        }
+        TextStyleAction::New { ask_name: true, .. } => {
+            open_new(app, kind).ok();
+        }
+        TextStyleAction::New { ask_name: false, .. } => {
+            end_typing(app);
+            if let Ok(r) = app.run(&format!("{p}.new"), target(app, kind, json!({}))) {
+                highlight_made(app, kind, r["name"].as_str().map(str::to_string).into_iter().collect());
+            }
+        }
+        TextStyleAction::Duplicate(id) => {
+            if let Some(n) = name(id) {
+                duplicate(app, kind, &[n]);
+            }
+        }
+        TextStyleAction::DuplicateHighlighted => {
+            let names = marked(app, true);
+            duplicate(app, kind, &names);
+        }
+        TextStyleAction::Delete(id) => {
+            if let Some(n) = name(id).filter(|_| id != 0)
+                && app.run(&format!("{p}.delete"), json!({ "names": [n] })).is_ok()
+            {
+                set_highlighted(app, kind, vec![]);
+            }
+        }
+        TextStyleAction::DeleteHighlighted => {
+            let names = marked(app, false);
+            if app.run(&format!("{p}.delete"), json!({ "names": names })).is_ok() {
+                set_highlighted(app, kind, vec![]);
+            }
+        }
+        // The Normal style of either kind opens its options too; its name stays fixed there.
+        TextStyleAction::Options(id) => {
+            if let Some(n) = name(id) {
+                open_style_options(app, kind, &n);
+            }
+        }
+        TextStyleAction::SelectUnused => {
+            if let Ok(r) = app.run(&format!("{p}.unused"), json!({})) {
+                set_highlighted(app, kind, serde_json::from_value(r["names"].clone()).unwrap_or_default());
+            }
+        }
+        // The panel offers no other action.
+        _ => {}
     }
-    if menu_item(ui, &crate::i18n::fmt(tl!("Duplicate {kind} Style"), &[("kind", kind.what_label())]), sel.is_some(), false)
-        && let Some(n) = &sel
-    {
-        app.run(&format!("{p}.duplicate"), json!({ "name": n })).ok();
+}
+
+/// The load command ids of `kind`'s panel menu: its own styles, then every kind.
+fn load_commands(kind: Kind) -> [&'static str; 2] {
+    [if kind == Kind::Char { "ui.loadCharStyles" } else { "ui.loadParaStyles" }, "ui.loadAllStyles"]
+}
+
+/// The panel menu: the framework's rows, then the load commands.
+pub(crate) fn menu_rows(_app: &VectorcraftApp, kind: Kind) -> Vec<PanelRow> {
+    let mut rows = TextStylesPanel::panel_rows();
+    rows.push(PanelRow::Separator);
+    rows.extend(load_commands(kind).map(|id| PanelRow::Command(CommandRef::new(id))));
+    rows
+}
+
+/// Publishes the load rows' state; the framework's rows publish their own.
+pub(crate) fn menu_states(app: &VectorcraftApp, kind: Kind, states: &mut CommandStates) {
+    let can = app.session.active().is_some() && file_asks::can(app, PickKind::Open);
+    for id in load_commands(kind) {
+        states.set(id, CommandState::new().enabled(can));
     }
-    if menu_item(ui, &crate::i18n::fmt(tl!("Delete {kind} Style"), &[("kind", kind.what_label())]), user, false)
-        && let Some(n) = &sel
-    {
-        app.run(&format!("{p}.delete"), json!({ "name": n })).ok();
+}
+
+/// Load Character Styles…, Load Paragraph Styles… and Load All Styles… (`ui.loadCharStyles`,
+/// `ui.loadParaStyles`, `ui.loadAllStyles`): the engine command `load` (`charStyle.load`,
+/// `paraStyle.load`, `textStyle.loadAll`) on the document at `path`, else on one picked in an open
+/// dialog. A cancelled dialog loads nothing.
+pub(crate) fn load(app: &mut VectorcraftApp, load: &str, path: Option<String>) -> Result<Value, String> {
+    if let Some(path) = path {
+        return app.run(load, json!({ "path": path }));
     }
-    ui.separator();
-    if menu_item(ui, tl!("Clear Overrides"), sel.is_some() && has_text, false)
-        && let Some(n) = &sel
-    {
-        app.run(&format!("{p}.apply"), target(app, kind, json!({ "name": n, "clearOverrides": true }))).ok();
-    }
-    if menu_item(ui, &crate::i18n::fmt(tl!("Redefine {kind} Style"), &[("kind", kind.what_label())]), sel.is_some() && has_text, false)
-        && let Some(n) = &sel
-    {
-        end_typing(app);
-        app.run(&format!("{p}.redefine"), target(app, kind, json!({ "name": n }))).ok();
-    }
-    if menu_item(ui, &crate::i18n::fmt(tl!("{kind} Style Options…"), &[("kind", kind.what_label())]), user, false)
-        && let Some(n) = &sel
-    {
-        let label = format!("{} Style Options", kind.what());
-        app.run("ui.paramDialog", json!({ "command": format!("{p}.rename"), "label": label, "params": { "name": n, "to": n } })).ok();
-    }
+    let request = fileio::builtin_open_filters().fold(PickRequest::open("textStyles"), |r, (name, exts)| r.filter(name, exts));
+    let load = load.to_string();
+    Ok(file_asks::ask(app, request, Owner::Document, move |app, picked| match file_asks::open_params(&picked) {
+        Some(params) => app.run(&load, Value::Object(params)),
+        None => Ok(Value::Null),
+    }))
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorcraft_doc::{NodeId, NodeKind};
-
-    use super::super::tests_appearance::{click, frame_events, text_rect};
-
-    #[test]
-    fn panels_draw_and_apply_headless() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-        let id = app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
-        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
-        app.session.execute("charStyle.new", &json!({"name": "Big", "attrs": {"size": 30.0}})).unwrap();
-        for kind in [Kind::Char, Kind::Para] {
-            let ctx = egui::Context::default();
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
-                show(&mut app, ui, kind);
-                menu(&mut app, ui, kind);
-            });
-            out.textures_delta.clear();
-        }
-        app.run("charStyle.apply", target(&app, Kind::Char, json!({"name": "Big"}))).unwrap();
-        let (name, attrs) = current(&app, Kind::Char).unwrap();
-        assert_eq!((name.as_deref(), attrs["size"].as_f64()), (Some("Big"), Some(30.0)));
-    }
-
-    #[test]
-    fn auto_leading_style_marks_only_real_overrides() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        app.run("charStyle.new", json!({"name": "Automatic", "attrs": {"leading": null}})).unwrap();
-        app.run("charStyle.apply", json!({"name": "Automatic"})).unwrap();
-        for (leading, label) in [(json!("auto"), "Automatic"), (json!(30), "Automatic+")] {
-            app.run("text.setStyle", json!({"leading": leading})).unwrap();
-            let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, Kind::Char));
-            assert!(shown.lines().any(|line| line == label), "expected {label} in {shown}");
-        }
-        app.run("charStyle.apply", json!({"name": "Automatic", "clearOverrides": true})).unwrap();
-        let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, Kind::Char));
-        assert!(shown.lines().any(|line| line == "Automatic"), "no override after clearing: {shown}");
-    }
-
-    /// Styles made from new type hold its Auto alignment and its attributes at their defaults;
-    /// the type they were made from shows no override until one of those attributes changes.
-    #[test]
-    fn styles_made_from_type_mark_only_real_overrides() {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Hi"})).unwrap()["id"].clone();
-        app.run("select.set", json!({"ids": [id]})).unwrap();
-        for kind in [Kind::Char, Kind::Para] {
-            app.run(&format!("{}.new", kind.prefix()), json!({"name": "Plain"})).unwrap();
-            app.run(&format!("{}.apply", kind.prefix()), json!({"name": "Plain"})).unwrap();
-        }
-        for (change, label) in [(None, "Plain"), (Some(json!({"kerning": 40, "composer": "singleLine"})), "Plain+")] {
-            if let Some(p) = change {
-                app.run("text.setFormat", p).unwrap();
-            }
-            for kind in [Kind::Char, Kind::Para] {
-                let shown = crate::tests_labels::painted_text(&mut app, |app, ui| show(app, ui, kind));
-                assert!(shown.lines().any(|line| line == label), "expected {label} in the {} styles: {shown}", kind.what());
-            }
-        }
-    }
-
-    fn capture_app() -> (VectorcraftApp, NodeId, egui::Context) {
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
-        app.run("charStyle.new", json!({"name": "Untouched", "attrs": {"size": 22}})).unwrap();
-        let other = app.run("text.create", json!({"x": 20, "y": 100, "text": "Other", "size": 22})).unwrap()["id"].clone();
-        app.run("charStyle.apply", json!({"name": "Untouched", "id": other})).unwrap();
-        let id = NodeId(app.run("text.create", json!({"x": 20, "y": 50, "text": "ABcdef", "size": 18})).unwrap()["id"].as_u64().unwrap());
-        app.run("text.setRangeStyle", json!({"id": id.0, "start": 2, "end": 6, "size": 34})).unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        assert_eq!(text_editing(&app), None);
-        (app, id, ctx)
-    }
-
-    fn select_type_range(app: &mut VectorcraftApp, id: NodeId, start: usize, end: usize) {
-        // The same editing handshake and selection API as character::tests::scaled_range_fields_follow_the_type_tool_selection.
-        app.session.select_tool("type", Default::default()).unwrap();
-        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
-        app.session.set_tool_option("select", &json!({"start": start, "end": end}));
-        super::super::character::end_typing(app);
-        assert_eq!(app.session.tool_options()["typing"], json!(false));
-        assert!(!app.session.in_interaction(), "settle typing before taking the history baseline");
-        assert_eq!(text_editing(app), Some((id, start, end)));
-    }
-
-    /// Click production panel/menu content with the existing hover/press/release helper.
-    /// A live range guard and command counter distinguish a dispatch failure from a missed click or lost Type selection.
-    fn click_style_ui(ctx: &egui::Context, app: &mut VectorcraftApp, id: NodeId, range: Option<(usize, usize)>, is_menu: bool, label: &str) {
-        let expected = range.map(|(start, end)| (id, start, end));
-        let mut expected_target = json!({});
-        if let Some((start, end)) = range {
-            expected_target["id"] = json!(id.0);
-            if end > start {
-                expected_target["start"] = json!(start);
-                expected_target["end"] = json!(end);
-            }
-        }
-        let commands = app.run_count;
-        let mut dispatched = false;
-        let mut draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
-            // On the release frame this is immediately before the production menu/row handles the click and builds its target.
-            assert_eq!(text_editing(app), expected, "Type selection before {label}");
-            assert_eq!(target(app, Kind::Char, json!({})), expected_target, "actual panel target before {label}");
-            let before = app.run_count;
-            if is_menu {
-                menu(app, ui, Kind::Char);
-            } else {
-                show(app, ui, Kind::Char);
-            }
-            if app.run_count != before {
-                assert!(!dispatched, "{label} dispatched more than once");
-                assert_eq!(app.run_count, before.wrapping_add(1), "one command from {label}");
-                dispatched = true;
-            }
-        };
-        frame_events(ctx, app, vec![], &mut draw);
-        let texts = frame_events(ctx, app, vec![], &mut draw);
-        // widgets::menu_item prefixes an unchecked label with three spaces; the panel row does not.
-        let painted = if is_menu { format!("   {label}") } else { label.to_string() };
-        let pos = text_rect(&texts, &painted).center();
-        click(ctx, app, pos, &mut draw);
-        assert!(dispatched, "pointer click did not dispatch {label}; do not interpret this as parameter rejection");
-        assert_eq!(app.run_count, commands.wrapping_add(1), "exactly one real panel command");
-        assert_eq!(text_editing(app), expected, "Type selection after {label}");
-    }
-
-    fn text_runs(app: &VectorcraftApp, id: NodeId) -> Vec<(String, f64, Option<String>)> {
-        let st = app.session.doc().unwrap();
-        let NodeKind::Text(text) = &st.doc.node(id).unwrap().kind else { panic!("expected text") };
-        text.runs.iter().map(|r| (r.text.clone(), r.style.size, r.style.style_name.clone())).collect()
-    }
-
-    fn capture_from_menu(range: Option<(usize, usize)>, redefine: bool) {
-        capture_from_ui(range, redefine, false, false);
-    }
-
-    fn capture_from_ui(range: Option<(usize, usize)>, redefine: bool, footer: bool, unicode: bool) {
-        let (mut app, id, ctx) = capture_app();
-        let (first, tail) = if unicode { ("é", "漢字") } else { ("AB", "cdef") };
-        let len = first.len() + tail.len();
-        if unicode {
-            app.run("text.setText", json!({"id": id.0, "text": format!("{first}{tail}")})).unwrap();
-            app.run("text.setRangeStyle", json!({"id": id.0, "start": first.len(), "end": len, "size": 34})).unwrap();
-        }
-        let mut follower = None;
-        let mut local_override = None;
-        if redefine {
-            app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24}})).unwrap();
-            // Select the definition through its real panel row; no test-only panel selection is installed.
-            click_style_ui(&ctx, &mut app, id, None, false, "Body");
-            let selected: Option<String> = pstate(&ctx, Kind::Char.key());
-            assert_eq!(selected.as_deref(), Some("Body"));
-            for (slot, text, y, size) in [(&mut follower, "Follower", 130, 24), (&mut local_override, "Override", 160, 48)] {
-                let user = NodeId(app.run("text.create", json!({"x": 20, "y": y, "text": text, "size": 24})).unwrap()["id"].as_u64().unwrap());
-                app.run("charStyle.apply", json!({"name": "Body", "id": user.0})).unwrap();
-                app.run("text.setRangeStyle", json!({"id": user.0, "start": 0, "end": text.len(), "size": size})).unwrap();
-                *slot = Some(user);
-            }
-            app.run("select.set", json!({"ids": [id.0]})).unwrap();
-            app.run("text.setRangeStyle", json!({"id": id.0, "start": 0, "end": len, "size": 18})).unwrap();
-            app.run("text.setRangeStyle", json!({"id": id.0, "start": first.len(), "end": len, "size": 34})).unwrap();
-        }
-        let link = redefine.then(|| "Body".to_string());
-        assert_eq!(text_runs(&app, id), vec![(first.into(), 18.0, link.clone()), (tail.into(), 34.0, link)]);
-        if let Some((start, end)) = range {
-            select_type_range(&mut app, id, start, end);
-        }
-        assert!(!app.session.in_interaction());
-        app.session.doc_mut().unwrap().mark_saved();
-        let before = app.session.doc().unwrap().doc.clone();
-        let selection = app.session.doc().unwrap().selection.clone();
-        let undo = app.session.doc().unwrap().history.undo.len();
-        assert!(!app.session.doc().unwrap().is_dirty());
-        let label = if redefine { "Redefine Character Style" } else { "New Character Style…" };
-        if footer {
-            click_new_style_footer_range(&ctx, &mut app, id, range.expect("footer fixture has a range"));
-        } else {
-            click_style_ui(&ctx, &mut app, id, range, true, label);
-        }
-        let after = app.session.doc().unwrap().doc.clone();
-        let name = if redefine { "Body" } else { "Character Style 1" };
-        let definition = after.char_styles.iter().find(|s| s.name == name);
-        let size = definition.and_then(|s| s.attrs.get("size")).and_then(Value::as_f64);
-        let expected_size = if range.is_some_and(|(a, b)| b > a && a >= first.len()) { 34.0 } else { 18.0 };
-        let count = before.char_styles.len() + usize::from(!redefine);
-        let history = &app.session.doc().unwrap().history;
-        assert_eq!(
-            (after.char_styles.len(), size, history.undo.len(), history.redo.len()),
-            (count, Some(expected_size), undo + 1, 0),
-            "{label} dispatched with live range {range:?}; capture must use the selected start and make one style edit"
-        );
-        assert!(!definition.unwrap().attrs.contains_key("style_name"));
-        for old in &before.char_styles {
-            if old.name != name {
-                assert_eq!(after.char_styles.iter().find(|s| s.name == old.name), Some(old));
-            }
-        }
-        // New captures without applying. Redefine changes its unmodified follower, preserving overrides and unrelated text.
-        before.walk(|node| {
-            if matches!(&node.kind, NodeKind::Text(_)) && Some(node.id) != follower {
-                assert_eq!(after.node(node.id), Some(node));
-            }
-        });
-        if let Some(user) = follower {
-            assert_eq!(text_runs(&app, user), vec![("Follower".into(), expected_size, Some("Body".into()))]);
-        }
-        if let Some(user) = local_override {
-            assert_eq!(text_runs(&app, user), vec![("Override".into(), 48.0, Some("Body".into()))]);
-        }
-        assert_eq!(app.session.doc().unwrap().selection, selection);
-        assert!(app.session.doc().unwrap().is_dirty());
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc, before);
-        assert!(!app.session.doc().unwrap().is_dirty());
-        app.run("edit.redo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc, after);
-        assert!(app.session.doc().unwrap().is_dirty());
-    }
-
-    // Start 3 is inside the second run; style_at chooses the preceding run at an exact boundary.
-    #[test]
-    fn selected_type_range_new_character_style_from_menu() {
-        capture_from_menu(Some((3, 5)), false);
-    }
-
-    #[test]
-    fn selected_type_range_redefine_character_style_from_menu() {
-        capture_from_menu(Some((3, 5)), true);
-    }
-
-    #[test]
-    fn new_character_style_object_and_caret_controls() {
-        // The current collapsed target omits start even at caret 3, so capture still uses object-start size 18.
-        for range in [None, Some((3, 3))] {
-            capture_from_menu(range, false);
-        }
-    }
-
-    #[test]
-    fn redefine_character_style_object_and_caret_controls() {
-        for range in [None, Some((3, 3))] {
-            capture_from_menu(range, true);
-        }
-    }
-
-    #[test]
-    fn character_style_range_apply_from_panel_control() {
-        let (mut app, id, ctx) = capture_app();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 26}})).unwrap();
-        select_type_range(&mut app, id, 3, 5);
-        let before = app.session.doc().unwrap().doc.clone();
-        let undo = app.session.doc().unwrap().history.undo.len();
-        click_style_ui(&ctx, &mut app, id, Some((3, 5)), false, "Body");
-        let after = app.session.doc().unwrap().doc.clone();
-        assert_eq!(
-            text_runs(&app, id),
-            vec![("AB".into(), 18.0, None), ("c".into(), 34.0, None), ("de".into(), 26.0, Some("Body".into())), ("f".into(), 34.0, None)]
-        );
-        assert_eq!(after.char_styles, before.char_styles, "Apply does not redefine Body");
-        before.walk(|node| {
-            if node.id != id && matches!(&node.kind, NodeKind::Text(_)) {
-                assert_eq!(after.node(node.id), Some(node));
-            }
-        });
-        assert_eq!((app.session.doc().unwrap().history.undo.len(), app.session.doc().unwrap().history.redo.len()), (undo + 1, 0));
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc, before);
-        app.run("edit.redo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc, after);
-    }
-
-    /// Feed real text/shortcut events through the canvas Type routing. No focus reset or typing
-    /// settlement here: the capture dispatch itself must close the live typing interaction.
-    fn capture_input(ctx: &egui::Context, app: &mut VectorcraftApp, events: Vec<egui::Event>) {
-        frame_events(ctx, app, events, |app, ui| {
-            crate::shortcuts::handle(app, ui.ctx());
-            menu(app, ui, Kind::Char);
-        });
-    }
-
-    fn click_new_style_footer(ctx: &egui::Context, app: &mut VectorcraftApp, id: NodeId) {
-        click_new_style_footer_range(ctx, app, id, (0, 5));
-    }
-
-    fn click_new_style_footer_range(ctx: &egui::Context, app: &mut VectorcraftApp, id: NodeId, range: (usize, usize)) {
-        let (start, end) = range;
-        let pos = std::cell::Cell::new(egui::Pos2::ZERO);
-        let commands = app.run_count;
-        let mut dispatched = false;
-        let mut draw = |app: &mut VectorcraftApp, ui: &mut egui::Ui| {
-            assert_eq!(text_editing(app), Some((id, start, end)));
-            assert_eq!(target(app, Kind::Char, json!({})), json!({"id": id.0, "start": start, "end": end}));
-            ui.set_width(280.0);
-            let right = ui.max_rect().right();
-            let before = app.run_count;
-            show(app, ui, Kind::Char);
-            // The final row is the production bottom bar: New and Delete are its two 24-point
-            // buttons, four points apart. Use its laid-out bottom/right, not screen coordinates.
-            pos.set(egui::pos2(right - 40.0, ui.min_rect().bottom() - 12.0));
-            if app.run_count != before {
-                assert!(!dispatched, "footer New dispatched more than once");
-                assert_eq!(app.run_count, before.wrapping_add(1));
-                dispatched = true;
-            }
-        };
-        frame_events(ctx, app, vec![], &mut draw);
-        frame_events(ctx, app, vec![], &mut draw);
-        click(ctx, app, pos.get(), &mut draw);
-        assert!(dispatched, "pointer click did not dispatch footer New");
-        assert_eq!(app.run_count, commands.wrapping_add(1));
-        let selected: Option<String> = pstate(ctx, Kind::Char.key());
-        assert_eq!(selected.as_deref(), Some("Character Style 1"), "production footer stores the new definition");
-        assert_eq!(text_editing(app), Some((id, start, end)), "footer capture preserves the Type range");
-    }
-
-    fn capture_during_live_typing(redefine: bool, footer: bool) {
-        let (mut app, id, ctx) = capture_app();
-        let mut follower = None;
-        let mut local_override = None;
-        if redefine {
-            app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24}})).unwrap();
-            click_style_ui(&ctx, &mut app, id, None, false, "Body");
-            for (slot, text, y, size) in [(&mut follower, "Follower", 130, 24), (&mut local_override, "Override", 160, 48)] {
-                let user = NodeId(app.run("text.create", json!({"x": 20, "y": y, "text": text, "size": 24})).unwrap()["id"].as_u64().unwrap());
-                app.run("charStyle.apply", json!({"name": "Body", "id": user.0})).unwrap();
-                app.run("text.setRangeStyle", json!({"id": user.0, "start": 0, "end": text.len(), "size": size})).unwrap();
-                *slot = Some(user);
-            }
-            app.run("select.set", json!({"ids": [id.0]})).unwrap();
-            // This override is already the captured size, so Redefine does not alter the edited
-            // runs and accidentally make TextTool::replace restart the typing interaction.
-            app.run("text.setRangeStyle", json!({"id": id.0, "start": 0, "end": 6, "size": 18})).unwrap();
-        }
-        let link = redefine.then(|| "Body".to_string());
-        app.session.doc_mut().unwrap().mark_saved();
-        let before = app.session.doc().unwrap().doc.clone();
-        let selection = app.session.doc().unwrap().selection.clone();
-        let undo = app.session.doc().unwrap().history.undo.len();
-        app.session.select_tool("type", Default::default()).unwrap();
-        app.session.apply_actions(vec![vectorcraft_tools::Action::Notify("text.editNew".into())]).unwrap();
-        assert_eq!(text_editing(&app), Some((id, 0, 6)));
-        capture_input(&ctx, &mut app, vec![egui::Event::Text("Typed".into())]);
-        assert_eq!(text_runs(&app, id), vec![("Typed".into(), 18.0, link.clone())]);
-        assert_eq!(text_editing(&app), Some((id, 5, 5)));
-        assert!(app.session.in_interaction());
-        assert_eq!(app.session.tool_options()["typing"], json!(true));
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
-        let typed = app.session.doc().unwrap().doc.clone();
-
-        // Ctrl+A/Cmd+A is Select All's real command route, including key release; it must leave
-        // the typing interaction live until the subsequent production menu dispatch.
-        for pressed in [true, false] {
-            capture_input(
-                &ctx,
-                &mut app,
-                vec![egui::Event::Key { key: egui::Key::A, physical_key: None, pressed, repeat: false, modifiers: egui::Modifiers::COMMAND }],
-            );
-        }
-        assert_eq!(text_editing(&app), Some((id, 0, 5)));
-        assert!(app.session.in_interaction());
-        assert_eq!(app.session.tool_options()["typing"], json!(true));
-        assert_eq!(app.session.doc().unwrap().selection, selection);
-        let label = if redefine { "Redefine Character Style" } else { "New Character Style…" };
-        if footer {
-            click_new_style_footer(&ctx, &mut app, id);
-        } else {
-            click_style_ui(&ctx, &mut app, id, Some((0, 5)), true, label);
-        }
-        let captured = app.session.doc().unwrap().doc.clone();
-        let capture_history = (app.session.doc().unwrap().history.undo.len(), app.session.doc().unwrap().history.redo.len());
-        let capture_settled = !app.session.in_interaction() && app.session.tool_options()["typing"] == json!(false);
-        let name = if redefine { "Body" } else { "Character Style 1" };
-        let definition = captured.char_styles.iter().find(|s| s.name == name).unwrap();
-        assert_eq!(definition.attrs.get("size").and_then(Value::as_f64), Some(18.0));
-        assert_eq!(captured.char_styles.len(), typed.char_styles.len() + usize::from(!redefine));
-        assert_eq!(text_runs(&app, id), vec![("Typed".into(), 18.0, link.clone())]);
-        assert_eq!(app.session.doc().unwrap().selection, selection);
-        typed.walk(|node| {
-            if matches!(&node.kind, NodeKind::Text(_)) && Some(node.id) != follower {
-                assert_eq!(captured.node(node.id), Some(node));
-            }
-        });
-        if let Some(user) = follower {
-            assert_eq!(text_runs(&app, user), vec![("Follower".into(), 18.0, Some("Body".into()))]);
-        }
-        if let Some(user) = local_override {
-            assert_eq!(text_runs(&app, user), vec![("Override".into(), 48.0, Some("Body".into()))]);
-        }
-
-        // Check persistence before the history assertions: RED must expose the lost definition,
-        // not merely report that typing was still live after capture.
-        capture_input(&ctx, &mut app, vec![egui::Event::Text("After".into())]);
-        let after = app.session.doc().unwrap().doc.clone();
-        assert_eq!(text_runs(&app, id), vec![("After".into(), 18.0, link)]);
-        assert_eq!(after.char_styles, captured.char_styles, "further typing must preserve the captured definition");
-        captured.walk(|node| {
-            if node.id != id && matches!(&node.kind, NodeKind::Text(_)) {
-                assert_eq!(after.node(node.id), Some(node), "further typing preserves followers and unrelated text");
-            }
-        });
-        assert!(capture_settled, "capture ends the prior typing interaction without ending text editing");
-        assert_eq!(capture_history, (undo + 2, 0), "typing and capture are separate history entries");
-        assert_eq!(text_editing(&app), Some((id, 5, 5)));
-        assert_eq!(app.session.doc().unwrap().selection, selection);
-        assert!(app.session.in_interaction(), "further text starts its own typing interaction");
-        assert_eq!(app.session.tool_options()["typing"], json!(true));
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo + 2);
-
-        // Undo itself commits the new live typing interaction. Three separate snapshots prove
-        // that typing, capture and further typing can each be undone/redone independently.
-        for (step, expected) in [&captured, &typed, &before].into_iter().enumerate() {
-            let result = app.run("edit.undo", json!({})).unwrap();
-            if step != 1 {
-                assert_eq!(result["undone"], json!("Typing"));
-            }
-            let st = app.session.doc().unwrap();
-            assert_eq!(&st.doc, expected);
-            assert_eq!(st.selection, selection);
-            assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + 2 - step, step + 1));
-            assert_eq!(st.is_dirty(), step != 2);
-            assert!(!app.session.in_interaction());
-            assert_eq!(app.session.tool_options()["typing"], json!(false));
-        }
-        for (step, expected) in [&typed, &captured, &after].into_iter().enumerate() {
-            let result = app.run("edit.redo", json!({})).unwrap();
-            if step != 1 {
-                assert_eq!(result["redone"], json!("Typing"));
-            }
-            let st = app.session.doc().unwrap();
-            assert_eq!(&st.doc, expected);
-            assert_eq!(st.selection, selection);
-            assert_eq!((st.history.undo.len(), st.history.redo.len()), (undo + step + 1, 2 - step));
-            assert!(st.is_dirty());
-        }
-    }
-
-    #[test]
-    fn new_character_style_survives_live_typing_and_undo_redo() {
-        capture_during_live_typing(false, false);
-    }
-
-    #[test]
-    fn redefine_character_style_survives_live_typing_and_undo_redo() {
-        capture_during_live_typing(true, false);
-    }
-
-    #[test]
-    fn new_character_style_from_footer_survives_live_typing_and_undo_redo() {
-        capture_during_live_typing(false, true);
-    }
-
-    #[test]
-    fn character_style_boundary_new_from_menu() {
-        capture_from_menu(Some((2, 5)), false);
-    }
-
-    #[test]
-    fn character_style_boundary_redefine_from_menu() {
-        capture_from_menu(Some((2, 5)), true);
-    }
-
-    #[test]
-    fn character_style_boundary_new_from_footer() {
-        capture_from_ui(Some((2, 5)), false, true, false);
-    }
-
-    #[test]
-    fn character_style_unicode_boundary_capture_controls() {
-        // Byte 2 is the start of 漢 after é; 2..5 selects exactly that complete character.
-        for (redefine, footer) in [(false, false), (true, false), (false, true)] {
-            capture_from_ui(Some((2, 5)), redefine, footer, true);
-        }
-    }
-}
+mod tests;

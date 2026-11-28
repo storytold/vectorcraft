@@ -39,7 +39,23 @@ mod tests {
         let out = with_text(png.clone(), &[("Title", "Café".into()), ("Author", "Łukasz".into()), ("bad\u{1}", "x".into())]);
         assert_eq!(text(&out), [("Title".to_string(), "Café".to_string()), ("Author".into(), "Łukasz".into())]);
         // Still a PNG every decoder reads (the CRCs check out).
-        let img = image::load_from_memory(&out).unwrap();
+        let img = craft_image_codecs::decode(&out)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap();
         assert_eq!((img.width(), img.height()), (2, 1));
         assert_eq!(with_text(b"not a png".to_vec(), &[("Title", "x".into())]), b"not a png");
         assert_eq!(with_text(png.clone(), &[]), png);

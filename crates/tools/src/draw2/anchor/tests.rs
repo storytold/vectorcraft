@@ -1,0 +1,1287 @@
+use super::*;
+use crate::testutil::*;
+use vectorcraft_doc::Selection;
+use vectorcraft_geom::{Anchor, ParamCurve};
+
+/// The Anchor Point tool has its own caret cursor, not the Pen's start-a-path one, and over a
+/// segment the Reshape Segment cursor, kept while the segment is dragged.
+#[test]
+fn anchor_point_tool_shows_its_caret_and_reshape_over_segments() {
+    let (d, _) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = AnchorTool::new("anchorPoint");
+    let none = Mods::default();
+    for at in [Point::new(20.0, 20.0), Point::new(200.0, 100.0)] {
+        assert_eq!(t.cursor(&cx, at, none), Cursor::AnchorPoint, "{at:?}");
+    }
+    assert_eq!(t.cursor(&cx, Point::new(150.0, 101.0), none), Cursor::ReshapeSegment);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 101.0));
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 140.0));
+    assert_eq!(t.cursor(&cx, Point::new(150.0, 140.0), none), Cursor::ReshapeSegment);
+}
+
+/// Selected three-anchor blend spine; the end anchors stay pinned to the
+/// centres of the two key objects.
+fn blend_spine_doc(smooth: bool) -> (vectorcraft_doc::Document, NodeId, Selection) {
+    let (mut d, _) = doc_with_rect();
+    let layer = d.layers[0].id;
+    let (id, first, last) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let key = |id, x| {
+        let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 300.0, x + 20.0, 320.0));
+        std::sync::Arc::new(vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art()))
+    };
+    let mut path = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
+    if smooth {
+        path.anchors[1] = Anchor::smooth(Point::new(160.0, 310.0), Point::new(190.0, 330.0));
+    }
+    let spec =
+        vectorcraft_doc::live::BlendSpec { spine: Some(vectorcraft_geom::PathData::single(path)), key_anchors: vec![0, 2], ..Default::default() };
+    let blend = vectorcraft_doc::Node::new(
+        id,
+        vectorcraft_doc::NodeKind::Blend { children: vec![key(first, 100.0), key(last, 200.0)], spec: Box::new(spec) },
+    );
+    d.insert(Some(layer), 1, blend).unwrap();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    (d, id, selected)
+}
+
+/// Owner priority applies to anchors, visible handles and segments alike, regardless
+/// of selection insertion order; cursor and emitted command must agree.
+#[test]
+fn overlapping_path_and_blend_follow_selection_then_stacking() {
+    use vectorcraft_doc::{Appearance, Node};
+    use vectorcraft_geom::{PathData, SubPath};
+    for path_on_top in [false, true] {
+        for path_selected in [false, true] {
+            for blend_first in [false, true] {
+                let (d, blend, sel) = blend_spine_doc(true);
+                let paint = paint();
+                let spine = crate::direct::spines(&cx(&d, &sel, &paint)).pop().unwrap().1;
+                let curve = spine.subpaths[0].segment(1).eval(0.5);
+                // Point, handle and segment overlaps, including different cursor kinds.
+                for (at, path_is_segment) in [
+                    (Point::new(160.0, 310.0), false),
+                    (Point::new(190.0, 330.0), false),
+                    (Point::new(160.0, 310.0), true),
+                    (Point::new(190.0, 330.0), true),
+                    (curve, false),
+                    (curve, true),
+                ] {
+                    let (mut d, mut sel) = (d.clone(), sel.clone());
+                    let path = d.alloc_id();
+                    let points = if path_is_segment {
+                        vec![at - vectorcraft_geom::Vec2::new(0.0, 30.0), at + vectorcraft_geom::Vec2::new(0.0, 30.0)]
+                    } else {
+                        vec![at, at + vectorcraft_geom::Vec2::new(0.0, 60.0)]
+                    };
+                    let node = Node::path(path, PathData::single(SubPath::polyline(&points, false)), Appearance::default_art());
+                    d.insert(Some(d.layers[0].id), if path_on_top { 2 } else { 1 }, node).unwrap();
+                    if path_selected {
+                        sel.set(if blend_first { vec![blend, path] } else { vec![path, blend] });
+                    }
+                    let c = cx(&d, &sel, &paint);
+                    let path_wins = path_selected && path_on_top;
+                    let expected_id = if path_wins { path } else { blend };
+                    let spine = crate::direct::spines(&c).into_iter().find(|(id, _)| *id == blend).unwrap().1;
+                    let spine_segment = AnchorTool::spine_point(&spine, at, c.point_tol()).is_none()
+                        && AnchorTool::spine_handle(&c, &spine, at, c.point_tol()).is_none();
+                    let reshape = if path_wins { path_is_segment } else { spine_segment };
+                    let mut tool = AnchorTool::new("anchorPoint");
+                    assert_eq!(tool.cursor(&c, at, Mods::default()), if reshape { Cursor::ReshapeSegment } else { Cursor::AnchorPoint });
+                    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+                    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x + 10.0, at.y + 20.0));
+                    let Some(Action::Preview(cmd, args)) = actions.get(1) else { panic!("missing preview: {actions:?}") };
+                    assert_eq!(
+                        args["id"], expected_id.0,
+                        "top={path_on_top}, selected={path_selected}, blend_first={blend_first}, at={at:?}, segment={path_is_segment}: {cmd}"
+                    );
+                    assert_eq!(cmd.starts_with("path."), path_wins);
+                    assert_eq!(cmd.ends_with("reshapeSegment"), reshape);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn anchor_point_converts_a_blend_spine_point_before_reshaping_its_segment() {
+    let (d, id, sel) = blend_spine_doc(false);
+    let p = paint();
+    let c = cx(&d, &sel, &p);
+    let mut tool = AnchorTool::new("anchorPoint");
+    assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 160.0, 310.0)).is_empty());
+    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 160.0, 340.0));
+    assert_eq!(actions.first(), Some(&Action::Begin("Convert Anchor Point".into())));
+    assert!(matches!(actions.get(1), Some(Action::Preview(cmd, args))
+        if cmd == "object.blend.spine.convertAnchor"
+        && args["id"] == id.0 && args["anchor"] == 1
+        && args["to"] == "smooth" && args["y"] == 340.0));
+    assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 340.0)), vec![Action::Commit]);
+}
+
+#[test]
+fn shift_reshapes_a_blend_spine_segment_perpendicular() {
+    let (d, id, sel) = blend_spine_doc(true);
+    let p = paint();
+    let c = cx(&d, &sel, &p);
+    let spine = crate::direct::spines(&c).pop().unwrap().1;
+    let at = spine.subpaths[0].segment(1).eval(0.5);
+    for shift in [false, true] {
+        let mut tool = AnchorTool::new("anchorPoint");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, at.x, at.y + 20.0).with_mods(Mods { shift, ..Mods::default() }));
+        assert!(
+            matches!(actions.get(1), Some(Action::Preview(cmd, args))
+            if cmd == "object.blend.spine.reshapeSegment" && args["id"] == id.0
+            && args["perpendicular"] == shift),
+            "{actions:?}"
+        );
+    }
+}
+
+#[test]
+fn anchor_point_keeps_blend_spine_handles_visible_and_editable_after_switch() {
+    let (d, id, sel) = blend_spine_doc(true);
+    let p = paint();
+    let c = cx(&d, &sel, &p);
+    // A new tool instance models switching from Direct Selection.
+    let mut tool = AnchorTool::new("anchorPoint");
+    let overlays = tool.overlays(&c);
+    assert!(overlays.iter().any(|o| matches!(o, Overlay::Handle { p, .. } if *p == Point::new(190.0, 330.0))));
+    assert!(overlays.iter().any(|o| matches!(o, Overlay::Handle { p, .. } if *p == Point::new(130.0, 290.0))));
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 190.0, 330.0));
+    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 190.0, 350.0));
+    assert!(matches!(actions.get(1), Some(Action::Preview(cmd, args))
+        if cmd == "object.blend.spine.moveAnchor"
+        && args["id"] == id.0 && args["anchor"] == 1 && args["handle"] == "out"
+        && args["independent"] == true));
+    assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 190.0, 350.0)), vec![Action::Commit]);
+
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    assert_eq!(
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 310.0)),
+        vec![Action::Exec("object.blend.spine.convertAnchor".into(), json!({"id": id.0, "anchor": 1, "to": "corner"}),)],
+    );
+}
+
+/// P1-1: a handle 2pt from its anchor must not intercept a click at the anchor centre;
+/// dragging the anchor converts it, while a click on an eligible handle still retracts it.
+#[test]
+fn anchor_point_prefers_a_blend_spine_anchor_over_its_short_handle() {
+    let (mut d, _) = doc_with_rect();
+    let layer = d.layers[0].id;
+    let (id, first, last) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let key = |id, x| {
+        let path = vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(x, 300.0, x + 20.0, 320.0));
+        std::sync::Arc::new(vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art()))
+    };
+    let mut path = vectorcraft_geom::SubPath::polyline(&[Point::new(110.0, 310.0), Point::new(160.0, 310.0), Point::new(210.0, 310.0)], false);
+    path.anchors[1] = Anchor::smooth(Point::new(160.0, 310.0), Point::new(162.0, 310.0));
+    let spec =
+        vectorcraft_doc::live::BlendSpec { spine: Some(vectorcraft_geom::PathData::single(path)), key_anchors: vec![0, 2], ..Default::default() };
+    let blend = vectorcraft_doc::Node::new(
+        id,
+        vectorcraft_doc::NodeKind::Blend { children: vec![key(first, 100.0), key(last, 200.0)], spec: Box::new(spec) },
+    );
+    d.insert(Some(layer), 1, blend).unwrap();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let p = paint();
+    let c = cx(&d, &selected, &p);
+    // Clicking the anchor centre converts the smooth point to a corner.
+    let mut tool = AnchorTool::new("anchorPoint");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 160.0, 310.0));
+    assert_eq!(
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 160.0, 310.0)),
+        vec![Action::Exec("object.blend.spine.convertAnchor".into(), json!({"id": id.0, "anchor": 1, "to": "corner"}),)],
+    );
+    // Clicking the eligible handle end retracts only that handle.
+    let mut tool = AnchorTool::new("anchorPoint");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 162.0, 310.0));
+    assert_eq!(
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 162.0, 310.0)),
+        vec![Action::Exec(
+            "object.blend.spine.moveAnchor".into(),
+            json!({"id": id.0, "anchor": 1, "handle": "out", "x": 160.0, "y": 310.0, "independent": true}),
+        )],
+    );
+}
+
+/// P2-2: with Show handles when multiple anchors are selected off, spine handles hide
+/// and cannot intercept pointer input, as for ordinary paths.
+#[test]
+fn anchor_point_hides_blend_spine_handles_when_multiple_is_off() {
+    let (d, _, sel) = blend_spine_doc(true);
+    let p = paint();
+    let single = ToolContext { handles_multiple: false, ..cx(&d, &sel, &p) };
+    let tool = AnchorTool::new("anchorPoint");
+    assert!(tool.overlays(&single).iter().all(|o| !matches!(o, Overlay::Handle { .. })));
+    // The hidden handle endpoint is neither an editable handle nor on the curve.
+    let mut tool = AnchorTool::new("anchorPoint");
+    tool.pointer(&single, &PointerEvent::new(PointerKind::Down, 190.0, 330.0));
+    assert!(matches!(tool.state, State::Idle));
+    assert!(tool.pointer(&single, &PointerEvent::new(PointerKind::Up, 190.0, 330.0)).is_empty());
+    // A drag on the curve away from anchors and handles reshapes the spine segment.
+    let (_, spine) = crate::direct::spines(&single).pop().unwrap();
+    let at = spine.subpaths[0].segment(1).eval(0.5);
+    assert!(AnchorTool::spine_handle(&single, &spine, at, single.point_tol()).is_none());
+    assert!(AnchorTool::spine_point(&spine, at, single.point_tol()).is_none());
+    let mut tool = AnchorTool::new("anchorPoint");
+    assert_eq!(tool.cursor(&single, at, Mods::default()), Cursor::ReshapeSegment);
+    tool.pointer(&single, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+    let actions = tool.pointer(&single, &PointerEvent::new(PointerKind::Drag, at.x, at.y + 20.0));
+    assert!(matches!(actions.get(1), Some(Action::Preview(cmd, _)) if cmd == "object.blend.spine.reshapeSegment"));
+}
+
+/// Hover and click agree: the caret shows where a press converts a spine point or
+/// edits a spine handle, and ReshapeSegment only where a press reshapes a segment.
+#[test]
+fn anchor_point_cursor_matches_spine_press_precedence() {
+    let (d, _, sel) = blend_spine_doc(true);
+    let p = paint();
+    let c = cx(&d, &sel, &p);
+    let tool = AnchorTool::new("anchorPoint");
+    let none = Mods::default();
+    assert_eq!(tool.cursor(&c, Point::new(160.0, 310.0), none), Cursor::AnchorPoint);
+    assert_eq!(tool.cursor(&c, Point::new(190.0, 330.0), none), Cursor::AnchorPoint);
+    let spine = crate::direct::spines(&c).pop().unwrap().1;
+    assert_eq!(tool.cursor(&c, spine.subpaths[0].segment(1).eval(0.5), none), Cursor::ReshapeSegment);
+}
+
+/// P1-2: Shift-dragging a blend spine handle constrains it to 45-degree steps round
+/// its anchor, as for ordinary Anchor Point handles.
+#[test]
+fn anchor_point_shift_constrains_a_blend_spine_handle() {
+    let (d, id, sel) = blend_spine_doc(true);
+    let p = paint();
+    let c = cx(&d, &sel, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let mut tool = AnchorTool::new("anchorPoint");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 190.0, 330.0));
+    let drag = PointerEvent { kind: PointerKind::Drag, pos: Point::new(200.0, 340.0), mods: shift, backquote: false, pressure: 1.0, pen: None };
+    let actions = tool.pointer(&c, &drag);
+    // The pointer (40, 30) keeps its length of 50; Shift snaps it to 45 degrees.
+    assert!(matches!(actions.get(1), Some(Action::Preview(cmd, args))
+        if cmd == "object.blend.spine.moveAnchor"
+        && args["id"] == id.0 && args["anchor"] == 1 && args["handle"] == "out"
+        && args["independent"] == true
+        && (args["x"].as_f64().unwrap() - 160.0 - 50.0 * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6
+        && (args["y"].as_f64().unwrap() - 310.0 - 50.0 * std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-6));
+    assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 340.0)), vec![Action::Commit]);
+}
+
+#[test]
+fn add_and_delete_anchor_clicks() {
+    let (d, id) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = AnchorTool::new("addAnchor");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 101.0));
+    assert!(matches!(&a[0], Action::Exec(c, v) if c == "path.insertAnchor" && v["id"] == id.0 && v["segment"] == 0));
+    assert!((t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 20.0, 20.0))).is_empty());
+    let mut t = AnchorTool::new("deleteAnchor");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 101.0));
+    assert_eq!(a, vec![Action::Exec("path.removeAnchor".into(), json!({"id": id.0, "subpath": 0, "anchor": 1}))]);
+}
+
+#[test]
+fn scissors_splits_at_segment() {
+    let (d, id) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = AnchorTool::new("scissors");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 150.0));
+    assert!(
+        matches!(&a[0], Action::Exec(c, v) if c == "path.split" && v["id"] == id.0 && v["segment"] == 1 && (v["t"].as_f64().unwrap() - 0.5).abs() < 1e-6)
+    );
+}
+
+fn scissors_crossing() -> (vectorcraft_doc::Document, NodeId, Selection) {
+    let (mut d, rect) = doc_with_rect();
+    let line = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            line,
+            vectorcraft_geom::shapes::line(Point::new(145.0, 90.0), Point::new(165.0, 130.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    // The selected rectangle is the cut target even though the crossing line is above it.
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    (d, rect, selected)
+}
+
+fn scissors_cut_at(d: &vectorcraft_doc::Document, id: NodeId, actions: &[Action]) -> Point {
+    let [Action::Exec(command, args)] = actions else { panic!("expected one split: {actions:?}") };
+    assert_eq!(command, "path.split");
+    assert_eq!(args["id"], id.0);
+    let si = args["subpath"].as_u64().unwrap() as usize;
+    let sp = &d.node(id).unwrap().path_data().unwrap().subpaths[si];
+    if let Some(anchor) = args["anchor"].as_u64() {
+        sp.anchors[anchor as usize].p
+    } else {
+        // A straight segment still has cubic parameters: check geometry, not a linear t.
+        sp.segment(args["segment"].as_u64().unwrap() as usize).eval(args["t"].as_f64().unwrap())
+    }
+}
+
+fn scissors_labels(tool: &AnchorTool, cx: &ToolContext) -> Vec<(String, Point)> {
+    tool.overlays(cx).into_iter().filter_map(|o| if let Overlay::Label { text, p, .. } = o { Some((text, p)) } else { None }).collect()
+}
+
+/// #6470: the hover and the cut use the drawing tools' intersection, with their existing pixel,
+/// grid and Smart Guides/Snap to Point precedence. Turning Smart Guides off restores the raw cut.
+#[test]
+fn scissors_snaps_intersections_with_the_drawing_options() {
+    let (mut d, rect, selected) = scissors_crossing();
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 20.0, subdivisions: 1 };
+    let paint = paint();
+    for (smart, point, pixel, grid, x, label) in [
+        (true, true, false, false, 150.0, Some("intersect")),
+        (false, false, false, false, 152.0, None),
+        (false, true, false, false, 152.0, None),
+        (true, true, true, false, 152.0, None),
+        (true, true, false, true, 160.0, None),
+    ] {
+        let c = ToolContext { smart_guides: smart, snap_to_point: point, snap_to_pixel: pixel, snap_to_grid: grid, ..cx(&d, &selected, &paint) };
+        let mut tool = AnchorTool::new("scissors");
+        assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Move, 152.0, 101.5)).is_empty());
+        let hovered = scissors_labels(&tool, &c);
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 152.0, 101.5));
+        let cut = scissors_cut_at(&d, rect, &actions);
+        assert!(cut.distance(Point::new(x, 100.0)) < 1e-6, "smart={smart}, point={point}, pixel={pixel}, grid={grid}: {cut:?}");
+        assert_eq!(hovered, label.map(|s| (s.to_string(), Point::new(x, 100.0))).into_iter().collect::<Vec<_>>());
+        assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 152.0, 101.5)).is_empty());
+        assert!(tool.overlays(&c).is_empty());
+    }
+}
+
+/// Snapping chooses the path it names, rather than a selected path merely within pick tolerance.
+/// With every snap off, the existing selected-path priority still applies to the raw pointer.
+#[test]
+fn scissors_snapped_path_beats_nearby_selected_path() {
+    let (mut d, rect) = doc_with_rect();
+    let line = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            line,
+            vectorcraft_geom::shapes::line(Point::new(120.0, 102.0), Point::new(240.0, 102.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    let paint = paint();
+    for (smart, point, at, owner, target) in [
+        (false, false, (150.0, 101.6), rect, (150.0, 100.0)),
+        (true, true, (150.0, 101.6), line, (150.0, 102.0)),
+        (false, true, (150.0, 101.6), rect, (150.0, 100.0)),
+        (false, true, (150.0, 102.0), line, (150.0, 102.0)),
+    ] {
+        let (at, target) = (Point::from(at), Point::from(target));
+        let c = ToolContext { smart_guides: smart, snap_to_point: point, snap_to_pixel: false, snap_to_grid: false, ..cx(&d, &selected, &paint) };
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+        let labels = scissors_labels(&tool, &c);
+        if smart {
+            assert_eq!(labels.len(), 1, "{labels:?}");
+            assert_eq!(labels[0].0, "path");
+            assert!(labels[0].1.distance(Point::new(150.0, 102.0)) < 1e-6, "{labels:?}");
+        } else {
+            assert!(labels.is_empty(), "{labels:?}");
+        }
+        assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        assert!(scissors_cut_at(&d, owner, &actions).distance(target) < 1e-6, "smart={smart}, point={point}: {actions:?}");
+    }
+}
+
+/// Outside art can give an isolated path useful guides, but an unusable art snap must not turn a
+/// valid raw cut into a miss. Pixel/grid precedence still forbids falling back to the raw point.
+#[test]
+fn scissors_keeps_valid_isolated_cuts_when_outside_art_snaps() {
+    let (mut d, rect) = doc_with_rect();
+    let outside = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            outside,
+            vectorcraft_geom::shapes::line(Point::new(150.0, 103.5), Point::new(350.0, 350.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    let paint = paint();
+    let at = Point::new(150.0, 100.0);
+    for snapping in [false, true] {
+        let c = ToolContext {
+            isolation: Some(rect),
+            smart_guides: snapping,
+            snap_to_point: snapping,
+            snap_to_pixel: false,
+            snap_to_grid: false,
+            ..cx(&d, &selected, &paint)
+        };
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+        let labels = scissors_labels(&tool, &c);
+        let cursor = tool.cursor(&c, at, Mods::default());
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        assert!(scissors_cut_at(&d, rect, &actions).distance(at) < 1e-6, "snapping={snapping}: {actions:?}");
+        assert_eq!(cursor, Cursor::Scissors, "snapping={snapping}");
+        assert!(labels.is_empty(), "rejected outside snap must not guide the raw cut: {labels:?}");
+        assert!(scissors_labels(&tool, &c).is_empty(), "the press also discards its rejected guide");
+    }
+
+    // The same isolation may still use an outside path's intersection on the eligible rectangle.
+    let (d, rect, selected) = scissors_crossing();
+    let c = ToolContext { isolation: Some(rect), ..cx(&d, &selected, &paint) };
+    let mut tool = AnchorTool::new("scissors");
+    let at = Point::new(152.0, 101.5);
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let labels = scissors_labels(&tool, &c);
+    assert_eq!(labels.len(), 1, "{labels:?}");
+    assert_eq!(labels[0].0, "intersect");
+    assert!(labels[0].1.distance(Point::new(150.0, 100.0)) < 1e-6, "{labels:?}");
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+    assert!(scissors_cut_at(&d, rect, &actions).distance(Point::new(150.0, 100.0)) < 1e-6, "{actions:?}");
+
+    // A grid snap away from the path remains a miss even though the raw point is cuttable.
+    let (mut d, rect) = doc_with_rect();
+    d.node_mut(rect).unwrap().transform(vectorcraft_geom::Affine::translate((0.0, 3.5)), true);
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 20.0, subdivisions: 1 };
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    let c = ToolContext { isolation: Some(rect), snap_to_grid: true, ..cx(&d, &selected, &paint) };
+    let mut tool = AnchorTool::new("scissors");
+    let at = Point::new(150.0, 103.5);
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y)).is_empty());
+    assert!(scissors_labels(&tool, &c).is_empty());
+}
+
+/// Path and alignment labels use the same targets as the Pen. A configured snap reach beyond the
+/// anchor's pick radius proves that snapping chooses the anchor rather than a nearby segment.
+#[test]
+fn scissors_shows_paths_alignment_and_configured_anchor_snaps() {
+    let (d, rect) = doc_with_rect();
+    let (selected, paint) = (Selection::default(), paint());
+    for (at, smart, point, reach, label, target, cuts) in [
+        ((170.0, 201.0), true, true, 4.0, Some("path"), (170.0, 200.0), true),
+        ((151.5, 431.0), true, true, 4.0, Some("align"), (150.0, 431.0), false),
+        ((201.0, 105.5), true, true, 8.0, Some("anchor"), (200.0, 100.0), true),
+        ((201.0, 105.5), true, true, 4.0, Some("path"), (200.0, 105.5), true),
+        // Snap to Point keeps the anchor target without Smart Guides labels.
+        ((201.0, 105.5), false, true, 8.0, None, (200.0, 100.0), true),
+        // Outside Smart Guides' reach, but inside the legacy 4.5 px anchor pick radius.
+        ((200.0, 104.25), true, true, 4.0, Some("path"), (200.0, 104.25), true),
+        ((200.0, 104.25), false, false, 4.0, None, (200.0, 100.0), true),
+    ] {
+        let c =
+            ToolContext { smart_guides: smart, snap_to_point: point, snapping_tolerance: reach, snap_tolerance: reach, ..cx(&d, &selected, &paint) };
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.0, at.1));
+        let target = Point::from(target);
+        let labels = scissors_labels(&tool, &c);
+        if let Some(label) = label {
+            assert_eq!(labels.len(), 1, "at={at:?}, smart={smart}, point={point}, reach={reach}, want={label}: {labels:?}");
+            assert_eq!(labels[0].0, label);
+            assert!(labels[0].1.distance(target) < 1e-6, "{labels:?}");
+        } else {
+            assert!(labels.is_empty(), "{labels:?}");
+        }
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.0, at.1));
+        if cuts {
+            assert!(scissors_cut_at(&d, rect, &actions).distance(target) < 1e-6, "{actions:?}");
+            if target == Point::new(200.0, 100.0) {
+                assert!(matches!(&actions[..], [Action::Exec(_, v)] if v["anchor"] == 1));
+            }
+        } else {
+            assert!(actions.is_empty(), "a guide away from every path must not cut: {actions:?}");
+        }
+    }
+}
+
+/// A cached snap is for the same raw position, document state and drawing options only. A press
+/// gathers fresh targets when the document's revision moved since the hover.
+#[test]
+fn scissors_cursor_and_press_use_current_snaps() {
+    let (d, rect) = doc_with_rect();
+    let (selected, paint) = (Selection::default(), paint());
+    let mut c = cx(&d, &selected, &paint);
+    let mut tool = AnchorTool::new("scissors");
+    let at = Point::new(204.0, 140.0);
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+    assert_eq!(tool.cursor(&c, Point::new(204.0, 160.0), Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(!tool.overlays(&c).is_empty());
+    // These interaction inputs can change without a document revision. The old hover must not
+    // keep moving the cursor onto the path or showing guides until another pointer move.
+    c.selection_tolerance = 1.0;
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(tool.overlays(&c).is_empty());
+    c.selection_tolerance = 3.0;
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+    assert!(!tool.overlays(&c).is_empty());
+    c.isolation = Some(rect);
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(tool.overlays(&c).is_empty());
+    c.isolation = None;
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::Scissors);
+    assert!(!tool.overlays(&c).is_empty());
+    c.smart_guides = false;
+    c.snap_to_point = false;
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    assert!(tool.overlays(&c).is_empty());
+    c.smart_guides = true;
+    c.snap_to_point = true;
+    c.zoom = 2.0;
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+    c.zoom = 1.0;
+    c.revision.1 += 1;
+    assert_eq!(tool.cursor(&c, at, Mods::default()), Cursor::ScissorsNotAllowed);
+
+    let (crossing, _, selected) = scissors_crossing();
+    let before = cx(&crossing, &selected, &paint);
+    let mut tool = AnchorTool::new("scissors");
+    tool.pointer(&before, &PointerEvent::new(PointerKind::Move, 152.0, 101.5));
+    let after = ToolContext { revision: (0, 1), ..cx(&d, &selected, &paint) };
+    let actions = tool.pointer(&after, &PointerEvent::new(PointerKind::Down, 152.0, 101.5));
+    assert!(scissors_cut_at(&d, rect, &actions).distance(Point::new(152.0, 100.0)) < 1e-6, "{actions:?}");
+}
+
+/// Ending the hover, release, Escape (including a dropped touch) and switching tools drop both the
+/// guides and the cursor's snap. Alt lends the raw Add Anchor Point tool, with no Scissors guide.
+#[test]
+fn scissors_clears_its_snap_when_the_interaction_ends_or_alt_takes_over() {
+    let (d, _) = doc_with_rect();
+    let (selected, paint) = (Selection::default(), paint());
+    let c = cx(&d, &selected, &paint);
+    for ending in 0..7 {
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, 204.0, 140.0));
+        assert!(!tool.overlays(&c).is_empty());
+        match ending {
+            0 => {
+                tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 204.0, 140.0));
+            }
+            1 => {
+                tool.key(&c, ToolKey::Escape, Mods::default());
+            }
+            2 => {
+                tool.drop_press(&c);
+            }
+            3 => {
+                tool.deactivate(&c);
+            }
+            4 => tool.hover_ended(&c),
+            _ => {
+                let alt = Mods { alt: true, ..Mods::default() };
+                let kind = if ending == 5 { PointerKind::Move } else { PointerKind::Down };
+                let event = PointerEvent::new(kind, 170.0, 201.0);
+                let mut add = AnchorTool::new("addAnchor");
+                let actions = tool.pointer(&c, &event.with_mods(alt));
+                assert_eq!(actions, add.pointer(&c, &event));
+                if kind == PointerKind::Down {
+                    assert!(matches!(&actions[..], [Action::Exec(command, _)] if command == "path.insertAnchor"));
+                }
+                assert_eq!(tool.cursor(&c, event.pos, alt), Cursor::PenAdd);
+            }
+        }
+        assert!(tool.overlays(&c).is_empty(), "ending {ending}");
+        assert_eq!(tool.cursor(&c, Point::new(204.0, 140.0), Mods::default()), Cursor::ScissorsNotAllowed, "ending {ending}");
+    }
+}
+
+/// With Alt held the Scissors tool acts as the Add Anchor Point tool: a click sends what the Add
+/// Anchor Point tool's click sends (an anchor inserted on a segment, nothing away from every path)
+/// and never splits, and the cursor is the Add Anchor Point tool's everywhere. Without Alt it cuts
+/// again.
+#[test]
+fn scissors_with_alt_adds_an_anchor() {
+    let (d, id) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = AnchorTool::new("scissors");
+    let mut add = AnchorTool::new("addAnchor");
+    let alt = Mods { alt: true, ..Mods::default() };
+    for (x, y) in [(200.0, 150.0), (150.0, 101.0), (200.0, 100.0), (400.0, 400.0)] {
+        let down = PointerEvent::new(PointerKind::Down, x, y);
+        let a = t.pointer(&cx, &down.with_mods(alt));
+        assert_eq!(a, add.pointer(&cx, &down), "({x}, {y})");
+        assert!(!a.iter().any(|a| matches!(a, Action::Exec(c, _) if c == "path.split")), "({x}, {y})");
+        assert_eq!(t.cursor(&cx, Point::new(x, y), alt), Cursor::PenAdd, "({x}, {y})");
+    }
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 150.0).with_mods(alt));
+    assert!(matches!(&a[..], [Action::Exec(c, v)] if c == "path.insertAnchor" && v["id"] == id.0 && v["segment"] == 1));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 150.0));
+    assert!(matches!(&a[..], [Action::Exec(c, v)] if c == "path.split" && v["id"] == id.0 && v["segment"] == 1));
+    assert_eq!(t.cursor(&cx, Point::new(200.0, 150.0), Mods::default()), Cursor::Scissors);
+    assert_eq!(t.cursor(&cx, Point::new(400.0, 400.0), Mods::default()), Cursor::ScissorsNotAllowed);
+}
+
+/// The Add Anchor Point, Delete Anchor Point, Anchor Point and Scissors tools pick anchors and
+/// segments only on the art a click can pick: not on a Shaper Group's original shapes unless
+/// they are isolated (Construction mode), and in isolation mode only on the isolated object.
+#[test]
+fn anchor_tools_leave_out_shaper_sources_and_art_outside_isolation() {
+    let (d, _, sources, face) = doc_with_shaper_group();
+    let rect = d.layers[0].children().unwrap()[0].id;
+    let b = d.node(sources).and_then(|n| n.children()).unwrap()[1].id;
+    let (s, p) = (Selection::default(), paint());
+    // The path the first command of a press with `tool` at (x, y) acts on.
+    let picked = |isolation: Option<NodeId>, tool: &str, x: f64, y: f64| {
+        let cx = ToolContext { isolation, ..cx(&d, &s, &p) };
+        let mut t = AnchorTool::new(tool);
+        let mut a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y));
+        a.extend(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 20.0, y - 10.0)));
+        a.iter().find_map(|a| match a {
+            Action::Exec(_, v) | Action::Preview(_, v) => v["id"].as_u64().map(NodeId),
+            _ => None,
+        })
+    };
+    // The second square's top right corner and its right side, which only its original shape
+    // has.
+    for (tool, x, y) in [("deleteAnchor", 150.0, 300.0), ("anchorPoint", 150.0, 300.0), ("addAnchor", 150.0, 350.0), ("scissors", 150.0, 350.0)] {
+        assert_eq!(picked(None, tool, x, y), None, "{tool}");
+        assert_eq!(picked(Some(sources), tool, x, y), Some(b), "{tool}");
+    }
+    // The face's top left corner, outside the isolated rectangle.
+    assert_eq!(picked(None, "deleteAnchor", 0.0, 300.0), Some(face));
+    assert_eq!(picked(Some(rect), "deleteAnchor", 0.0, 300.0), None);
+    assert_eq!(picked(Some(rect), "deleteAnchor", 100.0, 100.0), Some(rect));
+}
+
+#[test]
+fn anchor_point_drag_pulls_handles_click_converts() {
+    let (d, id) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let mut t = AnchorTool::new("anchorPoint");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 120.0, 90.0));
+    assert_eq!(a[0], Action::Begin("Convert Anchor Point".into()));
+    assert!(matches!(&a[1], Action::Preview(c, v) if c == "path.convertAnchor" && v["to"] == "smooth" && v["id"] == id.0));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 120.0, 90.0)), vec![Action::Commit]);
+    // Clicking a corner without handles does nothing.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 100.0));
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)).is_empty());
+    // Dragging a segment reshapes it.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 200.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 150.0, 230.0));
+    assert!(matches!(&a[1], Action::Preview(c, v) if c == "path.reshapeSegment" && v["dy"] == 30.0));
+}
+
+/// Shift held while a segment is dragged keeps its handles at right angles to the line between
+/// its anchors (`perpendicular`).
+#[test]
+fn shift_reshapes_a_segment_perpendicular() {
+    let (d, id) = doc_with_rect();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    for (mods, perpendicular) in [(Mods::default(), false), (shift, true)] {
+        let mut t = AnchorTool::new("anchorPoint");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 150.0, 200.0));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.0, 230.0).with_mods(mods));
+        assert!(
+            matches!(&a[1], Action::Preview(c, v) if c == "path.reshapeSegment" && v["id"] == id.0 && v["perpendicular"] == perpendicular),
+            "{a:?}"
+        );
+    }
+}
+
+/// #494: the Anchor Point tool picks within Selection & Anchor Display → Tolerance, and drags
+/// only the handles shown.
+#[test]
+fn anchor_point_picks_within_the_tolerance_and_drags_shown_handles() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+    sp.anchors[1] = vectorcraft_geom::Anchor::smooth(Point::new(200.0, 300.0), Point::new(240.0, 300.0));
+    let path = vectorcraft_geom::PathData::single(sp);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let press = |c: &ToolContext, x: f64, y: f64| {
+        let mut t = AnchorTool::new("anchorPoint");
+        t.pointer(c, &PointerEvent::new(PointerKind::Down, x, y));
+        t.pointer(c, &PointerEvent::new(PointerKind::Drag, x + 10.0, y + 30.0))
+    };
+    let dragged = |a: Vec<Action>| match a.as_slice() {
+        [Action::Begin(_), Action::Preview(c, _)] => c.clone(),
+        _ => String::new(),
+    };
+    // The segment 6 px off: picked with an 8 px tolerance, not with the default 3 px.
+    assert_eq!(dragged(press(&cx(&d, &s, &p), 150.0, 306.0)), "");
+    let wide = ToolContext { selection_tolerance: 8.0, ..cx(&d, &s, &p) };
+    assert_eq!(dragged(press(&wide, 150.0, 306.0)), "path.reshapeSegment");
+    // The middle anchor's handle drags; with Show handles when multiple anchors are selected
+    // off it's hidden (three anchors selected) and the press finds the segment under it.
+    assert_eq!(dragged(press(&cx(&d, &s, &p), 240.0, 301.0)), "path.setHandle");
+    let single = ToolContext { handles_multiple: false, ..cx(&d, &s, &p) };
+    assert_eq!(dragged(press(&single, 240.0, 301.0)), "path.reshapeSegment");
+}
+
+/// #2267: clicking a handle end retracts that handle only; the anchor becomes a corner and
+/// keeps the other handle, as Illustrator's Anchor Point tool does.
+#[test]
+fn anchor_point_click_on_a_handle_retracts_only_that_handle() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+    sp.anchors[1] = vectorcraft_geom::Anchor::smooth(Point::new(200.0, 300.0), Point::new(240.0, 320.0));
+    let path = vectorcraft_geom::PathData::single(sp);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let retract = |which: &str| {
+        vec![Action::Exec(
+            "path.setHandle".into(),
+            json!({"id": id.0, "subpath": 0, "anchor": 1, "which": which, "x": 200.0, "y": 300.0, "independent": true}),
+        )]
+    };
+    let mut t = AnchorTool::new("anchorPoint");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 240.0, 320.0));
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 240.0, 320.0)), retract("out"));
+    // A hand that shakes by a pixel still clicks; the incoming handle sits opposite, at (160, 280).
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 160.0, 280.0));
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 160.5, 280.5)).is_empty());
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 160.5, 280.5)), retract("in"));
+    // The command leaves the other handle where it was.
+    let mut a = vectorcraft_geom::Anchor::smooth(Point::new(200.0, 300.0), Point::new(240.0, 320.0));
+    a.set_handle(true, a.p, true);
+    assert!(!a.has_out());
+    assert_eq!(a.h_in, Point::new(160.0, 280.0));
+}
+
+/// Shift held at the press on an anchor moves it, handles and all, instead of pulling out
+/// handles; Shift still held keeps the move at 45° steps, released frees it. A Shift-click
+/// that doesn't move leaves the anchor as it was.
+#[test]
+fn anchor_point_shift_drag_moves_the_anchor() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+    sp.anchors[1] = vectorcraft_geom::Anchor::smooth(Point::new(200.0, 300.0), Point::new(240.0, 320.0));
+    let path = vectorcraft_geom::PathData::single(sp);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let moved = |x: f64, y: f64| Action::Preview("path.moveAnchor".into(), json!({"id": id.0, "subpath": 0, "anchor": 1, "x": x, "y": y}));
+    let mut t = AnchorTool::new("anchorPoint");
+    // Pressed a pixel off the anchor: it keeps that offset to the pointer.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 201.0, 301.0).with_mods(shift));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 231.0, 341.0));
+    assert_eq!(a, vec![Action::Begin("Move".into()), moved(230.0, 340.0)]);
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 241.0, 306.0).with_mods(shift));
+    assert!(
+        matches!(&a[..], [Action::Preview(c, v)] if c == "path.moveAnchor" && v["y"].as_f64().is_some_and(|y| (y - 300.0).abs() < 1e-9)),
+        "{a:?}"
+    );
+    assert_eq!(t.cursor(&cx, Point::new(241.0, 306.0), shift), Cursor::Arrow);
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 241.0, 306.0)), vec![Action::Commit]);
+    // Without Shift the same press still pulls out handles.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 300.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 230.0, 340.0));
+    assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.convertAnchor"), "{a:?}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 230.0, 340.0));
+    // A Shift-click that doesn't move does nothing (no conversion to a corner).
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 300.0).with_mods(shift));
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 300.0).with_mods(shift)).is_empty());
+}
+
+/// #3694: Space held mid-drag on a convert moves the anchor, handles and all.
+#[test]
+fn anchor_point_space_mid_drag_moves_the_anchor() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, vectorcraft_geom::PathData::single(sp), vectorcraft_doc::Appearance::default_art()))
+        .unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let space = Mods { space: true, ..Mods::default() };
+    let moved = |x: f64, y: f64| Action::Preview("path.moveAnchor".into(), json!({"id": id.0, "subpath": 0, "anchor": 1, "x": x, "y": y}));
+    let mut t = AnchorTool::new("anchorPoint");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 300.0));
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 230.0, 340.0));
+    assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(c, _)] if c == "path.convertAnchor"), "{a:?}");
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 240.0, 350.0).with_mods(space));
+    assert_eq!(a, vec![moved(200.0, 300.0)]);
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 250.0, 360.0).with_mods(space));
+    assert_eq!(a, vec![moved(210.0, 310.0)]);
+    let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 260.0, 370.0));
+    assert!(matches!(&a[..], [Action::Preview(c, _)] if c == "path.convertAnchor"), "{a:?}");
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 260.0, 370.0)), vec![Action::Commit]);
+}
+
+/// Escape during a drag cancels it, whatever the drag does, and the release after it does
+/// nothing; Enter leaves the drag alone. After a press that has not moved, Escape drops the press,
+/// so its release does not make the smooth anchor a corner.
+#[test]
+fn escape_cancels_an_anchor_point_drag() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+    sp.anchors[1] = vectorcraft_geom::Anchor::smooth(Point::new(200.0, 300.0), Point::new(240.0, 320.0));
+    let path = vectorcraft_geom::PathData::single(sp);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let shift = Mods { shift: true, ..Mods::default() };
+    let space = Mods { space: true, ..Mods::default() };
+    // (what, the press, its modifiers, Space held during the second drag step)
+    for (what, x, y, mods, spaced) in [
+        ("convert", 100.0, 300.0, Mods::default(), false),
+        ("handle", 240.0, 320.0, Mods::default(), false),
+        ("segment", 150.0, 200.0, Mods::default(), false),
+        ("shift move", 200.0, 300.0, shift, false),
+        ("space move", 100.0, 300.0, Mods::default(), true),
+    ] {
+        let mut t = AnchorTool::new("anchorPoint");
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, x, y).with_mods(mods));
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 20.0, y + 30.0));
+        assert!(matches!(&a[..], [Action::Begin(_), Action::Preview(..)]), "{what}: {a:?}");
+        let step = if spaced { space } else { Mods::default() };
+        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 30.0, y + 40.0).with_mods(step));
+        let moved = matches!(&a[..], [Action::Preview(c, _)] if c == "path.moveAnchor");
+        assert_eq!(moved, spaced || what == "shift move", "{what}: {a:?}");
+        assert!(t.key(&cx, ToolKey::Enter, Mods::default()).is_empty(), "{what}: Enter leaves the drag alone");
+        assert!(t.busy(), "{what}");
+        assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel], "{what}: Escape cancels the drag");
+        assert!(!t.busy(), "{what}");
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x + 40.0, y + 50.0)).is_empty(), "{what}: the drag is over");
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, x + 40.0, y + 50.0)).is_empty(), "{what}: the release does nothing");
+        assert!(t.overlays(&cx).iter().all(|o| !matches!(o, Overlay::Measure { .. })), "{what}: no readout stays");
+    }
+    // A click on the smooth anchor makes it a corner; Escape between press and release drops it.
+    let mut t = AnchorTool::new("anchorPoint");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 200.0, 300.0));
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty(), "nothing began, so nothing is canceled");
+    assert!(!t.busy());
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 200.0, 300.0)).is_empty());
+    // With nothing pressed, Escape is not the tool's.
+    assert!(t.key(&cx, ToolKey::Escape, Mods::default()).is_empty());
+}
+
+#[test]
+fn anchor_point_shift_drag_honors_measurement_labels() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, vectorcraft_geom::PathData::single(sp), vectorcraft_doc::Appearance::default_art()))
+        .unwrap();
+    let s = Selection::default();
+    let p = paint();
+    let base = cx(&d, &s, &p);
+    let on = ToolContext { measurement_labels: true, ..base };
+    let off = ToolContext { measurement_labels: false, ..base };
+    let shift = Mods { shift: true, ..Mods::default() };
+    let mut t = AnchorTool::new("anchorPoint");
+    t.pointer(&on, &PointerEvent::new(PointerKind::Down, 200.0, 300.0).with_mods(shift));
+    t.pointer(&on, &PointerEvent::new(PointerKind::Drag, 230.0, 340.0));
+    let want = on.offset_label(30.0, 40.0);
+    assert!(t.overlays(&on).iter().any(|o| matches!(o, Overlay::Measure { text, .. } if text == &want)));
+    assert!(!t.overlays(&off).iter().any(|o| matches!(o, Overlay::Measure { .. })));
+}
+
+/// Disabled Drawing pixel snapping must behave like the same effective art-snap mode.
+/// Drawing enabled is the ordinary pixel-priority control at this integer cut point.
+#[test]
+fn scissors_drawing_pixel_option_keeps_valid_isolated_cuts() {
+    let (mut d, rect) = doc_with_rect();
+    let outside = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            outside,
+            vectorcraft_geom::shapes::line(Point::new(150.0, 103.5), Point::new(350.0, 350.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    let mut selected = Selection::default();
+    selected.set([rect]);
+    let paint = paint();
+    let at = Point::new(150.0, 100.0);
+    for drawing in [true, false] {
+        let c = ToolContext {
+            isolation: Some(rect),
+            smart_guides: true,
+            snap_to_point: true,
+            snap_to_pixel: true,
+            pixel_snap: crate::PixelSnap { drawing, ..Default::default() },
+            snap_to_grid: false,
+            ..cx(&d, &selected, &paint)
+        };
+        let mut tool = AnchorTool::new("scissors");
+        tool.pointer(&c, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+        let labels = scissors_labels(&tool, &c);
+        let cursor = tool.cursor(&c, at, Mods::default());
+        let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        assert!(!actions.is_empty(), "drawing={drawing}: expected a valid isolated cut");
+        assert!(scissors_cut_at(&d, rect, &actions).distance(at) < 1e-6, "drawing={drawing}: {actions:?}");
+        assert_eq!(cursor, Cursor::Scissors, "drawing={drawing}");
+        assert!(labels.is_empty(), "rejected outside snap must not guide the raw cut: {labels:?}");
+        assert!(scissors_labels(&tool, &c).is_empty(), "the press also discards its rejected guide");
+    }
+}
+
+/// Alt held while dragging a handle links it with the opposite handle (`link`), making the
+/// anchor smooth; without Alt the handle moves on its own. Shift with Alt keeps the 45° steps, an
+/// Alt-click still retracts the handle, and Escape cancels the linking drag. The Pen, lending the
+/// tool for its Alt gestures, keeps moving the handle on its own.
+#[test]
+fn anchor_point_alt_drag_links_a_handle_with_the_opposite_one() {
+    let (mut d, _) = doc_with_rect();
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut sp = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0), Point::new(300.0, 300.0)], false);
+    // A corner: handles at (240, 320) and (170, 320), not in line.
+    sp.anchors[1] = Anchor::with_handles(Point::new(200.0, 300.0), Point::new(170.0, 320.0), Point::new(240.0, 320.0));
+    let path = vectorcraft_geom::PathData::single(sp);
+    d.insert(Some(l), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut s = Selection::default();
+    s.set([id]);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let drag = |t: &mut AnchorTool, mods: Mods, x: f64, y: f64| {
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 240.0, 320.0).with_mods(mods));
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, x, y).with_mods(mods))
+    };
+    let set = |x: f64, y: f64, key: &str| {
+        let mut params = json!({"id": id.0, "subpath": 0, "anchor": 1, "which": "out", "x": x, "y": y});
+        params[key] = json!(true);
+        Action::Preview("path.setHandle".into(), params)
+    };
+
+    let mut t = AnchorTool::new("anchorPoint");
+    assert_eq!(drag(&mut t, alt, 250.0, 340.0), vec![Action::Begin("Reshape".into()), set(250.0, 340.0, "link")]);
+    assert_eq!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 340.0).with_mods(alt)), vec![Action::Commit]);
+    // Without Alt the handle moves on its own, as before.
+    assert_eq!(drag(&mut t, Mods::default(), 250.0, 340.0), vec![Action::Begin("Reshape".into()), set(250.0, 340.0, "independent")]);
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 340.0));
+
+    // Shift with Alt: the linked handle stays at 45° steps round its anchor.
+    let shift_alt = Mods { shift: true, alt: true, ..Mods::default() };
+    let a = drag(&mut t, shift_alt, 250.0, 345.0);
+    let Some(Action::Preview(c, args)) = a.get(1) else { panic!("{a:?}") };
+    assert_eq!((c.as_str(), &args["link"], args.get("independent")), ("path.setHandle", &json!(true), None));
+    let (dx, dy) = (args["x"].as_f64().unwrap_or(f64::NAN) - 200.0, args["y"].as_f64().unwrap_or(f64::NAN) - 300.0);
+    assert!(dx > 0.0 && (dx - dy).abs() < 1e-6, "{args}");
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 345.0));
+
+    // An Alt-click on the handle retracts it, as a click without Alt does.
+    t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 240.0, 320.0).with_mods(alt));
+    assert_eq!(
+        t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 240.0, 320.0).with_mods(alt)),
+        vec![Action::Exec(
+            "path.setHandle".into(),
+            json!({"id": id.0, "subpath": 0, "anchor": 1, "which": "out", "x": 200.0, "y": 300.0, "independent": true})
+        )]
+    );
+
+    // Escape cancels the linking drag; its release does nothing.
+    drag(&mut t, alt, 250.0, 340.0);
+    assert_eq!(t.key(&cx, ToolKey::Escape, Mods::default()), vec![Action::Cancel]);
+    assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 250.0, 340.0).with_mods(alt)).is_empty());
+
+    // Lent by the Pen, Alt-drag moves the handle on its own.
+    let mut lent = AnchorTool::lent_by_pen();
+    assert_eq!(drag(&mut lent, alt, 250.0, 340.0), vec![Action::Begin("Reshape".into()), set(250.0, 340.0, "independent")]);
+}
+
+/// Alt-dragging a selected blend's spine handle links it with the opposite one.
+#[test]
+fn anchor_point_alt_drag_links_a_blend_spine_handle() {
+    let (d, id, sel) = blend_spine_doc(true);
+    let p = paint();
+    let c = cx(&d, &sel, &p);
+    let alt = Mods { alt: true, ..Mods::default() };
+    let mut tool = AnchorTool::new("anchorPoint");
+    tool.pointer(&c, &PointerEvent::new(PointerKind::Down, 190.0, 330.0).with_mods(alt));
+    let actions = tool.pointer(&c, &PointerEvent::new(PointerKind::Drag, 190.0, 350.0).with_mods(alt));
+    assert_eq!(
+        actions.get(1),
+        Some(&Action::Preview(
+            "object.blend.spine.moveAnchor".into(),
+            json!({"id": id.0, "anchor": 1, "handle": "out", "x": 190.0, "y": 350.0, "link": true})
+        ))
+    );
+    assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 190.0, 350.0).with_mods(alt)), vec![Action::Commit]);
+}
+
+fn review_8655_markers(tool: &AnchorTool, context: &ToolContext) -> Vec<Point> {
+    tool.overlays(context)
+        .into_iter()
+        .filter_map(|overlay| match overlay {
+            Overlay::Anchor { p, color, filled: false, size } if color == crate::draw2::FEEDBACK && size == 7.0 => Some(p),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Compare the public overlay to geometry reconstructed from the real path.split action,
+/// including points projected off the raw pointer and a rejected outside-art snap.
+#[test]
+fn review_8655_scissors_marker_matches_the_fresh_split_geometry() {
+    let paint = paint();
+    let mut observed = Vec::new();
+    for scenario in 0..5 {
+        let (mut d, mut target, mut selected) = if scenario == 1 {
+            scissors_crossing()
+        } else {
+            let (d, id) = doc_with_rect();
+            (d, id, Selection::default())
+        };
+        if scenario == 3 {
+            let outside = d.alloc_id();
+            d.insert(
+                Some(d.layers[0].id),
+                1,
+                vectorcraft_doc::Node::path(
+                    outside,
+                    vectorcraft_geom::shapes::line(Point::new(150.0, 103.5), Point::new(350.0, 350.0)),
+                    vectorcraft_doc::Appearance::default_art(),
+                ),
+            )
+            .unwrap();
+        } else if scenario == 4 {
+            let mut curve = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false);
+            curve.anchors[0].h_out = Point::new(120.0, 340.0);
+            curve.anchors[1].h_in = Point::new(180.0, 340.0);
+            target = d.alloc_id();
+            d.insert(
+                Some(d.layers[0].id),
+                1,
+                vectorcraft_doc::Node::path(target, vectorcraft_geom::PathData::single(curve), vectorcraft_doc::Appearance::default_art()),
+            )
+            .unwrap();
+        }
+        selected.set([target]);
+        let (at, expected) = match scenario {
+            0 => (Point::new(152.0, 101.5), Point::new(152.0, 100.0)),
+            1 => (Point::new(152.0, 101.5), Point::new(150.0, 100.0)),
+            2 => (Point::new(200.0, 104.25), Point::new(200.0, 100.0)),
+            3 => (Point::new(150.0, 100.0), Point::new(150.0, 100.0)),
+            _ => (Point::new(150.0, 331.5), Point::new(150.0, 330.0)),
+        };
+        let snapping = scenario == 1 || scenario == 3;
+        let context = ToolContext {
+            smart_guides: snapping,
+            snap_to_point: snapping,
+            snap_to_pixel: false,
+            snap_to_grid: false,
+            isolation: (scenario == 3).then_some(target),
+            ..cx(&d, &selected, &paint)
+        };
+        let mut tool = AnchorTool::new("scissors");
+        assert!(tool.pointer(&context, &PointerEvent::new(PointerKind::Move, at.x, at.y)).is_empty());
+        let markers = review_8655_markers(&tool, &context);
+        let labels = scissors_labels(&tool, &context);
+        if scenario == 1 {
+            assert_eq!(labels, [("intersect".to_string(), expected)], "CONTROL: existing intersection guides remain");
+        } else {
+            assert!(labels.is_empty(), "CONTROL: off/rejected snapping adds no guide: {labels:?}");
+        }
+        assert_eq!(tool.cursor(&context, at, Mods::default()), Cursor::Scissors);
+        let actions = tool.pointer(&context, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        let cut = scissors_cut_at(&d, target, &actions);
+        assert!(cut.distance(expected) < 1e-5, "CONTROL: scenario{scenario} actual split {cut:?}, expected{expected:?}");
+        if scenario == 2 {
+            assert!(matches!(&actions[..], [Action::Exec(_, args)] if args["anchor"] == 1), "CONTROL: the actual stored anchor wins");
+        }
+        if scenario == 0 || scenario == 4 {
+            assert!(cut.distance(at) > 1.0, "CONTROL: preview must show the path projection, not the raw point");
+        }
+        observed.push((scenario, markers, cut));
+    }
+    observed.extend(review_8655_endpoint_action_controls());
+    // Every split/guide control above executes before the missing-feedback oracle on old code.
+    for (scenario, markers, cut) in observed {
+        assert_eq!(markers.len(), 1, "REGRESSION: scenario{scenario} needs exactly one hollow7px FEEDBACK anchor: {markers:?}");
+        assert!(markers[0].distance(cut) < 1e-6, "REGRESSION: marker and actual fresh split disagree: {markers:?} versus{cut:?}");
+    }
+}
+
+#[test]
+fn review_8655_scissors_selection_change_cannot_reuse_the_wrong_marker() {
+    let (mut d, rectangle) = doc_with_rect();
+    let line = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            line,
+            vectorcraft_geom::shapes::line(Point::new(120.0, 102.0), Point::new(240.0, 102.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    let mut rectangle_selected = Selection::default();
+    rectangle_selected.set([rectangle]);
+    let mut line_selected = Selection::default();
+    line_selected.set([line]);
+    let paint = paint();
+    // Only the selection changes: these contexts have the same document and DrawSnap key inputs.
+    let before = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &rectangle_selected, &paint) };
+    let after = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &line_selected, &paint) };
+    assert_eq!(before.revision, after.revision);
+    assert!(std::ptr::eq(before.doc, after.doc));
+    let at = Point::new(150.0, 101.6);
+    let mut tool = AnchorTool::new("scissors");
+    tool.pointer(&before, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let old_markers = review_8655_markers(&tool, &before);
+    let mut fresh = AnchorTool::new("scissors");
+    let old_cut = scissors_cut_at(&d, rectangle, &fresh.pointer(&before, &PointerEvent::new(PointerKind::Down, at.x, at.y)));
+    let new_cut = scissors_cut_at(&d, line, &fresh.pointer(&after, &PointerEvent::new(PointerKind::Down, at.x, at.y)));
+    assert!(old_cut.distance(Point::new(150.0, 100.0)) < 1e-6, "CONTROL: selected rectangle beats nearer unselected line");
+    assert!(new_cut.distance(Point::new(150.0, 102.0)) < 1e-6, "CONTROL: fresh selection changes the actual split owner");
+    assert!(old_cut.distance(new_cut) > 1.0);
+    let stale = review_8655_markers(&tool, &after);
+    assert!(stale.iter().all(|p| p.distance(new_cut) < 1e-6), "no unchanged-key selection switch may show the old cut point: {stale:?}");
+    tool.pointer(&after, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let new_markers = review_8655_markers(&tool, &after);
+    let actions = tool.pointer(&after, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+    assert!(scissors_cut_at(&d, line, &actions).distance(new_cut) < 1e-6);
+    assert_eq!(old_markers.len(), 1, "REGRESSION: valid first selection has feedback");
+    assert!(old_markers[0].distance(old_cut) < 1e-6);
+    assert_eq!(new_markers.len(), 1, "REGRESSION: a fresh hover uses the fresh selected owner");
+    assert!(new_markers[0].distance(new_cut) < 1e-6);
+}
+
+#[test]
+fn review_8655_scissors_feedback_clears_on_miss_alt_stale_and_leave() {
+    let (d, _) = doc_with_rect();
+    let selected = Selection::default();
+    let paint = paint();
+    let context = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &selected, &paint) };
+    let at = Point::new(170.0, 201.0);
+    let mut tool = AnchorTool::new("scissors");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let valid = review_8655_markers(&tool, &context);
+    // A context change must not keep a geometrically obsolete point visible before rehover.
+    let stale = ToolContext { zoom: 2.0, smart_guides: false, snap_to_point: false, ..cx(&d, &selected, &paint) };
+    assert!(tool.overlays(&stale).is_empty(), "CONTROL: stale zoom shows neither guides nor marker");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, 20.0, 20.0));
+    assert!(tool.pointer(&context, &PointerEvent::new(PointerKind::Down, 20.0, 20.0)).is_empty());
+    assert!(tool.overlays(&context).is_empty(), "CONTROL: a true miss has no cut feedback");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let alt = Mods { alt: true, ..Mods::default() };
+    let event = PointerEvent::new(PointerKind::Down, at.x, at.y);
+    let mut add = AnchorTool::new("addAnchor");
+    assert_eq!(tool.pointer(&context, &event.with_mods(alt)), add.pointer(&context, &event), "CONTROL: Alt remains Add Anchor Point");
+    assert!(tool.overlays(&context).is_empty(), "CONTROL: Alt has no Scissors marker");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    tool.hover_ended(&context);
+    assert!(tool.overlays(&context).is_empty(), "CONTROL: leaving clears the marker and guides");
+    assert_eq!(valid.len(), 1, "REGRESSION: the initial valid cut needs visible feedback");
+    assert!(valid[0].distance(Point::new(170.0, 200.0)) < 1e-6);
+}
+
+/// The successful point is owned by path.split's consumer, including endpoint rejection and
+/// its canonical anchor threshold. Keep the emitted Down action itself unchanged.
+fn review_8655_endpoint_action_controls() -> Vec<(usize, Vec<Point>, Point)> {
+    let paint = paint();
+    let (open_doc, rectangle, selected) = scissors_crossing();
+    let open_cx = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&open_doc, &selected, &paint) };
+    let mut tool = AnchorTool::new("scissors");
+    for (anchor, endpoint) in [(0, Point::new(145.0, 90.0)), (1, Point::new(165.0, 130.0))] {
+        tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Move, endpoint.x, endpoint.y));
+        let endpoint_markers = review_8655_markers(&tool, &open_cx);
+        let actions = tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Down, endpoint.x, endpoint.y));
+        let [Action::Exec(command, args)] = &actions[..] else { panic!("CONTROL: preserve the original endpoint Down action: {actions:?}") };
+        assert_eq!(command, "path.split");
+        assert_eq!(args["anchor"], anchor);
+        let owner = NodeId(args["id"].as_u64().unwrap());
+        assert_ne!(owner, rectangle);
+        assert!(!open_doc.node(owner).unwrap().path_data().unwrap().subpaths[0].closed);
+        assert_eq!(scissors_cut_at(&open_doc, owner, &actions), endpoint);
+        assert!(endpoint_markers.is_empty(), "an open path's end point has no successful-cut marker");
+        tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Up, endpoint.x, endpoint.y));
+    }
+    let interior = Point::new(155.0, 110.0);
+    tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Move, interior.x, interior.y));
+    let interior_markers = review_8655_markers(&tool, &open_cx);
+    let actions = tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Down, interior.x, interior.y));
+    let [Action::Exec(_, args)] = &actions[..] else { panic!("CONTROL: interior open path emits split: {actions:?}") };
+    assert!(args.get("segment").is_some());
+    let owner = NodeId(args["id"].as_u64().unwrap());
+    assert!(scissors_cut_at(&open_doc, owner, &actions).distance(interior) < 1e-6);
+
+    let (mut d, other_rectangle) = doc_with_rect();
+    // Keep the unrelated fixture rectangle away: its exact(100,100) anchor must not steal
+    // the grid contact from the selected near-endpoint cubic.
+    d.node_mut(other_rectangle).unwrap().transform(vectorcraft_geom::Affine::translate((0.0, 250.0)), true);
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 10.0, subdivisions: 1 };
+    let start = Point::new(99.99995, 100.0);
+    // Explicit collinear cubic handles make t linear; a handle-free rectangle's cubic t
+    // would be about0.000408 here and would not exercise the consumer's1e-6 threshold.
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(start),
+        vectorcraft_geom::PathEl::CurveTo(Point::new(133.33328333333333, 100.0), Point::new(166.66661666666666, 100.0), Point::new(199.99995, 100.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(199.99995, 200.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(99.99995, 200.0)),
+        vectorcraft_geom::PathEl::ClosePath,
+    ]));
+    let id = d.alloc_id();
+    d.insert(Some(d.layers[0].id), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let context = ToolContext { snap_to_grid: true, smart_guides: false, snap_to_point: false, ..cx(&d, &selected, &paint) };
+    let raw = Point::new(100.1, 100.2);
+    let mut tool = AnchorTool::new("scissors");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, raw.x, raw.y));
+    let markers = review_8655_markers(&tool, &context);
+    let actions = tool.pointer(&context, &PointerEvent::new(PointerKind::Down, raw.x, raw.y));
+    let [Action::Exec(command, args)] = &actions[..] else { panic!("CONTROL: near-end grid contact emits split: {actions:?}") };
+    assert_eq!(command, "path.split");
+    assert_eq!(args["id"], id.0);
+    assert_eq!(args["segment"], 0);
+    let t = args["t"].as_f64().unwrap();
+    assert!(t > 0.0 && t <= 1e-6, "CONTROL: actual emitted t reaches the consumer's anchor canonicalization: {t}");
+    let projected = scissors_cut_at(&d, id, &actions);
+    assert!(projected.distance(Point::new(100.0, 100.0)) < 1e-6);
+    assert!(projected.distance(start) > 1e-5, "CONTROL: raw curve evaluation differs from the committed canonical anchor");
+    assert!(scissors_labels(&tool, &context).is_empty(), "grid contact adds no Smart Guide label");
+    vec![(5, interior_markers, interior), (6, markers, start)]
+}

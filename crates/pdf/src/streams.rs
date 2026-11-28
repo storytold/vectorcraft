@@ -7,17 +7,29 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::io::Read;
 
-use craft_pdf::syntax::content::TypedIter;
-use craft_pdf::syntax::content::ops::TypedInstruction;
-use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, Stream};
+use craft::pdf::syntax::content::TypedIter;
+use craft::pdf::syntax::content::ops::TypedInstruction;
+use craft::pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, Stream};
 
 /// The most a stream may decode to: 256 MB, the pixels of the largest image the app reads (64
 /// million, 4 bytes each).
 pub(crate) const MAX_DECODED: usize = 256 << 20;
 
+/// Whether this build reads the larger images of [`image_limits`]: a 64-bit build that isn't for
+/// the web.
+pub(crate) const LARGE_IMAGES: bool = cfg!(all(target_pointer_width = "64", not(target_family = "wasm")));
+
+/// The most bytes one image XObject may decode to and the most pixels it may have, for a build
+/// that reads `large` images: 4 GiB and 2^30 pixels (31404 × 31403 pixels are 2.76 GiB in RGB and
+/// 3.67 GiB in CMYK), otherwise 1 GiB and 2^28 pixels (an A0 sheet scanned at 300 ppi is 399 MiB
+/// in RGB and 532 MiB in CMYK). The shared reader takes the same two figures ([`crate::pages::open_options`]).
+pub(crate) const fn image_limits(large: bool) -> (u64, u64) {
+    if large { (1 << 32, 1 << 30) } else { (1 << 30, 1 << 28) }
+}
+
 /// The most an image XObject may decode to when its own size asks for more than
-/// [`MAX_DECODED`]: 1 GB (an A0 sheet scanned at 300 ppi is 418 MB in RGB, 557 MB in CMYK).
-const MAX_IMAGE_DECODED: usize = 1 << 30;
+/// [`MAX_DECODED`]: the bytes of [`image_limits`] for this build.
+const MAX_IMAGE_DECODED: usize = image_limits(LARGE_IMAGES).0 as usize;
 
 /// The longest row a predictor may have, in bytes.
 const MAX_ROW: usize = 1 << 24;
@@ -71,23 +83,14 @@ fn inflate(data: &[u8], max: usize) -> Option<Vec<u8>> {
     read(Box::new(flate2::read::ZlibDecoder::new(data))).or_else(|| read(Box::new(flate2::read::DeflateDecoder::new(data))))
 }
 
-/// `data` decoded from LZW, up to one byte past `max`. `early`: the code length grows one code
+/// `data` decoded from LZW, up to `max`. `early`: the code length grows one code
 /// early (`EarlyChange`, 1 by default).
 fn lzw(data: &[u8], early: bool, max: usize) -> Option<Vec<u8>> {
-    use weezl::{BitOrder, LzwStatus, decode::Decoder};
-    let mut decoder = if early { Decoder::with_tiff_size_switch(BitOrder::Msb, 8) } else { Decoder::new(BitOrder::Msb, 8) };
-    let (mut out, mut chunk, mut input) = (vec![], vec![0; 1 << 16], data);
-    while out.len() <= max {
-        let r = decoder.decode_bytes(input, &mut chunk);
-        input = input.get(r.consumed_in..).unwrap_or_default();
-        out.extend_from_slice(chunk.get(..r.consumed_out).unwrap_or_default());
-        match r.status {
-            Ok(LzwStatus::Ok) => {}
-            Ok(LzwStatus::Done | LzwStatus::NoProgress) => break,
-            Err(_) => return (out.len() > max).then_some(out),
-        }
+    match craft_stream_codecs::lzw::decode(data, early, max) {
+        Ok(out) => Some(out),
+        Err(f) if matches!(f.error, craft_stream_codecs::CodecError::LimitExceeded(_)) => Some(vec![0u8; max.saturating_add(1)]),
+        Err(_) => None,
     }
-    Some(out)
 }
 
 /// `data` decoded from run-length encoding, up to one byte past `max`.
@@ -116,7 +119,7 @@ fn hex(data: &[u8]) -> Vec<u8> {
 }
 
 /// `data` decoded from base-85 (white space skipped, `z` for four zeros, up to `~>`).
-fn base85(data: &[u8]) -> Vec<u8> {
+fn base85(data: &[u8], max: usize) -> Vec<u8> {
     let (mut out, mut group) = (vec![], vec![]);
     let flush = |group: &mut Vec<u32>, out: &mut Vec<u8>| {
         let n = group.len();
@@ -128,6 +131,10 @@ fn base85(data: &[u8]) -> Vec<u8> {
         group.clear();
     };
     for &c in data.iter().take_while(|c| **c != b'~') {
+        // Past `max` the caller refuses it: stop growing (a `z` is four bytes from one).
+        if out.len() > max {
+            break;
+        }
         match c {
             b'z' if group.is_empty() => out.extend([0; 4]),
             b'!'..=b'u' => {
@@ -144,13 +151,15 @@ fn base85(data: &[u8]) -> Vec<u8> {
 }
 
 /// The most data of `len` bytes can grow to through `filters`: 1,032 times through Flate (its
-/// largest ratio), 3,641 through LZW (4,096 bytes from a 9-bit code), 64 through run-length.
+/// largest ratio), 3,641 through LZW (4,096 bytes from a 9-bit code), 64 through run-length, 4
+/// through ASCII85 (`z`).
 fn most_after(len: usize, filters: &[Name<'_>]) -> u128 {
     filters.iter().fold(len as u128, |n, f| {
         n.saturating_mul(match f.as_ref() {
             b"FlateDecode" | b"Fl" => 1032,
             b"LZWDecode" | b"LZW" => 3641,
             b"RunLengthDecode" | b"RL" => 64,
+            b"ASCII85Decode" | b"A85" => 4,
             _ => 1,
         })
     })
@@ -213,7 +222,7 @@ fn decode(data: &[u8], dict: &Dict<'_>, keep: bool) -> Result<Option<Vec<u8>>, T
             b"LZWDecode" | b"LZW" => lzw(&data, early, max),
             b"RunLengthDecode" | b"RL" => Some(run_length(&data, max)),
             b"ASCIIHexDecode" | b"AHx" => Some(hex(&data)),
-            b"ASCII85Decode" | b"A85" => Some(base85(&data)),
+            b"ASCII85Decode" | b"A85" => Some(base85(&data, max)),
             _ => None,
         };
         match out {
@@ -234,34 +243,52 @@ fn maybe_content(dict: &Dict<'_>) -> bool {
         && ![&b"Length1"[..], b"Length2", b"Length3", b"FunctionType", b"N"].iter().any(|k| dict.contains_key(k))
 }
 
-/// Would the reader fail on `stream` (or on an inline image in it, when it is content): a
-/// predictor it can't apply, or more than its [`budget`] decoded?
-pub(crate) fn unsafe_stream(stream: &Stream<'_>) -> bool {
-    unsafe_data(stream, true)
+/// Why the reader would fail on a stream ([`refused`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Refused {
+    /// A predictor whose decode parameters it can't apply ([`bad_predictor`]).
+    Parameters,
+    /// More than this many bytes decoded: the stream's [`budget`].
+    TooBig(usize),
 }
 
-/// [`unsafe_stream`], looking for inline images in it when `inside` (not in an inline image's own
+/// A stream the reader would fail on: why, and whether it is an inline image in it that it would
+/// fail on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Refusal {
+    pub why: Refused,
+    pub inline_image: bool,
+}
+
+/// Would the reader fail on `stream` (or on an inline image in it, when it is content): a
+/// predictor it can't apply, or more than its [`budget`] decoded? Why, if so.
+pub(crate) fn refused(stream: &Stream<'_>) -> Option<Refusal> {
+    refused_data(stream, true)
+}
+
+/// [`refused`], looking for inline images in it when `inside` (not in an inline image's own
 /// data: it would be read again for each inline image a hostile one nests).
-fn unsafe_data(stream: &Stream<'_>, inside: bool) -> bool {
+fn refused_data(stream: &Stream<'_>, inside: bool) -> Option<Refusal> {
     let dict = stream.dict();
+    let refusal = |why| Some(Refusal { why, inline_image: !inside });
     if params(dict).iter().any(bad_predictor) {
-        return true;
+        return refusal(Refused::Parameters);
     }
     let content = inside && maybe_content(dict);
     match decode(&stream.raw_data(), dict, content) {
-        Err(TooBig) => true,
+        Err(TooBig) => refusal(Refused::TooBig(budget(dict))),
         Ok(Some(data)) if content && data.windows(2).any(|w| w == b"ID") => {
             let mut ops = TypedIter::new(&data);
             while let Some(op) = ops.next() {
                 if let TypedInstruction::InlineImage(image) = op
-                    && unsafe_data(image.0, false)
+                    && let Some(r) = refused_data(image.0, false)
                 {
-                    return true;
+                    return Some(r);
                 }
             }
-            false
+            None
         }
-        Ok(_) => false,
+        Ok(_) => None,
     }
 }
 
@@ -294,6 +321,21 @@ pub(crate) fn unsafe_file_streams(pdf: &[u8]) -> bool {
 /// A stream the reader would fail on, or a file that spent the scan's budget.
 struct Unsafe;
 
+#[cfg(test)]
+thread_local! {
+    /// The bytes [`unsafe_file_streams`] has looked at on this thread, counted each time one is
+    /// looked at, charged to its budget or not: the scan's work.
+    static SCANNED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Count `bytes` the scan looked at in [`SCANNED`]; nothing outside tests.
+fn scanned(bytes: usize) {
+    #[cfg(test)]
+    SCANNED.set(SCANNED.get().saturating_add(u64::try_from(bytes).unwrap_or(u64::MAX)));
+    #[cfg(not(test))]
+    let _ = bytes;
+}
+
 /// The most bytes a dictionary read from inside a string, comment or stream data may span past
 /// the last `<<` in it, as far as the scan looked back from a `stream` keyword before.
 const MAX_SKIPPED_DICT: usize = 1 << 16;
@@ -308,7 +350,9 @@ fn white(b: u8) -> bool {
 
 /// Where `what` is first found in `pdf` at or after `from`.
 fn find(pdf: &[u8], from: usize, what: &[u8]) -> Option<usize> {
-    pdf.get(from..).and_then(|rest| rest.windows(what.len()).position(|w| w == what)).map(|at| from + at)
+    let found = pdf.get(from..).and_then(|rest| rest.windows(what.len()).position(|w| w == what)).map(|at| from + at);
+    scanned(found.map_or(pdf.len().saturating_sub(from), |at| at + what.len() - from));
+    found
 }
 
 /// Past the literal string opening at `at` (a `(`), as the reader reads it: parentheses nest and
@@ -322,6 +366,7 @@ fn string_end(pdf: &[u8], at: usize, limit: usize) -> Result<usize, usize> {
             b')' => {
                 depth = depth.saturating_sub(1);
                 if depth == 0 {
+                    scanned(i + 1 - at);
                     return Ok(i + 1);
                 }
             }
@@ -329,6 +374,7 @@ fn string_end(pdf: &[u8], at: usize, limit: usize) -> Result<usize, usize> {
         }
         i += 1;
     }
+    scanned(i.min(limit).saturating_sub(at));
     Err(i.min(limit))
 }
 
@@ -339,7 +385,9 @@ const NEAR_STRING: usize = 64;
 /// Is the byte at `at` escaped, a `\` before it that isn't escaped itself? Reading a string from
 /// any `(` before it sees the same, as the run of `\` before it lies after that `(`.
 fn escaped(pdf: &[u8], at: usize) -> bool {
-    pdf.get(..at).unwrap_or_default().iter().rev().take_while(|b| **b == b'\\').count() % 2 == 1
+    let run = pdf.get(..at).unwrap_or_default().iter().rev().take_while(|b| **b == b'\\').count();
+    scanned(run + 1);
+    run % 2 == 1
 }
 
 /// Where the literal strings read from the file's `(` end, for those ending more than
@@ -359,6 +407,7 @@ impl StringEnds {
     /// file built for it nests strings so deep).
     fn of(pdf: &[u8]) -> Option<StringEnds> {
         let most = pdf.len() / 16 + 1024;
+        scanned(pdf.len().saturating_mul(3));
         // What the byte at `i` adds to the count: an escaped `(` adds nothing but is one too.
         let step = |i: usize| match pdf.get(i) {
             Some(b'(') => Some(i64::from(!escaped(pdf, i))),
@@ -418,12 +467,15 @@ fn hex_end(pdf: &[u8], at: usize, limit: usize) -> Result<usize, usize> {
     while pdf.get(i).is_some_and(|b| i < limit && (b.is_ascii_hexdigit() || white(*b))) {
         i += 1;
     }
+    scanned(i - at);
     if i < limit && pdf.get(i) == Some(&b'>') { Ok(i + 1) } else { Err(i.min(limit)) }
 }
 
 /// The end of the comment starting at `at` (a `%`): its end of line, not included.
 fn comment_end(pdf: &[u8], at: usize) -> usize {
-    pdf.get(at..).and_then(|rest| rest.iter().position(|b| matches!(b, b'\n' | b'\r'))).map_or(pdf.len(), |n| at + n)
+    let end = pdf.get(at..).and_then(|rest| rest.iter().position(|b| matches!(b, b'\n' | b'\r'))).map_or(pdf.len(), |n| at + n);
+    scanned(end.saturating_sub(at));
+    end
 }
 
 /// Can the reader start a dictionary at the `<<` at `at`? Its repair scan tries one at the start
@@ -455,6 +507,7 @@ struct FileScan<'a> {
 
 impl FileScan<'_> {
     fn charge(&mut self, bytes: usize) -> Result<(), Unsafe> {
+        scanned(bytes);
         self.budget = self.budget.checked_sub(bytes).ok_or(Unsafe)?;
         Ok(())
     }
@@ -467,6 +520,7 @@ impl FileScan<'_> {
         let mut closed: Option<(usize, usize)> = None;
         let mut i = 0;
         while let Some(&b) = pdf.get(i) {
+            scanned(1);
             if white(b) {
                 i += 1;
                 continue;
@@ -722,8 +776,10 @@ mod tests {
     #[test]
     fn the_decoders_read_what_the_specification_writes() {
         assert_eq!(hex(b"48 65 6c6C6\n>junk"), b"Hell`");
-        assert_eq!(base85(b"87cURD]i,\"Ebo80~>"), b"Hello World!");
-        assert_eq!(base85(b"z!!~>"), [0, 0, 0, 0, 0]);
+        assert_eq!(base85(b"87cURD]i,\"Ebo80~>", usize::MAX), b"Hello World!");
+        assert_eq!(base85(b"z!!~>", usize::MAX), [0, 0, 0, 0, 0]);
+        // Zeros past the allowance are not written: a little over it, and the caller refuses it.
+        assert!(base85(&[b'z'; 1 << 20], 1000).len() <= 1004);
         assert_eq!(run_length(&[2, b'a', b'b', b'c', 254, b'x', 128, b'q'], MAX_DECODED), b"abcxxx");
         let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
         std::io::Write::write_all(&mut e, &[7; 1000]).unwrap();
@@ -762,31 +818,42 @@ mod tests {
 
     /// A one-page PDF drawing one flat 8-bit DeviceRGB image of `w` × `h` pixels, Flate-compressed.
     fn one_image_pdf(w: usize, h: usize) -> Vec<u8> {
+        image_pdf(&format!("/Width {w} /Height {h} /ColorSpace /DeviceRGB"), &flat(&[200, 180, 150].repeat(w), h), None)
+    }
+
+    /// `row` repeated `h` times, Flate-compressed as it is written.
+    fn flat(row: &[u8], h: usize) -> Vec<u8> {
         let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
-        let row: Vec<u8> = [200, 180, 150].repeat(w);
         for _ in 0..h {
-            std::io::Write::write_all(&mut e, &row).unwrap();
+            std::io::Write::write_all(&mut e, row).unwrap();
         }
-        let image = e.finish().unwrap();
+        e.finish().unwrap()
+    }
+
+    /// A one-page PDF drawing one 8-bit image with the size and color space of `keys` and the
+    /// Flate-compressed samples `data`; with `smask`, a soft mask with those keys and data.
+    fn image_pdf(keys: &str, data: &[u8], smask: Option<(&str, &[u8])>) -> Vec<u8> {
+        let stream = |keys: &str, data: &[u8]| {
+            let dict =
+                format!("<< /Type /XObject /Subtype /Image {keys} /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n", data.len());
+            [dict.as_bytes(), data, b"\nendstream"].concat()
+        };
         let content = b"q 595 0 0 842 0 0 cm /Im0 Do Q";
         let mut out = b"%PDF-1.6\n".to_vec();
         let mut offsets = vec![];
-        let objects: Vec<Vec<u8>> = vec![
+        let mut objects: Vec<Vec<u8>> = vec![
             b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
             b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
             b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>".to_vec(),
             [format!("<< /Length {} >>\nstream\n", content.len()).as_bytes(), content, b"\nendstream"].concat(),
-            [
-                format!(
-                    "<< /Type /XObject /Subtype /Image /Width {w} /Height {h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n",
-                    image.len()
-                )
-                .as_bytes(),
-                &image,
-                b"\nendstream",
-            ]
-            .concat(),
         ];
+        match smask {
+            Some((mask_keys, mask_data)) => {
+                objects.push(stream(&format!("{keys} /SMask 6 0 R"), data));
+                objects.push(stream(mask_keys, mask_data));
+            }
+            None => objects.push(stream(keys, data)),
+        }
         for (i, o) in objects.iter().enumerate() {
             offsets.push(out.len());
             out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
@@ -809,6 +876,65 @@ mod tests {
         let info = crate::info(&pdf, None);
         assert!(info.is_ok(), "{:?}", info.err());
         assert_eq!(info.map(|i| i.pages.len()).unwrap(), 1);
+    }
+
+    #[test]
+    fn a_64_bit_desktop_build_reads_larger_images_and_others_keep_their_limits() {
+        assert_eq!(image_limits(false), (1 << 30, 1 << 28));
+        assert_eq!(image_limits(true), (1 << 32, 1 << 30));
+        let (bytes, pixels) = image_limits(LARGE_IMAGES);
+        assert_eq!(MAX_IMAGE_DECODED as u64, bytes);
+        let limits = crate::pages::open_options().decode_limits;
+        assert_eq!((limits.max_decoded_image(), limits.max_image_pixels()), (bytes, pixels));
+        // An image declaring more is held to this build's limit, which a refusal of it names.
+        let d = dict("<< /Subtype /Image /Width 70000 /Height 70000 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode >>");
+        assert_eq!(budget(&d), MAX_IMAGE_DECODED);
+        let most = if LARGE_IMAGES { "4 GB" } else { "1 GB" };
+        assert_eq!(crate::pages::decoded_size(MAX_IMAGE_DECODED), most);
+    }
+
+    /// The only image of `doc`, as stored: its width, height and channel layout.
+    fn stored_image(doc: &vectorcraft_doc::Document) -> (u32, u32, image::ExtendedColorType) {
+        use image::ImageDecoder as _;
+        let blobs: Vec<_> = doc.images.values().collect();
+        let [blob] = blobs[..] else { panic!("one image expected, found {}", blobs.len()) };
+        let decoder = image::ImageReader::new(std::io::Cursor::new(blob.bytes.as_slice())).with_guessed_format().unwrap().into_decoder().unwrap();
+        let (w, h) = decoder.dimensions();
+        (w, h, decoder.original_color_type())
+    }
+
+    #[test]
+    fn an_image_past_1_gb_and_2_to_the_28_pixels_opens_on_a_64_bit_desktop_build() {
+        if !LARGE_IMAGES {
+            return;
+        }
+        // 18919 × 18919 RGB pixels: 358 million pixels, 1.07 GB decoded (#4366).
+        let side = 18919;
+        let doc = crate::import(&one_image_pdf(side, side)).unwrap();
+        // Opaque: stored as RGB, without an alpha channel.
+        assert_eq!(stored_image(&doc), (side as u32, side as u32, image::ExtendedColorType::Rgb8));
+    }
+
+    #[test]
+    fn opaque_images_are_stored_without_an_alpha_channel_and_masked_ones_with_one() {
+        let rgb = image_pdf("/Width 4 /Height 2 /ColorSpace /DeviceRGB", &flat(&[200, 180, 150].repeat(4), 2), None);
+        assert_eq!(stored_image(&crate::import(&rgb).unwrap()), (4, 2, image::ExtendedColorType::Rgb8));
+        let gray = image_pdf("/Width 4 /Height 2 /ColorSpace /DeviceGray", &flat(&[120; 4], 2), None);
+        assert_eq!(stored_image(&crate::import(&gray).unwrap()), (4, 2, image::ExtendedColorType::Rgb8));
+        let mask = ("/Width 4 /Height 2 /ColorSpace /DeviceGray", &flat(&[0, 85, 170, 255], 2)[..]);
+        let masked = image_pdf("/Width 4 /Height 2 /ColorSpace /DeviceRGB", &flat(&[200, 180, 150].repeat(4), 2), Some(mask));
+        assert_eq!(stored_image(&crate::import(&masked).unwrap()), (4, 2, image::ExtendedColorType::Rgba8));
+    }
+
+    #[test]
+    fn an_image_of_more_pixels_than_the_limit_is_left_out_with_a_warning() {
+        let (_, pixels) = image_limits(LARGE_IMAGES);
+        // One more row than a square of the limit's pixels; its data isn't looked at.
+        let side = 1u64 << (pixels.ilog2() / 2);
+        let pdf = image_pdf(&format!("/Width {side} /Height {} /ColorSpace /DeviceGray", side + 1), &flat(&[0; 16], 1), None);
+        let report = crate::import_with_report(&pdf, &crate::ImportOptions::default()).unwrap();
+        assert!(report.document.images.is_empty());
+        assert!(report.warnings.iter().any(|w| w.contains("an image could not be decoded and was skipped")), "{:?}", report.warnings);
     }
 
     #[test]
@@ -836,16 +962,27 @@ mod tests {
         assert!(unsafe_file_streams(&[fine.as_slice(), b"<< >>stream x endstream", &bad].concat()));
     }
 
+    /// The most bytes the scan may look at for each byte of the file it scans: a scan that reads
+    /// some text again for each of many places in it looks at far more.
+    const MOST_SCANNED_PER_BYTE: u64 = 32;
+
+    /// [`unsafe_file_streams`] of `pdf`, and the bytes it looked at for each byte of `pdf`,
+    /// rounded up.
+    fn scan(pdf: &[u8]) -> (bool, u64) {
+        let before = SCANNED.get();
+        let refused = unsafe_file_streams(pdf);
+        (refused, (SCANNED.get() - before).div_ceil(u64::try_from(pdf.len().max(1)).unwrap()))
+    }
+
     #[test]
     fn a_file_dense_with_stream_keywords_is_scanned_in_linear_time() {
         // #3586: each `stream` keyword walked back up to 64 KiB, through every dictionary before
-        // it, so 1 MiB of keywords took minutes. Now the whole scan takes milliseconds.
+        // it, so 1 MiB of keywords took minutes. Now each byte is looked at a few times.
         for unit in [&b"<</A <</B 1>> >>stream"[..], b">>stream", b"<</Type/XRef>>stream"] {
             let pdf = unit.repeat((1 << 20) / unit.len());
-            let t = std::time::Instant::now();
-            assert!(!unsafe_file_streams(&pdf));
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{} took {took:?}", String::from_utf8_lossy(unit));
+            let (refused, per_byte) = scan(&pdf);
+            assert!(!refused);
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{} looked at {per_byte} bytes a byte", String::from_utf8_lossy(unit));
         }
     }
 
@@ -909,10 +1046,9 @@ mod tests {
             ("string", [&b"%PDF-1.7\n2 0 obj ("[..], &run[..], b") endobj\n"].concat()),
             ("comment", [&b"%PDF-1.7\n% "[..], &run[..], b"\n"].concat()),
         ] {
-            let t = std::time::Instant::now();
-            assert!(!unsafe_file_streams(&pdf), "{what}");
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{what} took {took:?}");
+            let (refused, per_byte) = scan(&pdf);
+            assert!(!refused, "{what}");
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{what} looked at {per_byte} bytes a byte");
         }
     }
 
@@ -929,10 +1065,9 @@ mod tests {
             (" <<( then noise", [&b" <<(".repeat(1 << 16)[..], &noise].concat()),
         ] {
             let pdf = [format!("1 0 obj << /Length {} >> stream\n", data.len()).as_bytes(), &data[..], b"\nendstream endobj\n"].concat();
-            let t = std::time::Instant::now();
-            assert!(!unsafe_file_streams(&pdf), "{what}");
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{what} took {took:?}");
+            let (refused, per_byte) = scan(&pdf);
+            assert!(!refused, "{what}");
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{what} looked at {per_byte} bytes a byte");
         }
     }
 
@@ -942,20 +1077,17 @@ mod tests {
         // its own, within a budget for the whole file.
         for unit in [&b"<<("[..], b"(<<", b"%<<\n", b"<</A (<</B 1>>stream) >>stream\n", b"<"] {
             let pdf = unit.repeat((1 << 20) / unit.len());
-            let t = std::time::Instant::now();
-            unsafe_file_streams(&pdf);
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{} took {took:?}", String::from_utf8_lossy(unit));
+            let (_, per_byte) = scan(&pdf);
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{} looked at {per_byte} bytes a byte", String::from_utf8_lossy(unit));
         }
         // An image's flat area of a colour whose bytes are `<<` and white space, `(` or `%` (a
         // reader may start at each `<<` after white space): read about once, and it opens.
         for pixel in [&b" <<"[..], b"<<(", b"<<%", b" <<%", b"\0<<\0"] {
             let data = pixel.repeat((1 << 20) / pixel.len());
             let pdf = [format!("1 0 obj << /Length {} >> stream\n", data.len()).as_bytes(), &data[..], b"\nendstream endobj\n"].concat();
-            let t = std::time::Instant::now();
-            assert!(!unsafe_file_streams(&pdf), "{}", String::from_utf8_lossy(pixel));
-            let took = t.elapsed();
-            assert!(took < std::time::Duration::from_secs(5), "{} took {took:?}", String::from_utf8_lossy(pixel));
+            let (refused, per_byte) = scan(&pdf);
+            assert!(!refused, "{}", String::from_utf8_lossy(pixel));
+            assert!(per_byte <= MOST_SCANNED_PER_BYTE, "{} looked at {per_byte} bytes a byte", String::from_utf8_lossy(pixel));
         }
     }
 }

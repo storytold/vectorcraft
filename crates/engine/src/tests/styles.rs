@@ -1,0 +1,502 @@
+//! Graphic styles: transparency, capture from groups and type, add-apply, unique names, links
+//! (redefine, break link, delete, rename), Select All Unused, Sort by Name and Select > Same.
+
+use serde_json::{Value, json};
+use vectorcraft_color::{BlendMode, Color, Paint};
+use vectorcraft_doc::{GraphicStyle, Knockout, Node, Shared};
+
+use crate::*;
+
+fn session() -> Session {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 600, "height": 400})).unwrap();
+    s
+}
+
+fn run(s: &mut Session, id: &str, p: Value) -> Value {
+    s.execute(id, &p).unwrap_or_else(|e| panic!("{id} {p}: {e}"))
+}
+
+/// A selected 50×50 rectangle at `x` with the default appearance.
+fn rect(s: &mut Session, x: f64) -> NodeId {
+    let id = NodeId(run(s, "shape.rectangle", json!({"x": x, "y": 10, "width": 50, "height": 50}))["id"].as_u64().unwrap());
+    run(s, "select.set", json!({"ids": [id.0]}));
+    id
+}
+
+fn node(s: &Session, id: NodeId) -> Node {
+    s.doc().unwrap().doc.node(id).unwrap().clone()
+}
+
+fn style(s: &Session, name: &str) -> GraphicStyle {
+    s.doc().unwrap().doc.graphic_style(name).unwrap_or_else(|| panic!("no style {name}")).clone()
+}
+
+fn fill(s: &Session, id: NodeId) -> Paint {
+    node(s, id).appearance.fill_paint()
+}
+
+fn set_fill(s: &mut Session, id: NodeId, hex: &str) {
+    run(s, "paint.setFill", json!({"color": hex, "ids": [id.0]}));
+}
+
+fn linked(s: &mut Session, name: &str) -> Vec<u64> {
+    let l = run(s, "graphicStyle.list", json!({}));
+    let st = l["styles"].as_array().unwrap().iter().find(|g| g["name"] == name).unwrap_or_else(|| panic!("{name} not listed")).clone();
+    st["linked"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap()).collect()
+}
+
+#[test]
+fn styles_carry_opacity_and_blend_through_a_save() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "transparency.set", json!({"item": null, "opacity": 50, "blend": "multiply", "knockout": true}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Half"}));
+    let g = style(&s, "Half");
+    assert_eq!((g.opacity, g.blend, g.knockout), (0.5, BlendMode::Multiply, Knockout::On));
+    let b = rect(&mut s, 100.0);
+    run(&mut s, "graphicStyle.apply", json!({"name": "Half"}));
+    let nb = node(&s, b);
+    assert_eq!((nb.opacity, nb.blend, nb.knockout), (0.5, BlendMode::Multiply, Knockout::On));
+    let l = run(&mut s, "graphicStyle.list", json!({}));
+    let half = l["styles"].as_array().unwrap().iter().find(|g| g["name"] == "Half").unwrap();
+    assert_eq!((half["opacity"].as_f64(), half["blend"].as_str()), (Some(50.0), Some("Multiply")));
+    assert_eq!(linked(&mut s, "Half"), vec![a.0, b.0]);
+    assert_eq!(l["selected"], "Half");
+
+    // Native round trip: the style's transparency, its id and the objects' links survive.
+    let doc = s.doc().unwrap().doc.clone();
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(back.graphic_styles, doc.graphic_styles);
+    assert_eq!(back.node(b).unwrap().extras().graphic_style, Some(g.id));
+    // Styles and objects from files without links still load (and get an id when first linked).
+    let old: GraphicStyle = serde_json::from_value(json!({"name": "Old", "appearance": {"items": []}})).unwrap();
+    assert_eq!((old.id, old.opacity, old.blend, old.isolate), (0, 1.0, BlendMode::Normal, false));
+    let mut d = (*doc).clone();
+    d.graphic_styles.push(old);
+    let i = d.graphic_styles.len() - 1;
+    assert_eq!(d.graphic_style_id(i), d.graphic_styles.iter().map(|g| g.id).max().unwrap());
+    assert!(!serde_json::to_string(&GraphicStyle::new("Plain", Default::default())).unwrap().contains("opacity"));
+}
+
+#[test]
+fn a_style_from_a_group_or_type_is_not_empty() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    let b = rect(&mut s, 100.0);
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    run(&mut s, "paint.setFill", json!({"color": "#ff0000"}));
+    let g = NodeId(run(&mut s, "object.group", json!({}))["id"].as_u64().unwrap());
+    assert!(node(&s, g).appearance.items.is_empty());
+    run(&mut s, "graphicStyle.new", json!({"name": "Group Look"}));
+    let gs = style(&s, "Group Look");
+    assert_eq!(gs.appearance.fill_paint(), Paint::solid(Color::from_hex("#ff0000").unwrap()));
+    // Both members share the look, so the group is linked.
+    assert_eq!(linked(&mut s, "Group Look"), vec![g.0]);
+
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 200, "text": "Hi"}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [t.0]}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Type Look"}));
+    assert!(!style(&s, "Type Look").appearance.fill_paint().is_none());
+
+    // Applying to a group gives the group itself the style (its fills paint the members, which
+    // keep their own look) and links it; `target: "contents"` styles the members instead.
+    let c = rect(&mut s, 200.0);
+    let before = node(&s, a).appearance;
+    run(&mut s, "graphicStyle.apply", json!({"name": "Black Outline", "ids": [g.0]}));
+    assert_eq!(node(&s, g).appearance, style(&s, "Black Outline").appearance);
+    assert_eq!(node(&s, a).appearance, before);
+    assert_eq!(node(&s, g).extras().graphic_style, Some(style(&s, "Black Outline").id));
+    assert_eq!(linked(&mut s, "Black Outline"), vec![g.0]);
+    assert_ne!(node(&s, c).appearance, style(&s, "Black Outline").appearance);
+    run(&mut s, "graphicStyle.apply", json!({"name": "Black Outline", "ids": [g.0], "target": "contents"}));
+    assert_eq!(node(&s, a).appearance, style(&s, "Black Outline").appearance);
+}
+
+#[test]
+fn alt_apply_adds_the_style_on_top() {
+    let mut s = session();
+    rect(&mut s, 10.0);
+    run(&mut s, "appearance.clear", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Rough"}));
+    let rough = style(&s, "Rough");
+    let b = rect(&mut s, 100.0);
+    let before = node(&s, b).appearance;
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough", "add": true}));
+    let after = node(&s, b).appearance;
+    assert_eq!(after.items.len(), before.items.len() + rough.appearance.items.len());
+    assert_eq!(after.items[..before.items.len()], before.items[..]);
+    assert_eq!(after.items.last(), rough.appearance.items.last());
+    assert_eq!(after.effects.len(), before.effects.len() + 1);
+    assert_eq!(node(&s, b).extras().graphic_style, None);
+    // One undo step.
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(node(&s, b).appearance, before);
+}
+
+#[test]
+fn style_names_are_unique() {
+    let mut s = session();
+    rect(&mut s, 10.0);
+    assert_eq!(run(&mut s, "graphicStyle.new", json!({"name": "X"}))["name"], "X");
+    assert_eq!(run(&mut s, "graphicStyle.new", json!({"name": "X"}))["name"], "X 2");
+    let n = s.doc().unwrap().doc.graphic_styles.len();
+    assert_eq!(run(&mut s, "graphicStyle.new", json!({}))["name"], format!("Graphic Style {}", n + 1));
+    assert!(s.execute("graphicStyle.rename", &json!({"name": "X 2", "to": "X"})).is_err());
+    assert!(s.execute("graphicStyle.rename", &json!({"name": "X 2", "to": "  "})).is_err());
+    assert_eq!(run(&mut s, "graphicStyle.rename", json!({"name": "X 2", "to": "Y"}))["name"], "Y");
+    assert_eq!(run(&mut s, "graphicStyle.duplicate", json!({"name": "Y"}))["name"], "Y copy");
+    assert_ne!(style(&s, "Y copy").id, style(&s, "Y").id);
+}
+
+#[test]
+fn duplicate_puts_the_copy_at_the_end_of_the_list_in_one_undo_step() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "graphicStyle.new", json!({"name": "S"}));
+    let names = |s: &Session| s.doc().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    let before = names(&s);
+    // A style that is not last: the copy still goes after every other style.
+    let first = before[0].clone();
+    assert_ne!(first, *before.last().unwrap());
+    assert_eq!(run(&mut s, "graphicStyle.duplicate", json!({"name": first}))["name"], format!("{first} copy"));
+    let after = names(&s);
+    assert_eq!(after[..before.len()], before[..]);
+    assert_eq!(after.last(), Some(&format!("{first} copy")));
+    let (src, copy) = (style(&s, &first), style(&s, &format!("{first} copy")));
+    assert_eq!(copy.appearance, src.appearance);
+    assert_ne!(copy.id, src.id);
+    // Nothing is linked to the copy, and the source keeps its links.
+    assert!(linked(&mut s, &format!("{first} copy")).is_empty());
+    assert_eq!(linked(&mut s, "S"), vec![a.0]);
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(names(&s), before);
+    assert!(s.execute("graphicStyle.duplicate", &json!({"name": "nope"})).is_err());
+    assert_eq!(names(&s), before);
+}
+
+/// Three rectangles: `a` (the source of style "S"), `b` and `c`, all linked to "S".
+fn linked_three(s: &mut Session) -> (NodeId, NodeId, NodeId) {
+    let a = rect(s, 10.0);
+    run(s, "graphicStyle.new", json!({"name": "S"}));
+    let b = rect(s, 100.0);
+    let c = rect(s, 200.0);
+    run(s, "graphicStyle.apply", json!({"name": "S", "ids": [b.0, c.0]}));
+    assert_eq!(linked(s, "S"), vec![a.0, b.0, c.0]);
+    (a, b, c)
+}
+
+#[test]
+fn redefine_updates_every_linked_object() {
+    let mut s = session();
+    let (a, b, c) = linked_three(&mut s);
+    set_fill(&mut s, a, "#0000ff");
+    // Editing the source broke its link, but it remembers the style Redefine replaces.
+    assert_eq!(linked(&mut s, "S"), vec![b.0, c.0]);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    assert_eq!(s.selection_graphic_style().map(|(g, linked)| (g.name.clone(), linked)), Some(("S".into(), false)));
+    run(&mut s, "graphicStyle.redefine", json!({}));
+    let blue = Paint::solid(Color::from_hex("#0000ff").unwrap());
+    assert_eq!((fill(&s, b), fill(&s, c)), (blue.clone(), blue));
+    assert_eq!(linked(&mut s, "S"), vec![a.0, b.0, c.0]);
+    // The step is named from a template with the style's name in it.
+    let step = s.doc().unwrap().history.undo.last().unwrap().clone();
+    let named = step.named().map(|n| (n.template, n.name.as_str(), n.built_in));
+    assert_eq!((step.label.as_str(), named), ("Redefine Graphic Style “S”", Some(("Redefine Graphic Style “{name}”", "S", false))));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(fill(&s, b), Paint::solid(Color::WHITE));
+}
+
+#[test]
+fn redefine_leaves_unlinked_and_edited_objects_alone() {
+    let mut s = session();
+    let (a, b, c) = linked_three(&mut s);
+    run(&mut s, "graphicStyle.breakLink", json!({"ids": [c.0]}));
+    assert_eq!(node(&s, c).extras().graphic_style, None);
+    let d = rect(&mut s, 300.0);
+    run(&mut s, "graphicStyle.apply", json!({"name": "S"}));
+    set_fill(&mut s, d, "#00ff00");
+    set_fill(&mut s, a, "#0000ff");
+    run(&mut s, "graphicStyle.redefine", json!({"name": "S", "id": a.0}));
+    assert_eq!(fill(&s, b), Paint::solid(Color::from_hex("#0000ff").unwrap()));
+    assert_eq!(fill(&s, c), Paint::solid(Color::WHITE));
+    // The edited object keeps its look and is unlinked.
+    assert_eq!(fill(&s, d), Paint::solid(Color::from_hex("#00ff00").unwrap()));
+    assert_eq!(node(&s, d).extras().graphic_style, None);
+    assert!(s.execute("graphicStyle.redefine", &json!({"id": c.0})).is_err());
+}
+
+/// Applying a style to several objects gives them one shared copy of its appearance; editing one
+/// object gives that one its own, and the saved file is the same as with a copy for each.
+#[test]
+fn applying_a_style_shares_one_appearance() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "appearance.clear", json!({}));
+    run(&mut s, "paint.setFill", json!({"color": "#00ff00"}));
+    run(&mut s, "paint.setStroke", json!({"color": "#0000ff"}));
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Rough"}));
+    let rough = style(&s, "Rough");
+    let ids = [rect(&mut s, 100.0), rect(&mut s, 200.0), rect(&mut s, 300.0)];
+    let [b, c, d] = ids;
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough", "ids": [b.0, c.0, d.0]}));
+    let shared = |s: &Session, x: NodeId, y: NodeId| Shared::ptr_eq(&node(s, x).appearance, &node(s, y).appearance);
+    assert!(shared(&s, b, c) && shared(&s, c, d), "one appearance for every object");
+    for id in ids {
+        assert_eq!(node(&s, id).appearance, rough.appearance);
+        assert_eq!(node(&s, id).extras().graphic_style, Some(rough.id));
+    }
+    // The saved file is the same as one where each object has its own copy.
+    let doc = s.doc().unwrap().doc.clone();
+    let mut copies = (*doc).clone();
+    for id in ids {
+        let n = copies.node_mut(id).unwrap();
+        n.appearance = Shared::new((*n.appearance).clone());
+    }
+    assert!(!Shared::ptr_eq(&copies.node(b).unwrap().appearance, &copies.node(c).unwrap().appearance));
+    for pretty in [false, true] {
+        assert_eq!(vectorcraft_format::save(&doc, pretty), vectorcraft_format::save(&copies, pretty));
+    }
+
+    // Editing one object leaves the others and the style as they were.
+    set_fill(&mut s, b, "#ff0000");
+    assert!(!shared(&s, b, c) && shared(&s, c, d));
+    assert_eq!(fill(&s, b), Paint::solid(Color::from_hex("#ff0000").unwrap()));
+    assert_eq!(node(&s, c).appearance, rough.appearance);
+    assert_eq!(style(&s, "Rough"), rough);
+    assert_eq!(linked(&mut s, "Rough"), vec![a.0, c.0, d.0]);
+
+    // Undo and redo restore the values, still shared.
+    run(&mut s, "edit.undo", json!({}));
+    assert!(shared(&s, b, c) && node(&s, b).appearance == rough.appearance);
+    run(&mut s, "edit.undo", json!({}));
+    for id in ids {
+        assert_ne!(node(&s, id).appearance, rough.appearance);
+        assert_eq!(node(&s, id).extras().graphic_style, None);
+    }
+    run(&mut s, "edit.redo", json!({}));
+    assert!(shared(&s, b, c) && shared(&s, c, d) && node(&s, d).appearance == rough.appearance);
+}
+
+/// Redefine Graphic Style gives the objects still linked one shared copy of the new appearance.
+#[test]
+fn redefine_shares_one_appearance() {
+    let mut s = session();
+    let (a, b, c) = linked_three(&mut s);
+    let d = rect(&mut s, 300.0);
+    run(&mut s, "graphicStyle.apply", json!({"name": "S"}));
+    set_fill(&mut s, d, "#00ff00");
+    set_fill(&mut s, a, "#0000ff");
+    run(&mut s, "graphicStyle.redefine", json!({"name": "S", "id": a.0}));
+    let (nb, nc) = (node(&s, b), node(&s, c));
+    assert!(Shared::ptr_eq(&nb.appearance, &nc.appearance));
+    assert_eq!(nb.appearance, style(&s, "S").appearance);
+    // The edited object keeps its own look.
+    assert_eq!(fill(&s, d), Paint::solid(Color::from_hex("#00ff00").unwrap()));
+    assert!(!Shared::ptr_eq(&node(&s, d).appearance, &nb.appearance));
+}
+
+/// Redefine with `from` gives a style another style's look: the style keeps its name, place and id,
+/// its objects still linked follow, edited ones are unlinked, and `from` and its objects stay as
+/// they are, in one undo step. A style replaced by itself or by a style with the same look records
+/// nothing, and bad parameters are errors that change nothing.
+#[test]
+fn redefine_from_a_style_gives_the_style_that_look() {
+    let mut s = session();
+    let (a, b, c) = linked_three(&mut s);
+    let d = rect(&mut s, 300.0);
+    set_fill(&mut s, d, "#0000ff");
+    run(&mut s, "transparency.set", json!({"item": null, "opacity": 50, "blend": "multiply"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Blue"}));
+    set_fill(&mut s, c, "#00ff00");
+    let names = |s: &Session| s.doc().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect::<Vec<_>>();
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let (old, blue, order, before) = (style(&s, "S"), style(&s, "Blue"), names(&s), steps(&s));
+    assert_eq!(run(&mut s, "graphicStyle.redefine", json!({"name": "S", "from": "Blue"}))["name"], "S");
+    assert_eq!(style(&s, "S"), GraphicStyle { name: "S".into(), id: old.id, ..blue.clone() });
+    assert_eq!(names(&s), order);
+    let blue_paint = Paint::solid(Color::from_hex("#0000ff").unwrap());
+    for id in [a, b] {
+        let n = node(&s, id);
+        assert_eq!((n.appearance.fill_paint(), n.opacity, n.blend), (blue_paint.clone(), 0.5, BlendMode::Multiply));
+    }
+    assert_eq!(linked(&mut s, "S"), vec![a.0, b.0]);
+    // The edited object keeps its look and is unlinked; Blue and its object are as they were.
+    assert_eq!(fill(&s, c), Paint::solid(Color::from_hex("#00ff00").unwrap()));
+    assert_eq!(node(&s, c).extras().graphic_style, None);
+    assert_eq!(style(&s, "Blue"), blue);
+    assert_eq!(linked(&mut s, "Blue"), vec![d.0]);
+    let step = s.doc().unwrap().history.undo.last().unwrap().clone();
+    assert_eq!((step.label.as_str(), steps(&s)), ("Redefine Graphic Style “S”", before + 1));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(style(&s, "S"), old);
+    assert_eq!((fill(&s, a), fill(&s, b)), (Paint::solid(Color::WHITE), Paint::solid(Color::WHITE)));
+    assert_eq!(node(&s, c).extras().graphic_style, Some(old.id));
+    run(&mut s, "edit.redo", json!({}));
+    assert_eq!(style(&s, "S").appearance, blue.appearance);
+    assert_eq!(linked(&mut s, "S"), vec![a.0, b.0]);
+    run(&mut s, "edit.undo", json!({}));
+
+    // A style replaced by itself, or by a copy with the same look, records nothing.
+    run(&mut s, "graphicStyle.duplicate", json!({"name": "Blue"}));
+    let before = steps(&s);
+    run(&mut s, "graphicStyle.redefine", json!({"name": "S", "from": "S"}));
+    run(&mut s, "graphicStyle.redefine", json!({"name": "Blue copy", "from": "Blue"}));
+    assert_eq!(steps(&s), before);
+    assert_eq!(style(&s, "S"), old);
+
+    // A style that does not exist, a `from` that is not a name, `from` with `id` and a missing `name` are errors.
+    for p in [
+        json!({"name": "S", "from": "nope"}),
+        json!({"name": "nope", "from": "Blue"}),
+        json!({"name": "S", "from": 3}),
+        json!({"name": "S", "from": "Blue", "id": a.0}),
+        json!({"from": "Blue"}),
+    ] {
+        assert!(s.execute("graphicStyle.redefine", &p).is_err(), "{p}");
+    }
+    assert_eq!((steps(&s), style(&s, "S")), (before, old));
+}
+
+#[test]
+fn deleting_a_style_unlinks_and_renaming_keeps_links() {
+    let mut s = session();
+    let (_, b, c) = linked_three(&mut s);
+    run(&mut s, "graphicStyle.rename", json!({"name": "S", "to": "T"}));
+    assert_eq!(linked(&mut s, "T").len(), 3);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    assert_eq!(run(&mut s, "select.same.graphicStyle", json!({}))["count"], 3);
+    let look = node(&s, c).appearance;
+    run(&mut s, "graphicStyle.delete", json!({"name": "T"}));
+    assert_eq!((node(&s, b).extras().graphic_style, node(&s, c).extras().graphic_style), (None, None));
+    assert_eq!(node(&s, c).appearance, look);
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    assert!(s.execute("select.same.graphicStyle", &json!({})).is_err());
+}
+
+#[test]
+fn unused_styles_and_sort_by_name() {
+    let mut s = session();
+    linked_three(&mut s);
+    let unused = run(&mut s, "graphicStyle.unused", json!({}));
+    let names: Vec<&str> = unused["names"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+    assert!(names.contains(&"Sunshine") && !names.contains(&"S"));
+    run(&mut s, "graphicStyle.delete", json!({"names": names}));
+    assert_eq!(s.doc().unwrap().doc.graphic_styles.len(), 1);
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "graphicStyle.sortByName", json!({}));
+    let names: Vec<String> = s.doc().unwrap().doc.graphic_styles.iter().map(|g| g.name.clone()).collect();
+    assert_eq!(names, ["Default Graphic Style", "Black Outline", "Heavy Ink", "S", "Sunshine"]);
+}
+
+#[test]
+fn select_same_appearance_attribute() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    let b = rect(&mut s, 100.0);
+    set_fill(&mut s, b, "#ff0000");
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    let c = rect(&mut s, 200.0);
+    // The shared effect.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "select.same.appearanceAttribute", json!({}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+    // The shared stroke (item 1).
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "select.same.appearanceAttribute", json!({"item": 1}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b, c]);
+    // An item past the last one leaves the shared effect. A 32-bit build read 2^32 + 1 as item 1.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "select.same.appearanceAttribute", json!({"item": (1u64 << 32) + 1}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+    // Null is the default: the shared effect.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    run(&mut s, "select.same.appearanceAttribute", json!({"item": null}));
+    assert_eq!(s.doc().unwrap().selection.objects, vec![a, b]);
+}
+
+/// Select > Same > Appearance Attribute refuses an `item` that is not a whole number and leaves
+/// the selection as it was.
+#[test]
+fn select_same_appearance_attribute_refuses_an_item_that_is_not_a_whole_number() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    rect(&mut s, 100.0);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    for item in [json!("1"), json!(-1), json!(1.5), json!(true), json!([1])] {
+        let e = s.execute("select.same.appearanceAttribute", &json!({"item": item})).unwrap_err().to_string();
+        assert_eq!(e, "invalid parameters for `select.same.appearanceAttribute`: `item` must be a whole number", "{item}");
+        assert_eq!(s.doc().unwrap().selection.objects, vec![a], "{item}");
+    }
+}
+
+/// With a member path of a compound path selected first, Select > Same > Graphic Style and
+/// Appearance Attribute compare the other objects with the compound path, except in isolation mode
+/// inside it.
+#[test]
+fn select_same_style_and_attribute_from_a_compound_path_member() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    set_fill(&mut s, a, "#ff0000");
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Rough"}));
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough"}));
+    let outer = rect(&mut s, 100.0);
+    let inner = rect(&mut s, 120.0);
+    run(&mut s, "select.set", json!({"ids": [outer.0, inner.0]}));
+    let c = NodeId(run(&mut s, "object.compoundPath.make", json!({}))["id"].as_u64().unwrap());
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough"}));
+    rect(&mut s, 300.0);
+    for cmd in ["select.same.graphicStyle", "select.same.appearanceAttribute"] {
+        for from in [c, outer] {
+            run(&mut s, "select.set", json!({"ids": [from.0]}));
+            run(&mut s, cmd, json!({}));
+            assert_eq!(s.doc().unwrap().selection.objects, vec![a, c], "{cmd} from {from:?}");
+        }
+    }
+    // Isolated in the compound path, its member paths are compared, and they carry no style.
+    run(&mut s, "object.isolate", json!({"id": c.0}));
+    run(&mut s, "select.set", json!({"ids": [outer.0]}));
+    assert!(s.execute("select.same.graphicStyle", &json!({})).is_err());
+}
+
+/// Select > Same > Graphic Style and Appearance Attribute pass over a hidden object selected first
+/// and compare the other objects with the next one.
+#[test]
+fn select_same_style_and_attribute_skip_a_hidden_reference() {
+    let mut s = session();
+    let a = rect(&mut s, 10.0);
+    set_fill(&mut s, a, "#ff0000");
+    run(&mut s, "effect.apply", json!({"effect": "distort.roughen"}));
+    run(&mut s, "graphicStyle.new", json!({"name": "Rough"}));
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough"}));
+    let b = rect(&mut s, 100.0);
+    run(&mut s, "graphicStyle.apply", json!({"name": "Rough"}));
+    let hidden = rect(&mut s, 200.0);
+    set_fill(&mut s, hidden, "#0000ff");
+    run(&mut s, "graphicStyle.new", json!({"name": "Blue"}));
+    run(&mut s, "graphicStyle.apply", json!({"name": "Blue"}));
+    rect(&mut s, 300.0);
+    run(&mut s, "graphicStyle.apply", json!({"name": "Blue"}));
+    run(&mut s, "layer.setProps", json!({"id": hidden.0, "visible": false}));
+    for cmd in ["select.same.graphicStyle", "select.same.appearanceAttribute"] {
+        run(&mut s, "select.set", json!({"ids": [hidden.0, a.0]}));
+        run(&mut s, cmd, json!({}));
+        assert_eq!(s.doc().unwrap().selection.objects, vec![a, b], "{cmd}");
+    }
+}
+
+#[test]
+fn document_info_lists_style_names() {
+    let mut s = session();
+    let (a, ..) = linked_three(&mut s);
+    let i = run(&mut s, "document.info", json!({}));
+    assert_eq!(i["graphicStyleNames"].as_array().unwrap().len(), 5);
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    assert_eq!(run(&mut s, "document.info", json!({"selectionOnly": true}))["graphicStyleNames"], json!(["S"]));
+}

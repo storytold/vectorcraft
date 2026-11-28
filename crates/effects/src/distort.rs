@@ -3,8 +3,11 @@
 use serde_json::Value;
 use vectorcraft_geom::kurbo::ParamCurveArclen;
 use vectorcraft_geom::{Affine, Anchor, ParamCurve, PathData, Point, Rect, SubPath, Vec2};
+use vectorcraft_pathops::addons::pathtools::insert_at;
 
-use crate::util::*;
+use crate::util::{
+    catmull_rom, fit_piece, flag, map_handles_within, map_nonlinear_within, mean_size, noise, normal_at, num, pieces, seed, seg_cubic, smooth_points,
+};
 
 fn diag(b: Rect) -> f64 {
     b.width().hypot(b.height()).max(1e-6)
@@ -13,6 +16,21 @@ fn diag(b: Rect) -> f64 {
 /// Free Distort: bilinear map of the bounding box onto four new corners (unit box coordinates),
 /// making at most `max` anchors ([`map_nonlinear_within`]).
 pub fn free_distort(path: &PathData, b: Rect, p: &Value, max: usize) -> PathData {
+    let c = free_distort_corners(b, p);
+    let (w, h) = (b.width().max(1e-9), b.height().max(1e-9));
+    let f = |q: Point| {
+        let u = (q.x - b.x0) / w;
+        let v = (q.y - b.y0) / h;
+        let top = c[0].lerp(c[1], u);
+        let bot = c[3].lerp(c[2], u);
+        top.lerp(bot, v)
+    };
+    map_nonlinear_within(path, diag(b) / 16.0, max, f)
+}
+
+/// The four corners (top left, top right, bottom right, bottom left) Free Distort with params `p`
+/// moves bounding box `b`'s corners to, in the document.
+pub(crate) fn free_distort_corners(b: Rect, p: &Value) -> [Point; 4] {
     let mut c = [Point::new(0.0, 0.0), Point::new(1.0, 0.0), Point::new(1.0, 1.0), Point::new(0.0, 1.0)];
     if let Some(arr) = p.get("corners").and_then(Value::as_array) {
         for (i, v) in arr.iter().take(4).enumerate() {
@@ -26,16 +44,7 @@ pub fn free_distort(path: &PathData, b: Rect, p: &Value, max: usize) -> PathData
         }
     }
     let (w, h) = (b.width().max(1e-9), b.height().max(1e-9));
-    let to_doc = |q: Point| Point::new(b.x0 + q.x * w, b.y0 + q.y * h);
-    let c = c.map(to_doc);
-    let f = |q: Point| {
-        let u = (q.x - b.x0) / w;
-        let v = (q.y - b.y0) / h;
-        let top = c[0].lerp(c[1], u);
-        let bot = c[3].lerp(c[2], u);
-        top.lerp(bot, v)
-    };
-    map_nonlinear_within(path, diag(b) / 16.0, max, f)
+    c.map(|q| Point::new(b.x0 + q.x * w, b.y0 + q.y * h))
 }
 
 /// Pucker & Bloat: anchors move toward (bloat) or away from (pucker) the centre, handles the
@@ -73,7 +82,8 @@ const MAX_ROUGHEN_POINTS: usize = 2000;
 
 /// Roughen: resample at `detail` points per inch and jitter each point by up to `size`. Where
 /// that would make more than `max` anchors, the points are spaced further apart until it doesn't
-/// (stacked Roughens multiply their points, #3578).
+/// (stacked Roughens multiply their points, #3578). At size 0 no point moves: each segment is
+/// split into its pieces, evenly along its length, and the outline stays as it is.
 pub fn roughen(path: &PathData, b: Rect, p: &Value, max: usize) -> PathData {
     let size = num(p, "size", 5.0).clamp(0.0, 1e4);
     let amp = if flag(p, "relative", true) { size / 100.0 * mean_size(b) } else { size };
@@ -83,6 +93,23 @@ pub fn roughen(path: &PathData, b: Rect, p: &Value, max: usize) -> PathData {
     let lens: Vec<f64> = path.subpaths.iter().flat_map(|sp| (0..sp.segment_count()).map(|i| sp.segment(i).arclen(0.1))).collect();
     let spacing = fit_piece(&lens, spacing, MAX_ROUGHEN_POINTS, max.saturating_sub(path.anchor_count()));
     let mut lens = lens.iter();
+    if amp == 0.0 {
+        // Each segment's pieces, cut at equal lengths as `pathtools::add_points` cuts them.
+        let mut subs = Vec::with_capacity(path.subpaths.len());
+        for sp in &path.subpaths {
+            let mut places = vec![];
+            for (i, &coarse) in (0..sp.segment_count()).zip(&mut lens) {
+                let k = pieces(coarse, spacing, MAX_ROUGHEN_POINTS);
+                let c = sp.segment(i);
+                let len = c.arclen(ROUGHEN_ARCLEN_ACCURACY);
+                if len > 1e-9 && len.is_finite() {
+                    places.extend((1..k).map(|j| (i, c.inv_arclen(len * j as f64 / k as f64, ROUGHEN_ARCLEN_ACCURACY))));
+                }
+            }
+            subs.push(insert_at(sp, &places).0);
+        }
+        return PathData::new(subs);
+    }
     let smooth = smooth_points(p);
     let seed = seed(p);
     let mut subs = vec![];
@@ -111,6 +138,8 @@ pub fn roughen(path: &PathData, b: Rect, p: &Value, max: usize) -> PathData {
     }
     PathData::new(subs)
 }
+
+const ROUGHEN_ARCLEN_ACCURACY: f64 = 1e-4;
 
 /// The move and the number of copies of a Transform effect with params `p` that only moves what
 /// it applies to, as [`transform_map`] reads them; `None` when it also scales, rotates or reflects,
@@ -298,7 +327,8 @@ pub fn tweak(path: &PathData, b: Rect, p: &Value) -> PathData {
 }
 
 /// Twist: rotation that is strongest at the centre and fades to zero at the bounding circle,
-/// making at most `max` anchors ([`map_nonlinear_within`]).
+/// clockwise on the page for a positive `angle`, making at most `max` anchors. Its handles follow
+/// the rotation's directional derivative, including each side of the outer circle.
 pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     let ang = angle.clamp(-3600.0, 3600.0).to_radians();
     if ang == 0.0 {
@@ -306,15 +336,46 @@ pub fn twist(path: &PathData, b: Rect, angle: f64, max: usize) -> PathData {
     }
     let c = b.center();
     let r = diag(b) / 2.0;
+    let half = Vec2::new(b.width() * 0.5, b.height() * 0.5);
+    let boundary = move |p: Point, length: f64| {
+        if length == r {
+            return true;
+        }
+        if !r.is_finite() || (length - r).abs() > 8.0 * f64::EPSILON * r {
+            return false;
+        }
+        // A bounds-relative distance identifies boundary points affected by center rounding.
+        (Vec2::new(p.x - b.x0, p.y - b.y0) - half).hypot() == r
+    };
     let f = move |q: Point| {
         let d = q - c;
-        let t = (1.0 - d.hypot() / r).max(0.0);
-        let a = -ang * t;
+        let length = d.hypot();
+        let t = (1.0 - length / r).max(0.0);
+        // y runs down, so a positive turn is clockwise on the page.
+        let a = ang * t;
+        if a == 0.0 {
+            return q;
+        }
         let (s, co) = a.sin_cos();
         c + Vec2::new(d.x * co - d.y * s, d.x * s + d.y * co)
     };
     let piece = (r / 8.0).min(r / (1.0 + ang.abs() * 2.0));
-    map_nonlinear_within(path, piece, max, f)
+    map_handles_within(path, piece, max, f, |p, h| {
+        let v = h - p;
+        if !v.hypot().is_finite() {
+            return f(p);
+        }
+        let d = p - c;
+        let length = d.hypot();
+        let radial = if length > 0.0 { (d / length).dot(v) } else { 0.0 };
+        // The clamped rotation has different inward and outward derivatives at the circle.
+        let inside = if boundary(p, length) { radial < 0.0 } else { length < r };
+        let gradient = if inside { -ang / r * radial } else { 0.0 };
+        let tangent = if gradient == 0.0 { v } else { v + Vec2::new(-d.y, d.x) * gradient };
+        let a = ang * (1.0 - length / r).max(0.0);
+        let (s, co) = a.sin_cos();
+        f(p) + Vec2::new(tangent.x * co - tangent.y * s, tangent.x * s + tangent.y * co)
+    })
 }
 
 const ZIGZAG_ARCLEN_ACCURACY: f64 = 1e-4;

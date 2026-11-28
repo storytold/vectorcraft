@@ -1,7 +1,7 @@
 # PDF backend
 
 PDF writing uses `craft-pdf` from `storytold/craft-libs`, pinned to
-`a0916808f7d78bed8c7b90cdf937176015454a7f`. Its `write` feature supplies Krilla configuration,
+`9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb`. Its `write` feature supplies Krilla configuration,
 metadata construction, fallible font preparation and serialization, and native unwind guards.
 The dependency disables default features and enables `write` and `interpret`.
 The production writer retains Krilla’s raster-image support without its optional text shaper.
@@ -15,8 +15,9 @@ Editable import keeps its VectorCraft adapter, layer routing, colour policy and 
 Desktop printer submission remains in `craft-print`.
 
 The shared writer vendors Krilla 0.8.2 with an unwind-safe cleanup and poisoning patch.
-The root `[patch.crates-io]` selects that copy from the same immutable revision: Cargo does
-not inherit a dependency workspace's patches. A failed page or surface cleanup poisons the
+The root `[patch.crates-io]` selects that copy from craft-libs revision
+`9be9a63782298ab59cd9b7a42ee9cba4f42a5ccb`, which includes craft-libs#417 (CMYK, gray and spot
+colors keep their exact inks): Cargo does not inherit a dependency workspace's patches. A failed page or surface cleanup poisons the
 backend document, so serialization cannot return an incomplete PDF after unwinding.
 The shared crate's compile-time backend marker and `cargo xtask pdf-deps` (included in CI)
 check that the patched writer is used. Krilla retains its MIT OR Apache-2.0 licensing;
@@ -51,9 +52,9 @@ warnings also become errors before a document is returned. Whitespace and commen
 EOF remain valid. The typed iterator does not classify every malformed operator, so this
 is known-incomplete rejection rather than a general PDF validity certificate.
 
-The five patched Hayro crates and Krilla are selected in the root `[patch.crates-io]`
-from the same immutable revision as `craft-pdf`. `cargo xtask pdf-deps` rejects missing,
-duplicate, local-path, registry and mismatched revisions for those seven packages.
+The five patched Hayro crates are selected in the root `[patch.crates-io]` from the same
+immutable revision as `craft-pdf`, and Krilla from the revision named above. `cargo xtask pdf-deps`
+rejects missing, duplicate, local-path, registry and mismatched revisions for those seven packages.
 `craft-print`, `craft-ui` and the other craft-libs crates use the same revision.
 
 Dependency asset hashes and sources are in `ASSETS.md`; redistributed license texts are

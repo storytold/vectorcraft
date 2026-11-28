@@ -10,11 +10,31 @@ updates:
       interval: "daily"
       time: "06:00"
       timezone: "America/New_York"
-    # Consolidate updates into a single PR rather than one PR per crate
     groups:
-      cargo-dependencies:
-        patterns:
-          - "*"
+      # A dependency that matches several groups goes to the first one it matches, so the
+      # lockstep families are listed before the catch-all cargo-patch group.
+      # Families that must move together; all update types of a family land in one PR.
+      egui-stack: # egui/eframe/winit are [patch.crates-io]'d to storytold forks: expect this PR red on upstream releases until the forks move
+        patterns: ["egui*", "eframe", "epaint*", "ecolor", "emath", "winit", "wgpu*", "naga", "accesskit*"]
+      font-stack:
+        patterns: ["harfrust", "skrifa", "read-fonts", "font-types", "fontique", "parley", "write-fonts", "skera", "ttf-parser"]
+      pdf-render-stack:
+        patterns: ["hayro*", "krilla*", "vello*", "peniko", "kurbo", "resvg", "usvg", "tiny-skia*", "svgtypes"]
+      icu-stack:
+        patterns: ["icu_*", "fixed_decimal"]
+      ml-stack:
+        patterns: ["candle-*", "rten*", "ocrs"]
+      platform-stack:
+        patterns: ["zbus*", "zvariant*", "x11rb*"]
+      apple-stack:
+        patterns: ["objc2*", "block2", "dispatch2"]
+      rustcrypto:
+        patterns: ["aes", "sha1", "sha2", "sha3", "md-5", "hmac", "pbkdf2", "digest", "cipher"]
+      # Everything else: patch bumps only (minor/major of other crates get one PR each).
+      cargo-patch:
+        update-types: ["patch"]
+        patterns: ["*"]
+    open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
 

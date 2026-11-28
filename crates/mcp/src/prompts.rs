@@ -309,8 +309,8 @@ Method:
    imageTrace.presets to see every preset with its numbers.
    Lower paths and higher corners give the clean, logo-like result; high fidelity needs paths
    near 90. imageTrace.setView {view: \"outlinesWithSourceImage\"} draws the traced outlines
-   over the image in the app's window to compare them (screenshot {window: true} captures it);
-   render_preview and screenshot without `window` draw the tracing result, as exports do.
+   over the image in the app's window to compare them; render_preview and screenshot draw it
+   with traceViews: true, and the tracing result otherwise, as exports do.
 3. imageTrace.expand keeps only the traced paths and removes the source image.
    imageTrace.makeAndExpand traces and expands in one command, in place of steps 2 and 3.
 4. apply_effect {effect} on the traced shapes. Call apply_effect with no `effect` for the
@@ -364,6 +364,110 @@ Method:
 
 Live effects are kept on export (geometry baked; shadows, glows and blur become SVG filters),
 and text stays text unless you pass outlineText.",
+    },
+    PromptDef {
+        name: "check-spelling",
+        title: "Check spelling",
+        description: "Run text.spelling.check on the selection or document, then apply suggestions or dictionary changes.",
+        arguments: &[
+            PromptArg {
+                name: "scope",
+                description: "What to check",
+                required: false,
+                default: "the selection, or every story when nothing is selected",
+                values: Values::Fixed(&[
+                    "the selection, or every story when nothing is selected",
+                    "the active story only",
+                    "every story in the document",
+                ]),
+            },
+            PromptArg {
+                name: "action",
+                description: "What to do with each unknown word",
+                required: false,
+                default: "list suggestions and ask before changing",
+                values: Values::Fixed(&[
+                    "list suggestions and ask before changing",
+                    "apply the first suggestion for each word",
+                    "add unknown words to the custom dictionary",
+                    "ignore all for this document",
+                ]),
+            },
+        ],
+        text: "\
+Check spelling in VectorCraft for {scope}, then {action}.
+
+Method:
+1. inspect_document to see the selection and type objects.
+2. run_command text.spelling.check (and text.spelling.suggest for each unknown word). Offsets are
+   byte ranges for text.editRange / text.spelling.changeWord.
+3. For a fix, text.spelling.changeWord; for the custom dictionary, text.spelling.addWord /
+   removeWord / dictionary; for this document only, text.spelling.ignoreAll.
+4. Prefer those commands over inventing replacements. screenshot if the layout may reflow.
+
+Desktop-only Auto Spell Check is edit.autoSpellCheck (ui: true); use --connect for the underlines.",
+    },
+    PromptDef {
+        name: "variables-bind",
+        title: "Bind variables",
+        description: "Define text, visibility or image variables, bind them to art, and load or save a variable library.",
+        arguments: &[
+            PromptArg {
+                name: "kind",
+                description: "Which variable kinds to set up",
+                required: false,
+                default: "text",
+                values: Values::Fixed(&["text", "visibility", "image", "graph", "mixed"]),
+            },
+            PromptArg {
+                name: "source",
+                description: "Where the data comes from",
+                required: false,
+                default: "define variables on the selection by hand",
+                values: Values::Fixed(&["define variables on the selection by hand", "import a CSV or TSV data set", "load a variable library XML"]),
+            },
+        ],
+        text: "\
+Set up {kind} variables in VectorCraft from {source}.
+
+Method:
+1. inspect_document and variable.list (or the Variables panel commands) to see what exists.
+2. variable.define / variable.bind for text, visibility, image or graph bindings; one text
+   variable per type object.
+3. For CSV/TSV, dataset.import; for a library file, variable.loadLibrary / variable.saveLibrary.
+4. Switch data sets with dataset.apply and verify with inspect_document / screenshot.
+5. Prefer run_command over inventing panel clicks. Undo covers each binding step.",
+    },
+    PromptDef {
+        name: "path-tools",
+        title: "Path Tools add-on",
+        description: "Use addon.pathtools.* commands (and addon.path.* live effects) to edit path geometry.",
+        arguments: &[PromptArg {
+            name: "task",
+            description: "What to do to the selection",
+            required: true,
+            default: "",
+            values: Values::Fixed(&[
+                "extend open ends",
+                "close paths",
+                "add anchors along curves",
+                "simplify anchors",
+                "split at anchors",
+                "expand dashes to geometry",
+                "create a parametric shape",
+            ]),
+        }],
+        text: "\
+Perform this Path Tools task in VectorCraft: {task}.
+
+Method:
+1. command_list with filter \"addon.pathtools\" for the command ids (extend, close, addPoints,
+   simplify, crossings, shape.create, …). Those are commands.
+2. Live Path Effects keep the effect ids addon.path.* (dashes, addAnchors, extend, close,
+   smooth, retract, reverse, simplify, split). Apply them with apply_effect / effect.apply;
+   they are not command ids.
+3. inspect_document the selection, run the command or effect, then screenshot.
+4. Expand Appearance (effect.expandAppearance) only when the brief needs baked geometry.",
     },
 ];
 
@@ -557,7 +661,8 @@ mod tests {
     }
 
     /// trace-and-style selects the opened image before tracing it, expands the trace, recolors it
-    /// instead of painting it one color, and says that screenshots draw the tracing result.
+    /// instead of painting it one color, and says that screenshots draw the trace view only with
+    /// traceViews.
     #[test]
     fn trace_and_style_selects_expands_and_recolors() {
         let v = get("trace-and-style", &json!({"path": "art.png"})).unwrap();
@@ -568,7 +673,7 @@ mod tests {
         let at = |s: &str| text.find(s).unwrap_or(usize::MAX);
         assert!(at("select.all") < at("imageTrace.make") && at("imageTrace.make") < at("imageTrace.expand"), "{text}");
         assert!(text.contains("black and white"), "{text}");
-        assert!(!text.contains("screenshots show it"), "{text}");
+        assert!(!text.contains("screenshots show it") && text.contains("traceViews: true"), "{text}");
         assert!(!text.contains("own pixel size") && text.contains("resolution it declares"), "{text}");
         // No step of its own paints the trace with set_paint.
         let steps: Vec<&str> = text.lines().filter(|l| is_item(l)).filter_map(|l| l.split_once(". ").map(|(_, rest)| rest)).collect();

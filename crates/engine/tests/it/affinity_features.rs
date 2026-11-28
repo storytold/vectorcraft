@@ -568,12 +568,14 @@ fn artistic_text_aligns_its_lines_within_the_longest() {
         assert!(matches!(t.kind, TextKind::Point));
         let lines = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).lines;
         let (wide, mid) = (&lines[0], &lines[1]);
-        let w = wide.x1 - wide.x0;
+        // Each line as wide as it is aligned: without the tracking after its last character.
+        let width = |l: &vectorcraft_text::LineInfo| l.x1 - l.trailing - l.x0;
+        let w = width(wide);
         assert!(w > 0.0);
         // The block stays where the first paragraph's alignment puts it on the anchor.
         let start = [0.0, -0.5, -1.0][first as usize] * w;
         assert!((wide.x0 - start).abs() < 1e-6, "{first}/{second}: {} vs {start}", wide.x0);
-        let expected = wide.x0 + (w - (mid.x1 - mid.x0)) * at;
+        let expected = wide.x0 + (w - width(mid)) * at;
         assert!((mid.x0 - expected).abs() < 1e-6, "{first}/{second}: {} vs {expected}", mid.x0);
         // Each paragraph keeps its own alignment.
         use vectorcraft_doc::text::Justify;
@@ -668,7 +670,24 @@ fn cmyk_pixel_layers_show_through_the_documents_cmyk_profile() {
     let loaded = open("photo.af", &cmyk_layer(false, Some(&icc)));
     let blob = photo(&loaded.doc);
     assert!(!blob.is_cmyk());
-    let px = image::load_from_memory(&blob.bytes).unwrap().to_rgba8();
+    let px = craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgba8();
     let profile = IccProfile::from_bytes(None, &icc).unwrap();
     let srgb = cms::icc::builtin_rgb(cms::SRGB).unwrap();
     let want = profile.to_rgb_of(&srgb, &[1.0, 0.0, 0.0, 0.0], Intent::RelativeColorimetric, true).unwrap().map(|v| (v * 255.0).round() as i32);
@@ -689,7 +708,29 @@ fn cmyk_pixel_layers_without_a_profile_keep_their_inks_or_use_the_working_profil
     let loaded = open("photo.af", &cmyk_layer(true, None));
     let blob = photo(&loaded.doc);
     assert!(!blob.is_cmyk());
-    assert_eq!(image::load_from_memory(&blob.bytes).unwrap().to_rgba8().get_pixel(8, 8).0[3], 0);
+    assert_eq!(
+        craft_image_codecs::decode(&blob.bytes)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(8, 8)
+            .0[3],
+        0
+    );
     assert!(loaded.warnings.iter().any(|w| w.contains("CMYK pixel layers with transparency")), "{:?}", loaded.warnings);
 }
 
@@ -701,4 +742,22 @@ fn objects_beyond_the_document_range_are_left_out() {
     let names: Vec<_> = all(&loaded.doc).iter().filter_map(|n| n.name.clone()).collect();
     assert!(names.iter().any(|n| n == "Magenta box") && !names.iter().any(|n| n == "Far box"), "{names:?}");
     assert!(loaded.warnings.iter().any(|w| w.contains("beyond the document range")), "{:?}", loaded.warnings);
+}
+
+#[test]
+fn test_af_g_symbol_fill_is_white() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test.af");
+    let Ok(bytes) = std::fs::read(&path) else {
+        return;
+    };
+    let loaded = vectorcraft_engine::cmd::fileio::load("test.af", &bytes).unwrap();
+    assert!(!loaded.preview_only, "{:?}", loaded.warnings);
+    let d = &loaded.doc;
+    // The visible "g41" group holds the "g" symbol (path43).
+    let g41 = all(d).into_iter().find(|n| n.visible && n.name.as_deref() == Some("g41")).expect("visible g41 group must be present");
+    let path43 = g41.children().and_then(|c| c.iter().find(|n| n.name.as_deref() == Some("path43"))).expect("path43 inside g41 must be present");
+    let Some(AppearanceItem::Fill(fill)) = path43.appearance.items.first() else {
+        panic!("path43 has no fill: {:?}", path43.appearance);
+    };
+    assert_eq!(fill.paint, Paint::solid(Color::rgb(1.0, 1.0, 1.0)), "The 'g' symbol must have a white fill in test.af, got {:?}", fill.paint);
 }

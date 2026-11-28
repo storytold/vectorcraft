@@ -7,18 +7,31 @@
 //! either onto another width point makes a discontinuous point (the width steps there). Shift-click
 //! adds width points to the selection (or takes them out), and dragging one of several selected
 //! points moves or widens them all. Double-clicking a stroke opens Width Point Edit (the
-//! `widthPoint` dialog), editing a hit point or creating one on confirmation. Delete/Backspace
-//! removes the selected width points.
+//! `widthPoint` dialog), editing a hit point or creating one on confirmation; on one of several
+//! selected points it edits all of them (`indices`). Delete/Backspace removes the selected width
+//! points.
 //!
 //! Gestures preview `stroke.widthPoint.set {id, t, left, right, index?}` (side widths in points),
 //! `stroke.widthPoint.copy {id, index, t}` or, for several points, `stroke.widthProfile.set {ids,
 //! points}`, and commit on release; Delete runs `stroke.widthPoint.remove {id, indices}`.
 //!
+//! Escape deselects the selected width points and sends no command.
+//!
 //! A compound path's stroke is the compound's: its members are edited through it, and the width
 //! points show on every subpath of the stroke (one profile runs along each). The cursor says what a
 //! drag does: add a width point on a stroke, or move or widen the one under it.
+//!
+//! A stroke drawn with a brush is left alone, as a width profile does not change it: a press or a
+//! double-click on it sends no command and shows why in the status bar ([`KEEPS_SIZE`]). Without
+//! Shift, the press or double-click deselects the width points, and the cursor over it offers no
+//! edit. Its width points selected before it took the brush show no handles, and Delete,
+//! Backspace and Escape do what they do with no width points selected.
+
+use std::cell::Cell;
+use std::sync::Arc;
 
 use serde_json::json;
+use vectorcraft_brush::Brush;
 use vectorcraft_doc::{Document, NodeId, NodeKind, StrokeLayer};
 use vectorcraft_geom::{Point, Vec2};
 
@@ -103,7 +116,18 @@ pub struct WidthTool {
     drag: Option<Drag>,
     /// Selected width points: the stroke's owner and their positions t.
     selected: Option<(NodeId, Vec<f64>)>,
+    /// The selected width points when the button went down: a dropped press puts them back.
+    before_press: Option<(NodeId, Vec<f64>)>,
+    /// The width points selected before a click on one of them selected just that one, and
+    /// whether the button has gone down again since: a double-click on that point edits them all.
+    before_click: Option<((NodeId, Vec<f64>), bool)>,
+    /// The document's brush library as it was at a revision, so pointer moves and overlays do not
+    /// parse it again ([`Self::keeps_size`]).
+    brushes: Cell<Option<BrushesAt>>,
 }
+
+/// A document revision and its brush library ([`WidthTool::keeps_size`]).
+type BrushesAt = ((u64, u64), Arc<Vec<Brush>>);
 
 /// The object whose stroke path `id` draws with: its compound path, if it is a member of one.
 pub fn stroke_owner(doc: &Document, id: NodeId) -> NodeId {
@@ -128,6 +152,9 @@ fn paths_of(doc: &Document, owner: NodeId) -> Vec<NodeId> {
     out
 }
 
+/// The status message for a press on a stroke the tool leaves alone ([`WidthTool::keeps_size`]).
+pub const KEEPS_SIZE: &str = "The stroke's brush keeps its own size, so a width profile does not change it. Remove the brush to use a profile.";
+
 /// Side widths (points) of a stroke at fraction `t`.
 pub fn sides_at(st: &StrokeLayer, t: f64) -> (f64, f64) {
     let (l, r) = st.profile.as_ref().map(|p| p.at(t)).unwrap_or((1.0, 1.0));
@@ -135,8 +162,46 @@ pub fn sides_at(st: &StrokeLayer, t: f64) -> (f64, f64) {
 }
 
 impl WidthTool {
-    /// The stroked path nearest to `p` within reach (stroke half-width + a few pixels).
-    fn spot_at(cx: &ToolContext, p: Point) -> Option<Spot> {
+    /// Does `owner`'s stroke draw with a brush ([`vectorcraft_brush::keeps_brush_size`])? A width
+    /// profile does not change it, so the tool adds and edits no width points on it. The library is
+    /// parsed once per document revision.
+    fn keeps_size(&self, cx: &ToolContext, owner: NodeId) -> bool {
+        let Some(st) = stroke_of(cx.doc, owner).filter(|s| s.brush.is_some()) else { return false };
+        let lib = self
+            .brushes
+            .take()
+            .filter(|(rev, _)| *rev == cx.revision)
+            .map(|(_, lib)| lib)
+            .unwrap_or_else(|| Arc::new(vectorcraft_brush::library(cx.doc)));
+        let keeps = vectorcraft_brush::keeps_brush_size(&lib, st);
+        self.brushes.set(Some((cx.revision, lib)));
+        keeps
+    }
+
+    /// Where a press at `p` lands: the nearest stroke the tool edits ([`Self::spot_at`] without
+    /// brushed strokes), so a plain stroke under a selected brushed one stays reachable. `Err(true)`
+    /// when only brushed strokes are within reach, `Err(false)` when no stroke is.
+    fn edit_spot_at(&self, cx: &ToolContext, p: Point) -> Result<Spot, bool> {
+        // `spot_at` asks `skip` only about strokes within reach, so one search tells both apart.
+        let passed_over = Cell::new(false);
+        let skip = |owner| {
+            let keeps = self.keeps_size(cx, owner);
+            passed_over.set(passed_over.get() || keeps);
+            keeps
+        };
+        Self::spot_at(cx, p, &skip).ok_or_else(|| passed_over.get())
+    }
+
+    /// The hovered stroke while the tool still edits it: a brush applied since the last pointer
+    /// move takes away its handles and its edit cursor.
+    fn live_hover(&self, cx: &ToolContext) -> Option<Spot> {
+        self.hover.filter(|s| !self.keeps_size(cx, s.owner))
+    }
+
+    /// The stroked path nearest to `p` within reach (stroke half-width + a few pixels), passing over
+    /// the strokes whose owner `skip` returns true for. `skip` is asked only about strokes within
+    /// reach.
+    fn spot_at(cx: &ToolContext, p: Point, skip: &dyn Fn(NodeId) -> bool) -> Option<Spot> {
         let editable = cx.doc.editable();
         let consider = |id: NodeId| -> Option<(f64, Spot)> {
             if !editable(id) {
@@ -152,7 +217,7 @@ impl WidthTool {
                 return None;
             }
             let (sub, t, q, tan, d) = nearest_fraction(path, p)?;
-            if d > reach {
+            if d > reach || skip(owner) {
                 return None;
             }
             let (left, right) = sides_at(st, t);
@@ -293,24 +358,63 @@ impl Tool for WidthTool {
         let p = ev.pos;
         match ev.kind {
             PointerKind::Move => {
-                self.hover = Self::spot_at(cx, p);
+                // A brushed stroke takes no width points, so the cursor offers no edit over it.
+                self.hover = self.edit_spot_at(cx, p).ok();
                 vec![]
             }
+            PointerKind::TripleClick => vec![],
             PointerKind::DoubleClick => {
-                let Some(spot) = Self::spot_at(cx, p) else { return vec![] };
+                // The double-click's first click selected just the point under it: the points
+                // selected before it are selected again.
+                let before_click = self.before_click.take().and_then(|(sel, pressed)| pressed.then_some(sel));
+                let spot = match self.edit_spot_at(cx, p) {
+                    Ok(spot) => spot,
+                    Err(false) => return vec![],
+                    Err(true) => {
+                        if !ev.mods.shift {
+                            self.selected = None;
+                        }
+                        return vec![Action::Status(KEEPS_SIZE.into())];
+                    }
+                };
                 let Some((w, _)) = Self::hit(cx, &spot, p) else {
                     self.selected = Some((spot.owner, vec![spot.t]));
                     return vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "t": spot.t}))];
                 };
-                self.selected = Some((spot.owner, vec![w.t]));
-                vec![Action::Dialog("widthPoint".into(), json!({"id": spot.owner.0, "index": w.index, "adjustAdjoining": ev.mods.shift}))]
+                if let Some((owner, ts)) = before_click
+                    && owner == spot.owner
+                    && self.is_selected(owner, w.t)
+                    && ts.iter().any(|t| (t - w.t).abs() <= SAME_T)
+                {
+                    self.selected = Some((owner, ts));
+                }
+                // A selected point edits every selected point; another one edits itself alone.
+                if !self.is_selected(spot.owner, w.t) {
+                    self.selected = Some((spot.owner, vec![w.t]));
+                }
+                // Every selected entry goes to the dialog, which opens one point (or the two
+                // halves of a discontinuous point) as `index` would.
+                let indices = self.selected_indices(cx, spot.owner);
+                let mut params = json!({"id": spot.owner.0, "adjustAdjoining": ev.mods.shift});
+                if indices.len() > 1 {
+                    params["indices"] = json!(indices);
+                } else {
+                    params["index"] = json!(w.index);
+                }
+                vec![Action::Dialog("widthPoint".into(), params)]
             }
             PointerKind::Down => {
-                let Some(spot) = Self::spot_at(cx, p) else {
-                    if !ev.mods.shift {
-                        self.selected = None;
+                self.before_press = self.selected.clone();
+                // Only the press right after the click counts as the double-click's second one.
+                self.before_click = self.before_click.take().filter(|(_, pressed)| !pressed).map(|(sel, _)| (sel, true));
+                let spot = match self.edit_spot_at(cx, p) {
+                    Ok(spot) => spot,
+                    Err(brushed) => {
+                        if !ev.mods.shift {
+                            self.selected = None;
+                        }
+                        return if brushed { vec![Action::Status(KEEPS_SIZE.into())] } else { vec![] };
                     }
-                    return vec![];
                 };
                 let drag = match Self::hit(cx, &spot, p) {
                     Some((w, part)) => {
@@ -379,10 +483,29 @@ impl Tool for WidthTool {
                     let dt = d.t - d.spot.t;
                     self.selected = match (d.group.is_some(), d.moved, self.selected.take()) {
                         // A click on one of several selected points selects just that one.
-                        (true, false, _) if !ev.mods.shift => Some((d.spot.owner, vec![d.spot.t])),
+                        (true, false, sel) if !ev.mods.shift => {
+                            // Only a selection of several places: a discontinuous point alone also
+                            // drags as a group, and its click must not replace the remembered one.
+                            if let Some(sel) = sel.filter(|(_, ts)| ts.len() > 1) {
+                                self.before_click = Some((sel, false));
+                            }
+                            Some((d.spot.owner, vec![d.spot.t]))
+                        }
                         // Points moved together stay selected.
                         (true, _, Some((id, ts))) if d.mode == Mode::Move => Some((id, ts.into_iter().map(|t| (t + dt).clamp(0.0, 1.0)).collect())),
                         (true, _, sel) => sel,
+                        // An Alt-click without a drag copies nothing: like a plain click on one of
+                        // several selected points, it lets a double-click edit them all.
+                        (false, false, _) if d.mode == Mode::Copy && !ev.mods.shift => {
+                            if let Some(sel) = self
+                                .before_press
+                                .clone()
+                                .filter(|(owner, ts)| *owner == d.spot.owner && ts.len() > 1 && ts.iter().any(|t| (t - d.spot.t).abs() <= SAME_T))
+                            {
+                                self.before_click = Some((sel, false));
+                            }
+                            Some((d.spot.owner, vec![d.t]))
+                        }
                         (false, _, _) => Some((d.spot.owner, vec![d.t])),
                     };
                     vec![Action::Commit]
@@ -391,14 +514,27 @@ impl Tool for WidthTool {
             },
         }
     }
-    /// Delete/Backspace remove the selected width points; with none selected they are the
-    /// shortcut's (Clear deletes the selected objects).
+    /// Delete/Backspace remove the selected width points and Escape deselects them; with none
+    /// selected the keys do what they do with other tools (Clear deletes the selected objects, and
+    /// Escape leaves isolation mode, for one). Width points of a brushed stroke, which show no
+    /// handles, count as none selected.
     fn claims_key(&self, cx: &ToolContext, key: ToolKey) -> bool {
-        matches!(key, ToolKey::Delete | ToolKey::Backspace)
+        matches!(key, ToolKey::Delete | ToolKey::Backspace | ToolKey::Escape)
             && self.drag.is_none()
-            && self.selected.as_ref().is_some_and(|(id, _)| !self.selected_indices(cx, *id).is_empty())
+            && self.selected.as_ref().is_some_and(|(id, _)| !self.selected_indices(cx, *id).is_empty() && !self.keeps_size(cx, *id))
+    }
+    /// A dropped press ends the drag, and the width points selected when the button went down are
+    /// selected again.
+    fn drop_press(&mut self, _cx: &ToolContext) -> Vec<Action> {
+        self.drag = None;
+        self.selected = self.before_press.take();
+        vec![]
     }
     fn key(&mut self, cx: &ToolContext, key: ToolKey, _mods: Mods) -> Vec<Action> {
+        if key == ToolKey::Escape && self.drag.is_none() {
+            self.selected = None;
+            return vec![];
+        }
         if !matches!(key, ToolKey::Delete | ToolKey::Backspace) {
             return vec![];
         }
@@ -408,12 +544,16 @@ impl Tool for WidthTool {
             return vec![];
         }
         self.selected = None;
+        if self.keeps_size(cx, id) {
+            return vec![];
+        }
         vec![Action::Exec("stroke.widthPoint.remove".into(), json!({"id": id.0, "indices": indices}))]
     }
     fn overlays(&self, cx: &ToolContext) -> Vec<Overlay> {
         let mut out = vec![];
         let r = cx.tol(4.0);
-        let focus = self.drag.as_ref().map(|d| d.spot).or(self.hover);
+        let hover = self.live_hover(cx);
+        let focus = self.drag.as_ref().map(|d| d.spot).or(hover);
         // Every subpath's width points of the stroke under the pointer, and of the selected ones'.
         let show = |owner: NodeId, out: &mut Vec<Overlay>| {
             for w in Self::all_points(cx, owner) {
@@ -427,8 +567,11 @@ impl Tool for WidthTool {
         if let Some(s) = focus {
             show(s.owner, &mut out);
         }
+        // Width points selected before their stroke took a brush show no handles: the tool no
+        // longer edits them.
         if let Some((owner, _)) = &self.selected
             && focus.is_none_or(|s| s.owner != *owner)
+            && !self.keeps_size(cx, *owner)
         {
             show(*owner, &mut out);
         }
@@ -439,7 +582,7 @@ impl Tool for WidthTool {
             if cx.measurement_labels {
                 out.push(Overlay::Measure { p: q + d.spot.n * (d.left + r * 3.0), text: format!("W: {}", cx.stroke_unit.readout(d.left + d.right)) });
             }
-        } else if let Some(h) = &self.hover {
+        } else if let Some(h) = &hover {
             out.push(Overlay::Line { a: h.p + h.n * h.left, b: h.p - h.n * h.right, color: BLUE, dashed: true });
             out.push(Overlay::Path { path: diamond(h.p, r), color: BLUE, width: 1.0, dashed: false });
         }
@@ -450,7 +593,7 @@ impl Tool for WidthTool {
             return Cursor::WidthPoint;
         }
         // The stroke under the pointer, as the last move found it (no search every frame).
-        match self.hover {
+        match self.live_hover(cx) {
             Some(spot) if Self::hit(cx, &spot, p).is_some() => Cursor::WidthPoint,
             Some(_) => Cursor::WidthAdd,
             None => Cursor::Width,
@@ -518,6 +661,169 @@ mod tests {
         assert!((v["t"].as_f64().unwrap() - 0.25).abs() < 1e-3);
         assert!((v["left"].as_f64().unwrap() - 20.0).abs() < 1e-6 && (v["right"].as_f64().unwrap() - 20.0).abs() < 1e-6);
         assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 220.0)), vec![Action::Commit]);
+    }
+
+    /// A stroke drawn with a brush of the library (the 3 pt. Round calligraphic brush) is left
+    /// alone: a press or a double-click sends no command and says why. A brush name the library
+    /// lacks draws a plain stroke, which the tool edits as usual.
+    #[test]
+    fn brushed_stroke_is_left_alone_with_a_reason() {
+        let (mut d, id) = doc_line();
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+        let (s, p) = (Selection::default(), paint());
+        let mut t = WidthTool::default();
+        let c = cx(&d, &s, &p);
+        let refused = vec![Action::Status(KEEPS_SIZE.into())];
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 201.0)), refused);
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 150.0, 220.0)), vec![], "no drag began");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 220.0)), vec![]);
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::DoubleClick, 150.0, 201.0)), refused);
+
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().brush = Some("No Such Brush".into());
+        let c = cx(&d, &s, &p);
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 201.0)), vec![Action::Begin("Width Point".into())]);
+    }
+
+    /// A selected brushed stroke lying on a plain one does not hide the plain one: a press there
+    /// edits the plain stroke.
+    #[test]
+    fn a_plain_stroke_under_a_selected_brushed_one_stays_reachable() {
+        let (mut d, _) = doc_line();
+        let l = d.layers[0].id;
+        let brushed = d.alloc_id();
+        let mut ap = Appearance::default_art();
+        let st = ap.stroke_mut().unwrap();
+        st.width = 10.0;
+        st.brush = Some("3 pt. Round".into());
+        let path = PathData::single(SubPath::polyline(&[Point::new(100.0, 200.0), Point::new(300.0, 200.0)], false));
+        d.insert(Some(l), 0, Node::path(brushed, path, ap)).unwrap();
+        let (s, p) = (Selection { objects: vec![brushed], ..Default::default() }, paint());
+        let mut t = WidthTool::default();
+        let c = cx(&d, &s, &p);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 150.0, 201.0));
+        assert_eq!(t.cursor(&c, Point::new(150.0, 201.0), Mods::default()), Cursor::WidthAdd);
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 201.0)), vec![Action::Begin("Width Point".into())]);
+    }
+
+    /// A brush applied to the hovered stroke, with the pointer still, takes away its handles and its
+    /// edit cursor before the next pointer move.
+    #[test]
+    fn a_brush_applied_under_a_still_pointer_takes_away_the_hover() {
+        let (mut d, id) = doc_line();
+        let (s, p) = (Selection::default(), paint());
+        let mut t = WidthTool::default();
+        let c = cx(&d, &s, &p);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 150.0, 201.0));
+        assert_eq!(t.cursor(&c, Point::new(150.0, 201.0), Mods::default()), Cursor::WidthAdd);
+        assert!(!t.overlays(&c).is_empty());
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+        let c = ToolContext { revision: (0, 1), ..cx(&d, &s, &p) };
+        assert_eq!(t.cursor(&c, Point::new(150.0, 201.0), Mods::default()), Cursor::Width);
+        assert!(t.overlays(&c).is_empty());
+    }
+
+    /// The brush library is read once per document revision: a brush added to the library under a
+    /// new revision is seen, so a stroke naming it is then left alone.
+    #[test]
+    fn a_brush_added_to_the_library_is_seen_at_the_next_revision() {
+        let (mut d, id) = doc_line();
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().brush = Some("Added Later".into());
+        let (s, p) = (Selection::default(), paint());
+        let mut t = WidthTool::default();
+        let c = cx(&d, &s, &p);
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 201.0)), vec![Action::Begin("Width Point".into())]);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 201.0));
+        let mut lib = vectorcraft_brush::library(&d);
+        let mut added = lib[0].clone();
+        added.name = "Added Later".into();
+        lib.push(added);
+        vectorcraft_brush::store(&mut d, &lib);
+        let c = ToolContext { revision: (0, 1), ..cx(&d, &s, &p) };
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 201.0)), vec![Action::Status(KEEPS_SIZE.into())]);
+    }
+
+    /// Width points selected before the stroke took a brush show no handles and count as none
+    /// selected: the tool leaves Delete and Escape to the app, and removes none.
+    #[test]
+    fn delete_leaves_the_width_points_of_a_brushed_stroke() {
+        let (mut d, id) = doc_line();
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().profile =
+            Some(WidthProfile { points: vec![(0.0, 1.0, 1.0), (0.5, 2.0, 2.0), (1.0, 1.0, 1.0)] });
+        let (s, p) = (Selection::default(), paint());
+        let mut t = WidthTool::default();
+        let c = cx(&d, &s, &p);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 200.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 200.0));
+        assert!(t.claims_key(&c, ToolKey::Delete), "a width point is selected");
+        assert!(!t.overlays(&c).is_empty(), "the selected point shows its handles");
+        d.node_mut(id).unwrap().appearance.stroke_mut().unwrap().brush = Some("3 pt. Round".into());
+        let c = ToolContext { revision: (0, 1), ..cx(&d, &s, &p) };
+        assert!(t.overlays(&c).is_empty(), "no handles show on a stroke the tool no longer edits");
+        for key in [ToolKey::Delete, ToolKey::Backspace, ToolKey::Escape] {
+            assert!(!t.claims_key(&c, key), "{key:?} is the app's");
+        }
+        assert_eq!(t.key(&c, ToolKey::Delete, Mods::default()), vec![]);
+        assert!(t.selected.is_none());
+    }
+
+    /// With Shift held, a press or a double-click on a brushed stroke keeps the width points of
+    /// another stroke selected, as a Shift-press that misses every stroke does.
+    #[test]
+    fn shift_on_a_brushed_stroke_keeps_the_selected_width_points() {
+        let (mut d, _) = doc_three_points();
+        let l = d.layers[0].id;
+        let other = d.alloc_id();
+        let mut ap = Appearance::default_art();
+        let st = ap.stroke_mut().unwrap();
+        st.width = 10.0;
+        st.brush = Some("3 pt. Round".into());
+        let path = PathData::single(SubPath::polyline(&[Point::new(100.0, 400.0), Point::new(300.0, 400.0)], false));
+        d.insert(Some(l), 0, Node::path(other, path, ap)).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let shift = Mods { shift: true, ..Default::default() };
+        let mut t = WidthTool::default();
+        let c = cx(&d, &s, &p);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 200.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 200.0));
+        let kept = t.selected.clone();
+        assert!(kept.is_some(), "the plain stroke's width point is selected");
+        for kind in [PointerKind::Down, PointerKind::DoubleClick] {
+            assert_eq!(t.pointer(&c, &ev(kind, 200.0, 401.0, shift)), vec![Action::Status(KEEPS_SIZE.into())]);
+            assert_eq!(t.selected, kept, "{kind:?} with Shift keeps the selection");
+        }
+        assert_eq!(t.pointer(&c, &ev(PointerKind::DoubleClick, 200.0, 401.0, Mods::default())), vec![Action::Status(KEEPS_SIZE.into())]);
+        assert!(t.selected.is_none(), "a double-click without Shift deselects");
+    }
+
+    /// A press on a brushed stroke deselects the width points of another stroke, as a press that
+    /// misses every stroke does, so a later Delete does not edit that other stroke. The cursor over
+    /// a brushed stroke offers no edit.
+    #[test]
+    fn a_press_on_a_brushed_stroke_deselects_and_its_cursor_offers_no_edit() {
+        let (mut d, _) = doc_three_points();
+        let l = d.layers[0].id;
+        let other = d.alloc_id();
+        let mut ap = Appearance::default_art();
+        let st = ap.stroke_mut().unwrap();
+        st.width = 10.0;
+        st.brush = Some("3 pt. Round".into());
+        let path = PathData::single(SubPath::polyline(&[Point::new(100.0, 400.0), Point::new(300.0, 400.0)], false));
+        d.insert(Some(l), 0, Node::path(other, path, ap)).unwrap();
+        let (s, p) = (Selection::default(), paint());
+        let mut t = WidthTool::default();
+        let c = cx(&d, &s, &p);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 200.0));
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 200.0));
+        assert!(t.claims_key(&c, ToolKey::Delete), "the plain stroke's width point is selected");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 200.0, 401.0)), vec![Action::Status(KEEPS_SIZE.into())]);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 200.0, 401.0));
+        assert!(!t.claims_key(&c, ToolKey::Delete), "nothing is left to delete");
+        assert_eq!(t.key(&c, ToolKey::Delete, Mods::default()), vec![]);
+
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 200.0, 401.0));
+        assert_eq!(t.cursor(&c, Point::new(200.0, 401.0), Mods::default()), Cursor::Width);
+        t.pointer(&c, &PointerEvent::new(PointerKind::Move, 220.0, 201.0));
+        assert_eq!(t.cursor(&c, Point::new(220.0, 201.0), Mods::default()), Cursor::WidthAdd, "the plain stroke still offers one");
     }
 
     #[test]
@@ -651,6 +957,72 @@ mod tests {
     }
 
     #[test]
+    fn escape_deselects_the_width_points() {
+        let (d, id) = doc_three_points();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        let (none, shift) = (Mods::default(), Mods { shift: true, ..Default::default() });
+        // With nothing selected the tool leaves Escape to the app.
+        assert!(!t.claims_key(&c, ToolKey::Escape));
+        // Select the points at t = 0.25 and 0.75: Escape is the tool's and deselects both, sending
+        // nothing to the document.
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Up, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Down, 250.0, 200.0, shift));
+        t.pointer(&c, &ev(PointerKind::Up, 250.0, 200.0, shift));
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        t.pointer(&c, &ev(PointerKind::Move, 200.0, 202.0, none));
+        let thick = |t: &WidthTool| t.overlays(&c).iter().filter(|o| matches!(o, Overlay::Path { width, .. } if *width > 2.0)).count();
+        assert_eq!(thick(&t), 2, "the two selected diamonds are drawn selected");
+        assert!(t.claims_key(&c, ToolKey::Escape));
+        assert!(t.key(&c, ToolKey::Escape, none).is_empty());
+        assert!(t.selected_indices(&c, id).is_empty());
+        assert_eq!(thick(&t), 0, "no diamond is drawn selected");
+        // Delete then removes nothing, and Escape is the app's again.
+        assert!(!t.claims_key(&c, ToolKey::Delete) && !t.claims_key(&c, ToolKey::Escape));
+        assert!(t.key(&c, ToolKey::Delete, none).is_empty());
+        // During a drag the dragged point stays selected.
+        t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Drag, 210.0, 200.0, none));
+        assert!(!t.claims_key(&c, ToolKey::Escape));
+        t.key(&c, ToolKey::Escape, none);
+        assert!(t.selected.is_some());
+    }
+
+    /// A dropped press keeps the width points earlier clicks selected: a press away from the
+    /// path, dropped, deselects nothing, and a dropped drag of another point ends with the points
+    /// selected before it, and its release commits nothing.
+    #[test]
+    fn a_dropped_press_keeps_the_selected_width_points() {
+        let (d, id) = doc_three_points();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = WidthTool::default();
+        let (none, shift) = (Mods::default(), Mods { shift: true, ..Default::default() });
+        t.pointer(&c, &ev(PointerKind::Down, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Up, 150.0, 200.0, none));
+        t.pointer(&c, &ev(PointerKind::Down, 250.0, 200.0, shift));
+        t.pointer(&c, &ev(PointerKind::Up, 250.0, 200.0, shift));
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        // The engine sends the release after the drop.
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 450.0, shift)).is_empty());
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 450.0, shift)).is_empty());
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        assert!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 450.0, none)).is_empty());
+        assert!(t.drop_press(&c).is_empty());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 200.0, 450.0, none)).is_empty());
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+        assert_eq!(t.pointer(&c, &ev(PointerKind::Down, 200.0, 200.0, none)), vec![Action::Begin("Width Point".into())]);
+        t.pointer(&c, &ev(PointerKind::Drag, 220.0, 200.0, none));
+        assert!(t.drop_press(&c).is_empty());
+        assert!(!t.busy());
+        assert!(t.pointer(&c, &ev(PointerKind::Up, 220.0, 200.0, none)).is_empty(), "the release commits nothing");
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3]);
+    }
+
+    #[test]
     fn width_points_show_on_every_subpath() {
         let (d, c, _) = doc_compound();
         let (s, p) = (Selection { objects: vec![c], ..Default::default() }, paint());
@@ -711,5 +1083,90 @@ mod tests {
             assert_eq!(p.get("adjustAdjoining").and_then(serde_json::Value::as_bool).unwrap_or(false), shift);
             assert!(t.pointer(&c, &ev(PointerKind::DoubleClick, 120.0, 250.0, mods)).is_empty(), "not on a stroked path");
         }
+    }
+
+    #[test]
+    fn double_click_on_one_of_several_selected_points_edits_them_all() {
+        let (d, id) = doc_three_points();
+        let (s, p) = (Selection::default(), paint());
+        let c = cx(&d, &s, &p);
+        let (none, shift) = (Mods::default(), Mods { shift: true, ..Default::default() });
+        let click = |t: &mut WidthTool, x: f64, mods: Mods| {
+            t.pointer(&c, &ev(PointerKind::Down, x, 200.0, mods));
+            t.pointer(&c, &ev(PointerKind::Up, x, 200.0, mods));
+        };
+        // The events a double-click sends: two clicks, then the double-click.
+        let double_click = |t: &mut WidthTool, x: f64, mods: Mods| {
+            click(t, x, mods);
+            click(t, x, mods);
+            match t.pointer(&c, &ev(PointerKind::DoubleClick, x, 200.0, mods)).as_slice() {
+                [Action::Dialog(kind, v)] if kind == "widthPoint" => v.clone(),
+                acts => panic!("expected Width Point Edit: {acts:?}"),
+            }
+        };
+        for mods in [none, shift] {
+            let mut t = WidthTool::default();
+            click(&mut t, 150.0, none);
+            click(&mut t, 250.0, shift);
+            let v = double_click(&mut t, 250.0, mods);
+            assert_eq!((&v["id"], &v["indices"]), (&json!(id.0), &json!([1, 3])), "{mods:?}");
+            assert!(v.get("index").is_none());
+            assert_eq!(v["adjustAdjoining"], json!(mods.shift));
+            assert_eq!(t.selected_indices(&c, id), vec![1, 3], "the selection is kept");
+            // A point outside the selection edits itself alone, and is selected alone.
+            let v = double_click(&mut t, 200.0, none);
+            assert_eq!(v["index"], json!(2));
+            assert!(v.get("indices").is_none());
+            assert_eq!(t.selected_indices(&c, id), vec![2]);
+        }
+        // With Alt held, a double-click without a drag edits every selected point too.
+        let alt = Mods { alt: true, ..Default::default() };
+        let mut t = WidthTool::default();
+        click(&mut t, 150.0, none);
+        click(&mut t, 250.0, shift);
+        let v = double_click(&mut t, 250.0, alt);
+        assert_eq!((&v["indices"], v.get("index")), (&json!([1, 3]), None));
+        assert_eq!(t.selected_indices(&c, id), vec![1, 3], "the selection is kept");
+        // An Alt-drag still copies the one point under the pointer, and selects the copy alone.
+        t.pointer(&c, &ev(PointerKind::Down, 250.0, 200.0, alt));
+        let acts = t.pointer(&c, &ev(PointerKind::Drag, 270.0, 200.0, alt));
+        let (cmd, v) = preview(&acts);
+        assert_eq!((cmd, &v["index"]), ("stroke.widthPoint.copy", &json!(3)));
+        t.pointer(&c, &ev(PointerKind::Up, 270.0, 200.0, alt));
+        assert_eq!(t.selected.as_ref().map(|(_, ts)| ts.len()), Some(1));
+        // A discontinuous point among them keeps both halves, and double-clicking it keeps the others.
+        let (mut d2, _) = doc_line();
+        let points = vec![(0.0, 1.0, 1.0), (0.25, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5, 2.0, 2.0), (0.75, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        d2.node_mut(id).unwrap().appearance.stroke_mut().unwrap().profile = Some(WidthProfile { points });
+        let c2 = cx(&d2, &s, &p);
+        let mut t = WidthTool::default();
+        for (x, mods) in [(150.0, none), (200.0, shift), (200.0, none), (200.0, none)] {
+            t.pointer(&c2, &ev(PointerKind::Down, x, 200.0, mods));
+            t.pointer(&c2, &ev(PointerKind::Up, x, 200.0, mods));
+        }
+        let acts = t.pointer(&c2, &ev(PointerKind::DoubleClick, 200.0, 200.0, none));
+        let [Action::Dialog(_, v)] = acts.as_slice() else { panic!("expected Width Point Edit: {acts:?}") };
+        assert_eq!(v["indices"], json!([1, 2, 3]));
+        // Three points at nearly one place are selected together and all go to the dialog.
+        let (mut d3, _) = doc_line();
+        let points = vec![(0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (0.5000005, 2.0, 2.0), (0.5000009, 3.0, 3.0), (1.0, 1.0, 1.0)];
+        d3.node_mut(id).unwrap().appearance.stroke_mut().unwrap().profile = Some(WidthProfile { points });
+        let c3 = cx(&d3, &s, &p);
+        let mut t = WidthTool::default();
+        for _ in 0..2 {
+            t.pointer(&c3, &ev(PointerKind::Down, 200.0, 200.0, none));
+            t.pointer(&c3, &ev(PointerKind::Up, 200.0, 200.0, none));
+        }
+        let acts = t.pointer(&c3, &ev(PointerKind::DoubleClick, 200.0, 200.0, none));
+        let [Action::Dialog(_, v)] = acts.as_slice() else { panic!("expected Width Point Edit: {acts:?}") };
+        assert_eq!(v["indices"], json!([1, 2, 3]));
+        // A click on one of the selected points, then a double-click on it later, edits that point.
+        let mut t = WidthTool::default();
+        click(&mut t, 150.0, none);
+        click(&mut t, 250.0, shift);
+        click(&mut t, 250.0, none);
+        click(&mut t, 200.0, none);
+        let v = double_click(&mut t, 250.0, none);
+        assert_eq!(v["index"], json!(3));
     }
 }

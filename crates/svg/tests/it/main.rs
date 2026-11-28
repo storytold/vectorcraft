@@ -2,12 +2,17 @@
 // Unwrapping and panicking on failure is fine here, unlike in shipped code (AGENTS.md › Robustness).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod basic_shapes;
 mod blend_export;
+mod clip_text;
+mod colorized_images;
 mod colour_glyphs;
+mod conic;
 mod container_export;
 mod css_rules;
 mod dash_align;
 mod data_attributes;
+mod diamond;
 mod effects_export;
 mod encoding_profile_fonts;
 mod focal;
@@ -15,17 +20,20 @@ mod font_weights;
 mod foreign_attributes;
 mod gradients;
 mod ids;
+mod image_orientation;
 mod import_details;
 mod import_live;
 mod import_text;
 mod import_units;
 mod interactivity;
 mod mask_options;
+mod mesh_export;
 mod non_scaling_stroke;
 mod options;
 mod prop_svg;
 mod raster_paints;
 mod roundtrip;
+mod spread;
 mod stroke_export;
 mod svg_glyphs;
 mod symbols_layers;
@@ -33,3 +41,4 @@ mod text_layout;
 mod text_paint_order;
 mod text_stroke;
 mod title_control_chars;
+mod warp_pieces;

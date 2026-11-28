@@ -1,15 +1,17 @@
 //! Raster (painted) effects: descriptions for the renderer.
 
-use serde_json::Value;
+use std::borrow::Cow;
+
+use serde_json::{Map, Value, json};
 use vectorcraft_doc::color::{BlendMode, Color};
 use vectorcraft_doc::rastersettings::MAX_ADD_AROUND;
-use vectorcraft_doc::{Effect, RasterColorModel, RasterEffectsSettings};
+use vectorcraft_doc::{AppearanceItem, Effect, Node, RasterColorModel, RasterEffectsSettings};
 
-use vectorcraft_geom::{Point, Rect};
+use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
 use crate::merged_params;
 use crate::pixel::{self, PixelFx, PixelSpace};
-use crate::util::*;
+use crate::util::{flag, num, text};
 
 /// Effect › Rasterize's id.
 pub const RASTERIZE: &str = "rasterize";
@@ -48,9 +50,11 @@ pub enum RasterFx {
     Feather {
         radius: f64,
     },
-    /// Blur the whole object (σ = radius / 2).
+    /// Blur the whole object (σ = radius / 2): its colours mixed as they are, or in linear light
+    /// (`linear`, as an SVG filter asks with `color-interpolation-filters="linearRGB"`).
     GaussianBlur {
         radius: f64,
+        linear: bool,
     },
     /// A Photoshop-style filter over the object's pixels (Radial Blur, Unsharp Mask…).
     Pixel(PixelFx),
@@ -77,7 +81,7 @@ impl RasterFx {
             RasterFx::DropShadow { dx, dy, blur, .. } => dx.abs().max(dy.abs()) + 1.5 * blur,
             RasterFx::OuterGlow { blur, .. } => 1.5 * blur,
             RasterFx::InnerGlow { .. } | RasterFx::Feather { .. } => 0.0,
-            RasterFx::GaussianBlur { radius } => 1.5 * radius,
+            RasterFx::GaussianBlur { radius, .. } => 1.5 * radius,
             RasterFx::Pixel(p) => p.outset(bounds),
             RasterFx::Rasterize(r) => r.outset(),
         }
@@ -361,12 +365,17 @@ impl Rasterize {
 
 /// Parse a blend mode name (`"multiply"`, `"Screen"`, `"color-burn"`…).
 pub fn blend_mode(s: &str) -> BlendMode {
+    named_blend_mode(s).unwrap_or(BlendMode::Normal)
+}
+
+/// The blend mode `s` names as [`blend_mode`] reads it; `None` when it names none.
+pub(crate) fn named_blend_mode(s: &str) -> Option<BlendMode> {
     let key: String = s.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
-    BlendMode::ALL.iter().copied().find(|m| format!("{m:?}").to_ascii_lowercase() == key).unwrap_or(BlendMode::Normal)
+    BlendMode::ALL.iter().copied().find(|m| format!("{m:?}").to_ascii_lowercase() == key)
 }
 
 /// An effect's `color` parameter (`"#rrggbb"`, `[r, g, b]` 0..1 or a colour object).
-pub(crate) fn color_param(p: &Value, default: Color) -> Color {
+pub fn color_param(p: &Value, default: Color) -> Color {
     match p.get("color") {
         Some(Value::String(s)) => Color::from_hex(s).unwrap_or(default),
         Some(Value::Array(a)) if a.len() >= 3 => {
@@ -382,9 +391,10 @@ fn opacity(p: &Value) -> f32 {
     (num(p, "opacity", 75.0) / 100.0).clamp(0.0, 1.0) as f32
 }
 
-/// The visible raster effects of `effects`, in stack order.
+/// The visible raster effects of `effects`, in stack order, each following the Transform effects
+/// listed after it ([`followed`]).
 pub fn raster_effects(effects: &[Effect]) -> Vec<RasterFx> {
-    effects
+    followed(effects)
         .iter()
         .filter(|e| e.visible)
         .filter_map(|e| {
@@ -416,12 +426,347 @@ pub fn raster_effects(effects: &[Effect]) -> Vec<RasterFx> {
                     center: text(&p, "source", "edge").eq_ignore_ascii_case("center"),
                 },
                 "stylize.feather" => RasterFx::Feather { radius: num(&p, "radius", 5.0).clamp(0.0, 1000.0) },
-                "blur.gaussian" => RasterFx::GaussianBlur { radius: num(&p, "radius", 5.0).clamp(0.0, 1000.0) },
+                "blur.gaussian" => RasterFx::GaussianBlur { radius: num(&p, "radius", 5.0).clamp(0.0, 1000.0), linear: flag(&p, "linear", false) },
                 RASTERIZE => RasterFx::Rasterize(Rasterize::parse(&p)),
                 id => RasterFx::Pixel(pixel::parse(id, &p)?),
             })
         })
         .collect()
+}
+
+/// `effects` with each raster effect following the visible Transform effects listed after it
+/// ([`follow_transform`]): effects apply in the order they are listed, so a Transform effect
+/// transforms what the raster effects before it paint, whatever its Scale Strokes & Effects says.
+/// A hidden raster effect follows too, so it draws the same when it is shown after the Transform
+/// effect has been expanded. A raster effect that a Transform effect making copies or moving at
+/// random follows stays as it is, as does one after the last Transform effect. Borrowed when
+/// nothing changes.
+pub(crate) fn followed(effects: &[Effect]) -> Cow<'_, [Effect]> {
+    if !effects.iter().any(|e| e.visible && e.id == "distort.transform") {
+        return Cow::Borrowed(effects);
+    }
+    let mut out: Option<Vec<Effect>> = None;
+    // The linear part of the Transform effects after the effect at hand, the last one outermost;
+    // `None` once one of them makes copies or moves at random.
+    let mut after = Some(Affine::IDENTITY);
+    for (i, e) in effects.iter().enumerate().rev() {
+        if e.id == "distort.transform" {
+            after = after.and_then(|a| transform_step(e).map(|s| a * s));
+            continue;
+        }
+        let Some(a) = after.filter(|a| *a != Affine::IDENTITY && follows(&e.id)) else { continue };
+        let list = out.get_or_insert_with(|| effects.to_vec());
+        if let Some(e) = list.get_mut(i) {
+            follow_transform(e, a, Affine::IDENTITY);
+        }
+    }
+    out.map_or(Cow::Borrowed(effects), Cow::Owned)
+}
+
+/// `effects` without their geometry effects, each raster effect following the Transform effects
+/// it loses ([`followed`]): what an object, or a fill or stroke, keeps once its geometry effects
+/// are applied to its art.
+pub fn without_geometry(effects: &[Effect]) -> Vec<Effect> {
+    followed(effects).iter().filter(|e| !crate::is_geometry(&e.id)).cloned().collect()
+}
+
+/// Make the raster effects of `effects`, all listed before Transform effect `t`, follow `t` as
+/// [`followed`] makes them follow it, for art that applies its effects one at a time. `false`
+/// when `t` leaves them as they are.
+pub(crate) fn follow_one(effects: &mut [Effect], t: &Effect) -> bool {
+    let Some(a) = transform_step(t).filter(|a| *a != Affine::IDENTITY) else { return false };
+    let mut changed = false;
+    for e in effects.iter_mut().filter(|e| follows(&e.id)) {
+        follow_transform(e, a, Affine::IDENTITY);
+        changed = true;
+    }
+    changed
+}
+
+/// The linear part of the visible Transform effects of `owner`, an object's or a container's own
+/// effects, in order: what they do to the raster effects of everything the object paints (its
+/// fills and strokes, and a container's members and theirs), which those effects transform with
+/// the rest of the art. `None` when they leave them as they are: no Transform effect moves the
+/// art, or one of them makes copies or moves at random ([`followed`]).
+pub(crate) fn contents_step(owner: &[Effect]) -> Option<Affine> {
+    let a = owner.iter().filter(|e| e.visible && e.id == "distort.transform").try_fold(Affine::IDENTITY, |a, e| transform_step(e).map(|s| s * a))?;
+    (a != Affine::IDENTITY).then_some(a)
+}
+
+/// Make the raster effects of `effects`, the own effects of something inside an object (a fill's
+/// or stroke's, or a member's), follow `a`, the linear part of the object's Transform effects
+/// ([`contents_step`]), which apply after all of them. `outer` is what the Transform effects
+/// between them and `a` do to them (those of the fill's or stroke's object and of the groups that
+/// hold it inside the object). A raster effect that the Transform effects after it in `effects`
+/// move ([`followed`]) is set so that it draws as those effects, then `outer` and then `a`
+/// transform it, whichever of them is applied first. One that a Transform effect after it in
+/// `effects` holds back keeps its value through those effects, so it is set to draw as `outer` and
+/// then `a` transform it. `false` when nothing changed.
+pub(crate) fn follow_contents(effects: &mut [Effect], a: Affine, outer: Affine) -> bool {
+    if a == Affine::IDENTITY || !effects.iter().any(|e| follows(&e.id)) {
+        return false;
+    }
+    let mut changed = false;
+    // The linear part of the Transform effects after the effect at hand, as `followed` reads it;
+    // `None` once one of them holds the effect back, which they then leave as it is.
+    let mut after = Some(Affine::IDENTITY);
+    for e in effects.iter_mut().rev() {
+        if e.id == "distort.transform" {
+            after = after.and_then(|b| transform_step(e).map(|s| b * s));
+            continue;
+        }
+        if !follows(&e.id) {
+            continue;
+        }
+        let b = outer * after.unwrap_or(Affine::IDENTITY);
+        // The effect is still to be mapped by `b` when it is drawn, so it takes b⁻¹·a·b now:
+        // drawn, it is a·b of what it was. A `b` that flattens the art takes `a` alone.
+        let det = b.determinant();
+        let c = if b == Affine::IDENTITY || !(det.is_finite() && det.abs() > 1e-12) { a } else { b.inverse() * a * b };
+        if c.is_finite() {
+            follow_transform(e, c, b);
+            changed = true;
+        }
+    }
+    changed
+}
+
+/// Make the raster effects of the fills and strokes of `n` follow the Transform effects of its own
+/// effect list ([`contents_step`]), as they do while the object is drawn with them: for art that
+/// applies those effects and keeps the fills and strokes. `false` when nothing changed.
+pub fn follow_items(n: &mut Node) -> bool {
+    let Some(a) = contents_step(&n.appearance.effects) else { return false };
+    follow_items_by(n, a)
+}
+
+/// [`follow_items`] for `n` holding the fills and strokes of an object whose own effects are
+/// `owner` (the area of a compound shape, which carries none of the shape's effects).
+pub(crate) fn follow_items_of(n: &mut Node, owner: &[Effect]) -> bool {
+    let Some(a) = contents_step(owner) else { return false };
+    follow_items_by(n, a)
+}
+
+/// Make the raster effects of the fills and strokes of `n` follow `a` ([`follow_contents`]).
+fn follow_items_by(n: &mut Node, a: Affine) -> bool {
+    if !n.appearance.items.iter().any(|i| i.effects().iter().any(|e| follows(&e.id))) {
+        return false;
+    }
+    let mut changed = false;
+    for item in &mut n.appearance.items {
+        changed |= follow_contents(item.effects_mut(), a, Affine::IDENTITY);
+    }
+    changed
+}
+
+/// Make the raster effects of `items`, the fills and strokes of an object whose own effects are
+/// `owner`, follow the Transform effects of `owner` ([`follow_contents`]): for art that applies
+/// those effects to the object's path and draws each fill and stroke on it as a node of its own.
+pub(crate) fn follow_paints(items: &mut [AppearanceItem], owner: &[Effect]) {
+    let Some(a) = contents_step(owner) else { return };
+    for item in items {
+        follow_contents(item.effects_mut(), a, Affine::IDENTITY);
+    }
+}
+
+/// `effects`, those of a fill or stroke of an object whose own effects are `owner`, with each
+/// raster effect following the Transform effects of `owner` as well ([`follow_contents`]): the
+/// list to draw that fill's or stroke's raster effects from ([`raster_effects`]). Borrowed when
+/// nothing changes.
+pub fn item_effects_in<'a>(owner: &[Effect], effects: &'a [Effect]) -> Cow<'a, [Effect]> {
+    let Some(a) = contents_step(owner) else { return Cow::Borrowed(effects) };
+    if !effects.iter().any(|e| follows(&e.id)) {
+        return Cow::Borrowed(effects);
+    }
+    let mut out = effects.to_vec();
+    if follow_contents(&mut out, a, Affine::IDENTITY) { Cow::Owned(out) } else { Cow::Borrowed(effects) }
+}
+
+/// How many of the effects of `effects` that [`without_geometry`] keeps no longer follow the
+/// Transform effects listed after `effects` ([`followed`]): those before the last visible Transform
+/// effect among them that makes copies or moves at random.
+pub(crate) fn held_back(effects: &[Effect]) -> usize {
+    let Some(last) = effects.iter().rposition(|e| transform_step(e).is_none()) else { return 0 };
+    effects.get(..last).unwrap_or_default().iter().filter(|e| !crate::is_geometry(&e.id)).count()
+}
+
+/// Does `e` stop the raster effects listed before it from following the Transform effects after
+/// it ([`followed`]): is it a visible Transform effect that makes copies or moves at random?
+pub(crate) fn holds_back(e: &Effect) -> bool {
+    transform_step(e).is_none()
+}
+
+/// What `e` does to the raster effects listed before it ([`followed`]): the linear part of its map
+/// when it is a visible Transform effect that moves the art once, the identity when it is no
+/// Transform effect, is hidden or has Transform Objects off (the art stays where it is), and `None`
+/// when it makes copies or moves at random.
+fn transform_step(e: &Effect) -> Option<Affine> {
+    if e.id != "distort.transform" || !e.visible {
+        return Some(Affine::IDENTITY);
+    }
+    let p = merged_params(&e.id, &e.params);
+    if !flag(&p, "objects", true) {
+        return Some(Affine::IDENTITY);
+    }
+    let (map, copies) = crate::distort::transform_map(Rect::ZERO, &p, 0);
+    (copies == 0 && !flag(&p, "random", false)).then(|| map.with_translation(Vec2::ZERO))
+}
+
+/// The Transform effects of `effects` that move the image of its last visible Rasterize effect
+/// instead of the art it is made from: the indices of the visible Transform effects listed after
+/// it that move or copy the art, when from the first visible Transform effect after it on every
+/// visible effect is a Transform effect that does not move at random, and at most one of them makes
+/// copies. Effects apply in the order they are listed, so the image is made of the art before those
+/// Transform effects and moves with them, its pixel grid and room around the art included; each copy
+/// carries the same image ([`stage_maps`]). `None` when there is no such Transform effect, or the
+/// effects after the Rasterize effect hold anything else from there on.
+pub fn rasterize_stage(effects: &[Effect]) -> Option<Vec<usize>> {
+    let r = effects.iter().rposition(|e| e.visible && e.id == RASTERIZE)?;
+    let first = r + 1 + effects.get(r + 1..)?.iter().position(|e| e.visible && e.id == "distort.transform")?;
+    let mut at = vec![];
+    let mut copying = false;
+    for (i, e) in effects.iter().enumerate().skip(first).filter(|(_, e)| e.visible) {
+        if e.id != "distort.transform" {
+            return None;
+        }
+        let p = merged_params(&e.id, &e.params);
+        if !flag(&p, "objects", true) {
+            continue;
+        }
+        if flag(&p, "random", false) {
+            return None;
+        }
+        let (map, copies) = crate::distort::transform_map(Rect::ZERO, &p, 0);
+        if copies > 0 {
+            if copying {
+                return None;
+            }
+            copying = true;
+        }
+        if copies > 0 || map != Affine::IDENTITY {
+            at.push(i);
+        }
+    }
+    (!at.is_empty()).then_some(at)
+}
+
+/// `effects` with the Transform effects at `at` hidden ([`rasterize_stage`]): what the image of
+/// the Rasterize effect before them is made from.
+pub fn staged_effects(effects: &[Effect], at: &[usize]) -> Vec<Effect> {
+    let mut out = effects.to_vec();
+    for &i in at {
+        if let Some(e) = out.get_mut(i) {
+            e.visible = false;
+        }
+    }
+    out
+}
+
+/// The maps the Transform effects at `at` of `effects` ([`rasterize_stage`]) place the Rasterize
+/// image by, for `staged`, the geometry the effects before them make: each one's map about its
+/// reference point on the bounds of the geometry it takes, as the geometry pass applies it, the
+/// last one outermost. A Transform effect with copies places the image once more for each copy
+/// the geometry pass makes, copy `k` through its map `k` times. The maps come in the order the
+/// images paint, the lowest first: the last copy lowest and the original on top, as copied objects
+/// stack. `None` when `staged` is empty or a map is not a number.
+pub fn stage_maps(effects: &[Effect], at: &[usize], staged: &vectorcraft_geom::PathData) -> Option<Vec<Affine>> {
+    let mut cur = staged.clone();
+    let mut b = staged.bounds()?;
+    // The original's map first, then each copy's.
+    let mut maps = vec![Affine::IDENTITY];
+    for &i in at {
+        let e = effects.get(i)?;
+        let p = merged_params(&e.id, &e.params);
+        let (m, copies) = crate::distort::transform_map(b, &p, 0);
+        if copies == 0 {
+            maps.iter_mut().for_each(|x| *x = m * *x);
+            cur = cur.transformed(m);
+        } else {
+            // As many copies as the geometry pass makes: it stops early past its limits.
+            let next = crate::distort::transform(&cur, b, &p, 0);
+            let made = (next.anchor_count() / cur.anchor_count().max(1)).saturating_sub(1);
+            let placed = maps.clone();
+            let mut xf = Affine::IDENTITY;
+            for _ in 0..made {
+                xf = m * xf;
+                maps.extend(placed.iter().map(|x| xf * *x));
+            }
+            cur = next;
+        }
+        b = cur.bounds().unwrap_or(b);
+    }
+    maps.reverse();
+    maps.iter().all(|m| m.is_finite()).then_some(maps)
+}
+
+/// Does raster effect `id` follow the Transform effects listed after it ([`followed`])? An SVG
+/// filter does not, and neither does Rasterize, whose image keeps its own pixel grid and room
+/// around the art: the image moves with those Transform effects instead ([`rasterize_stage`]).
+pub(crate) fn follows(id: &str) -> bool {
+    crate::is_raster(id) && id != crate::SVG_FILTER && id != RASTERIZE
+}
+
+thread_local! {
+    /// The linear part of the Transform effects of the groups and layers whose members are being
+    /// evaluated ([`LaterGroups`]), which those groups apply to the members' raster effects once
+    /// the members are evaluated: the members' light and stroke directions are rounded for them as
+    /// well ([`follow_transform`]).
+    static LATER_GROUPS: std::cell::Cell<Affine> = const { std::cell::Cell::new(Affine::IDENTITY) };
+}
+
+/// The Transform effects of a group or layer whose members are being evaluated before the group's
+/// own effects are applied to them, added to [`LATER_GROUPS`] until it is dropped.
+pub(crate) struct LaterGroups(Affine);
+
+impl LaterGroups {
+    /// Add the Transform effects of `owner`, a group's or layer's own effects ([`contents_step`]),
+    /// to those the members will still go through.
+    pub(crate) fn enter(owner: &[Effect]) -> Self {
+        let was = LATER_GROUPS.with(|l| l.get());
+        if let Some(step) = contents_step(owner) {
+            LATER_GROUPS.with(|l| l.set(was * step));
+        }
+        LaterGroups(was)
+    }
+}
+
+impl Drop for LaterGroups {
+    fn drop(&mut self) {
+        LATER_GROUPS.with(|l| l.set(self.0));
+    }
+}
+
+/// Make raster effect `e` follow `a`, the linear part of a Transform effect listed after it, as
+/// that effect transforms what `e` paints: its distances and raster sizes scale by `a`'s mean
+/// scale ([`crate::scale_effect`]), a Drop Shadow's offset turns, reflects and scales with `a`,
+/// and a pixel filter's light direction, stroke direction or screen angles turn and reflect with
+/// it ([`pixel::turned_directions`]; `later` is the map `e` still goes through when it is drawn,
+/// before the Transform effects of the groups around it in [`LATER_GROUPS`]). Effects that
+/// [`follows`] leaves out stay as they are.
+fn follow_transform(e: &mut Effect, a: Affine, later: Affine) {
+    if !follows(&e.id) {
+        return;
+    }
+    let offset = (e.id == "stylize.dropShadow").then(|| {
+        let p = merged_params(&e.id, &e.params);
+        a * Point::new(num(&p, "x", 7.0), num(&p, "y", 7.0))
+    });
+    let turned = pixel::turned_directions(&e.id, &e.params, a, LATER_GROUPS.with(|l| l.get()) * later);
+    if let Some(k) = vectorcraft_doc::Scaling::factor(a) {
+        crate::scale_effect(e, k);
+    }
+    let mut set = |key: &str, value: Value| {
+        if !e.params.is_object() {
+            e.params = Value::Object(Map::new());
+        }
+        e.params[key] = value;
+    };
+    if let Some(o) = offset.filter(|o| o.x.is_finite() && o.y.is_finite()) {
+        set("x", json!(o.x));
+        set("y", json!(o.y));
+    }
+    for (key, value) in turned {
+        set(key, value);
+    }
 }
 
 /// How far the visible raster effects of `effects` paint beyond `bounds`, the (effected)

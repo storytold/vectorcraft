@@ -97,7 +97,23 @@ fn pdf_info_lists_pages_boxes_and_a_thumbnail() {
     assert_eq!(p2["boxes"]["trim"], json!([15.0, 15.0, 185.0, 385.0]));
     assert_eq!(p2["boxes"]["media"], json!([0.0, 0.0, 200.0, 400.0]));
     let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
-    let img = image::load_from_memory(&png).unwrap();
+    let img = craft_image_codecs::decode(&png)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap();
     assert_eq!((img.width(), img.height()), (50, 100), "the art box at 100 px on its longest side");
     assert!(s.execute("document.pdfInfo", &json!({"dataBase64": b64(&bytes), "thumbnail": 4})).is_err());
     // Locked: no pages until the password is given.
@@ -145,6 +161,96 @@ fn load_options_read_pages_crop_and_password() {
     let o = LoadOptions::from_params("x", &json!({"pages": "1-2", "page": 3, "password": ""})).unwrap();
     assert_eq!((o.pages.as_deref(), o.password), (Some("1-2"), None));
     assert_eq!(LoadOptions::from_params("x", &Value::Null).unwrap(), LoadOptions::default());
+}
+
+/// `cropTo` (and `crop`), `password`, `colorMode` and `textAs` given as anything but a string are an
+/// error naming the param: `document.open` opens nothing and `file.place` places nothing and records
+/// no undo step. Null is the same as leaving the param out.
+#[test]
+fn pdf_options_of_the_wrong_type_are_refused() {
+    let bytes = three_pages();
+    let wrong = [
+        ("cropTo", json!(5)),
+        ("crop", json!(true)),
+        ("password", json!(123)),
+        ("colorMode", json!(5)),
+        ("textAs", json!(true)),
+        ("textAs", json!(["outlines"])),
+    ];
+    let one = |key: &str, v: &Value| {
+        let mut p = json!({});
+        p[key] = v.clone();
+        p
+    };
+    let mut s = Session::new();
+    for (key, v) in &wrong {
+        let e = open(&mut s, &bytes, one(key, v)).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{key}` must be a string")), "{key}: {e}");
+        assert!(s.active().is_none(), "{key}: nothing opened");
+    }
+    // A wrong `cropTo` is refused even when `crop` is a box, and a wrong `crop` when `cropTo` is.
+    let e = open(&mut s, &bytes, json!({"cropTo": 2, "crop": "art"})).unwrap_err().to_string();
+    assert!(e.contains("`cropTo` must be a string"), "{e}");
+    let e = open(&mut s, &bytes, json!({"cropTo": "art", "crop": 2})).unwrap_err().to_string();
+    assert!(e.contains("`crop` must be a string"), "{e}");
+    assert!(s.active().is_none(), "nothing opened");
+    s.execute("file.new", &json!({"width": 400, "height": 400})).unwrap();
+    let undo = s.doc().unwrap().history.undo.len();
+    let nodes = s.doc().unwrap().doc.node_count();
+    for (key, v) in &wrong {
+        let mut p = json!({"name": "pages.pdf", "dataBase64": b64(&bytes)});
+        p[*key] = v.clone();
+        let e = s.execute("file.place", &p).unwrap_err().to_string();
+        assert!(e.contains(&format!("`{key}` must be a string")), "{key}: {e}");
+        assert_eq!((s.doc().unwrap().history.undo.len(), s.doc().unwrap().doc.node_count()), (undo, nodes), "{key}: nothing placed");
+    }
+    // Null is left out; valid strings read as before.
+    let nulls = json!({"cropTo": null, "crop": null, "password": null, "colorMode": null, "textAs": null});
+    assert_eq!(LoadOptions::from_params("x", &nulls).unwrap(), LoadOptions::default());
+    let o = LoadOptions::from_params("x", &json!({"cropTo": null, "crop": "Bleed", "colorMode": "CMYK", "textAs": "outlines"})).unwrap();
+    assert_eq!(
+        (o.crop, o.color_mode, o.text_as),
+        (vectorcraft_pdf::CropTo::Bleed, Some(vectorcraft_doc::ColorMode::Cmyk), vectorcraft_pdf::TextAs::Outlines)
+    );
+}
+
+/// `document.pdfInfo`'s `thumbnailSize` given as anything but a number is an error, with or without
+/// a `thumbnail`; null is 160 px.
+#[test]
+fn pdf_info_refuses_a_thumbnail_size_that_is_not_a_number() {
+    let bytes = three_pages();
+    let mut s = Session::new();
+    for v in [json!("100"), json!(true)] {
+        for p in [json!({"dataBase64": b64(&bytes), "thumbnail": 1, "thumbnailSize": v}), json!({"dataBase64": b64(&bytes), "thumbnailSize": v})] {
+            let e = s.execute("document.pdfInfo", &p).unwrap_err().to_string();
+            assert!(e.contains("`thumbnailSize` must be a number"), "{v}: {e}");
+        }
+    }
+    let e = s.execute("document.pdfInfo", &json!({"dataBase64": b64(&bytes), "colorMode": 1})).unwrap_err().to_string();
+    assert!(e.contains("`colorMode` must be a string"), "{e}");
+    let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(&bytes), "thumbnail": 1, "thumbnailSize": null})).unwrap();
+    let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap()
+            .width(),
+        160
+    );
 }
 
 #[test]
@@ -214,7 +320,23 @@ fn pdf_info_reads_postscript_as_one_page() {
     ] {
         let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": 1, "thumbnailSize": 100})).unwrap();
         let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
-        let img = image::load_from_memory(&png).unwrap();
+        let img = craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap();
         assert_eq!(img.width().max(img.height()), 100, "{name}");
         let mut v = v;
         v["thumbnail"] = json!("png");
@@ -244,7 +366,23 @@ fn pdf_info_refuses_a_thumbnail_that_is_not_a_page_number() {
         }
         let v = s.execute("document.pdfInfo", &json!({"dataBase64": b64(bytes), "thumbnail": 1, "thumbnailSize": 64})).unwrap();
         let png = vectorcraft_format::base64_decode(v["thumbnail"].as_str().unwrap()).unwrap();
-        let img = image::load_from_memory(&png).unwrap();
+        let img = craft_image_codecs::decode(&png)
+            .map(|__cimg| {
+                let (__w, __h) = __cimg.dimensions();
+                match (__cimg.layout(), __cimg.sample_type()) {
+                    (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                        image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                    }
+                    _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                }
+            })
+            .unwrap();
         assert_eq!(img.width().max(img.height()), 64, "{pages}");
     }
 }
@@ -271,4 +409,17 @@ fn a_placeholder_only_pdf_part_is_detected() {
     let two = pdf(&[text_page(true, ""), text_page(true, "0 g 0 0 10 10 re f")], None);
     assert!(open(&mut s, &two, json!({"pages": "1"})).is_err());
     open(&mut s, &two, json!({})).unwrap();
+}
+
+/// `linkPages` takes a PDF up to the largest file placed, and nothing else.
+#[test]
+fn pages_can_link_a_pdf_up_to_the_largest_file_placed() {
+    let small = three_pages();
+    assert!(pages_can_link("pages.pdf", &small));
+    assert!(!pages_can_link("pages.svg", b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"));
+    let mut big = vec![0u8; crate::cmd::place::document::MAX_FILE + 1];
+    big[..small.len()].copy_from_slice(&small);
+    assert!(!pages_can_link("pages.pdf", &big), "over the limit");
+    big.pop();
+    assert!(pages_can_link("pages.pdf", &big), "at the limit");
 }

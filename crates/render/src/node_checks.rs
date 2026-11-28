@@ -1,0 +1,168 @@
+use super::{Affine, AppearanceItem, Arc, Document, Node, NodeKind, Rect, StrokeLayer, brush_fx, effects};
+
+/// Most pixels from the origin that a shape handed to the rasterizer may reach, or a stroke be
+/// wide. A document's art stays within 4 million points, 2.6 billion pixels at the closest zoom.
+/// Geometry far beyond that (from a malformed file) makes vello_cpu panic on a worker thread or ask
+/// for more memory than there is, either of which ends the app: it is left undrawn.
+const MAX_DEVICE: f64 = 1e10;
+
+/// Can a shape of `n` whose control points have the box `control` (`BezPath::control_box`) be
+/// drawn through `view`: its control points (finite) within [`MAX_DEVICE`] pixels, and its visible
+/// strokes no wider?
+pub(crate) fn drawable(control: Rect, view: Affine, n: &Node) -> bool {
+    let b = view.transform_rect_bbox(control);
+    let scale = view.determinant().abs().sqrt();
+    let widest = n.appearance.items.iter().filter_map(|i| if let AppearanceItem::Stroke(st) = i { Some(st.width) } else { None }).fold(0.0, f64::max);
+    [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_DEVICE) && (widest * scale).is_finite() && widest * scale <= MAX_DEVICE
+}
+
+/// Exactly one visible painted item, a fill with its own Normal blend and full opacity (one
+/// paint operation, so an object blend mode can be applied per draw).
+pub(crate) fn single_plain_fill(n: &Node) -> bool {
+    let mut painted = n.appearance.items.iter().filter(|i| match i {
+        AppearanceItem::Fill(f) => f.visible && !f.paint.is_none(),
+        AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0,
+    });
+    matches!((painted.next(), painted.next()), (Some(AppearanceItem::Fill(f)), None) if f.blend == vectorcraft_color::BlendMode::Normal && f.opacity >= 1.0 && !matches!(f.paint, vectorcraft_color::Paint::Pattern { .. }))
+}
+
+/// A knockout element whose opaque paint covers exactly its knockout shape. The caller limits
+/// source-over substitution to binary coverage, retaining analytical AA's intermediate rounding.
+pub(crate) fn opaque_knockout_fill(n: &Node) -> bool {
+    matches!(n.kind, NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. })
+        && n.opacity >= 1.0
+        && n.blend == vectorcraft_color::BlendMode::Normal
+        && !n.isolate
+        && n.extras().mask.is_none()
+        && !crate::fx::has_fx(n)
+        && !crate::fx::has_object_fx(n)
+        && single_plain_fill(n)
+        && n.appearance
+            .items
+            .iter()
+            .any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && matches!(f.paint, vectorcraft_color::Paint::Solid { .. })))
+}
+
+/// Number of visible painted fill/stroke items (opacity folding is exact only for one). A dashed
+/// stroke is one paint: its dashes are outlined into one path and filled once, so overlapping
+/// dashes don't darken where they overlap. A dashed brush stroke draws its pieces one by one, so
+/// it takes the layered path, with or without other paints.
+pub(crate) fn painted_items(n: &Node) -> usize {
+    n.appearance
+        .items
+        .iter()
+        .filter(|i| match i {
+            AppearanceItem::Fill(f) => f.visible && !f.paint.is_none() && matches!(f.paint, vectorcraft_color::Paint::Solid { .. }),
+            AppearanceItem::Stroke(s) => s.visible && !s.paint.is_none() && s.width > 0.0 && matches!(s.paint, vectorcraft_color::Paint::Solid { .. }),
+        })
+        .count()
+        .max(if n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Fill(f) if f.visible && !matches!(f.paint, vectorcraft_color::Paint::Solid { .. } | vectorcraft_color::Paint::None)) || matches!(i, AppearanceItem::Stroke(s) if s.visible && (!matches!(s.paint, vectorcraft_color::Paint::Solid { .. } | vectorcraft_color::Paint::None) || (s.dash.is_some() && s.brush.is_some() && !s.paint.is_none())))) { 2 } else { 0 })
+}
+
+/// Whether `st` is one of `n`'s own strokes (the strokes of the brush art drawn for `n` are not).
+pub(crate) fn owns_stroke(n: &Node, st: &StrokeLayer) -> bool {
+    n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if std::ptr::eq(s, st)))
+}
+
+/// Symbol art `art` stained by instance `inst` ([`instance_art`]) and placed by `xf`, with
+/// strokes scaled by `xf` when `scale_strokes`.
+pub(crate) fn place(art: &Node, xf: Affine, scale_strokes: bool, inst: Option<&Node>) -> Arc<Node> {
+    let mut placed = match inst {
+        Some(i) => brush_fx::instance_art(art, i),
+        None => art.clone(),
+    };
+    placed.transform(xf, scale_strokes);
+    Arc::new(placed)
+}
+
+/// Does `n` hold, in it or in the opacity masks of the objects in it, a symbol instance, type
+/// with an inline graphic, an image, a placed document, or an object or a fill or stroke with a
+/// visible raster effect?
+pub(crate) fn depends_on_document(n: &Node) -> bool {
+    let raster = |fx: &[vectorcraft_doc::Effect]| fx.iter().any(|e| e.visible && effects::is_raster(&e.id));
+    let mut depends = false;
+    n.walk(&mut |c| {
+        depends |= match &c.kind {
+            NodeKind::SymbolInstance { .. } | NodeKind::Image(_) | NodeKind::PlacedDocument(_) => true,
+            NodeKind::Text(t) => t.runs.iter().any(|r| r.inline.is_some()),
+            _ => false,
+        } || raster(&c.appearance.effects)
+            || c.appearance.items.iter().any(|i| raster(i.effects()))
+            || c.extras().mask.as_ref().is_some_and(|m| depends_on_document(&m.art));
+    });
+    depends
+}
+
+/// Does `n` hold type, in it or in the opacity masks of the objects in it?
+pub(crate) fn holds_type(n: &Node) -> bool {
+    let mut holds = false;
+    n.walk(&mut |c| holds |= matches!(c.kind, NodeKind::Text(_)) || c.extras().mask.as_ref().is_some_and(|m| holds_type(&m.art)));
+    holds
+}
+
+/// Is `n` a symbol instance, or does it hold one? Its cull bounds measure the instance by its
+/// symbol's art.
+pub(crate) fn holds_instance(n: &Node) -> bool {
+    let mut holds = false;
+    n.walk(&mut |c| holds |= matches!(c.kind, NodeKind::SymbolInstance { .. }));
+    holds
+}
+
+/// Is `a` left out of a frame `doc` draws with `opts`, before any culling: hidden, a template or
+/// guide the view hides, a ruler guide (the canvas draws those), drawn hidden, or the instance its
+/// symbol is being edited from?
+pub(crate) fn left_out(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Document, a: &Node) -> bool {
+    let view_item = a.is_ruler_guide() || a.hidden_by_view(opts.skip_templates || opts.hide_templates, opts.skip_templates || opts.hide_guides);
+    !a.visible || view_item || opts.hidden.contains(&a.id) || edited_instance(opts, doc, a.id)
+}
+
+/// Symbol editing mode on screen: is `id` the instance editing was entered from, which is not drawn
+/// (with its masks and effects), since the editing layer holds a copy of its art in its place?
+fn edited_instance(opts: &crate::RenderOptions, doc: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId) -> bool {
+    opts.isolated.is_some() && doc.symbol_edit.as_ref().is_some_and(|e| e.instance == Some(id))
+}
+
+/// Does [`crate::Renderer::bounds_of`] measure `n` by the 3D art the renderer draws and keeps for
+/// it: a Revolve, Extrude & Bevel, Inflate or Rotate without Crop Marks or Vector Halftone, which
+/// draw other art?
+pub(crate) fn measures_three_d(n: &Node) -> bool {
+    (effects::has_revolve(n) || effects::has_solid(n)) && !effects::has_crop_marks(n) && !effects::addons::halftone::has_halftone(n)
+}
+
+/// Does `n` hold an object that [`crate::Renderer::bounds_of`] measures by its 3D effect's art
+/// ([`measures_three_d`])?
+pub(crate) fn holds_measured_three_d(n: &Node) -> bool {
+    measures_three_d(n) || n.children().is_some_and(|c| c.iter().any(|c| holds_measured_three_d(c)))
+}
+
+/// Does `n` hold an object with a visible plug-in effect ([`effects::has_plugin_effect`]), in it or
+/// in the opacity masks of the objects in it?
+pub(crate) fn holds_plugin_effect(n: &Node) -> bool {
+    let mut holds = false;
+    n.walk(&mut |c| holds |= effects::has_plugin_effect(c) || c.extras().mask.as_ref().is_some_and(|m| holds_plugin_effect(&m.art)));
+    holds
+}
+
+/// Does `doc` draw a plug-in effect, so that installing or removing a plug-in
+/// ([`effects::plugin_revision`]) can change how it draws? It does when an object in its layers, in
+/// the art of its symbols or patterns, or in the art of its brushes holds one ([`holds_plugin_effect`]).
+pub fn draws_plugin_effects(doc: &Document) -> bool {
+    let symbols = doc.symbols.iter().map(|s| &s.art);
+    let patterns = doc.patterns.iter().flat_map(|p| &p.art);
+    doc.layers.iter().chain(symbols).chain(patterns).any(|a| holds_plugin_effect(a))
+        || vectorcraft_brush::library(doc).iter().any(|b| b.art().into_iter().any(holds_plugin_effect))
+}
+
+/// A symbol instance's stain ([`vectorcraft_brush::stain`]) as bits for a cache key: its color
+/// model, the color's components and the amount (all 0 without a stain).
+pub(crate) fn stain_bits(stain: Option<(vectorcraft_color::Color, f32)>) -> [u32; 6] {
+    use vectorcraft_color::Color;
+    let Some((color, amount)) = stain else { return [0; 6] };
+    let (model, [p, q, r, s]) = match color {
+        Color::Rgb { r, g, b } => (1, [r, g, b, 0.0]),
+        Color::Cmyk { c, m, y, k } => (2, [c, m, y, k]),
+        Color::Gray { k } => (3, [k, 0.0, 0.0, 0.0]),
+        Color::Lab { l, a, b } => (4, [l, a, b, 0.0]),
+    };
+    [model, p.to_bits(), q.to_bits(), r.to_bits(), s.to_bits(), amount.to_bits()]
+}

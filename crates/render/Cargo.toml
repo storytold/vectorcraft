@@ -19,17 +19,26 @@ vello_cpu = { workspace = true }
 # Filter types (Gaussian blur, drop shadow) are not re-exported by vello_cpu 0.2.
 vello_common = { version = "0.2", default-features = false }
 image = { workspace = true }
-flate2 = { workspace = true }
+craft-gif = { workspace = true }
+craft-image-codecs = { workspace = true }
 jpeg-encoder = { workspace = true }
-gif = { workspace = true }
-# TIFF LZW compression (MIT OR Apache-2.0; already used by the image crate's TIFF reader).
-weezl = "0.1"
+craft-stream-codecs = { workspace = true }
+flate2 = { workspace = true }
 log = { workspace = true }
+# Combining marks inside a lam-alef cluster (MIT OR Apache-2.0; already used by vectorcraft-text).
+unicode-general-category = "1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 vello_cpu = { workspace = true, features = ["multithreading"] }
 
+# The shared image store's budget (src/images.rs) follows the installed memory, which it reads with GlobalMemoryStatusEx
+# through winsafe's safe wrappers over Win32 (MIT), which vectorcraft-cli's src/perf.rs also uses.
+[target.'cfg(windows)'.dependencies]
+winsafe = { version = "0.0.29", default-features = false, features = ["kernel"] }
+
 [dev-dependencies]
+# The TIFF LZW writer before craft-stream-codecs, the reference encode/tests_tiff.rs compares it with.
+weezl = "0.2"
 vectorcraft-testkit = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
@@ -37,9 +46,10 @@ vectorcraft-text = { workspace = true, features = ["test-fonts"] }
 vectorcraft-plugins = { workspace = true }
 wat = { workspace = true }
 # Decoders the export tests read their files back with.
-image = { workspace = true, features = ["tga"] }
-tiff = "0.11"
-# Reads the PSD exports back (MIT OR Apache-2.0).
-psd = "0.3"
+image = { workspace = true }
+craft-tiff = { workspace = true }
+craft-psd = { workspace = true }
 proptest = { workspace = true }
 serde_json = { workspace = true }
+# How many times the symbol list is read to find symbols by name.
+vectorcraft-doc = { workspace = true, features = ["symbol-read-count"] }

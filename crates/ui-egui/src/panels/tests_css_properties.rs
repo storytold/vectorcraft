@@ -1,6 +1,6 @@
 //! The CSS Properties panel drawn headless: the selection's CSS in the code view, Generate CSS
-//! for the whole document, the export options in the panel menu, and Copy Selected Style and
-//! Export through their UI commands.
+//! for the whole document, the export options, and Copy Selected Style and Export through their UI
+//! commands.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -9,10 +9,12 @@ use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_svg::{CssOptions, CssUnits};
 
-use super::css_properties::{ALL, ID, OPTIONS, menu, show};
-use super::set_pstate;
-use crate::tests_labels::painted_text;
+use super::css_properties::show;
+use crate::tests::panel_harness::Panel;
 use crate::{Services, VectorcraftApp};
+
+/// The accessible name of the code view.
+const CODE: &str = "CSS code";
 
 type Log = Rc<RefCell<Vec<(String, Vec<u8>)>>>;
 
@@ -36,14 +38,14 @@ fn app() -> (VectorcraftApp, Log) {
 
 #[test]
 fn the_code_view_shows_the_selections_css_with_the_options() {
-    let (mut app, _) = app();
-    assert!(crate::state::ICON_PANELS.iter().any(|(id, ..)| *id == ID));
-    let text = painted_text(&mut app, show);
+    let (app, _) = app();
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    let text = panel.value(CODE).unwrap_or_default();
     assert!(text.contains(".rectangle {") && text.contains("background-color: #ff0000;") && text.contains("width: 30px;"), "{text}");
-    let text = painted_text(&mut app, |app, ui| {
-        set_pstate(ui.ctx(), OPTIONS, CssOptions { units: CssUnits::Pt, position: true, ..CssOptions::default() });
-        show(app, ui);
-    });
+    panel.app().ui.css_properties_panel.options = CssOptions { units: CssUnits::Pt, position: true, ..CssOptions::default() };
+    panel.frame();
+    let text = panel.value(CODE).unwrap_or_default();
     assert!(text.contains("width: 30pt;") && text.contains("left: 10pt;"), "{text}");
 }
 
@@ -52,32 +54,13 @@ fn generate_css_shows_the_document_while_nothing_is_selected() {
     let (mut app, _) = app();
     app.run("shape.ellipse", json!({"x": 100, "y": 10, "width": 20, "height": 20})).unwrap();
     app.run("select.none", json!({})).unwrap();
-    let text = painted_text(&mut app, show);
-    assert!(text.contains("No selection") && !text.contains(".rectangle"), "{text}");
-    let text = painted_text(&mut app, |app, ui| {
-        set_pstate(ui.ctx(), ALL, true);
-        show(app, ui);
-    });
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    assert!(panel.shows("No selection") && !panel.shows(CODE), "the empty state");
+    panel.app().run("ui.cssProperties.generate", json!({})).unwrap();
+    panel.frame();
+    let text = panel.value(CODE).unwrap_or_default();
     assert!(text.contains(".rectangle {") && text.contains(".ellipse {") && text.contains("border-radius: 50%;"), "{text}");
-}
-
-#[test]
-fn the_panel_menu_lists_the_actions_and_options() {
-    let (mut app, _) = app();
-    let text = painted_text(&mut app, menu);
-    for item in [
-        "Copy Selected Style",
-        "Export Selected CSS…",
-        "Export All…",
-        "Generate CSS",
-        "Units: px",
-        "Absolute Position",
-        "Width and Height",
-        "Unnamed Objects",
-        "Rasterize Unsupported Art",
-    ] {
-        assert!(text.contains(item), "{item} in {text}");
-    }
 }
 
 #[test]
@@ -108,16 +91,98 @@ fn export_says_in_the_status_bar_when_an_image_could_not_be_decoded() {
     let (mut app, log) = app();
     app.run("css.exportFile", json!({"path": "/tmp/site/site.css", "scope": "all", "rasterize": true})).unwrap();
     assert_eq!(app.ui.status, "Exported /tmp/site/site.css");
-    // A PNG whose header reads (so it places at its size) but whose pixel data is cut short.
+    // A PNG whose header reads but whose pixel data is cut short.
     let mut png = Vec::new();
-    image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .unwrap();
-    let idat = png.windows(4).position(|w| w == b"IDAT").unwrap();
-    png.truncate(idat + 8);
-    app.run("file.place", json!({"name": "cut.png", "dataBase64": vectorcraft_format::base64_encode(&png)})).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
     let r = app.run("css.exportFile", json!({"path": "/tmp/site/site.css", "scope": "all", "rasterize": true})).unwrap();
     assert_eq!(r["warnings"], json!([WARNING]));
-    assert_eq!(app.ui.status, format!("Exported /tmp/site/site.css with 1 note(s): {WARNING}"));
+    assert_eq!(app.ui.status, format!("Exported /tmp/site/site.css with 1 note: {WARNING}"));
     assert_eq!(log.borrow().len(), 3, "the sheet and the image's picture are still written");
+}
+
+/// A CSS export with several notes: the status bar names the first, counts them, and keeps every
+/// one of them for its hover.
+#[test]
+fn export_keeps_every_note_for_the_hover() {
+    let (mut app, _) = app();
+    let mut png = Vec::new();
+    {
+        let __dyn: image::DynamicImage = (image::RgbaImage::from_pixel(64, 32, image::Rgba([200, 30, 30, 255]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
+    vectorcraft_testkit::fixtures::place_cut_png(&mut app.session, &png, json!({}));
+    // Type painted with a gradient is rasterized, and its picture is drawn in the fallback font.
+    app.run("text.create", json!({"x": 5, "y": 20, "text": "Ab", "font": "Nonexistent Sans Probe"})).unwrap();
+    app.run("paint.setFill", json!({"gradient": {"stops": [{"offset": 0, "color": "#ff0000"}, {"offset": 1, "color": "#0000ff"}]}})).unwrap();
+    let r = app.run("css.exportFile", json!({"path": "/tmp/site/site.css", "scope": "all", "rasterize": true})).unwrap();
+    let notes = crate::io::notes_of(&r);
+    assert_eq!(notes.len(), 2, "{r}");
+    assert_eq!(app.ui.status, format!("Exported /tmp/site/site.css with 2 notes: {}", notes[0]));
+    assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
 }
