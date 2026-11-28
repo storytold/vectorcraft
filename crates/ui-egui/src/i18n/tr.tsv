@@ -4839,6 +4839,8 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	Script file could not be written	Betiğin dosyası yazılamadı
 @msg	Script file dialogs need a person to answer them	Betiğin dosya iletişim kutularının yanıtlanması için bir kişi gerekir
 @msg	Script file is not open for writing	Betiğin dosyası yazmak için açık değil
+@msg	Script file is read-only	Betiğin dosyası salt okunur
+@msg	Script file is open for writing	Betiğin dosyası yazmak için açık
 @msg	Script file name is already in use	Betiğin dosya adı zaten kullanılıyor
 @msg	Script file name must be a name without a folder	Betiğin dosya adı klasör içermeyen bir ad olmalıdır
 @msg	Script file permission can be kept only for a script run from a file	Dosya izni yalnızca bir dosyadan çalıştırılan betik için saklanabilir

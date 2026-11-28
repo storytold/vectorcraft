@@ -19,6 +19,20 @@ fn feature<'r>(r: &'r Report, id: &str) -> Option<&'r Feature> {
     r.features.iter().find(|f| f.id == id)
 }
 
+#[test]
+fn save_changes_text_requires_enumeration_member_context() {
+    for source in ["vc.log('SAVECHANGES');", "var text = 'SAVECHANGES';", "other['SAVECHANGES'];"] {
+        let r = report(source);
+        assert!(feature(&r, "file.write").is_none(), "{source}");
+        assert!(!r.outside.iter().any(|outside| outside.id == "filesWritten"), "{source}");
+    }
+    for source in ["SaveOptions['SAVECHANGES'];", "'SaveOptions.SAVECHANGES';"] {
+        let r = report(source);
+        assert!(feature(&r, "file.write").is_some(), "{source}");
+        assert!(r.outside.iter().any(|outside| outside.id == "filesWritten"), "{source}");
+    }
+}
+
 fn problems(r: &Report) -> Vec<(&'static str, Option<usize>, Option<&str>)> {
     r.problems.iter().map(|p| (p.code, p.line, p.detail.as_deref())).collect()
 }
@@ -528,6 +542,353 @@ fn the_scripts_own_platform_names_are_not_the_platforms() {
     assert!(feature(&r, "notify").is_none());
     assert_eq!(feature(&r, "file.objects").map(|f| f.lines.as_slice()), Some(&[5][..]));
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["filesWritten"]);
+}
+
+/// A document's `saveAs` and `exportFile` write the file they are given; `app.open` only reads one.
+#[test]
+fn save_as_and_export_file_write_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = app.open(f);\n",
+        "d.saveAs(f);\n",
+        "app.activeDocument.exportFile(f, ExportType.PNG24);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
+/// A document's `exportForScreens` writes files into the folder it is given, called directly or by
+/// its name in brackets; an object of the script's own that defines it writes nothing.
+#[test]
+fn export_for_screens_writes_files() {
+    let r = report(concat!(
+        "var dir = new Folder(p);\n",
+        "app.activeDocument.exportForScreens(dir, ExportForScreensType.SE_PNG24);\n",
+        "documents[0]['exportForScreens'](dir, ExportForScreensType.SE_SVG);\n",
+        "var local = {exportForScreens: function () {}};\n",
+        "local.exportForScreens(dir);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[2, 3][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[2, 3][..])]);
+}
+
+/// `SaveOptions.SAVECHANGES` makes a document's `close` save it to its own file, read directly, in
+/// brackets, as a string or through a variable; closing without it, and the other save options,
+/// write nothing.
+#[test]
+fn closing_with_save_changes_writes_a_file() {
+    let r = report(concat!(
+        "app.activeDocument.close();\n",
+        "app.activeDocument.close(SaveOptions.DONOTSAVECHANGES);\n",
+        "app.activeDocument.close(SaveOptions.PROMPTTOSAVECHANGES);\n",
+        "app.activeDocument.close(SaveOptions.SAVECHANGES);\n",
+        "var how = SaveOptions['SAVECHANGES'];\n",
+        "documents[0].close(how);\n",
+        "documents[1].close('SaveOptions.SAVECHANGES');\n",
+        "var w = new Window('dialog'); w.close(1);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 5, 7][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[4, 5, 7][..])]);
+}
+
+/// `saveAs` and `exportFile` called with their names as string literals in brackets write the file
+/// too; reading the method without calling it does not.
+#[test]
+fn save_as_and_export_file_in_brackets_write_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument['open'](f);\n",
+        "app.activeDocument[\"saveAs\"](f);\n",
+        "var d = app.activeDocument; d['exportFile'] (f, ExportType.SVG);\n",
+        "var n = d['saveAs'];\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
+/// `saveAs` and `exportFile` called on an object literal of the script's own that defines them write
+/// nothing, with `.` or in brackets. On a document, on a variable the check does not follow, on one
+/// assigned something else since, and for a method the literal does not define, they write the file.
+#[test]
+fn the_scripts_own_save_as_writes_no_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var local = {saveAs: function () {}, 'n': 1};\n",
+        "local.saveAs(f);\n",
+        "local['saveAs'](f);\n",
+        "app.activeDocument.saveAs(f);\n",
+        "local.exportFile(f);\n",
+        "other.saveAs(f);\n",
+        "local = app.activeDocument;\n",
+        "local.saveAs(f);\n",
+        "var t = {x: 1, a: ok ? saveAs : 0, 'exportFile': function () {}};\n",
+        "t['exportFile'](f);\n",
+        "t.saveAs(f);\n",
+        "var activeDocument = {saveAs: function () {}};\n",
+        "app.activeDocument['saveAs'](f);\n",
+        "app.activeDocument.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[5, 6, 7, 9, 12, 14, 15][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[5, 6, 7, 9, 12, 14, 15][..])]);
+}
+
+/// Once the script replaces or deletes such a method, indexes the object with a computed key, or
+/// lets another name hold the object, its `saveAs` may write a file again, and so may a `saveAs` key
+/// whose last value in the literal is not a function expression.
+#[test]
+fn a_changed_or_shared_own_save_as_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var a = {saveAs: function () {}}; var b = {saveAs: function () {}}; var c = {saveAs: function () {}};\n",
+        "var d = {saveAs: function () {}}; var e = {saveAs: function () {}}; var g = {saveAs: function () {}};\n",
+        "a.saveAs(f); b['saveAs'](f); a.n = 1; a.n;\n",
+        "a.saveAs = app.activeDocument.saveAs;\n",
+        "b['saveAs'] = w;\n",
+        "c[k] = w;\n",
+        "delete d.saveAs;\n",
+        "var h = e;\n",
+        "use(g);\n",
+        "a.saveAs(f);\n",
+        "b.saveAs(f);\n",
+        "c.saveAs(f);\n",
+        "d.saveAs(f);\n",
+        "e.saveAs(f);\n",
+        "g['saveAs'](f);\n",
+        "var m = {saveAs: d.saveAs}; var n = {saveAs: function () {}, saveAs: d.saveAs};\n",
+        "m.saveAs(f);\n",
+        "n.saveAs(f);\n",
+        "var q = {saveAs: function () {}, saveAs: (d.saveAs)}; var s = {saveAs: function () {}, saveAs: [w][0]};\n",
+        "q['saveAs'](f);\n",
+        "s.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16, 18, 19, 21, 22][..]));
+}
+
+/// A call of another method of such an object may replace its `saveAs` through `this`, and a property
+/// assignment that names the variable (`this.local = d`) may give it another value through the global
+/// object: after either, its `saveAs` writes the file again.
+#[test]
+fn a_method_call_or_a_global_property_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var a = {saveAs: function () {}, install: function () { this.saveAs = app.activeDocument.saveAs; }};\n",
+        "var b = {saveAs: function () {}, install: function () {}};\n",
+        "var c = {saveAs: function () {}}; var e = {saveAs: function () {}}; var g = {saveAs: function () {}};\n",
+        "a.saveAs(f); a.install();\n",
+        "b['install']();\n",
+        "this.c = app.activeDocument;\n",
+        "$.global['e'] = app.activeDocument;\n",
+        "g.saveAs(f); g.saveAs(f);\n",
+        "a.saveAs(f);\n",
+        "b.saveAs(f);\n",
+        "c.saveAs(f);\n",
+        "e.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[10, 11, 12, 13][..]));
+}
+
+/// An assignment to a property of the global object under a key that is not one string literal may
+/// give any such variable another value: after it, their `saveAs` writes the file again. One under a
+/// string literal ends only the variable it names, and an index of another object ends none.
+#[test]
+fn a_computed_global_property_ends_every_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var a = {saveAs: function () {}}; var b = {saveAs: function () {}};\n",
+        "var rows = [];\n",
+        "rows[k] = 1; $.global['b'] = app.activeDocument;\n",
+        "a.saveAs(f);\n",
+        "$.global[key] = app.activeDocument;\n",
+        "a.saveAs(f);\n",
+        "var c = {saveAs: function () {}};\n",
+        "this['lo' + 'cal'] = app.activeDocument;\n",
+        "c.saveAs(f);\n",
+        "var h = {saveAs: function () {}};\n",
+        "globalThis[names[0]] = app.activeDocument;\n",
+        "h.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[7, 10, 13][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[7, 10, 13][..])]);
+}
+
+/// A `saveAs` whose body uses `this` or the variable's own name may replace the object's methods
+/// when it runs, so it is not the script's own and its calls write the file. A `this` in another
+/// method's body leaves `saveAs` the script's own.
+#[test]
+fn an_own_save_as_that_may_replace_itself_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var doc = app.activeDocument;\n",
+        "var a = {saveAs: function () { this.saveAs = function (g) { doc.saveAs(g); }; }};\n",
+        "var b = {saveAs: function () { b.saveAs = w; }};\n",
+        "var c = {saveAs: function (g) { return g; }, install: function () { this.n = 1; }};\n",
+        "a.saveAs(f); a.saveAs(f);\n",
+        "b.saveAs(f);\n",
+        "c.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 6, 7][..]));
+}
+
+/// A function declared before the literal is hoisted, so it may change or share the variable before
+/// the literal's later calls run: its calls then keep reporting the write. A function with a
+/// variable of its own of the same name, and one that only calls the method, leave the method the
+/// script's own.
+#[test]
+fn a_hoisted_function_that_changes_or_shares_the_variable_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "function a(w) { local.saveAs = w; }\n",
+        "var local = {saveAs: function () {}};\n",
+        "local.saveAs(f);\n",
+        "function b() { use(other); }\n",
+        "var other = {saveAs: function () {}};\n",
+        "other.saveAs(f);\n",
+        "function c() { var calm = app.activeDocument; use(calm); }\n",
+        "var calm = {saveAs: function () {}};\n",
+        "calm.saveAs(f);\n",
+        "function d() { quiet.saveAs(f); }\n",
+        "var quiet = {saveAs: function () {}};\n",
+        "quiet.saveAs(f);\n",
+        "function g1() { use(mine); }\n",
+        "function g2() { var mine = {saveAs: function () {}}; mine.saveAs(f); }\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 11, 13][..]));
+}
+
+/// A table of shared names with no room left for one more means a function may share any name: no
+/// literal after it gives methods that are the script's own.
+#[test]
+fn a_full_table_of_shared_names_keeps_reporting_the_write() {
+    let src = concat!(
+        "var f = new File(p);\n",
+        "function a(w) { p1.saveAs = w; p2.saveAs = w; p3.saveAs = w; }\n",
+        "var local = {saveAs: function () {}};\n",
+        "local.saveAs(f);\n",
+    );
+    let r = check("test.jsx", src.as_bytes(), None, &Limits { entries: 2, ..Limits::default() });
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4][..]));
+}
+
+/// A function body that assigns a variable it does not declare (`=`, a compound operator, `++` or
+/// `--`) may run after the literal and give the variable another value.
+#[test]
+fn an_assignment_in_a_hoisted_function_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "function a(w) { local = w; }\n",
+        "var local = {saveAs: function () {}};\n",
+        "local.saveAs(f);\n",
+        "function b() { other += 1; }\n",
+        "var other = {saveAs: function () {}};\n",
+        "other.saveAs(f);\n",
+        "function c() { third++; }\n",
+        "var third = {saveAs: function () {}};\n",
+        "third.saveAs(f);\n",
+        "function e() { --fourth; }\n",
+        "var fourth = {saveAs: function () {}};\n",
+        "fourth.saveAs(f);\n",
+        "function d() { var mine = 1; mine = 2; }\n",
+        "var mine = {saveAs: function () {}};\n",
+        "mine.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 10, 13][..]));
+}
+
+/// A function body that calls a method of, or reads, a variable it does not declare may run before
+/// the literal as well, so a later literal's calls keep reporting the write.
+#[test]
+fn a_member_call_or_read_in_a_hoisted_function_ends_the_own_save_as() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "function a() { local.run(); }\n",
+        "var local = {saveAs: function () {}};\n",
+        "local.saveAs(f);\n",
+        "function b() { other['m'](); }\n",
+        "var other = {saveAs: function () {}};\n",
+        "other.saveAs(f);\n",
+        "function c() { return third.name; }\n",
+        "var third = {saveAs: function () {}};\n",
+        "third.saveAs(f);\n",
+        "function d() { var calm = 1; return calm.name; }\n",
+        "var calm = {saveAs: function () {}};\n",
+        "calm.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 10][..]));
+}
+
+/// A function that reads the variable from outside runs after whatever the script gave it since, so
+/// its calls keep reporting the write. A `var` after a label or a `case` is in a branch as well.
+#[test]
+fn a_captured_or_labelled_own_save_as_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var local = {saveAs: function () {}};\n",
+        "function run() { local.saveAs(f); }\n",
+        "function run2() { local['saveAs'](f); }\n",
+        "local = app.activeDocument;\n",
+        "run();\n",
+        "function own() { var inner = {saveAs: function () {}}; inner.saveAs(f); inner['saveAs'](f); }\n",
+        "if (flag) skip:\n",
+        "var lab = {saveAs: function () {}};\n",
+        "lab.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4, 10][..]));
+}
+
+/// Only a `var` statement directly in a function body or the global code that gives its first name
+/// the literal as its whole value makes the literal's `saveAs` the script's own, from the end of the
+/// statement. A literal given in a branch, one the value goes on from, one given by an assignment
+/// or to a later name of the statement, a call inside the literal, and a variable a function gave
+/// another value keep reporting the write.
+#[test]
+fn only_a_whole_var_value_makes_save_as_the_scripts_own() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = {saveAs: function () {}};\n",
+        "function choose() { d = null; d = app.activeDocument; }\n",
+        "d.saveAs(f);\n",
+        "var e = app.activeDocument;\n",
+        "if (flag) var e = {saveAs: function () {}};\n",
+        "e.saveAs(f);\n",
+        "if (flag) { var e2 = {saveAs: function () {}}; }\n",
+        "e2.saveAs(f);\n",
+        "var g = {saveAs: function () {}} && app.activeDocument;\n",
+        "g.saveAs(f);\n",
+        "var h = app.activeDocument;\n",
+        "h = {saveAs: function () {}, value: h.saveAs(f)};\n",
+        "var k = {saveAs: function () {}, value: k.saveAs(f)};\n",
+        "k.saveAs(f);\n",
+        "var x = 1, y = {saveAs: function () {}};\n",
+        "y.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 9, 11, 13, 14, 17][..]));
+}
+
+/// A `saveAs` key's value is a method of the script's own only when the whole value is one function
+/// expression: a value that goes on after the function's body, and a literal inside another, leave
+/// `saveAs` writing the file. A literal given to a function body's own variable at the end of the body
+/// leaves the outer variable as it was.
+#[test]
+fn a_value_that_goes_on_after_the_function_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var a = {saveAs: function () {} && app.activeDocument.saveAs};\n",
+        "var b = {saveAs: function () {}(f), n: 1};\n",
+        "var c = {saveAs: function () {} ? x : y};\n",
+        "var e = {saveAs: function () {}.call};\n",
+        "var k = {exportFile: function w(x) { return x; }, saveAs: function () {}};\n",
+        "var m = {o: {saveAs: function () {}}};\n",
+        "var q = app.activeDocument; function r() { var q = {saveAs: function () {}}\n",
+        "}\n",
+        "a.saveAs(f);\n",
+        "b.saveAs(f);\n",
+        "c.saveAs(f);\n",
+        "e.saveAs(f);\n",
+        "k.saveAs(f); k.exportFile(f);\n",
+        "m.saveAs(f);\n",
+        "q.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[10, 11, 12, 13, 15, 16][..]));
 }
 
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing

@@ -2,6 +2,34 @@
 
 use super::{Analyzer, COMPOUND, FeatureId, NEWER, OutsideId, Pending, Sig, T, catalog, is, member_mark, newer_number, report, unquote, word};
 
+/// Words that start or continue a statement or an expression, never a variable's name.
+const RESERVED: [&str; 24] = [
+    "var",
+    "function",
+    "if",
+    "else",
+    "for",
+    "while",
+    "do",
+    "return",
+    "new",
+    "typeof",
+    "delete",
+    "in",
+    "instanceof",
+    "this",
+    "with",
+    "switch",
+    "case",
+    "try",
+    "catch",
+    "finally",
+    "throw",
+    "break",
+    "continue",
+    "void",
+];
+
 /// A global name of the platform the report looks for (`$`, `File`, `Socket`, `alert`, `eval`…).
 pub(super) fn platform_name(n: &str) -> bool {
     matches!(
@@ -85,6 +113,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 }
             }
         }
+        self.writer_use(t);
         match t.kind {
             T::Ident => self.name(t, line),
             T::Punct => self.punct(t, line),
@@ -128,6 +157,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             Pending::Setter(l, true) => self.file_setter(l),
             Pending::Open(_) | Pending::Setter(_, false) | Pending::Name(..) | Pending::None => {}
         }
+    }
+
+    /// `SaveOptions.SAVECHANGES` read at `line`: a `Document.close` given it saves the document to
+    /// its own file, and the value may reach `close` through a variable or an argument.
+    fn save_changes(&mut self, line: Option<usize>) {
+        self.acc.feature(FeatureId::FileWrite, line);
+        self.acc.outside(OutsideId::FilesWritten, line, None);
     }
 
     /// A File object's `length`, `hidden` or `readonly` set at `line`: the file changes.
@@ -199,6 +235,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if of(catalog::FOLDER) && catalog::FOLDER_PLACES.contains(&n) {
                 self.acc.feature(FeatureId::FilePlaces, line);
+            }
+            if n == catalog::SAVE_CHANGES {
+                self.save_changes(line);
             }
             if n == catalog::ON_DRAW {
                 self.acc.feature(FeatureId::ScriptuiDrawing, line);
@@ -273,6 +312,11 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 let name = h0.map(|s| unquote(s.text, 16)).unwrap_or_default();
                 self.setter(&name, h2, h3, line);
             }
+            // `local['saveAs']`: what the object before the bracket defines, for a call that may follow.
+            "[" => {
+                self.index_receiver = self.writer_bits(h0, h1);
+                self.index_stable = h0.is_some_and(|r| self.stable(r.text));
+            }
             "(" => self.call(line),
             // `Name.prototype["+"] = …` defines an operator.
             "=" => {
@@ -287,9 +331,20 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
     }
 
-    /// `(` after a name: a call.
-    fn call(&mut self, line: Option<usize>) {
+    /// What the call whose `(` is the current token reaches.
+    fn classify_call(&mut self, line: Option<usize>) {
         let [h0, h1, h2, h3] = self.h;
+        // `doc['saveAs'](f)`: a document method named by a string literal in brackets.
+        if is(h0, "]")
+            && is(h2, "[")
+            && let Some(method) = h1.filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 32))
+            && catalog::DOM_FILE_WRITES.contains(&method.as_str())
+            && !(self.index_stable && Self::defines(self.index_receiver, &method))
+        {
+            self.acc.feature(FeatureId::FileWrite, line);
+            self.acc.outside(OutsideId::FilesWritten, line, None);
+            return;
+        }
         let Some(callee) = h0.filter(|s| s.kind == T::Ident) else { return };
         let n = callee.text;
         if is(h1, ".") {
@@ -310,7 +365,9 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.feature(FeatureId::FileDialog, line);
             } else if catalog::FOLDER_READS.contains(&n) || (file && catalog::FILE_READS.contains(&n)) {
                 self.acc.feature(FeatureId::FileRead, line);
-            } else if file && catalog::FILE_WRITES.contains(&n) {
+            } else if (file && catalog::FILE_WRITES.contains(&n))
+                || (catalog::DOM_FILE_WRITES.contains(&n) && !(h2.is_some_and(|r| self.stable(r.text)) && Self::defines(self.writer_bits(h2, h3), n)))
+            {
                 self.acc.feature(FeatureId::FileWrite, line);
                 self.acc.outside(OutsideId::FilesWritten, line, None);
             } else if n == catalog::EXECUTE {
@@ -331,6 +388,163 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.acc.outside(OutsideId::UnseenCode, line, None);
             }
         }
+    }
+
+    /// The methods that `receiver`, which `before` comes before, defines when it is a variable holding
+    /// an object literal of the script's own ([`Analyzer::writers`]), not a property of the same name;
+    /// 0 for anything else. A receiver the check does not follow may be a document.
+    /// Whether a call of `name`'s own method may be left out: the call is in the global code, or in a
+    /// function body that declares `name` itself. A body that reads `name` from outside may run
+    /// after the variable was given another value, so its calls are not known.
+    fn stable(&self, name: &str) -> bool {
+        self.scopes.last().is_none_or(|s| s.saved.contains_key(name))
+    }
+
+    /// A function body uses `name`, which no literal has given methods and the body does not declare,
+    /// in a way that may change or share it ([`Analyzer::shared_early`]). With no room left for the
+    /// name, no literal's methods are the script's own from then on.
+    pub(super) fn share_early(&mut self, name: &str) {
+        let Some(body) = self.scopes.last() else { return };
+        if body.saved.contains_key(name) || self.writers.contains_key(name) {
+            return;
+        }
+        if self.shared_early.contains_key(name) || self.acc.room(self.shared_early.len()) {
+            let open = self.scopes.len();
+            let seen = self.shared_early.entry(name.to_string()).or_insert(open);
+            *seen = (*seen).max(open);
+        } else {
+            self.shared_full = true;
+        }
+    }
+
+    fn writer_bits(&self, receiver: Option<Sig<'s>>, before: Option<Sig<'s>>) -> u8 {
+        match receiver {
+            Some(r) if r.kind == T::Ident && !member_mark(before) => self.writers.get(r.text).copied().unwrap_or(0),
+            _ => 0,
+        }
+    }
+
+    /// A variable of [`Analyzer::writers`] used before `t` in any way but a member (`local.name`,
+    /// `local['name']`) or an assignment to it ([`Analyzer::assignment`]), or whose `saveAs` or
+    /// `exportFile` is assigned: another name may hold its object, or its methods may change, so its
+    /// own methods are no longer known (`var b = local`, `f(local)`, `local.saveAs = w`,
+    /// `local[k] = w`, `delete local.saveAs`). A property assignment whose name is such a variable's
+    /// (`this.local = d`, `$.global['local'] = d`) may give the variable a new value through the global
+    /// object, so its methods are no longer known either. An assignment to a property of the global
+    /// object under any other key (`$.global[key] = d`, `this['lo' + 'cal'] = d`) may give any such
+    /// variable a new value: no variable's methods are known after it.
+    fn writer_use(&mut self, t: &Sig<'s>) {
+        let [h0, h1, h2, h3] = self.h;
+        let global_index_closed = std::mem::take(&mut self.global_index_closed);
+        if t.is("[") {
+            let global = (word(h0, "global") && is(h1, ".") && word(h2, "$") && !member_mark(h3))
+                || ((word(h0, "this") || word(h0, "globalThis")) && !member_mark(h1));
+            if global && self.global_indexes.len() < self.acc.limits.nesting {
+                self.global_indexes.push(self.depth());
+            }
+        } else if t.is("]") {
+            let depth = self.depth();
+            self.global_index_closed = self.global_indexes.last() == Some(&(depth + 1));
+            self.global_indexes.retain(|d| *d <= depth);
+        }
+        let writer = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| s.filter(|s| self.writer_bits(Some(*s), before) != 0).map(|s| s.text);
+        let changes = t.kind == T::Punct && (t.text == "=" || COMPOUND.contains(&t.text) || matches!(t.text, "++" | "--"));
+        let key = t.is(":") && (is(h1, "{") || is(h1, ","));
+        let escape = |writer: &dyn Fn(Option<Sig<'s>>, Option<Sig<'s>>) -> Option<&'s str>| -> Option<&'s str> {
+            if word(h0, "delete") {
+                // `delete local…`
+                writer(Some(*t), h0)
+            } else if let Some(name) = writer(h0, h1) {
+                // `local` followed by anything but a member, its own assignment or an object key's `:`.
+                (!t.is(".") && !t.is("[") && !t.is("=") && !key).then_some(name)
+            } else if is(h1, ".") && changes && h0.is_some_and(|m| catalog::DOM_FILE_WRITES.contains(&m.text)) {
+                // `local.saveAs = …`
+                writer(h2, h3)
+            } else if is(h0, "[") {
+                // `local[k]` with a key that is not a string literal.
+                writer(h1, h2).filter(|_| t.kind != T::Str)
+            } else if is(h1, "[") && h0.is_some_and(|s| s.kind == T::Str) {
+                // `local['name' + k]`.
+                writer(h2, h3).filter(|_| !t.is("]"))
+            } else if is(h0, "]") && is(h2, "[") && changes && h1.is_some_and(|m| catalog::DOM_FILE_WRITES.contains(&unquote(m.text, 32).as_str())) {
+                // `local['saveAs'] = …`
+                writer(h3, None)
+            } else {
+                None
+            }
+        };
+        let escaped = escape(&writer);
+        // A function body reads a variable of the enclosing code that no literal has given methods yet
+        // in a way that changes or shares it: the body may run after the literal, as a hoisted
+        // declaration does.
+        let early = if escaped.is_none() && !self.scopes.is_empty() {
+            let captured = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| {
+                s.filter(|s| {
+                    s.kind == T::Ident
+                        && !member_mark(before)
+                        && !self.writers.contains_key(s.text)
+                        && self.scopes.last().is_some_and(|b| !b.saved.contains_key(s.text))
+                })
+                .map(|s| s.text)
+            };
+            escape(&captured)
+        } else {
+            None
+        };
+        if let Some(name) = escaped {
+            self.writers.remove(name);
+        }
+        if let Some(name) = early {
+            self.share_early(name);
+        }
+        // A name read in a function body that the body does not declare, as a receiver or otherwise.
+        if let Some(r) = h0.filter(|r| r.kind == T::Ident && !member_mark(h1) && !RESERVED.contains(&r.text)) {
+            self.share_early(r.text);
+        }
+        if changes {
+            let rebound = if is(h1, ".") {
+                h0.filter(|s| s.kind == T::Ident).map(|s| s.text.to_string())
+            } else if is(h0, "]") && is(h2, "[") {
+                h1.filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 256))
+            } else {
+                None
+            };
+            if let Some(name) = rebound {
+                self.writers.remove(&name);
+            } else if global_index_closed {
+                // `$.global[key] = …`: the key may name any of them.
+                self.writers.clear();
+            }
+        }
+    }
+
+    /// `(` after a name: a call ([`Self::classify_call`]). A call of a variable of
+    /// [`Analyzer::writers`]'s method other than the `saveAs` or `exportFile` its literal defines
+    /// (`local.install()`, `local['install']()`) may replace the object's methods through `this`, so
+    /// after the call they are no longer known.
+    fn call(&mut self, line: Option<usize>) {
+        let [h0, h1, h2, h3] = self.h;
+        let bits = self.writer_bits(h2, h3);
+        let receiver = if is(h1, ".") && bits != 0 && h0.is_some_and(|s| s.kind == T::Ident && !Self::defines(bits, s.text)) {
+            h2
+        } else if is(h0, "]")
+            && is(h2, "[")
+            && self.index_receiver != 0
+            && h1.is_some_and(|s| s.kind == T::Str && !Self::defines(self.index_receiver, &unquote(s.text, 32)))
+        {
+            h3
+        } else {
+            None
+        };
+        self.classify_call(line);
+        if let Some(r) = receiver {
+            self.writers.remove(r.text);
+        }
+    }
+
+    /// Whether `bits` ([`Self::writer_bits`]) has `method`: the receiver's own `method` is called.
+    fn defines(bits: u8, method: &str) -> bool {
+        catalog::DOM_FILE_WRITES.iter().position(|m| *m == method).is_some_and(|i| bits & (1 << i) != 0)
     }
 
     /// Whether `receiver`, which `before` comes before, is a variable holding a File or Folder object
@@ -354,6 +568,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         let [h0, h1, h2, _] = self.h;
         if t.text.contains(catalog::ACTION_TEXT) {
             self.acc.feature(FeatureId::Actions, line);
+        }
+        // `SaveOptions['SAVECHANGES']`, or the value written as the string `"SaveOptions.SAVECHANGES"`.
+        let value = unquote(t.text, 32);
+        if (value == catalog::SAVE_CHANGES && is(h0, "[") && word(h1, catalog::SAVE_OPTIONS))
+            || value.strip_prefix(catalog::SAVE_OPTIONS).and_then(|r| r.strip_prefix('.')) == Some(catalog::SAVE_CHANGES)
+        {
+            self.save_changes(line);
         }
         let compares = h0.is_some_and(|s| s.kind == T::Punct && matches!(s.text, "==" | "===" | "!=" | "!=="));
         if compares && word(h1, "typename") && is(h2, ".") {

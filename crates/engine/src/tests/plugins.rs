@@ -2202,6 +2202,7 @@ fn a_script_loads_no_plugin_from_outside_its_folder_through_a_name_that_is_not_t
         read: ScriptScope::of_folder(&inside),
         write: ScriptScope::default(),
         documents: vec![],
+        held: vec![],
         linked: Default::default(),
         also: None,
     };

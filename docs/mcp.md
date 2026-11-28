@@ -2655,7 +2655,9 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
   object; the same objects left out are not counted for the File-only functions `open`, `read`, `readch`,
   `readln`, `write`, `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`, which a Folder object does not
-  have), `filesOpened` (files opened in other apps), `network`,
+  have; a document's `saveAs`, `exportFile` or `exportForScreens` counts too, and so does `SaveOptions.SAVECHANGES` wherever the script
+  reads it, since `close` given it saves the document to its file), `filesOpened` (files opened in other apps),
+  `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2814,8 +2816,8 @@ other files through `$`:
   Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
-  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`,
+  `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
   or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
@@ -2884,8 +2886,8 @@ other files through `$`:
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
-  `app.beep`, throw an error that says they are not available yet when they are read or assigned.
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.controlBounds`,
+  `PageItem.rotate` and `app.beep`, throw an error that says they are not available yet when they are read or assigned.
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the
   other properties but not the methods. `Object.keys`, `Object.getOwnPropertyNames` and
@@ -2894,6 +2896,112 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `Document.saveAs(file, options?)` runs `file.saveAs`, and the document then has the new file.
+  `Document.exportFile(file, exportType, options?)` runs `document.export` and leaves the document's file as it is.
+  `app.open(file, documentColorSpace?, options?)` runs `document.open` and gives the new `Document`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/Application/).
+  `file` is a `File`. `new IllustratorSaveOptions()`, `new EPSSaveOptions()` and `new PDFSaveOptions()` pick the
+  format (https://ai-scripting.docsforadobe.dev/jsobjref/IllustratorSaveOptions/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/EPSSaveOptions/, https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/);
+  without options the path's extension picks it. Without options, `saveAs` to a `.ai`, `.eps` or `.pdf` path and
+  `exportFile` as `PNG24`, `JPEG` or `SVG` use the defaults a new options object of that class holds. `saveAs` maps `compressed`, `pdfCompatible`, `embedICCProfile` and
+  `compatibility` (`ILLUSTRATOR17` and `ILLUSTRATOR19`), `saveMultipleArtboards` and `artboardRange` of `.ai`;
+  `cmykPostScript`, `includeDocumentThumbnails`, `postScript`, `preview`, `overprint`, `compatibility`,
+  `saveMultipleArtboards` and `artboardRange` of EPS; and `pDFPreset`, `compatibility` (`ACROBAT4` to
+  `ACROBAT8` as PDF 1.3 to 1.7), `artboardRange`, `preserveEditability`, `acrobatLayers` and `compressArt` of PDF.
+  As the `.ai` and EPS help pages say, `artboardRange` is used only with `saveMultipleArtboards` true, and an
+  empty range means every artboard. `Document.fullName` is a `File` for the document's file, `Document.saved` is
+  true when the document has no unsaved changes and can be set, and `Document.close(saveOptions?)` closes the
+  document with the given `SaveOptions` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/).
+  `exportType` is an `ExportType`: `PNG24`, `JPEG` and `SVG` take `new ExportOptionsPNG24()`, `new ExportOptionsJPEG()`
+  and `new ExportOptionsSVG()` (https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/, https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/),
+  with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, from 1 to
+  776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
+  `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
+  `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
+  `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
+  `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
+  each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
+  `EPSPostScriptLevelEnum`, `PDFOverprint`, `SaveOptions` and `UserInteractionLevel` hold strings such as
+  `"ExportType.PNG24"`.
+  `saveAs`, `exportFile`, `exportForScreens`, and `app.open` write their command warnings to the run's console.
+  VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
+  command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
+  document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
+  read-only`; a file a `File` object holds open for writing throws `Script file is open for writing` on `saveAs`
+  and `exportFile`, and `Script file access denied` when a command would write it besides the file named; and the
+  files a command reads or writes besides the one named, such as an SVG's linked files, are
+  read and written only where the script's folders allow. `userInteractionLevel` does not change what a command
+  does or where it may read and write, since a command a script runs never shows a dialog. `exportFile` adds the
+  format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with
+  `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
+  visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
+  when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
+  an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`. A property the help
+  pages do not list throws an error that names it (`PDFFileOptions` also accepts its read-only `typename` and
+  `parent`), and an `undefined` one is left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
+  keeps the preset's value. A `pDFPreset` in square brackets, such as `[Smallest File Size]`, names the built-in
+  preset of the name inside them; the default preset's name in brackets names VectorCraft Default, and
+  `[PDF/X-4:2008]` names PDF/X-4:2010. Any other name throws `unknown PDF preset`. `artboardRange` takes
+  a whole number from 1 as well as a string, read as `String(number)` reads it; any other number throws. With `saveMultipleArtboards` true, a `.ai` range
+  (every artboard when it is empty) goes to `file.saveAs`'s `separateArtboards`, which also writes each of its
+  artboards to `<name>-<artboard name>.ai`, and an EPS range goes to `useArtboards`, which writes
+  `<name>_<artboard name>.eps` for each of two or more artboards beside the file at the path, and for one artboard
+  writes only the file at the path, holding that artboard. Without `saveMultipleArtboards`, a `.ai` or EPS
+  `artboardRange` is not checked against the document's artboards, but one that is not written as a range of
+  artboard numbers (such as `abc` or `0-`) throws. `Document.path` is a `Folder` for the folder of the document's
+  file. A document that has no file has a `fullName` of a `File` for its name in `Folder.current` and a `path` of
+  `""`. `fullName` and `path` of a document whose file the automation read roots do not allow throw
+  `Script file access denied`. Setting `saved` runs `document.setSaved`: `true` records the document as saved
+  without saving it, so `close()` then closes it, and `false` records it as having unsaved changes; neither adds an
+  undo step. With unsaved changes, `close` closes without them with `SaveOptions.DONOTSAVECHANGES`;
+  `SaveOptions.SAVECHANGES` first saves them to the document's file with `file.saveAs`, in the format the document
+  was last saved in and after the same write-access check of the path as `saveAs`, and throws an error
+  and leaves the document open when the document has no file (a converted or recovered document included); and
+  `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws an error and leaves the document open, since a script cannot
+  show the prompt. A bad value throws an error before anything is written.
+- `Document.exportForScreens(exportFolder, exportFormat, options?, itemToExport?, fileNamePrefix?)` runs
+  `document.exportForScreens` with one format row into `exportFolder`, a `Folder` (or a `File`, read as the folder at
+  its path) (https://www.indesignjs.de/indesignapi/illustrator/Document.html). `exportFormat` is an
+  `ExportForScreensType` (https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensType.html): `SE_JPEG100`,
+  `SE_JPEG80`, `SE_JPEG50` and `SE_JPEG20` write JPEG at a quality of 100, 80, 50 and 20 and take
+  `new ExportForScreensOptionsJPEG()`; `SE_PNG24` takes `new ExportForScreensOptionsPNG24()`; `SE_PNG8` takes
+  `new ExportForScreensOptionsPNG8()`; `SE_SVG` takes `new ExportForScreensOptionsWebOptimizedSVG()`; and `SE_PDF`
+  takes `new ExportForScreensPDFOptions()` (https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsJPEG.html,
+  https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsPNG24.html,
+  https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsPNG8.html,
+  https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensOptionsWebOptimizedSVG.html,
+  https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensPDFOptions.html). The raster classes map
+  `antiAliasing`, `scaleType` and `scaleTypeValue` (`SCALEBYFACTOR` as a multiplier from 0.01 to 64, so 2 doubles the
+  size, `SCALEBYWIDTH` and `SCALEBYHEIGHT` in pixels, `SCALEBYRESOLUTION` in ppi from 0.72 to 4608).
+  Width and height requests must imply a raster scale from 0.01 to 64 for every exported region; an invalid scale
+  is rejected before that export command creates its output folder. Earlier artboard, asset or document exports in
+  the same script call can have written files. JPEG also maps `compressionMethod`, `embedICCProfile` and `progressiveScan` (3 to 5);
+  PNG24 maps `transparency`, `backgroundBlack` and `interlaced`; PNG8 maps `colorCount` (2 to 256), `interlaced`,
+  `matte` and `transparency`. With PNG8 transparency enabled, `matte: false` preserves transparency without a white background. The SVG class maps `coordinatePrecision` (1 to 7), `cssProperties`, `fontType`,
+  `rasterImageLocation`, `svgId`, `svgMinify` and `svgResponsive`. SVG `RasterImageLocation.LINK` throws; `EMBED` and `PRESERVE` embed raster images. The PDF class maps `pdfPreset` (at most 255
+  bytes; a name in square brackets names a built-in preset as `PDFSaveOptions.pDFPreset` does). `itemToExport` is a
+  `new ExportForScreensItemToExport()` (https://www.indesignjs.de/indesignapi/illustrator/ExportForScreensItemToExport.html)
+  with `artboards` (`all`, the default, a range of artboard numbers such as `1-3, 5`, or `""` for none), `assets` (a
+  list of asset ids, as `assets.list` gives them) and `document` (false by default). `fileNamePrefix` goes before each
+  file's name. The enumerations `ExportForScreensType`, `ExportForScreensScaleType`, `AntiAliasingMethod`,
+  `JPEGCompressionMethodType`, `RasterImageLocation`, `SVGCSSPropertyLocation`, `SVGFontType` and `SVGIdType` hold
+  strings such as `"ExportForScreensType.SE_PNG24"`.
+  VectorCraft's own rules: the folder is checked as a `File` opened for writing in it is checked, before the command
+  runs: a folder outside the script's folders throws `Script file access denied`, and a file throws `Script folder is
+  a file`. The command writes only where the script's folders allow. The files go into the folder without
+  sub-folders, each named `<fileNamePrefix><name><suffix>.<extension>` as `document.exportForScreens` names them (`@2x`
+  after a raster file at twice the size); a character a file name may not hold, `/` and `\` included, is written as
+  `-` in the prefix. The export keeps its settings in the document, as an export from the dialog does. The artboards,
+  the assets and, with `document` true, the bounds of the whole document's art (a PDF of every artboard) are each
+  their own export, in that order: when a later one throws, the files of the earlier ones stay written. An
+  `itemToExport` that names nothing throws `nothing to export`. A scale factor is from 0.01 to 64 and a resolution
+  from 0.72 to 4608 ppi. `RasterImageLocation.PRESERVE`, the default, embeds raster images as `EMBED` does, and
+  `SVGFontType.SVGFONT`, the default, writes text as SVG text elements. A listed option that is not mapped
+  (`matteColor`) is accepted at its default and throws at any other value, a property the pages do not list throws an
+  error that names it, an omitted options object takes the defaults a new one holds, and an options object of
+  another class throws. A bad value throws an error before anything is written.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
   with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
   `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page
@@ -9699,7 +9807,9 @@ document. With no document open they fail with "no document open". `document.act
 the current one. `document.move {from?, to}` reorders open documents the way dragging a document tab along the tab strip
 does: `from` defaults to the current document, `to` is the destination index, documents between them shift by one, the
 current document stays current, and each document keeps its own view (#5663). It is an engine command, so headless and
-remote `command_list` both list it. `file.close {index}` on a document other than the current one leaves the current
+remote `command_list` both list it. `document.setSaved {index?, saved}` records a document as saved (`true`) or as
+having unsaved changes (`false`) without saving it and without an undo step; a script's `Document.saved = value` runs
+it. `file.close {index}` on a document other than the current one leaves the current
 document current, and its tool keeps its state; closing the current document makes the document in the next tab
 current, or the one before it when it was the last tab. In the desktop app a modified document comes to the front first,
 to ask whether to save it.
