@@ -1380,6 +1380,7 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
     let params = params.clone();
     let session = host.session.clone();
     let started = clock();
+    let before = dom::before_command(host, &id);
     let (copies, r) = {
         let mut s = session.borrow_mut();
         (s.copies, step(&mut s, host, &id, &params))
@@ -1418,6 +1419,7 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
         host.copied.set(true);
     }
     drop(s);
+    dom::after_command(host, before);
     crossed.map(|data| (data, value))
 }
 

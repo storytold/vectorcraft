@@ -8366,6 +8366,7 @@ breakText	Glyphs	字形
 	Place Brush Art	置入画笔图稿
 	Replace Brush Art	替换画笔图稿
 	Replace Pattern Art	替换图案图稿
+	Place Pattern Art	置入图案图稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有描边使用了此画笔。要将新图稿应用到这些描边，还是保留描边不变并添加一个使用新图稿的画笔副本？
 	Apply to Strokes	应用于描边
 	Leave Strokes	保留描边

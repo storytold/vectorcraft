@@ -1296,6 +1296,28 @@ fn wrappers_go_stale_after_delete_and_undo() {
 }
 
 #[test]
+fn wrappers_go_stale_after_revert() {
+    let (mut s, ..) = doc();
+    let folder = vectorcraft_testkit::TempDir::new("script-dom-revert");
+    let path = folder.join("saved's art.vectorcraft");
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    let held = "var d = app.activeDocument, i = d.pageItems[0], l = i.parent; i.name = 'changed'; vc.run('file.revert');";
+    let out = log(&mut s, &format!("{held} vc.log(d.pageItems.length); vc.log(d.pageItems[0] === i); vc.log(d.pageItems[0].parent === l);"));
+    assert_eq!(out, vec![json!(2), json!(false), json!(false)]);
+    for operation in [
+        "i.name",
+        "i.name = 'wrong'",
+        "l.name",
+        "i.move(d.pageItems[1], ElementPlacement.PLACEBEFORE)",
+        "d.pageItems[1].duplicate(i, ElementPlacement.PLACEBEFORE)",
+        "d.pageItems[1].move(l, ElementPlacement.PLACEATEND)",
+    ] {
+        let source = format!("{held} try {{ {operation}; vc.log('ran'); }} catch (e) {{ vc.log(e.message); }} vc.log(d.pageItems.length);");
+        assert_eq!(log(&mut s, &source), vec![json!("Stale page item"), json!(2)], "{operation}");
+    }
+}
+
+#[test]
 fn remove_all_refuses_locked_art_before_deleting_anything() {
     let (mut s, a, b) = doc();
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();

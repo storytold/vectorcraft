@@ -8505,6 +8505,7 @@ breakText	Glyphs	Glyfer
 	Place Brush Art	Placera penselgrafik
 	Replace Brush Art	Ersätt penselgrafik
 	Replace Pattern Art	Ersätt mönstergrafik
+	Place Pattern Art	Placera mönstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturer använder den här penseln. Använd den nya grafiken på konturerna, eller låt dem vara som de är och lägg till en kopia av penseln med den nya grafiken?
 	Apply to Strokes	Använd på konturer
 	Leave Strokes	Behåll konturer

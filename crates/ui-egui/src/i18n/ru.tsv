@@ -8488,6 +8488,7 @@ breakText	Glyphs	Глифы
 	Place Brush Art	Поместить рисунок кисти
 	Replace Brush Art	Заменить рисунок кисти
 	Replace Pattern Art	Заменить рисунок узора
+	Place Pattern Art	Поместить рисунок узора
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обводки используют эту кисть. Применить новый рисунок к этим обводкам или оставить их как есть и добавить копию кисти с новым рисунком?
 	Apply to Strokes	Применить к обводкам
 	Leave Strokes	Оставить обводки

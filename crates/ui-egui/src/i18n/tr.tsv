@@ -10389,6 +10389,7 @@ breakText	Glyphs	Glifler
 	Place Brush Art	Fırça Çizimini Yerleştir
 	Replace Brush Art	Fırça Çizimini Değiştir
 	Replace Pattern Art	Desen Çizimini Değiştir
+	Place Pattern Art	Desen Çizimini Yerleştir
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturlar bu fırçayı kullanıyor. Yeni çizim bu konturlara uygulansın mı, yoksa konturlar olduğu gibi bırakılıp fırçanın yeni çizimli bir kopyası mı eklensin?
 	Apply to Strokes	Konturlara Uygula
 	Leave Strokes	Konturları Bırak

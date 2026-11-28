@@ -8186,6 +8186,7 @@ breakText	Glyphs	Glyph
 	Place Brush Art	Đặt đối tượng của cọ
 	Replace Brush Art	Thay đối tượng của cọ
 	Replace Pattern Art	Thay đối tượng của họa tiết
+	Place Pattern Art	Đặt đối tượng của họa tiết
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
 	Apply to Strokes	Áp dụng cho nét
 	Leave Strokes	Giữ nguyên nét

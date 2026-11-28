@@ -180,24 +180,26 @@ fn list_files(dir: &Path, ext: &str) -> Vec<PathBuf> {
 /// [`list_files`], each file with its stamp ([`file_stamp`]) from the same look at it.
 fn list_stamped_files(dir: &Path, ext: &str) -> Vec<(PathBuf, (u64, SystemTime))> {
     let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
-    let mut files: Vec<_> = entries
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)))
-        .filter_map(|p| {
-            let m = std::fs::metadata(&p).ok().filter(std::fs::Metadata::is_file)?;
-            match m.modified() {
-                Ok(t) => Some((p, (m.len(), t))),
-                Err(e) => {
-                    log::warn!("skipping the stored plug-in {}: {e}", p.display());
-                    None
-                }
-            }
-        })
-        .collect();
+    let mut files: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).filter_map(|p| stamped_file(p, ext)).collect();
     files.sort_by_key(|(p, _)| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
     files.truncate(MAX_STORE_FILES);
     files
+}
+
+/// The file `p` with its size and modified time, as [`list_stamped_files`] lists it: `None` unless
+/// it is a regular file with the extension `ext`.
+fn stamped_file(p: PathBuf, ext: &str) -> Option<(PathBuf, (u64, SystemTime))> {
+    if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)) {
+        return None;
+    }
+    let m = std::fs::metadata(&p).ok().filter(std::fs::Metadata::is_file)?;
+    match m.modified() {
+        Ok(t) => Some((p, (m.len(), t))),
+        Err(e) => {
+            skip_stored(&p, e);
+            None
+        }
+    }
 }
 
 /// The content of `path` when it is at most `max` bytes; the file is never read past `max`.
@@ -322,6 +324,8 @@ pub(crate) struct StoredLoad {
     loads: Loads<StoredRead>,
     /// Outcomes taken from `loads` and not installed yet, in order.
     loaded: VecDeque<vectorcraft_plugins::Result<StoredRead>>,
+    /// The ids this load installed, in file-name order.
+    installed: Vec<String>,
     /// The next file to install.
     next: usize,
     /// The store's grants this load removed, by id, because the module stored for the id lists no
@@ -379,6 +383,45 @@ fn after_stored_load(path: &Path) {
 /// Why a stored plug-in whose file changed between its listing and its install is skipped.
 const CHANGED_WHILE_LOADING: &str = "it changed or went away while it loaded";
 
+/// The stored plug-in files that didn't install in this process, by path, with why
+/// ([`skip_stored`]). A file stays listed until it installs or its store is loaded again.
+static STORED_FAILED: Mutex<BTreeMap<PathBuf, String>> = Mutex::new(BTreeMap::new());
+
+/// The stored plug-ins skipped ([`STORED_FAILED`]).
+fn stored_failures() -> MutexGuard<'static, BTreeMap<PathBuf, String>> {
+    STORED_FAILED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Skips the stored plug-in `path` because of `why`: logs it and lists the file as failed.
+fn skip_stored(path: &Path, why: impl std::fmt::Display) {
+    log::warn!("skipping the stored plug-in {}: {why}", path.display());
+    stored_failures().insert(path.to_path_buf(), why.to_string());
+}
+
+/// The stored plug-in files in the plug-in store `dir` that didn't install in this process, in
+/// file-name order, each with why.
+pub(crate) fn failed_stored_plugins(dir: &Path) -> Vec<(PathBuf, String)> {
+    stored_failures().iter().filter(|(p, _)| p.parent() == Some(dir)).map(|(p, why)| (p.clone(), why.clone())).collect()
+}
+
+/// Stops listing the stored plug-in file `path` as failed: a plug-in installed from it.
+pub(crate) fn clear_stored_failure(path: &Path) {
+    stored_failures().remove(path);
+}
+
+/// A plug-in installed from the stored file `path`: it is no longer listed as failed, by the store
+/// (a load in another session may have failed on it meanwhile) or by the folder report of a
+/// `plugin.reload` of the store's folder.
+fn installed_from(path: &Path) {
+    clear_stored_failure(path);
+    crate::cmd::plugin::clear_folder_failure(path);
+}
+
+/// Why the stored plug-in `path` didn't install in this process, if it is listed as failed.
+pub(crate) fn stored_failure(path: &Path) -> Option<String> {
+    stored_failures().get(path).cloned()
+}
+
 #[cfg(test)]
 thread_local! {
     /// Tests: the stored plug-in bytes a store listed on this thread may read ([`MAX_PLUGIN_STORE`]).
@@ -418,11 +461,15 @@ fn list_stored_plugins(rest: &mut VecDeque<StoredFile>, left: &mut u64) -> (Vec<
         let most = *left + taken;
         if most == 0 {
             log::warn!("skipping the other stored plug-ins: they hold more than {MAX_PLUGIN_STORE} bytes together");
-            rest.clear();
+            let why = format!("the stored plug-ins hold more than {MAX_PLUGIN_STORE} bytes together");
+            let mut failed = stored_failures();
+            for (path, _) in std::iter::once((path, stamp)).chain(rest.drain(..)) {
+                failed.insert(path, why.clone());
+            }
             break;
         }
         if len > most {
-            log::warn!("skipping the stored plug-in {}: {}", path.display(), too_large(most));
+            skip_stored(&path, too_large(most));
             continue;
         }
         // An empty file too waits once `left` is used up.
@@ -784,7 +831,7 @@ impl Session {
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
         self.finish_plugin_loads();
         self.plugin_dir = Some(dir);
-        self.start_stored_plugins(true);
+        self.start_stored_plugins(true, None);
     }
 
     /// Install the plug-ins kept in the plug-in folder: none in Safe Mode, and none the user
@@ -801,34 +848,58 @@ impl Session {
     /// ([`Session::plugin_store_turn_for_load`]); the modules load between them. With
     /// [`Session::load_plugins_in_background`] on, this returns while the modules load.
     pub fn load_stored_plugins(&mut self) {
-        self.start_stored_plugins(false);
+        self.start_stored_plugins(false, None);
+    }
+
+    /// Loads the stored plug-in `path` again, as [`Session::load_stored_plugins`] loads each file,
+    /// and waits until it is installed or skipped (`plugin.retry`) → the id it installed, if any.
+    pub(crate) fn retry_stored_plugin(&mut self, path: &Path) -> Option<String> {
+        self.finish_plugin_loads();
+        self.start_stored_plugins(false, Some(path))
     }
 
     /// [`Session::load_stored_plugins`]; `disabled`: first take the disabled plug-ins saved in the
-    /// folder ([`DISABLED_FILE`]).
-    fn start_stored_plugins(&mut self, disabled: bool) {
-        let Some(dir) = self.plugin_dir.clone() else { return };
+    /// folder ([`DISABLED_FILE`]); `only`: load that one file of the folder, if it is there. The
+    /// files it loads stop being listed as failed ([`failed_stored_plugins`]) until they fail again.
+    /// With `only`, waits for the load → the id it installed, if any.
+    fn start_stored_plugins(&mut self, disabled: bool, only: Option<&Path>) -> Option<String> {
+        let dir = self.plugin_dir.clone()?;
         // A `plugin.install` in another session or process writes the store before this lists it.
         let held = crate::cmd::plugin::hold_plugin_changes();
         let turn = self.plugin_store_turn_for_load();
+        match only {
+            Some(path) => {
+                stored_failures().remove(path);
+            }
+            None => stored_failures().retain(|p, _| p.parent() != Some(dir.as_path())),
+        }
         if disabled {
             let path = dir.join(DISABLED_FILE);
             let saved = read_capped(&path, safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
             safe_mode::set_disabled(saved);
         }
         if safe_mode::active() {
-            return;
+            return None;
         }
         let module = vectorcraft_plugins::Limits::default().max_module_bytes as u64;
         let mut rest = VecDeque::new();
         let disabled: BTreeSet<String> = safe_mode::skipped_ids().iter().map(|id| file_stem(id)).collect();
-        for (path, stamp) in list_stamped_files(&dir, PLUGIN_EXT) {
+        // A retry reads its one file without listing the folder again.
+        let listed: Vec<_> = match only {
+            Some(path) => stamped_file(path.to_path_buf(), PLUGIN_EXT).filter(|(p, _)| p.parent() == Some(dir.as_path())).into_iter().collect(),
+            None => list_stamped_files(&dir, PLUGIN_EXT),
+        };
+        // A retried file that isn't there (yet) stays listed, so a later retry can load it.
+        if let Some(path) = only.filter(|p| listed.is_empty() && stored_failure(p).is_none()) {
+            skip_stored(path, "it is no longer in the plug-in store");
+        }
+        for (path, stamp) in listed {
             let item = safe_mode::Item::file(path.display().to_string());
             let by_id = path.file_stem().is_some_and(|s| disabled.contains(s.to_string_lossy().as_ref()));
             if safe_mode::skipped(&item) || by_id {
                 log::info!("skipping the stored plug-in {}: disabled", path.display());
             } else if stamp.0 > module {
-                log::warn!("skipping the stored plug-in {}: {}", path.display(), too_large(module));
+                skip_stored(&path, too_large(module));
             } else {
                 rest.push_back((path, Some(Some(stamp))));
             }
@@ -840,9 +911,24 @@ impl Session {
         changes.start();
         // The modules load after the turn, once the loads queued before them are done.
         drop((turn, held));
-        let load =
-            StoredLoad { dir, files, loads: Loads::deferred(jobs), loaded: VecDeque::new(), next: 0, retired: BTreeMap::new(), changes, rest, left };
+        let load = StoredLoad {
+            dir,
+            files,
+            loads: Loads::deferred(jobs),
+            loaded: VecDeque::new(),
+            installed: Vec::new(),
+            next: 0,
+            retired: BTreeMap::new(),
+            changes,
+            rest,
+            left,
+        };
+        if only.is_some() {
+            let report = self.finish_plugin_load(PluginLoad::Stored(load));
+            return report["loaded"].as_array()?.first()?.as_str().map(str::to_string);
+        }
         self.queue_plugin_load(PluginLoad::Stored(load));
+        None
     }
 
     /// Installs what the stored plug-ins' `load` has loaded so far, in file-name order up to the
@@ -887,7 +973,7 @@ impl Session {
             // The worker read the file again once its module loaded ([`list_stored_plugins`]); one
             // whose stamp changed since then is skipped too.
             if file_stamp(path).ok() != *stamp {
-                log::warn!("skipping the stored plug-in {}: {CHANGED_WHILE_LOADING}", path.display());
+                skip_stored(path, CHANGED_WHILE_LOADING);
                 continue;
             }
             match loaded {
@@ -911,7 +997,7 @@ impl Session {
                             // grant it, so it wouldn't load at the next launch either.
                             if back.is_some() {
                                 if !self.store_grant_in(turn, &m.id, Some(g.clone())) {
-                                    log::warn!("skipping the stored plug-in {}: couldn't put back its grant", path.display());
+                                    skip_stored(path, "couldn't put back its grant");
                                     continue;
                                 }
                                 load.retired.remove(&m.id);
@@ -932,6 +1018,8 @@ impl Session {
                             ) {
                                 Ok(Some(p)) => {
                                     load.changes.installed(&p);
+                                    load.installed.push(p.id().to_string());
+                                    installed_from(path);
                                     true
                                 }
                                 Ok(None) => {
@@ -939,7 +1027,7 @@ impl Session {
                                     false
                                 }
                                 Err(e) => {
-                                    log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                                    skip_stored(path, e);
                                     false
                                 }
                             };
@@ -955,9 +1043,7 @@ impl Session {
                                 }
                             }
                         }
-                        None => {
-                            log::warn!("skipping the stored plug-in {}: the user hasn't granted this module the permissions it lists", path.display())
-                        }
+                        None => skip_stored(path, "the user hasn't granted this module the permissions it lists"),
                     }
                 }
                 Ok(plugin) => {
@@ -978,11 +1064,13 @@ impl Session {
                             continue;
                         }
                         Err(e) => {
-                            log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                            skip_stored(path, e);
                             continue;
                         }
                     };
                     load.changes.installed(&p);
+                    load.installed.push(p.id().to_string());
+                    installed_from(path);
                     // In the same turn: the grants for the id stop counting, the process's and the
                     // store's, so no session sees the earlier module as approved. A module installed
                     // in its place meanwhile keeps the process's grant recorded for it.
@@ -999,7 +1087,7 @@ impl Session {
                         }
                     }
                 }
-                Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
+                Err(e) => skip_stored(path, e),
             }
         }
     }
@@ -1083,7 +1171,7 @@ impl Session {
     }
 
     /// Waits for `load`'s modules and installs them as they load, in turns on the store, then
-    /// ends it → its report (a folder's; `null` for the stored plug-ins).
+    /// ends it → its report (the installed ids for the stored plug-ins).
     pub(crate) fn finish_plugin_load(&mut self, mut load: PluginLoad) -> Value {
         load.start();
         loop {
@@ -1152,7 +1240,7 @@ impl Session {
         }
     }
 
-    /// Ends `load` once [`PluginLoad::done`], in `turn` → its report (a folder's).
+    /// Ends `load` once [`PluginLoad::done`], in `turn` → its report.
     fn end_plugin_load(&mut self, load: PluginLoad, turn: &StoreTurn) -> Value {
         // The loads queued after it count what it installed as their own: one of theirs replaces
         // it, as it would have with the loads run one after the other.
@@ -1165,7 +1253,7 @@ impl Session {
         }
         match load {
             // A stored load's grants were settled as each module installed.
-            PluginLoad::Stored(_) => Value::Null,
+            PluginLoad::Stored(load) => serde_json::json!({"loaded": load.installed}),
             PluginLoad::Folder(load) => crate::cmd::plugin::end_folder(self, load, turn),
         }
     }
@@ -1298,9 +1386,19 @@ impl Session {
     }
 
     /// Write the module `bytes` of the plug-in `id` to the store in `turn` → whether they went there
-    /// (`false` without a folder, and when `turn` isn't held).
+    /// (`false` without a folder, and when `turn` isn't held). The file written is no longer listed
+    /// as failed ([`failed_stored_plugins`]).
     pub(crate) fn store_plugin(&self, turn: &StoreTurn, id: &str, bytes: &[u8]) -> bool {
-        turn.held() && self.plugin_dir.as_deref().is_some_and(|dir| put(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)), bytes))
+        let name = format!("{}.{PLUGIN_EXT}", file_stem(id));
+        turn.held()
+            && self.plugin_dir.as_deref().is_some_and(|dir| {
+                let written = put(dir, &name, bytes);
+                if written {
+                    stored_failures().remove(&dir.join(&name));
+                    crate::cmd::plugin::clear_folder_failure(&dir.join(&name));
+                }
+                written
+            })
     }
 
     /// The module the store holds for the plug-in `id`: `None` without a folder or such a file, and
@@ -1506,9 +1604,19 @@ impl Session {
     }
 
     /// Remove the plug-in `id` from the store in `turn` → whether its file is gone (`false` without a
-    /// folder, and when `turn` isn't held).
+    /// folder, and when `turn` isn't held). A file removed is no longer listed as failed
+    /// ([`failed_stored_plugins`]).
     pub(crate) fn unstore_plugin(&self, turn: &StoreTurn, id: &str) -> bool {
-        turn.held() && self.plugin_dir.as_deref().is_some_and(|dir| take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id))))
+        let name = format!("{}.{PLUGIN_EXT}", file_stem(id));
+        turn.held()
+            && self.plugin_dir.as_deref().is_some_and(|dir| {
+                let gone = take(dir, &name);
+                if gone {
+                    stored_failures().remove(&dir.join(&name));
+                    crate::cmd::plugin::clear_folder_failure(&dir.join(&name));
+                }
+                gone
+            })
     }
 
     /// Keep the settings and cache of plug-in `id` in the attached plug-in store from now on; without

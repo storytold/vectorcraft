@@ -10549,6 +10549,7 @@ breakText	Glyphs	Glyffer
 	Place Brush Art	Placér penselgrafik
 	Replace Brush Art	Erstat penselgrafik
 	Replace Pattern Art	Erstat mønstergrafik
+	Place Pattern Art	Placér mønstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Streger bruger denne pensel. Anvend den nye grafik på stregerne, eller lad dem være, som de er, og tilføj en kopi af penslen med den nye grafik?
 	Apply to Strokes	Anvend på streger
 	Leave Strokes	Bevar streger
