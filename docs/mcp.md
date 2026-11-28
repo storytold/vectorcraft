@@ -2626,10 +2626,10 @@ top-level `import` or `export`, such as a React `.jsx` file), `notText` (a NUL b
 control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script, the reply holds these lists:
 
 - `needs` lists what the script needs from the app that runs it: `language` (the script language's own objects,
-  syntax and directives, such as `$`, `alert`, `UnitValue`, the XML object and E4X, `#target` and `#targetengine`),
-  `dom` (the reference app's document model), `files`, `menuCommands`, `dialogs`, and `hostOnly` (features only the
-  reference app has: palettes, BridgeTalk, sockets, native code, XMP, operator overloading, reflection, actions and
-  `selectTool`).
+  syntax and directives, such as `$`, `alert`, `UnitValue`, `reflect`, the XML object and E4X, `#target` and
+  `#targetengine`), `dom` (the reference app's document model), `files`, `menuCommands`, `dialogs`, and `hostOnly`
+  (features only the reference app has: palettes, BridgeTalk, sockets, native code, XMP, operator overloading,
+  actions and `selectTool`).
 - `directives` lists the `#include`, `#includepath`, `#script`, `#strict`, `#target` and `#targetengine` lines,
   and `targets` splits each `#target` line's application specifier into `app`, `instance`, `version` and
   `locale`. A directive is read where it starts a line, written `#name` or `//@name`.
@@ -2796,7 +2796,9 @@ Script Console and runs other files through `$`:
   setting's enumeration, a finite number, a `title` string, `true` or `false` for `documentBleedLink`, or an array
   of four finite numbers for `documentBleedOffsetRect`. Any setting takes `undefined`, which unsets it. A value of
   another kind throws a `TypeError`, a `title` longer than 4096 bytes throws a `RangeError`, and the setting keeps
-  its old value. `addDocument` checks the ranges of the values. `documentBleedLink`, `documentBleedOffsetRect` and
+  its old value. The values a run's `DocumentPreset` objects hold together may not take more than the run's heap; an
+  assignment past that throws a `RangeError`, and a value assigned again replaces the one before it in that count.
+  `addDocument` checks the ranges of the values. `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` also take `null` and can be assigned, but `addDocument` throws an error that says they are not available yet when
   the preset it is given holds one of them with a value other than `null`, and makes no document. A
   `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
@@ -2817,8 +2819,9 @@ Script Console and runs other files through `$`:
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
-  or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  visible bounds, widened to take in the direction points of every path in the object), `editable` (false for an
+  object that is hidden or locked, in a hidden or locked layer or group, or on a locked artboard), `zOrderPosition`,
+  `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
@@ -2881,9 +2884,10 @@ Script Console and runs other files through `$`:
   the page's axes, so a rotated object then reads back the size that was set. `index` and `getByName` throw
   `Not found`; and
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
-  a list of at most 10,000, `null` or `[]`. Any other value, `undefined` included, throws a `TypeError`, and an
-  object that cannot be selected throws `Cannot select`, each with nothing changed. While View › Guides › Lock
-  Guides is on, a path made into a guide cannot be selected this way or with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
+  a list of at most 10,000, `null` or `[]`. Any other value, `undefined` included (such as an index past the end
+  of `pageItems`), throws a `TypeError`, and an object that cannot be selected throws `Cannot select`, each with
+  nothing changed. While View › Guides › Lock Guides is on, a path made into a guide cannot be selected this way or
+  with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
@@ -3097,6 +3101,22 @@ by 0 included) and a comparison with a number that is not finite throw a `RangeE
 `Error` and leaves the object as it was; `value` takes only a finite number; and `baseUnit` takes only `null` or a
 length greater than 0 (not pixels or percentages). Two units of length convert through their exact ratio to the inch,
 so `UnitValue(1, 'in').as('pt')` is exactly 72.
+
+`value.reflect` describes an object, as the reflection interface page lays out
+(https://extendscript.docsforadobe.dev/extendscript-tools-features/extendscript-reflection-interface/). Each read
+gives a new frozen object with `name` (the class), `description` and `help` (`undefined`), `properties` and
+`methods` (arrays of entries), and `find(name)`, which gives the entry of the property, or else the method, with that
+name, or `null`; a name that is not a string or a number throws a `TypeError`. Each entry has `name` (a number for an
+array index), `description`, `help`, `type` (`readonly`, `readwrite`, `method`, or `parameter` for an argument),
+`dataType`, `defaultValue`, `min`, `max`, `isCollection` and `arguments`; an entry is also under its name in its array
+when that name is not an array index or `length`. `app`, its documents, page items and layers, `DocumentPreset` and
+each class's constructor list the members of their class and its parents, with the types, bounds, defaults and method
+arguments the object model declares for them (VectorCraft's own values); members that are not available yet are left
+out. Any other object lists its own properties: a function value is a method, with a JavaScript function's parameter
+names as its arguments, a data property gives the type of its value, and an accessor gives `unknown`. A string, number
+or boolean lists its prototype's own properties. No getter runs. `reflect` has no setter, and nothing in a reflection
+can be changed: a write is ignored, or throws a `TypeError` in strict mode. An object with more than 10,000 members
+and arguments throws a `RangeError`.
 
 The run is one transaction. When the script ends, each document it changed gets one undo step named Run Script. A
 run that changes no document adds no undo step. The journal records each command the run finished, as it records
