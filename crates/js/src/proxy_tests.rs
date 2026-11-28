@@ -409,13 +409,23 @@ fn a_proxy_works_as_a_prototype_and_a_with_scope() {
 
 #[test]
 fn typeof_reads_the_binding_a_with_scope_reported_once() {
+    // GetBindingValue asks `has` again, and a binding gone by then reads as undefined without `get`.
     truth(
-        "var asked = 0;
+        "var asked = 0, got = 0;
          var p = new Proxy({}, { has: function (t, k) { return k === 'x' && asked++ === 0; },
-                                 get: function (t, k) { return k === 'x' ? function () {} : undefined; } });
+                                 get: function (t, k) { got++; return k === 'x' ? function () {} : undefined; } });
          var r;
          with (p) { r = typeof x; }
-         r === 'function' && asked === 1",
+         r === 'undefined' && asked === 2 && got === 0",
+    );
+    // A plain read of the same binding takes the same path.
+    truth(
+        "var asked = 0, got = 0;
+         var p = new Proxy({}, { has: function (t, k) { return k === 'x' && asked++ === 0; },
+                                 get: function (t, k) { got++; return 1; } });
+         var r;
+         with (p) { r = x; }
+         r === undefined && asked === 2 && got === 0",
     );
 }
 

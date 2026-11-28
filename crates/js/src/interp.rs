@@ -1306,8 +1306,18 @@ impl Interp {
             Resolved::Decl(e) if self.uninitialized(e, name) => Err(self.not_initialized(name)),
             Resolved::Decl(e) => Ok((self.binding_value(e, name)?, Value::Undefined)),
             Resolved::Obj { object, with_this } => {
+                // GetBindingValue of an object environment asks HasProperty again (ES2015
+                // 8.1.1.2.6): a binding gone since the lookup reads as undefined, or throws in
+                // strict code, without a [[Get]].
+                let this = if with_this { Value::Object(object) } else { Value::Undefined };
+                if !self.scope_has(object, name)? {
+                    if self.strict() {
+                        return Err(self.not_defined(name));
+                    }
+                    return Ok((Value::Undefined, this));
+                }
                 let v = self.get_value(&Value::Object(object), name)?;
-                Ok((v, if with_this { Value::Object(object) } else { Value::Undefined }))
+                Ok((v, this))
             }
             Resolved::Unresolved => Err(self.not_defined(name)),
         }
