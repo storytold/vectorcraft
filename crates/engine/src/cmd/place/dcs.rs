@@ -105,7 +105,7 @@ pub(crate) fn read(bytes: &[u8], path: Option<&str>) -> Result<DcsArt> {
     let blob = ImageBlob::separated_tiff_clipped(&p.separated, p.ppi, &files, clip.as_ref())
         .ok_or_else(|| EngineError::Other("the plates can't be kept".into()))?;
     let clip = clip.map(|path| (path, vectorcraft_geom::FillRule::NonZero));
-    let img = RasterImage { key: blob.content_key(), blob, width: p.separated.width, height: p.separated.height, ppi: p.ppi, clip };
+    let img = RasterImage { key: blob.content_key(), blob, width: p.separated.width, height: p.separated.height, ppi: p.ppi, clip, note: None };
     let spots = p.separated.spots().map(|s| (s.name.clone(), s.cmyk)).collect();
     Ok(DcsArt { img, xf: p.xf, page: p.page, clip: p.clip, spots, warnings: p.warnings })
 }
