@@ -22,6 +22,12 @@ const CUBE_BOX: f32 = 124.0;
 const CUBE_HALF: f32 = 25.0;
 const RING_IN: f32 = 47.0;
 const RING_OUT: f32 = 60.0;
+/// The grays the 3D dialogs shade a surface with, the same in every theme: light for the cube's top and bottom faces
+/// and a Map Art surface the viewer sees, mid for the cube's left and right faces, and dark for its back face and a
+/// hidden Map Art surface.
+pub(super) const SHADE_LIGHT: Color32 = Color32::from_gray(205);
+pub(super) const SHADE_MID: Color32 = Color32::from_gray(155);
+pub(super) const SHADE_DARK: Color32 = Color32::from_gray(90);
 /// How far an edge reaches for the pointer (points).
 const EDGE_REACH: f32 = 5.0;
 /// Degrees one point of pointer movement turns the cube.
@@ -298,7 +304,7 @@ impl Component for TrackCube<'_> {
         let center = cx.rect.center();
         let mut held = *cx.press_slot::<CubeDrag>();
         let result = cx.part(CUBE);
-        let (press, hover) = (result.press, result.hover_pos.filter(|_| result.hovered));
+        let (press, hover) = (result.press, cx.hover_pos(CUBE));
         match press.phase {
             PressPhase::Down { start, .. } if start.button == PointerButton::Primary => {
                 cx.focus_part(CUBE);
@@ -425,12 +431,11 @@ fn paint_cube(painter: &egui::Painter, s: &RowStyle, rect: Rect, m: M3, active: 
         if !face_visible(m, axis, side) {
             continue;
         }
-        // PLAN: the gray steps are literals; the data tokens of area plan §2 w3 were not visible to this writer.
         let fill = match (axis, side) {
             (2, true) => colors[2],
-            (2, false) => Color32::from_gray(90),
-            (1, _) => Color32::from_gray(205),
-            _ => Color32::from_gray(155),
+            (2, false) => SHADE_DARK,
+            (1, _) => SHADE_LIGHT,
+            _ => SHADE_MID,
         };
         let points: Vec<Pos2> = face_corners(axis, side).iter().map(|&i| corner(m, center, i)).collect();
         painter.add(egui::Shape::convex_polygon(points, fill, Stroke::NONE));

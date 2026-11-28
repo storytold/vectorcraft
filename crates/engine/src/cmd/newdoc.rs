@@ -634,6 +634,30 @@ pub(crate) fn grid_origins_rc(
         .collect()
 }
 
+/// Rearrange Artboards' grid for artboards of `sizes`, in their order, its top-left at `origin`:
+/// `lines` is the column count of a grid by row and the row count of a grid by column (kept to 1
+/// to the artboard count), and `rtl` puts the first column at the right. Returns each artboard's
+/// top-left corner and the grid's rows and columns.
+pub fn rearrange_grid(
+    sizes: &[(f64, f64)],
+    origin: Point,
+    layout: ArtboardLayout,
+    lines: u64,
+    spacing: f64,
+    rtl: bool,
+) -> (Vec<Point>, usize, usize) {
+    let n = sizes.len().max(1);
+    let lines = usize::try_from(lines).unwrap_or(usize::MAX).clamp(1, n);
+    let (rows, cols) = match layout {
+        ArtboardLayout::GridByRow => (n.div_ceil(lines), lines),
+        ArtboardLayout::GridByColumn => (lines, n.div_ceil(lines)),
+        ArtboardLayout::Row => (1, n),
+        ArtboardLayout::Column => (n, 1),
+    };
+    let origins = grid_origins_rc(sizes, origin, (rows, cols), spacing, layout == ArtboardLayout::GridByColumn, rtl);
+    (origins, rows, cols)
+}
+
 /// The built-in presets: (category, presets as (name, width, height, units)), with the category's
 /// colour mode and raster effects resolution. Sizes in `units` (converted to points on use).
 type Category = (&'static str, ColorMode, f64, &'static [(&'static str, f64, f64, Unit)]);
@@ -977,8 +1001,9 @@ impl Session {
 
     /// Profile `name`'s document, its file's path and a warning for each color profile the file
     /// carries that can't be used: `None` when it has no file (the shipped profile, the defaults),
-    /// the reason when the request being served may not read it, or its file can't be read, is
-    /// larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft reads.
+    /// the reason when the request being served may not read it, or its file is a link or a folder,
+    /// can't be read, is larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft
+    /// reads.
     fn read_profile(&self, name: &str) -> std::result::Result<Option<ReadProfile>, String> {
         let Some(path) = self.profile_path(name) else { return Ok(None) };
         let file = path.to_string_lossy().to_string();
@@ -989,8 +1014,11 @@ impl Session {
         let denied = |_| PROFILE_DENIED.to_string();
         let read = crate::file_access::app_folder_read(|| {
             crate::file_access::check_read(&file).map_err(denied)?;
-            if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
-                return Ok(None);
+            match std::fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                // A link is refused: the script's gate does not check where it leads.
+                Ok(m) if !m.file_type().is_file() => return Err("not a plain file".to_string()),
+                _ => {}
             }
             crate::file_access::check_read(&file).map_err(denied)?;
             crate::store::read_capped(&path, MAX_PROFILE_BYTES).map(Some)

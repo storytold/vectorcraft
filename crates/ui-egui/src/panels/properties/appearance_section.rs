@@ -5,7 +5,7 @@ use craft::behavior::IconId;
 use craft::keymap::CommandRef;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger, clicked};
+use craft::ui::contract::{Bind, LabelScheme, Props as _, Show as _, ShowContainer as _, Sizing, Trigger, clicked};
 use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
@@ -41,7 +41,7 @@ fn panel_button<'a>(icon: &'static str, panel: &str, label: &'static str) -> Ico
 
 /// The Opacity field, and the icon that shows the Transparency panel.
 fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
-    Row::new().show(ui, |ui, _| {
+    Row::new().labels(LabelScheme::Inspector).show(ui, |ui, _| {
         let shown = Some(n.opacity as f64 * 100.0);
         let out = Field::new(tl!("Opacity"))
             .sizing(Sizing::Content)
@@ -97,13 +97,35 @@ fn effect_delete(app: &mut VectorcraftApp, ui: &mut Ui, id: NodeId, effects: &[(
     }
 }
 
+/// Whether a stroke that `stroke.set` edits has a width profile
+/// ([`vectorcraft_engine::Session::edited_strokes_profiled`]), cached per document revision and
+/// active Appearance row in `PropertiesUi::edited_profiled`. False while the Type tool edits text or
+/// a tool paints the stroke ([`vectorcraft_engine::Session::tool_paints`]), when the list edits the stroke the panel shows.
+fn edited_strokes_profiled(app: &mut VectorcraftApp) -> bool {
+    if panels::character::text_editing(app).is_some() || app.session.tool_paints(true) {
+        return false;
+    }
+    let Some(st) = app.session.active() else { return false };
+    let key = (st.uid, st.revision, app.session.appearance_item());
+    if let Some((k, v)) = app.ui.properties_panel.edited_profiled
+        && k == key
+    {
+        return v;
+    }
+    let v = app.session.edited_strokes_profiled();
+    app.ui.properties_panel.edited_profiled = Some((key, v));
+    v
+}
+
 /// The stroke's Variable Width Profile (the Control bar's list), shown while the Width tool is in
 /// use or the stroke has a variable width, as the Properties panel overview places it
 /// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>).
+/// The row also shows when the shown stroke is uniform and another stroke the list edits has a
+/// variable width ([`edited_strokes_profiled`]), so that Uniform can remove it.
 fn width_profile_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     let stroke = panels::current_stroke(app);
     let profile = stroke.as_ref().and_then(|s| s.profile.as_ref());
-    if app.session.tool_id() != "width" && WidthProfile::id_of(profile) == "uniform" {
+    if app.session.tool_id() != "width" && WidthProfile::id_of(profile) == "uniform" && !edited_strokes_profiled(app) {
         return;
     }
     Field::new(tl!("Profile")).show(ui, |ui, _| stroke::profile_select(app, ui));
@@ -118,7 +140,7 @@ pub(super) fn fill_stroke_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
         panels::paint_chip(app, ui, false);
         Text::new(tl!("Fill")).show(ui);
     });
-    Row::new().show(ui, |ui, _| {
+    Row::new().labels(LabelScheme::Inspector).show(ui, |ui, _| {
         panels::paint_chip(app, ui, true);
         stroke::link_field(app, ui, tl!("Stroke"), weight);
     });

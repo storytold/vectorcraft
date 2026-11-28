@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 
 use craft::behavior::{ColumnWidth, IconId};
 use craft::egui::{Response, Ui};
-use craft::host::{PickRequest, Picked};
+use craft::host::PickRequest;
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::contract::overlay::Trigger;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
@@ -73,8 +73,9 @@ pub(crate) const SIZES: [&str; 12] = ["0.5x", "0.75x", "1x", "1.5x", "2x", "3x",
 /// The iOS and Android rows (the engine's `mobile` and `density` presets) and their labels.
 pub(crate) const PLATFORMS: [(&str, &str); 2] = [("mobile", "iOS"), ("density", "Android")];
 
-/// The columns of the format rows: scale, suffix, format and the remove button.
-const COLUMNS: &[ColumnWidth] = &[ColumnWidth::Content; 4];
+/// The columns of the format rows: scale, suffix and format share the room the remove button leaves. When the
+/// fields cannot narrow that far, the grid stacks the cells.
+const COLUMNS: &[ColumnWidth] = &[ColumnWidth::fill(1.0), ColumnWidth::fill(1.0), ColumnWidth::fill(1.0), ColumnWidth::Content];
 
 /// The text of `key` in `fields`, "" when it has none.
 fn text<'a>(fields: &'a Map<String, Value>, key: &str) -> &'a str {
@@ -177,26 +178,16 @@ pub(crate) fn save_preset_row(ui: &mut Ui, fields: &mut Map<String, Value>) -> O
 }
 
 /// Import Preset…: the presets of a picked file are added to the saved ones; `then` gets the names
-/// added, or the error (`cancelled` when no file was picked). On the web the picked file arrives
-/// with its bytes and imports through `io::open_bytes`, which reports no names.
+/// added, or the error (`cancelled` when no file was picked). Browser picks use the file's contents.
 pub(crate) fn import_presets(app: &mut VectorcraftApp, then: impl FnOnce(&mut VectorcraftApp, Result<Vec<String>, String>) + 'static) {
     let request = PickRequest::open("export-presets").filter("Export presets", fileio::SCREEN_EXPORT_PRESET_EXTS);
     // `then` reports its own result, so the continuation never fails (a failure would reach the status line twice).
     let _ = file_asks::ask(app, request, Owner::Free, move |app, picked| {
-        let result: Result<Vec<String>, String> = match picked {
-            Picked::Contents(files) => match files.first() {
-                Some((name, bytes)) => io::open_bytes(app, name, bytes, None).map(|_| Vec::new()),
-                None => Err("cancelled".into()),
-            },
-            other => match other.first_path() {
-                Some(path) => {
-                    let path = path.to_string_lossy().into_owned();
-                    io::import_presets(app, "document.exportPresets.import", io::EXPORT_PRESETS, json!({ "path": path }))
-                        .map(|r| r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect())
-                }
-                None => Err("cancelled".into()),
-            },
-        };
+        let result = file_asks::open_params(&picked).ok_or_else(|| "cancelled".to_owned()).and_then(|mut params| {
+            params.remove("name");
+            io::import_presets(app, "document.exportPresets.import", io::EXPORT_PRESETS, Value::Object(params))
+                .map(|r| r["imported"].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect())
+        });
         then(app, result);
         Ok(Value::Null)
     });
@@ -373,9 +364,10 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
     let one = rows.len() == 1;
     let first = settings_format(&rows);
     let shown = Stack::new().show(ui, |ui, _| {
-        Row::new().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
+        // The buttons end at the right edge; a column too narrow for them puts them on more lines.
+        Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
             Text::new(tl!("Formats:")).shade(Shade::Muted).show(ui);
-            Row::new().show(ui, |ui, _| {
+            Row::new().wrap(true).show(ui, |ui, _| {
                 for (id, label) in PLATFORMS {
                     if Button::new(tl!(label)).selected(preset == id).id_salt(id).show(ui).clicked() {
                         platform = Some(id);
@@ -486,7 +478,6 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut Map<String, Value>, mut menu: Optio
     }
     shown.output
 }
-
 /// The format Format Settings opens on for format rows `rows`: the first row's format when it has
 /// settings of its own, else PNG. Row spellings (`jpeg`, `tif`) give the canonical id.
 pub(crate) fn settings_format(rows: &[Value]) -> &'static str {
@@ -558,4 +549,40 @@ pub(crate) fn settings(ui: &mut Ui, fields: &mut Map<String, Value>, presets: &[
         fields.insert("__settings".into(), json!(""));
     }
     shown.output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_browser_preset_picker_routes_by_content_without_opening_drawings() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.services.download = Some(Box::new(|_, _| Ok(())));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.run("document.exportPresets.save", json!({"name": "Fleet", "settings": {"formats": [{"format": "png"}]}})).unwrap();
+        let export = app.run("document.exportPresets.export", json!({"names": ["Fleet"]})).unwrap();
+        let bytes = export["data"].as_str().unwrap().as_bytes();
+        app.run("document.exportPresets.delete", json!({"name": "Fleet"})).unwrap();
+        let document = app.session.active().unwrap().uid;
+        let picker = crate::tests::picks::scripted(&mut app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let picked = |app: &mut VectorcraftApp, name: &str, bytes: &[u8]| {
+            let answer = Rc::new(Cell::new(None));
+            let report = Rc::clone(&answer);
+            import_presets(app, move |_, result| report.set(Some(result)));
+            picker.answer_contents(&[(name, bytes)]);
+            crate::tests::picks::poll(app, &ctx);
+            answer.take().unwrap()
+        };
+
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="30" height="20"><rect width="10" height="10"/></svg>"#;
+        let error = picked(&mut app, "drawing.svg", svg);
+        assert_eq!(app.session.documents().len(), 1, "Import Preset must not open a drawing");
+        assert!(error.unwrap_err().contains("not an export presets file"));
+
+        assert_eq!(picked(&mut app, "different-extension.svg", bytes), Ok(vec!["Fleet".to_string()]));
+        assert_eq!(app.ui.status, "Imported export presets: Fleet");
+        assert_eq!(app.session.active().unwrap().uid, document);
+    }
 }

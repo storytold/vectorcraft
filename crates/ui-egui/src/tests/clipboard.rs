@@ -145,6 +145,38 @@ fn ok_pastes_nothing_after_another_document_became_active() {
 }
 
 #[test]
+fn immediate_swatch_conflict_pastes_nothing_after_destination_revert() {
+    let mut app = conflicting();
+    let dir = vectorcraft_testkit::TempDir::new("immediate-swatch-conflict-revert");
+    let path = dir.join("destination.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    run(&mut app, "file.saveAs", json!({"path": path.to_string_lossy()}));
+    rect(&mut app);
+
+    assert_eq!(run(&mut app, "edit.paste", json!({"profileMismatch": "preserveNumbers"}))["dialog"], dialogs::swatch_conflict::KIND);
+    let id = question(&app);
+    host::set(&app, id, "choice", json!("add"));
+    host::set(&app, id, "applyToAll", json!(true));
+    let before = app.session.active().unwrap();
+    let (uid, reverts) = (before.uid, before.reverts);
+    run(&mut app, "file.revert", json!({"confirmed": true}));
+    let restored = app.session.active().unwrap();
+    assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+    assert!(objects(&app).is_empty());
+    assert_eq!(question(&app), id, "the old question is still waiting");
+    let saved = restored.doc.clone();
+    let undo = restored.history.undo.len();
+
+    assert!(host::confirm(&app, id));
+    host::frame(&mut app);
+    let after = app.session.active().unwrap();
+    assert!(after.doc == saved, "the old swatch approval must leave the restored drawing intact");
+    assert_eq!(after.history.undo.len(), undo);
+    assert!(dialogs::swatch_conflict::id(&app).is_none());
+}
+
+#[test]
 fn paste_goes_to_the_centre_of_the_view() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     run(&mut app, "file.new", json!({"width": 400, "height": 300}));
@@ -472,6 +504,49 @@ fn type_paste_drops_a_refused_copy_it_cannot_track() {
     });
     super::sysclip::copy_elsewhere(&board, vec![(PNG, super::sysclip::blue_png().into_iter().rev().collect())]);
     assert_eq!(paste_at(&mut app, 5), "Own: ");
+}
+
+/// After a Copy whose formats have no text (On Copy: Include SVG Code off) and could not be
+/// written, a paste into type takes nothing, from the menu or a paste event, not the text another
+/// app left on the clipboard. A later copy in another app still pastes.
+#[test]
+fn a_paste_into_type_after_a_refused_textless_copy_takes_nothing() {
+    use vectorcraft_engine::cmd::clipboard::TEXT;
+    let _guard = TEST_CLIP_LOCK.lock().unwrap();
+    let (mut app, board) = super::sysclip::app();
+    run(&mut app, "prefs.set", json!({"key": "copyAsSvg", "value": false}));
+    let rect = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20}))["id"].clone();
+    run(&mut app, "select.set", json!({"ids": [rect]}));
+    super::sysclip::copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
+    super::sysclip::refuse_writes(&board, true);
+    run(&mut app, "edit.copy", json!({}));
+    crate::background::wait_all(&mut app);
+    super::sysclip::refuse_writes(&board, false);
+
+    let destination =
+        run(&mut app, "text.create", json!({"x": 20, "y": 60, "text": "Own: ", "size": 12, "color": "#000000"}))["id"].as_u64().unwrap();
+    let v = app.view_info();
+    let text = |app: &VectorcraftApp| {
+        let node = app.session.doc().unwrap().doc.node(NodeId(destination)).unwrap();
+        let vectorcraft_doc::NodeKind::Text(t) = &node.kind else { panic!() };
+        t.plain_text()
+    };
+    let place = |app: &mut VectorcraftApp| {
+        app.session.select_tool("selection", v).unwrap();
+        app.session.select_tool("type", v).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"id": destination, "start": 5, "end": 5}));
+    };
+    place(&mut app);
+    crate::panels::character::intercept_text_command(&mut app, "edit.paste");
+    assert_eq!(text(&app), "Own: ", "the menu's Paste");
+    place(&mut app);
+    super::sysclip::frame(&mut app, vec![egui::Event::Paste("Old".into())]);
+    assert_eq!(text(&app), "Own: ", "a paste event");
+
+    super::sysclip::copy_elsewhere(&board, vec![(TEXT, b"New".to_vec())]);
+    place(&mut app);
+    crate::panels::character::intercept_text_command(&mut app, "edit.paste");
+    assert_eq!(text(&app), "Own: New", "the later copy");
 }
 
 #[test]

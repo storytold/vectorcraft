@@ -1,5 +1,6 @@
 //! What panels drag onto art and onto each other.
 
+use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 
 /// What panels drag onto art and onto each other. One payload type, so the canvas has one drop
@@ -25,8 +26,8 @@ pub enum PanelDrag {
     /// (`graphicStyle.new`), or with Alt held replaces the style it is dropped on with that
     /// object's look (`graphicStyle.redefine`), the Symbols panel a symbol of it all
     /// (`symbol.new`), the Swatches panel a pattern swatch of a copy (`object.pattern.make`) and
-    /// the Brushes panel an Art brush (`brush.new`).
-    Art { document: u64, ids: Vec<vectorcraft_doc::NodeId> },
+    /// the Brushes panel an Art brush (`brush.new`). `reverts` identifies the contents it came from.
+    Art { document: u64, reverts: u64, ids: Vec<vectorcraft_doc::NodeId> },
     /// A Libraries panel graphic (`item`: its id in `library`): the canvas places a copy centred
     /// where it is dropped (`library.use`); the panel moves it to where it is dropped.
     LibraryGraphic { library: String, item: String },
@@ -41,13 +42,25 @@ pub enum PanelDrag {
 /// panel order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwatchRows {
+    /// The document whose rows the drag started on.
+    pub document: u64,
     pub grabbed: String,
     pub names: Vec<String>,
     /// The names are colour groups.
     pub groups: bool,
+    /// Whether the grabbed swatch's paint can travel as an unlinked process color.
+    pub unlinked_process_color: bool,
 }
 
 impl PanelDrag {
+    /// The artwork IDs while the destination still shows the contents the drag came from.
+    pub(crate) fn artwork_for(&self, uid: u64, reload_count: u64) -> Option<&[vectorcraft_doc::NodeId]> {
+        match self {
+            Self::Art { document, reverts, ids } if (*document, *reverts) == (uid, reload_count) => Some(ids),
+            _ => None,
+        }
+    }
+
     /// `paint` dragged from a Fill/Stroke proxy, a Recent Colors chip, a Color Guide color or the
     /// Gradient panel's thumbnail. A gradient carries no placement: it fits the art it lands on
     /// (freeform points are placed afresh there, coloured like the dragged ones).
@@ -65,5 +78,21 @@ impl PanelDrag {
             Self::Paint { paint, .. } => paint.color(),
             _ => None,
         }
+    }
+
+    /// A named process swatch follows the source drawing's swatch. In another drawing its
+    /// captured process color applies without using a same-name swatch there.
+    pub(crate) fn paint_drop_params(&self, destination: Option<u64>) -> Option<Value> {
+        let Self::Paint { paint, params, rows, .. } = self else { return None };
+        if params.is_null() {
+            return None;
+        }
+        if let Some(rows) = rows.as_ref().filter(|rows| rows.unlinked_process_color)
+            && destination.is_some_and(|uid| uid != rows.document)
+            && let Some(color) = paint.color()
+        {
+            return Some(json!({"color": crate::panels::color_json(&color), "keepModel": true}));
+        }
+        Some(params.clone())
     }
 }

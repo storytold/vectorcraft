@@ -36,6 +36,8 @@ fn the_print_dialog_saves_and_loads_presets() {
     set(&mut app, "copies", json!(4));
     set(&mut app, "media", json!("a4"));
     super::tests_print::press(&mut app, "New…");
+    // The name field takes the keyboard in the frame after the press.
+    pump(&mut app);
     call(&mut app, "ui.text", json!({"text": "Proofs"}));
     call(&mut app, "ui.key", json!({"key": "Enter"}));
     pump(&mut app);
@@ -118,6 +120,88 @@ fn the_manager_adds_edits_and_deletes_presets_through_the_editor() {
 }
 
 #[test]
+fn print_presets_difference_caption_uses_the_visible_default_name() {
+    use egui::accesskit::{Node, NodeId, Role};
+    use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+    fn modal_nodes(out: &[(NodeId, Node)]) -> Vec<&Node> {
+        let modal = out.iter().find(|(_, node)| node.role() == Role::Dialog).expect("Print Presets dialog").0;
+        let by_id: std::collections::HashMap<_, _> = out.iter().map(|(id, node)| (*id, node)).collect();
+        let mut pending = vec![modal];
+        let mut nodes = Vec::new();
+        while let Some(id) = pending.pop() {
+            let Some(node) = by_id.get(&id) else { continue };
+            nodes.push(*node);
+            pending.extend_from_slice(node.children());
+        }
+        nodes
+    }
+
+    let mut failures = Vec::new();
+    let name = "Épreuve — Δοκιμή";
+    for lang in ["en", "fr", "el"] {
+        for height in [500.0, 800.0] {
+            let mut app = new_app(Default::default());
+            app.session.prefs.interface_language = lang.into();
+            app.run("print.presets.save", json!({"name": name, "settings": {"copies": 2}})).unwrap();
+            let ctx = app.ui_ctx.clone().unwrap();
+            ctx.enable_accesskit();
+            let screen = Rect::from_min_size(Pos2::ZERO, vec2(800.0, height));
+            let mut time = 0.0;
+            let mut draw = |app: &mut VectorcraftApp, events| {
+                time += 0.25;
+                crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() })
+            };
+            draw(&mut app, vec![]);
+            app.run("ui.printPresetsDialog", json!({})).unwrap();
+            for _ in 0..6 {
+                draw(&mut app, vec![]);
+            }
+            let default_label = crate::i18n::t(DEFAULT_PRESET);
+            if lang != "en" {
+                assert_ne!(default_label, DEFAULT_PRESET, "the tested locale has its own Default name");
+            }
+            let expected = crate::i18n::fmt(crate::i18n::t("Differences from {preset}:"), &[("preset", default_label)]);
+            let stock = crate::i18n::fmt(crate::i18n::t("Differences from {preset}:"), &[("preset", DEFAULT_PRESET)]);
+            let frame = draw(&mut app, vec![]).platform_output.accesskit_update.unwrap().nodes;
+            let nodes = modal_nodes(&frame);
+            let row = |label| {
+                nodes
+                    .iter()
+                    .find(|node| matches!(node.role(), Role::ListItem | Role::ListBoxOption) && node.label() == Some(label))
+                    .unwrap_or_else(|| panic!("{lang} at 800 by {height}: missing preset row {label:?}"))
+            };
+            assert_eq!(row(default_label).is_selected(), Some(true));
+            let bounds = row(name).bounds().unwrap();
+            let click = pos2(((bounds.x0 + bounds.x1) * 0.5) as f32, ((bounds.y0 + bounds.y1) * 0.5) as f32);
+            assert!(screen.contains(click));
+            if !nodes.iter().any(|node| node.label() == Some(expected.as_str())) {
+                failures.push(format!(
+                    "{lang} at 800 by {height}, Default: expected {expected:?}, English name present: {}",
+                    nodes.iter().any(|node| node.label() == Some(stock.as_str()))
+                ));
+            }
+            draw(&mut app, vec![Event::PointerMoved(click)]);
+            for pressed in [true, false] {
+                draw(&mut app, vec![Event::PointerButton { pos: click, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+            }
+            draw(&mut app, vec![]);
+            assert_eq!(fields(&app)["selected"], name);
+            let frame = draw(&mut app, vec![]).platform_output.accesskit_update.unwrap().nodes;
+            let nodes = modal_nodes(&frame);
+            if !nodes.iter().any(|node| node.label() == Some(expected.as_str())) {
+                failures.push(format!(
+                    "{lang} at 800 by {height}, saved preset: expected {expected:?}, English name present: {}",
+                    nodes.iter().any(|node| node.label() == Some(stock.as_str()))
+                ));
+            }
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
 fn presets_files_import_and_export() {
     let dir = std::env::temp_dir().join(format!("vc-printpresets-ui-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -129,6 +213,8 @@ fn presets_files_import_and_export() {
     app.run("ui.printPresetsDialog", json!({"selected": "Mine"})).unwrap();
     pump(&mut app);
     press(&mut app, ManagerAction::Export);
+    // The save panel suggests the preset's name.
+    assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some("Mine.vcprintpresets"));
     picker.answer_saved(&file, None);
     let ctx = app.ui_ctx.clone().expect("the test app has a window");
     crate::tests_picks::poll(&mut app, &ctx);
@@ -139,5 +225,11 @@ fn presets_files_import_and_export() {
     assert_eq!(names, ["Mine", "Mine 2"]);
     assert_eq!(app.session.prefs.print_presets[1].settings.copies, 2);
     assert!(app.ui.status.contains("print presets"), "{}", app.ui.status);
+    // The built-in preset's file is named without its brackets.
+    app.run("ui.printPresetsDialog", json!({"selected": DEFAULT_PRESET})).unwrap();
+    pump(&mut app);
+    press(&mut app, ManagerAction::Export);
+    assert_eq!(picker.requests().last().and_then(|r| r.file_name.clone()).as_deref(), Some("Default.vcprintpresets"));
+    picker.cancel();
     let _ = std::fs::remove_dir_all(dir);
 }

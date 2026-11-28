@@ -219,7 +219,7 @@ pub fn set_live_art(f: LiveArt, inputs: LiveInputs) {
 }
 
 /// The registered [`LiveInputs`] now, 0 while nothing is registered.
-fn live_inputs() -> u64 {
+pub fn live_inputs() -> u64 {
     LIVE_ART.get().map_or(0, |(_, inputs)| inputs())
 }
 
@@ -729,6 +729,152 @@ fn objects_at_repeated_after(doc: &Document, p: Point, opt: HitOptions, scope: O
         tops.push(top);
     }
     tops
+}
+
+/// The most hits [`leaves_at`] lists.
+pub const MAX_LEAVES_AT: usize = 256;
+
+/// The hits under `p`, topmost first, at most [`MAX_LEAVES_AT`]: one for each object a click with
+/// Direct Selection picks there (a path, a compound path or an image, also inside a group), each
+/// found by a hit test ([`hit_test`]) that passes over the ones found before it. In isolation mode
+/// (`opt.scope`) only what is inside the isolated group or object is hit. Cmd/Ctrl-clicks with the
+/// Selection tool step through them (Select Behind).
+pub fn leaves_at(doc: &Document, p: Point, opt: HitOptions) -> Vec<Hit> {
+    let _walk = ArtWalk::open();
+    // A clipping mask, or a group drawn with its own geometry effects, hits by rules the single
+    // traversal leaves to the hit test: the repeated hit test finds the rest, after the hits found
+    // above them, which the art walked for them already counted against.
+    leaves_at_once(doc, p, opt).unwrap_or_else(|above| leaves_at_repeated_after(doc, p, opt, above))
+}
+
+/// [`leaves_at`] by repeated hit tests, each passing over the objects found before it.
+#[cfg(test)]
+fn leaves_at_repeated(doc: &Document, p: Point, opt: HitOptions) -> Vec<Hit> {
+    leaves_at_repeated_after(doc, p, opt, vec![])
+}
+
+/// [`leaves_at`] by repeated hit tests after `hits`, the topmost hits already found.
+fn leaves_at_repeated_after(doc: &Document, p: Point, opt: HitOptions, mut hits: Vec<Hit>) -> Vec<Hit> {
+    let mut found: HashSet<NodeId> = hits.iter().map(|h| h.leaf).collect();
+    while hits.len() < MAX_LEAVES_AT
+        && let Some(h) = hit_test_skipping(doc, p, opt, &|id| found.contains(&id), true)
+    {
+        if !found.insert(h.leaf) {
+            break;
+        }
+        hits.push(h);
+    }
+    hits
+}
+
+/// [`leaves_at`] in one traversal of the document, in the order repeated hit tests
+/// ([`hit_test_skipping`]) find them. `Err` with the hits found above it when a container under
+/// `p` clips or draws its art with its own geometry effects ([`leaves_in`]).
+fn leaves_at_once(doc: &Document, p: Point, opt: HitOptions) -> Result<Vec<Hit>, Vec<Hit>> {
+    let finish = |mut h: Hit| {
+        h.contents_of = h.ancestry.iter().rev().copied().find(|a| doc.node(*a).is_some_and(edits_contents));
+        h.layers = h.ancestry.iter().take_while(|a| doc.node(**a).is_some_and(Node::is_layer)).count();
+        h
+    };
+    let locks = doc.locked_artboards_kept();
+    let on_locked = |id: NodeId| {
+        !locks.is_empty() && doc.parent_of(id).and_then(|l| doc.node(l)).is_some_and(Node::is_layer) && doc.node(id).is_some_and(|n| locks.holds(n))
+    };
+    let symbols = doc.kept_symbol_boxes().keeping(&locks.symbols);
+    let mut hits = Vec::new();
+    if let Some(scope) = opt.scope
+        && let Some(isolated) = doc.node(scope)
+        && let Some(mut chain) = doc.ancestry(scope)
+    {
+        if !doc.is_editable_with(&locks, scope) {
+            return Ok(hits);
+        }
+        let whole = if isolated.is_container() {
+            leaves_in(isolated, p, opt, &symbols, &on_locked, &mut chain, &mut hits)
+        } else {
+            // A single object isolated: only it hits, among its siblings.
+            chain.pop();
+            let Some(parent) = chain.last().and_then(|id| doc.node(*id)) else { return Ok(hits) };
+            leaves_in(parent, p, opt, &symbols, &|id| id != scope || on_locked(id), &mut chain, &mut hits)
+        };
+        let hits = hits.into_iter().map(finish).collect();
+        return if whole { Ok(hits) } else { Err(hits) };
+    }
+    let mut chain = Vec::new();
+    for layer in doc.layers.iter().rev() {
+        if !layer.visible || layer.locked || layer.is_template() || doc.pattern_edit.as_ref().is_some_and(|e| e.layer != layer.id) {
+            continue;
+        }
+        chain.push(layer.id);
+        let opt = if !opt.ignore_layer_preview && previews_off(layer) { HitOptions { outline: true, ..opt } } else { opt };
+        if !leaves_in(layer, p, opt, &symbols, &on_locked, &mut chain, &mut hits) {
+            return Err(hits.into_iter().map(finish).collect());
+        }
+        chain.pop();
+        if hits.len() >= MAX_LEAVES_AT {
+            break;
+        }
+    }
+    Ok(hits.into_iter().map(finish).collect())
+}
+
+/// Every editable hit under `p` in `parent`, topmost first, added to `hits` up to
+/// [`MAX_LEAVES_AT`]: what [`hit_children`] finds first, then what it finds passing over each hit
+/// found before. `false` when `parent` or a container in it under `p` clips or draws its art with
+/// its own geometry effects, which [`hit_children`] hits by rules of their own.
+fn leaves_in(
+    parent: &Node,
+    p: Point,
+    opt: HitOptions,
+    symbols: &SymbolBoxes,
+    skip: &dyn Fn(NodeId) -> bool,
+    chain: &mut Vec<NodeId>,
+    hits: &mut Vec<Hit>,
+) -> bool {
+    let Some(children) = parent.children() else { return true };
+    if parent.clips() || drawn_art(symbols, parent, opt.outline).is_some() {
+        return false;
+    }
+    for i in hit_order(parent, children, p) {
+        if hits.len() >= MAX_LEAVES_AT {
+            return true;
+        }
+        let Some(c) = children.get(i) else { continue };
+        if !may_hit(parent, i, c, p, opt, symbols, true) || skip(c.id) {
+            continue;
+        }
+        chain.push(c.id);
+        let leaf = |hits: &mut Vec<Hit>, chain: &[NodeId]| {
+            if let Some(kind) = hit_leaf(c, p, opt, symbols) {
+                hits.push(Hit { leaf: c.id, ancestry: chain.to_vec(), kind, contents_of: None, layers: 1 });
+            }
+        };
+        let whole = match &c.kind {
+            NodeKind::Layer { preview: false, .. } if !opt.ignore_layer_preview => {
+                leaves_in(c, p, HitOptions { outline: true, ..opt }, symbols, skip, chain, hits)
+            }
+            NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Intertwine { .. } | NodeKind::Envelope { editing: true, .. } => {
+                leaves_in(c, p, opt, symbols, skip, chain, hits)
+            }
+            // A blend's key objects first; its steps hit as the blend.
+            NodeKind::Blend { .. } => {
+                let whole = leaves_in(c, p, opt, symbols, skip, chain, hits);
+                if whole && hits.len() < MAX_LEAVES_AT {
+                    leaf(hits, chain);
+                }
+                whole
+            }
+            _ => {
+                leaf(hits, chain);
+                true
+            }
+        };
+        chain.pop();
+        if !whole {
+            return false;
+        }
+    }
+    true
 }
 
 /// The most objects [`locked_objects_at`] lists.

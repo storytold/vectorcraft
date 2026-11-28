@@ -28,6 +28,7 @@ pub(crate) mod command;
 pub mod composite_fonts;
 pub mod confirm;
 pub mod corners;
+pub mod curvature_circle_options;
 pub mod custom_dictionary;
 pub mod dimension;
 mod document_setup;
@@ -117,6 +118,7 @@ mod psd_options;
 pub mod raster_effects;
 pub mod rearrange_artboards;
 pub mod recolor;
+pub mod recolor_preset;
 pub mod relink;
 pub mod rename_artboards;
 pub(crate) mod revolve;
@@ -213,6 +215,8 @@ mod tests_raster_formats;
 #[cfg(test)]
 mod tests_raster_supplied_options;
 
+#[cfg(test)]
+mod tests_custom_rows;
 #[cfg(test)]
 mod tests_dxf;
 #[cfg(test)]

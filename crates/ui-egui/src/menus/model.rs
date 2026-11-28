@@ -18,7 +18,7 @@ use craft::ui::runtime::windows::WindowHost;
 use serde_json::{Value, json};
 
 use super::labels::holds_plugin_commands;
-use super::{Listed, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
+use super::{Listed, PLACEHOLDER, TODO, display_label, menu_tree_named, plugin_revision, shown_label, shown_state, why_off};
 use crate::i18n::LangExt as _;
 use crate::{UiState, VectorcraftApp};
 
@@ -75,7 +75,7 @@ pub(crate) fn translate_label(english: &'static str) -> String {
 }
 
 /// What the menus' rows depend on, cheaply (no allocation): commands run, the active document,
-/// its revision (edits, selection and view changes), history and clipboard, the language,
+/// its revision (edits, selection and view changes), history and clipboard, the filter plug-in that ran last, the language,
 /// shortcuts, plug-ins, the Scripts folder's listing, an open file dialog and the fonts (Type › Font lists the loaded fonts
 /// until the installed ones are scanned, then all of them, #5483). `input` forces a change on frames with a click or
 /// a key press, which covers what the hash doesn't list (panels shown, a tool picked). While an
@@ -86,6 +86,9 @@ pub(crate) fn state_key(app: &VectorcraftApp, input: Option<u64>) -> u64 {
     let mut h = DefaultHasher::new();
     input.hash(&mut h);
     app.run_count.hash(&mut h);
+    // The window's keymap, which the panel rows read their shortcuts from (`Build::decorate`): the framework builds it
+    // after the first frame's menus, and builds a new one when the bindings or the catalog change.
+    app.ui_ctx.as_ref().and_then(craft::ui::runtime::commands::keymap).map(|k| std::sync::Arc::as_ptr(&k).addr()).hash(&mut h);
     let s = &app.session;
     (s.journal.len(), s.active_index(), s.clipboard.is_empty(), s.tool_composing()).hash(&mut h);
     if let Some(d) = s.active() {
@@ -93,6 +96,8 @@ pub(crate) fn state_key(app: &VectorcraftApp, input: Option<u64>) -> u64 {
         (d.uid, revision, d.history.undo.len(), d.history.redo.len(), d.transparency_grid, d.print_tiling).hash(&mut h);
     }
     (app.system_paste, app.last_effect.is_some(), app.ui.recent_files.len(), app.ui.recent_files.first(), app.recent_fonts().len()).hash(&mut h);
+    // Apply Last Filter and Last Filter… are named after the filter that ran last.
+    app.last_filters.last_id().hash(&mut h);
     app.file_dialog_open().hash(&mut h);
     (crate::i18n::current().code(), plugin_revision(), crate::scripts_menu::revision(), crate::dialogs::proof_setup::saved_revision()).hash(&mut h);
     hash_listed_names(&app.ui, &mut h);
@@ -362,13 +367,13 @@ fn row_state(app: &VectorcraftApp, command: &CommandRef, label: &str) -> Command
     state
 }
 
-/// What the dimmed row `command`, named `label`, says: the engine's reason, the panels' in Presentation Mode, else that
-/// the command is not available right now.
+/// What the dimmed row `command`, named `label`, says in the interface language: the engine's reason, the panels' in
+/// Presentation Mode, else that the command is not available right now.
 pub(crate) fn off_reason(app: &VectorcraftApp, command: &CommandRef, label: &str) -> String {
     why_off(app, crate::keymap::state_id(command))
         .flatten()
         .or_else(|| crate::palette::refusal(app, command).filter(|_| command.id == "window.panel"))
-        .unwrap_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")))
+        .map_or_else(|| crate::i18n::msg(&format!("command `{label}` is not available right now")), |why| crate::i18n::msg(&why))
 }
 
 /// The title a row shows in `lang`: the Settings pages read `Page…`, the other rows their label as the menus draw it.
@@ -432,6 +437,16 @@ impl Build<'_> {
             let tip = crate::i18n::tr(self.lang, TODO_TOOLTIP).to_string();
             return Some(item.tooltip(tip));
         }
+        // A placeholder shows its text in the UI language, as a heading does, and runs nothing.
+        if command.id == PLACEHOLDER {
+            self.states.set(command, CommandState::new().enabled(false));
+            let mut item = item.enabled(false);
+            let shown = self.title(&item.label, true);
+            if shown != item.label {
+                item.english = Some(std::mem::replace(&mut item.label, shown));
+            }
+            return Some(item);
+        }
         let (id, params) = (command.id.as_str(), &command.params);
         let (enabled, checked) = shown_state(self.app, id, params)?;
         let mut state = CommandState::new().enabled(enabled).title(self.item_title(id, params, &item.label));
@@ -463,11 +478,19 @@ impl Build<'_> {
         item_title(self.app, self.lang, id, params, label)
     }
 
-    /// The alternates (a modifier held as the row is chosen) and the font sample of a row.
+    /// The alternates (a modifier held as the row is chosen), the font sample and the shortcut of a row.
     fn decorate(&self, item: Item, id: &str, params: &Value) -> Item {
         let run_with = |mods: Mods, p: Value| Alternate::new(mods, CommandRef::with_params(id, p));
         let held = |shift: bool, alt: bool| Mods { cmd: false, ctrl: false, alt, shift };
         match id {
+            // A panel row shows the chord of the panel's shortcut (`panel:<id>`), which binds `window.panel {panel}`;
+            // a Window row runs it with `toggle: true`, so the framework finds no chord for the row's own command.
+            // Settings' first page shows Preferences' shortcut, which binds `edit.preferences` with no page.
+            "window.panel" | "edit.preferences" if !params.is_null() => {
+                let mut item = item;
+                item.shortcut = super::labels::item_shortcut(self.app, id, params);
+                item
+            }
             "ui.expandDialog" => item.alternate(run_with(held(false, true), json!({ "immediate": true }))),
             crate::addons::select::link_status::COMMAND => {
                 item.alternate(run_with(held(true, false), crate::addons::select::link_status::with_shift(params.clone())))
