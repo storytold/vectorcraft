@@ -15,7 +15,9 @@
 //! - `Document.pathItems` lists the document's paths in the order of `pageItems`, paths inside
 //!   groups and compound paths included.
 //! - A change to the geometry or paint of a path that is hidden or locked, or that is in a hidden
-//!   or locked layer or group, throws `Cannot edit` with nothing changed.
+//!   or locked layer or group, or that is on a locked artboard, throws `Cannot edit` with nothing
+//!   changed. A point assigned more than `MAX_COORD` from the origin throws a range error when it
+//!   is assigned.
 //! - A path in a compound path or compound shape reads that owner's paint, which the paint
 //!   commands change in its place, and a gradient that `filled = true` gives it is placed on that
 //!   owner's bounds. A paint or stroke change leaves the paint for new art, the active proxy and
@@ -106,6 +108,27 @@ fn cannot_edit(id: NodeId) -> HostError {
     HostError::Error(format!("Cannot edit PathItem {}: it, or a layer or group it is in, is hidden or locked", id.0))
 }
 
+/// The `Cannot edit` error for the path `id` of `st` when it, or a layer or group it is in, is
+/// hidden or locked, or it is on a locked artboard.
+fn protected(h: &super::Host, st: &DocState, id: NodeId) -> Option<HostError> {
+    if !editable(&st.doc, id) {
+        Some(cannot_edit(id))
+    } else if super::on_locked_artboard(h, st, id) {
+        Some(HostError::Error(format!("Cannot edit PathItem {}: it is on a locked artboard", id.0)))
+    } else {
+        None
+    }
+}
+
+/// `p`, a point the script assigned, which must be within [`crate::MAX_COORD`] of the origin.
+fn in_canvas(p: Point, what: &str) -> std::result::Result<Point, HostError> {
+    if p.x.abs() <= crate::MAX_COORD && p.y.abs() <= crate::MAX_COORD {
+        Ok(p)
+    } else {
+        Err(HostError::Range(format!("{what} is outside the canvas")))
+    }
+}
+
 /// The path `d` names, which must still be in its document.
 fn path_of(h: &super::Host, d: &Data) -> std::result::Result<Item, HostError> {
     let item = item_of(h, d)?;
@@ -179,7 +202,7 @@ fn read_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&[SubPath]) -> T) 
 /// Changes the subpaths of the path of `item` with `f`. The change waits in [`super::State`] with
 /// the path's other point changes until [`flush`] writes them. The first change of a path writes
 /// the waiting changes of another path first, and throws `Cannot edit` when the path is hidden or
-/// locked, unless it changes nothing. A path that is aligned to the pixel grid, or is in an object
+/// locked or is on a locked artboard, unless it changes nothing. A path that is aligned to the pixel grid, or is in an object
 /// that is, is written at once, so that its points read as the grid snaps them.
 fn edit_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&mut Vec<SubPath>) -> T) -> std::result::Result<T, HostError> {
     if let Some((waiting, subs)) = &mut *h.dom.pending.borrow_mut()
@@ -190,14 +213,15 @@ fn edit_points<T>(h: &super::Host, item: Item, f: impl FnOnce(&mut Vec<SubPath>)
     flush(h)?;
     let mut subs = read_path(h, item, |_, _, pd| pd.subpaths.clone())?;
     let r = f(&mut subs);
-    let (same, ok, aligned) = read_path(h, item, |st, _, pd| {
+    let (same, refused, aligned) = read_path(h, item, |st, _, pd| {
         let d = &st.doc;
         let aligned = d.ancestry(item.id).is_some_and(|a| a.iter().chain([&item.id]).any(|i| d.node(*i).is_some_and(|n| n.extras().pixel_aligned)));
-        (pd.subpaths == subs, editable(d, item.id), aligned)
+        let same = pd.subpaths == subs;
+        (same, if same { None } else { protected(h, st, item.id) }, aligned)
     })?;
     if !same {
-        if !ok {
-            return Err(cannot_edit(item.id));
+        if let Some(e) = refused {
+            return Err(e);
         }
         *h.dom.pending.borrow_mut() = Some((item, subs));
         if aligned {
@@ -253,9 +277,8 @@ fn drawing_normally<T>(h: &super::Host, f: impl FnOnce() -> T) -> T {
 /// recent colors, which `paint.setFill`, `paint.setStroke` and `stroke.set` also set, are put
 /// back afterwards, so the edit changes only the path.
 fn edit_path(h: &super::Host, item: Item, id: &str, mut params: Value) -> std::result::Result<Data, HostError> {
-    let ok = with_doc(h, item.doc, |_, st| editable(&st.doc, item.id));
-    if !ok {
-        return Err(cannot_edit(item.id));
+    if let Some(e) = with_doc(h, item.doc, |_, st| protected(h, st, item.id)) {
+        return Err(e);
     }
     if let Some(o) = params.as_object_mut() {
         o.entry("ids").or_insert_with(|| json!([item.id.0]));
@@ -676,7 +699,8 @@ fn path_set_entire(h: &super::Host, a: &[Data]) -> Answer {
     let f = with_doc(h, item.doc, |_, st| frame(st))?;
     let closed = read_points(h, item, |subs| !subs.is_empty() && subs.iter().all(|sp| sp.closed))?;
     let c = h.dom.coords.get();
-    let anchors: Vec<Anchor> = script.iter().map(|p| Anchor::corner(f.to_document(c, *p))).collect();
+    let anchors: Vec<Anchor> =
+        script.iter().map(|p| in_canvas(f.to_document(c, *p), "each point").map(Anchor::corner)).collect::<std::result::Result<_, _>>()?;
     let subs = if anchors.is_empty() { Vec::new() } else { vec![SubPath::new(anchors, closed)] };
     write_path(h, item, subs)?;
     cut_points(h, item);
@@ -1351,7 +1375,7 @@ fn assigned_point(h: &super::Host, a: &[Data], what: &str) -> std::result::Resul
     let p = point(arg(a, 1), what)?;
     let (item, _) = this_point(h, a)?;
     let fr = with_doc(h, item.doc, |_, st| frame(st))?;
-    Ok(fr.to_document(h.dom.coords.get(), p))
+    in_canvas(fr.to_document(h.dom.coords.get(), p), what)
 }
 
 fn pt_anchor(h: &super::Host, a: &[Data]) -> Answer {

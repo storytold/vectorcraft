@@ -302,12 +302,24 @@ fn resolve(h: &Host, r: Span) -> std::result::Result<(Rc<Index>, usize, usize, u
 }
 
 /// Runs command `id` with `params` on the text frame of `item`. Throws `Cannot edit`, with nothing
-/// changed, when the frame or a layer or group it is in is hidden or locked.
+/// changed, when the frame or a layer or group it is in is hidden or locked, or the frame is on a
+/// locked artboard.
 fn edit_text(h: &Host, item: Item, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
-    if !with_doc(h, item.doc, |_, st| editable(&st.doc, item.id)) {
-        return Err(HostError::Error(format!("Cannot edit TextFrame {}: it, or a layer or group it is in, is hidden or locked", item.id.0)));
-    }
+    refuse_protected(h, item, "TextFrame")?;
     edit_item(h, item, id, params)
+}
+
+/// Throws `Cannot edit` for the `class` object of `item` when it or a layer or group it is in is
+/// hidden or locked, or it is on a locked artboard.
+fn refuse_protected(h: &Host, item: Item, class: &str) -> std::result::Result<(), HostError> {
+    let (ok, on_locked) = with_doc(h, item.doc, |_, st| (editable(&st.doc, item.id), super::on_locked_artboard(h, st, item.id)));
+    if !ok {
+        return Err(HostError::Error(format!("Cannot edit {class} {}: it, or a layer or group it is in, is hidden or locked", item.id.0)));
+    }
+    if on_locked {
+        return Err(HostError::Error(format!("Cannot edit {class} {}: it is on a locked artboard", item.id.0)));
+    }
+    Ok(())
 }
 
 /// Records an edit the model made to the frame: `removed` units at `at` replaced by `inserted`.
@@ -548,6 +560,7 @@ fn new_ref(h: &Host, doc: Doc, id: Option<NodeId>) -> Answer {
 /// `null` when the type has nothing to outline and the command removed it.
 fn frame_outline(h: &Host, a: &[Data]) -> Answer {
     let item = this_frame(h, a)?;
+    refuse_protected(h, item, "TextFrame")?;
     let (_, r) = on_doc(h, item.doc.uid, true, |h| {
         command(h, "select.set", &json!({"ids": [item.id.0]}))?;
         super::command_value(h, "type.createOutlines", &json!({}))
@@ -569,6 +582,7 @@ fn convert(h: &Host, a: &[Data], to_area: bool) -> Answer {
         Some(false) => return Err(HostError::Error(format!("the text frame is not {} type", if to_area { "point" } else { "area" }))),
         Some(true) => {}
     }
+    refuse_protected(h, item, "TextFrame")?;
     let id = if to_area { "type.convertToAreaType" } else { "type.convertToPointType" };
     let (_, r) = on_doc(h, item.doc.uid, true, |h| super::command_value(h, id, &json!({"ids": [item.id.0]})))?;
     new_ref(h, item.doc, result_id(&r).or(Some(item.id)))
@@ -1365,6 +1379,7 @@ fn in_path(h: &Host, a: &[Data], on_path: bool, rest: &[usize]) -> Answer {
     if rest.iter().any(|i| !matches!(arg(a, *i), Data::Undefined)) {
         return Err(HostError::Error("TextFrames: threading and path positions are not available yet".into()));
     }
+    refuse_protected(h, path, "PathItem")?;
     let orientation = if on_path { 4 } else { 2 };
     let vertical = vertical_of(arg(a, orientation))?;
     let mode = if on_path { "onPath" } else { "area" };

@@ -854,6 +854,55 @@ fn locked_paths_and_wrong_objects_are_refused() {
     assert!(e.contains("not a PathPoint"), "{e}");
 }
 
+/// A point edit of a path on a locked artboard throws `Cannot edit` and changes nothing.
+#[test]
+fn point_edits_of_a_path_on_a_locked_artboard_are_refused() {
+    let (mut s, _, _) = doc();
+    s.execute("artboard.setProps", &json!({"index": 0, "locked": true})).unwrap();
+    let before = art(&s);
+    let steps = undo_steps(&s);
+    for source in [
+        "app.activeDocument.pathItems[0].pathPoints[0].anchor = [1, 1];",
+        "app.activeDocument.pathItems[0].pathPoints[0].leftDirection = [1, 1];",
+        "app.activeDocument.pathItems[0].setEntirePath([[0, 0], [1, 1]]);",
+    ] {
+        let e = failure(&mut s, source);
+        assert!(e.contains("Cannot edit PathItem") && e.contains("locked artboard"), "{source}: {e}");
+    }
+    assert_eq!(art(&s), before);
+    assert_eq!(undo_steps(&s), steps);
+}
+
+/// A point placed beyond the canvas throws when it is assigned, and the path keeps its points, so a
+/// later member call does not lose an assignment that returned.
+#[test]
+fn a_point_beyond_the_canvas_throws_when_it_is_assigned() {
+    let (mut s, a, _) = doc();
+    let before = node(&s, a).path_data().unwrap().subpaths.clone();
+    let far = crate::MAX_COORD * 1.5;
+    for source in [
+        format!("app.activeDocument.pathItems[0].pathPoints[0].anchor = [{far}, 0];"),
+        format!("app.activeDocument.pathItems[0].pathPoints[0].rightDirection = [0, {far}];"),
+        format!("app.activeDocument.pathItems[0].setEntirePath([[0, 0], [{far}, 1]]);"),
+    ] {
+        let e = failure(&mut s, &source);
+        assert!(e.contains("outside the canvas"), "{source}: {e}");
+    }
+    let out = log(
+        &mut s,
+        &format!(
+            "var p = app.activeDocument.pathItems[0], q = p.pathPoints[1];\
+             q.anchor = [45, 285];\
+             try {{ p.pathPoints[0].anchor = [{far}, 0]; }} catch (e) {{ vc.log('threw'); }}\
+             vc.log(q.anchor); vc.log(p.closed);"
+        ),
+    );
+    assert_eq!(out, vec![json!("threw"), json!([45, 285]), json!(true)]);
+    let after = node(&s, a).path_data().unwrap().subpaths.clone();
+    assert_eq!(after[0].anchors[0], before[0].anchors[0], "the point assigned beyond the canvas stays");
+    assert_ne!(after[0].anchors[1], before[0].anchors[1], "the earlier assignment is written");
+}
+
 #[test]
 fn rotate_positive_is_counterclockwise_and_transforms_move_and_scale() {
     let mut s = Session::new();

@@ -633,6 +633,33 @@ fn collections_of_text_add_words_characters_and_paragraphs() {
     assert_eq!(plain(&s, id), "ab");
 }
 
+/// Type on a locked artboard, and a hidden or locked path given to `areaText` or `pathText`, are
+/// not changed.
+#[test]
+fn protected_type_and_paths_are_not_converted_or_edited() {
+    let (mut s, id) = doc_with("abc");
+    s.edit("Lock Artboard", |d, _| {
+        d.artboards[0].locked = true;
+        Ok(())
+    })
+    .unwrap();
+    let steps = undo_steps(&s);
+    for edit in ["t.contents = 'xyz';", "t.textRange.size = 30;", "t.createOutline();", "t.convertPointObjectToAreaObject();"] {
+        let e = failure(&mut s, &format!("var t = app.activeDocument.textFrames[0]; {edit}"));
+        assert!(e.contains("Cannot edit TextFrame") && e.contains("locked artboard"), "{edit}: {e}");
+    }
+    assert_eq!(plain(&s, id), "abc");
+    assert_eq!(undo_steps(&s), steps);
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    s.execute("path.create", &json!({"anchors": [{"x": 20, "y": 200}, {"x": 300, "y": 220}], "closed": false})).unwrap();
+    for (hide, call) in [("p.locked = true;", "areaText(p)"), ("p.hidden = true;", "pathText(p)")] {
+        let e = failure(&mut s, &format!("var d = app.activeDocument, p = d.pathItems[0]; {hide} d.textFrames.{call};"));
+        assert!(e.contains("Cannot edit PathItem"), "{call}: {e}");
+        assert_eq!(log(&mut s, "var d = app.activeDocument; vc.log([d.pathItems.length, d.textFrames.length]);"), vec![json!([1, 0])]);
+    }
+}
+
 /// Type on a locked artboard stays: `removeAll()` throws and deletes nothing, as
 /// `pathItems.removeAll()` does.
 #[test]

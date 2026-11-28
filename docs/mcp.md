@@ -2901,7 +2901,10 @@ other files through `$`:
   with `text.create`; `areaText(path, orientation?)` and `pathText(path, startTValue?, endTValue?, orientation?)` turn
   a `PathItem` into area type or type on a path with `text.createInPath`, the orientation being a `TextOrientation`
   value; a `startTValue`, `endTValue`, `baseFrame` or `postFix` that is given throws an error that says it is not
-  available yet. A `TextFrame`
+  available yet. `removeAll()` throws and deletes nothing when any type object is hidden or locked, is in a hidden or
+  locked layer or group, or is on a locked artboard (`cannot delete objects on a locked artboard`). A text edit,
+  `createOutline()` or a conversion of such a type object, and `areaText` or `pathText` given such a path, throw
+  `Cannot edit` with nothing changed. A `TextFrame`
   (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
   `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
   `createOutline()` (Type › Create Outlines, giving the group of outlines, or `null` when the type has nothing to
@@ -3033,8 +3036,10 @@ other files through `$`:
   `resize(100, 100)`, checks its arguments and runs no command, on a path with no points too. The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
   `changeStrokePattern` given as different values throw an error, and `changeFillGradients` false and `ellipse` with
   `inscribed` true throw an error that says they are not available yet. A change to the geometry or paint of a path
-  that is hidden or locked, or that is in a hidden or locked layer or group, throws `Cannot edit` with nothing
-  changed. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
+  that is hidden or locked, that is in a hidden or locked layer or group, or that is on a locked artboard, throws
+  `Cannot edit` with nothing changed. A point given to `setEntirePath` or assigned to `anchor`, `leftDirection` or
+  `rightDirection` more than 4,000,000 pt from the origin throws a range error when it is given, and the path keeps
+  its points. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
   shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
   art, the active Fill or Stroke proxy and Recent Colors as they were. `transform`, `polarity`, the gradient stops and
   the document's default paint are not available yet.
