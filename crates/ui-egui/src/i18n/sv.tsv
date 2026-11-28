@@ -9170,7 +9170,7 @@ digits	Hindi	Hindi
 @msg	artboard {i} doesn't print	rityta {i} skrivs inte ut
 @msg	artboard is a 0-based index	artboard är ett 0-baserat index
 @msg	artboard must be a 0-based index	artboard måste vara ett 0-baserat index
-@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout måste vara {{layout?, columns?, spacing?, rightToLeft?}}
+@msg	artboardLayout must be {{layout?, columns?, rows?, spacing?, rightToLeft?}}	artboardLayout måste vara {{layout?, columns?, rows?, spacing?, rightToLeft?}}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns måste vara 1 eller mer
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout måste vara gridByRow, gridByColumn, row eller column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft måste vara true eller false
@@ -10139,7 +10139,7 @@ digits	Hindi	Hindi
 @msg	unknown align `{other}`	okänd justering `{other}`
 @msg	unknown alignToPath `{a}`	okänt alignToPath-värde `{a}`
 @msg	unknown arrowhead {v}	okänd pilspets {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	okänd artboardLayout-nyckel `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	okänd artboardLayout-nyckel `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	okänt attribut `{attribute}`
 @msg	unknown attribute `{k}`	okänt attribut `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	okänd axel `{other}` (vertical|horizontal|free)

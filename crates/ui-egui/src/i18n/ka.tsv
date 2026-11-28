@@ -625,7 +625,7 @@
 @msg	artboard is a 0-based index	artboard არის 0-დან დაწყებული ინდექსი
 @msg	artboard must be a 0-based index	artboard უნდა იყოს 0-დან დაწყებული ინდექსი
 @msg	artboard {i} doesn't print	სამუშაო დაფა {i} არ იბეჭდება
-@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout უნდა იყოს {{layout?, columns?, spacing?, rightToLeft?}}
+@msg	artboardLayout must be {{layout?, columns?, rows?, spacing?, rightToLeft?}}	artboardLayout უნდა იყოს {{layout?, columns?, rows?, spacing?, rightToLeft?}}
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns უნდა იყოს 1 ან მეტი
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout უნდა იყოს gridByRow, gridByColumn, row ან column
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft უნდა იყოს true ან false
@@ -1772,7 +1772,7 @@
 @msg	unknown Warp style	გაღუნვის უცნობი სტილი
 @msg	unknown alignToPath `{a}`	უცნობი alignToPath `{a}`
 @msg	unknown arrowhead {v}	უცნობი ისრის წვერი {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	artboardLayout-ის უცნობი გასაღები `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	artboardLayout-ის უცნობი გასაღები `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	უცნობი ატრიბუტი `{attribute}`
 @msg	unknown attribute `{k}`	უცნობი ატრიბუტი `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	უცნობი ღერძი `{other}` (vertical|horizontal|free)

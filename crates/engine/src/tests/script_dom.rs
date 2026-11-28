@@ -222,6 +222,37 @@ fn page_item_properties_join_one_undo_step() {
     }
 }
 
+/// `app.undo()` and `app.redo()` step through the run's own edits, and the run still ends as one
+/// undo step. They change nothing past the run's first edit or its last undone one.
+#[test]
+fn app_undo_and_redo_step_through_the_runs_edits() {
+    let (mut s, a, b) = doc();
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument; var i = d.pageItems[0]; var unnamed = i.name;\
+         app.undo(); app.redo();\
+         i.name = 'first'; i.opacity = 40;\
+         app.undo(); vc.log([i.name, i.opacity]);\
+         app.redo(); vc.log(i.opacity);\
+         app.redo(); vc.log(i.opacity);\
+         app.undo(); app.undo(); app.undo(); vc.log([i.name === unnamed, i.opacity]);\
+         vc.log(typeof app.undo());\
+         d.pageItems[1].name = 'kept';",
+    );
+    assert_eq!(out, vec![json!(["first", 100]), json!(40), json!(40), json!([true, 100]), json!("undefined")]);
+    assert_eq!(undo_steps(&s), steps + 1, "one undo step for the run");
+    let st = s.active().unwrap();
+    let names: Vec<_> = [a, b].iter().map(|id| st.doc.node(*id).unwrap().name.clone()).collect();
+    assert!(names.contains(&Some("kept".to_string())) && !names.contains(&Some("first".to_string())), "{names:?}");
+    s.execute("edit.undo", &json!({})).unwrap();
+    let st = s.active().unwrap();
+    assert!(st.doc.node(a).is_some_and(|n| n.name.is_none()) && st.doc.node(b).is_some_and(|n| n.name.is_none()), "undoing the run");
+    let mut s = Session::new();
+    assert!(failure(&mut s, "app.undo();").contains("No active document"));
+    assert!(failure(&mut s, "app.redo();").contains("No active document"));
+}
+
 /// An opacity a graph mark already has still replaces the opacity another mark of its series left on
 /// the graph, as `object.setProps` does.
 #[test]
@@ -276,6 +307,23 @@ fn assigning_the_reported_opacity_changes_nothing() {
     log(&mut s, "app.activeDocument.pageItems[1].opacity = 50.00005;");
     assert!(s.active().unwrap().doc.node(a).unwrap().opacity > before, "the assigned opacity was applied");
     assert_eq!(undo_steps(&s), steps + 1);
+}
+
+/// The settings of a run's `DocumentPreset` objects are held to a total, and a setting assigned
+/// again counts only its new value.
+#[test]
+fn document_preset_settings_are_held_to_a_total() {
+    let (mut s, _, _) = doc();
+    let e = failure(
+        &mut s,
+        "var t = new Array(64001).join('x'), kept = []; for (var i = 0; i < 300; i++) { var p = new DocumentPreset(); p.title = t; kept.push(p); }",
+    );
+    assert!(e.contains("at most 16 MiB of settings"), "{e}");
+    let out = log(
+        &mut s,
+        "var t = new Array(64001).join('x'), p = new DocumentPreset(); for (var i = 0; i < 500; i++) p.title = t + i; vc.log(p.title.length);",
+    );
+    assert_eq!(out, vec![json!(64003)]);
 }
 
 #[test]
@@ -693,6 +741,11 @@ fn file_new_takes_the_rows_of_a_grid_by_column() {
         let e = s.execute("file.new", &json!({"artboardLayout": {"layout": layout, "rows": 2}})).unwrap_err().to_string();
         assert!(e.contains("rows needs the gridByColumn layout"), "{layout}: {e}");
     }
+    // The messages for a layout of the wrong kind and an unknown key list `rows` with the others.
+    let e = s.execute("file.new", &json!({"artboardLayout": 3})).unwrap_err().to_string();
+    assert!(e.contains("{layout?, columns?, rows?, spacing?, rightToLeft?}"), "{e}");
+    let e = s.execute("file.new", &json!({"artboardLayout": {"row": 2}})).unwrap_err().to_string();
+    assert!(e.contains("(layout, columns, rows, spacing, rightToLeft)"), "{e}");
 }
 
 #[test]
@@ -1472,6 +1525,14 @@ fn get_is_file_open_cannot_probe_outside_script_scope() {
     let query = format!("vc.log(app.getIsFileOpen({p})); vc.log(app.getIsFileOpen({other}));");
     let out = log(&mut s, &query);
     assert_eq!(out, vec![json!(true), json!(false)]);
+    // Outside Windows a `\` is a character of a name: the folder and the name joined by one name
+    // another file.
+    #[cfg(not(windows))]
+    {
+        let (dir, name) = (path.parent().unwrap().to_string_lossy(), path.file_name().unwrap().to_string_lossy());
+        let joined = serde_json::to_string(&format!("{dir}\\{name}")).unwrap();
+        assert_eq!(log(&mut s, &format!("vc.log(app.getIsFileOpen({joined}));")), vec![json!(false)], "{joined}");
+    }
     // Read roots that leave out the document's file: the same path does not count.
     let elsewhere = fixture.join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();

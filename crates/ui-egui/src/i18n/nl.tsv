@@ -7045,7 +7045,7 @@ imageTrace	Outline	Contour
 @msg	artboard is a 0-based index	artboard is een index die bij 0 begint
 @msg	artboard must be a 0-based index	artboard moet een index zijn die bij 0 begint
 @msg	artboard {i} doesn't print	tekengebied {i} wordt niet afgedrukt
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout moet {layout?, columns?, spacing?, rightToLeft?} zijn
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout moet {layout?, columns?, rows?, spacing?, rightToLeft?} zijn
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns moet 1 of meer zijn
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout moet gridByRow, gridByColumn, row of column zijn
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft moet true of false zijn
@@ -8159,7 +8159,7 @@ imageTrace	Outline	Contour
 @msg	unknown Warp style	onbekende warpstijl
 @msg	unknown alignToPath `{a}`	onbekende alignToPath `{a}`
 @msg	unknown arrowhead {v}	onbekende pijlpunt {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	onbekende sleutel `{k}` van artboardLayout (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	onbekende sleutel `{k}` van artboardLayout (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	onbekend kenmerk `{attribute}`
 @msg	unknown attribute `{k}`	onbekend kenmerk `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	onbekende as `{other}` (vertical|horizontal|free)

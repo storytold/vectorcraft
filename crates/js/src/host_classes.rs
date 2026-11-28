@@ -107,6 +107,15 @@ type MadeKey = (u32, Box<[u64]>);
 /// The object made for each family of classes and handle ([`Interp::host_objects`]).
 pub(crate) type Made = std::collections::HashMap<MadeKey, ObjId>;
 
+/// The estimated bytes of an entry of [`Made`] without the bits of its handle.
+const MADE_ENTRY_BYTES: usize = 64;
+
+/// The estimated bytes an object of a host class with a handle of `len` numbers holds outside its
+/// cell: its handle, and its entry in [`Interp::host_objects`] with the bits of the handle.
+pub(crate) fn retained_bytes(len: usize) -> usize {
+    MADE_ENTRY_BYTES.saturating_add(len.saturating_mul(16))
+}
+
 /// Whether `id` is still the object made for `key`, and not a freed cell or another object that
 /// was given its cell.
 fn is_made(heap: &crate::heap::Heap, classes: &[Entry], id: ObjId, key: &MadeKey) -> bool {
@@ -172,6 +181,8 @@ impl Interp {
         Ok(Some(host_ref(&name, &h.handle)))
     }
 
+    /// The length of the class name and of the handle of the object of a host class `id`, or `None`
+    /// when it is not one.
     pub(crate) fn host_ref_size(&self, id: ObjId) -> JsResult<Option<(usize, usize)>> {
         let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
         let name = self.host_classes.get(h.class as usize).map(|e| e.name.len()).ok_or_else(|| Abrupt::Internal("host class out of range".into()))?;
@@ -202,7 +213,9 @@ impl Interp {
             }
             return Ok(Value::Object(id));
         }
-        self.reserve_heap(crate::heap::OBJECT_BYTES)?;
+        let extra = retained_bytes(handle.len());
+        self.reserve_heap(crate::heap::OBJECT_BYTES.saturating_add(extra))?;
+        self.heap.bytes = self.heap.bytes.saturating_add(extra);
         let mut o = Object::new(Class::Host(HostObj { class, handle: handle.into() }), Some(proto));
         o.extensible = false;
         let id = self.heap.alloc_object(o);

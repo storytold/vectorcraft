@@ -841,6 +841,74 @@ fn the_answer_to_a_waiting_member_of_a_host_class_is_an_object_of_its_class() {
     assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("true,2,true,false".into()));
 }
 
+/// A realm with the host class `Thing`: `make(n)` gives the `Thing` whose handle is `n` followed by
+/// zeros, `len` numbers in all, and `take()` gives `undefined`; and the global `thing`, the `Thing`
+/// with the handle `[0]`.
+fn with_long_things(r: &mut Realm, len: usize) {
+    let make: HostFunction = Rc::new(move |a| {
+        let mut handle = vec![if let Some(Data::Number(n)) = a.get(1) { *n } else { 0.0 }];
+        handle.resize(len, 0.0);
+        Ok(host_ref("Thing", &handle))
+    });
+    let take: HostFunction = Rc::new(|_| Ok(Data::Undefined));
+    let members = vec![("make".to_string(), HostMember::Method(make)), ("take".to_string(), HostMember::Method(take))];
+    let class = HostClass { name: "Thing".into(), parent: None, members, index: None, construct: None };
+    r.define_host_classes(vec![class], vec![("thing".into(), host_ref("Thing", &[0.0]))]).unwrap();
+}
+
+#[test]
+fn the_handles_of_host_objects_a_script_keeps_count_toward_the_heap() {
+    let mut r = realm(100_000_000);
+    with_long_things(&mut r, 4096);
+    // 200 objects hold handles of 4,096 numbers each, more than 12 MiB with their keys.
+    r.set_limits(Limits { fuel: 100_000_000, heap_bytes: 4 << 20, ..Limits::default() });
+    let e = r.run("var kept = []; for (var i = 0; i < 200; i++) kept.push(thing.make(i)); kept.length").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap));
+    // A collection counts the handles of the objects the script still holds.
+    r.set_limits(Limits { fuel: 100_000_000, heap_bytes: 256 << 20, ..Limits::default() });
+    r.run("var kept = []; for (var i = 0; i < 100; i++) kept.push(thing.make(i));").unwrap();
+    let interp = r.interp();
+    interp.collect_garbage();
+    assert!(interp.heap.bytes >= 100 * 4096 * 16, "{}", interp.heap.bytes);
+}
+
+#[test]
+fn the_handles_of_host_objects_given_to_the_host_count_toward_the_data_limits() {
+    let mut r = realm(100_000_000);
+    with_long_things(&mut r, 1024);
+    // 100 references to an object with a handle of 1,024 numbers are more than 100,000 entries.
+    r.set_data_limits(DataLimits { depth: 64, bytes: 16 << 20, entries: 100_000 });
+    let probe = "var t = thing.make(1), list = []; for (var i = 0; i < 100; i++) list.push(t); var m = 'none'; \
+                 try { thing.take(list); } catch (e) { m = e.name + '|' + e.message; } m";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("RangeError|") && out.contains("too many entries"), "{out}");
+    // The object a member is called on counts too.
+    r.set_data_limits(DataLimits { depth: 64, bytes: 16 << 20, entries: 1_000 });
+    let probe = "var m = 'none'; try { thing.make(2).take(); } catch (e) { m = e.name + '|' + e.message; } m";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("RangeError|") && out.contains("too many entries"), "{out}");
+    // Short handles stay within the limits.
+    assert_eq!(r.run("thing.take([thing, thing]) === undefined").unwrap(), JsValue::Bool(true));
+}
+
+#[test]
+fn the_object_an_indexer_reads_counts_toward_the_data_limits() {
+    let mut r = realm(100_000_000);
+    let index: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let class = HostClass { name: "List".into(), parent: None, members: Vec::new(), index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("long".into(), host_ref("List", &[0.0; 1024])), ("short".into(), host_ref("List", &[0.0]))]).unwrap();
+    r.set_data_limits(DataLimits { depth: 64, bytes: 16 << 20, entries: 1_000 });
+    let probe = "var m = 'none'; try { long[0]; } catch (e) { m = e.name + '|' + e.message; } m";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("RangeError|") && out.contains("too many entries"), "{out}");
+    // A long name given to the indexer counts too.
+    r.set_data_limits(DataLimits { depth: 64, bytes: 1_000, entries: 1_000 });
+    let probe = "var m = 'none'; try { short[new Array(600).join('x')]; } catch (e) { m = e.name + '|' + e.message; } m";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("RangeError|") && out.contains("too large"), "{out}");
+    assert_eq!(r.run("short[0] + short.name").unwrap(), JsValue::Number(2.0));
+}
+
 #[test]
 fn a_host_class_constructor_called_with_new_cannot_wait() {
     let mut r = realm(1_000_000);

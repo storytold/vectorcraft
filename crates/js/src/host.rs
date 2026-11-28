@@ -305,6 +305,8 @@ impl Interp {
         out
     }
 
+    /// The [`crate::host_ref`] of the object of a host class `id`, its key, class name and handle
+    /// charged to `r` as the plain data they are before they are copied.
     fn read_host_ref(&mut self, id: ObjId, r: &mut Reading) -> JsResult<Data> {
         let Some((name, len)) = self.host_ref_size(id)? else { return Err(Abrupt::Internal("host object without a class".into())) };
         self.charge_entries(r, len.saturating_add(2))?;
@@ -511,7 +513,9 @@ impl Interp {
         r
     }
 
-    /// The arguments of host function `name` as [`Data`], read as `how` says, with an optional host receiver first.
+    /// The arguments of host function `name` as [`Data`], read as `how` says. With `this`, the
+    /// first is the object `this` stands for, or `undefined` when it is not an object of a host
+    /// class, charged to the same limits as the arguments.
     fn read_args(&mut self, name: &Rc<str>, this: Option<&Value>, args: &[Value], how: &ArgRead) -> JsResult<Vec<Data>> {
         let mut reading = Reading {
             limits: match how {

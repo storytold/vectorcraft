@@ -9408,7 +9408,7 @@ breakText	Glyphs	Glifák
 @msg	artboard is a 0-based index	artboard: 0-tól kezdődő index
 @msg	artboard must be a 0-based index	artboard: 0-tól kezdődő index kell
 @msg	artboard {i} doesn't print	ez a rajztábla nem kerül nyomtatásra: {i}
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout: {layout?, columns?, spacing?, rightToLeft?} kell
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout: {layout?, columns?, rows?, spacing?, rightToLeft?} kell
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns: 1 vagy nagyobb érték kell
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout: gridByRow, gridByColumn, row vagy column kell
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft: true vagy false kell
@@ -10514,7 +10514,7 @@ breakText	Glyphs	Glifák
 @msg	unknown Warp style	ismeretlen hajlítási stílus
 @msg	unknown alignToPath `{a}`	ismeretlen alignToPath: `{a}`
 @msg	unknown arrowhead {v}	ismeretlen nyílhegy: {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	ismeretlen artboardLayout kulcs: `{k}` (layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	ismeretlen artboardLayout kulcs: `{k}` (layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	ismeretlen attribútum: `{attribute}`
 @msg	unknown attribute `{k}`	ismeretlen attribútum: `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	ismeretlen tengely: `{other}` (vertical|horizontal|free)

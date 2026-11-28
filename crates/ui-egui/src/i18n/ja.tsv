@@ -8134,7 +8134,7 @@ axis	Y Axis	Y 軸
 @msg	artboard is a 0-based index	artboard には 0 から始まるインデックスを指定してください
 @msg	artboard must be a 0-based index	artboard には 0 から始まるインデックスを指定してください
 @msg	artboard {i} doesn't print	アートボード {i} はプリントされません
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout には {layout?, columns?, spacing?, rightToLeft?} を指定してください
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout には {layout?, columns?, rows?, spacing?, rightToLeft?} を指定してください
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns には 1 以上の値を指定してください
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout には gridByRow、gridByColumn、row、column のいずれかを指定してください
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft には true または false を指定してください
@@ -9034,7 +9034,7 @@ axis	Y Axis	Y 軸
 @msg	unknown Warp style	不明なワープスタイルです
 @msg	unknown alignToPath `{a}`	`{a}` は不明な alignToPath の指定です
 @msg	unknown arrowhead {v}	{v} は不明な矢印です
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	`{k}` は不明な artboardLayout のキーです (layout、columns、spacing、rightToLeft のいずれか)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	`{k}` は不明な artboardLayout のキーです (layout、columns、rows、spacing、rightToLeft のいずれか)
 @msg	unknown attribute `{attribute}`	`{attribute}` は不明な属性です
 @msg	unknown attribute `{k}`	`{k}` は不明な属性です
 @msg	unknown axis `{other}` (vertical|horizontal|free)	`{other}` は不明な軸の指定です (vertical|horizontal|free)

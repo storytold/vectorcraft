@@ -370,7 +370,7 @@ impl DocSettings {
             }
             return Ok(());
         }
-        let o = l.as_object().ok_or_else(|| bad(cmd, "artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}"))?;
+        let o = l.as_object().ok_or_else(|| bad(cmd, "artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}"))?;
         let count = |v: &Value| v.as_f64().filter(|c| c.is_finite() && *c >= 1.0).map(|c| c.round().min(MAX_ARTBOARDS as f64) as u32);
         for (k, v) in o {
             match k.as_str() {
@@ -384,7 +384,7 @@ impl DocSettings {
                         .ok_or_else(|| bad(cmd, format!("artboardLayout.spacing must be 0–{MAX_SPACING} pt")))?
                 }
                 "rightToLeft" => self.right_to_left = v.as_bool().ok_or_else(|| bad(cmd, "artboardLayout.rightToLeft must be true or false"))?,
-                _ => return Err(bad(cmd, format!("unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)"))),
+                _ => return Err(bad(cmd, format!("unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)"))),
             }
         }
         if o.contains_key("rows") && self.layout != ArtboardLayout::GridByColumn {

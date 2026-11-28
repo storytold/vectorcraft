@@ -9175,7 +9175,7 @@ breakText	Glyphs	글리프
 @msg	artboard is a 0-based index	artboard는 0부터 시작하는 인덱스입니다
 @msg	artboard must be a 0-based index	artboard는 0부터 시작하는 인덱스여야 합니다
 @msg	artboard {i} doesn't print	아트보드 {i}은(는) 인쇄되지 않습니다
-@msg	artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}	artboardLayout은 {layout?, columns?, spacing?, rightToLeft?}여야 합니다
+@msg	artboardLayout must be {layout?, columns?, rows?, spacing?, rightToLeft?}	artboardLayout은 {layout?, columns?, rows?, spacing?, rightToLeft?}여야 합니다
 @msg	artboardLayout.columns must be 1 or more	artboardLayout.columns는 1 이상이어야 합니다
 @msg	artboardLayout.layout must be gridByRow, gridByColumn, row or column	artboardLayout.layout은 gridByRow, gridByColumn, row 또는 column이어야 합니다
 @msg	artboardLayout.rightToLeft must be true or false	artboardLayout.rightToLeft는 true 또는 false여야 합니다
@@ -10289,7 +10289,7 @@ breakText	Glyphs	글리프
 @msg	unknown Warp style	알 수 없는 왜곡 스타일
 @msg	unknown alignToPath `{a}`	알 수 없는 alignToPath `{a}`
 @msg	unknown arrowhead {v}	알 수 없는 화살촉 {v}
-@msg	unknown artboardLayout key `{k}` (layout, columns, spacing, rightToLeft)	알 수 없는 artboardLayout 키 `{k}`(layout, columns, spacing, rightToLeft)
+@msg	unknown artboardLayout key `{k}` (layout, columns, rows, spacing, rightToLeft)	알 수 없는 artboardLayout 키 `{k}`(layout, columns, rows, spacing, rightToLeft)
 @msg	unknown attribute `{attribute}`	알 수 없는 속성 `{attribute}`
 @msg	unknown attribute `{k}`	알 수 없는 속성 `{k}`
 @msg	unknown axis `{other}` (vertical|horizontal|free)	알 수 없는 축 `{other}`(vertical|horizontal|free)
