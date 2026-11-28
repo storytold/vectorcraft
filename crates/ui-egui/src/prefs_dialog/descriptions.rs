@@ -291,7 +291,7 @@ pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     (
         "gpuPreference",
-        "From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.",
+        "From the next start, the desktop window uses this graphics processor. Automatic and Low Power use the shared adapter policy; an unavailable saved adapter falls back to Automatic. The artwork is drawn on the CPU either way.",
     ),
     (
         "lowLatencyDrawing",

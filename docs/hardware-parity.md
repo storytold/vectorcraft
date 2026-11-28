@@ -2,6 +2,8 @@
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-11-09 · **Change:** minor (interim macOS cursor delivery, #2292; native validation pending; scores and estimates unchanged; Windows: the pen's tilt and barrel rotation from Windows Ink, #372) · **Target:** Adobe Illustrator 2026 (30.x)
 
+> **Backend preference status (2026-11-26):** #7942 source preparation adds restart-only Graphics Backend selection. Native validation and the hardware-specific blur remain unverified; scores and estimates are unchanged.
+
 What hardware Illustrator uses, per platform, against VectorCraft. Illustrator's side is from its public
 documentation (GPU Performance, touch workspace, pen pressure pages); ours from the code
 (`crates/ui-egui/src/canvas.rs`, `touch.rs`, `graphics.rs`, `crates/render`). Part of
@@ -20,6 +22,7 @@ It reads the pen's tilt and barrel rotation on macOS and on Linux under X11 and 
 | GPU-accelerated canvas (GPU Performance, GPU Preview, GPU anti-aliasing) | Metal, DirectX | CPU raster, GPU composite (wgpu/Metal) | CPU raster, GPU composite (DX12, OpenGL fallback) | CPU raster, GPU composite (Vulkan/GL) | WebGPU, WebGL2 fallback | partial; a GPU renderer spike is pending (M5): 15–25 h |
 | Multithreaded rendering off the UI thread | partial | yes | yes | yes | single-threaded | beyond Illustrator |
 | Hybrid-graphics GPU choice | automatic | power-saving GPU by default, Preferences › Graphics Processor | same; DX12 then OpenGL; no Vulkan unless asked (#545, #806) | the desktop's GPU | browser | done |
+| Desktop graphics API choice (#7942) | not assessed | Automatic / Metal | Automatic / Direct3D 12 / Vulkan / OpenGL | Automatic / Vulkan / OpenGL | browser-selected | restart-only preference; physical blur and new native execution unverified; scores and estimates unchanged |
 | Restart on another GPU when the first fails to present | — | yes (#502, #964) | yes | yes | restart on lost device (#369) | done |
 | Pen pressure | yes (Wacom, Windows Ink, macOS tablet events) | yes, read from AppKit's tablet events before the window gets them (winit reports none), each move of a stroke with its own pressure, mouse event coalescing off (#852; not yet tried on a Mac) | yes (pointer force via `WM_POINTER`) | under X11 and XWayland (Preferences › Performance › Linux Display Server, #1151, #2028; Automatic uses XWayland when a pen is attached on a Wayland session, #4967), read from XInput2 raw events (#764); **no** on native Wayland, where winit reports none and the pen may not reach the window (#491) | browser pointer events, with coalesced events; Apple Pencil on iPad (hover, palm rejection: fingers navigate after a pen contact until reload) | partial: 2–4 h for Wayland (winit 0.31), plus a check on a Mac |
 | Pen tilt, bearing, barrel rotation (6D Art Pen) | yes, drives brushes | read from AppKit's tablet events (tilt, and the barrel rotation of a pen that reports one); Calligraphic and Scatter brushes vary with them (#764; not yet tried on a Mac) | with Windows Ink, read from the pen's `POINTER_PEN_INFO` (tilt and barrel rotation where its pen mask says the pen reports them); Calligraphic and Scatter brushes vary with them (#372; not yet tried with a pen) | under X11 and XWayland, read from XInput2 raw events; Calligraphic and Scatter brushes vary with them (#764); **no** on native Wayland | no | partial: native Wayland and the web read none, and Bristle brushes do not use them (an Art brush's Width and a Pattern brush's Scale follow them); 3–6 h (#372) |
@@ -32,6 +35,8 @@ It reads the pen's tilt and barrel rotation on macOS and on Linux under X11 and 
 | 3D GPU rendering (Materials, ray tracing) | yes | — | — | — | — | blocked on 3D (gap G3) |
 
 ## Revision history
+
+- 2026-11-26: Desktop Graphics Backend (#7942) is a restart-only Performance preference with platform choices, tolerant saved settings and WGPU_BACKEND precedence. Automatic and GPU power preference remain independent. This source preparation does not establish a hardware-specific blur fix; native execution is pending. Scores and estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|

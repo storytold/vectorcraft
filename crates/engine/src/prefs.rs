@@ -38,6 +38,43 @@ fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<S
     Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
 }
 
+/// Read the shared preference without accepting a defaulted, unidentifiable adapter key.
+/// Availability is deliberately not checked: a disconnected device remains a valid saved choice.
+pub(crate) fn parse_gpu_preference(value: Value) -> Result<craft_gpu_device::Preference, String> {
+    use craft_gpu_device::Preference;
+    let preference: Preference = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    if let Preference::Adapter(key) = &preference {
+        // AdapterKey stores wgpu's canonical rendering-backend names. `noop` is a test backend
+        // with no compatible surfaces, not a window compositor the person can select.
+        if !matches!(key.backend.as_str(), "vulkan" | "metal" | "dx12" | "gl" | "webgpu") {
+            return Err("an adapter needs a recognized rendering backend".into());
+        }
+        // This is the SDK's PCI-identity rule; zero-ID backends distinguish adapters by name.
+        if key.vendor == 0 && key.device == 0 && key.name.trim().is_empty() {
+            return Err("an adapter needs PCI identity or a nonempty name".into());
+        }
+    }
+    Ok(preference)
+}
+
+/// A saved/imported graphics choice: old power strings migrate to the shared policy, and a
+/// malformed choice falls back to Auto without discarding valid sibling preferences. Auto now
+/// ranks high performance; the old `powerSaving` value already meant Automatic. A backend-only
+/// legacy setting cannot identify an AdapterKey and is ignored, leaving the default Auto.
+pub(crate) fn saved_gpu_preference(saved: Value) -> craft_gpu_device::Preference {
+    use craft_gpu_device::Preference;
+    match saved.as_str() {
+        Some("lowPower") => Preference::LowPower,
+        Some("automatic" | "powerSaving" | "highPerformance") => Preference::Auto,
+        _ => parse_gpu_preference(saved).unwrap_or_default(),
+    }
+}
+
+fn gpu_preference<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<craft_gpu_device::Preference, D::Error> {
+    let saved = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(saved_gpu_preference(saved))
+}
+
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
 /// `prefs.set {key, value}` (camelCase keys, validated against [`cmd::prefscmds::PREF_SPECS`]).
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -261,15 +298,10 @@ pub struct Prefs {
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
-    /// Which graphics processor the desktop app asks for at startup (it takes effect after a
-    /// restart): `automatic`, `lowPower` (the integrated GPU on hybrid-graphics machines) or
-    /// `highPerformance` (the discrete one). The canvas is rasterized on the CPU and only
-    /// composited on the GPU, so the integrated GPU is plenty; presenting from the discrete GPU
-    /// through the integrated one made some hybrid laptops flicker (#306). Automatic is power
-    /// saving on Windows and macOS and the system's default GPU elsewhere, the one the desktop
-    /// runs on: a Wayland compositor may not show frames from another GPU (#502). Single-GPU
-    /// machines are unaffected.
-    pub gpu_preference: String,
+    /// The shared adapter preference, read by the desktop app at startup; changes take effect
+    /// after restarting. Adapter keys are retained even when that device is not currently present.
+    #[serde(deserialize_with = "gpu_preference")]
+    pub gpu_preference: craft_gpu_device::Preference,
     /// The desktop app's window presents without vsync, with frames capped at 240 a second (#6013).
     /// Read at startup (it takes effect after a restart); `--present-mode` and
     /// `VECTORCRAFT_PRESENT_MODE` take precedence over it.
@@ -610,7 +642,7 @@ impl Default for Prefs {
             app_title_bar: false,
             gpu_performance: true,
             animated_zoom: true,
-            gpu_preference: s("automatic"),
+            gpu_preference: craft_gpu_device::Preference::Auto,
             low_latency_drawing: false,
             history_states: 500,
             real_time_drawing: true,

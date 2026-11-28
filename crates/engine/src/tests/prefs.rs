@@ -449,37 +449,35 @@ fn prefs_serde_round_trip_and_tolerates_missing_fields() {
     assert_eq!(partial.corner_radius, 12.0);
 }
 
-/// Performance › Graphics Processor (#306, #502): automatic by default, set by value or label,
-/// kept through a save/load round trip, and a bad value (0.5.0's `powerSaving` among them) is an
-/// error that changes nothing.
+/// The shared adapter preference defaults to Auto, is strictly structured at the command boundary,
+/// survives save/load, and resets with its category. Legacy strings migrate only while loading.
 #[test]
 fn gpu_preference_defaults_to_automatic_and_validates() {
+    use craft_gpu_device::Preference;
     let mut s = Session::new();
-    assert_eq!(s.prefs.gpu_preference, "automatic");
-    assert_eq!(s.execute("prefs.get", &json!({"key": "gpuPreference"})).unwrap(), json!("automatic"));
-    s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "highPerformance"})).unwrap();
-    assert_eq!(s.prefs.gpu_preference, "highPerformance");
-    s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "Power Saving (integrated)"})).unwrap();
-    assert_eq!(s.prefs.gpu_preference, "lowPower");
-    s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "automatic"})).unwrap();
-    assert_eq!(s.prefs.gpu_preference, "automatic");
+    assert_eq!(s.prefs.gpu_preference, Preference::Auto);
+    assert_eq!(s.execute("prefs.get", &json!({"key": "gpuPreference"})).unwrap(), json!({"kind":"auto"}));
+    for preference in [Preference::LowPower, Preference::Software, Preference::Auto] {
+        s.execute("prefs.set", &json!({"key": "gpuPreference", "value": preference})).unwrap();
+        assert_eq!(s.prefs.gpu_preference, preference);
+    }
     for bad in [json!("powerSaving"), json!("turbo"), json!(""), json!(1), json!(null), json!(["highPerformance"])] {
         assert!(s.execute("prefs.set", &json!({"key": "gpuPreference", "value": bad})).is_err(), "{bad}");
-        assert_eq!(s.prefs.gpu_preference, "automatic");
+        assert_eq!(s.prefs.gpu_preference, Preference::Auto);
     }
-    let p = Prefs { gpu_preference: "lowPower".into(), ..Default::default() };
+    let p = Prefs { gpu_preference: Preference::LowPower, ..Default::default() };
     let back: Prefs = serde_json::from_value(p.to_json()).unwrap();
-    assert_eq!(back.gpu_preference, "lowPower");
-    // Preference files written before the preference existed get the default.
+    assert_eq!(back.gpu_preference, Preference::LowPower);
     let old: Prefs = serde_json::from_value(json!({"gpuPerformance": true})).unwrap();
-    assert_eq!(old.gpu_preference, "automatic");
+    assert_eq!(old.gpu_preference, Preference::Auto);
     let l = s.execute("prefs.list", &json!({})).unwrap();
     let row = l.as_array().unwrap().iter().find(|e| e["key"] == "gpuPreference").unwrap().clone();
     assert_eq!(row["category"], "Performance");
-    assert_eq!(row["options"], json!(["automatic", "lowPower", "highPerformance"]));
-    s.execute("prefs.set", &json!({"key": "gpuPreference", "value": "highPerformance"})).unwrap();
+    assert_eq!(row["kind"], "gpuPreference");
+    assert!(row.get("options").is_none());
+    s.execute("prefs.set", &json!({"key": "gpuPreference", "value": {"kind":"software"}})).unwrap();
     s.execute("prefs.reset", &json!({"category": "Performance"})).unwrap();
-    assert_eq!(s.prefs.gpu_preference, "automatic");
+    assert_eq!(s.prefs.gpu_preference, Preference::Auto);
 }
 
 /// Plug-ins & Scratch Disks › Plug-in Instruction Budget: Normal by default, Large by value or

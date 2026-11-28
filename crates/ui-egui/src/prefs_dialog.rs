@@ -61,6 +61,8 @@ pub struct PrefsWindow {
     reset_asked: Option<DialogId>,
     /// The draft's text and choice values, which the model's rows borrow (the draft hands out owned values only).
     strings: std::collections::BTreeMap<String, String>,
+    /// Structured graphics choices and their borrowed native-menu ids, from the app's snapshot.
+    graphics: model::GraphicsChoices,
     /// General › Script File Access: the file access kept with Always, read when the window opens; `None` where the
     /// session keeps none (no settings folder, and the web).
     script_access: Option<script_access::Access>,
@@ -143,6 +145,7 @@ impl PrefsWindow {
             .filter(|s| matches!(s.kind, PrefKind::Text | PrefKind::Choice(_)))
             .filter_map(|s| Some((s.key.to_string(), self.draft.get::<String>(s.key)?)))
             .collect();
+        self.graphics.sync(&self.draft.get::<craft_gpu_device::Preference>("gpuPreference").unwrap_or_default());
     }
 
     /// Writes every pref of `prefs` the draft already holds, as after an import; Units ▸ General then shows the
@@ -220,6 +223,7 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
         nested: DialogHost::new(),
         reset_asked: None,
         strings: Default::default(),
+        graphics: model::GraphicsChoices::new(&app.graphics_adapters),
         script_access,
     };
     w.state.selected = selected.to_string();

@@ -19,6 +19,7 @@ mod delete_path_pieces;
 mod dimensions;
 mod eyedropper_sources;
 mod find_replace_paras;
+mod gpu_backend;
 mod inline_text;
 mod js_lexer_vs_scriptcheck;
 mod known_bugs;

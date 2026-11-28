@@ -1,67 +1,33 @@
 //! Which graphics adapter the window renders with (#306, #502), and what happens when it can't
 //! show the window.
 //!
-//! The canvas is rasterized on the CPU; the GPU only composites it and draws the UI, so any
-//! adapter that can present to the window will do. [`adapter_order`] ranks the adapters: those that
-//! can't present to the window's surface never, then the one `WGPU_ADAPTER_NAME` names, hardware
-//! before software, the native backends (Vulkan, Metal, DX12) before OpenGL, the GPU the Wayland
-//! compositor draws with ([`crate::compositor_gpu`]), the GPU that drives a display and the one
-//! that drives the primary display ([`display_gpus`]), the power preference
-//! ([`power_preference`]) among the rest, and a GPU's DX12 adapter before its Vulkan one (#545).
-//! eframe is handed [`selector`], which takes the first of that order.
+//! Adapter ranking and saved choices belong to `craft_gpu_device`. The app supplies only its
+//! display/compositor safety context for Automatic, explicit debug environment choices, and
+//! exclusions for adapters that failed to present this window. eframe still owns the device.
 //!
-//! A GPU without a monitor is the wrong one even when it can present: on a desktop whose monitors
-//! all hang off the discrete GPU, power saving picked the Ryzen's integrated GPU, Windows had to
-//! present every frame across adapters, and the integrated GPU's driver reset under that, which
-//! lost the graphics device, or took the desktop's compositor and every monitor down for minutes
-//! (pdfcraft#378). So, when Preferences say Automatic, the GPU that drives the display the user
-//! looks at comes first, and the power preference only orders the rest. Windows says which adapter
-//! drives which display (`EnumDisplayDevices`), Linux through sysfs; elsewhere, or when nothing
-//! matches, the order is the power preference's as before. Power Saving and High Performance,
-//! chosen by the user, order by kind as they always did.
+//! A failed or hung startup is retried without its exact adapter. Each restart adds that full
+//! adapter key's SHA256 fingerprint, so it cannot keep retrying the same device. A locked, bounded start record also
+//! catches driver crashes that end the process before Rust can handle them. Crash history is
+//! scoped to fingerprints of the app version and complete shared preference, not an adapter's display label.
+//! The existing first-frame watchdog and platform-specific listing recovery remain app policy.
 //!
-//! Under Wayland, the compositor's own GPU comes before the displays: the compositor says which
-//! GPU it draws with, and frames from another one may never reach the screen, with no error, even
-//! from the GPU behind the built-in panel when the compositor runs on the discrete one.
-//!
-//! An adapter can report that it presents to the window and still fail once it does: on a hybrid
-//! Linux desktop under Wayland, the compositor runs on one GPU and may refuse the frame buffers
-//! another GPU allocates, which kills the window's Wayland connection; egui-wgpu then panics while
-//! configuring the surface (#502). Nothing in the process can show a window after that, so when
-//! the graphics fail while the window is starting up, [`finish`] starts the app again without
-//! that adapter, as the next one in the order would be tried. Each restart leaves out one more
-//! adapter, so it ends when none is left.
-//!
-//! An adapter can also hang instead of failing: on a hybrid laptop with High Performance chosen,
-//! the discrete GPU never put the window's first frame on the screen, with no error and no panic,
-//! and the app stayed in the background without a window (#964). [`watch_first_frame`] gives the
-//! first frame [`FIRST_FRAME_TIMEOUT`] once the app is created and, when it doesn't come, starts
-//! the app again without that adapter in the same way.
-//!
-//! A driver can also crash the whole process, and then no code in it runs to start it again:
-//! Intel's Direct3D 12 driver (`igd12umd64.dll`) ended 0.9.0 before its window appeared (#2243).
-//! So each start writes [`START_FILE`] in the log folder before the graphics start, adds the
-//! adapter once one is picked, and clears both once the first frame reaches the screen or the app
-//! ends without crashing ([`Startup::track`]). The next start that finds a start still recorded
-//! there leaves that adapter out, as a restart does, and keeps leaving it out; when the crash came
-//! while the adapters were being listed, before one was picked, it lists OpenGL's adapters alone
-//! (except on macOS, where wgpu has none). A start that `WGPU_BACKEND` or `WGPU_ADAPTER_NAME`
-//! chooses leaves nothing out, and the crashes are forgotten when the app version or
-//! Preferences › Performance › Graphics Processor changes, when a start shows its first frame on
-//! the adapter that crashed, or when no adapter is left to show the window.
-
 use std::io::{Read as _, Seek as _, Write as _};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
+use craft_gpu_device::{AdapterKey, Candidate, Notice, Preference};
 use eframe::egui_wgpu::NativeAdapterSelectorMethod;
-use eframe::wgpu::{self, Backend, Backends, DeviceType, PowerPreference};
+#[cfg(any(windows, test))]
+use eframe::wgpu::DeviceType;
+use eframe::wgpu::{self, Backend, Backends, PowerPreference};
+use sha2::{Digest, Sha256};
 
-/// The adapters a restart leaves out, those the window failed on, as comma-separated [`key`]s
-/// (`Vulkan:1002:164e`, `Metal:Intel Iris Pro Graphics`). Set by the app itself when it starts
-/// again.
+/// Complete-key SHA256 fingerprints left out after a failure in this restart chain. New starts
+/// write a JSON array of fingerprint strings. Old structured full-key arrays remain readable;
+/// old comma-separated labels apply only when unambiguous. This is internal recovery state,
+/// not a saved user preference.
 pub const SKIP_ENV: &str = "VECTORCRAFT_GPU_SKIP";
 
 /// The file in the log folder that records each start of the window until its first frame
@@ -89,54 +55,17 @@ pub const STARTUP_FRAMES: u64 = 10;
 /// interface and compiles its shaders, a second at most on a slow machine.
 pub const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// The preference used when Preferences say Automatic. Windows and macOS show frames from any GPU
-/// (the integrated one avoids the flicker of #306). Elsewhere, the system's own order: Mesa's
-/// device-select layer puts the GPU the desktop runs on first (the integrated one on hybrid
-/// laptops), and a Wayland compositor may not show frames from another GPU (#502).
-pub const AUTOMATIC: PowerPreference = if cfg!(any(windows, target_os = "macos")) { PowerPreference::LowPower } else { PowerPreference::None };
-
-/// The power preference that orders the adapters: the `WGPU_POWER_PREF` environment variable
-/// (`low`, `high`, `none`) when set, otherwise Preferences › Performance › Graphics Processor
-/// (`gpuPreference`). Automatic, and any value this version doesn't know (0.5.0's default
-/// `powerSaving`, a newer or damaged preference file), is [`AUTOMATIC`].
-pub fn power_preference(pref: Option<&str>, env: Option<PowerPreference>) -> PowerPreference {
-    match (env, pref) {
-        (Some(p), _) => p,
-        (None, Some("highPerformance")) => PowerPreference::HighPerformance,
-        (None, Some("lowPower")) => PowerPreference::LowPower,
-        (None, _) => AUTOMATIC,
-    }
+/// Only Automatic without a debug power override uses the app's display/compositor context.
+pub fn automatic(preference: &Preference, env: Option<PowerPreference>) -> bool {
+    env.is_none() && matches!(preference, Preference::Auto)
 }
 
-/// Whether the adapter is the app's to choose: neither `WGPU_POWER_PREF` nor Preferences name a
-/// kind of GPU (the arguments of [`power_preference`]). Then the GPU that drives the display comes
-/// first ([`display_gpus`]); a user's own choice is kept as it is.
-pub fn automatic(pref: Option<&str>, env: Option<PowerPreference>) -> bool {
-    env.is_none() && !matches!(pref, Some("highPerformance" | "lowPower"))
+pub fn preferred_displays(preference: &Preference, env: Option<PowerPreference>) -> Vec<DisplayGpu> {
+    if automatic(preference, env) { display_gpus() } else { Vec::new() }
 }
 
-/// The GPUs to rank first: those that drive a display, when the choice is [`automatic`].
-pub fn preferred_displays(pref: Option<&str>, env: Option<PowerPreference>) -> Vec<DisplayGpu> {
-    if automatic(pref, env) { display_gpus() } else { Vec::new() }
-}
-
-/// The GPU to rank first: the one the Wayland compositor draws with, when the choice is
-/// [`automatic`].
-pub fn preferred_compositor(pref: Option<&str>, env: Option<PowerPreference>) -> Option<(u32, u32)> {
-    if automatic(pref, env) { crate::compositor_gpu::compositor_gpu() } else { None }
-}
-
-/// The graphics backends the window starts with: on Windows Direct3D 12, with OpenGL beside it
-/// only when `opengl` ([`windows_opengl`]), unless `WGPU_BACKEND` names others (`env_set`;
-/// `default` then holds them). Creating a Vulkan instance loads every installed Vulkan driver into
-/// the process, and a faulty one (Intel's `igvk64.dll`, #806) crashed the app before its window
-/// appeared. DX12 is Windows' own backend, as in PdfCraft. Elsewhere, `default`.
-pub fn backends(default: Backends, env_set: bool, opengl: bool) -> Backends {
-    match (cfg!(windows) && !env_set, opengl) {
-        (true, true) => Backends::DX12 | Backends::GL,
-        (true, false) => Backends::DX12,
-        (false, _) => default,
-    }
+pub fn preferred_compositor(preference: &Preference, env: Option<PowerPreference>) -> Option<(u32, u32)> {
+    if automatic(preference, env) { crate::compositor_gpu::compositor_gpu() } else { None }
 }
 
 /// Whether a Windows start lists OpenGL's adapters beside Direct3D 12's: only when it leaves an
@@ -190,46 +119,6 @@ pub fn device_limits(asked: wgpu::Limits, adapter: &wgpu::Limits) -> wgpu::Limit
     let mut limits = asked.or_worse_values_from(adapter);
     limits.max_texture_dimension_2d = adapter.max_texture_dimension_2d;
     limits
-}
-
-/// One adapter, as [`adapter_order`] sees it.
-#[derive(Clone, Debug)]
-pub struct Candidate {
-    /// Identifies the adapter across a restart ([`key`]).
-    pub key: String,
-    pub name: String,
-    pub backend: Backend,
-    pub device_type: DeviceType,
-    /// PCI vendor and device ids, to match a [`DisplayGpu`]; zero where the backend reports none
-    /// (Metal, and OpenGL's device id).
-    pub pci: (u32, u32),
-    /// Reports that it can present to the window's surface.
-    pub presents: bool,
-}
-
-impl Candidate {
-    fn new(adapter: &wgpu::Adapter, surface: Option<&wgpu::Surface<'_>>) -> Self {
-        let info = adapter.get_info();
-        Self {
-            key: key(info.backend, info.vendor, info.device, &info.name),
-            presents: surface.is_none_or(|s| adapter.is_surface_supported(s)),
-            name: info.name,
-            backend: info.backend,
-            device_type: info.device_type,
-            pci: (info.vendor, info.device),
-        }
-    }
-
-    /// Whether it is the GPU the compositor draws with (`compositor`, by PCI ids).
-    fn composites(&self, compositor: Option<(u32, u32)>) -> bool {
-        compositor == Some(self.pci)
-    }
-
-    /// Whether it drives one of `displays`, and whether that is the primary one.
-    fn drives(&self, displays: &[DisplayGpu]) -> (bool, bool) {
-        let shown = displays.iter().find(|g| g.pci == self.pci);
-        (shown.is_some(), shown.is_some_and(|g| g.primary))
-    }
 }
 
 /// A GPU with a monitor attached, as the system reports it ([`display_gpus`]).
@@ -347,93 +236,163 @@ fn is_internal_panel(connector: &str) -> bool {
     ["eDP", "LVDS", "DSI"].iter().any(|kind| connector.starts_with(kind))
 }
 
-/// `backend:vendor:device`, e.g. `Vulkan:1002:164e` (PCI ids, as `MESA_VK_DEVICE_SELECT` takes them).
-/// Metal reports no ids (`0000:0000` for every GPU), so an adapter without them is `backend:name`
-/// (`Metal:Intel Iris Pro Graphics`): otherwise leaving out the one that failed would leave out
-/// every GPU of a dual-GPU Mac (#651). Commas, which separate [`SKIP_ENV`]'s keys, become spaces.
-fn key(backend: Backend, vendor: u32, device: u32, name: &str) -> String {
-    if vendor == 0 && device == 0 {
-        format!("{backend:?}:{}", name.replace(',', " ").trim())
+/// Canonical full identity, not `AdapterKey`'s deliberately abbreviated human display label.
+#[cfg(test)]
+fn key(candidate: &Candidate) -> String {
+    adapter_fingerprint(&AdapterKey::of(candidate))
+}
+
+/// Fixed-order, domain-separated canonical arrays cover every identity field. Display labels
+/// are not identity; only bounded fingerprints and human labels enter the recovery file.
+fn fingerprint(value: serde_json::Value) -> String {
+    format!("sha256:{:x}", Sha256::digest(value.to_string().as_bytes()))
+}
+
+fn adapter_fingerprint(key: &AdapterKey) -> String {
+    fingerprint(serde_json::json!(["adapter-v1", key.name, key.backend, key.vendor, key.device, key.pci_bus_id, key.driver]))
+}
+
+fn preference_fingerprint(preference: &Preference) -> String {
+    fingerprint(match preference {
+        Preference::Auto => serde_json::json!(["preference-v1", "auto"]),
+        Preference::LowPower => serde_json::json!(["preference-v1", "lowPower"]),
+        Preference::Software => serde_json::json!(["preference-v1", "software"]),
+        Preference::Adapter(key) => serde_json::json!(["preference-v1", "adapter", adapter_fingerprint(key)]),
+    })
+}
+
+fn version_fingerprint(version: &str) -> String {
+    fingerprint(serde_json::json!(["version-v1", version]))
+}
+
+fn is_fingerprint(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
+}
+
+fn recorded_name(name: &str) -> String {
+    let name = name.trim();
+    let mut end = name.len().min(128);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    name[..end].to_string()
+}
+
+/// The SDK must see all duplicates before exclusions: removing the corrected adapter must not
+/// resurrect its stale sibling. The same policy eligibility is exposed to Preferences.
+fn eligible_inventory(candidates: &[Candidate]) -> Vec<Candidate> {
+    let mut eligible = vec![false; candidates.len()];
+    for index in craft_gpu_device::ranked(candidates, &Preference::Auto) {
+        eligible[index] = true;
+    }
+    candidates
+        .iter()
+        .zip(eligible)
+        .map(|(candidate, eligible)| {
+            let mut candidate = candidate.clone();
+            candidate.usable &= eligible;
+            candidate
+        })
+        .collect()
+}
+
+/// The old restart format lacked bus and driver identity. It may exclude an adapter only when
+/// exactly one listed candidate has that label; otherwise leave it to the full-key retry.
+fn legacy_key(candidate: &Candidate) -> String {
+    if candidate.vendor == 0 && candidate.device == 0 {
+        format!("{:?}:{}", candidate.backend, candidate.name.replace(',', " ").trim())
     } else {
-        format!("{backend:?}:{vendor:04x}:{device:04x}")
+        format!("{:?}:{:04x}:{:04x}", candidate.backend, candidate.vendor, candidate.device)
     }
 }
 
-/// The order to try `candidates` in (their indices): only those that present to the window and
-/// aren't in `skip`; the one whose name contains `named` (any case) first; hardware before
-/// software; native backends before OpenGL; the GPU the compositor draws with (`compositor`); the
-/// GPUs that drive one of `displays`, the primary display's first; then by `power`; then DX12
-/// before Vulkan, keeping the system's order among equals (all of it for
-/// [`PowerPreference::None`]). Windows lists each GPU under both, and Intel's
-/// Vulkan driver made the whole window flicker black where DX12 and OpenGL didn't (#545);
-/// elsewhere there is no DX12 adapter, so the order is unchanged.
-///
-/// With no `displays`, or none a candidate's PCI ids match (OpenGL reports no device id, Metal no
-/// ids at all), the order is the power preference's alone, as it was.
-pub fn adapter_order(
-    candidates: &[Candidate],
-    power: PowerPreference,
-    displays: &[DisplayGpu],
-    compositor: Option<(u32, u32)>,
-    named: Option<&str>,
-    skip: &[String],
-) -> Vec<usize> {
-    let named = named.map(str::to_lowercase).filter(|n| !n.is_empty());
-    let mut order: Vec<(usize, &Candidate)> = candidates.iter().enumerate().filter(|(_, c)| c.presents && !skip.contains(&c.key)).collect();
-    // Stable, so equals keep the system's order.
-    order.sort_by_key(|(_, c)| {
-        let unnamed = named.as_ref().is_some_and(|n| !c.name.to_lowercase().contains(n));
-        let (drives_display, drives_primary) = c.drives(displays);
-        (
-            unnamed,
-            c.device_type == DeviceType::Cpu,
-            c.backend == Backend::Gl,
-            !c.composites(compositor),
-            !drives_display,
-            !drives_primary,
-            power_rank(c.device_type, power),
-            c.backend == Backend::Vulkan,
-        )
-    });
-    order.into_iter().map(|(i, _)| i).collect()
+fn excluded(candidates: &[Candidate], index: usize, skip: &[String]) -> bool {
+    let Some(candidate) = candidates.get(index) else { return true };
+    let actual = AdapterKey::of(candidate);
+    let fingerprint = adapter_fingerprint(&actual);
+    skip.iter().any(|token| {
+        if is_fingerprint(token) {
+            *token == fingerprint
+        } else if let Ok(saved) = serde_json::from_str::<AdapterKey>(token) {
+            // Crash identity is exact, unlike the SDK's tolerant saved-choice matching.
+            saved == actual
+        } else {
+            *token == legacy_key(candidate) && candidates.iter().filter(|c| legacy_key(c) == *token).count() == 1
+        }
+    })
 }
 
-/// [`adapter_order`] without the adapters a restart left out after they failed (`skip`) and those
-/// that crashed an earlier start (`crashed`), and `true` when that left none and the ones that
-/// crashed are tried again. A crash record can't stop a start that has no other adapter to try:
-/// the record may be from a start ended from outside before its first frame (#9183), which looks
-/// the same as a crash in the driver. An adapter in `skip` failed in this run of the app and
-/// stays left out.
-pub fn order_leaving_out(
+fn drives(candidate: &Candidate, displays: &[DisplayGpu]) -> (bool, bool) {
+    let shown = displays.iter().find(|g| g.pci != (0, 0) && g.pci == (candidate.vendor, candidate.device));
+    (shown.is_some(), shown.is_some_and(|g| g.primary))
+}
+
+fn composites(candidate: &Candidate, compositor: Option<(u32, u32)>) -> bool {
+    (candidate.vendor != 0 || candidate.device != 0) && compositor == Some((candidate.vendor, candidate.device))
+}
+
+/// Resolve only app-specific context into a shared preference. The SDK remains responsible for
+/// generic power/device ordering, duplicate drivers, unsafe drivers and saved-adapter fallback.
+fn effective_preference(
     candidates: &[Candidate],
-    power: PowerPreference,
+    saved: &Preference,
+    env_power: Option<PowerPreference>,
     displays: &[DisplayGpu],
     compositor: Option<(u32, u32)>,
     named: Option<&str>,
+) -> Preference {
+    if let Some(name) = named.map(str::to_lowercase).filter(|n| !n.is_empty())
+        && let Some(candidate) = candidates.iter().find(|c| c.usable && c.name.to_lowercase().contains(&name))
+    {
+        return Preference::Adapter(AdapterKey::of(candidate));
+    }
+    if let Some(power) = env_power {
+        return if power == PowerPreference::LowPower { Preference::LowPower } else { Preference::Auto };
+    }
+    if !matches!(saved, Preference::Auto) {
+        // In particular a missing saved key goes through SDK Auto, not our contextual override.
+        return saved.clone();
+    }
+    let context = candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.usable && !c.is_software() && c.backend != Backend::Gl && (composites(c, compositor) || drives(c, displays).0))
+        .max_by_key(|(i, c)| (composites(c, compositor), drives(c, displays).1, std::cmp::Reverse(*i)));
+    context.map_or(Preference::Auto, |(_, c)| Preference::Adapter(AdapterKey::of(c)))
+}
+
+struct SelectionInputs {
+    indices: Vec<usize>,
+    preference: Preference,
+    retried: bool,
+}
+
+/// Keep the restart-chain exclusions even for explicit debug choices. A historical crash is
+/// retried only when it leaves no usable shared selection, matching the previous recovery rule.
+fn selection_inputs(
+    candidates: &[Candidate],
+    saved: &Preference,
+    debug: (Option<PowerPreference>, Option<&str>),
+    displays: &[DisplayGpu],
+    compositor: Option<(u32, u32)>,
     skip: &[String],
     crashed: &[String],
-) -> (Vec<usize>, bool) {
+) -> SelectionInputs {
+    let eligible = eligible_inventory(candidates);
+    let inputs = |left_out: &[String]| {
+        let indices: Vec<usize> = (0..candidates.len()).filter(|&i| eligible[i].usable && !excluded(candidates, i, left_out)).collect();
+        let filtered: Vec<Candidate> = indices.iter().map(|&i| candidates[i].clone()).collect();
+        let preference = effective_preference(&filtered, saved, debug.0, displays, compositor, debug.1);
+        (indices, filtered, preference)
+    };
     let left_out: Vec<String> = skip.iter().chain(crashed).cloned().collect();
-    let order = adapter_order(candidates, power, displays, compositor, named, &left_out);
-    if !order.is_empty() || crashed.is_empty() {
-        return (order, false);
+    let (indices, filtered, preference) = inputs(&left_out);
+    if craft_gpu_device::select(&filtered, &preference).is_some() || crashed.is_empty() {
+        return SelectionInputs { indices, preference, retried: false };
     }
-    let again = adapter_order(candidates, power, displays, compositor, named, skip);
-    let retried = !again.is_empty();
-    (again, retried)
-}
-
-/// wgpu's own ranking for a power preference: the preferred kind of GPU, the other kind, unknown,
-/// virtual, software.
-fn power_rank(t: DeviceType, power: PowerPreference) -> u8 {
-    match (power, t) {
-        (PowerPreference::None, _) => 0,
-        (PowerPreference::LowPower, DeviceType::IntegratedGpu) | (PowerPreference::HighPerformance, DeviceType::DiscreteGpu) => 0,
-        (_, DeviceType::IntegratedGpu | DeviceType::DiscreteGpu) => 1,
-        (_, DeviceType::Other) => 2,
-        (_, DeviceType::VirtualGpu) => 3,
-        (_, DeviceType::Cpu) => 4,
-    }
+    let (indices, filtered, preference) = inputs(skip);
+    let retried = craft_gpu_device::select(&filtered, &preference).is_some();
+    SelectionInputs { indices, preference, retried }
 }
 
 /// The adapters [`SKIP_ENV`] lists.
@@ -442,7 +401,27 @@ pub fn skipped() -> Vec<String> {
 }
 
 fn parse_skip(v: &str) -> Vec<String> {
+    if v.trim_start().starts_with('[') {
+        let Ok(values) = serde_json::from_str::<Vec<serde_json::Value>>(v) else { return Vec::new() };
+        return values
+            .into_iter()
+            .filter_map(|v| {
+                if let Some(old) = v.as_str() {
+                    return Some(old.to_string());
+                }
+                serde_json::from_value::<AdapterKey>(v).ok().map(|key| adapter_fingerprint(&key))
+            })
+            .collect();
+    }
     v.split(',').map(str::trim).filter(|k| !k.is_empty()).map(String::from).collect()
+}
+
+fn encode_skip(skip: &[String]) -> String {
+    let values: Vec<serde_json::Value> = skip
+        .iter()
+        .map(|token| serde_json::from_str::<AdapterKey>(token).map_or_else(|_| serde_json::json!(token), |key| serde_json::json!(key)))
+        .collect();
+    serde_json::Value::Array(values).to_string()
 }
 
 /// Whether `WGPU_BACKEND` or `WGPU_ADAPTER_NAME` is set: then a start uses the backends and the
@@ -458,14 +437,14 @@ pub fn explicit_choice() -> bool {
 pub enum Crash {
     /// While the adapters were being listed, before one was picked.
     Listing,
-    /// On the adapter with this [`key`] and name.
+    /// On the adapter with this full-key fingerprint and bounded name.
     Adapter { key: String, name: String },
 }
 
 /// What a start leaves out because earlier starts crashed ([`Startup::track`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LeftOut {
-    /// The adapters ([`key`]s) that crashed a start.
+    /// Fingerprints of the complete adapter keys that crashed a start.
     pub adapters: Vec<String>,
     /// A start crashed while listing the adapters: list OpenGL's alone. Never on macOS, where wgpu
     /// has no OpenGL adapters to fall back to.
@@ -482,7 +461,7 @@ impl LeftOut {
     }
 }
 
-/// An adapter in [`START_FILE`]: its [`key`] and name.
+/// An adapter in [`START_FILE`]: its full-key fingerprint and bounded human name.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Recorded {
     key: String,
@@ -501,8 +480,7 @@ struct Starting {
 /// What [`START_FILE`] holds.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct StartRecord {
-    /// The app version and the Graphics Processor preference (`gpuPreference`) it was written
-    /// under: the crashes count only for the same ones.
+    /// Fingerprints of the app version and complete preference: crashes count only for the same choice.
     version: String,
     preference: String,
     /// The start in progress, from before the graphics start until its first frame reaches the
@@ -517,8 +495,10 @@ struct StartRecord {
 impl StartRecord {
     /// This start's record, made from the one the last start left (`previous`; `None` when there
     /// is none or it can't be read), and the crash that start ended in, if it did. A record
-    /// written by another version or under another `preference` is dropped.
-    fn begin(previous: Option<Self>, version: &str, preference: &str) -> (Self, Option<Crash>) {
+    /// written by another version or under another complete `preference` is dropped.
+    fn begin(previous: Option<Self>, version: &str, preference: &Preference) -> (Self, Option<Crash>) {
+        let version = version_fingerprint(version);
+        let preference = preference_fingerprint(preference);
         let mut record = previous.filter(|r| r.version == version && r.preference == preference).unwrap_or_default();
         let crash = record.starting.take().map(|s| match s.adapter {
             Some(Recorded { key, name }) => Crash::Adapter { key, name },
@@ -534,8 +514,8 @@ impl StartRecord {
             Some(Crash::Listing) => record.listing_crashed = true,
             _ => {}
         }
-        record.version = version.to_string();
-        record.preference = preference.to_string();
+        record.version = version;
+        record.preference = preference;
         record.starting = Some(Starting::default());
         (record, crash)
     }
@@ -553,8 +533,8 @@ impl StartRecord {
 
     /// The adapter this start picked, after a listing that found one of a backend other than
     /// OpenGL when `native`.
-    fn picked(&mut self, key: &str, name: &str, native: bool) {
-        self.starting = Some(Starting { adapter: Some(Recorded { key: key.to_string(), name: name.trim().to_string() }), native });
+    fn picked(&mut self, key: &AdapterKey, name: &str, native: bool) {
+        self.starting = Some(Starting { adapter: Some(Recorded { key: adapter_fingerprint(key), name: recorded_name(name) }), native });
     }
 
     /// The listing found no adapter that can show the window: nothing is left to leave out, so the
@@ -584,6 +564,7 @@ impl StartRecord {
     fn to_json(&self) -> String {
         let recorded = |r: &Recorded| serde_json::json!({ "key": r.key, "name": r.name });
         let mut v = serde_json::json!({
+            "schema": 3,
             "version": self.version,
             "gpuPreference": self.preference,
             "crashed": self.crashed.iter().map(recorded).collect::<Vec<_>>(),
@@ -597,9 +578,27 @@ impl StartRecord {
 
     /// The record in `text`; `None` when it isn't one.
     fn parse(text: &str) -> Option<Self> {
+        if text.len() > START_FILE_LIMIT as usize {
+            return None;
+        }
         let v: serde_json::Value = serde_json::from_str(text).ok()?;
+        let schema = v.get("schema")?.as_u64()?;
+        // Schema 2 had complete keys, so its bounded records can be migrated exactly. Older
+        // lossy labels cannot distinguish buses/drivers and are deliberately reset.
+        if schema != 2 && schema != 3 {
+            return None;
+        }
+        let identity = |v: &serde_json::Value| -> Option<String> {
+            let value = v.as_str()?;
+            is_fingerprint(value).then(|| value.to_string())
+        };
         let recorded = |v: &serde_json::Value| -> Option<Recorded> {
-            Some(Recorded { key: v.get("key")?.as_str()?.to_string(), name: v.get("name")?.as_str()?.to_string() })
+            let key = if schema == 2 {
+                adapter_fingerprint(&serde_json::from_value::<AdapterKey>(v.get("key")?.clone()).ok()?)
+            } else {
+                identity(v.get("key")?)?
+            };
+            Some(Recorded { key, name: recorded_name(v.get("name")?.as_str()?) })
         };
         let starting = match v.get("starting") {
             None => None,
@@ -613,8 +612,12 @@ impl StartRecord {
         };
         let crashed = v.get("crashed")?.as_array()?;
         Some(Self {
-            version: v.get("version")?.as_str()?.to_string(),
-            preference: v.get("gpuPreference")?.as_str()?.to_string(),
+            version: if schema == 2 { version_fingerprint(v.get("version")?.as_str()?) } else { identity(v.get("version")?)? },
+            preference: if schema == 2 {
+                preference_fingerprint(&serde_json::from_value::<Preference>(v.get("gpuPreference")?.clone()).ok()?)
+            } else {
+                identity(v.get("gpuPreference")?)?
+            },
             starting,
             crashed: crashed.iter().take(CRASHED_LIMIT).map(recorded).collect::<Option<_>>()?,
             listing_crashed: v.get("listingCrashed")?.as_bool()?,
@@ -664,16 +667,6 @@ impl StartFile {
     }
 }
 
-/// The value of `gpuPreference` the crashes are recorded under: any value this version doesn't
-/// know reads as `automatic`, as in [`power_preference`].
-fn preference_name(pref: Option<&str>) -> &'static str {
-    match pref {
-        Some("highPerformance") => "highPerformance",
-        Some("lowPower") => "lowPower",
-        _ => "automatic",
-    }
-}
-
 /// What the window's start-up leaves for [`finish`].
 #[derive(Default)]
 pub struct Startup {
@@ -685,6 +678,8 @@ pub struct Startup {
     ready: OnceLock<Instant>,
     /// [`START_FILE`] while the start runs ([`Self::track`]).
     start: Mutex<Option<StartFile>>,
+    /// Shared selection notices for translated app UI after eframe has picked its adapter.
+    notices: Mutex<Vec<Notice>>,
 }
 
 impl Startup {
@@ -702,10 +697,10 @@ impl Startup {
 
     /// Record this start in `dir`'s [`START_FILE`] until the window's first frame reaches the
     /// screen or the app ends without crashing, and say what it leaves out for the starts that
-    /// crashed before (see the module docs). `preference` is Preferences › Performance › Graphics
-    /// Processor, and `explicit` is [`explicit_choice`]. When the file can't be used (it can't be
+    /// crashed before (see the module docs). `preference` is Preferences ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Âº Performance ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Âº Graphics
+    /// Processor as a shared preference; `explicit` is [`explicit_choice`]. When the file can't be used (it can't be
     /// written, or another copy of the app is starting), nothing is recorded or left out.
-    pub fn track(&self, dir: &Path, preference: Option<&str>, explicit: bool) -> LeftOut {
+    pub fn track(&self, dir: &Path, preference: &Preference, explicit: bool) -> LeftOut {
         let (file, previous) = match StartFile::open(dir) {
             Ok(Some(opened)) => opened,
             Ok(None) => {
@@ -717,7 +712,7 @@ impl Startup {
                 return LeftOut::default();
             }
         };
-        let (record, crash) = StartRecord::begin(previous, vectorcraft_ui_egui::os_window::version(), preference_name(preference));
+        let (record, crash) = StartRecord::begin(previous, vectorcraft_ui_egui::os_window::version(), preference);
         let left_out = record.left_out(crash.clone(), explicit);
         match &crash {
             Some(Crash::Adapter { key, name }) => {
@@ -741,11 +736,16 @@ impl Startup {
         left_out
     }
 
-    /// [`selector`] picked the adapter with this [`key`] and name; `native` when the listing found
+    /// Notices from the actual shared selection, retained for translated UI rather than just logs.
+    pub fn notices(&self) -> Vec<Notice> {
+        self.notices.lock().unwrap_or_else(PoisonError::into_inner).clone()
+    }
+
+    /// [`selector`] picked the adapter with this full key and name; `native` when the listing found
     /// an adapter of a backend other than OpenGL.
-    fn picked(&self, key: &str, name: &str, native: bool) {
+    fn picked(&self, key: &AdapterKey, name: &str, native: bool) {
         // Set once; eframe picks the adapter once.
-        let _ = self.adapter.set(key.to_string());
+        let _ = self.adapter.set(adapter_fingerprint(key));
         self.update(|r| r.picked(key, name, native), false);
     }
 
@@ -853,7 +853,7 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
         // The new app records its own start.
         startup.ended();
         skip.push(failed.to_string());
-        match restart(&skip.join(",")) {
+        match restart(&encode_skip(&skip)) {
             Ok(()) => std::process::exit(0),
             Err(e) => {
                 log::error!("starting again failed: {e}");
@@ -866,63 +866,43 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
     }
 }
 
-/// eframe's adapter choice: the first of [`adapter_order`] for `power`, the GPU the `compositor`
-/// draws with, the GPUs that drive a `displays`, `WGPU_ADAPTER_NAME`, the adapters a restart
-/// left out and those `crashed` ([`LeftOut::adapters`]). Every adapter, the displays and the
-/// choice are logged: which GPU draws is the first question in every black-window report.
+/// eframe's selector, using the shared policy after app-specific presentation exclusions.
+/// `inventory` retains actual keys and surface/shared-policy eligibility for Preferences; notices are retained on Startup.
 pub fn selector(
-    power: PowerPreference,
+    preference: Preference,
+    env_power: Option<PowerPreference>,
     displays: Vec<DisplayGpu>,
     compositor: Option<(u32, u32)>,
     crashed: Vec<String>,
     startup: Arc<Startup>,
+    inventory: Arc<Mutex<Vec<Candidate>>>,
 ) -> NativeAdapterSelectorMethod {
     let named = std::env::var(NAME_ENV).ok();
     let skip = skipped();
     Arc::new(move |adapters, surface| {
-        let candidates: Vec<Candidate> = adapters.iter().map(|a| Candidate::new(a, surface)).collect();
-        let (order, retried) = order_leaving_out(&candidates, power, &displays, compositor, named.as_deref(), &skip, &crashed);
-        let listed: Vec<String> = candidates
-            .iter()
-            .map(|c| {
-                let (drives_display, drives_primary) = c.drives(&displays);
-                let note = if !c.presents {
-                    ", can't show the window"
-                } else if skip.contains(&c.key) {
-                    ", failed before"
-                } else if crashed.contains(&c.key) {
-                    ", crashed an earlier start"
-                } else if c.composites(compositor) {
-                    ", the compositor draws with it"
-                } else if drives_primary {
-                    ", drives the primary display"
-                } else if drives_display {
-                    ", drives a display"
-                } else {
-                    ""
-                };
-                format!("{} ({:?}, {:?}, {}{note})", c.name.trim(), c.backend, c.device_type, c.key)
-            })
-            .collect();
-        log::info!("graphics adapters: {}", listed.join("; "));
-        if retried {
-            log::warn!("every graphics adapter that can show the window crashed an earlier start: trying them again");
+        let candidates: Vec<Candidate> = adapters.iter().map(|a| Candidate::of(a, surface)).collect();
+        *inventory.lock().unwrap_or_else(PoisonError::into_inner) = eligible_inventory(&candidates);
+        let inputs = selection_inputs(&candidates, &preference, (env_power, named.as_deref()), &displays, compositor, &skip, &crashed);
+        if inputs.retried {
+            log::warn!("every usable graphics adapter crashed an earlier start: trying those again, keeping this restart's exclusions");
         }
-        let first = order.first().and_then(|&i| adapters.get(i).zip(candidates.get(i)));
-        let Some((adapter, chosen)) = first else {
+        let eligible: Vec<wgpu::Adapter> = inputs.indices.iter().filter_map(|&i| adapters.get(i).cloned()).collect();
+        let (adapter, selection) = match craft_gpu_device::pick(&eligible, surface, &inputs.preference) {
+            Ok(picked) => picked,
+            Err(error) => {
+                startup.none_left();
+                return Err(error.to_string());
+            }
+        };
+        let Some(chosen) = inputs.indices.get(selection.index).and_then(|&i| candidates.get(i)) else {
             startup.none_left();
-            return Err(format!("no graphics adapter can show the window (power preference {power:?}, {} adapters)", adapters.len()));
+            return Err("the shared graphics selection is not in the enumerated adapters".to_string());
         };
-        let why = match chosen.drives(&displays) {
-            _ if chosen.composites(compositor) => "the compositor draws with it".to_string(),
-            (_, true) => "it drives the primary display".to_string(),
-            (true, false) => "it drives a display".to_string(),
-            (false, false) if displays.is_empty() => format!("power preference {power:?}"),
-            (false, false) => format!("no adapter matches a display GPU, so power preference {power:?}"),
-        };
-        log::info!("drawing on {} ({:?}, {:?}): {why}", chosen.name.trim(), chosen.backend, chosen.device_type);
-        startup.picked(&chosen.key, &chosen.name, candidates.iter().any(|c| c.backend != Backend::Gl));
-        Ok(adapter.clone())
+        *startup.notices.lock().unwrap_or_else(PoisonError::into_inner) = selection.notices;
+        let actual_key = AdapterKey::of(chosen);
+        log::info!("drawing on {actual_key}; saved preference {preference:?}, effective preference {:?}", inputs.preference);
+        startup.picked(&actual_key, &chosen.name, candidates.iter().any(|c| c.backend != Backend::Gl));
+        Ok(adapter)
     })
 }
 
@@ -939,7 +919,7 @@ pub fn watch_panics() {
     }));
 }
 
-/// A source file of wgpu (`wgpu-core-30.0.1/src/…`, `wgpu-hal-…`), egui-wgpu or naga.
+/// A source file of wgpu (`wgpu-core-30.0.1/src/ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦`, `wgpu-hal-ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦`), egui-wgpu or naga.
 fn in_graphics_stack(file: &str) -> bool {
     file.split(['/', '\\']).any(|dir| ["wgpu-", "egui-wgpu-", "naga-"].iter().any(|p| dir.starts_with(p)))
 }
@@ -969,7 +949,7 @@ pub fn finish(outcome: Result<eframe::Result, String>, startup: &Startup) -> Res
     };
     log::error!("the window failed on graphics adapter {failed} ({why}): starting again without it");
     skip.push(failed.to_string());
-    restart(&skip.join(",")).map_err(|e| format!("{why}; starting again failed: {e}"))
+    restart(&encode_skip(&skip)).map_err(|e| format!("{why}; starting again failed: {e}"))
 }
 
 /// Start the app again with the same arguments, leaving out the adapters in `skip`. On Unix the

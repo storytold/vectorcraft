@@ -5,6 +5,8 @@
 
 > Panel readout copy (#8432, #8826): Info values and paint names, Links information, and named Document Info rows with no separate value follow the guarded immediate-copy policy landed in #9353. A plain first click copies the full value and reports "Copied the value"; accessible activation copies it too. Selectable readouts retain word selection on double-click, Shift/drag selection and keyboard Copy/Cut. Links Location retains #9521's path fitting and full-path tooltip as static text, with the same full-value primary/accessible copy and a native Copy Location button for keyboard use. Scores and estimates are unchanged.
 
+> **Backend preference status (2026-11-26):** #7942 source preparation adds restart-only Graphics Backend selection. Native validation and the hardware-specific blur remain unverified; scores and estimates are unchanged.
+
 > Scissors snapping update (2026-11-11): with Alt released, hover and cuts use the Pen's path, alignment, intersection and anchor snaps (#6470). Scores and estimates unchanged.
 
 > Selection update (2026-11-11): path and compound-path interiors follow enabled non-None fill rows, including lower fills beneath a top None row (#6625). Hidden-only interiors miss; zero-opacity fills remain selectable. Cap/join follow-up (2026-11-12): hidden-fill and no-fill stroke hits must respect cap and join geometry; focused cap/join CPU regressions passed. Scores and estimates unchanged.
@@ -552,6 +554,8 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 - **Implemented and tested (2026-11-21):** Properties panel Quick Actions follow every selected object. Ungroup (`object.ungroup`) is offered when any selected object is a group, including several groups, a group selected after a path, and a group that holds another group. Isolate Group (`object.isolate`) is offered only when that one group is the whole selection. Unite (`object.pathfinder.unite`) appears only for selections of at least two objects, each a non-guide path or a compound path. It appears alongside Group and Make Clipping Mask. Headless regressions: `panels::properties::tests::two_groups_offer_ungroup_without_isolate_group`, `one_group_offers_ungroup_and_isolate_group` and `several_paths_offer_group_clipping_mask_and_unite`. Other G12 gaps remain; scores and estimates unchanged.
 
+Desktop graphics adapter/backend choice (#7942) uses the shared structured Preference, backend-grouped adapter rows, tolerant legacy settings and explicit environment overrides. Startup records compare full preferences and adapter keys. This source preparation does not establish a hardware-specific blur fix; native execution is pending. Scores and estimates are unchanged.
+
 - **Implemented and tested (2026-11-21):** Document Info's panel menu Selection Only (`ui.docInfo.selectionOnly`; kept in memory for the session, not stored) asks `document.info` for the selection: object counts cover the selected nodes and their descendants, and with no artwork selected it shows `(No artwork selected)` instead of the document's counts, while artboards the Artboard tool has selected still show under Document. With the item off, counts stay for the whole document. Headless regressions: `panels::doc_info::tests::test_doc_info_counts_entire_document`, `test_doc_info_selection_only_toggles_and_filters_counts`, `test_doc_info_selection_only_keeps_selected_artboard` and `test_doc_info_panel_menu_toggles_state`. Scores and estimates unchanged.
 
 - **Implemented (2026-11-20):** History panel row context menus (2026-11-20, G12): Right-clicking any state offers New Document from State, Step to This State, and Clear History. Creating a document uses the clicked snapshot without stepping the source document; Step to This State uses undo/redo and is disabled on the current row; Clear History removes undo and redo steps without changing artwork and is disabled when history is empty. Headless tests in `crates/ui-egui/src/panels/history.rs` cover opening an earlier row menu, snapshot creation, backward/forward jumps, and clearing history. The snapshot chosen when the menu opens is retained while it stays open; pending tool edits are settled before resolving that snapshot to its new row; a discarded snapshot reports that it is unavailable instead of acting on a neighboring row. Jumps settle pending typing before counting undo/redo steps. Shift+F10 opens the focused row menu; Escape dismisses it and restores row focus. Switching documents dismisses the menu before it can act on another document. Headless tests cover these keyboard and document-switch paths. The list and menu use shared Craft UI controls. Scores and estimates unchanged.
@@ -1027,6 +1031,8 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 `crates/engine/src/tests/trap.rs`, `crates/effects/src/trap.rs`, `crates/pathops/src/trap.rs`.
 
 ## Revision history
+
+- 2026-11-26: Desktop graphics adapter/backend choice (#7942) uses the shared structured Preference, backend-grouped adapter rows, tolerant legacy settings and explicit environment overrides. Startup records compare full preferences and adapter keys. This source preparation does not establish a hardware-specific blur fix; native execution is pending. Scores and estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|

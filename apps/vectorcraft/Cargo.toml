@@ -11,10 +11,13 @@ workspace = true
 
 [features]
 default = ["wgpu", "accessibility"]
-wgpu = ["eframe/wgpu", "dep:winsafe"]
+wgpu = ["eframe/wgpu", "dep:winsafe", "dep:sha2"]
 accessibility = ["eframe/accesskit"]
 
 [dependencies]
+craft-gpu-device = { workspace = true }
+# Fixed-size startup recovery identities; MIT OR Apache-2.0, already used by the engine.
+sha2 = { version = "0.10", default-features = false, optional = true }
 vectorcraft-engine = { workspace = true, features = ["bundled-fonts", "heif"] }
 vectorcraft-ui-egui = { workspace = true }
 vectorcraft-text = { workspace = true }
