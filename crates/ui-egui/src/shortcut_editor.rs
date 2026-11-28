@@ -798,8 +798,9 @@ pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
 /// Is `key` a command with no default shortcut that a key press can't run: no item of the menu
 /// bar runs it without params or with one set of params ([`menu_target`]), it opens no dialog when
 /// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
-/// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a menu command whose params
-/// doc names a field a call must give (File › Document Setup › Units, `{units}`)?
+/// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a command whose params doc
+/// names a field a call must give, with a menu path (File › Document Setup › Units, `{units}`) or
+/// without one (Close Path, `{id}`)?
 pub(crate) fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
@@ -809,7 +810,7 @@ pub(crate) fn needs_a_value(key: &str) -> bool {
                 c.shortcut.is_none()
                     && !a_menu_bar_item_runs(c.id, c.params)
                     && !crate::dialogs::variables::opens(c.id)
-                    && (!c.journal || NEEDS_A_PARAM.contains(&c.id) || (!c.menu.is_empty() && names_a_required_field(c.params)))
+                    && (!c.journal || NEEDS_A_PARAM.contains(&c.id) || names_a_required_field(c.params))
             })
             .map(|c| c.id)
             .collect()
@@ -2437,6 +2438,8 @@ mod tests {
     #[test]
     fn listed_commands_run_from_a_key_without_a_missing_param() {
         use vectorcraft_testkit::fixtures::Fixture;
+        // The View menu's proof commands change the whole process's proof view.
+        let _view = crate::testing::DefaultProofView::new();
         // These need a state the fixtures lack: text being edited, a pattern being edited, an
         // object linked to a graphic style, a plug-ins folder.
         let context = ["text.insertInline", "pattern.options", "graphicStyle.redefine", "plugin.reload"];
