@@ -10676,6 +10676,27 @@ digits	Hindi	Hindi
 @msg	`{_1}` is an importer: open a file with document.open {{"importer": "{_2}"}}	`{_1}` är en importfunktion: öppna en fil med document.open {{"importer": "{_2}"}}
 @msg	the importer returned no objects	importfunktionen returnerade inga objekt
 @msg	an importer returns `objects` and `warnings`, not `{key}`	en importfunktion returnerar `objects` och `warnings`, inte `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` måste ange objektindex i stigande ordning, vart och ett mindre än {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` anger `{shown}` två gånger
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` anger en okänd typ `{shown}`: använd type, image, layer eller artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` kräver plugin-API-nivå {OUTPUT_KINDS_API}: ange `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` måste vara [width, height]: två heltal från 1 till {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` måste innehålla 4 × bredd × höjd = {want} byte som base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` måste vara [x, y, width, height]: ändliga tal inom ±{MAX_COORD}, bredd och höjd över 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` är {len} byte (gräns {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` får inte innehålla andra styrtecken än radbrytningar och tabbar
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` måste vara 1-{MAX_NAME_CHARS} tecken, utan styrtecken eller textriktningstecken
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` måste vara sex ändliga tal inom ±{MAX_COORD} som inte plattar till objektet
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` måste innehålla 1 till {max} poster (innehåller {n})
+@msg	a type fill must be a color or a gradient	en textfyllning måste vara en färg eller en gradient
+@msg	artboard name `{shown}` is used twice	ritytans namn `{shown}` används två gånger
+@msg	object {k} must be in exactly one layer	objekt {k} måste ligga i exakt ett lager
+@msg	only an importer declares `outputKinds`	bara en importfunktion anger `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	bilderna innehåller mer än {MAX_PIXEL_BYTES} byte pixlar
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	utdata innehåller `{kind}`, som importfunktionens `outputKinds` inte anger
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	texten innehåller mer än {MAX_TEXT_TOTAL} byte
+@msg	unknown field `{key}`	okänt fält `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} pixlar (gräns {MAX_IMAGE_SIDE} pixlar per sida)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen är större än de {MAX_INPUT_BYTES} byte som en importfunktion läser
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importfunktion anger 1 till {MAX_EXTENSIONS} `extensions`
 @msg	an importer always gets an import's budget: leave `budget` out	en importfunktion får alltid en imports budget: utelämna `budget`

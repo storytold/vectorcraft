@@ -8939,6 +8939,27 @@ swatch	Yellow Green	Verde-amarelado
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` é um efeito dinâmico: aplique-o com effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	o plug-in de importação não retornou nenhum objeto
 @msg	an importer returns `objects` and `warnings`, not `{key}`	um plug-in de importação retorna `objects` e `warnings`, não `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` deve listar índices de objetos em ordem crescente, cada um menor que {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` lista `{shown}` duas vezes
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` indica um tipo desconhecido `{shown}`: use type, image, layer ou artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` exige o nível de API de plug-ins {OUTPUT_KINDS_API}: informe `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` deve ser [width, height]: dois números inteiros de 1 a {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` deve conter 4 × largura × altura = {want} bytes em base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` deve ser [x, y, width, height]: números finitos dentro de ±{MAX_COORD}, com largura e altura maiores que 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` tem {len} bytes (limite {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` não deve conter caracteres de controle além de quebras de linha e tabulações
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` deve ter 1-{MAX_NAME_CHARS} caracteres, sem caracteres de controle nem de direção do texto
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` deve ser seis números finitos dentro de ±{MAX_COORD} que não achatem o objeto
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` deve conter de 1 a {max} entradas (contém {n})
+@msg	a type fill must be a color or a gradient	o preenchimento de um texto deve ser uma cor ou um gradiente
+@msg	artboard name `{shown}` is used twice	o nome de mesa de trabalho `{shown}` é usado duas vezes
+@msg	object {k} must be in exactly one layer	o objeto {k} deve estar em exatamente uma camada
+@msg	only an importer declares `outputKinds`	somente um plug-in de importação declara `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	as imagens contêm mais de {MAX_PIXEL_BYTES} bytes de pixels
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	a saída contém `{kind}`, que `outputKinds` do plug-in de importação não lista
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	o texto contém mais de {MAX_TEXT_TOTAL} bytes
+@msg	unknown field `{key}`	campo desconhecido `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} pixels (limite de {MAX_IMAGE_SIDE} pixels por lado)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	o arquivo é maior que os {MAX_INPUT_BYTES} bytes que um plug-in de importação lê
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	um plug-in de importação declara de 1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	só um plug-in de exportação ou de importação declara `extensions`

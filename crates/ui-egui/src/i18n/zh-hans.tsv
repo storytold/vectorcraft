@@ -8629,6 +8629,27 @@ breakText	Glyphs	字形
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` 是实时效果：请用 effect.apply {{"effect": "{_2}"}} 应用
 @msg	the importer returned no objects	导入增效工具未返回任何对象
 @msg	an importer returns `objects` and `warnings`, not `{key}`	导入增效工具返回 `objects` 和 `warnings`，不是 `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` 必须按递增顺序列出对象索引，每个都小于 {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` 列出了两次 `{shown}`
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` 指定了未知类型 `{shown}`：请使用 type、image、layer 或 artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` 需要增效工具 API 级别 {OUTPUT_KINDS_API}：请指定 `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` 必须是 [width, height]：两个 1 到 {MAX_IMAGE_SIDE} 的整数
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` 必须以 base64 形式包含 4 × 宽 × 高 = {want} 字节
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` 必须是 [x, y, width, height]：±{MAX_COORD} 以内的有限数，宽和高大于 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` 有 {len} 字节 (上限 {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` 不能包含换行符和制表符以外的控制字符
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` 必须为 1-{MAX_NAME_CHARS} 个字符，且不含控制字符或文本方向字符
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` 必须是 ±{MAX_COORD} 以内、不会压扁对象的六个有限数
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` 必须包含 1 到 {max} 项 (现有 {n} 项)
+@msg	a type fill must be a color or a gradient	文字的填色必须是颜色或渐变
+@msg	artboard name `{shown}` is used twice	画板名称 `{shown}` 使用了两次
+@msg	object {k} must be in exactly one layer	对象 {k} 必须恰好位于一个图层中
+@msg	only an importer declares `outputKinds`	只有导入增效工具才能声明 `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	图像的像素超过 {MAX_PIXEL_BYTES} 字节
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	输出包含 `{kind}`，但导入增效工具的 `outputKinds` 没有列出它
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	文字超过 {MAX_TEXT_TOTAL} 字节
+@msg	unknown field `{key}`	未知字段 `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} 像素 (每边上限 {MAX_IMAGE_SIDE} 像素)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	文件超过导入增效工具读取的 {MAX_INPUT_BYTES} 字节
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	导入增效工具声明 1 到 {MAX_EXTENSIONS} 个 `extensions`
 @msg	only an exporter or an importer declares `extensions`	只有导出或导入增效工具才声明 `extensions`

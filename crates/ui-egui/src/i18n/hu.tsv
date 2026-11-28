@@ -8746,6 +8746,27 @@ breakText	Glyphs	Glifák
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` élő effektus: alkalmazza az effect.apply {{"effect": "{_2}"}} paranccsal
 @msg	the importer returned no objects	az importáló bővítmény nem adott vissza objektumot
 @msg	an importer returns `objects` and `warnings`, not `{key}`	az importáló bővítmény `objects` és `warnings` értéket ad vissza, nem `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	az `objects` kulcsnak objektumindexeket kell felsorolnia növekvő sorrendben, mindegyik kisebb, mint {count}
+@msg	`outputKinds` lists `{shown}` twice	az `outputKinds` kétszer sorolja fel ezt: `{shown}`
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	az `outputKinds` ismeretlen fajtát ad meg: `{shown}`; használja ezeket: type, image, layer vagy artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	az `outputKinds` használatához {OUTPUT_KINDS_API}. szintű bővítmény-API szükséges: adja meg az `api` {OUTPUT_KINDS_API} értéket
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	a `pixelSize` értéke [width, height] kell legyen: két egész szám 1 és {MAX_IMAGE_SIDE} között
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	a `pixelsBase64` értéknek 4 × szélesség × magasság = {want} bájtot kell tartalmaznia base64 formában
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	a `rect` értéke [x, y, width, height] kell legyen: véges számok ±{MAX_COORD} tartományban, 0-nál nagyobb szélességgel és magassággal
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	a `text` {len} bájt (korlát: {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	a `text` nem tartalmazhat vezérlőkaraktert a sortöréseken és tabulátorokon kívül
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}`: 1-{MAX_NAME_CHARS} karakter kell, vezérlő- és szövegirány-karakterek nélkül
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}`: hat véges szám kell ±{MAX_COORD} tartományban, amely nem lapítja el az objektumot
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}`: 1 és {max} közötti számú bejegyzés kell (jelenleg {n})
+@msg	a type fill must be a color or a gradient	a szöveg kitöltése szín vagy színátmenet lehet
+@msg	artboard name `{shown}` is used twice	a(z) `{shown}` rajztáblanév kétszer szerepel
+@msg	object {k} must be in exactly one layer	a(z) {k}. objektumnak pontosan egy rétegben kell lennie
+@msg	only an importer declares `outputKinds`	`outputKinds` kulcsot csak importáló bővítmény adhat meg
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	a képek több mint {MAX_PIXEL_BYTES} bájtnyi képpontot tartalmaznak
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	a kimenet `{kind}` tartalmat hordoz, amelyet az importáló bővítmény `outputKinds` kulcsa nem sorol fel
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	a szöveg több mint {MAX_TEXT_TOTAL} bájt
+@msg	unknown field `{key}`	ismeretlen mező: `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} képpont (oldalanként legfeljebb {MAX_IMAGE_SIDE} képpont)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	a fájl nagyobb annál a {MAX_INPUT_BYTES} bájtnál, amit egy importáló bővítmény beolvas
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	az importáló bővítmény 1–{MAX_EXTENSIONS} `extensions` értéket ad meg
 @msg	only an exporter or an importer declares `extensions`	csak exportáló vagy importáló bővítmény adhat meg `extensions` értéket

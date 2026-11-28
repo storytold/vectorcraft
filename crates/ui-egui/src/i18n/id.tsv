@@ -721,6 +721,27 @@
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` adalah efek langsung: terapkan dengan effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	pengimpor tidak mengembalikan objek apa pun
 @msg	an importer returns `objects` and `warnings`, not `{key}`	pengimpor mengembalikan `objects` dan `warnings`, bukan `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` harus mencantumkan indeks objek dalam urutan naik, masing-masing kurang dari {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` mencantumkan `{shown}` dua kali
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` menyebut jenis yang tidak dikenal `{shown}`: gunakan type, image, layer, atau artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` memerlukan API plug-in tingkat {OUTPUT_KINDS_API}: berikan `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` harus berupa [width, height]: dua bilangan bulat dari 1 sampai {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` harus berisi 4 × lebar × tinggi = {want} byte dalam base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` harus berupa [x, y, width, height]: bilangan hingga dalam ±{MAX_COORD}, lebar dan tinggi di atas 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` berukuran {len} byte (batas {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` tidak boleh berisi karakter kontrol selain pemisah baris dan tab
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` harus terdiri dari 1-{MAX_NAME_CHARS} karakter, tanpa karakter kontrol atau karakter arah teks
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` harus berupa enam bilangan hingga dalam ±{MAX_COORD} yang tidak memipihkan objek
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` harus berisi 1 sampai {max} entri (berisi {n})
+@msg	a type fill must be a color or a gradient	isian teks harus berupa warna atau gradien
+@msg	artboard name `{shown}` is used twice	nama artboard `{shown}` digunakan dua kali
+@msg	object {k} must be in exactly one layer	objek {k} harus berada di tepat satu lapisan
+@msg	only an importer declares `outputKinds`	hanya pengimpor yang mendeklarasikan `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	gambar berisi lebih dari {MAX_PIXEL_BYTES} byte piksel
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	keluaran berisi `{kind}`, yang tidak dicantumkan oleh `outputKinds` pengimpor
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	teks berisi lebih dari {MAX_TEXT_TOTAL} byte
+@msg	unknown field `{key}`	bidang tidak dikenal `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} piksel (batas {MAX_IMAGE_SIDE} piksel per sisi)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	berkas lebih besar dari {MAX_INPUT_BYTES} byte yang dibaca pengimpor
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	pengimpor mendeklarasikan 1 sampai {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	hanya pengekspor atau pengimpor yang mendeklarasikan `extensions`

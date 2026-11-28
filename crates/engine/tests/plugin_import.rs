@@ -273,7 +273,7 @@ fn failures_open_nothing() {
         ("test.fail.notjson", "not json", "JSON"),
         ("test.fail.empty", r#"{"objects":[]}"#, "the importer returned no objects"),
         ("test.fail.key", r#"{"objects":[],"layers":[]}"#, "an importer returns `objects` and `warnings`, not `layers`"),
-        ("test.fail.id", r#"{"objects":[{"id":3}]}"#, "is not the id of an input object"),
+        ("test.fail.id", r#"{"objects":[{"id":3}]}"#, "an importer returns new paths without `id`"),
         ("test.fail.far", far, "4000000"),
         ("test.fail.warnings", bad_warnings.as_str(), "`warnings` must be a list of strings"),
     ];
@@ -440,4 +440,162 @@ fn a_built_in_file_past_the_input_limit_still_opens() {
     let encoded = json!({"name": "big.tsp", "dataBase64": vectorcraft_format::base64_encode(&data)});
     assert_eq!(s.execute("document.open", &encoded).unwrap()["format"], "png");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An importer at plug-in API level 4 `id` reading `.trc` files, listing `kinds` (a JSON list) in
+/// `outputKinds`, whose output is the file it is given.
+fn rich_echo(s: &mut Session, id: &str, kinds: &str) -> Value {
+    let manifest =
+        format!(r#"{{"id":"{id}","name":"Test {id}","version":"1","kind":"importer","api":4,"extensions":["trc"],"outputKinds":{kinds}}}"#);
+    install(s, &tpl::module(&manifest, tpl::ECHO, "", 1))
+}
+
+/// The pixels of a 2 × 1 image: opaque red, then half-transparent blue.
+const PIXELS: [u8; 8] = [255, 0, 0, 255, 0, 0, 255, 128];
+
+/// Rich importer output: type, the image of [`PIXELS`] and the rectangle of [`RECT`], with two
+/// layers (the image and the rectangle in "Art", the type in the hidden, locked "Words") and two
+/// artboards.
+fn rich_output() -> Value {
+    let rect: Value = serde_json::from_str(RECT).unwrap();
+    json!({
+        "objects": [
+            {"type": "type", "text": "Hello\nWorld", "fontFamily": "No Such Family Q9617", "fontSize": 24,
+             "fill": {"type": "solid", "color": {"model": "rgb", "r": 0, "g": 0, "b": 1}}, "transform": [1, 0, 0, 1, 10, 40], "name": "Title"},
+            {"type": "image", "pixelSize": [2, 1], "pixelsBase64": vectorcraft_format::base64_encode(&PIXELS), "transform": [10, 0, 0, 10, 0, 100]},
+            rect["objects"][0],
+        ],
+        "layers": [{"name": "Art", "objects": [1, 2]}, {"name": "Words", "visible": false, "locked": true, "objects": [0]}],
+        "artboards": [{"name": "Front", "rect": [0, 0, 200, 100]}, {"name": "Back", "rect": [220, 0, 200, 100]}],
+        "warnings": ["from the importer"],
+    })
+}
+
+/// The active document's layers (name, shown, locked, kinds of its objects), its artboards (name
+/// and rectangle), its type (text, family, size, fill), the RGBA of its first image, and the transforms
+/// of its text and images.
+#[allow(clippy::type_complexity)]
+fn structure(
+    s: &Session,
+) -> (Vec<(String, bool, bool, Vec<&'static str>)>, Vec<(String, [f64; 4])>, Vec<(String, String, f64, String)>, Vec<u8>, Vec<(&'static str, [f64; 6])>)
+{
+    let d = &s.doc().unwrap().doc;
+    let kind = |n: &vectorcraft_doc::Node| match &n.kind {
+        vectorcraft_doc::NodeKind::Text(_) => "type",
+        vectorcraft_doc::NodeKind::Image(_) => "image",
+        vectorcraft_doc::NodeKind::Path { .. } => "path",
+        _ => "other",
+    };
+    let layers = d
+        .layers
+        .iter()
+        .map(|l| (l.name.clone().unwrap_or_default(), l.visible, l.locked, l.children().unwrap().iter().map(|c| kind(c)).collect()))
+        .collect();
+    let boards = d.artboards.iter().map(|a| (a.name.clone(), [a.rect.x0, a.rect.y0, a.rect.x1, a.rect.y1])).collect();
+    let (mut types, mut pixels, mut transforms) = (Vec::new(), Vec::new(), Vec::new());
+    d.walk(|n| match &n.kind {
+        vectorcraft_doc::NodeKind::Text(t) => {
+            transforms.push(("type", t.xf.as_coeffs()));
+            let st = &t.runs[0].style;
+            let text: String = t.runs.iter().map(|r| r.text.as_str()).collect();
+            types.push((text, st.font_family.clone(), st.size, serde_json::to_string(&st.fill).unwrap()));
+        }
+        vectorcraft_doc::NodeKind::Image(im) => {
+            transforms.push(("image", im.xf.as_coeffs()));
+            // Read back through the filter input's own decoder, not the importer's.
+            if pixels.is_empty() {
+                let o = vectorcraft_plugins::objects::encode_read_only(d, n).unwrap();
+                pixels = vectorcraft_format::base64_decode(o["pixelsBase64"].as_str().unwrap()).unwrap();
+            }
+        }
+        _ => {}
+    });
+    (layers, boards, types, pixels, transforms)
+}
+
+/// An importer at API level 4 that lists every output kind opens editable type, an embedded image,
+/// paths, layers and artboards as it returned them; the artboards replace the one around the art,
+/// a missing font is reported with the importer's warnings, and the document saves and opens again
+/// in the native format with all of it.
+#[test]
+fn an_api_4_importer_opens_type_images_layers_and_artboards() {
+    let mut s = Session::new();
+    let entry = rich_echo(&mut s, "test.rich", r#"["type","image","layer","artboard"]"#);
+    assert_eq!((&entry["api"], &entry["outputKinds"]), (&json!(4), &json!(["type", "image", "layer", "artboard"])));
+    assert_eq!(entry["permissions"], json!(["import.read"]));
+    let r = open(&mut s, "Rich.trc", rich_output().to_string().as_bytes(), json!({})).unwrap();
+    let warnings = r["warnings"].as_array().unwrap();
+    assert_eq!(warnings.first(), Some(&json!("from the importer")));
+    assert!(warnings.iter().any(|w| w.as_str().unwrap().contains("No Such Family Q9617")), "{warnings:?}");
+    let opened = structure(&s);
+    let blue = serde_json::to_string(&vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0))).unwrap();
+    assert_eq!(opened.0, [("Art".to_string(), true, false, vec!["image", "path"]), ("Words".to_string(), false, true, vec!["type"])]);
+    assert_eq!(opened.1, [("Front".to_string(), [0.0, 0.0, 200.0, 100.0]), ("Back".to_string(), [220.0, 0.0, 420.0, 100.0])]);
+    assert_eq!(opened.2, [("Hello\nWorld".to_string(), "No Such Family Q9617".to_string(), 24.0, blue)]);
+    assert_eq!(opened.3, PIXELS);
+    assert_eq!(opened.4, [("image", [10.0, 0.0, 0.0, 10.0, 0.0, 100.0]), ("type", [1.0, 0.0, 0.0, 1.0, 10.0, 40.0])]);
+    // The type is laid out at the place the transform gives: its first baseline starts at (10, 40).
+    let d = &s.doc().unwrap().doc;
+    let words = d.layers[1].children().unwrap()[0].clone();
+    let b = d.bounds_of(&[words.id], false).unwrap();
+    assert!(b.x0 >= 9.0 && b.x0 < 12.0 && b.y0 < 40.0 && b.y1 > 40.0, "{b:?}");
+
+    let native = fileio::encode(&s.doc().unwrap().doc, "vectorcraft", &json!({})).unwrap();
+    open(&mut s, "Again.vectorcraft", &native, json!({})).unwrap();
+    assert_eq!(structure(&s), opened, "saved and opened again");
+}
+
+/// An importer at API level 4 that lists only some kinds: output with another kind, a malformed
+/// image, a bad layer, or an image or type that reaches past the canvas opens nothing and leaves the open document as it was; a blank document of
+/// artboards alone opens.
+#[test]
+fn rich_output_that_fails_its_checks_changes_nothing() {
+    let mut s = Session::new();
+    rich_echo(&mut s, "test.richsome", r#"["type","image","layer"]"#);
+    let before = open_edited(&mut s, "test.richsome.edited");
+    let mut short = rich_output();
+    short["objects"][1]["pixelsBase64"] = json!(vectorcraft_format::base64_encode(&PIXELS[..4]));
+    let mut twice = rich_output();
+    twice["layers"][1]["objects"] = json!([0, 2]);
+    let mut wide = rich_output();
+    wide["objects"][1]["transform"] = json!([4000000, 0, 0, 1, 0, 0]);
+    let mut far = rich_output();
+    far["objects"][0]["transform"] = json!([1, 0, 0, 1, 4000000, 40]);
+    let cases = [
+        (rich_output(), "`artboard`"),
+        (short, "= 8 bytes"),
+        (twice, "exactly one layer"),
+        (wide, "objects[1]: it reaches more than 4000000 pt"),
+        (far, "objects[0]: it reaches more than 4000000 pt"),
+        (json!({"objects": [], "layers": [{"name": "A\u{202E}B"}]}), "text direction"),
+    ];
+    for (mut output, says) in cases {
+        if says != "`artboard`" {
+            output.as_object_mut().unwrap().remove("artboards");
+        }
+        let e = open(&mut s, "x.trc", output.to_string().as_bytes(), json!({"importer": "plugin.test.richsome"})).unwrap_err();
+        assert!(e.to_string().contains(says) && e.to_string().contains("x.trc"), "{says}: {e}");
+        assert_eq!(state(&mut s), before, "{says}");
+    }
+    rich_echo(&mut s, "test.richboards", r#"["artboard"]"#);
+    let blank = json!({"objects": [], "artboards": [{"name": "Only", "rect": [0, 0, 50, 60]}]});
+    open(&mut s, "Blank.trc", blank.to_string().as_bytes(), json!({"importer": "plugin.test.richboards"})).unwrap();
+    let (layers, boards, types, _, _) = structure(&s);
+    assert_eq!((layers.len(), layers[0].3.len(), boards, types.len()), (1, 0, vec![("Only".to_string(), [0.0, 0.0, 50.0, 60.0])], 0));
+}
+
+/// An importer below API level 4 reads paths alone, as it always has: type is not a path, and it
+/// can't return layers.
+#[test]
+fn an_older_importer_reads_paths_alone() {
+    let mut s = Session::new();
+    echo(&mut s, "test.older", r#"["tol"]"#);
+    let e = open(&mut s, "x.tol", rich_output().to_string().as_bytes(), json!({})).unwrap_err();
+    assert!(e.to_string().contains("an importer returns `objects` and `warnings`, not `"), "{e}");
+    let typed = json!({"objects": [rich_output()["objects"][0]]});
+    let e = open(&mut s, "x.tol", typed.to_string().as_bytes(), json!({})).unwrap_err();
+    assert!(e.to_string().contains("`type` must be \"path\" or \"compound\""), "{e}");
+    assert!(s.documents().is_empty());
+    open(&mut s, "Shapes.tol", RECT.as_bytes(), json!({})).unwrap();
+    assert_eq!((objects(&s), artboard(&s), s.doc().unwrap().doc.layers.len()), (1, (10.0, 20.0, 110.0, 70.0), 1));
 }

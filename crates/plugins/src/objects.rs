@@ -603,7 +603,7 @@ pub(crate) fn clamp_color(c: Color) -> Color {
 
 /// A paint from plug-in output (`null`: none), with colors, process plates, opacities and
 /// offsets clamped and gradient and pattern placements checked.
-fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
+pub(crate) fn decode_paint(v: &Value, at: &str) -> Result<Paint> {
     if v.is_null() {
         return Ok(Paint::None);
     }
@@ -693,7 +693,7 @@ fn opt<'a>(o: &'a serde_json::Map<String, Value>, key: &str) -> Option<&'a Value
 /// Object `v` of a plug-in's output (`at` names it in errors), its anchors added to `anchors` and
 /// held to [`MAX_ANCHORS`]: each key it has checked, numbers clamped into range, as [`decode`] reads
 /// them.
-fn decode_object(v: &Value, at: &str, anchors: &mut usize) -> Result<OutObject> {
+pub(crate) fn decode_object(v: &Value, at: &str, anchors: &mut usize) -> Result<OutObject> {
     let o = v.as_object().ok_or_else(|| out_err(at, "an object must be a JSON object"))?;
     let mut out = OutObject::default();
     if let Some(id) = opt(o, "id") {
@@ -1061,7 +1061,7 @@ fn paints(ap: &Appearance, fill: bool) -> Vec<&Paint> {
 /// `p` without swatch links: a plug-in's colours are its own, so only paints it returned
 /// unchanged keep theirs. A gradient stop also loses its process plates, which print only with
 /// a spot swatch.
-fn unlinked(mut p: Paint) -> Paint {
+pub(crate) fn unlinked(mut p: Paint) -> Paint {
     match &mut p {
         Paint::Solid { swatch, tint, .. } => {
             *swatch = None;
@@ -1359,6 +1359,21 @@ impl Plan {
         }
         out
     }
+}
+
+/// New object `o` of a plug-in's output (`at` names it in errors) as a node of `doc`, not yet in it:
+/// a path or a compound path made as [`apply_output`] makes one, its effects admitted by `admit`.
+/// An object with an `id` or without a `path` is an error.
+pub fn new_object(doc: &mut Document, o: OutObject, at: &str, admit: AdmitEffects) -> Result<Node> {
+    if let Some(id) = o.id {
+        return Err(out_err(at, format!("{} is not the id of an input object", id.0)));
+    }
+    if o.path.is_none() {
+        return Err(out_err(at, "a new object needs a `path`"));
+    }
+    let mut n = Node::path(doc.alloc_id(), PathData::default(), Appearance::default());
+    write(doc, &mut n, o, at, admit)?;
+    Ok(n)
 }
 
 /// Applies an object filter's output to `doc`.

@@ -8421,6 +8421,27 @@ breakText	Glyphs	Glifi
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` è un effetto dinamico: applicalo con effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	il plug-in di importazione non ha restituito alcun oggetto
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un plug-in di importazione restituisce `objects` e `warnings`, non `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` deve elencare indici di oggetti in ordine crescente, ciascuno minore di {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` elenca `{shown}` due volte
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` indica un tipo sconosciuto `{shown}`: usa type, image, layer o artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` richiede il livello API dei plug-in {OUTPUT_KINDS_API}: indica `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` deve essere [width, height]: due numeri interi da 1 a {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` deve contenere 4 × larghezza × altezza = {want} byte in base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` deve essere [x, y, width, height]: numeri finiti entro ±{MAX_COORD}, con larghezza e altezza maggiori di 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` è di {len} byte (limite {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` non deve contenere caratteri di controllo diversi da interruzioni di riga e tabulazioni
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` deve avere 1-{MAX_NAME_CHARS} caratteri, senza caratteri di controllo o di direzione del testo
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` deve essere sei numeri finiti entro ±{MAX_COORD} che non appiattiscano l’oggetto
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` deve contenere da 1 a {max} voci (ne contiene {n})
+@msg	a type fill must be a color or a gradient	il riempimento di un testo deve essere un colore o una sfumatura
+@msg	artboard name `{shown}` is used twice	il nome di tavola da disegno `{shown}` è usato due volte
+@msg	object {k} must be in exactly one layer	l’oggetto {k} deve trovarsi in un solo livello
+@msg	only an importer declares `outputKinds`	solo un plug-in di importazione dichiara `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	le immagini contengono più di {MAX_PIXEL_BYTES} byte di pixel
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	l’output contiene `{kind}`, che `outputKinds` del plug-in di importazione non elenca
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	il testo contiene più di {MAX_TEXT_TOTAL} byte
+@msg	unknown field `{key}`	campo sconosciuto `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} pixel (limite {MAX_IMAGE_SIDE} pixel per lato)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	il file supera i {MAX_INPUT_BYTES} byte che un plug-in di importazione legge
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un plug-in di importazione dichiara da 1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	solo un plug-in di esportazione o di importazione dichiara `extensions`

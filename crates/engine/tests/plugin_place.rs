@@ -58,6 +58,56 @@ fn state(s: &mut Session) -> (usize, usize, usize, Value) {
     (d.history.undo.len(), d.history.redo.len(), d.doc.layers.len(), content)
 }
 
+#[test]
+fn placing_importer_checks_the_transformed_bounds_before_editing() {
+    let image = json!({"objects": [{
+        "type": "image", "pixelSize": [1, 1], "pixelsBase64": vectorcraft_format::base64_encode(&[255, 0, 0, 255]),
+        "transform": [20, 0, 0, 10, 0, 0],
+    }]})
+    .to_string();
+    for (index, output, half_width) in [(0, ART, 50.0), (1, image.as_str(), 10.0)] {
+        let mut s = with_document();
+        let mut manifest: Value = serde_json::from_str(&placing(&format!("test.place.canvas{index}"), r#"["tpc"]"#)).unwrap();
+        if index == 1 {
+            manifest["api"] = json!(4);
+            manifest["outputKinds"] = json!(["image"]);
+        }
+        install(&mut s, &tpl::returning(&manifest.to_string(), output));
+        let importer = format!("plugin.test.place.canvas{index}");
+        let before = state(&mut s);
+        for at in [[4_000_000.0, 400.0], [-4_000_000.0, 400.0], [400.0, 4_000_000.0], [400.0, -4_000_000.0]] {
+            for template in [false, true] {
+                assert!(
+                    place(&mut s, "Art.tpc", b"?", json!({"at": at, "template": template, "importer": importer})).is_err(),
+                    "{index}: {at:?}, template: {template}"
+                );
+                assert_eq!(state(&mut s), before);
+            }
+        }
+        let inside = place(&mut s, "Art.tpc", b"?", json!({"at": [4_000_000.0 - half_width, 400.0], "importer": importer}));
+        assert!(inside.is_ok(), "{index}: {inside:?}");
+        assert_eq!(s.doc().unwrap().history.undo.len(), before.0 + 1);
+    }
+}
+
+#[test]
+fn cropped_svg_placement_checks_art_outside_its_frame_before_editing() {
+    let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M-20 -20 L120 -20 L120 120 L-20 120 Z"/></svg>"#;
+    for at in [[3_999_940.0, 400.0], [-3_999_940.0, 400.0], [400.0, 3_999_940.0], [400.0, -3_999_940.0]] {
+        for template in [false, true] {
+            let mut s = with_document();
+            let before = state(&mut s);
+            assert!(
+                place(&mut s, "cropped.svg", svg, json!({"at": at, "crop": "crop", "template": template})).is_err(),
+                "{at:?}, template: {template}"
+            );
+            assert_eq!(state(&mut s), before);
+        }
+    }
+    let mut s = with_document();
+    assert!(place(&mut s, "cropped.svg", svg, json!({"at": [3_999_930.0, 400.0], "crop": "crop"})).is_ok());
+}
+
 /// A placed group: its name, the names of its children, and its bounds as `(x0, y0, x1, y1)`.
 type Placed = (Option<String>, Vec<Option<String>>, (f64, f64, f64, f64));
 
@@ -157,6 +207,37 @@ fn guides_are_left_out_of_what_is_placed() {
     let e = place(&mut s, "c.tpq", b"?", json!({})).unwrap_err().to_string();
     assert!(e.contains("`c.tpq` has no art to place"), "{e}");
     assert_eq!(state(&mut s), before);
+}
+
+/// An importer at plug-in API level 4 places its type and images with its paths: the objects of its
+/// visible layers go in the group, in order, the objects of a hidden layer are left out, and its
+/// artboards leave the document's as they were.
+#[test]
+fn an_api_4_importer_places_type_and_images_of_its_visible_layers() {
+    let mut s = with_document();
+    let manifest = r#"{"id":"test.place.rich","name":"Test test.place.rich","version":"1","kind":"importer","api":4,"extensions":["tpr"],"place":true,"outputKinds":["type","image","layer","artboard"]}"#;
+    let rect: Value = serde_json::from_str(ART).unwrap();
+    let output = json!({
+        "objects": [
+            {"type": "type", "text": "Hello", "fontFamily": "No Such Family P9129", "fontSize": 24, "transform": [1, 0, 0, 1, 10, 40], "name": "Title"},
+            {"type": "image", "pixelSize": [2, 1], "pixelsBase64": vectorcraft_format::base64_encode(&[255, 0, 0, 255, 0, 0, 255, 128]), "transform": [10, 0, 0, 10, 0, 100], "name": "Pic"},
+            rect["objects"][0],
+        ],
+        "layers": [{"name": "Shown", "objects": [0, 1]}, {"name": "Hidden", "visible": false, "objects": [2]}],
+        "artboards": [{"name": "Front", "rect": [0, 0, 200, 100]}],
+    });
+    install(&mut s, &tpl::returning(manifest, &output.to_string()));
+    let boards = s.doc().unwrap().doc.artboards.clone();
+    let r = place(&mut s, "Rich.tpr", b"?", json!({"at": [300, 400]})).unwrap();
+    let id = NodeId(r["ids"][0].as_u64().unwrap());
+    let d = &s.doc().unwrap().doc;
+    let NodeKind::Group { children, .. } = &d.node(id).expect("placed").kind else { panic!("not a group") };
+    let kinds: Vec<(Option<&str>, bool, bool)> = children
+        .iter()
+        .map(|c| (c.name.as_deref(), matches!(c.kind, NodeKind::Text(_)), matches!(&c.kind, NodeKind::Image(im) if d.images.contains_key(&im.key))))
+        .collect();
+    assert_eq!(kinds, [(Some("Title"), true, false), (Some("Pic"), false, true)]);
+    assert_eq!(d.artboards, boards);
 }
 
 /// The importer is told it places the file (`_context.mode`), with the file's extension and name,

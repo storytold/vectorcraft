@@ -10312,6 +10312,27 @@ breakText	Glyphs	字形
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` はライブ効果です: effect.apply {{"effect": "{_2}"}} で適用してください
 @msg	the importer returned no objects	読み込みプラグインがオブジェクトを返しませんでした
 @msg	an importer returns `objects` and `warnings`, not `{key}`	読み込みプラグインが返すのは `objects` と `warnings` で、`{key}` ではありません
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` にはオブジェクトのインデックスを昇順で指定してください (各値は {count} 未満)
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` に `{shown}` が 2 回指定されています
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` に不明な種類 `{shown}` が指定されています: type、image、layer、artboard のいずれかを使用してください
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` にはプラグイン API レベル {OUTPUT_KINDS_API} が必要です: `api` {OUTPUT_KINDS_API} を指定してください
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` は [width, height] の形式で指定してください: 1 から {MAX_IMAGE_SIDE} までの整数 2 つ
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` には 4 × 幅 × 高さ = {want} バイトを base64 で指定してください
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` は [x, y, width, height] の形式で指定してください: ±{MAX_COORD} 以内の有限の数値で、幅と高さは 0 より大きくします
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` は {len} バイトです (上限 {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` には改行とタブ以外の制御文字を含めないでください
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` は 1-{MAX_NAME_CHARS} 文字にし、制御文字や文字方向を変える文字を含めないでください
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` は ±{MAX_COORD} 以内の有限の数値 6 つで、オブジェクトをつぶさないものにしてください
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` の項目数は 1 から {max} にしてください (現在 {n})
+@msg	a type fill must be a color or a gradient	テキストの塗りはカラーまたはグラデーションにしてください
+@msg	artboard name `{shown}` is used twice	アートボード名 `{shown}` が 2 回使われています
+@msg	object {k} must be in exactly one layer	オブジェクト {k} はちょうど 1 つのレイヤーに入れてください
+@msg	only an importer declares `outputKinds`	`outputKinds` を宣言できるのは読み込みプラグインだけです
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	画像のピクセルが {MAX_PIXEL_BYTES} バイトを超えています
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	出力に `{kind}` が含まれていますが、読み込みプラグインの `outputKinds` には指定されていません
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	テキストが {MAX_TEXT_TOTAL} バイトを超えています
+@msg	unknown field `{key}`	不明なフィールド `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} ピクセル (1 辺の上限 {MAX_IMAGE_SIDE} ピクセル)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ファイルが読み込みプラグインの読み取る {MAX_INPUT_BYTES} バイトを超えています
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	読み込みプラグインは `extensions` を 1～{MAX_EXTENSIONS} 個宣言します
 @msg	only an exporter or an importer declares `extensions`	`extensions` を宣言できるのは書き出しプラグインと読み込みプラグインだけです

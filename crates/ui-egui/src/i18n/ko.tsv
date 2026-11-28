@@ -8393,6 +8393,27 @@ breakText	Glyphs	글리프
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}`은(는) 라이브 효과입니다: effect.apply {{"effect": "{_2}"}}로 적용하세요
 @msg	the importer returned no objects	가져오기 플러그인이 개체를 반환하지 않았습니다
 @msg	an importer returns `objects` and `warnings`, not `{key}`	가져오기 플러그인은 `{key}`가 아닌 `objects`와 `warnings`를 반환합니다
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects`에는 개체 인덱스를 오름차순으로 나열해야 하며 각 값은 {count}보다 작아야 합니다
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds`에 `{shown}`이(가) 두 번 나열되어 있습니다
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds`에 알 수 없는 종류 `{shown}`이(가) 있습니다. type, image, layer 또는 artboard를 사용하세요
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds`에는 플러그인 API 수준 {OUTPUT_KINDS_API}이(가) 필요합니다. `api`를 {OUTPUT_KINDS_API}(으)로 지정하세요
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize`는 [width, height]여야 합니다. 1에서 {MAX_IMAGE_SIDE} 사이의 정수 두 개
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64`에는 4 × 너비 × 높이 = {want}바이트가 base64로 들어 있어야 합니다
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect`는 [x, y, width, height]여야 합니다. ±{MAX_COORD} 이내의 유한한 수이며 너비와 높이는 0보다 커야 합니다
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text`가 {len}바이트입니다(한도 {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text`에는 줄 바꿈과 탭 외의 제어 문자가 없어야 합니다
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}`은(는) 제어 문자나 텍스트 방향 문자 없이 1-{MAX_NAME_CHARS}자여야 합니다
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}`은(는) 개체를 납작하게 만들지 않는 ±{MAX_COORD} 이내의 유한한 수 여섯 개여야 합니다
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}`에는 1~{max}개의 항목이 있어야 합니다(현재 {n}개)
+@msg	a type fill must be a color or a gradient	텍스트 칠은 색상 또는 그레이디언트여야 합니다
+@msg	artboard name `{shown}` is used twice	아트보드 이름 `{shown}`이(가) 두 번 사용되었습니다
+@msg	object {k} must be in exactly one layer	개체 {k}은(는) 정확히 한 레이어에 있어야 합니다
+@msg	only an importer declares `outputKinds`	가져오기 플러그인만 `outputKinds`를 선언할 수 있습니다
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	이미지의 픽셀이 {MAX_PIXEL_BYTES}바이트를 넘습니다
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	출력에 가져오기 플러그인의 `outputKinds`에 없는 `{kind}`이(가) 있습니다
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	텍스트가 {MAX_TEXT_TOTAL}바이트를 넘습니다
+@msg	unknown field `{key}`	알 수 없는 필드 `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h}픽셀(한 변 한도 {MAX_IMAGE_SIDE}픽셀)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	파일이 가져오기 플러그인이 읽는 {MAX_INPUT_BYTES}바이트보다 큽니다
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	가져오기 플러그인은 `extensions`를 1~{MAX_EXTENSIONS}개 선언합니다
 @msg	only an exporter or an importer declares `extensions`	`extensions`는 내보내기 또는 가져오기 플러그인만 선언합니다

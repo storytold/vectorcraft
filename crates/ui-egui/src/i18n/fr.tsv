@@ -8756,6 +8756,27 @@ breakText	Glyphs	Glyphes
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` est un effet dynamique : appliquez-le avec effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	le module externe d’importation n’a renvoyé aucun objet
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un module externe d’importation renvoie `objects` et `warnings`, pas `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` doit indiquer des indices d’objets dans l’ordre croissant, chacun inférieur à {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` mentionne `{shown}` deux fois
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` indique un type inconnu `{shown}`. Utilisez type, image, layer ou artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` nécessite le niveau d’API de module externe {OUTPUT_KINDS_API}. Indiquez `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` doit être [width, height], soit deux nombres entiers de 1 à {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` doit contenir 4 × largeur × hauteur = {want} octets en base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` doit être [x, y, width, height], soit des nombres finis compris dans ±{MAX_COORD}, largeur et hauteur supérieures à 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` fait {len} octets (limite {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` ne doit contenir aucun caractère de contrôle autre que des sauts de ligne et des tabulations
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` doit compter 1-{MAX_NAME_CHARS} caractères, sans caractère de contrôle ni de sens du texte
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` doit être six nombres finis compris dans ±{MAX_COORD} qui n’aplatissent pas l’objet
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` doit contenir de 1 à {max} entrées (il en contient {n})
+@msg	a type fill must be a color or a gradient	le fond d’un texte doit être une couleur ou un dégradé
+@msg	artboard name `{shown}` is used twice	le nom de plan de travail `{shown}` est utilisé deux fois
+@msg	object {k} must be in exactly one layer	l’objet {k} doit se trouver dans un seul calque
+@msg	only an importer declares `outputKinds`	seul un module externe d’importation déclare `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	les images contiennent plus de {MAX_PIXEL_BYTES} octets de pixels
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	la sortie contient `{kind}`, que `outputKinds` du module externe d’importation ne mentionne pas
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	le texte contient plus de {MAX_TEXT_TOTAL} octets
+@msg	unknown field `{key}`	champ inconnu `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} pixels (limite {MAX_IMAGE_SIDE} pixels par côté)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	le fichier dépasse les {MAX_INPUT_BYTES} octets qu’un module externe d’importation lit
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un module externe d’importation déclare de 1 à {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	seul un module externe d’exportation ou d’importation déclare `extensions`

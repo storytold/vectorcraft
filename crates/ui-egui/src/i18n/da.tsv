@@ -841,6 +841,27 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` er en live-effekt: anvend den med effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	importøren returnerede ingen objekter
 @msg	an importer returns `objects` and `warnings`, not `{key}`	en importør returnerer `objects` og `warnings`, ikke `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` skal angive objektindeks i stigende rækkefølge, hvert mindre end {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` angiver `{shown}` to gange
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` angiver en ukendt type `{shown}`: brug type, image, layer eller artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` kræver plug-in-API-niveau {OUTPUT_KINDS_API}: angiv `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` skal være [width, height]: to heltal fra 1 til {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` skal indeholde 4 × bredde × højde = {want} byte som base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` skal være [x, y, width, height]: endelige tal inden for ±{MAX_COORD}, bredde og højde over 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` er {len} byte (grænse {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` må ikke indeholde andre kontroltegn end linjeskift og tabulatorer
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` skal være 1-{MAX_NAME_CHARS} tegn uden kontroltegn eller tegn for tekstretning
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` skal være seks endelige tal inden for ±{MAX_COORD}, som ikke gør objektet fladt
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` skal indeholde 1 til {max} poster (indeholder {n})
+@msg	a type fill must be a color or a gradient	en tekstudfyldning skal være en farve eller en gradient
+@msg	artboard name `{shown}` is used twice	tegnefladenavnet `{shown}` bruges to gange
+@msg	object {k} must be in exactly one layer	objekt {k} skal ligge i præcis ét lag
+@msg	only an importer declares `outputKinds`	kun en importør angiver `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	billederne indeholder mere end {MAX_PIXEL_BYTES} byte pixels
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	outputtet indeholder `{kind}`, som importørens `outputKinds` ikke angiver
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	teksten indeholder mere end {MAX_TEXT_TOTAL} byte
+@msg	unknown field `{key}`	ukendt felt `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} pixel (grænse {MAX_IMAGE_SIDE} pixel pr. side)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	filen er større end de {MAX_INPUT_BYTES} byte, en importør læser
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	en importør angiver 1 til {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	kun en eksportør eller en importør angiver `extensions`

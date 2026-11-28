@@ -8863,6 +8863,27 @@ shape	Open	Открытый
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` — динамический эффект: примените его с помощью effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	модуль импорта не вернул ни одного объекта
 @msg	an importer returns `objects` and `warnings`, not `{key}`	модуль импорта возвращает `objects` и `warnings`, а не `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	в `objects` должны быть индексы объектов по возрастанию, каждый меньше {count}
+@msg	`outputKinds` lists `{shown}` twice	в `outputKinds` `{shown}` указано дважды
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	в `outputKinds` указан неизвестный вид `{shown}`: используйте type, image, layer или artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	для `outputKinds` нужен уровень API плагинов {OUTPUT_KINDS_API}: укажите `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` должно быть [width, height]: два целых числа от 1 до {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` должно содержать 4 × ширина × высота = {want} байт в base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` должно быть [x, y, width, height]: конечные числа в пределах ±{MAX_COORD}, ширина и высота больше 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` занимает {len} байт (предел {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` не должно содержать управляющих символов, кроме разрывов строк и табуляций
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` должно содержать 1-{MAX_NAME_CHARS} символов, без управляющих символов и символов направления текста
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` должно быть шестью конечными числами в пределах ±{MAX_COORD}, которые не сплющивают объект
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` должно содержать от 1 до {max} записей (содержит {n})
+@msg	a type fill must be a color or a gradient	заливка текста должна быть цветом или градиентом
+@msg	artboard name `{shown}` is used twice	имя монтажной области `{shown}` использовано дважды
+@msg	object {k} must be in exactly one layer	объект {k} должен быть ровно в одном слое
+@msg	only an importer declares `outputKinds`	`outputKinds` может объявлять только модуль импорта
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	изображения содержат больше {MAX_PIXEL_BYTES} байт пикселей
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	вывод содержит `{kind}`, которого нет в `outputKinds` модуля импорта
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	текст занимает больше {MAX_TEXT_TOTAL} байт
+@msg	unknown field `{key}`	неизвестное поле `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} пикселей (предел {MAX_IMAGE_SIDE} пикселей на сторону)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл больше {MAX_INPUT_BYTES} байт, которые читает модуль импорта
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль импорта объявляет от 1 до {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	`extensions` объявляет только модуль экспорта или импорта

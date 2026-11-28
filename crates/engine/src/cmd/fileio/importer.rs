@@ -13,13 +13,16 @@
 //! a new document whose artboard is their bounds (or, to place, the art of one group), and nothing
 //! opens or is placed when the importer fails, declines, is cancelled or returns objects that don't
 //! pass the checks a filter's output does.
+//! An importer at plug-in API level 4 may also return point type, embedded images, top-level
+//! layers and artboards (its manifest's `outputKinds`): the artboards it returns replace the one
+//! around the art of a new document, and File › Place leaves them out.
 
 use std::sync::Arc;
 
 use serde_json::Value;
-use vectorcraft_doc::{Document, MAX_COORD, NodeId};
-use vectorcraft_geom::Rect;
-use vectorcraft_plugins::import::Mode;
+use vectorcraft_doc::{CharStyle, Document, ImageObject, LAYER_COLORS, LayerColor, MAX_COORD, Node, NodeId, NodeKind, TextObject};
+use vectorcraft_geom::{Point, Rect};
+use vectorcraft_plugins::import::{ImportObject, Mode};
 use vectorcraft_plugins::{Manifest, Plugin, export, import, objects};
 
 use super::super::{Result, bad, str_param};
@@ -210,17 +213,15 @@ pub(crate) fn place_source<'a>(p: &'a Value, cmd: &str) -> Result<Source<'a>> {
     }
 }
 
+/// What [`read`] gives: the importer's format, the new document, its objects' ids, the artboards
+/// the importer returned and its warnings.
+type Read = (&'static Format, Document, Vec<NodeId>, Vec<import::OutArtboard>, Vec<String>);
+
 /// The file `name` holding `bytes` read by importer `plugin` for `mode` with command `cmd`'s params
 /// `p` (`params`: the importer's own parameters) → the importer's format, a new document holding its
-/// objects on its first layer, their ids, and its warnings.
-fn read(
-    name: &str,
-    bytes: &[u8],
-    plugin: &Plugin,
-    p: &Value,
-    cmd: &str,
-    mode: Mode,
-) -> Result<(&'static Format, Document, Vec<NodeId>, Vec<String>)> {
+/// objects (on its first layer, or in the layers the importer returned), their ids, the artboards
+/// the importer returned, and its warnings.
+fn read(name: &str, bytes: &[u8], plugin: &Plugin, p: &Value, cmd: &str, mode: Mode) -> Result<Read> {
     let m = plugin.manifest();
     let format = format(&export::format_id(&m.id)).filter(|f| f.read).ok_or_else(|| err(vectorcraft_plugins::Error::NotFound(m.id.clone())))?;
     let (ext, stem) = (extension(name), file_stem(name));
@@ -234,15 +235,24 @@ fn read(
     let mut doc = Document::new(1.0, 1.0);
     let layer = doc.layers.first().map(|l| l.id);
     let admit = |fx: &[vectorcraft_doc::Effect], n: &vectorcraft_doc::Node| crate::cmd::plugin::admit_effects_for(cmd, fx, n);
-    let ids = objects::apply_output(&mut doc, &[], imported.objects, layer, &admit).map_err(|e| failed(mode, name, e))?;
-    Ok((format, doc, ids, imported.warnings))
+    let mut warnings = Vec::new();
+    let (ids, artboards) = if imported.paths_only() {
+        let paths = imported.objects.into_iter().filter_map(|o| if let ImportObject::Path(o) = o { Some(o) } else { None }).collect();
+        (objects::apply_output(&mut doc, &[], paths, layer, &admit).map_err(|e| failed(mode, name, e))?, Vec::new())
+    } else {
+        let ids = build(&mut doc, imported.objects, imported.layers, &admit, &mut warnings).map_err(|e| failed(mode, name, e))?;
+        (ids, imported.artboards)
+    };
+    warnings.splice(0..0, imported.warnings);
+    Ok((format, doc, ids, artboards, warnings))
 }
 
 /// The file `name` holding `bytes` read by importer `plugin` to place it, with `file.place`'s params
-/// `p` (errors of command `cmd`) → the importer's format, the document holding its objects on its
-/// first layer, and its warnings. Importer `plugin`'s manifest must set `place`.
+/// `p` (errors of command `cmd`) → the importer's format, the document holding its objects in its
+/// layers, and its warnings; artboards the importer returned are left out. Importer `plugin`'s
+/// manifest must set `place`.
 pub(crate) fn read_for_place(name: &str, bytes: &[u8], plugin: &Plugin, p: &Value, cmd: &str) -> Result<(&'static Format, Document, Vec<String>)> {
-    let (format, doc, _, warnings) = read(name, bytes, plugin, p, cmd, Mode::Place)?;
+    let (format, doc, _, _, warnings) = read(name, bytes, plugin, p, cmd, Mode::Place)?;
     Ok((format, doc, warnings))
 }
 
@@ -250,12 +260,146 @@ pub(crate) fn read_for_place(name: &str, bytes: &[u8], plugin: &Plugin, p: &Valu
 /// (`params`: the importer's own parameters) into a new document, its artboard the bounds of what
 /// the importer returned.
 pub(super) fn load(name: &str, bytes: &[u8], plugin: &Plugin, p: &Value) -> Result<Loaded> {
-    let (format, mut doc, ids, warnings) = read(name, bytes, plugin, p, C, Mode::Import)?;
-    if let (Some(bounds), Some(board)) = (doc.bounds_of(&ids, true), doc.artboards.first_mut()) {
-        board.rect = artboard_rect(bounds);
+    let (format, mut doc, ids, artboards, warnings) = read(name, bytes, plugin, p, C, Mode::Import)?;
+    if artboards.is_empty() {
+        if let (Some(bounds), Some(board)) = (doc.bounds_of(&ids, true), doc.artboards.first_mut()) {
+            board.rect = artboard_rect(bounds);
+        }
+    } else {
+        set_artboards(&mut doc, artboards);
     }
     doc.title = file_name(name);
     Ok(Loaded { doc, format, warnings, restored: false, converted: false, preview_only: false, editing_data: false, native_pdf_compatible: None })
+}
+
+/// Puts `objects`, what an importer at plug-in API level 4 returned, into `doc`, a new document of
+/// one layer: in `layers`, bottom first, each holding the objects it lists in their order, or all in
+/// that one layer when there are none. Paths are made as a filter's new ones are (their effects let
+/// in by `admit`), type is laid out, and each image is stored in the document as a PNG of its
+/// pixels. A warning for type whose font isn't there, or doesn't have its style, goes to `warnings`.
+/// An object that reaches more than [`MAX_COORD`] from the origin is an error. Returns the objects'
+/// ids in order.
+fn build(
+    doc: &mut Document,
+    objects: Vec<ImportObject>,
+    layers: Vec<import::OutLayer>,
+    admit: objects::AdmitEffects,
+    warnings: &mut Vec<String>,
+) -> std::result::Result<Vec<NodeId>, String> {
+    let count = objects.len();
+    let first = doc.layers.first().map(|l| (**l).clone());
+    let first = first.unwrap_or_else(|| Node::layer(doc.alloc_id(), "Layer 1", LayerColor::Preset(0)));
+    let mut owner = vec![0usize; count];
+    for (li, l) in layers.iter().enumerate() {
+        for &k in &l.objects {
+            if let Some(o) = owner.get_mut(k) {
+                *o = li;
+            }
+        }
+    }
+    let mut members: Vec<Vec<Arc<Node>>> = vec![Vec::new(); layers.len().max(1)];
+    let mut ids = Vec::with_capacity(count);
+    let mut fonts = std::collections::BTreeSet::new();
+    for (i, o) in objects.into_iter().enumerate() {
+        let at = format!("objects[{i}]");
+        let node = match o {
+            ImportObject::Path(o) => objects::new_object(doc, o, &at, admit).map_err(|e| e.to_string())?,
+            ImportObject::Type(t) => {
+                let node = type_node(doc, t);
+                if let NodeKind::Text(t) = &node.kind {
+                    fonts.extend(t.runs.iter().flat_map(crate::cmd::fonts::run_fonts));
+                }
+                node
+            }
+            ImportObject::Image(im) => image_node(doc, im).map_err(|e| e.to_string())?,
+        };
+        if node.geometric_bounds().is_some_and(|b| ![b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.is_finite() && v.abs() <= MAX_COORD)) {
+            return Err(format!("plug-in output: {at}: it reaches more than {MAX_COORD} pt from the origin"));
+        }
+        ids.push(node.id);
+        if let Some(list) = owner.get(i).and_then(|&li| members.get_mut(li)) {
+            list.push(Arc::new(node));
+        }
+    }
+    let built: Vec<Arc<Node>> = if layers.is_empty() {
+        let mut layer = first;
+        if let Some(children) = layer.children_mut() {
+            *children = members.into_iter().next().unwrap_or_default();
+        }
+        vec![Arc::new(layer)]
+    } else {
+        layers
+            .into_iter()
+            .zip(members)
+            .enumerate()
+            .map(|(li, (l, children))| {
+                let mut layer = Node::layer(doc.alloc_id(), &l.name, LayerColor::Preset((li % LAYER_COLORS.len()) as u8));
+                layer.visible = l.visible;
+                layer.locked = l.locked;
+                if let Some(c) = layer.children_mut() {
+                    *c = children;
+                }
+                Arc::new(layer)
+            })
+            .collect()
+    };
+    doc.layers = built;
+    warnings.extend(crate::cmd::fonts::set_font_warning(fonts));
+    Ok(ids)
+}
+
+/// Point type `t` as a new node of `doc`, in [Normal Character Style] with the face, size and fill
+/// `t` gives, laid out.
+fn type_node(doc: &mut Document, t: import::OutType) -> Node {
+    let mut style = crate::cmd::textstyles::normal_char_style(doc);
+    style.font_version = None;
+    style.font_axes.clear();
+    style.font_family = t.font_family;
+    match t.font_style {
+        Some(s) => style.font_style = s,
+        None => {
+            style.font_style = CharStyle::default().font_style;
+            crate::cmd::textedit::fit_font_style(&mut style);
+        }
+    }
+    style.size = t.font_size;
+    if let Some(fill) = t.fill {
+        style.fill = fill;
+    }
+    let mut text = TextObject::point(Point::ZERO, &t.text, style);
+    text.xf = t.transform;
+    text.para = crate::cmd::create::new_type_para();
+    text.system_layout = doc.setup.system_layout;
+    crate::cmd::typecmd::refresh_bounds(&mut text);
+    let mut n = Node::new(doc.alloc_id(), NodeKind::Text(Box::new(text)));
+    n.name = t.name;
+    n
+}
+
+/// Image `im` as a new node of `doc`, its pixels stored in `doc` as a PNG.
+fn image_node(doc: &mut Document, im: import::OutImage) -> Result<Node> {
+    let pixels = image::RgbaImage::from_raw(im.width, im.height, im.rgba).ok_or_else(|| err("the image's pixels don't match its size"))?;
+    let stored = super::load::as_png(pixels, None, None)?;
+    let image = ImageObject {
+        key: stored.key.clone(),
+        width: stored.width,
+        height: stored.height,
+        xf: im.transform,
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    doc.images.insert(stored.key, stored.blob);
+    let mut n = Node::new(doc.alloc_id(), NodeKind::Image(Box::new(image)));
+    n.name = im.name;
+    Ok(n)
+}
+
+/// Gives `doc` the artboards `boards` an importer returned, in order, in place of its one.
+fn set_artboards(doc: &mut Document, boards: Vec<import::OutArtboard>) {
+    let Some(template) = doc.artboards.first().cloned() else { return };
+    doc.artboards =
+        boards.into_iter().zip(1u32..).map(|(b, id)| vectorcraft_doc::Artboard { id, name: b.name, rect: b.rect, ..template.clone() }).collect();
 }
 
 /// The artboard of art with bounds `r`: `r` within ±[`MAX_COORD`], at least 1 pt wide and high

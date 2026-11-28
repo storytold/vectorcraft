@@ -11017,6 +11017,27 @@ font-script	Japanese	იაპონური
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` ცოცხალი ეფექტია: გამოიყენეთ ის effect.apply {{"effect": "{_2}"}}-ით
 @msg	the importer returned no objects	იმპორტის პლაგინმა ობიექტები არ დააბრუნა
 @msg	an importer returns `objects` and `warnings`, not `{key}`	იმპორტის პლაგინი აბრუნებს `objects`-ს და `warnings`-ს და არა `{key}`-ს
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects`-ში ობიექტების ინდექსები ზრდადი რიგით უნდა იყოს, თითოეული {count}-ზე ნაკლები
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds`-ში `{shown}` ორჯერაა ჩამოთვლილი
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds`-ში უცნობი სახეა `{shown}`: გამოიყენეთ type, image, layer ან artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds`-ს სჭირდება პლაგინის API-ის დონე {OUTPUT_KINDS_API}: მიუთითეთ `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` უნდა იყოს [width, height]: ორი მთელი რიცხვი 1-დან {MAX_IMAGE_SIDE}-მდე
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` უნდა შეიცავდეს 4 × სიგანე × სიმაღლე = {want} ბაიტს base64-ში
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` უნდა იყოს [x, y, width, height]: სასრული რიცხვები ±{MAX_COORD}-ის ფარგლებში, სიგანე და სიმაღლე 0-ზე მეტი
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` არის {len} ბაიტი (ზღვარი {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` არ უნდა შეიცავდეს მართვის სიმბოლოებს, გარდა ხაზის გადატანისა და ტაბულაციისა
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` უნდა იყოს 1-{MAX_NAME_CHARS} სიმბოლო, მართვის და ტექსტის მიმართულების სიმბოლოების გარეშე
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` უნდა იყოს ექვსი სასრული რიცხვი ±{MAX_COORD}-ის ფარგლებში, რომლებიც ობიექტს არ აბრტყელებს
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` უნდა შეიცავდეს 1-დან {max}-მდე ჩანაწერს (შეიცავს {n}-ს)
+@msg	a type fill must be a color or a gradient	ტექსტის შევსება უნდა იყოს ფერი ან გრადიენტი
+@msg	artboard name `{shown}` is used twice	სამუშაო დაფის სახელი `{shown}` ორჯერაა გამოყენებული
+@msg	object {k} must be in exactly one layer	ობიექტი {k} ზუსტად ერთ შრეში უნდა იყოს
+@msg	only an importer declares `outputKinds`	`outputKinds`-ის გამოცხადება მხოლოდ იმპორტის პლაგინს შეუძლია
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	გამოსახულებები {MAX_PIXEL_BYTES} ბაიტზე მეტ პიქსელს შეიცავს
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	გამოტანა შეიცავს `{kind}`-ს, რომელიც იმპორტის პლაგინის `outputKinds`-ში არ არის ჩამოთვლილი
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	ტექსტი {MAX_TEXT_TOTAL} ბაიტზე მეტს შეიცავს
+@msg	unknown field `{key}`	უცნობი ველი `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} პიქსელი (ზღვარი {MAX_IMAGE_SIDE} პიქსელი თითო მხარეს)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	ფაილი აღემატება {MAX_INPUT_BYTES} ბაიტს, რომელსაც იმპორტის პლაგინი კითხულობს
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	იმპორტის პლაგინი აცხადებს 1-დან {MAX_EXTENSIONS}-მდე `extensions`-ს
 @msg	only an exporter or an importer declares `extensions`	`extensions`-ს მხოლოდ ექსპორტის ან იმპორტის პლაგინი აცხადებს

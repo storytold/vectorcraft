@@ -8403,6 +8403,27 @@ breakText	Glyphs	Гліфи
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` - динамічний ефект: застосуйте його за допомогою effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	модуль імпорту не повернув жодного об’єкта
 @msg	an importer returns `objects` and `warnings`, not `{key}`	модуль імпорту повертає `objects` і `warnings`, а не `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	в `objects` мають бути індекси об’єктів за зростанням, кожен менший за {count}
+@msg	`outputKinds` lists `{shown}` twice	в `outputKinds` `{shown}` указано двічі
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	в `outputKinds` указано невідомий вид `{shown}`: використовуйте type, image, layer або artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	для `outputKinds` потрібен рівень API плагінів {OUTPUT_KINDS_API}: укажіть `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` має бути [width, height]: два цілі числа від 1 до {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` має містити 4 × ширина × висота = {want} байт у base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` має бути [x, y, width, height]: скінченні числа в межах ±{MAX_COORD}, ширина й висота більші за 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` займає {len} байт (межа {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` не має містити керівних символів, крім розривів рядків і табуляцій
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` має містити 1-{MAX_NAME_CHARS} символів, без керівних символів і символів напрямку тексту
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` має бути шістьма скінченними числами в межах ±{MAX_COORD}, які не сплющують об’єкт
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` має містити від 1 до {max} записів (містить {n})
+@msg	a type fill must be a color or a gradient	заливка тексту має бути кольором або градієнтом
+@msg	artboard name `{shown}` is used twice	назву монтажної області `{shown}` використано двічі
+@msg	object {k} must be in exactly one layer	об’єкт {k} має бути рівно в одному шарі
+@msg	only an importer declares `outputKinds`	`outputKinds` може оголошувати лише модуль імпорту
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	зображення містять понад {MAX_PIXEL_BYTES} байт пікселів
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	вивід містить `{kind}`, якого немає в `outputKinds` модуля імпорту
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	текст займає понад {MAX_TEXT_TOTAL} байт
+@msg	unknown field `{key}`	невідоме поле `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} пікселів (межа {MAX_IMAGE_SIDE} пікселів на сторону)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	файл більший за {MAX_INPUT_BYTES} байтів, які читає модуль імпорту
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	модуль імпорту оголошує від 1 до {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	`extensions` оголошує лише модуль експорту або імпорту

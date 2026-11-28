@@ -8383,6 +8383,27 @@ breakText	Glyphs	Glyphen
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` ist ein Live-Effekt: Wenden Sie ihn mit effect.apply {{"effect": "{_2}"}} an
 @msg	the importer returned no objects	das Import-Plug-in hat keine Objekte zurückgegeben
 @msg	an importer returns `objects` and `warnings`, not `{key}`	ein Import-Plug-in gibt `objects` und `warnings` zurück, nicht `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` muss Objektindizes in aufsteigender Reihenfolge aufführen, jeder kleiner als {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` führt `{shown}` doppelt auf
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` nennt eine unbekannte Art `{shown}`: verwenden Sie type, image, layer oder artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` erfordert Plug-in-API-Stufe {OUTPUT_KINDS_API}: geben Sie `api` {OUTPUT_KINDS_API} an
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` muss [width, height] sein: zwei ganze Zahlen von 1 bis {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` muss 4 × Breite × Höhe = {want} Byte als Base64 enthalten
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` muss [x, y, width, height] sein: endliche Zahlen innerhalb von ±{MAX_COORD}, Breite und Höhe größer als 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` ist {len} Byte groß (Grenze {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` darf außer Zeilenumbrüchen und Tabulatoren keine Steuerzeichen enthalten
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` muss 1-{MAX_NAME_CHARS} Zeichen lang sein, ohne Steuerzeichen oder Textrichtungszeichen
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` müssen sechs endliche Zahlen innerhalb von ±{MAX_COORD} sein, die das Objekt nicht flach drücken
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` muss 1 bis {max} Einträge enthalten (enthält {n})
+@msg	a type fill must be a color or a gradient	eine Textfläche muss eine Farbe oder ein Verlauf sein
+@msg	artboard name `{shown}` is used twice	der Zeichenflächenname `{shown}` wird doppelt verwendet
+@msg	object {k} must be in exactly one layer	Objekt {k} muss in genau einer Ebene liegen
+@msg	only an importer declares `outputKinds`	nur ein Import-Plug-in deklariert `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	die Bilder enthalten mehr als {MAX_PIXEL_BYTES} Byte Pixel
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	die Ausgabe enthält `{kind}`, das `outputKinds` des Import-Plug-ins nicht aufführt
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	der Text enthält mehr als {MAX_TEXT_TOTAL} Byte
+@msg	unknown field `{key}`	unbekanntes Feld `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} Pixel (Grenze {MAX_IMAGE_SIDE} Pixel je Seite)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	die Datei ist größer als die {MAX_INPUT_BYTES} Byte, die ein Import-Plug-in liest
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	ein Import-Plug-in gibt 1 bis {MAX_EXTENSIONS} `extensions` an
 @msg	only an exporter or an importer declares `extensions`	nur ein Export- oder Import-Plug-in gibt `extensions` an

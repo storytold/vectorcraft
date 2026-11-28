@@ -8779,6 +8779,27 @@ breakText	Glyphs	Glifs
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` és un efecte dinàmic: apliqueu-lo amb effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	l’importador no ha retornat cap objecte
 @msg	an importer returns `objects` and `warnings`, not `{key}`	un importador retorna `objects` i `warnings`, no `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` ha d’indicar índexs d’objectes en ordre creixent, cadascun menor que {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` inclou `{shown}` dues vegades
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` indica un tipus desconegut `{shown}`: feu servir type, image, layer o artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` requereix el nivell d’API de complements {OUTPUT_KINDS_API}: indiqueu `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` ha de ser [width, height]: dos nombres enters de l’1 al {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` ha de contenir 4 × amplada × alçada = {want} bytes en base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` ha de ser [x, y, width, height]: nombres finits dins de ±{MAX_COORD}, amb amplada i alçada més grans que 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` fa {len} bytes (límit {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` no pot contenir caràcters de control llevat de salts de línia i tabulacions
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` ha de tenir 1-{MAX_NAME_CHARS} caràcters, sense caràcters de control ni de direcció del text
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` han de ser sis nombres finits dins de ±{MAX_COORD} que no aplanin l’objecte
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` ha de contenir d’1 a {max} entrades (en conté {n})
+@msg	a type fill must be a color or a gradient	l’emplenament d’un text ha de ser un color o un degradat
+@msg	artboard name `{shown}` is used twice	el nom de tauler `{shown}` s’utilitza dues vegades
+@msg	object {k} must be in exactly one layer	l’objecte {k} ha de ser exactament en una capa
+@msg	only an importer declares `outputKinds`	només un importador declara `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	les imatges contenen més de {MAX_PIXEL_BYTES} bytes de píxels
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	la sortida conté `{kind}`, que `outputKinds` de l’importador no inclou
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	el text conté més de {MAX_TEXT_TOTAL} bytes
+@msg	unknown field `{key}`	camp desconegut `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} píxels (límit de {MAX_IMAGE_SIDE} píxels per costat)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	el fitxer supera els {MAX_INPUT_BYTES} bytes que llegeix un importador
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	un importador declara d’1 a {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	només un exportador o un importador declara `extensions`

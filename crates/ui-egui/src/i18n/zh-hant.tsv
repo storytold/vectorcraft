@@ -8451,6 +8451,27 @@ breakText	Glyphs	字符
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	`{_1}` 是即時效果：請用 effect.apply {{"effect": "{_2}"}} 套用
 @msg	the importer returned no objects	匯入增效模組未傳回任何物件
 @msg	an importer returns `objects` and `warnings`, not `{key}`	匯入增效模組傳回 `objects` 和 `warnings`，不是 `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	`objects` 必須依遞增順序列出物件索引，每個都小於 {count}
+@msg	`outputKinds` lists `{shown}` twice	`outputKinds` 列出了兩次 `{shown}`
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	`outputKinds` 指定了不明的種類 `{shown}`：請使用 type、image、layer 或 artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	`outputKinds` 需要增效模組 API 層級 {OUTPUT_KINDS_API}：請指定 `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	`pixelSize` 必須是 [width, height]：兩個 1 到 {MAX_IMAGE_SIDE} 的整數
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	`pixelsBase64` 必須以 base64 形式包含 4 × 寬 × 高 = {want} 位元組
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	`rect` 必須是 [x, y, width, height]：±{MAX_COORD} 以內的有限數，寬和高大於 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	`text` 有 {len} 位元組 (上限 {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	`text` 不能包含換行和定位字元以外的控制字元
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	`{key}` 必須為 1-{MAX_NAME_CHARS} 個字元，且不含控制字元或文字方向字元
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	`{key}` 必須是 ±{MAX_COORD} 以內、不會壓扁物件的六個有限數
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	`{key}` 必須包含 1 到 {max} 項 (目前有 {n} 項)
+@msg	a type fill must be a color or a gradient	文字的填色必須是顏色或漸層
+@msg	artboard name `{shown}` is used twice	工作區域名稱 `{shown}` 使用了兩次
+@msg	object {k} must be in exactly one layer	物件 {k} 必須剛好位於一個圖層中
+@msg	only an importer declares `outputKinds`	只有匯入增效模組才能宣告 `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	影像的像素超過 {MAX_PIXEL_BYTES} 位元組
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	輸出包含 `{kind}`，但匯入增效模組的 `outputKinds` 沒有列出
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	文字超過 {MAX_TEXT_TOTAL} 位元組
+@msg	unknown field `{key}`	不明的欄位 `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} 像素 (每邊上限 {MAX_IMAGE_SIDE} 像素)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	檔案超過匯入增效模組讀取的 {MAX_INPUT_BYTES} 位元組
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	匯入增效模組宣告 1 到 {MAX_EXTENSIONS} 個 `extensions`
 @msg	only an exporter or an importer declares `extensions`	只有匯出或匯入增效模組才宣告 `extensions`

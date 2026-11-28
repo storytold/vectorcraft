@@ -8751,6 +8751,27 @@ breakText	Glyphs	Γλύφοι
 @msg	`{_1}` is a live effect: apply it with effect.apply {{"effect": "{_2}"}}	το `{_1}` είναι δυναμικό εφέ: εφαρμόστε το με effect.apply {{"effect": "{_2}"}}
 @msg	the importer returned no objects	το πρόσθετο εισαγωγής δεν επέστρεψε κανένα αντικείμενο
 @msg	an importer returns `objects` and `warnings`, not `{key}`	ένα πρόσθετο εισαγωγής επιστρέφει `objects` και `warnings`, όχι `{key}`
+@msg	`objects` must list object indexes in increasing order, each below {count}	το `objects` πρέπει να αναφέρει δείκτες αντικειμένων σε αύξουσα σειρά, ο καθένας μικρότερος από {count}
+@msg	`outputKinds` lists `{shown}` twice	το `outputKinds` αναφέρει το `{shown}` δύο φορές
+@msg	`outputKinds` names an unknown kind `{shown}`: use type, image, layer or artboard	το `outputKinds` ορίζει άγνωστο είδος `{shown}`: χρησιμοποιήστε type, image, layer ή artboard
+@msg	`outputKinds` needs plug-in API level {OUTPUT_KINDS_API}: give `api` {OUTPUT_KINDS_API}	το `outputKinds` απαιτεί επίπεδο API προσθέτων {OUTPUT_KINDS_API}: δώστε `api` {OUTPUT_KINDS_API}
+@msg	`pixelSize` must be [width, height]: two whole numbers from 1 to {MAX_IMAGE_SIDE}	το `pixelSize` πρέπει να είναι [width, height]: δύο ακέραιοι από 1 έως {MAX_IMAGE_SIDE}
+@msg	`pixelsBase64` must hold 4 × width × height = {want} bytes as base64	το `pixelsBase64` πρέπει να περιέχει 4 × πλάτος × ύψος = {want} byte σε base64
+@msg	`rect` must be [x, y, width, height]: finite numbers within ±{MAX_COORD}, width and height above 0	το `rect` πρέπει να είναι [x, y, width, height]: πεπερασμένοι αριθμοί εντός ±{MAX_COORD}, πλάτος και ύψος πάνω από 0
+@msg	`text` is {len} bytes (limit {MAX_TYPE_TEXT})	το `text` είναι {len} byte (όριο {MAX_TYPE_TEXT})
+@msg	`text` must not hold control characters other than line breaks and tabs	το `text` δεν πρέπει να περιέχει χαρακτήρες ελέγχου εκτός από αλλαγές γραμμής και στηλοθέτες
+@msg	`{key}` must be 1-{MAX_NAME_CHARS} characters, without control or text direction characters	το `{key}` πρέπει να έχει 1-{MAX_NAME_CHARS} χαρακτήρες, χωρίς χαρακτήρες ελέγχου ή κατεύθυνσης κειμένου
+@msg	`{key}` must be six finite numbers within ±{MAX_COORD} that don't flatten the object	το `{key}` πρέπει να είναι έξι πεπερασμένοι αριθμοί εντός ±{MAX_COORD} που δεν ισοπεδώνουν το αντικείμενο
+@msg	`{key}` must hold 1 to {max} entries (it holds {n})	το `{key}` πρέπει να περιέχει 1 έως {max} καταχωρίσεις (περιέχει {n})
+@msg	a type fill must be a color or a gradient	το γέμισμα κειμένου πρέπει να είναι χρώμα ή ντεγκραντέ
+@msg	artboard name `{shown}` is used twice	το όνομα πίνακα σχεδίασης `{shown}` χρησιμοποιείται δύο φορές
+@msg	object {k} must be in exactly one layer	το αντικείμενο {k} πρέπει να βρίσκεται σε ακριβώς ένα επίπεδο
+@msg	only an importer declares `outputKinds`	μόνο ένα πρόσθετο εισαγωγής δηλώνει `outputKinds`
+@msg	the images hold more than {MAX_PIXEL_BYTES} bytes of pixels	οι εικόνες περιέχουν περισσότερα από {MAX_PIXEL_BYTES} byte εικονοστοιχείων
+@msg	the output holds `{kind}`, which the importer's `outputKinds` doesn't list	η έξοδος περιέχει `{kind}`, που δεν αναφέρεται στο `outputKinds` του προσθέτου εισαγωγής
+@msg	the type holds more than {MAX_TEXT_TOTAL} bytes of text	το κείμενο περιέχει περισσότερα από {MAX_TEXT_TOTAL} byte
+@msg	unknown field `{key}`	άγνωστο πεδίο `{key}`
+@msg	{w} × {h} pixels (limit {MAX_IMAGE_SIDE} pixels a side)	{w} × {h} εικονοστοιχεία (όριο {MAX_IMAGE_SIDE} εικονοστοιχεία ανά πλευρά)
 @msg	the file is larger than the {MAX_INPUT_BYTES} bytes an importer reads	το αρχείο είναι μεγαλύτερο από τα {MAX_INPUT_BYTES} byte που διαβάζει ένα πρόσθετο εισαγωγής
 @msg	an importer declares 1 to {MAX_EXTENSIONS} `extensions`	ένα πρόσθετο εισαγωγής δηλώνει 1 έως {MAX_EXTENSIONS} `extensions`
 @msg	only an exporter or an importer declares `extensions`	μόνο ένα πρόσθετο εξαγωγής ή εισαγωγής δηλώνει `extensions`

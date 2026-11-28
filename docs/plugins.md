@@ -18,8 +18,9 @@ There are four kinds of plug-in:
   laser cutters and the like. File › Export › Export As lists them after the built-in formats, and the host writes the
   bytes they return: a plug-in still never touches a file.
 - **Importers** read files in a format of their own, such as a plotter's or a cutting machine's, into a new document of
-  paths and compound paths. File › Open lists their files, File › Open With lists the importers by name, and the host
-  hands them the file's bytes.
+  paths and compound paths, and at API level 4 also of point type, embedded images, layers and artboards ([importer
+  output kinds](#importer-output-kinds)). File › Open lists their files, File › Open With lists the importers by name,
+  and the host hands them the file's bytes.
 
 An object filter may also be written in JavaScript, as a manifest and a `.js` file ([JavaScript
 filters](#javascript-filters)).
@@ -31,7 +32,7 @@ in `crates/engine/src/cmd/plugin.rs`).
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `runtime: "js"` and `script` mark a [JavaScript filter](#javascript-filters); `cacheBytes` is the size of its [cache](#settings-and-cache)), `"failed": [{file, error, from}]` (the plug-in files that [didn't load](#plug-ins-that-didnt-load)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, outputKinds?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `outputKinds` lists what an importer returns besides paths ([importer output kinds](#importer-output-kinds)); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `runtime: "js"` and `script` mark a [JavaScript filter](#javascript-filters); `cacheBytes` is the size of its [cache](#settings-and-cache)), `"failed": [{file, error, from}]` (the plug-in files that [didn't load](#plug-ins-that-didnt-load)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. An output that changes no object and none of the data it keeps with the document ([`documentData`](#output)) records no undo step and leaves the document unmodified. |
 | `plugin.install` | `{"path": "/x/y.wasm"}` or a [JavaScript filter's](#javascript-filters) `.vcplugin` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
@@ -86,9 +87,10 @@ importers that set `place`: when no built-in format reads the file, the first su
 extension reads it, and `"importer": "plugin.<id>"` names one, which must set `place` and list the file's extension,
 also one a built-in format reads. `"params"?: {…}` holds its parameters, which take their defaults when left out. The
 importer is given at most 128 MiB of the file and `_context.mode` `"place"`, and returns its objects as it does for
-File › Open. They are placed in the open document as
-one group named after the file, in the order the importer returned them, at the place, size or object `at`, `rect`,
-`replace` and `template` give, as one undo step; guides are left out, and the group's box is the bounds of what the
+File › Open. The visible layers' objects are placed in the open document as one group named after the file,
+from the bottom layer to the top, in each layer's listed object order. Without layers, objects keep their returned
+order. The group uses the place, size or object `at`, `rect`, `replace` and `template` give, as one undo step;
+guides are left out, and the group's box is the bounds of what the
 other objects draw. The file is embedded whatever `link`
 says, as a format that can't be linked is, and the reply's `linked` is `false`. A decline, invalid output, a trap or
 Cancel places nothing and leaves the document and its undo steps as they were. An importer without `place` is not used
@@ -452,9 +454,10 @@ capability model proposed for PhotoCraft plug-ins
   changes the document is refused. A refused output leaves the document as it was.
 - `api` is the plug-in API level the manifest is written for: `1` (the default); `2`, which adds the [host
   imports](#host-imports-api-level-2), a filter's `inputs` ([reading type, images and
-  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects); or `3`, which
+  symbols](#reading-type-images-and-symbols)) and a live effect's [`paintOutput`](#painted-live-effects); `3`, which
   adds a filter's `writes` ([writing type, images and symbols](#writing-type-images-and-symbols)) and `context`
-  ([document information](#document-information)). A higher one is refused. `plugin.list` and
+  ([document information](#document-information)); or `4`, which adds an importer's
+  [`outputKinds`](#importer-output-kinds). A higher one is refused. `plugin.list` and
   `plugin.info` give it as `api`. `inputs` is not a permission: the objects it asks for are read under `doc.read`, which
   a filter that lists `inputs` must list in `permissions`, so installing it asks the user to grant them. `context` is
   not a permission either: it is read under `doc.read` in the same way, and the install prompt says that the plug-in
@@ -783,6 +786,12 @@ the module's start function, in a run that isn't a filter's run on a document, o
   `api` 1 is refused when the module is installed, and the error names `paintOutput`. Without the key the effect returns
   geometry, at any level. Hosts at `api` 1 refuse the manifest for its `api`, so such an effect never draws unpainted
   there.
+- `outputKinds` (importers at `api` 4 only): the kinds of content besides paths and compound paths the importer
+  returns, any of `"type"`, `"image"`, `"layer"` and `"artboard"`, each at most once (`"outputKinds": ["type",
+  "layer"]`). Left out, `null` or `[]`, the importer returns paths and compound paths alone, as before. An unknown,
+  repeated or wrongly typed entry, `outputKinds` on another kind, or below `api` 4 is refused when the plug-in is
+  installed, and hosts from before level 4 refuse the manifest for its `api`. It needs no permission besides
+  `import.read`. See [importer output kinds](#importer-output-kinds).
 - `extensions` (exporters and importers only, and required): 1–8 file extensions, lower-case letters and digits
   without the dot (`["plt"]`); the first is the one Export As gives the file. A built-in format keeps an extension both
   list (`svg`): `document.export` then writes the exporter's format only when asked for by its format id, and
@@ -1223,6 +1232,53 @@ that fails the checks opens nothing, and neither does a decline (`{"error": …}
 returns the same output when `_context.mode` is `"place"`; an output that fails, or whose objects other than guides draw
 nothing of any width or height, places nothing.
 
+#### Importer output kinds
+
+An importer at `api` 4 whose manifest lists [`outputKinds`](#manifest) may return more than paths. The host checks the
+whole output before it makes the document, and one entry that fails a check opens nothing; the error names the entry
+(`objects[2]`, `layers[0]`) and the limit or field. Content of a kind the manifest doesn't list is refused, and the
+error names the kind. An importer that lists no kinds is read as before, and the keys below are errors for it.
+
+```json
+{
+  "objects": [
+    {"type": "type", "text": "Hello", "fontFamily": "Source Sans 3", "fontStyle": "Bold", "fontSize": 24,
+     "fill": {"type": "solid", "color": {"model": "rgb", "r": 0, "g": 0, "b": 1}}, "transform": [1, 0, 0, 1, 10, 40]},
+    {"type": "image", "pixelSize": [2, 1], "pixelsBase64": "/wAA/wAA/4A=", "transform": [10, 0, 0, 10, 0, 100]},
+    {"type": "path", "path": {"subpaths": [{"closed": true, "anchors": [{"p": [0, 0]}, {"p": [10, 0]}, {"p": [10, 10]}]}]}}
+  ],
+  "layers": [{"name": "Art", "objects": [1, 2]}, {"name": "Words", "visible": false, "locked": true, "objects": [0]}],
+  "artboards": [{"name": "Front", "rect": [0, 0, 200, 100]}, {"name": "Back", "rect": [220, 0, 200, 100]}]
+}
+```
+
+- `"type": "type"` (kind `type`) is point type in the document's Normal Character Style with the face, size and fill
+  it gives: `text` (at most 1,048,576 bytes of UTF-8, a `\n` between paragraphs, no control characters other than
+  line breaks and tabs), `fontFamily`, `fontStyle` (left out: the family's regular style), `fontSize` (0.1–1296 pt),
+  `fill` (a color or a gradient, in the filters' paint form; left out: black), `transform` and `name`. The first
+  baseline starts at the origin of the type's own space. A font that isn't installed keeps its name, and the open
+  reports it as missing. All the type of one output holds at most 16,777,216 bytes of text.
+- `"type": "image"` (kind `image`) is an image embedded in the document, stored as a PNG of its pixels: `pixelSize`
+  (width and height, 1–16,384 each), `pixelsBase64` (straight RGBA, 8 bits a channel, rows from the top, exactly 4 ×
+  width × height bytes in padded base64), `transform` (from pixel space, one unit a pixel, into the document) and
+  `name`. All the images of one output hold at most 33,554,432 bytes of RGBA. The host checks both limits from the
+  sizes the images give, and the length of `pixelsBase64`, before it decodes any pixels.
+- `transform` is six finite numbers `[a, b, c, d, e, f]` within ±4,000,000 that don't flatten the object; left out,
+  the identity. Type or an image that then reaches more than 4,000,000 pt from the origin is refused.
+- `layers` (kind `layer`): 1–256 top-level layers, bottom first. Each has a `name`, `visible` (default `true`),
+  `locked` (default `false`) and `objects`, the indexes of its objects in `objects` in increasing order. Every object
+  is in exactly one layer, and a layer may hold none. Without `layers`, every object goes in one layer.
+- `artboards` (kind `artboard`): 1–100 artboards, each with a `name` used once and a `rect`, `[x, y, width, height]`
+  with a width and height above 0. Each computed endpoint must differ from its origin and remain within
+  ±4,000,000. They replace the one artboard around the art.
+- A `name` (of type, an image, a layer or an artboard) and a font's family and style are each 1–256 characters, not
+  only spaces, without control characters or characters that change the direction of text.
+- An output whose `objects` is empty opens as a blank document when it has `layers` or `artboards`.
+- To place (`_context.mode` `"place"`), the objects of the visible layers are placed in one group with their type and
+  images, the objects of hidden layers are left out, and `artboards` are left out. Without layers, all objects are
+  placed. Transformed art beyond ±4,000,000 pt on either axis is rejected before the edit, including template placement.
+- Imported paths require `path` geometry and cannot include an `id`, at every plug-in API level.
+
 ## Writing a plug-in in Rust
 
 [`crates/plugins/example`](../crates/plugins/example) is a complete object filter, **Desaturate**: it moves every
@@ -1313,7 +1369,9 @@ per change of their input, parameters or paints (results are cached), not per fr
 ## Not in v1
 
 - Tool plug-ins (pointer events on the canvas, a guide line or rectangle, geometry back), panel plug-ins, importers
-  that make type, images, layers or artboards, and placed importer files that stay linked to their file.
+  that make area type, type on a path, nested layers or linked images (an importer at `api` 4 makes point type,
+  embedded images, top-level layers and artboards, see [importer output kinds](#importer-output-kinds)), and placed
+  importer files that stay linked to their file.
 - Live effects that change opacity, blending or effects (at `api` 2 one may [paint](#painted-live-effects) the pieces
   it returns), filters that add or delete type, images or symbol instances or change their pixels and other fields
   (a filter at `api` 3 changes [some of their fields](#writing-type-images-and-symbols)).
