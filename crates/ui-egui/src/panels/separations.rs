@@ -546,6 +546,10 @@ mod tests {
     /// model's profile stays as it was.
     #[test]
     fn assign_rows_follow_the_document_color_mode() {
+        // Assigning a profile to the front document changes the process's active color settings.
+        if !crate::testing::in_own_process("panels::separations::tests::assign_rows_follow_the_document_color_mode") {
+            return;
+        }
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({})).unwrap();
         for (mode, key, kind, other) in [("rgb", "rgb", ProfileKind::Rgb, "cmyk"), ("cmyk", "cmyk", ProfileKind::Cmyk, "rgb")] {

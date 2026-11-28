@@ -1030,31 +1030,46 @@ fn promise_builtins_run() {
     handle.join().unwrap();
 }
 
-/// Runs one `test/built-ins/Promise` test in a new realm with [`Options::es2015`] and a global
-/// `print` that collects its output; an `async` test passes when it prints
-/// `Test262:AsyncTestComplete`.
+#[test]
+fn promise_async_completion_requires_an_exact_print_argument() {
+    assert!(run_promise_one("print('not Test262:AsyncTestComplete');", None, true).is_err());
+    assert!(run_promise_one("print('Test262:AsyncTestComplete suffix');", None, true).is_err());
+    assert!(run_promise_one("print('message', 'Test262:AsyncTestComplete');", None, true).is_ok());
+    assert!(run_promise_one("print('Test262:AsyncTestComplete');", None, true).is_ok());
+}
+
+#[test]
+fn promise_async_failure_checks_each_print_argument() {
+    assert!(run_promise_one("print('Test262:AsyncTestComplete', 'Test262:AsyncTestFailure: failed');", None, true).is_err());
+    assert!(run_promise_one("print('not Test262:AsyncTestFailure'); print('Test262:AsyncTestComplete');", None, true).is_ok());
+}
+
+/// Runs one Promise test with a global `print` that collects every argument. An `async` test
+/// needs an exact `Test262:AsyncTestComplete` argument and no `Test262:AsyncTestFailure` prefix.
 fn run_promise_one(script: &str, negative_type: Option<&str>, asynchronous: bool) -> Result<(), String> {
     let options = Options { es2015: true, ..Options::default() };
     let mut realm = Realm::with_options(options, Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
-    let printed = std::rc::Rc::new(std::cell::RefCell::new(String::new()));
+    let printed = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
     let out = printed.clone();
     realm.define_function("print", move |args| {
-        let line = match args.first() {
-            Some(JsValue::String(s)) => s.clone(),
-            Some(other) => format!("{other:?}"),
-            None => String::new(),
-        };
-        out.borrow_mut().push_str(&line);
-        out.borrow_mut().push('\n');
+        let mut printed = out.borrow_mut();
+        for arg in args {
+            printed.push(match arg {
+                JsValue::String(s) => s.clone(),
+                other => format!("{other:?}"),
+            });
+        }
         Ok(JsValue::Undefined)
     });
     let result = realm.run(script);
     if asynchronous && result.is_ok() && negative_type.is_none() {
         let printed = printed.borrow();
-        return if printed.contains("Test262:AsyncTestComplete") && !printed.contains("Test262:AsyncTestFailure") {
+        return if printed.iter().any(|arg| arg == "Test262:AsyncTestComplete")
+            && !printed.iter().any(|arg| arg.starts_with("Test262:AsyncTestFailure"))
+        {
             Ok(())
         } else {
-            Err(format!("printed {:?}", printed.trim()))
+            Err(format!("printed {printed:?}"))
         };
     }
     match (result, negative_type) {

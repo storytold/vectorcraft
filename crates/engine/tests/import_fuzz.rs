@@ -4950,6 +4950,37 @@ proptest! {
         survive("hostile .ai images and placed files", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose placed EPS files have their bytes included between `%%BeginDocument:` and
+    /// `%%EndDocument` (one on `%_` lines, one with a nested document and counted data in it),
+    /// damaged, opened and drawn: their bytes are read as an EPS file when drawn.
+    #[test]
+    fn ai_placed_eps_files_with_included_bytes_never_panic(
+        cut in 0usize..4_000,
+        edits in prop::collection::vec((0usize..4_000, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '[', ']', '%', '_', '`', '~', 'E', 'D'])), 0..12),
+    ) {
+        use vectorcraft_testkit::ai;
+        let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 40\n%%EndComments\n0 0 1 setrgbcolor\n0 0 60 40 rectfill\n%%EOF\n";
+        let nested = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 9 9\n%%BeginDocument: c.eps\nnewpath\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n%%EOF\n";
+        let place = |path: &str, matrix: &str, doc: &str| {
+            format!(
+                "%AI5_BeginPlace\n%%FileType: 0\n{matrix} 0 0 60 40 4 4 0\n({path})`\n%%BeginDocument: {path}\n{doc}\n%%EndDocument\n\
+                 %AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n%AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n"
+            )
+        };
+        let hidden: String = place("/tmp/b.eps", "[1 0 0 1 20 20]", eps).lines().map(|l| format!("%_{l}\n")).collect();
+        let body = format!("{}{hidden}{}", place("/tmp/a.eps", "[1 0 0 1 20 20]", eps), place("/tmp/c.eps", "[1 0 0 1 0 0]", nested));
+        let fixture = ai::editing_data(200.0, 100.0, &ai::layer("L", &body));
+        // A session reads placed documents' files when they are drawn.
+        let _ = vectorcraft_engine::Session::new();
+        let whole = vectorcraft_engine::cmd::fileio::load("x.ai", &ai::ai(fixture.as_bytes(), "0 0 1 rg 20 20 60 40 re f"));
+        let mut placed = 0;
+        whole.iter().for_each(|l| l.doc.visit_placed(|_, _| placed += 1));
+        prop_assert!(placed == 3 && fixture.len() < 4_000, "{placed} placed documents, {} bytes: {:?}", fixture.len(), whole.map(|l| l.warnings));
+        let text = mutate_text(&fixture, cut, &edits);
+        let file = ai::ai(text.as_bytes(), "0 0 1 rg 20 20 60 40 re f");
+        survive("hostile .ai placed EPS files with included bytes", || vectorcraft_engine::cmd::fileio::load("x.ai", &file).ok().map(|l| l.doc))?;
+    }
+
     /// A `.ai` whose type (point type turned, vertical type, area type, threaded area type and type
     /// on a path, their stubs with the frames' paths, and the text document they name, as the `.ai`
     /// writer writes them) is damaged: read from its editing data alone and beside a page.
@@ -6390,6 +6421,12 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%%BeginData: 14 Binary Bytes\n",
             "\n%%BeginBinary: 99999999999\n",
             "\n%%BeginData: 3 Hex Lines\n",
+            // A placed EPS file's bytes included in the data: one drawn, one with a box it can't
+            // take, one on `%_` lines.
+            "\n%%BeginDocument: a.eps\n%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 9 9\n0 0 1 setrgbcolor 0 0 9 9 rectfill\n%%EndDocument\n",
+            "\n%%BeginDocument: a.eps\n%!PS\n%%BoundingBox: 0 0 1e308 -5\n%%EndDocument\n",
+            "\n%_%%BeginDocument: a.eps\n%_%!PS\n%_0 0 9 9 rectfill\n%_%%EndDocument\n",
+            "[1 0 0 1 0 0] 0 0 1e308 1e308 4 4 0 (a.eps) `",
             "\n%AI5_EndPlace\n",
             "Xm",
             "50 -50 -100 -100 5000 -2000 Xm",

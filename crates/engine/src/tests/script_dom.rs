@@ -2076,7 +2076,8 @@ fn objects_of_the_object_model_print_their_class_and_name() {
 }
 
 /// `activeDocument`, `documents` and `selection` without `app.` read the application's members, and
-/// assigning one assigns the member: `selection` selects, `documents` keeps its value.
+/// assigning one assigns the member: `selection` selects, and `documents` keeps its value outside
+/// strict mode and throws a `TypeError` in strict mode code or with `#strict on`.
 #[test]
 fn the_application_members_can_be_named_without_app() {
     let (mut s, a, b) = doc();
@@ -2102,6 +2103,8 @@ fn the_application_members_can_be_named_without_app() {
     assert!(s.active().unwrap().selection.objects.is_empty());
     assert!(failure(&mut s, "activeDocument = 5;").contains("not a Document"));
     let e = failure(&mut s, "'use strict'; documents = 5;");
+    assert!(e.contains("TypeError") && e.contains("cannot assign to property 'documents': it has only a getter"), "{e}");
+    let e = failure(&mut s, "#strict on\ndocuments = 5;");
     assert!(e.contains("TypeError") && e.contains("cannot assign to property 'documents': it has only a getter"), "{e}");
     // With no document open, reading `activeDocument` throws as `app.activeDocument` does.
     let mut s = Session::new();

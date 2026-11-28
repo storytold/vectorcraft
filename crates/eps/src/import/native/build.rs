@@ -334,6 +334,7 @@ pub(super) fn build_weighing(
         placeholders,
         placed_elsewhere,
         placed_pages,
+        placed_eps,
         envelopes_drawn,
         styles_read,
         text_paints,
@@ -644,33 +645,50 @@ pub(super) fn build_weighing(
     }
     doc.limit_depth_noting(&mut notes);
     bind_variables(&mut doc, &bindings, bindings_skipped, &xml_ids, &filled, &mut notes);
-    placed_documents(&mut doc, &placed_pages);
+    if placed_documents(&mut doc, &placed_pages, &placed_eps) && !notes.iter().any(|n| n == ai::LINKED_PREVIEWS) {
+        notes.push(ai::LINKED_PREVIEWS.to_string());
+    }
     if small.is_some() {
         scale_read_document(&mut doc, unit, styles_read, symbols_own_size);
     }
     Ok((doc, notes))
 }
 
-/// The linked images of `pages` that are still in `doc`, opacity-mask art included, as placed
-/// documents of their page and box, over the same place, each showing the same preview until its
-/// file is read. An image bound to an image variable stays a linked image, the object an image
-/// variable binds.
-fn placed_documents(doc: &mut Document, pages: &[ai::PlacedPage]) {
-    if pages.is_empty() {
-        return;
+/// The linked images of `pages` and included `eps` still in `doc`, opacity-mask art included, as placed
+/// documents of their page and box. PDF pages keep their previews, and EPS files keep their included
+/// bytes. An image bound to an image variable stays a linked image, the object an image variable binds.
+/// Returns whether an included EPS file stays a linked image that way, showing its preview.
+pub(in crate::import) fn placed_documents(doc: &mut Document, pages: &[ai::PlacedPage], eps: &[ai::PlacedEps]) -> bool {
+    if pages.is_empty() && eps.is_empty() {
+        return false;
     }
     let vars = &doc.variables;
     let image_bound = |id: &NodeId| {
         vars.bindings.get(id).is_some_and(|names| names.iter().any(|v| vars.variable(v).is_some_and(|v| v.kind == VariableKind::Image)))
     };
     let pages: std::collections::HashMap<NodeId, ai::PlacedPage> = pages.iter().filter(|p| !image_bound(&p.id)).map(|p| (p.id, *p)).collect();
+    let previews = eps.iter().any(|p| image_bound(&p.id));
+    let eps: std::collections::HashMap<NodeId, &ai::PlacedEps> = eps.iter().filter(|p| !image_bound(&p.id)).map(|p| (p.id, p)).collect();
     for layer in &mut doc.layers {
-        to_placed_documents(Arc::make_mut(layer), &pages);
+        to_placed_documents(Arc::make_mut(layer), &pages, &eps, &mut doc.images);
     }
+    previews
 }
 
 /// [`placed_documents`] in `n` and everything in it.
-fn to_placed_documents(n: &mut Node, pages: &std::collections::HashMap<NodeId, ai::PlacedPage>) {
+fn to_placed_documents(
+    n: &mut Node,
+    pages: &std::collections::HashMap<NodeId, ai::PlacedPage>,
+    eps: &std::collections::HashMap<NodeId, &ai::PlacedEps>,
+    images: &mut std::collections::BTreeMap<String, vectorcraft_doc::ImageBlob>,
+) {
+    if let Some(eps) = eps.get(&n.id)
+        && let NodeKind::Image(im) = &n.kind
+        && im.link.is_some()
+    {
+        images.entry(eps.placed.key.clone()).or_insert_with(|| eps.blob.clone());
+        n.kind = NodeKind::PlacedDocument(Box::new(eps.placed.clone()));
+    }
     // A box too small to take the image's pixels to (its transform not finite) keeps the linked image.
     if let Some(page) = pages.get(&n.id)
         && let NodeKind::Image(im) = &n.kind
@@ -694,10 +712,10 @@ fn to_placed_documents(n: &mut Node, pages: &std::collections::HashMap<NodeId, a
         n.kind = NodeKind::PlacedDocument(Box::new(placed));
     }
     if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
-        to_placed_documents(Arc::make_mut(&mut m.art), pages);
+        to_placed_documents(Arc::make_mut(&mut m.art), pages, eps, images);
     }
     for c in n.children_mut().into_iter().flatten() {
-        to_placed_documents(Arc::make_mut(c), pages);
+        to_placed_documents(Arc::make_mut(c), pages, eps, images);
     }
 }
 
@@ -1905,11 +1923,12 @@ fn outside_placed_files(objects: &[Vec<Arc<Node>>], doc: &Document, placed: &[(N
 }
 
 /// Where the placed files that show in `nodes` are: the linked images the editing data's reader
-/// makes of them.
+/// makes of them, and the placed documents it makes of the EPS files whose bytes it includes.
 fn placed_files(nodes: &[Arc<Node>], out: &mut Vec<Rect>) {
     for n in nodes.iter().filter(|n| n.visible) {
         match &n.kind {
             NodeKind::Image(im) if im.link.is_some() => out.extend(n.visual_bounds()),
+            NodeKind::PlacedDocument(_) => out.extend(n.visual_bounds()),
             _ => {
                 if let Some(c) = n.children() {
                     placed_files(c, out);

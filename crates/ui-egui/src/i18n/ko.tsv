@@ -8208,6 +8208,8 @@ breakText	Glyphs	글리프
 	Tangent Circle	접원
 	Tangent Circle Tool	접원 도구
 	No tangent circle here	여기에는 접원이 없음
+	Ask For Circle Radius	원 반지름 묻기
+	Auto-Update Default	기본값 자동 업데이트
 	Circle:	원:
 @msg	`ids` names an object twice	`ids`에 같은 오브젝트가 두 번 있습니다
 @msg	select two or three paths or compound paths	패스나 컴파운드 패스를 두 개 또는 세 개 선택하세요
