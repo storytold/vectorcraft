@@ -7,6 +7,7 @@
   <project_license>MIT OR Apache-2.0</project_license>
   <name>VectorCraft</name>
   <summary>Draw and edit vector illustrations, SVG and PDF</summary>
+  <summary xml:lang="ru">Рисование и редактирование векторных иллюстраций, SVG и PDF</summary>
   <developer id="ai.storyteller">
     <name>Learning Machines LLC</name>
   </developer>
@@ -15,6 +16,11 @@
       VectorCraft is an open-source vector illustration app. Draw with pen, shape and brush tools,
       style art with fills, strokes, gradients and live effects, lay out artboards and type, and
       open and save SVG and PDF.
+    </p>
+    <p xml:lang="ru">
+      VectorCraft — открытое приложение для векторной иллюстрации. Рисуйте пером, фигурами
+      и кистями, оформляйте графику заливками, обводками, градиентами и динамическими
+      эффектами, размещайте монтажные области и текст, открывайте и сохраняйте SVG и PDF.
     </p>
   </description>
   <launchable type="desktop-id">ai.storyteller.vectorcraft.desktop</launchable>
@@ -31,15 +37,22 @@
   </categories>
   <keywords>
     <keyword>vector</keyword>
+    <keyword xml:lang="ru">вектор</keyword>
     <keyword>illustration</keyword>
+    <keyword xml:lang="ru">иллюстрация</keyword>
     <keyword>svg</keyword>
+    <keyword xml:lang="ru">svg</keyword>
     <keyword>pdf</keyword>
+    <keyword xml:lang="ru">pdf</keyword>
     <keyword>drawing</keyword>
+    <keyword xml:lang="ru">рисование</keyword>
     <keyword>bezier</keyword>
+    <keyword xml:lang="ru">безье</keyword>
   </keywords>
   <screenshots>
     <screenshot type="default">
       <caption>Editing the Neon Drive poster with a live glow effect in the Appearance panel</caption>
+      <caption xml:lang="ru">Редактирование постера Neon Drive с динамическим эффектом свечения на панели «Оформление»</caption>
       <image>https://raw.githubusercontent.com/storytold/vectorcraft/main/docs/images/shot-1-neon.png</image>
     </screenshot>
   </screenshots>

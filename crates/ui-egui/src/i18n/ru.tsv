@@ -11097,3 +11097,322 @@ shape	Open	Открытый
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Редактировать оригинал в:
 file-filter	Applications	Приложения
+	Add art with Add as Single Graphic, or drop art here.	Добавьте рисунок командой «Добавить как один графический объект» или перетащите его сюда.
+	Add as Single Graphic	Добавить как один графический объект
+	Add to Custom Dictionary	Добавить в пользовательский словарь
+	Anchor Point of Perspective Artwork	Опорная точка перспективного рисунка
+	Apply Gradient Preset	Применить набор градиента
+	Apply SVG Filter	Применить фильтр SVG
+	Automatic Plane Positioning	Автоматическое размещение плоскости
+	Brush Options	Параметры кисти
+	Bulgarian	Болгарский
+	Cancel Image Trace	Отменить трассировку изображения
+	Cancel Opening	Отменить открытие
+	Caps Lock Cursor State	Состояние курсора при Caps Lock
+	Catalan	Каталанский
+	Change in Custom Dictionary	Заменить в пользовательском словаре
+	Check Spelling	Проверить орфографию
+	Chinese	Китайский
+	Clean Up	Очистить
+	Configure Shape	Настроить фигуру
+	Create Gradient Mesh	Создать градиентную сетку
+	Croatian	Хорватский
+	Czech	Чешский
+	Danish	Датский
+	Delete from Custom Dictionary	Удалить из пользовательского словаря
+	Delete Gradient Preset	Удалить набор градиента
+	Delete SVG Filter	Удалить фильтр SVG
+	Devanagari	Деванагари
+	Drop Script Engine	Удалить движок скриптов
+	Duplicate Effects	Дублировать эффекты
+	Edit Character Style	Редактировать стиль символа
+	Edit Paragraph Style	Редактировать стиль абзаца
+	Edit Profile	Редактировать профиль
+	Edit SVG Filter	Редактировать фильтр SVG
+	Emboss	Тиснение
+	Expand as Wireframes	Разобрать в каркасы
+	Export All Open Documents	Экспортировать все открытые документы
+	Face	Грань
+	Finnish	Финский
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	Со следующего запуска строку заголовка окна рисует система, а не VectorCraft.
+	German: Swiss	Немецкий: Швейцария
+	Glow	Свечение
+	Glyph Categories	Категории глифов
+	Gradient Presets	Наборы градиентов
+	Graphics map onto planar faces: pick the Plane or Extrude object type.	Графика наносится на плоские грани: выберите тип объекта «Плоскость» или «Выдавливание».
+	Graphics map onto the Plane, Extrude and Revolve object types.	Графика наносится на объекты типов «Плоскость», «Выдавливание» и «Вращение».
+	Graphics map onto the Plane, Extrude, Revolve and Inflate object types.	Графика наносится на объекты типов «Плоскость», «Выдавливание», «Вращение» и «Надувание».
+	Gurmukhi	Гурмукхи
+	Heavy Blur	Сильное размытие
+	Hide Presets	Скрыть наборы
+	Import Metadata Template…	Импортировать шаблон метаданных…
+	Import SVG Filter	Импортировать фильтр SVG
+	Import SVG Filter…	Импортировать фильтр SVG…
+	Intersection of Gridlines	Пересечение линий сетки
+	Limit to Library	Ограничить библиотекой
+	Line Gap	Интервал между строками
+	List Installed Scripts	Список установленных сценариев
+	List Script Engines	Список движков скриптов
+	Load All Styles	Загрузить все стили
+	Load Character Styles	Загрузить стили символов
+	Load Paragraph Styles	Загрузить стили абзацев
+	Manage Profiles	Управление профилями
+	Map Graphic	Наложить графику
+	Mapped graphics	Наложенная графика
+	Materials	Материалы
+	Metadata Templates	Шаблоны метаданных
+	Move Document	Переместить документ
+	Move Object on Path	Переместить объект по контуру
+	Move Type Path Handle	Переместить маркер контура текста
+	Neon & Glow	Неон и свечение
+	NEW DOCUMENT PROFILES	ПРОФИЛИ НОВОГО ДОКУМЕНТА
+	New Document Profiles	Профили нового документа
+	New Layer	Новый слой
+	New Sublayer	Новый подслой
+	New SVG Filter	Новый фильтр SVG
+	Norwegian	Норвежский
+	Pick a graphic above to map it onto the object.	Выберите графику выше, чтобы наложить её на объект.
+	Pick from Swatches	Выбрать из образцов
+	Polish	Польский
+	PSD Info	Сведения PSD
+	Reading the file…	Чтение файла…
+	Remove Effects	Удалить эффекты
+	Remove Graphic	Удалить графику
+	Replace the selected 3D objects with the edges of their faces, as stroked paths.	Заменить выделенные 3D-объекты рёбрами их граней в виде контуров с обводкой.
+	Reset Profile	Сбросить профиль
+	Reshape Type Path	Изменить форму контура текста
+	Rough Edges	Неровные края
+	Russian	Русский
+	Save Gradient Preset	Сохранить набор градиента
+	Save Gradient Preset…	Сохранить набор градиента…
+	Select a 3D object to map the graphic onto it.	Выделите 3D-объект, чтобы наложить на него графику.
+	Select Object on Path	Выделить объект на контуре
+	Select Symbol Instance Part	Выделить часть экземпляра символа
+	Serbian: Cyrillic	Сербский: кириллица
+	Serbian: Latin	Сербский: латиница
+	Set Panel View	Задать вид панели
+	Show Hidden Panels at Edge	Показывать скрытые панели у края
+	Show Presets	Показать наборы
+	Soft Blur	Мягкое размытие
+	Spelling Suggestions	Варианты орфографии
+	Stroke Weight Down	Уменьшить толщину обводки
+	Stroke Weight Up	Увеличить толщину обводки
+	SVG Filter	Фильтр SVG
+	Swedish	Шведский
+	The selected objects have different graphics.	У выделенных объектов разная графика.
+	Thicken	Утолщение
+	Thin	Утончение
+	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Пока «Масштабировать колесом мыши» выключено, колесо мыши с нажатой Cmd/Ctrl прокручивает холст по горизонтали.
+	Word Gap	Интервал между словами
+@msg	`anchor` must be a [subpath, anchor] pair	`anchor` должно быть парой [subpath, anchor]
+@msg	`anchor` needs `id`, the path the point is on	`anchor` требуется `id` — контур, на котором лежит точка
+@msg	`artboard` must be a whole number	`artboard` должно быть целым числом
+@msg	`artboard` must be an artboard's index	`artboard` должно быть индексом монтажной области
+@msg	`artboards` must contain whole numbers	`artboards` должно содержать целые числа
+@msg	`base` is empty	`base` пусто
+@msg	`baseAlong` must be one of x, y	`baseAlong` должно быть одним из значений x, y
+@msg	`family` is required	`family` обязательно
+@msg	`family` must be a string	`family` должно быть строкой
+@msg	`fontAxes` must be an object of axis tags and values, such as {{"wght": 650}}	`fontAxes` должно быть объектом тегов осей и значений, например {{"wght": 650}}
+@msg	`from.byte` is past the end of {id}'s text	`from.byte` находится за концом текста объекта {id}
+@msg	`from.byte` must be a whole number	`from.byte` должно быть целым числом
+@msg	`from.id` must be a type object's id	`from.id` должно быть id текстового объекта
+@msg	`from.id` {id} is not a type object	`from.id` {id} не является текстовым объектом
+@msg	`from.id` {id} is not one of the type objects checked	`from.id` {id} нет среди проверенных текстовых объектов
+@msg	`from` must be {{id, byte}}	`from` должно быть {{id, byte}}
+@msg	`from` takes id and byte, not `{k}`	`from` принимает id и byte, а не `{k}`
+@msg	`glyphForm` must be one of {_1}	`glyphForm` должно быть одним из {_1}
+@msg	`in` must be [x, y]	`in` должно быть [x, y]
+@msg	`index` must be a whole number	`index` должно быть целым числом
+@msg	`index` must be the index of an applied SVG filter	`index` должно быть индексом применённого фильтра SVG
+@msg	`items` is a list of {{kind, item}}	`items` — список {{kind, item}}
+@msg	`items` must be a list of {{id, points}}	`items` должно быть списком {{id, points}}
+@msg	`items` must be an array of {{id, anchors}}	`items` должно быть массивом {{id, anchors}}
+@msg	`limit` must be a whole number from 1 to {MAX_SIMILAR}	`limit` должно быть целым числом от 1 до {MAX_SIMILAR}
+@msg	`lineWidth` must be a number, not {w}	`lineWidth` должно быть числом, а не {w}
+@msg	`lineWidth` must be from {min} to {max} pt, not {w}	`lineWidth` должно быть от {min} до {max} пт, а не {w}
+@msg	`max` must be 1 to {MAX_WORDS}	`max` должно быть от 1 до {MAX_WORDS}
+@msg	`panel` is swatches, graphicStyles or symbols	`panel` имеет значение swatches, graphicStyles или symbols
+@msg	`points` must be three [x, y] pairs of numbers	`points` должно быть тремя парами чисел [x, y]
+@msg	`reference` must be a whole number from 0 to 8	`reference` должно быть целым числом от 0 до 8
+@msg	`ringSeed` must be below 2^53, not {r}	`ringSeed` должно быть меньше 2^53, а не {r}
+@msg	`showImportOptions` must be true or false	`showImportOptions` должно быть true или false
+@msg	`side` must be left, right or null	`side` должно быть left, right или null
+@msg	`source` is the only path, line or label that graph group `target` stands for	`source` — единственный контур, линия или подпись, которые представляет группа графика `target`
+@msg	`start` is a number up to 1 (below 0: before an open path's start)	`start` — число не больше 1 (меньше 0: до начала открытого контура)
+@msg	`style` must be "pencil" or "brush", not {v}	`style` должно быть "pencil" или "brush", а не {v}
+@msg	`tolerance` must be from {_1} to {_2} pt	`tolerance` должно быть от {_1} до {_2} пт
+@msg	`words` must be a list of {{id, start, end}}	`words` должно быть списком {{id, start, end}}
+@msg	`{_1}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{_1}`: набор символов содержит не более {CUSTOM_CHARS_MAX} символов
+@msg	`{_1}`: U+{_2} is a control character or past U+FFFF	`{_1}`: U+{_2} является управляющим символом или лежит за U+FFFF
+@msg	`{code}` is not a code from U+0000 to U+FFFF	`{code}` не является кодом от U+0000 до U+FFFF
+@msg	`{font}`: `{name}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{font}`: `{name}`: набор символов содержит не более {CUSTOM_CHARS_MAX} символов
+@msg	`{font}`: `{name}`: characters must be a string	`{font}`: `{name}`: characters должно быть строкой
+@msg	`{font}`: `{name}`: {e}	`{font}`: `{name}`: {e}
+@msg	`{font}`: each character set must be {{name, characters, font…}}	`{font}`: каждый набор символов должен быть {{name, characters, font…}}
+@msg	`{font}`: each character set needs a name	`{font}`: каждому набору символов нужно имя
+@msg	`{font}`: unknown key `{k}` in a character set	`{font}`: неизвестный ключ `{k}` в наборе символов
+@msg	`{GRAPHICS}` face must be front or back	Грань `{GRAPHICS}` должна быть front или back
+@msg	`{key}` must be a list of artboard indices	`{key}` должно быть списком индексов монтажных областей
+@msg	`{key}` must be a non-empty list of artboard indices	`{key}` должно быть непустым списком индексов монтажных областей
+@msg	`{key}` must be a number from 0 to 1	`{key}` должно быть числом от 0 до 1
+@msg	`{key}` must be a whole number between {min} and {max} (got {n})	`{key}` должно быть целым числом от {min} до {max} (получено {n})
+@msg	`{key}` must be a whole number of at least 0, not {v}	`{key}` должно быть целым числом не меньше 0, а не {v}
+@msg	`{key}` must be from 0 to {max} pt	`{key}` должно быть от 0 до {max} пт
+@msg	`{key}` must be from 0 to {max}, not {n}	`{key}` должно быть от 0 до {max}, а не {n}
+@msg	`{key}` must contain whole numbers	`{key}` должно содержать целые числа
+@msg	`{k}` isn't an export setting: {_1}, openLocation	`{k}` не является параметром экспорта: {_1}, openLocation
+@msg	`{name}` already carries the {_1} role	`{name}` уже имеет тип линии {_1}
+@msg	`{name}` can't name a character set	`{name}` нельзя использовать как имя набора символов
+@msg	`{name}` isn't a global or spot color	`{name}` не является глобальным или плашечным цветом
+@msg	`{name}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{name}`: набор символов содержит не более {CUSTOM_CHARS_MAX} символов
+@msg	`{name}`: a composite font keeps at most {CUSTOM_SETS_MAX} character sets	`{name}`: составной шрифт содержит не более {CUSTOM_SETS_MAX} наборов символов
+@msg	`{name}`: custom must be a list of character sets	`{name}`: custom должно быть списком наборов символов
+@msg	`{name}`: U+{code} is a control character or past U+FFFF	`{name}`: U+{code} является управляющим символом или лежит за U+FFFF
+@msg	`{name}`: U+{code} is listed twice	`{name}`: U+{code} указан дважды
+@msg	`{raw}` can't name a character set (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` нельзя использовать как имя набора символов (от 1 до {COMPOSITE_NAME_MAX} символов, без управляющих символов)
+@msg	`{var_key}` must be from {_1} to {most}	`{var_key}` должно быть от {_1} до {most}
+@msg	a composite font keeps at most {CUSTOM_SETS_MAX} character sets	составной шрифт содержит не более {CUSTOM_SETS_MAX} наборов символов
+@msg	a document holds at most {_1} SVG filters, and applying a default filter adds it	документ содержит не более {_1} фильтров SVG, и применение фильтра по умолчанию добавляет его
+@msg	a new document has no artboard	у нового документа нет монтажной области
+@msg	a slice's text has more than the {MAX_SLICE_TEXT} characters a PSD file holds	текст фрагмента содержит больше символов, чем {MAX_SLICE_TEXT}, которые вмещает файл PSD
+@msg	a word's `id` must be a type object's id	`id` слова должен быть id текстового объекта
+@msg	a word's `{k}` must be a whole number	`{k}` слова должно быть целым числом
+@msg	alignToPixelGrid must be true or false	alignToPixelGrid должно быть true или false
+@msg	an image is too large to draw	изображение слишком большое, чтобы его нарисовать
+@msg	an image of {sw} × {sh} pixels is too large to resample	изображение {sw} × {sh} пикселей слишком большое для передискретизации
+@msg	anchor [{_1}, {_2}] of object {id} is not a selected anchor point	опорная точка [{_1}, {_2}] объекта {id} не является выделенной опорной точкой
+@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout должно быть {{layout?, columns?, spacing?, rightToLeft?}}
+@msg	byColor needs the seam fills' group under every path: move it to the bottom or delete it	byColor требуется группа заливок швов под каждым контуром: переместите её вниз или удалите
+@msg	can't open `{_1}`: not a PDF	не удаётся открыть `{_1}`: это не PDF
+@msg	cannot apply brush `{name}`: path has no stroke	не удаётся применить кисть `{name}`: у контура нет обводки
+@msg	commands[{i}]: `prefs.import` runs on its own, not as a batch step	commands[{i}]: `prefs.import` выполняется отдельно, а не как шаг пакета
+@msg	could not decode image: {_1}	не удалось декодировать изображение: {_1}
+@msg	data set `{name}` holds a graph value for `{var}` with {_1}	набор данных `{name}` содержит значение графика для `{var}` с {_1}
+@msg	data set `{name}` holds a graph value for `{var}` without rows or series	набор данных `{name}` содержит значение графика для `{var}` без строк или рядов
+@msg	data set `{name}` holds an image value for `{var}` that isn't a file's absolute path	набор данных `{name}` содержит значение изображения для `{var}`, которое не является абсолютным путём к файлу
+@msg	data set `{set}` holds a graph value for `{var}` longer than {MAX_GRAPH_CSV} bytes	набор данных `{set}` содержит значение графика для `{var}` длиннее {MAX_GRAPH_CSV} байт
+@msg	data set `{set}` holds a graph value for `{var}` with {_1}	набор данных `{set}` содержит значение графика для `{var}` с {_1}
+@msg	data set `{set}` holds a value for `{_1}` that isn't {what}	набор данных `{set}` содержит значение для `{_1}`, которое не является {what}
+@msg	data set `{set}` holds a value for `{var}` that isn't a graph's `data` element	набор данных `{set}` содержит значение для `{var}`, которое не является элементом `data` графика
+@msg	direct-select three anchor points, or give `points`	выделите прямым выделением три опорные точки или укажите `points`
+@msg	duplicate attribute `{key}`	повторяющийся атрибут `{key}`
+@msg	duplicate expanded attribute `{key}`	повторяющийся развёрнутый атрибут `{key}`
+@msg	each format is an object {{format, scale?, suffix?}}	каждый формат — объект {{format, scale?, suffix?}}
+@msg	each of `fonts` is {{family, style?}}; 1 to 1000 of them	каждый элемент `fonts` — {{family, style?}}; их от 1 до 1000
+@msg	each of `items` is {{kind, item}}	каждый элемент `items` — {{kind, item}}
+@msg	each of `words` must be {{id, start, end}}	каждый элемент `words` должен быть {{id, start, end}}
+@msg	each of `words` takes id, start and end, not `{k}`	каждый элемент `words` принимает id, start и end, а не `{k}`
+@msg	files must be {{name, dataBase64}}	files должно быть {{name, dataBase64}}
+@msg	give `anchor` or `guide`, not both	укажите `anchor` или `guide`, но не оба
+@msg	give `char` or `text`	укажите `char` или `text`
+@msg	give `matches`: [{{kind, name, target}}]	укажите `matches`: [{{kind, name, target}}]
+@msg	give `points` or `rect`, not both	укажите `points` или `rect`, но не оба
+@msg	give the settings to change, e.g. {{"formats": [{{"format": "png", "scale": "2x"}}]}}	укажите изменяемые параметры, например {{"formats": [{{"format": "png", "scale": "2x"}}]}}
+@msg	give {{key, value}} or {{values}}	укажите {{key, value}} или {{values}}
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Графика наносится на плоские грани: используйте тип объекта «Выдавливание» или «Плоскость»
+@msg	image is too large to draw	изображение слишком большое, чтобы его нарисовать
+@msg	Image Trace finished, but its document was reverted: trace it again	Трассировка изображения завершена, но её документ был возвращён к сохранённой версии: выполните трассировку ещё раз
+@msg	importSlices must be true or false	importSlices должно быть true или false
+@msg	invalid 16-bit pixel buffer	недопустимый 16-битный буфер пикселей
+@msg	invalid 8-bit pixel buffer	недопустимый 8-битный буфер пикселей
+@msg	knockout groups with brushed strokes over other translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	группы с вырезанием, у которых мазки кисти перекрывают другие полупрозрачные элементы, записываются как группы с вырезанием PDF: их полупрозрачные элементы вырезают то, что полностью перекрывают
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	группы с вырезанием со слишком большим числом перекрывающихся полупрозрачных элементов записываются как группы с вырезанием PDF: их полупрозрачные элементы вырезают то, что полностью перекрывают
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` gives a graph value longer than {MAX_GRAPH_CSV} bytes	строка {line}, столбец {column}: файл данных графика `{path}` для `{var}` задаёт значение графика длиннее {MAX_GRAPH_CSV} байт
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is a relative path: give `base`, or an absolute path	строка {line}, столбец {column}: файл данных графика `{path}` для `{var}` задан относительным путём: укажите `base` или абсолютный путь
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` is larger than {MAX_GRAPH_DATA_FILE} bytes	строка {line}, столбец {column}: файл данных графика `{path}` для `{var}` больше {MAX_GRAPH_DATA_FILE} байт
+@msg	line {line}, column {column}: the graph data file `{path}` for `{var}` isn't followed: {r}	строка {line}, столбец {column}: файл данных графика `{path}` для `{var}` не используется: {r}
+@msg	line {line}, column {column}: the graph data file for `{var}` can't be read: {e}	строка {line}, столбец {column}: файл данных графика для `{var}` не удаётся прочитать: {e}
+@msg	line {line}, column {column}: the graph data files hold more than {MAX_GRAPH_FILES_TOTAL} bytes in all	строка {line}, столбец {column}: файлы данных графика в сумме занимают больше {MAX_GRAPH_FILES_TOTAL} байт
+@msg	linkPages can't be used with textAs: outlines: linked pages show the file's own type	linkPages нельзя использовать вместе с textAs: outlines: связанные страницы показывают собственный текст файла
+@msg	linkPages can't open a file with a password: linked pages are read again without it	linkPages не может открыть файл с паролем: связанные страницы читаются снова без него
+@msg	linkPages must be true or false	linkPages должно быть true или false
+@msg	linkPages needs the file's path: linked pages are read from it	linkPages требуется путь к файлу: связанные страницы читаются из него
+@msg	linkPages: `{file}` is over {_1} MB	linkPages: `{file}` больше {_1} МБ
+@msg	linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file	linkPages: `{file}` не является PDF или совместимым с PDF файлом .ai
+@msg	match applies only with scope {scopes}	match применяется только при scope {scopes}
+@msg	match must be a paint as the document stores it	match должно быть заливкой или обводкой в том виде, в каком её хранит документ
+@msg	missing `map` (rows [{{from, to}}] or {{current: new}})	отсутствует `map` (строки [{{from, to}}] или {{current: new}})
+@msg	missing `newName` or `kind`	отсутствует `newName` или `kind`
+@msg	missing `role`	отсутствует `role`
+@msg	missing `swatch`	отсутствует `swatch`
+@msg	mode must be replace or append	режим должен быть replace или append
+@msg	no character set	нет набора символов
+@msg	no panels are docked on the {_1} side	на стороне {_1} нет закреплённых панелей
+@msg	no pattern `{pat}`	нет узора `{pat}`
+@msg	no selected object fits on the sheet	ни один выделенный объект не помещается на листе
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	похожие объекты не найдены (повёрнутые или отражённые копии не учитываются); измените параметры глобального редактирования и повторите попытку
+@msg	not a gradient mesh or mesh envelope	это не градиентная сетка и не сетка оболочки
+@msg	not an RTF file: it doesn't start with {\\rtf	это не файл RTF: он не начинается с {\\rtf
+@msg	pdfs `single` writes artboards as the pages of one PDF: assets, layers and selection `each` write a PDF each	для pdfs значение `single` записывает монтажные области как страницы одного PDF: для ресурсов, слоёв и выделения `each` записывает отдельный PDF для каждого
+@msg	plugin.remove: {_1}: {e}: nothing was removed	plugin.remove: {_1}: {e}: ничего не удалено
+@msg	ppi can't be more than {max} for this image	для этого изображения ppi не может быть больше {max}
+@msg	preserveText writes type layers: it needs layers: true	preserveText записывает текстовые слои: для этого нужно layers: true
+@msg	quotes must be {{double?, single?}}	quotes должно быть {{double?, single?}}
+@msg	rect is [x, y, width, height] in points, with a width and a height above 0	rect — это [x, y, width, height] в пунктах, причём ширина и высота больше 0
+@msg	scope applies to a click: leave out points	scope применяется к щелчку: не указывайте points
+@msg	scope must be "one", "connected" or "samePaint"	scope должно быть "one", "connected" или "samePaint"
+@msg	Script file dialogs are not available	Диалоги файлов скрипта недоступны
+@msg	Script file writing is not available	Запись файлов скрипта недоступна
+@msg	select a compound shape	выделите составную фигуру
+@msg	select a path that is neither locked nor hidden: text, images and symbol instances can't have a fold line role	выделите контур, который не заблокирован и не скрыт: текст, изображения и экземпляры символов не могут иметь тип линии сгиба
+@msg	select another anchor point to align to the key anchor	выделите другую опорную точку, чтобы выровнять по ключевой
+@msg	select at most {MAX_SHAPES} objects to nest	чтобы вложить объекты, выделите не более {MAX_SHAPES}
+@msg	select members of a compound shape	выделите элементы составной фигуры
+@msg	slice {number} has no finite bounds and can't be written to PSD	у фрагмента {number} нет конечных границ, его нельзя записать в PSD
+@msg	sort `{x}`: name, kind, status or size	sort `{x}`: name, kind, status или size
+@msg	style `{style}` of `{family}` is not available	начертание `{style}` семейства `{family}` недоступно
+@msg	text must be {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}}	text должно быть {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}}
+@msg	textureImage: give {{path}} or {{name, dataBase64}} of an image file, or a texture as effect.list gives it	textureImage: укажите {{path}} или {{name, dataBase64}} файла изображения либо текстуру в том виде, в каком её возвращает effect.list
+@msg	the character at byte {start} is not drawn: it falls before its path's start	символ в байте {start} не рисуется: он находится до начала своего контура
+@msg	the composite fonts make a file larger than 4 MB, which Import can't read; export fewer of them	составные шрифты дают файл больше 4 МБ, который «Импорт» не может прочитать; экспортируйте их меньше
+@msg	the decoded samples don't fit the image	декодированные отсчёты не соответствуют изображению
+@msg	the document has {count} slices, more than the {MAX_SLICES} a PSD file holds	в документе {count} фрагментов, больше чем {MAX_SLICES}, которые вмещает файл PSD
+@msg	the document it was dropped on was closed	документ, на который это было перетащено, закрыт
+@msg	the document it was dropped on was reverted	документ, на который это было перетащено, возвращён к сохранённой версии
+@msg	the document was switched	документ был переключён
+@msg	the file has {_1} slices, more than the {MAX_SLICES} read	в файле {_1} фрагментов, больше чем {MAX_SLICES}, которые были прочитаны
+@msg	the image is too large to change	изображение слишком большое, чтобы его изменить
+@msg	the image is too large to draw	изображение слишком большое, чтобы его нарисовать
+@msg	the image's size can't be read	не удаётся прочитать размер изображения
+@msg	the lines and labels in graph group {_1} have different appearance rows: pass `aligned: true` or their ids	линии и подписи в группе графика {_1} имеют разные строки оформления: передайте `aligned: true` или их id
+@msg	the margin leaves no room on the sheet	поля не оставляют места на листе
+@msg	the panels are not hidden	панели не скрыты
+@msg	the place cursor that asked for these import options is no longer loaded	курсор размещения, который запросил эти параметры импорта, больше не загружен
+@msg	the plug-in store can't be locked	хранилище подключаемых модулей не удаётся заблокировать
+@msg	the RGB policy can't be {_1}	политика RGB не может быть {_1}
+@msg	the selection has nothing to nest	в выделении нечего вкладывать
+@msg	the slices are too large for PSD (at most 4 GB)	фрагменты слишком велики для PSD (не более 4 ГБ)
+@msg	the {_1} file holds no records	файл {_1} не содержит записей
+@msg	the {_1} header is damaged	заголовок {_1} повреждён
+@msg	there is no artboard for the sheet	для листа нет монтажной области
+@msg	there is no artboard {i}	монтажной области {i} нет
+@msg	through applies to scope "connected"	through применяется при scope "connected"
+@msg	through must be an array of at most 4096 edge ids	through должно быть массивом не более чем из 4096 id рёбер
+@msg	through: {id} is not an edge of {g}, or is given twice	through: {id} не является ребром {g} или указан дважды
+@msg	too many in-scope namespace declarations	слишком много объявлений пространств имён в области видимости
+@msg	trim keeps the image's pixels as they are: leave out ppi	trim сохраняет пиксели изображения как есть: не указывайте ppi
+@msg	two character sets are named `{name}`	два набора символов названы `{name}`
+@msg	unknown `by` "{name}": expected one of {_1}	неизвестный `by` "{name}": ожидалось одно из {_1}
+@msg	unknown key `{k}`; a font takes name, parts and custom	неизвестный ключ `{k}`; шрифт принимает name, parts и custom
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	неизвестная функция OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt, hkna, ital; префикс - выключает; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom и aalt принимают номер альтернативы как `tag=N`, где N от 0 до {_1}, например `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; prefix - to turn off)	неизвестная функция OpenType `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; префикс - выключает)
+@msg	unknown parameter `{within}settings.{format}`; {why}	неизвестный параметр `{within}settings.{format}`; {why}
+@msg	unknown role `{id}`: cut, crease, partialCut or perforation	неизвестный тип линии `{id}`: cut, crease, partialCut или perforation
+@msg	unknown role `{id}`: cut, crease, partialCut, perforation or none	неизвестный тип линии `{id}`: cut, crease, partialCut, perforation или none
+@msg	variable `{_1}` starts or ends with white space or holds a control character, which a variable library can't hold	переменная `{_1}` начинается или заканчивается пробельным символом либо содержит управляющий символ, который библиотека переменных не может хранить
+@msg	words of {_1} overlap at byte {a}	слова объекта {_1} пересекаются в байте {a}
+@msg	{_1} is not a type object	{_1} не является текстовым объектом
+@msg	{a}..{b} is not a word of {_1}'s text	{a}..{b} не является словом текста объекта {_1}
+@msg	{C}: {_1}: {e}: nothing was installed	{C}: {_1}: {e}: ничего не установлено
+@msg	{EXPORT_SELECTION} must be true or false, not {v}	{EXPORT_SELECTION} должно быть true или false, а не {v}
+@msg	{label} failed: {e}	{label} не выполнено: {e}
+@msg	{label}: the clipping masks hide the selected art	{label}: маски обрезки скрывают выделенный рисунок
+@msg	{mode_key} is one of {ERASER_MODES}, not `{id}`	{mode_key} имеет одно из значений {ERASER_MODES}, а не `{id}`
+@msg	{mode_key} is one of {ERASER_MODES}, not {other}	{mode_key} имеет одно из значений {ERASER_MODES}, а не {other}
+@msg	{name} is a default SVG filter, and the document holds no copy of it to delete	{name} — фильтр SVG по умолчанию, и в документе нет его копии, которую можно удалить
+@msg	{path}: invalid pixel buffer	{path}: недопустимый буфер пикселей
+@msg	{var_key} must be 0 or more	{var_key} должно быть не меньше 0
+@msg	{var_key} must be at most {most}	{var_key} должно быть не больше {most}
+@msg	{why} (the {_1} role's swatch; addon.packaging.setRoleSwatch picks another)	{why} (образец типа линии {_1}; addon.packaging.setRoleSwatch выбирает другой)
+@msg	{w} × {h} pixels take {rgba} bytes as RGBA	{w} × {h} пикселей занимают {rgba} байт в формате RGBA

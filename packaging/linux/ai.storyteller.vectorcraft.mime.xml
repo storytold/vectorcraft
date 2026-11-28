@@ -5,17 +5,20 @@
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type="application/x-vectorcraft">
     <comment>VectorCraft document</comment>
+    <comment xml:lang="ru">Документ VectorCraft</comment>
     <icon name="ai.storyteller.vectorcraft"/>
     <glob pattern="*.vectorcraft"/>
     <glob pattern="*.drawcraft"/>
   </mime-type>
   <mime-type type="application/x-vectorcraft-template">
     <comment>VectorCraft template</comment>
+    <comment xml:lang="ru">Шаблон VectorCraft</comment>
     <sub-class-of type="application/x-vectorcraft"/>
     <glob pattern="*.vctemplate"/>
   </mime-type>
   <mime-type type="application/x-ai-template">
     <comment>PDF-compatible .ait template</comment>
+    <comment xml:lang="ru">Шаблон .ait, совместимый с PDF</comment>
     <sub-class-of type="application/pdf"/>
     <glob pattern="*.ait"/>
   </mime-type>
@@ -23,6 +26,7 @@
        the document kind. -->
   <mime-type type="application/x-affinity">
     <comment>Affinity document</comment>
+    <comment xml:lang="ru">Документ Affinity</comment>
     <glob pattern="*.afdesign"/>
     <glob pattern="*.afpub"/>
     <magic>

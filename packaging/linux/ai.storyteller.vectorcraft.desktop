@@ -1,8 +1,11 @@
 [Desktop Entry]
 Type=Application
 Name=VectorCraft
+Name[ru]=VectorCraft
 GenericName=Vector Graphics Editor
+GenericName[ru]=Редактор векторной графики
 Comment=Draw and edit vector illustrations, SVG and PDF
+Comment[ru]=Рисование и редактирование векторных иллюстраций, SVG и PDF
 Exec=vectorcraft %F
 TryExec=vectorcraft
 Icon=ai.storyteller.vectorcraft
@@ -11,6 +14,7 @@ StartupNotify=true
 StartupWMClass=ai.storyteller.vectorcraft
 Categories=Graphics;2DGraphics;VectorGraphics;
 Keywords=vector;illustration;svg;pdf;drawing;bezier;
+Keywords[ru]=вектор;векторная графика;иллюстрация;svg;pdf;рисование;безье;кривые;
 # MimeType lists the formats File › Open reads that Info.plist.in declares for macOS. The type of .ai
 # files is shared-mime-info's application/illustrator (brand-ok).
 MimeType=image/svg+xml;application/pdf;application/x-vectorcraft;image/svg+xml-compressed;application/illustrator;application/x-ai-template;image/png;image/jpeg;image/gif;image/webp;image/tiff;image/bmp;application/x-vectorcraft-template;image/vnd.dxf;image/emf;image/wmf;image/x-eps;application/x-affinity;
