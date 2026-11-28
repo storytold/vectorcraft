@@ -1488,7 +1488,7 @@ fn painted_bounds(object: &Node, appearance: &Appearance) -> Option<Rect> {
     let mut out = None;
     for item in &appearance.items {
         let painted = match item {
-            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => path.bounds(),
+            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => path.drawn_bounds(false),
             AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => vectorcraft_effects::stroke::outline_region(&path, rule, s).bounds(),
             _ => None,
         };
@@ -1990,6 +1990,31 @@ mod tests {
 
     fn square(id: u64, fill: Paint) -> Arc<Node> {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
+    }
+
+    /// A lone anchor, which a fill does not paint, does not move what the fill paints when the
+    /// arrowheads are placed against the drawn look: a filled line with a head and a stray anchor
+    /// well outside it still fits a look of the line and its head alone.
+    #[test]
+    fn a_lone_anchor_does_not_move_the_painted_box_heads_are_placed_by() {
+        use vectorcraft_doc::{ArrowAlign, Arrowhead, CustomArrowhead, FillLayer, StrokeLayer};
+        use vectorcraft_geom::{Point, SubPath};
+        let wedge = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(3.0, 2.0), Point::new(3.0, -1.0)], true));
+        let mut stroke = StrokeLayer::new(Paint::solid(vectorcraft_doc::color::Color::BLACK), 2.0);
+        stroke.end_arrow = Some(Arrowhead::Custom(Arc::new(CustomArrowhead::new("Wedge".into(), wedge))));
+        stroke.arrow_align = ArrowAlign::Tip;
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(vectorcraft_doc::color::Color::BLACK))));
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let line = SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false);
+        let plain = Node::path(NodeId(1), PathData::single(line.clone()), appearance.clone());
+        let want = painted_bounds(&plain, &appearance).unwrap();
+        let look =
+            Node::path(NodeId(2), shapes::rectangle(want), Appearance::basic(Paint::solid(vectorcraft_doc::color::Color::BLACK), Paint::None, 0.0));
+        let stray = SubPath::new(vec![vectorcraft_geom::Anchor::corner(Point::new(50.0, 200.0))], false);
+        let object = Node::path(NodeId(3), PathData::new(vec![line, stray]), appearance.clone());
+        let placed = heads_placed(&object, &look, appearance, Affine::IDENTITY).expect("the heads fit the look");
+        assert!(placed.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.arrow_align == ArrowAlign::Tip)));
     }
 
     /// The outline check works from one budget for the object: a look of the outline drawn twice
