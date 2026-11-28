@@ -540,7 +540,10 @@ fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pen: PenAt) -> f64 {
 
 pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
-    let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
+    // Copies are spaced by the width of the art with its strokes, so at 100% spacing stroked
+    // copies touch instead of overlapping by the stroke.
+    let aw = sc.art.visual_bounds().unwrap_or(b).width().max(1e-3);
+    let ah = b.height().max(1e-3);
     let mut rng = Rng::new(seed_of(bp, name));
     let [size_mode, spacing_mode, scatter_mode, rotation_mode] = sc.modes();
     let mut out = Budget::default();
