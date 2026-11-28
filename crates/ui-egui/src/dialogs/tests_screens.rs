@@ -61,10 +61,141 @@ fn open(app: &mut VectorcraftApp) {
     assert_eq!(kind(app).as_deref(), Some(export_for_screens::KIND));
 }
 
+#[test]
+fn the_first_artboard_is_clickable_on_open_in_a_short_web_viewport() {
+    use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        app.run("artboard.rename", json!({"indices": [0], "name": "First audit board"})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(640.0, 500.0));
+        let mut time = 0.0;
+        let mut draw = |app: &mut VectorcraftApp, events| {
+            time += 0.2;
+            crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() })
+        };
+        draw(&mut app, vec![]);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        for _ in 0..5 {
+            draw(&mut app, vec![]);
+        }
+        let out = draw(&mut app, vec![]);
+        let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+        let bounds = nodes
+            .iter()
+            .find_map(|(_, node)| {
+                if node.role() == Role::CheckBox && node.label().is_some_and(|label| label.contains("First audit board")) {
+                    node.bounds()
+                } else {
+                    None
+                }
+            })
+            .expect("the first artboard has a checkbox");
+        let pos = pos2(((bounds.x0 + bounds.x1) / 2.0) as f32, ((bounds.y0 + bounds.y1) / 2.0) as f32);
+
+        assert_eq!(field(&app, "boards"), json!([true, true]));
+        draw(&mut app, vec![Event::PointerMoved(pos)]);
+        for pressed in [true, false] {
+            draw(&mut app, vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+        }
+        draw(&mut app, vec![]);
+        assert_eq!(field(&app, "boards"), json!([false, true]), "the first {view} checkbox should be clickable without scrolling");
+        assert!(log.borrow().is_empty());
+    }
+}
+
 /// Presses OK, which the dialog refuses or does not offer: it stays open.
 fn stays_open(app: &mut VectorcraftApp) {
     let _ = try_confirm(app);
     assert_eq!(kind(app).as_deref(), Some(export_for_screens::KIND));
+}
+
+#[test]
+fn a_queued_download_requires_fresh_confirmation_after_file_revert() {
+    use craft::ui::dialog::{HeldOk, dialog_id};
+
+    for artboards in [1, 2] {
+        let dir = vectorcraft_testkit::TempDir::new("screens-held-revert");
+        let path = dir.join("saved.vectorcraft").to_string_lossy().into_owned();
+        let (mut app, log) = app(artboards, true);
+        app.run("artboard.rename", json!({"indices": [0], "name": "Saved"})).unwrap();
+        app.session.execute("document.save", &json!({"path": path})).unwrap();
+        app.run("artboard.rename", json!({"indices": [0], "name": "Edited"})).unwrap();
+        let uid = app.session.active().unwrap().uid;
+        let reverts = app.session.active().unwrap().reverts;
+        open(&mut app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialogs = app.dialogs().unwrap();
+        let id = dialog_id(export_for_screens::KIND);
+        assert!(!dialogs.with(|host| host.confirm_by_id(&ctx, id)));
+        assert_eq!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Waiting));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        assert_eq!(app.session.active().unwrap().uid, uid);
+        assert!(app.session.active().unwrap().reverts > reverts, "the actual file was loaded back into its tab");
+        let settings = app.session.active().unwrap().doc.export_settings.clone();
+        export_for_screens::pump(&mut app, &ctx);
+        assert!(log.borrow().is_empty(), "the retired drawing's approval exports no restored content");
+        assert_eq!(app.session.active().unwrap().doc.export_settings, settings);
+        assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+        try_confirm(&mut app).unwrap();
+        let log = log.borrow();
+        let [(name, bytes)] = log.as_slice() else { panic!("one download") };
+        if artboards == 1 {
+            assert_eq!(name, "Saved.png");
+        } else {
+            let names = zip_names(bytes);
+            assert!(names.iter().any(|name| name.ends_with("Saved.png")));
+            assert!(!names.iter().any(|name| name.contains("Edited")));
+        }
+    }
+}
+
+#[test]
+fn a_queued_download_still_uses_ordinary_edits_in_the_same_loaded_drawing() {
+    use craft::ui::dialog::dialog_id;
+
+    let (mut app, log) = app(1, true);
+    open(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
+    let id = dialog_id(export_for_screens::KIND);
+    assert!(!dialogs.with(|host| host.confirm_by_id(&ctx, id)));
+    app.run("artboard.rename", json!({"indices": [0], "name": "Current"})).unwrap();
+    export_for_screens::pump(&mut app, &ctx);
+    assert_eq!(log.borrow().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["Current.png"]);
+}
+
+#[test]
+fn a_queued_export_requires_fresh_confirmation_after_switching_documents() {
+    use craft::ui::dialog::{HeldOk, dialog_id};
+
+    let (mut app, log) = app(1, true);
+    let source = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 40, "height": 30})).unwrap();
+    app.run("artboard.rename", json!({"indices": [0], "name": "Destination"})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    app.run("window.previousDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source);
+    open(&mut app);
+
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
+    let id = dialog_id(export_for_screens::KIND);
+    dialogs.with(|host| {
+        assert!(!host.confirm_by_id(&ctx, id));
+        assert_eq!(host.held_state(id), Some(HeldOk::Waiting));
+    });
+    app.run("window.nextDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, destination);
+    export_for_screens::pump(&mut app, &ctx);
+
+    assert!(log.borrow().is_empty(), "the earlier OK cannot download from the destination tab");
+    assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(log.borrow().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["Destination.png"]);
 }
 
 fn temp_folder(tag: &str) -> std::path::PathBuf {
@@ -1415,6 +1546,30 @@ fn renaming_an_artboard_in_export_for_screens_renames_it() {
         assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Renamed", "{view}");
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(app.session.active().unwrap().doc.artboards[0].name, old, "{view}");
+    }
+}
+
+/// A rename begun before File Revert cannot rename an artboard restored from the saved file.
+#[test]
+fn an_artboard_name_cannot_reach_the_contents_loaded_by_file_revert() {
+    for view in ["grid", "list"] {
+        let dir = vectorcraft_testkit::TempDir::new("screens-rename-revert");
+        let path = dir.join("saved.vectorcraft").to_string_lossy().into_owned();
+        let (mut app, log) = app(2, true);
+        app.session.execute("document.save", &json!({"path": path})).unwrap();
+        app.run("shape.rectangle", json!({"x": 1, "y": 1, "width": 5, "height": 5})).unwrap();
+        let reverts = app.session.active().unwrap().reverts;
+        let mut w = Window::default();
+        w.names(&mut app);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        type_artboard_name(&mut w, &mut app, "2  Artboard 2", "Retired Name");
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        assert!(app.session.active().unwrap().reverts > reverts);
+        w.key(&mut app, egui::Key::Enter);
+        assert_eq!(app.session.active().unwrap().doc.artboards[1].name, "Artboard 2");
+        assert!(app.session.active().unwrap().history.undo.is_empty());
+        assert!(log.borrow().is_empty(), "the stale name does not export either");
     }
 }
 

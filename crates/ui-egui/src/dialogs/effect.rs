@@ -10,6 +10,7 @@
 //! effect's defaults for the rest.
 
 use std::path::PathBuf;
+use std::sync::{Arc, Weak};
 
 use craft::host::{PickRequest, Picked};
 use craft::ui::contract::Bind;
@@ -17,6 +18,7 @@ use craft::ui::dialog::{DialogId, PromptChoice, StandardPrompt};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamResult};
 use craft::ui::runtime::memory::{Lifetime, SaveKey};
 use serde_json::{Map, Value, json};
+use vectorcraft_doc::Selection;
 
 use super::effect_params::{EffectCx, effect_params, heading, label};
 use super::form;
@@ -48,6 +50,10 @@ pub(crate) struct EffectDialogs {
 pub(crate) struct Open {
     /// The dialog's id; while [`asking`](Open::asking), the question's.
     pub id: DialogId,
+    /// Identity of this opening, since effect dialogs reuse the same dialog ID.
+    opening: Arc<()>,
+    /// The drawing and its file generation when the dialog was opened.
+    source: Option<(u64, u64)>,
     /// The item the effect goes to, resolved.
     target: Value,
     /// The parameters that find the applied effect (`item`, `aligned`).
@@ -63,10 +69,63 @@ pub(crate) struct Open {
     opened: Map<String, Value>,
     /// The live preview OK keeps and Cancel rolls back.
     pub preview: LivePreview,
+    preview_owner: Option<PreviewOwner>,
     /// What the rows need from the app.
     pub cx: EffectCx,
     /// Whether the Edit or Add New question is still open.
     asking: bool,
+}
+
+/// The interaction and preview last written by this opening.
+struct PreviewOwner {
+    selection: Weak<Selection>,
+    command: Option<(String, Value)>,
+}
+
+fn active_drawing(app: &VectorcraftApp) -> Option<(u64, u64)> {
+    app.session.active().map(|doc| (doc.uid, doc.reverts))
+}
+
+impl Open {
+    fn check_source(&self, app: &VectorcraftApp) -> Result<(), String> {
+        let active = active_drawing(app);
+        if active == self.source {
+            Ok(())
+        } else if active.map(|(id, _)| id) == self.source.map(|(id, _)| id) {
+            Err(tl!("The document was reverted. Reopen this dialog to continue.").into())
+        } else {
+            Err(tl!("Return to the original drawing to apply the effect").into())
+        }
+    }
+
+    fn owns_preview(&self, app: &VectorcraftApp) -> bool {
+        self.source == active_drawing(app)
+            && self.preview_owner.as_ref().is_some_and(|owner| {
+                app.session.active().and_then(|doc| doc.interaction.as_ref()).is_some_and(|interaction| {
+                    owner.selection.upgrade().is_some_and(|selection| Arc::ptr_eq(&selection, &interaction.selection))
+                        && owner.command == interaction.preview
+                })
+            })
+    }
+
+    fn cancel_preview(self, app: &mut VectorcraftApp) {
+        if self.owns_preview(app) {
+            self.preview.cancel(app);
+        }
+    }
+
+    fn ready_to_edit(&mut self, app: &mut VectorcraftApp) -> Result<bool, String> {
+        if self.owns_preview(app) {
+            return Ok(true);
+        }
+        // A tab switch normally rolls the preview back. A new edit can now hold the interaction.
+        self.preview = LivePreview::default();
+        self.preview_owner = None;
+        if app.session.in_interaction() {
+            app.keep_typing()?;
+        }
+        Ok(!app.session.in_interaction())
+    }
 }
 
 /// Match an automation request's blend-mode spelling to the mode shown in the targeted effect dialog.
@@ -107,6 +166,8 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let target = edit_target.get("item").cloned().unwrap_or(target);
     let mut open = Open {
         id: DialogId::NULL,
+        opening: Arc::new(()),
+        source: active_drawing(app),
         target: target.clone(),
         edit_target,
         index: None,
@@ -114,6 +175,7 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         aligned: p.get("aligned").and_then(Value::as_bool) == Some(true),
         opened: Map::new(),
         preview: LivePreview::default(),
+        preview_owner: None,
         cx: EffectCx::new(app, id, false),
         asking: false,
     };
@@ -144,6 +206,8 @@ pub(crate) fn open_last(app: &mut VectorcraftApp, effect: &str, params: Value) -
     vectorcraft_effects::effect_info(effect).ok_or_else(|| format!("unknown effect `{effect}`"))?;
     let open = Open {
         id: DialogId::NULL,
+        opening: Arc::new(()),
+        source: active_drawing(app),
         target: Value::Null,
         edit_target: json!({}),
         index: None,
@@ -151,6 +215,7 @@ pub(crate) fn open_last(app: &mut VectorcraftApp, effect: &str, params: Value) -
         aligned: false,
         opened: Map::new(),
         preview: LivePreview::default(),
+        preview_owner: None,
         cx: EffectCx::new(app, effect, false),
         asking: false,
     };
@@ -243,6 +308,9 @@ fn ask(app: &mut VectorcraftApp, mut open: Open) -> Result<Value, String> {
         .button(PromptChoice::Alternate, tl!("Add New").to_string())
         .button(PromptChoice::Cancel, tl!("Cancel").to_string());
     let Some(dialogs) = app.dialogs() else { return Err("no window".into()) };
+    if let Some(old) = app.effect_dialogs.effect.take() {
+        old.cancel_preview(app);
+    }
     open.id = dialogs.with(|h| h.open(prompt));
     open.asking = true;
     app.effect_dialogs.effect = Some(open);
@@ -254,7 +322,7 @@ fn ask(app: &mut VectorcraftApp, mut open: Open) -> Result<Value, String> {
 fn launch(app: &mut VectorcraftApp, mut open: Open, baseline: Map<String, Value>, seed: Map<String, Value>) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     if let Some(old) = app.effect_dialogs.effect.take() {
-        old.preview.cancel(app);
+        old.cancel_preview(app);
     }
     let id = open.cx.id.clone();
     let fresh = open.index.is_none();
@@ -291,28 +359,46 @@ fn launch(app: &mut VectorcraftApp, mut open: Open, baseline: Map<String, Value>
         };
         if warp_new { dialog.remember(WARP_KEY).remember_for(Lifetime::Run) } else { dialog }
     });
-    let cancel: Box<dyn FnOnce(&mut VectorcraftApp)> = Box::new(|app| {
-        if let Some(open) = app.effect_dialogs.effect.take() {
-            open.preview.cancel(app);
+    let cancelled = Arc::clone(&open.opening);
+    let confirmed = Arc::clone(&open.opening);
+    let cancel: Box<dyn FnOnce(&mut VectorcraftApp)> = Box::new(move |app| {
+        if let Some(open) = take_opening(app, &cancelled) {
+            open.cancel_preview(app);
         }
     });
     let options = HeldOptions { cancel: Some(cancel), ..Default::default() };
-    let dialog_id = open_held_with(app, dialog, move |app, result| finish(app, &ctx, result), options).ok_or("no window")?;
+    let dialog_id = open_held_with(app, dialog, move |app, result| finish(app, &ctx, &confirmed, result), options).ok_or("no window")?;
     open.id = dialog_id;
     open.asking = false;
     app.effect_dialogs.effect = Some(open);
     Ok(Value::Null)
 }
 
+/// Take the current effect only when it is the opening that registered the callback.
+fn take_opening(app: &mut VectorcraftApp, opening: &Arc<()>) -> Option<Open> {
+    app.effect_dialogs.effect.as_ref().filter(|open| Arc::ptr_eq(opening, &open.opening))?;
+    app.effect_dialogs.effect.take()
+}
+
 /// What OK runs: the command keeps the preview as one undo step. An `Err` keeps the dialog open
 /// with the reason, and the record with a fresh preview.
-fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Result<(), String> {
-    let Some(mut open) = app.effect_dialogs.effect.take() else { return Ok(()) };
+fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, opening: &Arc<()>, result: &ParamResult) -> Result<(), String> {
+    let Some(mut open) = take_opening(app, opening) else { return Ok(()) };
+    if let Err(why) = open.check_source(app) {
+        app.effect_dialogs.effect = Some(open);
+        return Err(why);
+    }
     let (cmd, params) = command(&open, &result.fields);
     // An edit that sends nothing changes nothing and records no step: the preview rolls back.
     if cmd == "effect.setParams" && params.get("warpStyle").is_none() && params["params"].as_object().is_some_and(Map::is_empty) {
-        open.preview.cancel(app);
+        open.cancel_preview(app);
         return Ok(());
+    }
+    let ready =
+        open.ready_to_edit(app).and_then(|ready| if ready { Ok(()) } else { Err(tl!("Finish the current edit before applying the effect").into()) });
+    if let Err(why) = ready {
+        app.effect_dialogs.effect = Some(open);
+        return Err(why);
     }
     let preview = std::mem::take(&mut open.preview);
     match preview.commit(app, cmd, params.clone()) {
@@ -328,6 +414,7 @@ fn finish(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -
             Ok(())
         }
         Err(e) => {
+            open.preview_owner = None;
             app.effect_dialogs.effect = Some(open);
             Err(e)
         }
@@ -395,21 +482,30 @@ pub(super) fn command_for(
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let _ = ctx;
     let Some(open) = app.effect_dialogs.effect.take() else { return };
-    let open = if open.asking {
-        match answer(app, open) {
-            Some(open) => open,
-            None => return,
-        }
+    if open.asking {
+        answer(app, open);
     } else {
-        open
-    };
-    drive(app, open);
+        drive(app, open);
+    }
 }
 
-/// The answer of the Edit or Add New question; `open` back while it is still asked.
-fn answer(app: &mut VectorcraftApp, mut open: Open) -> Option<Open> {
-    let result = app.dialogs()?.with(|h| h.take_by_id::<StandardPrompt>(open.id))?;
-    let choice = result.ok().map_or(PromptChoice::Cancel, |answer| answer.choice);
+/// The answer of the Edit or Add New question; retain the opening while the question is still visible.
+fn answer(app: &mut VectorcraftApp, mut open: Open) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let (waiting, result) = dialogs.with(|host| {
+        if host.get_by_id::<StandardPrompt>(open.id).is_some() { (true, None) } else { (false, host.take_by_id::<StandardPrompt>(open.id)) }
+    });
+    if waiting {
+        app.effect_dialogs.effect = Some(open);
+        return;
+    }
+    let choice = result.and_then(|result| result.ok()).map_or(PromptChoice::Cancel, |answer| answer.choice);
+    if choice != PromptChoice::Cancel
+        && let Err(why) = open.check_source(app)
+    {
+        app.status(why);
+        return;
+    }
     let id = open.cx.id.clone();
     let launched = match (choice, open.index) {
         (PromptChoice::Proceed, Some(k)) => {
@@ -423,12 +519,11 @@ fn answer(app: &mut VectorcraftApp, mut open: Open) -> Option<Open> {
             open.index = None;
             launch(app, open, defaults_of(&id), Map::new())
         }
-        _ => return None,
+        _ => return,
     };
     if let Err(e) = launched {
         app.status(e);
     }
-    None
 }
 
 /// The fields show what the effect stores, also for a value set while the dialog is open: Scribble's 270° angle
@@ -450,6 +545,10 @@ fn show_stored(cx: &EffectCx, d: &mut HostedParamDialog) {
 /// One frame of the open dialog: the preview of its values, and the requests its rows filed.
 fn drive(app: &mut VectorcraftApp, mut open: Open) {
     let Some(dialogs) = app.dialogs() else { return };
+    if open.check_source(app).is_err() {
+        app.effect_dialogs.effect = Some(open);
+        return;
+    }
     let Some((fields, previewing, path)) = dialogs.with(|h| {
         h.get_mut_by_id::<HostedParamDialog>(open.id).map(|d| {
             show_stored(&open.cx, d);
@@ -459,13 +558,43 @@ fn drive(app: &mut VectorcraftApp, mut open: Open) {
         app.effect_dialogs.effect = Some(open);
         return;
     };
-    let (cmd, params) = command(&open, &fields);
-    let english = vectorcraft_effects::effect_info(&open.cx.id).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_default();
-    // `run` reports a failed preview itself.
-    let _ = open.preview.run(app, previewing, &english, cmd, &params);
+    if previewing || open.owns_preview(app) {
+        match open.ready_to_edit(app) {
+            Ok(true) => {
+                let (cmd, params) = command(&open, &fields);
+                let english = vectorcraft_effects::effect_info(&open.cx.id).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_default();
+                let ran = open.preview.run(app, previewing, &english, cmd, &params);
+                if !previewing {
+                    open.preview_owner = None;
+                } else if ran.is_some() {
+                    open.preview_owner = app
+                        .session
+                        .active()
+                        .and_then(|doc| doc.interaction.as_ref())
+                        .map(|interaction| PreviewOwner { selection: Arc::downgrade(&interaction.selection), command: interaction.preview.clone() });
+                }
+            }
+            Ok(false) => {}
+            Err(why) => app.status(why),
+        }
+    }
     if let Some(request) = path {
         let (id, key) = (open.id, request.key);
-        pick_texture(app, Owner::Document, move |app, path, fields| {
+        let opening = Arc::clone(&open.opening);
+        let is_current = move |app: &VectorcraftApp| {
+            app.effect_dialogs.effect.as_ref().is_some_and(|current| current.id == id && Arc::ptr_eq(&opening, &current.opening))
+        };
+        let same_opening = is_current.clone();
+        let source = open.source;
+        let is_live = move |app: &VectorcraftApp| {
+            same_opening(app)
+                && app.session.documents().iter().any(|doc| Some((doc.uid, doc.reverts)) == source)
+                && app.dialogs().is_some_and(|dialogs| dialogs.with(|host| host.get_by_id::<HostedParamDialog>(id).is_some()))
+        };
+        pick_texture_while(app, Owner::Document, is_live, move |app, path, fields| {
+            if !is_current(app) {
+                return;
+            }
             let Some(dialogs) = app.dialogs() else { return };
             dialogs.with(|h| {
                 if let Some(d) = h.get_mut_by_id::<HostedParamDialog>(id) {
@@ -487,10 +616,19 @@ pub(super) fn pick_texture(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, PathBuf, [(&'static str, FieldValue); 2]) + 'static,
 ) {
+    pick_texture_while(app, owner, |_| true, then);
+}
+
+fn pick_texture_while(
+    app: &mut VectorcraftApp,
+    owner: Owner,
+    current: impl FnOnce(&VectorcraftApp) -> bool + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, PathBuf, [(&'static str, FieldValue); 2]) + 'static,
+) {
     use vectorcraft_engine::cmd::fileio;
     let rasters = fileio::FORMATS.iter().filter(|f| f.read && f.raster);
     let request = rasters.fold(PickRequest::open("texture"), |r, f| r.filter(f.label, fileio::read_extensions(f)));
-    file_asks::ask(app, request, owner, move |app: &mut VectorcraftApp, picked: Picked| {
+    file_asks::ask_while(app, request, owner, current, move |app: &mut VectorcraftApp, picked: Picked| {
         let Some(path) = picked.first_path() else { return Ok(Value::Null) };
         let bytes = match picked {
             Picked::Contents(mut files) if !files.is_empty() => files.swap_remove(0).1,
@@ -560,6 +698,39 @@ mod tests {
 
     fn steps(app: &VectorcraftApp) -> usize {
         app.session.doc().unwrap().history.undo.len()
+    }
+
+    #[test]
+    fn edit_and_add_new_still_open_after_an_idle_effect_prompt() {
+        for (choice, editing) in [("proceed", true), ("alternate", false)] {
+            let mut app = app();
+            let node = rect(&mut app, 10);
+            app.run("effect.apply", json!({"ids": [node], "effect": "distort.roughen", "item": null, "params": {"size": 19, "detail": 8}})).unwrap();
+            app.run("select.set", json!({"ids": [node]})).unwrap();
+            let undo = steps(&app);
+            assert_eq!(app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap(), json!({"pending": "effectExists"}));
+            let prompt = id(&app);
+            let ctx = app.ui_ctx.clone().unwrap();
+            let host = app.dialogs().unwrap();
+            for _ in 0..3 {
+                super::super::host::pump(&mut app, &ctx);
+                assert!(host.with(|h| h.get_by_id::<StandardPrompt>(prompt).is_some()));
+            }
+
+            host.with(|h| {
+                h.set_json_field(&ctx, prompt, "choice", json!(choice)).unwrap();
+                assert!(h.confirm_by_id(&ctx, prompt));
+            });
+            super::super::host::pump(&mut app, &ctx);
+            let open = app.effect_dialogs.effect.as_ref().expect("the accepted choice opens the effect options");
+            assert!(!open.asking);
+            assert_eq!(open.cx.editing, editing);
+            assert_eq!(open.index, editing.then_some(0));
+            if editing {
+                assert_eq!(number(&mut app, "size"), Some(19.0));
+            }
+            assert_eq!(steps(&app), undo, "choosing the options has not yet committed an edit");
+        }
     }
 
     /// An applied effect's dialog opened on a shared row of a mixed selection (`aligned`) edits
@@ -665,6 +836,77 @@ mod tests {
             ok(&mut app);
             let p = params(&app, node);
             assert_eq!((&p["texture"], &p["textureImage"]), (&json!("loaded"), &json!(stored)), "{effect}");
+        }
+    }
+
+    #[test]
+    fn a_delayed_texture_reply_only_reaches_the_effect_opening_that_requested_it() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        use craft::ui::testing::{Fixture, Room};
+        use vectorcraft_effects::pixel::TEXTURE_IMAGE;
+
+        let mut png = Vec::new();
+        let img: image::DynamicImage = image::RgbaImage::from_pixel(6, 4, image::Rgba([40, 60, 90, 255])).into();
+        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        for (reopen, switch_document) in [(true, false), (false, true), (false, false)] {
+            let mut app = app();
+            rect(&mut app, 10);
+            app.run("select.all", json!({})).unwrap();
+            let app = Rc::new(RefCell::new(app));
+            let shown = Rc::clone(&app);
+            let mut fixture = Fixture::new(move |ui| crate::tests::picks::dialogs(&mut shown.borrow_mut(), ui));
+            fixture.in_room(Room::Window);
+            let ctx = fixture.ctx().clone();
+            app.borrow_mut().ui_ctx = Some(ctx.clone());
+            let picker = crate::tests::picks::scripted(&mut app.borrow_mut());
+            let open = || app.borrow_mut().run("effect.dialog", json!({"effect": ROUGH_PASTELS})).unwrap();
+            open();
+            fixture.settle();
+            let browse = fixture.by_label("Browse…").expect("the Load Texture Browse button");
+            fixture.click(&browse).settle();
+            assert_eq!(picker.requests().len(), 1, "Browse requested a file");
+
+            if reopen || switch_document {
+                let dialog = id(&app.borrow());
+                assert!(app.borrow().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, dialog)));
+            }
+            if switch_document {
+                let mut app = app.borrow_mut();
+                let original = app.session.active().unwrap().uid;
+                // The reply arrives before the host pump has cleared the closed effect's app record.
+                app.session.execute("file.new", &json!({"width": 300, "height": 300})).unwrap();
+                let active = app.session.active().unwrap().uid;
+                assert_ne!(active, original, "a different document is active");
+                let status = app.ui.status.clone();
+                picker.answer_contents(&[("invalid.png", b"not an image")]);
+                crate::file_asks::poll(&mut app);
+                assert_eq!(app.session.active().unwrap().uid, active, "a stale reply cannot switch documents");
+                assert_eq!(app.ui.status, status, "a stale reply cannot report a texture error");
+                continue;
+            }
+            if reopen {
+                fixture.settle();
+                open();
+                fixture.settle();
+            }
+            let current = || {
+                let app = app.borrow();
+                fields(&app, id(&app))
+            };
+            let before = current();
+            picker.answer_contents(&[("texture.png", &png)]);
+            crate::file_asks::poll(&mut app.borrow_mut());
+            fixture.settle();
+            let after = current();
+            if reopen {
+                assert_eq!(after.text("texture"), before.text("texture"), "a reopened effect keeps its own texture choice");
+                assert_eq!(after.text(TEXTURE_IMAGE), before.text(TEXTURE_IMAGE), "the previous effect's image is absent");
+            } else {
+                assert_eq!(after.text("texture"), Some("loaded"), "the originating effect loads the picked texture");
+                assert!(after.text(TEXTURE_IMAGE).and_then(vectorcraft_effects::pixel::texture).is_some());
+            }
         }
     }
 
@@ -782,5 +1024,175 @@ mod tests {
         set(&mut app, "centerX", json!(0.5));
         ok(&mut app);
         assert_eq!(params(&app, node)["centerX"].as_f64(), Some(0.5));
+    }
+
+    fn standalone_effect_source(app: &mut VectorcraftApp) {
+        app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
+        set(app, "size", json!(16.0));
+        set(app, "preview", json!(true));
+    }
+
+    fn effect_frame(app: &mut VectorcraftApp) {
+        let ctx = app.ui_ctx.clone().unwrap();
+        super::super::host::pump(app, &ctx);
+    }
+
+    #[test]
+    fn old_effect_approval_does_not_answer_a_new_edit_or_add_question() {
+        let mut app = app();
+        let first = rect(&mut app, 10);
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let second = rect(&mut app, 80);
+        app.run("effect.apply", json!({"ids": [second], "effect": "distort.roughen", "params": {"size": 19, "detail": 8}})).unwrap();
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+
+        app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap();
+        set(&mut app, "size", json!(16.0));
+        let old_id = id(&app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        assert!(!host.with(|h| h.confirm_by_id(&ctx, old_id)));
+        assert_eq!(host.with(|h| h.held_state(old_id)), Some(craft::ui::dialog::HeldOk::Waiting));
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        let undo = steps(&app);
+        assert_eq!(app.run("effect.dialog", json!({"effect": "distort.roughen"})).unwrap(), json!({"pending": "effectExists"}));
+        let question = id(&app);
+        assert_ne!(question, old_id);
+        effect_frame(&mut app);
+        assert_eq!(app.session.active().unwrap().doc, before, "old approval leaves the second drawing intact");
+        assert_eq!(steps(&app), undo);
+        let current = app.effect_dialogs.effect.as_ref().expect("the new question still has its opening");
+        assert_eq!(current.id, question);
+        assert!(current.asking);
+
+        host.with(|h| {
+            h.set_json_field(&ctx, question, "choice", json!("proceed")).unwrap();
+            assert!(h.confirm_by_id(&ctx, question));
+        });
+        effect_frame(&mut app);
+        set(&mut app, "size", json!(28.0));
+        ok(&mut app);
+        assert_eq!(params(&app, second)["size"], 28.0);
+        assert_eq!(steps(&app), undo + 1);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(first)).unwrap().appearance.effects.is_empty());
+    }
+
+    #[test]
+    fn standalone_effect_preview_stays_with_the_opening_drawing() {
+        let mut app = app();
+        let original = rect(&mut app, 10);
+        standalone_effect_source(&mut app);
+        effect_frame(&mut app);
+        assert_eq!(params(&app, original)["size"], 16.0);
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        rect(&mut app, 80);
+        let other = app.session.active().unwrap().doc.clone();
+        effect_frame(&mut app);
+        assert!(app.session.active().unwrap().doc == other, "effect preview reached the other drawing");
+        assert!(!app.session.in_interaction());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        effect_frame(&mut app);
+        assert_eq!(params(&app, original)["size"], 16.0, "preview resumes on the opening drawing");
+    }
+
+    #[test]
+    fn standalone_effect_ok_can_be_retried_on_the_opening_drawing() {
+        let mut app = app();
+        let original = rect(&mut app, 10);
+        standalone_effect_source(&mut app);
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        rect(&mut app, 80);
+        let before = app.session.active().unwrap().doc.clone();
+        let history = steps(&app);
+        ok(&mut app);
+        assert!(app.session.active().unwrap().doc == before, "effect OK reached the other drawing");
+        assert_eq!(steps(&app), history);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let history = steps(&app);
+        ok(&mut app);
+        assert_eq!(params(&app, original)["size"], 16.0);
+        assert_eq!(steps(&app), history + 1);
+    }
+
+    #[test]
+    fn standalone_effect_cancel_preserves_the_other_drawings_edit() {
+        let mut app = app();
+        rect(&mut app, 10);
+        standalone_effect_source(&mut app);
+        effect_frame(&mut app);
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        rect(&mut app, 80);
+        app.session.begin_interaction("Other drawing's edit").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00aa00"})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id(&app));
+        assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id)));
+        effect_frame(&mut app);
+        assert!(app.session.in_interaction(), "effect Cancel ended the other drawing's edit");
+        assert!(app.session.active().unwrap().doc == before);
+    }
+
+    #[test]
+    fn standalone_effect_cancel_preserves_a_replaced_preview_in_the_same_drawing() {
+        let mut app = app();
+        rect(&mut app, 10);
+        standalone_effect_source(&mut app);
+        effect_frame(&mut app);
+        app.session.preview("paint.setFill", &json!({"color": "#00aa00"})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), id(&app));
+        assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id)));
+        effect_frame(&mut app);
+        assert!(app.session.in_interaction(), "effect Cancel ended a different preview on the same interaction");
+        assert!(app.session.active().unwrap().doc == before);
+    }
+
+    #[test]
+    fn standalone_effect_replacement_keeps_its_own_preview() {
+        let mut app = app();
+        let node = rect(&mut app, 10);
+        standalone_effect_source(&mut app);
+        effect_frame(&mut app);
+        app.run("effect.dialog", json!({"effect": "distort.zigZag"})).unwrap();
+        set(&mut app, "size", json!(12.0));
+        set(&mut app, "preview", json!(true));
+        effect_frame(&mut app);
+        assert!(app.effect_dialogs.effect.is_some(), "a replaced dialog's Cancel removed the new opening");
+        assert_eq!(params(&app, node)["size"], 12.0);
+        ok(&mut app);
+        assert_eq!(params(&app, node)["size"], 12.0);
+    }
+
+    #[test]
+    fn standalone_effect_ok_cannot_change_the_reloaded_drawing() {
+        let mut app = app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let folder = vectorcraft_testkit::TempDir::new("effect-opening-revert");
+        let path = folder.join("drawing.vectorcraft");
+        let original = rect(&mut app, 10);
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        rect(&mut app, 80);
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        let source = app.session.active().unwrap();
+        let (uid, generation) = (source.uid, source.reverts);
+        standalone_effect_source(&mut app);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let reloaded = app.session.active().unwrap();
+        assert_eq!(reloaded.uid, uid);
+        assert_ne!(reloaded.reverts, generation);
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        let history = steps(&app);
+        ok(&mut app);
+        assert!(app.session.active().unwrap().doc == before, "effect OK reached the reloaded drawing");
+        assert_eq!(steps(&app), history);
+        standalone_effect_source(&mut app);
+        ok(&mut app);
+        assert_eq!(params(&app, original)["size"], 16.0, "a fresh opening applies to the restored drawing");
     }
 }

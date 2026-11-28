@@ -43,6 +43,17 @@ fn partial(a: &[u8]) -> usize {
     a.iter().filter(|v| **v > 0 && **v < 255).count()
 }
 
+#[test]
+fn a_plain_patch_defers_frame_sensitive_type_edges() {
+    let mut renderer = Renderer::new();
+    renderer.threads = 0;
+    let opts = RenderOptions::default();
+    let sharp = page(TypeAntiAlias::Sharp, None);
+    let crisp = page(TypeAntiAlias::Crisp, None);
+    assert!(renderer.render_plain_patch(&sharp, W, H, Affine::IDENTITY, &opts).is_some());
+    assert!(renderer.render_plain_patch(&crisp, W, H, Affine::IDENTITY, &opts).is_none());
+}
+
 /// The first pixels of `drawn` (type drawn with `m`) that are not the share `edge_coverage` gives
 /// the same pixel of `sharp` (the type drawn with Sharp), within a step of rounding: (pixel,
 /// Sharp, drawn).

@@ -41,6 +41,12 @@ fn state_id() -> egui::Id {
     egui::Id::unique("custom-dictionary-words")
 }
 
+#[derive(Clone)]
+struct Draft {
+    original: Vec<String>,
+    words: Vec<String>,
+}
+
 /// The custom dictionary's words.
 fn dictionary(app: &mut VectorcraftApp) -> Result<Vec<String>, String> {
     let words = app.run(COMMAND, json!({})).map_err(|e| e.to_string())?;
@@ -65,7 +71,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     ];
     let dialog = HostedListManager::new(COMMAND, tl!("Edit Custom Dictionary"), tl!("Entry:"), actions).entries(entries(&words)).renames(WORD);
     dialogs.with(|host| host.open(dialog));
-    ctx.data_mut(|data| data.insert_temp(state_id(), words));
+    ctx.data_mut(|data| data.insert_temp(state_id(), Draft { original: words.clone(), words }));
     Ok(Value::Null)
 }
 
@@ -79,7 +85,8 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, choice: &ListManagerChoi
     if choice.action == DONE {
         return save(app, ctx);
     }
-    let Some(mut words) = ctx.data(|data| data.get_temp::<Vec<String>>(state_id())) else { return };
+    let Some(mut draft) = ctx.data(|data| data.get_temp::<Draft>(state_id())) else { return };
+    let words = &mut draft.words;
     match (choice.action.as_str(), choice.entry.as_deref()) {
         (ADD, _) => match custom_word(&choice.name) {
             Some(word) => words.push(word),
@@ -100,24 +107,20 @@ fn apply(app: &mut VectorcraftApp, ctx: &egui::Context, choice: &ListManagerChoi
     if let Some(dialogs) = app.dialogs() {
         dialogs.with(|host| {
             if let Some(list) = host.get_dyn_mut(id()).and_then(|d| d.downcast_mut::<HostedListManager>()) {
-                list.set_entries(entries(&words));
+                list.set_entries(entries(words));
             }
         });
     }
-    ctx.data_mut(|data| data.insert_temp(state_id(), words));
+    ctx.data_mut(|data| data.insert_temp(state_id(), draft));
 }
 
 /// Done: deletes the words no longer in the list and adds the new ones in one
 /// `text.spelling.editDictionary`, saved once. When it can't be saved, none of it is kept: the
 /// dialog stays open with the error, its list as edited, and Cancel leaves the dictionary as it was.
 fn save(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(words) = ctx.data(|data| data.get_temp::<Vec<String>>(state_id())) else { return };
-    let orig = match dictionary(app) {
-        Ok(orig) => orig,
-        Err(e) => return app.status(e),
-    };
-    let remove: Vec<&String> = orig.iter().filter(|w| !words.contains(w)).collect();
-    let add: Vec<&String> = words.iter().filter(|w| !orig.contains(w)).collect();
+    let Some(Draft { original, words }) = ctx.data(|data| data.get_temp::<Draft>(state_id())) else { return };
+    let remove: Vec<&String> = original.iter().filter(|w| words.binary_search(w).is_err()).collect();
+    let add: Vec<&String> = words.iter().filter(|w| original.binary_search(w).is_err()).collect();
     match app.run(EDIT, json!({ "remove": remove, "add": add })) {
         Ok(_) => {
             if let Some(dialogs) = app.dialogs() {
@@ -136,8 +139,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if let Some(choice) = dialogs.with(|host| host.get_mut_by_id::<HostedListManager>(id()).and_then(HostedListManager::take_choice)) {
         apply(app, ctx, &choice);
     }
-    if dialogs.with(|host| host.take_by_id::<HostedListManager>(id())).is_some() {
-        ctx.data_mut(|data| data.remove::<Vec<String>>(state_id()));
+    if dialogs.with(|host| host.take_by_id::<HostedListManager>(id()).is_some() && host.get_by_id::<HostedListManager>(id()).is_none()) {
+        ctx.data_mut(|data| data.remove::<Draft>(state_id()));
     }
 }
 
@@ -190,7 +193,7 @@ mod tests {
     /// The dialog's list, of `mine` (other tests may have their words in the dictionary meanwhile).
     fn words(app: &VectorcraftApp, mine: &[&str]) -> Vec<String> {
         let ctx = app.ui_ctx.clone().expect("a window");
-        let all = ctx.data(|data| data.get_temp::<Vec<String>>(super::state_id())).unwrap_or_default();
+        let all = ctx.data(|data| data.get_temp::<super::Draft>(super::state_id())).map(|draft| draft.words).unwrap_or_default();
         all.into_iter().filter(|w| mine.contains(&w.as_str())).collect()
     }
 
@@ -233,6 +236,31 @@ mod tests {
         let mut app = p.app();
         assert!(!has(&mut app, A) && has(&mut app, B) && has(&mut app, C));
         forget(&mut app, &[A, B, C]);
+    }
+
+    #[test]
+    fn done_preserves_dictionary_changes_made_after_opening() {
+        let _dictionary = crate::testing::custom_dictionary();
+        const KEPT: &str = "zqvdictoutsideadd";
+        const REMOVED: &str = "zqvdictoutsideremove";
+        let mut app = app();
+        forget(&mut app, &[A, B, KEPT, REMOVED]);
+        for word in [A, REMOVED] {
+            app.run("text.spelling.addWord", json!({"word": word})).unwrap();
+        }
+        let mut p = Panel::new(app, draw);
+        super::open(&mut p.app()).unwrap();
+        p.app().run("text.spelling.addWord", json!({"word": KEPT})).unwrap();
+        p.app().run("text.spelling.removeWord", json!({"word": REMOVED})).unwrap();
+        p.click(A);
+        p.click("Delete");
+        enter(&mut p, B);
+        p.click("Add");
+        p.click("Done");
+        let mut app = p.app();
+        let final_words = [A, B, KEPT, REMOVED].map(|word| has(&mut app, word));
+        forget(&mut app, &[A, B, KEPT, REMOVED]);
+        assert_eq!(final_words, [false, true, true, false]);
     }
 
     /// Done that can't be saved keeps none of the edits: the dialog stays open and Cancel leaves the

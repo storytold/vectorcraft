@@ -520,6 +520,33 @@ fn with_active_puts_settings_in_place_on_this_thread_only() {
 }
 
 #[test]
+fn with_active_keeps_its_working_settings_while_another_thread_sets_them() {
+    let before = working_settings();
+    let p3 = Arc::new(Cms::new(&ColorSettings { rgb: DISPLAY_P3.into(), cmyk: DEVICE_CMYK.into(), ..Default::default() }).unwrap());
+    let (inside, after_other, other) = with_active(p3.clone(), || {
+        let inside = working();
+        // The same settings again, so other tests in this binary see the same values.
+        let again = before.clone();
+        let other = std::thread::spawn(move || {
+            set_active(&again).unwrap();
+            working()
+        })
+        .join()
+        .unwrap();
+        (inside, working(), other)
+    });
+    assert!(Arc::ptr_eq(&inside, &p3), "settings made from no others are their own working settings");
+    assert!(Arc::ptr_eq(&after_other, &p3), "a set_active on another thread leaves this thread's working settings");
+    assert!(!Arc::ptr_eq(&other, &p3), "the other thread has the settings it set");
+    assert_eq!(working_settings(), before, "the working settings come back after");
+    // A document's context keeps the working settings it was made from.
+    let doc = for_document(Some(DISPLAY_P3), None);
+    let (active, working) = with_active(doc, || (active_settings(), working_settings()));
+    assert_eq!(active.rgb, DISPLAY_P3, "the document's profile is active");
+    assert_eq!(working, before, "the working RGB space stays the working one");
+}
+
+#[test]
 fn a_document_gets_the_same_context_for_the_same_profiles() {
     // Other tests load profiles meanwhile, and a load makes the contexts again: try until one pair
     // of calls sees none.
