@@ -666,9 +666,10 @@ fn open_takes_the_page_and_crop_box_of_its_options() {
 }
 
 /// An SVG export to a name that ends with `.svgz` writes a compressed file at that name, without
-/// options and with `compressed` false; a name without the suffix stays a plain SVG.
+/// options and with `compressed` false; a name without the suffix stays a plain SVG. `cssProperties`
+/// picks how the style properties are written.
 #[test]
-fn export_file_keeps_an_svgz_name_compressed() {
+fn export_file_keeps_an_svgz_name_compressed_and_applies_css_properties() {
     let base = folder("svgz");
     let mut s = session(&base);
     let dir = data_folder(&mut s, &base);
@@ -682,14 +683,19 @@ fn export_file_keeps_an_svgz_name_compressed() {
              d.exportFile(new File(dir + '/logo.svgz'), ExportType.SVG);\n\
              var o = new ExportOptionsSVG(); o.compressed = false;\n\
              d.exportFile(new File(dir + '/plain.SVGZ'), ExportType.SVG, o);\n\
-             d.exportFile(new File(dir + '/page'), ExportType.SVG);"
+             d.exportFile(new File(dir + '/page'), ExportType.SVG);\n\
+             var a = new ExportOptionsSVG(); a.cssProperties = SVGCSSPropertyLocation.PRESENTATIONATTRIBUTES;\n\
+             d.exportFile(new File(dir + '/attributes'), ExportType.SVG, a);"
         ),
     );
     for name in ["logo.svgz", "plain.SVGZ"] {
         assert!(std::fs::read(dir.join(name)).unwrap().starts_with(&[0x1f, 0x8b]), "{name}");
         assert!(!dir.join(format!("{name}.svg")).exists(), "{name}");
     }
-    assert!(std::fs::read_to_string(dir.join("page.svg")).unwrap().contains("<svg"));
+    let page = std::fs::read_to_string(dir.join("page.svg")).unwrap();
+    assert!(page.contains("style=\"fill:"), "a new options object's cssProperties is STYLEATTRIBUTES: {page}");
+    let attributes = std::fs::read_to_string(dir.join("attributes.svg")).unwrap();
+    assert!(attributes.contains(" fill=\"") && !attributes.contains("style=\"fill:"), "{attributes}");
 }
 
 /// A path whose real path has no UTF-8 form, through a link to a folder of such a name, is refused

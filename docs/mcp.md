@@ -2900,7 +2900,7 @@ other files through `$`:
   https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/, https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/),
   with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, from 1 to
   776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
-  `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
+  `coordinatePrecision` (1 to 7), `cssProperties`, `embedRasterImages`, `compressed`, `preserveEditability` and
   `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
   `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
   `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
@@ -2911,13 +2911,13 @@ other files through `$`:
   VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
   command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
   document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
-  read-only`; a file a `File` object holds open for writing throws `Script file is open for writing` on `saveAs`
+  read-only`; a path whose real path has no UTF-8 form throws `Script file path is not valid Unicode`; a file a `File` object holds open for writing throws `Script file is open for writing` on `saveAs`
   and `exportFile`, and `Script file access denied` when a command would write it besides the file named; and the
   files a command reads or writes besides the one named, such as an SVG's linked files, are
   read and written only where the script's folders allow. `userInteractionLevel` does not change what a command
   does or where it may read and write, since a command a script runs never shows a dialog. `exportFile` adds the
   format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with
-  `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
+  `compressed`); an SVG to a name that ends with `.svgz` is compressed whatever `compressed` holds. It writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
   visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
   when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
   an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`. A property the help
@@ -2972,7 +2972,7 @@ other files through `$`:
   strings such as `"ExportForScreensType.SE_PNG24"`.
   VectorCraft's own rules: the folder is checked as a `File` opened for writing in it is checked, before the command
   runs: a folder outside the script's folders throws `Script file access denied`, and a file throws `Script folder is
-  a file`. The command writes only where the script's folders allow. The files go into the folder without
+  a file`. A volume root (`/`, `E:\`) is taken when the script's folders and the automation write roots hold it. The command writes only where the script's folders allow. The files go into the folder without
   sub-folders, each named `<fileNamePrefix><name><suffix>.<extension>` as `document.exportForScreens` names them (`@2x`
   after a raster file at twice the size); a character a file name may not hold, `/` and `\` included, is written as
   `-` in the prefix. The export keeps its settings in the document, as an export from the dialog does. The artboards,

@@ -538,6 +538,16 @@ fn svg_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Res
         "compressed" => {
             p.insert("_svgz".into(), json!(boolean(d, &what)?));
         }
+        "cssProperties" => {
+            let locations = ["ENTITIES", "PRESENTATIONATTRIBUTES", "STYLEATTRIBUTES", "STYLEELEMENTS"];
+            let styling = match member(d, "SVGCSSPropertyLocation", &locations, &what)? {
+                "ENTITIES" => "entities",
+                "PRESENTATIONATTRIBUTES" => "presentation",
+                "STYLEELEMENTS" => "css",
+                _ => "style",
+            };
+            p.insert("styling".into(), json!(styling));
+        }
         "preserveEditability" => {
             p.insert("preserveEditing".into(), json!(boolean(d, &what)?));
         }
@@ -551,7 +561,6 @@ fn svg_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Res
 
 const SVG_KEPT: &[(&str, Default)] = &[
     ("artboardRange", Default::Text("")),
-    ("cssProperties", Default::Member("SVGCSSPropertyLocation", "STYLEATTRIBUTES")),
     ("documentEncoding", Default::Member("SVGDocumentEncoding", "ASCII")),
     ("DTD", Default::Member("SVGDTDVersion", "SVG1_1")),
     ("fontSubsetting", Default::Member("SVGFontSubsetting", "ALLGLYPHS")),
@@ -569,6 +578,7 @@ fn svg_starts() -> Vec<(&'static str, Data)> {
     vec![
         ("compressed", Data::Bool(false)),
         ("coordinatePrecision", num(3.0)),
+        ("cssProperties", text("SVGCSSPropertyLocation.STYLEATTRIBUTES")),
         ("embedRasterImages", Data::Bool(false)),
         ("includeVariablesAndDatasets", Data::Bool(false)),
         ("preserveEditability", Data::Bool(false)),
