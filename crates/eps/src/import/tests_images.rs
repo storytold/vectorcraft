@@ -552,6 +552,61 @@ fn tiff_predicted_rows_at_every_depth() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
+/// Without `Interpolate` (PLRM 3rd ed. §4.10: false by default) an image enlarged to coarse
+/// pixels is drawn with hard pixels, as PostScript paints it; with `Interpolate true`, or finer
+/// pixels (a photo), it is smoothed as placed images are. A coarse CMYK image's opacity mask
+/// keeps the same hard edges.
+#[test]
+fn coarse_images_without_interpolate_draw_hard_pixels() {
+    let pixelated = |program: &str| {
+        let r = read(program);
+        let n = first_image(&r);
+        let mask = n.extras().mask.as_ref().map(|m| m.art.extras().pixelated);
+        (n.extras().pixelated, mask)
+    };
+    let dict = |extra: &str, scale: f64| {
+        format!(
+            "{scale} {scale} scale /DeviceGray setcolorspace << /ImageType 1 /Width 2 /Height 2 /BitsPerComponent 8 {extra} \
+             /Decode [0 1] /ImageMatrix [2 0 0 -2 0 2] /DataSource <00ff ff00> >> image"
+        )
+    };
+    // 2 × 2 pixels over 100 points: 50 points a pixel.
+    assert_eq!(pixelated(&dict("", 100.0)), (true, None));
+    assert_eq!(pixelated(&dict("/Interpolate false", 100.0)), (true, None));
+    assert_eq!(pixelated(&dict("/Interpolate true", 100.0)), (false, None));
+    assert_eq!(pixelated("100 100 scale 2 2 1 [2 0 0 -2 0 2] {<40c0>} image"), (true, None));
+    assert_eq!(pixelated("100 100 scale 2 2 true [2 0 0 -2 0 2] {<40c0>} imagemask"), (true, None));
+    // 2 × 2 pixels over 2 points: finer than the document.
+    assert_eq!(pixelated(&dict("", 2.0)), (false, None));
+    // At exactly 2 points a pixel it is coarse; just under, or coarse one way only, it isn't.
+    assert_eq!(pixelated(&dict("", 4.0)), (true, None));
+    assert_eq!(pixelated(&dict("/Interpolate true", 4.0)), (false, None));
+    assert_eq!(pixelated("4 4 scale 2 2 true [2 0 0 -2 0 2] {<40c0>} imagemask"), (true, None));
+    assert_eq!(pixelated(&dict("", 3.98)), (false, None));
+    assert_eq!(pixelated(&dict("", 4.0).replacen("4 4 scale", "100 3.98 scale", 1)), (false, None));
+    // A CMYK image with transparent pixels: its mask too.
+    let cmyk = "100 100 scale /DeviceCMYK setcolorspace << /ImageType 4 /Width 2 /Height 1 /BitsPerComponent 8 \
+                /MaskColor [0 0 0 0] /Decode [0 1 0 1 0 1 0 1] /ImageMatrix [2 0 0 -1 0 1] /DataSource <00000000 ff000000> >> image";
+    assert_eq!(pixelated(cmyk), (true, Some(true)));
+}
+
+/// A coarse image of a legacy `.ai` VectorCraft wrote (its prolog the writer's procedure set, which
+/// paints images without `Interpolate`) is smoothed, as the image it was written from is; the same
+/// program under another prolog draws hard pixels.
+#[test]
+fn coarse_images_of_a_file_vectorcraft_wrote_stay_smooth() {
+    let file = |resources: &str| {
+        format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n{resources}%%EndComments\n\
+             100 100 scale 2 2 8 [2 0 0 -2 0 2] {{<00ffff00>}} image\nshowpage\n%%EOF\n"
+        )
+    };
+    let pixelated = |resources: &str| first_image(&import(file(resources).as_bytes()).unwrap()).extras().pixelated;
+    assert!(!pixelated(&format!("%%DocumentSuppliedResources: procset {}\n", crate::legacy_ai::PROCSET)));
+    assert!(pixelated("%%DocumentSuppliedResources: procset Another_Prolog 1.0 0\n"));
+    assert!(pixelated(""));
+}
+
 /// An image over the reader's pixel cap is read at a lower resolution, or when its data is too
 /// large to hold left out with its data skipped; either way the program goes on after the data,
 /// as reading the whole image would leave it: the art after it is read, not the data as

@@ -16,6 +16,8 @@ pub(super) struct Spec {
     pub(super) mask_color: Option<Vec<u32>>,
     /// An image mask: whether its 1 bits paint.
     pub(super) stencil: Option<bool>,
+    /// `Interpolate`: the image may be smoothed where it is enlarged.
+    pub(super) interpolate: bool,
 }
 
 impl Spec {
@@ -85,6 +87,8 @@ pub(super) struct Pixels {
     /// A CMYK image's ink amounts: C, M, Y and K bytes a pixel, 0 is no ink.
     pub(super) inks: Option<Vec<u8>>,
     pub(super) matrix: Affine,
+    /// `Interpolate` ([`Spec::interpolate`]).
+    pub(super) interpolate: bool,
 }
 
 pub(super) fn source(o: &Obj) -> Res<Source> {
