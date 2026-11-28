@@ -22,6 +22,15 @@ pub struct Session {
     previous_unclean: bool,
 }
 
+impl Drop for Session {
+    /// Frees the lease when the session ends. A child process that any thread starts holds a copy of
+    /// the lease's handle until it runs its program, and the lock is only freed by closing every copy
+    /// or by unlocking.
+    fn drop(&mut self) {
+        let _ = self._lease.unlock();
+    }
+}
+
 fn regular_or_missing(path: &Path) -> io::Result<bool> {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_file() && !metadata.file_type().is_symlink() => Ok(true),
@@ -256,6 +265,21 @@ mod tests {
         assert!(!begin(Some(&fixture.0), "clean", None).unwrap());
         finish_after(true);
         assert!(!fixture.0.join(RECORD).exists(), "a controlled return clears its record");
+    }
+
+    #[test]
+    fn an_ended_session_frees_the_lease_while_a_copy_of_its_handle_is_open() {
+        let fixture = Fixture::new();
+        let first = Session::begin(Some(&fixture.0), "first", None).unwrap().unwrap();
+        // A child process that is starting holds such a copy.
+        let first_copy = first._lease.try_clone().unwrap();
+        first.complete().unwrap();
+        let second = Session::begin(Some(&fixture.0), "second", None).unwrap();
+        assert!(second.is_some(), "a completed session frees the lease");
+        let second_copy = second.as_ref().map(|session| session._lease.try_clone().unwrap());
+        drop(second);
+        assert!(Session::begin(Some(&fixture.0), "third", None).unwrap().is_some(), "a dropped session frees the lease");
+        drop((first_copy, second_copy));
     }
 
     #[test]
