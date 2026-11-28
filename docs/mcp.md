@@ -2819,7 +2819,21 @@ other files through `$`:
   `DocumentPreviewMode.PixelPreview` throws an error that says it is not available yet, and no document is made.
   `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
   `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
-  destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  destination)`, `pageItems`, `selection` and `views`. `views` (https://ai-scripting.docsforadobe.dev/jsobjref/Views/)
+  lists each window, tab, or tiled pane the desktop app has drawn for the document, in view-number order. Each view
+  uses the size of the area it last drew the document in. A document the app has not drawn yet, and every document without a window (headless),
+  has none. `views` has `length`, `[i]` and `index(i)`. The view (https://ai-scripting.docsforadobe.dev/jsobjref/View/) has `typename`,
+  `parent`, `bounds` (`[left, top, right, bottom]` of the part of the document the canvas shows, the box around a
+  rotated canvas), `centerPoint`, `zoom` and `screenMode`, in the run's coordinate system. `zoom` is 1 at the window's
+  displayed 100%. With Display Print Size at 100% Zoom off, the range is 0.0313 to 640 (VectorCraft's own range).
+  With it enabled, the app divides these limits by the window's scale at 100% (the screen points per inch used for
+  that window divided by 72). A zoom outside that range, or a `centerPoint` outside the canvas after
+  coordinate conversion, throws a `RangeError`. A `centerPoint` that is not two numbers throws a `TypeError`. `screenMode` reads Normal as
+  `ScreenMode.MULTIWINDOW`, Full Screen Mode with Menu Bar as `ScreenMode.DESKTOP` and Full Screen Mode and
+  Presentation Mode as `ScreenMode.FULLSCREEN` (VectorCraft's own mapping); the screen mode is the app's, so setting it
+  on one view sets it on every view. Changing a view runs no command, adds
+  no undo step and stays when the run fails. A view object keeps its target when windows are renumbered. While its
+  document remains open, closing its window makes it throw `Stale view`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
   lists every object in the document's layers, the objects inside groups, compound paths, blends, envelopes, repeats
   and intertwines included, and has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either
   collection is true for each

@@ -59,6 +59,8 @@ pub struct RearrangePlacement {
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
+    #[serde(skip, default = "next_view_id")]
+    pub(crate) runtime_id: u64,
     /// The zoom (1.0 = 100%): points of the screen per document point, counted before
     /// Preferences › User Interface › UI Scaling, which scales the interface and not the art.
     /// [`Self::canvas`] gives the zoom in the interface's points.
@@ -107,6 +109,7 @@ pub struct View {
 impl Default for View {
     fn default() -> Self {
         Self {
+            runtime_id: next_view_id(),
             zoom: 1.0,
             center: Point::new(306.0, 396.0),
             fitted: false,
@@ -123,7 +126,16 @@ impl Default for View {
     }
 }
 
+fn next_view_id() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 impl View {
+    pub(crate) fn copy_for_window(&self) -> Self {
+        Self { runtime_id: next_view_id(), ..*self }
+    }
+
     /// The view a document opens at: the one it was saved with, else fitted on first display, on
     /// the artboard the opened file names as its active one ([`vectorcraft_doc::Document::opened_artboard`]),
     /// else the first.

@@ -4,6 +4,7 @@
 //! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
 
 use serde_json::{Value, json};
+use vectorcraft_engine::WindowView;
 
 use crate::VectorcraftApp;
 use crate::dialogs::script_run::{self, GrowthQuestion, ScriptFiles, ScriptNotice};
@@ -24,7 +25,10 @@ pub fn poll(app: &mut VectorcraftApp) {
     }
     let name = app.session.script_name().unwrap_or_default();
     let startup = app.session.startup_script_running();
-    let Some(result) = app.session.script_pump() else {
+    let shared = share_views(app);
+    let pumped = app.session.script_pump();
+    take_views(app, &shared);
+    let Some(result) = pumped else {
         // A pump that started the next queued run shows the runs before it that could not start
         // in this frame: with none left running, the app may draw no next one.
         startup_failures(app);
@@ -45,6 +49,54 @@ pub fn poll(app: &mut VectorcraftApp) {
     }
     startup_failures(app);
     app.sync_views();
+}
+
+/// The running script reads each drawn window in `Document.views`, with its last drawn area.
+/// The returned list contains those windows for [`take_views`].
+pub(crate) fn share_views(app: &mut VectorcraftApp) -> Vec<((u64, u64), WindowView)> {
+    // The view's zoom counts screen points before UI scaling; its area is in the interface's points.
+    let scaling = f64::from(app.ui_scaling());
+    let mode = app.ui.screen_mode;
+    let shared: Vec<((u64, u64), WindowView)> = crate::doc_windows::windows(app)
+        .into_iter()
+        .filter_map(|window| {
+            let uid = app.session.documents().get(window.0)?.uid;
+            let v = crate::doc_windows::view(app, window)?;
+            if !v.fitted || v.rect.width() <= 0.0 || v.rect.height() <= 0.0 {
+                return None;
+            }
+            let print = app.print_ppi_of(Some(window));
+            let baseline = crate::state::zoom_baseline(print);
+            let size = [f64::from(v.rect.width()) * scaling / baseline, f64::from(v.rect.height()) * scaling / baseline];
+            let zoom = crate::state::zoom_display_percent(v.zoom, print) / 100.0;
+            Some(((uid, v.runtime_id), WindowView { center: v.center, zoom, zoom_baseline: baseline, rotation: v.rotation, size, screen_mode: mode }))
+        })
+        .collect();
+    app.session.window_views.clone_from(&shared);
+    shared
+}
+
+/// Applies the zoom, center and screen mode a script assigned to the views from [`share_views`].
+pub(crate) fn take_views(app: &mut VectorcraftApp, shared: &[((u64, u64), WindowView)]) {
+    let (min, max) = WindowView::ZOOM_RANGE;
+    for (key, before) in shared {
+        let Some(now) = app.session.window_views.iter().find(|(k, _)| k == key).map(|(_, v)| *v) else { continue };
+        if now == *before {
+            continue;
+        }
+        if let Some(v) = crate::doc_windows::view_by_id_mut(app, *key) {
+            if now.zoom != before.zoom {
+                v.zoom = (now.zoom * now.zoom_baseline).clamp(min, max);
+            }
+            v.center = now.center;
+        }
+    }
+    // The screen mode is the app's: a script that sets it on any view sets it on every view.
+    if let (Some((_, before)), Some((_, now))) = (shared.first(), app.session.window_views.first())
+        && now.screen_mode != before.screen_mode
+    {
+        app.ui.screen_mode = now.screen_mode.min(3);
+    }
 }
 
 /// Shows each run `script.startup.run` queued that could not start ([`add_notes`]), and once the

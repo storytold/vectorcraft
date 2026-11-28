@@ -81,7 +81,8 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
          DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
-         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= Tag Tags ZOrderMethod",
+         Documents ElementPlacement Layer PageItem PageItems RulerUnits ScreenMode selection selection= Tag Tags View Views \
+         ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -105,8 +106,12 @@ const INSIDE: &[(&str, &str)] = &[
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
          groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
          rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
-         typename views views= width",
+         typename views width",
     ),
+    ("Views.", "prototype"),
+    ("Views.prototype.", "constructor index length parent toString typename"),
+    ("View.", "prototype"),
+    ("View.prototype.", "bounds centerPoint centerPoint= constructor parent screenMode screenMode= toString typename zoom zoom="),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name toString typename"),
     ("PageItems.", "prototype"),
@@ -138,6 +143,7 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("ScreenMode.", "DESKTOP FULLSCREEN MULTIWINDOW"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
     // Variables and data sets. `importVariables` reads the library file it is given. `PageItem`'s
     // `visibilityVariable` is in its row above.
