@@ -56,7 +56,7 @@ fn single_file(plates: &[(&str, String)], extra: &str) -> Vec<u8> {
 }
 
 /// Cyan solid on the top row, PANTONE 185 C at 50% on the left column.
-fn two_plates() -> Vec<u8> {
+pub(crate) fn two_plates() -> Vec<u8> {
     single_file(
         &[("Cyan", plate_eps([0, 0, 255, 255])), ("PANTONE 185 C", plate_eps([127, 255, 127, 255]))],
         "%%DocumentCustomColors: (PANTONE 185 C)\n%%CMYKCustomColor: 0 .91 .76 0 (PANTONE 185 C)\n",

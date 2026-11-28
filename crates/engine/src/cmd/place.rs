@@ -655,7 +655,7 @@ fn at_param(p: &Value) -> Result<Option<Point>> {
 
 /// The transform that puts new art with the natural box `natural` where `old` is: an image's scale
 /// and rotation relative to its 100% size (its resolution's) and its centre are kept (with
-/// `image_xf`), also for an image alone in a clip group when the new art is an image, clipped by
+/// `image_xf`), also for an image alone in a clip group when the new art is a raster or DCS image, clipped by
 /// its file's clipping path or not (`new_image`); other objects keep their centre.
 fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool, new_image: bool) -> Affine {
     let image = replace_measured(d, old, new_image);
@@ -663,7 +663,7 @@ fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool, new_image
         let (sx, sy) = pt_per_px(d.images.get(&im.key).and_then(|b| fileio::ppi::resolution(&b.bytes)));
         let full = Affine::scale_non_uniform(sx, sy);
         let centre = full * Point::new(im.width as f64 / 2.0, im.height as f64 / 2.0);
-        if im.xf.determinant().abs() > 1e-12 {
+        if Homography::affine_is_invertible(im.xf) {
             return im.xf * full.inverse() * Affine::translate(centre - natural.center());
         }
     }
@@ -672,8 +672,8 @@ fn replace_xf(d: &Document, old: &Node, natural: Rect, image_xf: bool, new_image
 }
 
 /// The object [`replace_xf`] measures when Replace swaps `old`: an image alone in a clip group (as
-/// a PSD or PSB file's clipping path places it, [`fileio::file_clipped`]) when the new art is an
-/// image (`new_image`), except a DCS file's plates; else `old` itself.
+/// a PSD or PSB file's clipping path places it, [`fileio::file_clipped`]) when the new art is a
+/// raster or DCS image (`new_image`), except a DCS file's plates; else `old` itself.
 fn replace_measured<'a>(d: &Document, old: &'a Node, new_image: bool) -> &'a Node {
     match &old.kind {
         NodeKind::Group { children, clip: true } if new_image => match &children[..] {
@@ -704,7 +704,7 @@ fn distorted_replace(old: &Node, art: &Art) -> Option<(Affine, [Point; 4], Homog
         Art::Dcs(a) => (a.xf, a.img.width, a.img.height),
         _ => return None,
     };
-    if width == 0 || height == 0 || pixels.determinant().abs() <= 1e-12 {
+    if width == 0 || height == 0 || !Homography::affine_is_invertible(pixels) {
         return None;
     }
     let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width) / f64::from(width), f64::from(im.height) / f64::from(height));
@@ -725,7 +725,7 @@ fn with_corners(mut node: Node, q: [Point; 4]) -> Option<Node> {
             let [path, image] = &mut children[..] else { return None };
             let image = Arc::make_mut(image);
             let NodeKind::Image(im) = &image.kind else { return None };
-            if im.xf.determinant().abs() <= 1e-12 {
+            if !Homography::affine_is_invertible(im.xf) {
                 return None;
             }
             // The clipping path in the image's pixels, which its transform placed on the page.
@@ -905,10 +905,11 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
     // art is refused. Type, and any other object it measures, is placed by the bounds of what it
     // replaces, so a distorted image there is not refused.
     let mut distorted = None;
+    let new_image = matches!(loaded.art, Art::Image(..) | Art::Dcs(..));
     if let Some(o) = old_node
         && !is_text
     {
-        let image = replace_measured(&st.doc, o, matches!(loaded.art, Art::Image(..)));
+        let image = replace_measured(&st.doc, o, new_image);
         if image.is_distorted_image() {
             let fit = distorted_replace(image, &loaded.art).ok_or_else(|| super::xform::distorted_image_error(PLACE, image.id))?;
             distorted = Some((image.id, fit));
@@ -916,7 +917,7 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
     }
     let m = match (old_node, rect) {
         (Some(_), _) if let Some((_, (m, ..))) = distorted => m,
-        (Some(o), _) => replace_xf(&st.doc, o, natural, !is_text, matches!(loaded.art, Art::Image(..))),
+        (Some(o), _) => replace_xf(&st.doc, o, natural, !is_text, new_image),
         (None, Some(r)) => fit(natural, r),
         // Its artboard's bottom-left corner on the target's.
         (None, None) if let (Some(src), Some(to)) = (loaded.board, target) => Affine::translate((to.x0 - src.x0, to.y1 - src.y1)),
