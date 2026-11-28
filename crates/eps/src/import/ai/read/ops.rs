@@ -1763,6 +1763,14 @@ pub(crate) fn parse_art_style(section: &[u8], name: &str) -> Option<ParsedStyle>
     crate::import::ai::style::art_styles(section).remove(name).map(|style| ParsedStyle { style })
 }
 
+/// The color type takes from art style `parsed` when a character's fill or stroke names it (key 5
+/// of its paint, `ate`): a style of one paint whose paint is a color with a swatch, at its tint and
+/// linked to that swatch ([`crate::import::ai::style::ArtStyle::simple_color`]). `None` for any
+/// other style.
+pub(crate) fn parsed_type_color(parsed: &ParsedStyle) -> Option<&Paint> {
+    parsed.style.simple_color.as_ref().map(|(paint, _)| paint)
+}
+
 /// Art style `parsed` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`], with a
 /// style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads it on
 /// objects other than type. A stroke that names a brush is read with that brush's name, as [`styled`]

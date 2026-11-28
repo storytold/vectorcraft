@@ -155,7 +155,7 @@ pub use document::{
 };
 pub(crate) use document::{slot_frame, slot_of};
 use graph::Graph;
-pub(crate) use ops::{ParsedStyle, parse_art_style, parsed_moves_with, read_parsed_style, read_style_list};
+pub(crate) use ops::{ParsedStyle, parse_art_style, parsed_moves_with, parsed_type_color, read_parsed_style, read_style_list};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub(crate) use types::BLEND_BUDGET;
