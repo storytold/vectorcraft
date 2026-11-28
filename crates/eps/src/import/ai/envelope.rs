@@ -234,12 +234,12 @@ fn painted_outlines(outlines: &Node) -> Option<Rect> {
 }
 
 /// `n` with its paths, and the paths in its groups and compound paths, without their subpaths of
-/// one anchor (contours of zero length, which have no segment); a path with nothing else keeps
-/// them. `None` when nothing changes.
+/// one anchor (contours of zero length, which have no segment); a path with nothing else is left
+/// empty, with no bounds. `None` when nothing changes.
 fn without_zero_length_contours(n: &Node) -> Option<Node> {
     if let Some(path) = n.path_data() {
         let lone = |s: &vectorcraft_geom::SubPath| s.segment_count() == 0;
-        if !path.subpaths.iter().any(lone) || path.subpaths.iter().all(lone) {
+        if !path.subpaths.iter().any(lone) {
             return None;
         }
         let mut kept = n.clone();
@@ -1402,6 +1402,30 @@ mod tests {
         appearance.items.push(AppearanceItem::Stroke(stroke));
         let piece = Node::path(NodeId(1), PathData::from_bezpath(&bp), appearance);
         let outlines = Node::group(NodeId(2), vec![Arc::new(piece)]);
+        assert_eq!(painted_outlines(&outlines), Some(Rect::new(9.0, 9.0, 21.0, 21.0)));
+    }
+
+    /// A piece of type outlines that is only contours of zero length paints nothing either: a dot
+    /// piece with a round 2 point stroke beside a stroked square adds nothing to the square's box.
+    #[test]
+    fn a_piece_of_only_zero_length_contours_paints_nothing() {
+        let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+        (stroke.join, stroke.cap) = (LineJoin::Round, LineCap::Round);
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))));
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let mut square = BezPath::new();
+        square.move_to((10.0, 10.0));
+        square.line_to((20.0, 10.0));
+        square.line_to((20.0, 20.0));
+        square.line_to((10.0, 20.0));
+        square.close_path();
+        let mut dot = BezPath::new();
+        dot.move_to((50.0, 50.0));
+        dot.line_to((50.0, 50.0));
+        dot.close_path();
+        let pieces = [(1, square), (2, dot)].map(|(id, bp)| Arc::new(Node::path(NodeId(id), PathData::from_bezpath(&bp), appearance.clone())));
+        let outlines = Node::group(NodeId(3), pieces.to_vec());
         assert_eq!(painted_outlines(&outlines), Some(Rect::new(9.0, 9.0, 21.0, 21.0)));
     }
 
