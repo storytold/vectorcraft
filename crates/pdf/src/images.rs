@@ -700,11 +700,17 @@ pub(crate) fn recode(
     Recoded { image, warning: rule.instead, note, unconverted }
 }
 
+/// Whether coverage `cover` (one byte a pixel) only covers or doesn't, as a 1-bit image mask's
+/// does: what the Monochrome settings resample, and kept so.
+pub(crate) fn bilevel_coverage(cover: &[u8]) -> bool {
+    cover.iter().all(|v| *v == 0 || *v == 255)
+}
+
 /// A colorized image's coverage (one sample a pixel, `w` × `h`, see
 /// [`ImageBlob::coverage`]) placed `size` points wide and high, resampled as the Compression
 /// settings `c` ask for monochrome images (when every sample is 0 or 255) or grayscale ones.
 pub(crate) fn coverage_sized(w: u32, h: u32, cover: Vec<u8>, size: (f64, f64), c: &CompressionSettings) -> Option<(u32, u32, Vec<u8>)> {
-    let mono = cover.iter().all(|v| *v == 0 || *v == 255);
+    let mono = bilevel_coverage(&cover);
     let rule = rule(c, if mono { Kind::Mono } else { Kind::Gray });
     let to = sized(&rule, (w, h), size);
     if to == (w, h) {
