@@ -1862,6 +1862,8 @@ pub(crate) fn import_text_styles(src: &Document, d: &mut Document, chars: bool, 
     let clip = Clipboard::with_used(src, &used, &library, vec![]);
     let before = [&d.char_styles, &d.para_styles].map(|l| l.iter().map(|s| s.name.clone()).collect::<BTreeSet<_>>());
     let out = clip.import_used(d, &used, &SwatchChoices::default(), false)?;
+    // Graphs in the symbols added draw with the designs `d` kept, as pasted ones do.
+    crate::cmd::graph::redraw_symbols_with_designs(d, &out.added_symbols, &out.kept_designs);
     let mut placed: Vec<LoadedStyle> = vec![];
     for (para, r, list) in [(false, Res::CharStyle, &clip.char_styles), (true, Res::ParaStyle, &clip.para_styles)] {
         for s in list {
@@ -1895,6 +1897,8 @@ pub(crate) fn import_looks(
     let carrier = Node::path(vectorcraft_doc::NodeId(0), vectorcraft_geom::PathData::default(), look.clone());
     let clip = Clipboard::with_used(src, &used, &library, vec![carrier]);
     let out = clip.import_used(d, &used, &SwatchChoices::default(), false)?;
+    // Graphs in the symbols added draw with the designs `d` kept, as pasted ones do.
+    crate::cmd::graph::redraw_symbols_with_designs(d, &out.added_symbols, &out.kept_designs);
     let (mut look, mut attrs) = (look.clone(), attrs.clone());
     out.relink.appearance(&mut look);
     out.relink.attrs(&mut attrs);

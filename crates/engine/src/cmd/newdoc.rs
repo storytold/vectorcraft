@@ -63,7 +63,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Profile",
             [],
             None,
-            "{name: a category of file.newPresets} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first; under automation roots it needs write and read access to the file, and an error names the file by its file name outside the read roots → document.open's result",
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} open the category's New Document profile as a document to edit (File › Save keeps the changes for the next file.new); a category without a profile file gets the shipped profile written first; under automation roots it needs write and read access to the file, and an error names the file by its file name outside the read roots → document.open's result",
             always,
             edit_profile
         ),
@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reset Profile",
             [],
             None,
-            "{name: a category of file.newPresets} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open; under automation roots it needs write access to the file, and an error names the file by its file name outside the read roots → {name, reset: whether a file was deleted}",
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} delete the category's profile file, so the shipped profile (today's defaults) applies again; an open copy of it stays open; under automation roots it needs write access to the file, and an error names the file by its file name outside the read roots → {name, reset: whether a file was deleted}",
             always,
             reset_profile
         ),
@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Use Profile Defaults",
             [],
             None,
-            "{name: a category of file.newPresets} give the active document the default fill and stroke and the default font of the category's New Document profile (VectorCraft's own command; a category without a profile file gives the shipped ones): the document's Default Graphic Style takes the fills, strokes, effects and transparency of the profile's, and its [Normal Character Style] the profile's attributes (a composite font of the profile they name replaces the document's of that name, as type.compositeFonts.import does), the profile's colors converted to the document's color mode, with the swatches, patterns, symbols and brushes they paint with, in one undo step (none when the document already has both). As Redefine Graphic Style and Redefine Character Style do, objects still linked to the Default Graphic Style and type in [Normal Character Style] take the new definitions and keep their overrides. New art then starts as paint.default gives it (see appearance.newArt), and new type in the profile's [Normal Character Style]. An error when the profile's file can't be read, its [Normal Character Style] has attributes charStyle.new does not take, or the composite font it names can't join the document's (as type.compositeFonts.set checks them) → {name, changed: whether the document changed, warnings?: [text] (a color profile or font the profile's file carries that can't be used)}",
+            "{name: a built-in category of file.newPresets (not Recent or Saved)} give the active document the default fill and stroke and the default font of the category's New Document profile (VectorCraft's own command; a category without a profile file gives the shipped ones): the document's Default Graphic Style takes the fills, strokes, effects and transparency of the profile's, and its [Normal Character Style] the profile's attributes (a composite font of the profile they name replaces the document's of that name, as type.compositeFonts.import does), the profile's colors converted to the document's color mode, with the swatches, patterns, symbols and brushes they paint with, in one undo step (none when applying the profile leaves the document unchanged). As Redefine Graphic Style and Redefine Character Style do, objects still linked to the Default Graphic Style and type in [Normal Character Style] take the new definitions and keep their overrides. New art then starts as paint.default gives it (see appearance.newArt), and new type in the profile's [Normal Character Style]. An error when the profile's file can't be read, its [Normal Character Style] has attributes charStyle.new does not take, or the composite font it names can't join the document's (as type.compositeFonts.set checks them) → {name, changed: whether the document changed, warnings?: [text] (a color profile or font the profile's file carries that can't be used)}",
             has_doc,
             apply_defaults
         ),

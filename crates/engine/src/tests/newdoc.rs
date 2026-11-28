@@ -951,7 +951,11 @@ fn an_open_document_takes_another_profiles_default_fill_stroke_and_font() {
         let st = first_run(&s, id);
         assert_eq!((st.font_family.as_str(), st.size), ("Source Serif 4", 9.0));
         // The profile's CMYK red is converted to the document's color mode.
-        assert!(matches!(st.fill, Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, .. }), "{:?}", st.fill);
+        assert!(
+            matches!(st.fill, Paint::Solid { color: vectorcraft_color::Color::Rgb { r, g, b }, .. } if r > 0.8 && g < 0.3 && b < 0.3),
+            "a converted red: {:?}",
+            st.fill
+        );
     }
     // Again: nothing changes and no undo step is recorded.
     let step = s.doc().unwrap().history.step();

@@ -9841,7 +9841,7 @@ with the defaults.
   brushes they paint with added. A composite font of the profile that those attributes name replaces the document's
   composite font of that name, as `type.compositeFonts.import` does. A category without a file gives the shipped
   defaults. The change is one undo step, which also puts back the fill and stroke new art took, and none is recorded
-  when the document already has both. As
+  when applying the profile leaves the document unchanged. As
   `graphicStyle.redefine` and `charStyle.redefine` do, objects still linked to the Default Graphic Style and type in
   [Normal Character Style] take the new definitions and keep their overrides. New art then starts as `paint.default`
   gives it, and new type in the profile's font. It returns `{name, changed, warnings?}`, and an error when the
