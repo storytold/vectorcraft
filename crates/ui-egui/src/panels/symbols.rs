@@ -578,9 +578,14 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             // Art dropped anywhere on the list becomes a symbol; dropped on a symbol, the browser's
             // own target takes it.
             DropAction::<PanelDrag>::new(move |drag| art_of(drag, uid, reverts).is_some()).show(ui, |ui, _| {
+                // With no symbols the body says how to make one, as the other panels' empty states do.
+                if doc.symbols.is_empty() {
+                    super::empty_state(ui, "spray-can", tl!("No symbols in this document"), tl!("Select art and click New Symbol to make one."));
+                    return None;
+                }
                 let mut state = PresetState::new();
                 state.zoom = zoom;
-                PresetBrowser::new(tl!("Symbols"), Bind::bound(&mut state), &source)
+                let shown = PresetBrowser::new(tl!("Symbols"), Bind::bound(&mut state), &source)
                     .browser_id(browser_id)
                     .selection(Bind::given(selection.clone()))
                     .select(select)
@@ -591,13 +596,13 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, move |drag: &PanelDrag, _: &DropAt<SymbolKey>| {
                         art_of(drag, uid, reverts).is_some()
                     }))
-                    .empty(tl!("No symbols in this document"))
-                    .show(ui)
+                    .show(ui);
+                Some(shown)
             })
         });
     let taken = shown.settle(|_, list| {
         let dropped = list.output.dropped.take().map(|drag| (drag, list.output.mods));
-        (dropped, list.inner.take().map(|out| out.events).unwrap_or_default())
+        (dropped, list.inner.take().flatten().map(|out| out.events).unwrap_or_default())
     });
     let footer = footer.into_inner();
     if let Some(opener) = footer.as_ref().and_then(|out| out.responses.get(AT_LIBRARY)) {

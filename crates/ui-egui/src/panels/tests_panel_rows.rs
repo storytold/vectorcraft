@@ -97,6 +97,25 @@ fn the_color_wheel_box_and_its_strip_stay_inside_the_panel() {
 }
 
 #[test]
+fn the_symbols_panel_with_no_symbols_says_how_to_make_one() {
+    let panel = Panel::new(app_with_rect(), symbols::show);
+    assert!(panel.shows("No symbols in this document"));
+    assert!(panel.shows("Select art and click New Symbol to make one."), "the empty panel has no hint");
+}
+
+#[test]
+fn the_appearance_swatches_and_labels_line_up() {
+    let panel = Panel::new(app_with_rect(), appearance::show);
+    let (stroke, fill) = (panel.rect("Stroke swatch"), panel.rect("Fill swatch"));
+    assert!((stroke.left() - fill.left()).abs() < 1.0, "the stroke swatch at {stroke:?} and the fill swatch at {fill:?} are in different columns");
+    let opacity = panel.rect("Opacity:");
+    for name in ["Stroke:", "Fill:"] {
+        let at = panel.rect(name);
+        assert!((at.left() - opacity.left()).abs() < 1.0, "Opacity: at {opacity:?} does not start where {name} at {at:?} does");
+    }
+}
+
+#[test]
 fn align_to_shares_the_distribute_spacing_line_inside_the_align_panel() {
     let panel = Panel::new(app_with_rect(), align::show);
     let (field, to) = (panel.rect("Distribute Spacing"), panel.rect("Align to Artboard"));

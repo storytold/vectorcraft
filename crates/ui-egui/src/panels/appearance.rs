@@ -33,7 +33,7 @@ use craft::ui::contract::{
 use craft::ui::display::{Picture, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Stack;
-use craft::ui::list::{List, ListRow, RowDragSpot, RowEvent, RowInk, ThumbAspect, ThumbSize, ThumbTarget, ToggleCell};
+use craft::ui::list::{List, ListRow, RowDragSpot, RowEvent, RowInk, ThumbAspect, ThumbSize, ThumbTarget, ToggleCell, TreeLeaves};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamRows};
 use craft::ui::patterns::presets::{
@@ -543,6 +543,9 @@ fn show_list(
     let mut list = List::new(tl!("Appearance"))
         .id(list_id)
         .tree(true)
+        // The top-level rows without a disclosure (Opacity, an object's effects) keep its column, so their labels
+        // start where the Stroke and Fill labels do.
+        .tree_leaves(TreeLeaves::Aligned)
         .columns(columns)
         .deletable(true)
         .selection(Bind::bound(selection))
@@ -842,6 +845,9 @@ fn item_row<'r>(cx: &'r RowCx<'_>, key: RowKey, i: usize) -> ListRow<'r> {
         row = row.trailing_field(stroke::weight_number(cx.app, Some(st.width)), move |out| {
             pass.borrow_mut().acts.push(Act::Weight(target, Box::new(out)))
         });
+    } else {
+        // A fill row keeps the weight's room empty, so its swatch stands in the stroke rows' swatch column.
+        row = row.trailing_space(stroke::weight_number(cx.app, None));
     }
     let painted = if new_art { Painted::NewArt { fill } } else { Painted::Item(i) };
     let pass = cx.pass;
