@@ -334,8 +334,9 @@ fn pen_size_row(size: PenSize) -> Param {
         Row::new()
             .show(ui, |ui, _| {
                 let slid = Slider::new(Bind::given(clamped(f, key, range)), range.0..=range.1).step(1.0).label(label).id_salt(key).show(ui);
-                if let Some(value) = slid.value() {
-                    f.set(key, value.round());
+                if let Some(value) = slid.events.landed() {
+                    // The slider quantizes new edits; Cancel restores the exact opening value.
+                    f.set(key, *value);
                 }
                 number_cell(ui, f, max_key, max_label, range, UnitKind::Percent, mode.follows_pen());
                 id_select(ui, f, mode_key, mode_label, &entries, mode.id().to_string());

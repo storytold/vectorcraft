@@ -186,7 +186,7 @@ fn canceled_art_width_drag_restores_the_opening_width() {
     let initial = fields_of(&panel.app()).number("width").unwrap();
     assert_eq!(initial, 100.25, "Cancel must preserve a valid fractional stored width");
     let mode = fields_of(&panel.app()).text("widthMode").map(str::to_owned);
-    panel.click_role("Width", Role::COMBO_BOX);
+    panel.click_role("Width: Mode", Role::COMBO_BOX);
     panel.key(Key::ArrowDown, Modifiers::NONE);
     panel.key(Key::Escape, Modifiers::NONE);
     assert_eq!(fields_of(&panel.app()).text("widthMode").map(str::to_owned), mode);
@@ -212,6 +212,56 @@ fn canceled_art_width_drag_restores_the_opening_width() {
     assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
     panel.app().run("edit.undo", json!({})).unwrap();
     assert_eq!(panel.app().run("brush.get", json!({"name": "Arrow"})).unwrap(), original);
+}
+
+/// Pattern Brush Options' Scale row: a held drag ended with Escape and a mode menu closed with
+/// Escape leave the open dialog's fields as they opened, and Cancel leaves the brush as it was; a
+/// released drag is kept by OK.
+#[test]
+fn canceled_pattern_scale_edits_do_not_reach_the_brush() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    let mut app = app();
+    app.run("brush.options", json!({"name": "Diamonds", "params": {"scale": 100.25}})).unwrap();
+    let original = app.run("brush.get", json!({"name": "Diamonds"})).unwrap();
+    let undo = app.session.active().unwrap().history.undo.len();
+    let mut panel = Panel::new(app, draw_hosted_options);
+    panel.room(egui::vec2(1000.0, 1000.0));
+    open(&mut panel.app(), "Diamonds");
+    panel.frame();
+    let initial = fields_of(&panel.app()).number("scale").unwrap();
+    assert_eq!(initial, 100.25, "Cancel must preserve a valid fractional stored scale");
+    let mode = fields_of(&panel.app()).text("scaleMode").map(str::to_owned);
+    panel.click_role("Scale: Mode", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Escape, Modifiers::NONE);
+    assert!(is_open(&panel.app()));
+    assert_eq!(fields_of(&panel.app()).text("scaleMode").map(str::to_owned), mode);
+    panel.drag_hold_role("Scale", Role::SLIDER, egui::vec2(40.0, 0.0));
+    assert_ne!(fields_of(&panel.app()).number("scale"), Some(initial), "the held drag previews another scale");
+    panel.key(Key::Escape, Modifiers::NONE);
+    panel.release();
+    assert!(is_open(&panel.app()));
+    assert_eq!(fields_of(&panel.app()).number("scale"), Some(initial), "the canceled drag restores the opening scale");
+    panel.click("Cancel");
+    panel.frame();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Diamonds"})).unwrap(), original);
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+    open(&mut panel.app(), "Diamonds");
+    panel.frame();
+    panel.drag_hold_role("Scale", Role::SLIDER, egui::vec2(40.0, 0.0));
+    panel.release();
+    let accepted = fields_of(&panel.app()).number("scale").unwrap();
+    assert_ne!(accepted, initial);
+    panel.click("OK");
+    panel.frame();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Diamonds"})).unwrap()["scale"], accepted);
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(panel.app().run("brush.get", json!({"name": "Diamonds"})).unwrap(), original);
 }
 
 /// What a step of the table expects at a JSON pointer of the saved brush.
