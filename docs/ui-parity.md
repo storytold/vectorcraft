@@ -360,6 +360,7 @@ tools, never checked side by side) isn't captured row by row.
 | Field precision: 3 decimals for steps; values kept as f64 | done | |
 | Scrubby labels (beyond Illustrator) | done | #400; the labels that are links (the Control bar's Stroke: and Opacity:, the Properties panel's Stroke) scrub too, and a click on them still opens their panel (#4088) |
 | 3D Lighting Color picker, preview, reset dot and Reset all | initial | One to ten opaque RGB lights for Revolve, Extrude & Bevel, Inflate and Rotate; select, add or delete a light and edit its settings or gizmo; Standard, Diffuse, Top Left and Right select original rigs, with Custom for manual changes; Cancel restores all lights |
+| Classic 3D Track Cube preserves untouched rotation precision | done | Editing Z preserves the original fractional X and Y angles. |
 | Dialogs open with the first field focused and selected; Enter confirms | done | on every open, not only the first (#1367); a first field that starts greyed out takes the focus once enabled (#1395) |
 | Value fields: selected text readable in every brightness; a focused field follows its value when a slider or preview changes it | partial | #1490, #1457; hover wheel stepping #5949 |
 | Sliders in dialogs and popups (Save for Web, raster export options, Preferences, the opacity popup) show their rail, filled up to the handle | done | #1483 |
