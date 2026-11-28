@@ -94,7 +94,8 @@ impl Outcome for CellOutput {
 pub(super) struct TargetCircle {
     #[common]
     common: Common,
-    document: u64,
+    /// The document's uid and revert count: File › Revert keeps the uid but replaces the drawing.
+    document: (u64, u64),
     id: NodeId,
     targeted: bool,
     styled: bool,
@@ -104,19 +105,19 @@ pub(super) struct TargetCircle {
 }
 
 impl TargetCircle {
-    fn new(document: u64, id: NodeId, targeted: bool, styled: bool) -> Self {
+    fn new(document: (u64, u64), id: NodeId, targeted: bool, styled: bool) -> Self {
         Self { common: Common::new(), document, id, targeted, styled, held: false, pick: None }
     }
 
     /// A targeted circle with an appearance, for the suite.
     fn sample() -> Self {
-        Self::new(1, NodeId(1), true, true).label("Target")
+        Self::new((1, 0), NodeId(1), true, true).label("Target")
     }
 }
 
-/// The circle as a drop target: it takes another row's appearance.
+/// The circle as a drop target: it takes another row's appearance from the same contents.
 struct TakesAppearance {
-    document: u64,
+    document: (u64, u64),
     own: NodeId,
     rect: Rect,
 }
@@ -125,12 +126,9 @@ impl DropTarget<PanelDrag> for TakesAppearance {
     type Drop = (NodeId, bool);
 
     fn accept(&self, payload: &PanelDrag, _: Pos2, op: DropOperation) -> Option<(NodeId, bool)> {
-        match payload {
-            PanelDrag::Appearance { document, source } if *document == self.document && *source != self.own => {
-                Some((*source, op == DropOperation::Copy))
-            }
-            _ => None,
-        }
+        let (uid, reverts) = self.document;
+        let source = payload.appearance_for(uid, reverts).filter(|source| *source != self.own)?;
+        Some((source, op == DropOperation::Copy))
     }
 
     fn mark(&self, _: &(NodeId, bool)) -> DropMark {
@@ -171,7 +169,8 @@ impl Component for TargetCircle {
             self.pick = Some(CellPick::Target(activation.mods));
         }
         if primary_drag_start(cx) {
-            cx.start_drag(PanelDrag::Appearance { document: self.document, source: self.id }, DragPreview::None);
+            let (document, reverts) = self.document;
+            cx.start_drag(PanelDrag::Appearance { document, reverts, source: self.id }, DragPreview::None);
         }
         let rect = cx.rect;
         let target = TakesAppearance { document: self.document, own: self.id, rect };
@@ -379,7 +378,7 @@ pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cell
             let is_sel = selected(id);
             let (full, holds) = square_marks(tree, n);
             let art = if full || holds { st.selection.objects.clone() } else { vec![] };
-            let circle = TargetCircle::new(st.uid, id, shows_targeted(tree, n, is_sel), has_styled_target(n))
+            let circle = TargetCircle::new((st.uid, st.reverts), id, shows_targeted(tree, n, is_sel), has_styled_target(n))
                 .label(crate::i18n::fmt(tl!("Target {row}"), &[("row", info.name.as_str())]));
             let square = SelectionSquare::new(st.uid, Some(id), full, holds, color, art)
                 .label(crate::i18n::fmt(tl!("Select art of {row}"), &[("row", info.name.as_str())]));

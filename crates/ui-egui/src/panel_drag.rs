@@ -20,8 +20,9 @@ pub enum PanelDrag {
     Paint { paint: Paint, params: serde_json::Value, rows: Option<SwatchRows>, library: Option<(String, String)> },
     /// The Appearance panel's thumbnail: art it is dropped on takes object `0`'s appearance
     /// (`appearance.copyFrom`); the Graphic Styles panel makes a style of it, or with Alt held
-    /// replaces the style it is dropped on with it (`graphicStyle.redefine`).
-    Appearance { document: u64, source: vectorcraft_doc::NodeId },
+    /// replaces the style it is dropped on with it (`graphicStyle.redefine`). `document` is the uid of the
+    /// document it came from and `reverts` identifies the contents it came from.
+    Appearance { document: u64, reverts: u64, source: vectorcraft_doc::NodeId },
     /// The selected art, dragged off the canvas with the Selection tool (`document`: the uid of the
     /// document it came from): the Graphic Styles panel makes a style of the first object
     /// (`graphicStyle.new`), or with Alt held replaces the style it is dropped on with that
@@ -58,6 +59,14 @@ impl PanelDrag {
     pub(crate) fn artwork_for(&self, uid: u64, reload_count: u64) -> Option<&[vectorcraft_doc::NodeId]> {
         match self {
             Self::Art { document, reverts, ids } if (*document, *reverts) == (uid, reload_count) => Some(ids),
+            _ => None,
+        }
+    }
+
+    /// The object whose appearance is dragged while the destination still shows the contents the drag came from.
+    pub(crate) fn appearance_for(&self, uid: u64, reload_count: u64) -> Option<vectorcraft_doc::NodeId> {
+        match self {
+            Self::Appearance { document, reverts, source } if (*document, *reverts) == (uid, reload_count) => Some(*source),
             _ => None,
         }
     }
