@@ -22,6 +22,7 @@ use crate::i18n::LangExt as _;
 mod descriptions;
 mod model;
 mod runtime;
+mod script_access;
 
 pub use runtime::*;
 
@@ -52,6 +53,9 @@ pub struct PrefsWindow {
     reset_asked: Option<DialogId>,
     /// The draft's text and choice values, which the model's rows borrow (the draft hands out owned values only).
     strings: std::collections::BTreeMap<String, String>,
+    /// General › Script File Access: the file access kept with Always, read when the window opens; `None` where the
+    /// session keeps none (no settings folder, and the web).
+    script_access: Option<script_access::Access>,
 }
 
 impl PrefsWindow {
@@ -140,6 +144,7 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     draft.set("__snapToGrid", &app.ui.view.snap_to_grid);
     draft.set("__taskBar", &app.ui.task_bar);
     let selected = category.and_then(|c| PREF_CATEGORIES.iter().find(|x| x.eq_ignore_ascii_case(c))).copied().unwrap_or(PREF_CATEGORIES[0]);
+    let script_access = script_access::load(app);
     let mut w = PrefsWindow {
         state: PreferencesState::default(),
         opened: draft.clone(),
@@ -148,6 +153,7 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
         nested: DialogHost::new(),
         reset_asked: None,
         strings: Default::default(),
+        script_access,
     };
     w.state.selected = selected.to_string();
     w.sync_strings();
@@ -210,12 +216,15 @@ pub(crate) fn draft_language(app: &VectorcraftApp) -> Option<crate::i18n::Lang> 
     Some(crate::i18n::Lang::from_pref(&code))
 }
 
-/// The draft as JSON, plus `__category` and `__search`; `None` while the window is closed.
+/// The draft as JSON, plus `__category`, `__search` and General › Script File Access's rows and error
+/// (`__scriptAccess`, `__scriptAccessError`, each script and path named as `script.grants` names it to the request
+/// being served); `None` while the window is closed.
 pub(crate) fn fields(app: &VectorcraftApp) -> Option<Map<String, Value>> {
     let w = app.prefs.as_ref()?;
     let mut fields = w.draft.to::<Map<String, Value>>().unwrap_or_default();
     fields.insert("__category".into(), json!(w.state.selected));
     fields.insert("__search".into(), json!(w.state.search));
+    script_access::inspect(w.script_access.as_ref(), &mut fields);
     Some(fields)
 }
 
@@ -299,9 +308,23 @@ fn export_preferences(app: &mut VectorcraftApp) {
 fn import_preferences(app: &mut VectorcraftApp) {
     let request = PickRequest::open("preferences").filter("Preferences", &["json"]);
     file_asks::ask(app, request, Owner::Free, |app, picked| {
-        let Picked::Paths(paths) = picked else { return Ok(Value::Null) };
-        let Some(path) = paths.first() else { return Ok(Value::Null) };
-        match app.run("prefs.import", json!({ "path": path.to_string_lossy() })) {
+        let params = match picked {
+            Picked::Paths(paths) => {
+                let Some(path) = paths.first() else { return Ok(Value::Null) };
+                json!({ "path": path.to_string_lossy() })
+            }
+            Picked::Contents(files) => {
+                let Some((_, bytes)) = files.into_iter().next() else { return Ok(Value::Null) };
+                // Match prefs.import's file cap before allocating its JSON text parameter.
+                if bytes.len() > 1 << 20 {
+                    return Err("The preferences file is larger than 1 MB".into());
+                }
+                let data = String::from_utf8(bytes).map_err(|_| "The preferences file is not valid UTF-8")?;
+                json!({ "data": data })
+            }
+            _ => return Ok(Value::Null),
+        };
+        match app.run("prefs.import", params) {
             Ok(_) => app.status("Preferences imported."),
             Err(e) => app.status(e),
         }

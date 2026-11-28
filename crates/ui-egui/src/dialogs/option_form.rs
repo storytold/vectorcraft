@@ -7,7 +7,7 @@ use std::ops::RangeInclusive;
 
 use craft::theme::variant::Tone;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Politeness, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::Row;
@@ -76,7 +76,7 @@ pub(super) fn is_on(values: &Map<String, Value>, key: &str) -> bool {
 /// A select of `labels` showing the entry at `current`; the entry picked this pass.
 pub(super) fn pick(ui: &mut Ui, label: &str, current: usize, labels: &[&str]) -> Option<usize> {
     let entries: Vec<Entry<usize>> = labels.iter().enumerate().map(|(at, text)| Entry::new(at, word(text))).collect();
-    Select::new(word(label), Bind::given(current), &entries).show(ui).value().copied()
+    Select::new(word(label), Bind::given(current), &entries).show(ui).events.committed().copied()
 }
 
 impl Rows<'_> {
@@ -108,7 +108,7 @@ impl Rows<'_> {
     /// A check box over `values[key]`.
     pub(super) fn check(&mut self, ui: &mut Ui, key: &str, label: &str, enabled: bool) {
         let shown = Checkbox::new(Bind::given(self.flag(key))).label(word(label)).enabled(enabled).show(ui);
-        if let Some(on) = shown.value().copied() {
+        if let Some(on) = shown.events.landed().copied() {
             self.set(key, json!(on));
         }
     }
@@ -142,7 +142,7 @@ impl Rows<'_> {
         let current = self.float(key, *range.start());
         let symbol = Env::of(ui).units().symbol(unit);
         let shown = NumberField::new(word(label), Bind::given(Some(current))).range(range).unit_kind(unit).unit(symbol).enabled(enabled).show(ui);
-        if let Some(Some(number)) = shown.value().copied() {
+        if let Some(Some(number)) = shown.edit.events.landed().copied() {
             self.set(key, json!(number));
         }
     }
@@ -151,7 +151,7 @@ impl Rows<'_> {
     pub(super) fn length(&mut self, ui: &mut Ui, key: &str, label: &str, range: RangeInclusive<f64>, enabled: bool) {
         let current = self.values.get(key).and_then(Value::as_f64);
         let shown = NumberField::length(word(label), Bind::given(current), self.lengths).range(range).enabled(enabled).show(ui);
-        if let Some(Some(length)) = shown.value().copied() {
+        if let Some(length) = shown.edit.events.landed().copied() {
             self.set(key, json!(length));
         }
     }
@@ -175,6 +175,8 @@ pub(crate) struct OptionForm {
     lengths: LengthUnits,
     /// The Preview check box.
     pub(super) preview: bool,
+    /// The current document does not own this dialog's preview.
+    pub(super) preview_paused: bool,
     /// Whether the dialog's container is open.
     open: bool,
     /// The OK the dialog filed for [`pump`] to answer.
@@ -202,6 +204,7 @@ pub(super) fn open(app: &mut VectorcraftApp, spec: &'static OptionSpec, values: 
         extra,
         lengths,
         preview: false,
+        preview_paused: false,
         open: true,
         held: HeldAnswer::new(),
         requests: HostRequests::new(),
@@ -249,8 +252,9 @@ impl StackDialog for OptionForm {
         // The app accepted the held OK: this pass closes the dialog with it. A measuring run closes nothing.
         let finish = self.held.is_accepted() && !measuring;
         let answers = if measuring { Vec::new() } else { self.requests.take_answers() };
-        let OptionForm { spec, values, lengths, preview, open, held, requests, .. } = self;
+        let OptionForm { spec, values, lengths, preview, preview_paused, open, held, requests, .. } = self;
         let (spec, lengths) = (*spec, *lengths);
+        let show_pause = *preview && *preview_paused;
         let title = (spec.title)();
         let refusal = held.refusal().map(|(reason, refused)| (reason.clone(), refused.clone()));
         let mut form = FormDialog::new(word(&title), Bind::bound(&mut *values))
@@ -273,6 +277,12 @@ impl StackDialog for OptionForm {
             }
             if let Some((reason, _)) = refusal.as_ref().filter(|(_, refused)| *refused == *values) {
                 Notice::new(Tone::Bad, reason.clone()).layout(NoticeLayout::Inline).show(ui);
+            }
+            if show_pause {
+                Notice::new(Tone::Info, tl!("Preview is paused. Return to the document this dialog was opened for.").to_owned())
+                    .layout(NoticeLayout::Inline)
+                    .announce(Politeness::Polite)
+                    .show(ui);
             }
             if finish {
                 form.request_close_as(CloseReason::Activated);
@@ -386,6 +396,9 @@ fn accept(app: &mut VectorcraftApp, spec: &OptionSpec, answer: &Map<String, Valu
 
 #[cfg(test)]
 pub(super) mod tests {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
     use vectorcraft_engine::Session;
 
     use super::*;
@@ -444,6 +457,104 @@ pub(super) mod tests {
         let ctx = app.ui_ctx.clone().unwrap();
         app.dialogs().unwrap().with(|host| host.cancel::<OptionForm>(&ctx));
         pump_all(app);
+    }
+
+    #[test]
+    fn cancelling_a_shape_builder_gap_preset_keeps_the_custom_length_on_ok() {
+        let mut app = app();
+        app.run("tool.setOption", json!({"tool": "shapeBuilder", "values": {"gapDetection": true, "gapLength": 17}})).unwrap();
+        let original = app.session.tool_options_of("shapeBuilder");
+        let document = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(1000.0, 1000.0));
+        crate::toolbar::open_options(&mut panel.app(), "shapeBuilder").unwrap();
+        panel.frame();
+        let before = fields(&panel.app());
+        panel.click_role("Gap Length", Role::COMBO_BOX);
+        // Custom is the last entry: Up highlights the preceding Large preset.
+        panel.key(Key::ArrowUp, Modifiers::NONE);
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(fields(&panel.app()), before, "the preset popup must not replace a custom numeric length");
+        assert_eq!(panel.app().session.tool_options_of("shapeBuilder"), original);
+        panel.click("OK");
+        panel.frame();
+        panel.frame();
+        assert!(!is_open(&panel.app()));
+        assert_eq!(panel.app().session.tool_options_of("shapeBuilder"), original);
+        assert_eq!(panel.app().session.active().unwrap().doc, document);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+    }
+
+    #[test]
+    fn bucket_width_escape_restores_the_draft_and_only_ok_sets_accepted_typing() {
+        for commit in [false, true] {
+            let app = app();
+            let original = app.session.tool_options_of("livePaintBucket");
+            let document = app.session.active().unwrap().doc.clone();
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(900.0, 900.0));
+            crate::toolbar::open_options(&mut panel.app(), "livePaintBucket").unwrap();
+            panel.frame();
+            let before = fields(&panel.app());
+            panel.click_role("Width", Role::SPIN_BUTTON);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text("9");
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert!(!is_open(&panel.app()), "Escape from the Width draft cancels the modal");
+            assert_eq!(panel.app().session.tool_options_of("livePaintBucket"), original);
+            crate::toolbar::open_options(&mut panel.app(), "livePaintBucket").unwrap();
+            panel.frame();
+            assert_eq!(fields(&panel.app()), before);
+            if commit {
+                panel.click_role("Width", Role::SPIN_BUTTON);
+                panel.key(Key::A, Modifiers::COMMAND);
+                panel.type_text("9");
+                panel.key(Key::Tab, Modifiers::NONE);
+                assert_eq!(fields(&panel.app())["width"], 9.0);
+            }
+            assert_eq!(panel.app().session.tool_options_of("livePaintBucket"), original, "field edits remain draft values until OK");
+            assert_eq!(panel.app().session.active().unwrap().doc, document);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            panel.click("OK");
+            panel.frame();
+            panel.frame();
+            assert!(!is_open(&panel.app()));
+            assert_eq!(panel.app().session.tool_options_of("livePaintBucket")["width"], if commit { 9.0 } else { 4.0 });
+            assert_eq!(panel.app().session.active().unwrap().doc, document);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+        }
+    }
+
+    /// Normal Gap Options supplies numeric points. This hosted row fixture separately checks
+    /// the nullable length helper's contract, including restoring an empty opening value.
+    #[test]
+    fn a_nullable_length_row_restores_null_on_escape() {
+        static NULL_LENGTH: OptionSpec = OptionSpec {
+            key: "nullableLengthTest",
+            title: || "Nullable Length".into(),
+            keys: &["length"],
+            colors: &[],
+            preview: false,
+            body: |ui, rows| rows.length(ui, "length", "Length", 0.0..=72.0, true),
+            inactive: |_, _| false,
+            run: |_, _, _| Ok(Value::Null),
+            cancelled: None,
+        };
+        let mut panel = Panel::new(app(), crate::tests::picks::dialogs);
+        panel.room(egui::vec2(900.0, 900.0));
+        open(&mut panel.app(), &NULL_LENGTH, Map::from_iter([("length".into(), Value::Null)]), Value::Null).unwrap();
+        panel.frame();
+        panel.click_role("Length", Role::SPIN_BUTTON);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("9 pt");
+        assert_eq!(fields(&panel.app())["length"], 9.0, "the row still supports live proposals");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert!(!is_open(&panel.app()));
+        open(&mut panel.app(), &NULL_LENGTH, Map::from_iter([("length".into(), Value::Null)]), Value::Null).unwrap();
+        panel.frame();
+        assert_eq!(fields(&panel.app())["length"], Value::Null);
     }
 
     /// Whether `a` and `b` are the same value, numbers by their value.

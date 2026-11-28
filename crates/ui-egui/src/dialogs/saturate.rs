@@ -46,9 +46,9 @@ fn params(fields: &DialogFields) -> Value {
 }
 
 fn rows() -> Vec<Param> {
-    vec![Param::custom("intensity", "Intensity", |ui, fields, _cx| {
+    vec![Param::custom("intensity", tl!("Intensity"), |ui, fields, _cx| {
         // The rail runs from grey to a fully saturated colour.
-        percent_row(ui, fields, "intensity", "Intensity", |x| Srgba::from(c32(&Color::from_hsb(12.0, x, 0.85))));
+        percent_row(ui, fields, "intensity", tl!("Intensity"), |x| Srgba::from(c32(&Color::from_hsb(12.0, x, 0.85))));
         ui.response()
     })]
 }

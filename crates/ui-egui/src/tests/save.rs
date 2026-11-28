@@ -171,6 +171,51 @@ fn new_from_template_takes_bytes_from_agents() {
 }
 
 #[test]
+fn new_from_template_opens_browser_bytes_and_desktop_paths_as_untitled_copies() {
+    let folder = dir("new-from-template-pick");
+    let name = "Source Drawing.svg";
+    let bytes = br#"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="60"><rect width="20" height="10"/></svg>"#;
+    let path = folder.join(name);
+    std::fs::write(&path, bytes).unwrap();
+    for browser in [false, true] {
+        let mut app = app();
+        if browser {
+            app.services.download = Some(Box::new(|_, _| Ok(())));
+        }
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        rect(&mut app);
+        let source = app.session.active().unwrap();
+        let source_uid = source.uid;
+        let source_undo = source.history.undo.len();
+        let picker = scripted(&mut app);
+        picks::asks(&mut app, "file.newFromTemplate");
+        assert_eq!(picker.requests()[0].purpose, "template");
+        if browser {
+            picker.answer_contents(&[(name, bytes)]);
+        } else {
+            picker.answer(&[path.to_str().unwrap()]);
+        }
+        poll(&mut app);
+
+        let opened = app.session.active().unwrap();
+        assert!(opened.title().starts_with("Untitled-"), "browser={browser}: the template copy was named {:?}", opened.title());
+        assert_eq!((app.session.documents().len(), app.views.len()), (2, 2));
+        assert_eq!((opened.path.as_deref(), opened.history.undo.len()), (None, 0));
+        assert_eq!(opened.doc.layers[0].children().unwrap().len(), 1);
+        let source = &app.session.documents()[0];
+        assert_eq!((source.uid, source.history.undo.len()), (source_uid, source_undo));
+        if browser {
+            picks::asks(&mut app, "file.newFromTemplate");
+            picker.answer_contents(&[(name, b"not a drawing")]);
+            poll(&mut app);
+            assert_eq!(app.session.documents().len(), 2, "an invalid template opens no document");
+            assert!(app.ui.status.contains("Couldn't open Source Drawing.svg"), "{}", app.ui.status);
+        }
+    }
+    let _ = std::fs::remove_dir_all(folder);
+}
+
+#[test]
 fn show_in_folder_needs_a_saved_document_and_a_file_manager() {
     let shown = Rc::new(RefCell::new(vec![]));
     let s = shown.clone();
@@ -493,4 +538,58 @@ fn file_save_writes_opened_eps_back_without_another_save_as_dialog() {
     assert_eq!(app.session.active().unwrap().format, "eps");
     assert_eq!(app.session.active().unwrap().path.as_deref(), Some(path.as_str()));
     std::fs::remove_dir_all(d).unwrap();
+}
+
+#[test]
+fn revert_confirmation_never_discards_another_drawings_changes() {
+    let d = dir("revert-drawing-switch");
+    let mut app = app();
+    for name in ["first.vectorcraft", "second.vectorcraft"] {
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let path = d.join(name).to_string_lossy().to_string();
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        rect(&mut app);
+    }
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("file.revert", json!({})).unwrap();
+    assert!(confirm::open_question(&app).unwrap().0.contains("first"));
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let count = objects(&app);
+    answer_top(&mut app, true);
+    let result = (objects(&app), app.session.active().unwrap().is_dirty());
+    let _ = std::fs::remove_dir_all(d);
+    assert_eq!(result, (count, true), "the second drawing must retain its unsaved edits");
+}
+
+#[test]
+fn acknowledging_import_loss_does_not_overwrite_the_source_with_another_drawing() {
+    let d = dir("lossy-drawing-switch");
+    let path = d.join("source.vectorcraft").to_string_lossy().to_string();
+    let mut app = app();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    let saved = std::fs::read(&path).unwrap();
+    let st = app.session.doc_mut().unwrap();
+    st.imported_from = Some(path.clone());
+    st.import_losses = vec!["hidden type".into()];
+    rect(&mut app);
+
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    rect(&mut app);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let params = json!({"path": path, "options": {"compress": true}});
+    assert_eq!(app.run("file.saveAs", params.clone()).unwrap()["pending"], confirm::KIND);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    answer_top(&mut app, true);
+    crate::background::wait_all(&mut app);
+    let after_switch = std::fs::read(&path).unwrap();
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("file.saveAs", params).unwrap();
+    answer_top(&mut app, true);
+    crate::background::wait_all(&mut app);
+    let after_original = std::fs::read(&path).unwrap();
+    let _ = std::fs::remove_dir_all(d);
+    assert!(after_switch == saved, "drawing B must never overwrite A's file");
+    assert!(after_original != saved, "approval in drawing A must still save A");
 }

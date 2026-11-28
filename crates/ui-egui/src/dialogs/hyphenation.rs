@@ -9,6 +9,7 @@
 //! (letters, 1..15), `hyphenLimit` (hyphens, 0..25, 0: no limit), `hyphenationZone` (pt) and
 //! `hyphenateCapitalized`, as `text.setFormat` takes them.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind};
 // PLAN: assumed paths of `UnitKind` and `LengthUnits`
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
@@ -43,7 +44,30 @@ fn rows(lengths: LengthUnits) -> Vec<Param> {
 
 /// Open Hyphenation on the paragraph attributes the Paragraph panel shows.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    crate::panels::character::text_style(app).ok_or("select some type first")?;
+    use crate::panels::character;
+
+    let editing = character::text_editing_kept(app)?;
+    character::text_style(app).ok_or("select some type first")?;
+    let source = app.session.active().ok_or("no document open")?;
+    let (document, reverts) = (source.uid, source.reverts);
+    let mut target = Map::new();
+    let mut story_focus = None;
+    let ids = if let Some((id, start, end)) = editing {
+        if let Some(story) = character::text_story(app) {
+            story_focus = Some(id);
+            story
+        } else {
+            target.insert("start".into(), json!(start));
+            target.insert("end".into(), json!(end));
+            vec![id]
+        }
+    } else {
+        character::selected_stories(app)
+    };
+    if ids.is_empty() || source.selection.symbol_part.is_some() {
+        return Err("select some type first".into());
+    }
+    target.insert("ids".into(), json!(ids.iter().map(|id| id.0).collect::<Vec<_>>()));
     let mut fields = DialogFields::new();
     set_shared(&mut fields, FLAGS[0], crate::panels::paragraph::shared_hyphenate(app));
     set_shared(&mut fields, FLAGS[1], crate::panels::paragraph::shared_hyphenation_field(app, |h| h.capitalized));
@@ -55,13 +79,26 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let initial = fields.clone();
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let lengths = crate::canvas::rulers::general_lengths(app);
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |_| ParamDialog::new(KIND, tl!("Hyphenation"), rows(lengths)));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        ParamDialog::new(KIND, tl!("Hyphenation"), rows(lengths)).values(Bind::bound(fields))
+    });
     super::host::open_held(app, dialog, move |app, result| {
-        let p = params(&result.fields, &initial);
+        let mut p = params(&result.fields, &initial);
         if p.is_empty() {
             return Ok(());
         }
-        crate::panels::paragraph::run_on_paragraphs(app, "text.setFormat", Value::Object(p)).map(|_| ())
+        let active =
+            app.session.active().filter(|st| st.uid == document).ok_or_else(|| tl!("This dialog was opened in a different document.").to_owned())?;
+        if active.reverts != reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+        }
+        character::text_editing_kept(app)?;
+        p.extend(target.clone());
+        if let Some(id) = story_focus {
+            let story = app.session.active().ok_or("no document open")?.doc.story_of(id);
+            p.insert("ids".into(), json!(story.iter().map(|id| id.0).collect::<Vec<_>>()));
+        }
+        app.run("text.setFormat", Value::Object(p)).map(|_| ())
     })
     .ok_or("no window")?;
     Ok(Value::Null)
@@ -106,6 +143,147 @@ mod tests {
             NodeKind::Text(t) => (t.para_at(0).clone(), t.para_at(1).clone()),
             _ => panic!("not text"),
         }
+    }
+
+    /// Actual focused Hyphenation edits keep the hosted draft and apply to both selected paragraphs.
+    #[test]
+    fn hyphenation_keeps_focused_edits_until_cancel_or_ok() {
+        use craft::automation::{ControlRequest, Reply};
+        use egui::accesskit::{Node, Role, TreeUpdate};
+        use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+        fn control(tree: &TreeUpdate, source: &str, role: Role, scope: Option<Rect>) -> Rect {
+            fn plain(s: &str) -> &str {
+                s.trim_end().trim_end_matches([':', '：']).trim_end()
+            }
+            fn bounds(node: &Node) -> Option<Rect> {
+                let b = node.bounds()?;
+                Some(Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))
+            }
+            let expected = crate::i18n::t(source);
+            tree.nodes
+                .iter()
+                .map(|(_, n)| n)
+                .filter(|n| n.role() == role && n.label().is_some_and(|label| plain(label) == plain(expected)))
+                .filter_map(bounds)
+                .find(|rect| scope.is_none_or(|scope| scope.contains(rect.center())))
+                .unwrap_or_else(|| panic!("missing {role:?} {expected:?} in {scope:?}"))
+        }
+
+        fn draft(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
+            let ui = crate::control::inspect(app, ctx);
+            ui["dialogs"].as_array().unwrap().iter().find(|dialog| dialog["key"] == KIND).expect("open Hyphenation dialog")["fields"].clone()
+        }
+
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
+        let mut failures = Vec::new();
+        for lang in ["en", "de", "fr", "ja"] {
+            for answer in ["Cancel", "OK", "ui.dialog.confirm"] {
+                let (mut app, id) = app();
+                app.session.prefs.interface_language = lang.into();
+                app.run("text.setFormat", json!({"ids": [id], "afterFirst": 2, "start": 5, "end": 5})).unwrap();
+                let ctx = app.ui_ctx.clone().unwrap();
+                let mut time = 0.0;
+                let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+                    time += 0.1;
+                    let raw = RawInput { events, time: Some(time), screen_rect: Some(screen), focused: true, ..Default::default() };
+                    crate::testing::app_frame(app, &ctx, raw).platform_output.accesskit_update.unwrap()
+                };
+                let settle = |app: &mut VectorcraftApp, frame: &mut dyn FnMut(&mut VectorcraftApp, Vec<Event>) -> TreeUpdate| {
+                    for _ in 0..5 {
+                        frame(app, vec![]);
+                    }
+                    frame(app, vec![])
+                };
+                let click = |app: &mut VectorcraftApp, frame: &mut dyn FnMut(&mut VectorcraftApp, Vec<Event>) -> TreeUpdate, pos| {
+                    frame(app, vec![Event::PointerMoved(pos)]);
+                    for pressed in [true, false] {
+                        frame(app, vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+                    }
+                    frame(app, vec![]);
+                };
+                let press = |app: &mut VectorcraftApp, frame: &mut dyn FnMut(&mut VectorcraftApp, Vec<Event>) -> TreeUpdate, key, modifiers| {
+                    for pressed in [true, false] {
+                        frame(
+                            app,
+                            vec![Event::ModifiersChanged(modifiers), Event::Key { key, physical_key: None, pressed, repeat: false, modifiers }],
+                        );
+                    }
+                };
+                let original = paras(&app, id);
+                let undo = app.session.active().unwrap().history.undo.len();
+                settle(&mut app, &mut frame);
+                let apply = answer != "Cancel";
+                app.run("ui.hyphenation", json!({})).unwrap();
+                let tree = settle(&mut app, &mut frame);
+                let modal = control(&tree, "Hyphenation", Role::Dialog, None);
+                let count = control(&tree, "Words Longer Than:", Role::SpinButton, Some(modal));
+                let enabled = control(&tree, "Hyphenation", Role::CheckBox, Some(modal));
+                let footer = control(&tree, if apply { "OK" } else { "Cancel" }, Role::Button, Some(modal));
+                assert!(screen.expand(0.5).contains_rect(modal));
+                for bounds in [count, enabled, footer] {
+                    assert!(bounds.is_positive() && modal.expand(0.5).contains_rect(bounds), "{lang}: {bounds:?} outside {modal:?}");
+                }
+                let before = driver::fields(&app);
+                assert_eq!(before.number("wordsLongerThan"), Some(5.0));
+                assert_eq!(before.bool("hyphenate"), Some(false));
+                assert!(before.is_mixed("afterFirst"));
+                click(&mut app, &mut frame, count.center());
+                press(&mut app, &mut frame, Key::A, Modifiers::COMMAND);
+                frame(&mut app, vec![Event::ModifiersChanged(Modifiers::NONE), Event::Text("8".into())]);
+                press(&mut app, &mut frame, Key::Tab, Modifiers::NONE);
+                settle(&mut app, &mut frame);
+                let typed = draft(&app, &ctx)["wordsLongerThan"].as_f64();
+                click(&mut app, &mut frame, enabled.center());
+                let inspected = draft(&app, &ctx);
+                let kept = (inspected["wordsLongerThan"].as_f64(), inspected["hyphenate"].as_bool());
+                eprintln!("{lang}, {answer}: {modal:?}; ui.inspect after typing {typed:?}, after checkbox {kept:?}");
+                if typed != Some(8.0) || kept != (Some(8.0), Some(true)) || !driver::fields(&app).is_mixed("afterFirst") {
+                    failures.push(format!("{lang} {answer}: {typed:?}, {kept:?}"));
+                }
+                assert_eq!(paras(&app, id), original, "{lang}: only the draft changes while open");
+                if answer == "ui.dialog.confirm" {
+                    let (request, _) = ControlRequest::new(answer, json!({}));
+                    match crate::control::handle(&mut app, &ctx, &request) {
+                        Reply::Done(reply) => assert_eq!(reply["ok"], true, "{reply}"),
+                        _ => panic!("confirmation should reply immediately"),
+                    }
+                } else {
+                    click(&mut app, &mut frame, footer.center());
+                }
+                settle(&mut app, &mut frame);
+                assert!(!driver::is_open(&app), "{lang}: footer closed the dialog");
+                let actual = paras(&app, id);
+                let undo_delta = app.session.active().unwrap().history.undo.len() - undo;
+                eprintln!(
+                    "{lang}, {answer}: committed counts {}/{}, hyphenation {}/{}, after first {}/{}, undo {undo_delta}",
+                    actual.0.hyphenation.words_longer_than,
+                    actual.1.hyphenation.words_longer_than,
+                    actual.0.hyphenate,
+                    actual.1.hyphenate,
+                    actual.0.hyphenation.after_first,
+                    actual.1.hyphenation.after_first
+                );
+                if apply {
+                    let mut expected = original.clone();
+                    for p in [&mut expected.0, &mut expected.1] {
+                        p.hyphenation.words_longer_than = 8;
+                        p.hyphenate = true;
+                    }
+                    if actual != expected || undo_delta != 1 {
+                        failures.push(format!(
+                            "{lang} {answer}: left {:?} and {:?}, undo delta {undo_delta}",
+                            actual.0.hyphenation, actual.1.hyphenation
+                        ));
+                    }
+                } else {
+                    assert_eq!(actual, original, "{lang}: Cancel discards both edits");
+                    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+                }
+            }
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+        }
+        assert!(failures.is_empty(), "Hyphenation lost physical edits: {failures:?}");
     }
 
     /// `ui.hyphenation` opens the dialog on the selected type; OK sets the paragraphs' hyphenation
@@ -155,5 +333,103 @@ mod tests {
         app.run("select.set", json!({"ids": []})).unwrap();
         assert!(app.run("ui.hyphenation", json!({})).is_err());
         assert!(!driver::is_open(&app));
+    }
+
+    #[test]
+    fn hyphenation_confirm_keeps_the_opening_selection() {
+        let (mut app, first) = app();
+        let second = app.run("text.create", json!({"x": 10, "y": 150, "text": "Other text"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [first]})).unwrap();
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        driver::ok(&mut app);
+        assert_eq!((paras(&app, first).0.hyphenate, paras(&app, second).0.hyphenate), (true, false));
+    }
+
+    #[test]
+    fn hyphenation_confirm_keeps_the_opening_caret_paragraph() {
+        let (mut app, id) = app();
+        app.session.select_tool("type", Default::default()).unwrap();
+        let caret = |at| json!({"editing": id, "anchor": at, "caret": at});
+        app.session.set_tool_option("textSelection", &caret(0));
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        app.session.set_tool_option("textSelection", &caret(5));
+        driver::ok(&mut app);
+        let (first, second) = paras(&app, id);
+        assert_eq!((first.hyphenate, second.hyphenate), (true, false));
+    }
+
+    #[test]
+    fn hyphenation_confirms_the_caret_paragraph_after_buffered_typing() {
+        let (mut app, id) = app();
+        app.run("prefs.set", json!({"key": "realTimeDrawing", "value": false})).unwrap();
+        let view = Default::default();
+        app.session.select_tool("type", view).unwrap();
+        app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": 7, "caret": 7}));
+        app.session.tool_text("\nThree", view).unwrap();
+        let text = &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind;
+        assert!(matches!(text, NodeKind::Text(t) if t.plain_text() == "One\nTwo"));
+
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        driver::ok(&mut app);
+        let NodeKind::Text(t) = &app.session.active().unwrap().doc.node(NodeId(id)).unwrap().kind else { panic!("not text") };
+        assert_eq!(t.plain_text(), "One\nTwo\nThree");
+        assert_eq!([t.para_at(0).hyphenate, t.para_at(1).hyphenate, t.para_at(2).hyphenate], [false, false, true]);
+    }
+
+    #[test]
+    fn hyphenation_confirm_leaves_the_other_drawing_unchanged() {
+        let (mut app, id) = app();
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let second = app.run("text.create", json!({"x": 10, "y": 10, "text": "Other drawing"})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(id, second, "local text IDs may match between drawings");
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        driver::ok(&mut app);
+        assert!(!paras(&app, second).0.hyphenate);
+        assert!(driver::is_open(&app));
+        assert_eq!(driver::fields(&app).bool("hyphenate"), Some(true));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        driver::ok(&mut app);
+        assert!(!driver::is_open(&app));
+        assert!(paras(&app, id).0.hyphenate);
+    }
+
+    #[test]
+    fn hyphenation_approval_refuses_to_change_restored_text() {
+        let (mut app, id) = app();
+        let dir = vectorcraft_testkit::TempDir::new("hyphenation-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let before = paras(&app, id);
+        app.run("text.setFormat", json!({"ids": [id], "afterFirst": 2})).unwrap();
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let dialog = craft::ui::dialog::dialog_id(KIND);
+        crate::tests::picks::answer_dialog(&mut app, dialog, &[], true);
+        assert_eq!(paras(&app, id), before);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(
+            app.dialogs().unwrap().with(|h| h.held_state(dialog)),
+            Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+
+        driver::cancel(&mut app);
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        driver::ok(&mut app);
+        assert!(paras(&app, id).0.hyphenate);
     }
 }
