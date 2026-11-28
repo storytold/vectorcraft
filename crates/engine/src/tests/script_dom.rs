@@ -1391,7 +1391,7 @@ fn wrappers_go_stale_after_delete_and_undo() {
 /// File › Revert loads objects with the ids they were saved with: an object or a layer read before
 /// the revert does not name the loaded one.
 #[test]
-fn wrappers_go_stale_after_revert() {
+fn objects_read_before_a_revert_are_stale_and_ones_read_after_are_the_loaded_ones() {
     // `pageItems[0]` is the topmost object, the one made last.
     let (mut s, _, b) = doc();
     let dir = std::env::temp_dir().join(format!("vc-dom-revert-{}", std::process::id()));
