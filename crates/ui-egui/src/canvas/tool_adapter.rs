@@ -110,27 +110,37 @@ fn sync_artboard(app: &mut VectorcraftApp) {
 }
 
 /// Enter that the tool does not claim, while no gesture runs: it takes what the tool asks of the UI (Rotate, Scale,
-/// Reflect and Shear open their dialog), and with a selection tool it opens the Move dialog, as a double-click on the
-/// tool's button does. Taken only when a dialog opened, so that Enter is not also its OK.
+/// Reflect and Shear open their dialog), and Enter opens the active tool's options, exactly as a double-click on its
+/// button does: the Move dialog for the selection tools, that tool's dialog or panel for the others, the Hand's fit,
+/// the Zoom's 100 %, the Print Tiling's reset. A tool that acted on Enter itself keeps it (a finished path, Crop
+/// Image's Apply, a transform dialog), and a tool with no options opens nothing. Taken when a dialog or options
+/// opened, or when the tool acted, so that Enter is not also a command's, or its own dialog's OK.
 pub(crate) fn tool_enter(app: &mut VectorcraftApp, mods: Mods, view: ViewInfo) -> bool {
     if app.session.tool_busy() {
         return false;
     }
     let open = |app: &VectorcraftApp| app.dialogs().map_or(0, |d| d.with(|h| h.open_dialogs().len()));
     let before = open(app);
+    let revision = |app: &VectorcraftApp| app.session.doc().ok().map(|d| d.revision);
+    let revision_before = revision(app);
     let r = app.session.tool_key(EngineKey::Enter, mods, view);
+    // Did the tool act on Enter itself? A finished pen path, the Curvature tool's reset, Crop Image's Apply, or
+    // (Rotate, Scale, Reflect and Shear) the dialog it asks for. Most of these show as a request in `r` (the
+    // transform dialogs); a change the session applies for the tool (the Curvature's Enter clears the current point
+    // with select.set) moves the document's revision instead.
+    let acted = !matches!(&r, Ok(reqs) if reqs.is_empty()) || revision_before.zip(revision(app)).is_some_and(|(before, after)| after > before);
     apply_requests(app, r);
     let tool = app.session.tool_id().to_owned();
-    if open(app) == before && vectorcraft_tools::catalog::is_selection_tool(&tool) {
-        // Nothing selected: it fails and nothing opens (the menu item is disabled then too).
-        let _ = crate::toolbar::open_options(app, &tool);
+    let mut opened = open(app) > before;
+    if !opened && !acted {
+        // Nothing selected (or nothing to open): it fails and nothing opens (the menu item is disabled then too).
+        opened = crate::toolbar::open_options(app, &tool).is_ok();
     }
-    let opened = open(app) > before;
     // The dialog uses the tool a held key chose.
     if opened {
         crate::shortcuts::note_tool_use(app);
     }
-    opened
+    opened || acted
 }
 
 /// The session as a tool for one pass. The host's trait takes `&self` for the cursor and the claims, which the

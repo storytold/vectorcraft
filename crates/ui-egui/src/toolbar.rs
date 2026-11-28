@@ -484,6 +484,8 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
 /// ([`crate::dialogs::shapes::open_options`]), the Circle tool's ([`crate::dialogs::circle_options::open`]) and the
 /// Curvature Circle tool's ([`crate::dialogs::curvature_circle_options::open`]). The Type on a Path and Vertical Type on a Path
 /// tools' are Type on a Path Options for the selected type on a path.
+///
+/// Pressing Enter with a tool does the same, for every tool it can (see [`crate::canvas::tool_enter`]).
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
         "dimension" => crate::dialogs::dimension::open(app),

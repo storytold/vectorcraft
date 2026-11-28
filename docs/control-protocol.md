@@ -197,9 +197,11 @@ shows 100% (`view.actualSize`). For `rotate`, `scale`, `reflect` and `shear` it 
 Transform (dialog kind = the tool id), or fails with `nothing selected`. For `selection`, `directSelection` and
 `groupSelection` it opens the Move dialog (kind `move`), with the same failure; Move opens on the offset of the last
 drag or Move (`dx`, `dy`) and with the `copy`, `objects` and `preview` it was last confirmed with (its `patterns` is
-the `transformPatternTiles` preference, which its OK sets). `ui.key` Enter with one of those seven
-tools opens its dialog too (nothing happens without a selection), with the transform tools' `origin` at their reference
-point. For `lineSegment`, `arc`, `rectangularGrid` and `polarGrid` it opens the tool's Tool Options: the dialog its
+the `transformPatternTiles` preference, which its OK sets). `ui.key` Enter opens the active tool's options, exactly as a
+double-click on its button does, for every tool: the dialog or panel above, the Hand's fit, the Zoom's 100% and the Print
+Tiling's reset (nothing happens without a selection where the dialog needs one; a tool with no options, or that uses
+Enter itself — a finished Pen path, Crop Image's Apply — opens nothing), with the transform tools' `origin` at their
+reference point. For `lineSegment`, `arc`, `rectangularGrid` and `polarGrid` it opens the tool's Tool Options: the dialog its
 click opens (kind = the tool id), without `x` and `y` and with `__toolOptions: true`, whose `ui.dialog.confirm` runs
 `tool.setOption {tool, values}` and draws nothing; the next drag with the tool and its click dialog use the values
 (the line's `fillLine`, the grids' Default Size `width`, `height` and `reference` too). For `typeOnPath` and

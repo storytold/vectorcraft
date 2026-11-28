@@ -1565,7 +1565,89 @@ fn enter_opens_the_tools_dialog_and_leaves_it_open() {
     }
     app.select_tool("rectangle");
     key_frame(&mut app, &ctx, enter());
-    assert_eq!(dialog_kind(&app), None, "another tool has its own Enter");
+    assert_eq!(dialog_kind(&app), None, "a tool with no options opens nothing");
+}
+
+/// Enter opens every tool's options, exactly as a double-click on the tool's button does: the dialog
+/// tools, the panel tools, and the action tools (the Hand fits the artboard, the Zoom shows 100 %).
+/// A tool with no options opens nothing.
+#[test]
+fn enter_opens_any_tools_options() {
+    let enter = || tap(Key::Enter, Modifiers::NONE);
+    // The tools whose options are a dialog; none needs a selection.
+    for (tool, dialog) in [
+        ("blend", "blendOptions"),
+        ("pencil", "freehandOptions"),
+        ("paintbrush", "freehandOptions"),
+        ("blobBrush", "freehandOptions"),
+        ("eraser", "freehandOptions"),
+        ("smooth", "freehandOptions"),
+        ("eyedropper", "eyedropperOptions"),
+        ("warp", "liquifyOptions"),
+        ("twirl", "liquifyOptions"),
+        ("artboard", "artboardOptions"),
+        ("perspectiveGrid", "perspectiveGridOptions"),
+        ("flare", "flareOptions"),
+        ("symbolSprayer", "symbolismOptions"),
+        ("dimension", "dimensionOptions"),
+    ] {
+        let mut app = new_app();
+        let ctx = ready(&mut app);
+        app.select_tool(tool);
+        key_frame(&mut app, &ctx, enter());
+        assert_eq!(dialog_kind(&app).as_deref(), Some(dialog), "{tool}: Enter opens its options");
+        // The Enter that opened them isn't also their OK.
+        key_frame(&mut app, &ctx, vec![]);
+        assert_eq!(dialog_kind(&app).as_deref(), Some(dialog), "{tool}: and they stay open");
+    }
+    // The panel tools open their panel.
+    for panel in ["gradient", "magicWand"] {
+        let mut app = new_app();
+        let ctx = ready(&mut app);
+        app.select_tool(panel);
+        assert!(!crate::panel_docking::showing(&app.ui, panel), "{panel}: its panel starts closed");
+        key_frame(&mut app, &ctx, enter());
+        assert!(crate::panel_docking::showing(&app.ui, panel), "{panel}: Enter opens its panel");
+    }
+    // A tool with no options opens nothing.
+    for tool in ["rectangle", "pen", "width", "lasso"] {
+        let mut app = new_app();
+        let ctx = ready(&mut app);
+        app.select_tool(tool);
+        key_frame(&mut app, &ctx, enter());
+        assert_eq!(dialog_kind(&app), None, "{tool}: no options to open");
+    }
+    // The action tools do what a double-click on their button does.
+    let mut app = new_app();
+    let ctx = ready(&mut app);
+    let view = |app: &VectorcraftApp| {
+        let v = app.view().unwrap();
+        (v.center.x, v.center.y, v.zoom)
+    };
+    let zoomed_out = |app: &mut VectorcraftApp| {
+        app.run("view.setZoom", json!({"zoom": 25, "center": [0, 0]})).unwrap();
+        key_frame(app, &ctx, vec![]);
+    };
+    // The Hand fits the artboard, as its double-click does.
+    zoomed_out(&mut app);
+    app.select_tool("hand");
+    key_frame(&mut app, &ctx, enter());
+    key_frame(&mut app, &ctx, vec![]);
+    let fitted = view(&app);
+    zoomed_out(&mut app);
+    app.run("view.fitArtboard", json!({})).unwrap();
+    key_frame(&mut app, &ctx, vec![]);
+    assert_eq!(view(&app), fitted, "Hand: Enter fits the artboard");
+    // The Zoom shows 100%, as its double-click does.
+    zoomed_out(&mut app);
+    app.select_tool("zoom");
+    key_frame(&mut app, &ctx, enter());
+    key_frame(&mut app, &ctx, vec![]);
+    let shown = view(&app);
+    zoomed_out(&mut app);
+    app.run("view.actualSize", json!({})).unwrap();
+    key_frame(&mut app, &ctx, vec![]);
+    assert_eq!(view(&app), shown, "Zoom: Enter shows 100%");
 }
 
 /// A drag with the Selection tool, then Enter: Move opens on the drag's offset and repeats it.
