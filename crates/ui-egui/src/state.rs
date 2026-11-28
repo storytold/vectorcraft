@@ -614,6 +614,10 @@ pub struct UiState {
     pub toolbar_advanced: bool,
     #[serde(default = "yes")]
     pub task_bar: bool,
+    /// The Discord button in the app bar and on Home (Preferences ▸ General). On by default; turning it off hides
+    /// both, while Help and About keep their Discord link.
+    #[serde(default = "yes")]
+    pub show_discord_button: bool,
     /// Where the Contextual Task Bar was dragged or pinned, and the document it was moved in. Not
     /// saved: the bar starts under the selection at every launch.
     #[serde(skip)]
@@ -1480,6 +1484,7 @@ impl Default for UiState {
             toolbar_compact: false,
             toolbar_advanced: false,
             task_bar: true,
+            show_discord_button: true,
             task_bar_place: Default::default(),
             task_bar_hidden_actions: Default::default(),
             quick_pen_bar: true,

@@ -36,7 +36,8 @@ pub(super) fn home(app: &mut VectorcraftApp, ui: &mut Ui, rect: egui::Rect) {
         .map(|s| Template::new(s.name.clone(), s.name.clone(), s.size_label()).page(s.width, s.height))
         .collect();
     let mut links = vec![];
-    let discord = crate::credits::discord_url(app);
+    // Preferences ▸ General ▸ Show the Discord button.
+    let discord = if app.ui.show_discord_button { crate::credits::discord_url(app) } else { String::new() };
     if !discord.is_empty() {
         links.push(StartLink::url(tl!("Join our Discord"), Some(IconId::new("message-circle")), discord).primary());
     }

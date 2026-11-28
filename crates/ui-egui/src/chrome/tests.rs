@@ -473,6 +473,21 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
     assert!(widest.zip(narrowest).is_some_and(|(w, n)| n >= w - 0.5), "the search keeps its width until it goes: {search_widths:?}");
 }
 
+/// Preferences ▸ General ▸ Show the Discord button: off, neither the app bar nor Home shows a Discord button; on, both do.
+#[test]
+fn the_discord_preference_hides_the_app_bar_and_home_buttons() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let shown = |on: bool| {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.ui.show_discord_button = on;
+        let mut window = Shown::new(app, egui::vec2(1600.0, 900.0), |app, ui| app.ui(ui));
+        window.frame(Vec::new()).frame(Vec::new());
+        (window.find("Discord").is_some(), window.shows("Join our Discord"))
+    };
+    assert_eq!(shown(true), (true, true), "on: the app bar and Home show the button");
+    assert_eq!(shown(false), (false, false), "off: neither shows it");
+}
+
 /// The app bar's right-hand controls stand at least `space.gap.item` apart, the gap between neighboring controls in a
 /// bar, so a hovered control's highlight does not touch the one beside it.
 #[test]

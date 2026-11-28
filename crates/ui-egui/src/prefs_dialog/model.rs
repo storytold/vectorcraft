@@ -474,6 +474,9 @@ impl PreferencesDraft for Live<'_> {
         if let Some(on) = row("__snapToGrid") {
             self.app.ui.view.snap_to_grid = on;
         }
+        if let Some(on) = row("__showDiscordButton") {
+            self.app.ui.show_discord_button = on;
+        }
         if !before_switch && let Some(on) = row("__taskBar") {
             self.app.ui.task_bar = on;
         }
@@ -497,6 +500,7 @@ impl PreferencesDraft for Live<'_> {
         self.w.draft.set("__smartGuides", &self.app.ui.view.smart_guides);
         self.w.draft.set("__snapToGrid", &self.app.ui.view.snap_to_grid);
         self.w.draft.set("__taskBar", &self.app.ui.task_bar);
+        self.w.draft.set("__showDiscordButton", &self.app.ui.show_discord_button);
         self.w.opened = self.w.draft.clone();
         self.w.source = self.w.draft.clone();
         self.w.touched.clear();

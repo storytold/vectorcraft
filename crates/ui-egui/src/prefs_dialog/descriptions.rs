@@ -6,6 +6,7 @@
 pub(crate) const DESCRIPTIONS: &[(&str, &str)] = &[
     // General
     ("__taskBar", "Shows a bar of commands for the selection or tool on the canvas; it hides while you drag and in Presentation Mode."),
+    ("__showDiscordButton", "Shows the Discord button in the app bar and on Home; Help and About keep their Discord link."),
     ("keyboardIncrement", "How far an arrow key moves the selection; with Shift, it moves ten times as far."),
     ("constrainAngle", "The angle of the axes that arrow keys move along and that Shift holds drawing and moving to."),
     ("cornerRadius", "The corner radius the Rounded Rectangle tool draws with; changing the radius while drawing changes this value too."),
