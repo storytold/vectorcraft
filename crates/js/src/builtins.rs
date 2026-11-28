@@ -4,14 +4,17 @@
 //! B's `escape` and `unescape`, `Boolean` with `Boolean.prototype`'s `toString` and `valueOf`, and
 //! the prototypes primitive values look properties up on. `String`, `Number`, `RegExp` and `Date` are in
 //! their own modules. A realm with [`crate::Options::es2015`] also has `Symbol` (in `symbol`),
-//! the iterators of arrays, strings and `arguments` objects (in `iterator`), and the generator
-//! objects' prototypes with `GeneratorFunction` (in `generator`).
+//! the iterators of arrays, strings and `arguments` objects (in `iterator`), the generator
+//! objects' prototypes with `GeneratorFunction` (in `generator`), `Map`, `Set`, `WeakMap` and
+//! `WeakSet` (in `collections`) and `ArrayBuffer`, `DataView` and the typed arrays (in `binary`).
 //!
 //! Every loop in a built-in takes a unit of fuel for each step, and every string, array, object
 //! or property it makes is checked against the heap limit before it is made, so no built-in can
 //! run past [`crate::Limits`].
 
 mod array;
+pub(crate) mod binary;
+pub(crate) mod collections;
 pub(crate) mod extensions;
 mod generator;
 mod global;
@@ -270,6 +273,8 @@ fn try_install(interp: &mut Interp) -> JsResult<()> {
     }
     if interp.options.es2015 {
         promise::install(interp)?;
+        collections::install(interp)?;
+        binary::install(interp)?;
     }
     Ok(())
 }
@@ -291,8 +296,16 @@ fn key_of(n: f64) -> Key {
     number_to_str(n).flat()
 }
 
-/// ToUint32 of an object's `length`.
+/// ToUint32 of an object's `length`. While a `%TypedArray%.prototype` method runs the array
+/// method it shares, the typed array's length is its element count, whatever its `length`
+/// property says (ECMA-262 6.0 section 22.2.3).
 fn length_of(interp: &mut Interp, o: ObjId) -> JsResult<u32> {
+    if interp.typed_length == Some(o) {
+        interp.typed_length = None;
+        if let Some(Class::TypedArray(view)) = interp.heap.object(o).map(|obj| &obj.class) {
+            return Ok(u32::try_from(view.length).unwrap_or(u32::MAX));
+        }
+    }
     let len = interp.get_from(o, &key("length"), &Value::Object(o))?;
     Ok(to_uint32(interp.to_number(&len)?))
 }

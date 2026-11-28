@@ -64,6 +64,8 @@ pub(crate) struct PasteAsk {
     mismatches: Vec<Value>,
     /// The drawing and content generation the question was asked in.
     drawing: Option<(u64, u64)>,
+    /// For a drop, the source drawing and content generation its node IDs came from.
+    drop_source: Option<(u64, u64)>,
     /// The chain of a deferred paste (one that waits for its clipboard), which placing answers.
     deferred: Option<u64>,
 }
@@ -271,7 +273,13 @@ fn open_paste(app: &mut VectorcraftApp, command: &str, params: &Value, mismatche
     }
     let dialog = paste_dialog(&ctx, &mismatches);
     let drawing = app.session.active().map(|st| (st.uid, st.reverts));
-    app.pending_paste = Some(PasteAsk { command: command.to_string(), params: params.clone(), mismatches, drawing, deferred: None });
+    let drop_source = if command == DROP {
+        let source_uid = params["sourceDocument"].as_u64();
+        app.session.documents().iter().find(|st| Some(st.uid) == source_uid).map(|st| (st.uid, st.reverts))
+    } else {
+        None
+    };
+    app.pending_paste = Some(PasteAsk { command: command.to_string(), params: params.clone(), mismatches, drawing, drop_source, deferred: None });
     dialogs.with(|h| h.open(dialog));
     Some(Ok(json!({ "dialog": PASTE_KIND })))
 }
@@ -389,11 +397,16 @@ fn pump_paste(app: &mut VectorcraftApp) {
 }
 
 /// OK: run the paste with the choice; any Swatch Conflict question comes next. An immediate paste
-/// is canceled if its drawing is inactive or reverted. When the profiles it would bring have changed
-/// since it asked (the clipboard, dragged objects or destination changed), it asks about the new ones.
+/// is canceled if its destination is inactive or reverted, or if its drop source was reverted.
+/// When the profiles it would bring have changed since it asked, it asks about the new ones.
 fn paste_confirm(app: &mut VectorcraftApp, ask: PasteAsk, choice: Value) -> Result<Value, String> {
     if ask.deferred.is_none() && ask.drawing != app.session.active().map(|st| (st.uid, st.reverts)) {
         return Ok(json!({}));
+    }
+    if let Some((uid, reverts)) = ask.drop_source
+        && app.session.documents().iter().any(|st| st.uid == uid && st.reverts != reverts)
+    {
+        return Err(tl!("The drawing dragged from was reverted.").into());
     }
     let params = with_choice(&ask.params, choice);
     // Without the answer, the paste asks again about what it brings now.

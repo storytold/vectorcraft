@@ -398,20 +398,62 @@ pub(crate) fn painted<'a>(n: &'a Node, top: bool, stroke: bool, out: &mut Vec<&'
 /// whether another one differs ([`DocState::proxy_mixed`] without an active Appearance item or
 /// picked mesh points, and [`super::stroke::StrokeMixed::weight`]), and whether an object lies in a
 /// Live Paint group or may hold a gradient mesh. The objects added to a selection are read with
-/// [`SelectionPaints::add`].
+/// [`SelectionPaints::add`], and the objects taken out of it with [`SelectionPaints::remove`].
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SelectionPaints {
-    fill: Option<Paint>,
-    pub(crate) fill_mixed: bool,
-    stroke: Option<Paint>,
-    pub(crate) stroke_mixed: bool,
-    weight: Option<f64>,
-    pub(crate) weight_mixed: bool,
-    /// An object is a face or edge of a Live Paint group, or lies inside one
+    fill: Tally<Paint>,
+    stroke: Tally<Paint>,
+    weight: Tally<f64>,
+    /// The objects that are a face or edge of a Live Paint group, or lie inside one
     /// ([`live_paint_covered`]).
-    pub(crate) in_live_paint: bool,
-    /// An object is a gradient mesh or a container ([`Session::fill_mesh_points`]).
-    pub(crate) may_hold_mesh: bool,
+    in_live_paint: usize,
+    /// The objects that are a gradient mesh or a container ([`Session::fill_mesh_points`]).
+    may_hold_mesh: usize,
+}
+
+/// The first value met, how many of the values met are the same as it, and how many were met.
+#[derive(Clone, Debug)]
+struct Tally<T> {
+    first: Option<T>,
+    same: usize,
+    all: usize,
+}
+
+impl<T> Default for Tally<T> {
+    fn default() -> Self {
+        Self { first: None, same: 0, all: 0 }
+    }
+}
+
+impl<T> Tally<T> {
+    fn add(&mut self, value: T, same: impl Fn(&T, &T) -> bool) {
+        self.all += 1;
+        match &self.first {
+            Some(f) if same(f, &value) => self.same += 1,
+            Some(_) => {}
+            None => (self.first, self.same) = (Some(value), 1),
+        }
+    }
+    /// Take out a value met before. → false when the values left must be met again to know which
+    /// differ: every value the same as the first one is gone, and others are left.
+    fn remove(&mut self, value: &T, same: impl Fn(&T, &T) -> bool) -> bool {
+        let Some(f) = &self.first else { return false };
+        if self.all == 0 {
+            return false;
+        }
+        self.all -= 1;
+        if same(f, value) {
+            self.same = self.same.saturating_sub(1);
+        }
+        if self.same == 0 {
+            self.first = None;
+            return self.all == 0;
+        }
+        true
+    }
+    fn mixed(&self) -> bool {
+        self.same < self.all
+    }
 }
 
 impl SelectionPaints {
@@ -422,31 +464,76 @@ impl SelectionPaints {
         p
     }
 
-    /// Read objects `ids` of `doc` too.
+    /// Do the fills differ?
+    pub(crate) fn fill_mixed(&self) -> bool {
+        self.fill.mixed()
+    }
+
+    /// Do the strokes differ?
+    pub(crate) fn stroke_mixed(&self) -> bool {
+        self.stroke.mixed()
+    }
+
+    /// Do the stroke weights differ?
+    pub(crate) fn weight_mixed(&self) -> bool {
+        self.weight.mixed()
+    }
+
+    /// Is an object a face or edge of a Live Paint group, or inside one?
+    pub(crate) fn in_live_paint(&self) -> bool {
+        self.in_live_paint > 0
+    }
+
+    /// Is an object a gradient mesh or a container?
+    pub(crate) fn may_hold_mesh(&self) -> bool {
+        self.may_hold_mesh > 0
+    }
+
+    /// Read objects `ids` of `doc` too: ids that are not read yet, each named once.
     pub(crate) fn add(&mut self, doc: &Document, ids: &[NodeId]) {
-        fn meet<T>(first: &mut Option<T>, mixed: &mut bool, value: T, same: impl Fn(&T, &T) -> bool) {
-            match first {
-                Some(f) => *mixed |= !same(f, &value),
-                None => *first = Some(value),
+        self.each(doc, ids, true);
+    }
+
+    /// Take out objects `ids` of `doc`, read before in the same document: ids that are read, each
+    /// named once. → false when the objects left must be read again ([`Tally::remove`]); the
+    /// paints are then wrong.
+    pub(crate) fn remove(&mut self, doc: &Document, ids: &[NodeId]) -> bool {
+        self.each(doc, ids, false)
+    }
+
+    /// [`Self::add`] (`add`) or [`Self::remove`].
+    fn each(&mut self, doc: &Document, ids: &[NodeId], add: bool) -> bool {
+        let mut ok = true;
+        let mut meet = |tally: &mut Tally<Paint>, value: Paint| {
+            if add {
+                tally.add(value, same_in_proxy);
+            } else {
+                ok &= tally.remove(&value, same_in_proxy);
             }
-        }
-        // As in `proxy_mixed_with`: every node with an added id, in tree order.
+        };
+        // As in `proxy_mixed_with`: every node with one of the ids, in tree order.
         let (mut fills, mut strokes) = (vec![], vec![]);
         for n in doc.nodes_in_order(ids.iter().copied()) {
             painted(n, true, false, &mut fills);
             painted(n, true, true, &mut strokes);
         }
         for n in fills {
-            meet(&mut self.fill, &mut self.fill_mixed, proxy_paint(n, false, None), same_in_proxy);
+            meet(&mut self.fill, proxy_paint(n, false, None));
         }
         for n in strokes {
-            meet(&mut self.stroke, &mut self.stroke_mixed, proxy_paint(n, true, None), same_in_proxy);
+            meet(&mut self.stroke, proxy_paint(n, true, None));
         }
-        // As in `stroke_mixed`: the node each added id names.
-        for id in ids {
+        // As in `stroke_mixed`: the node each id names.
+        let step = |count: &mut usize, yes: bool| {
+            if yes {
+                *count = if add { *count + 1 } else { count.saturating_sub(1) };
+            }
+        };
+        let mut seen = std::collections::HashSet::new();
+        for id in ids.iter().filter(|id| seen.insert(**id)) {
             let Some(n) = doc.node(*id) else { continue };
-            self.in_live_paint |= in_live_paint(doc, *id);
-            self.may_hold_mesh |= matches!(n.kind, NodeKind::Mesh(_)) || n.is_container();
+            step(&mut self.in_live_paint, in_live_paint(doc, *id));
+            step(&mut self.may_hold_mesh, matches!(n.kind, NodeKind::Mesh(_)) || n.is_container());
             let mut nodes = vec![];
             painted(n, true, true, &mut nodes);
             for n in nodes {
@@ -455,10 +542,15 @@ impl SelectionPaints {
                     _ => n.appearance.stroke().map(|s| s.width).into_iter().collect(),
                 };
                 for w in widths {
-                    meet(&mut self.weight, &mut self.weight_mixed, w, |a, b| a == b);
+                    if add {
+                        self.weight.add(w, |a, b| a == b);
+                    } else {
+                        ok &= self.weight.remove(&w, |a, b| a == b);
+                    }
                 }
             }
         }
+        ok
     }
 }
 
@@ -1161,7 +1253,7 @@ impl Session {
     /// takes from the selection now ([`Session::inherit_new_art`]). No appearance is captured
     /// while inheritance does not run (New Art Has Basic Appearance on, or the active tool painting
     /// with both the fill and the stroke).
-    fn note_defaults_only(&mut self) {
+    pub(crate) fn note_defaults_only(&mut self) {
         let inherits = !self.prefs.new_art_basic && !(self.tool_paints(false) && self.tool_paints(true));
         self.defaults_only_ran = Some(if inherits { self.new_art_source() } else { None });
     }
@@ -1275,7 +1367,7 @@ impl DocState {
     /// [`live_paint_covered`] for `ids`, the selected objects or the selection's subjects: none
     /// when the [`SelectionPaints`] of the selection say no selected object is in a Live Paint group.
     pub(crate) fn selection_live_paint_covered(&self, ids: &[NodeId]) -> std::collections::HashSet<NodeId> {
-        if self.selection_paints().is_some_and(|p| !p.in_live_paint) {
+        if self.selection_paints().is_some_and(|p| !p.in_live_paint()) {
             return std::collections::HashSet::new();
         }
         live_paint_covered(&self.doc, ids)
@@ -1527,7 +1619,7 @@ impl Session {
         // Only gradient meshes have points to pick: a selection with no mesh and no container that
         // could hold one skips reading the tool's options.
         let may_hold_mesh = |id: &NodeId| st.doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Mesh(_)) || n.is_container());
-        let none_may = || st.selection_paints().map_or_else(|| !st.selection.subjects().iter().any(may_hold_mesh), |p| !p.may_hold_mesh);
+        let none_may = || st.selection_paints().map_or_else(|| !st.selection.subjects().iter().any(may_hold_mesh), |p| !p.may_hold_mesh());
         if st.selection.symbol_part.is_some() || none_may() {
             return vec![];
         }
