@@ -27,7 +27,7 @@ pub const EXTS: &[&str] = &["vccomposite"];
 const EXPORT: &str = "type.compositeFonts.export";
 
 /// The largest file Import reads, in bytes.
-const MAX_FILE_BYTES: usize = 4 << 20;
+pub const MAX_FILE_BYTES: usize = 4 << 20;
 
 /// The keys a part may give.
 const PART_KEYS: [&str; 7] = ["font", "style", "size", "baseline", "hScale", "vScale", "scaleAtCenter"];
@@ -204,7 +204,7 @@ fn parse_set(v: &Value, font: &str, kanji: &CompositePart, c: &str) -> Result<Cu
 
 /// Error unless `fonts` can stand together in a document: names unique in any case, none naming
 /// an installed font, no part set in a composite font, and at most [`COMPOSITE_FONTS_MAX`].
-fn check_set(fonts: &[CompositeFont], c: &str) -> Result<()> {
+pub(crate) fn check_set(fonts: &[CompositeFont], c: &str) -> Result<()> {
     if fonts.len() > COMPOSITE_FONTS_MAX {
         return Err(bad(c, format!("a document keeps at most {COMPOSITE_FONTS_MAX} composite fonts")));
     }
@@ -237,31 +237,53 @@ fn replace(s: &mut Session, label: &str, after: Vec<CompositeFont>) -> Result<()
     if before == after {
         return Ok(());
     }
+    let changed = register(s, &before, &after);
+    let r = s.edit(label, |d, _| set_fonts(d, &after, &changed));
+    sync(s);
+    r
+}
+
+/// Before an edit makes `after` the active document's composite fonts (it has `before`), register
+/// them in the font database and forget the ones taken out → the lowercased names of the fonts that
+/// change, for [`set_fonts`]. Run [`sync`] after the edit, whether it was made or not.
+pub(crate) fn register(s: &mut Session, before: &[CompositeFont], after: &[CompositeFont]) -> Vec<String> {
     let changed: Vec<String> =
         before.iter().filter(|b| !after.contains(b)).chain(after.iter().filter(|a| !before.contains(a))).map(|f| f.name.to_lowercase()).collect();
     // A refused or panicked edit leaves the document without the new fonts: `sync` forgets a name
     // listed here that the document doesn't define.
     s.composite_names.extend(after.iter().map(|f| f.name.to_lowercase()));
     let db = FontDb::global();
-    for f in &before {
+    for f in before {
         if !after.iter().any(|a| CompositeFont::same_name(&a.name, &f.name)) {
             db.remove_composite_font(&f.name);
         }
     }
-    for f in &after {
+    for f in after {
         db.set_composite_font(f);
     }
-    let r = s.edit(label, |d, _| {
-        *d.composite_fonts = after.clone();
-        each_text_mut(d, &mut |t| {
-            if t.runs.iter().any(|r| changed.contains(&r.style.font_family.to_lowercase())) {
-                refresh_bounds(t);
-            }
-            Ok(())
-        })
-    });
-    sync(s);
-    r
+    changed
+}
+
+/// Make `after` the composite fonts of `d`, and measure the type set in a font of `changed` again.
+pub(crate) fn set_fonts(d: &mut vectorcraft_doc::Document, after: &[CompositeFont], changed: &[String]) -> Result<()> {
+    *d.composite_fonts = after.to_vec();
+    each_text_mut(d, &mut |t| {
+        if t.runs.iter().any(|r| changed.contains(&r.style.font_family.to_lowercase())) {
+            refresh_bounds(t);
+        }
+        Ok(())
+    })
+}
+
+/// `fonts` with `f` in place of the composite font of its name, or added, as Import Composite Fonts
+/// adds a font.
+pub(crate) fn with_font(fonts: &[CompositeFont], f: &CompositeFont) -> Vec<CompositeFont> {
+    let mut after = fonts.to_vec();
+    match after.iter_mut().find(|a| CompositeFont::same_name(&a.name, &f.name)) {
+        Some(a) => *a = f.clone(),
+        None => after.push(f.clone()),
+    }
+    after
 }
 
 fn set(s: &mut Session, p: &Value) -> Result<Value> {
@@ -349,7 +371,12 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     let too_large = || bad(C, "the file is larger than 4 MB");
     let bytes = match given {
         (Some(path), None, None) if !path.trim().is_empty() => read_file_head(path, MAX_FILE_BYTES + 1)?,
-        (None, Some(text), None) => text.as_bytes().to_vec(),
+        (None, Some(text), None) => {
+            if text.len() > MAX_FILE_BYTES {
+                return Err(too_large());
+            }
+            text.as_bytes().to_vec()
+        }
         (None, None, Some(b64)) => {
             if b64.len() > MAX_FILE_BYTES / 3 * 4 + 4 {
                 return Err(too_large());
@@ -372,10 +399,7 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     if apply {
         let mut after = s.doc()?.doc.composite_fonts.to_vec();
         for f in &fonts {
-            match after.iter_mut().find(|a| CompositeFont::same_name(&a.name, &f.name)) {
-                Some(a) => *a = f.clone(),
-                None => after.push(f.clone()),
-            }
+            after = with_font(&after, f);
         }
         check_set(&after, C)?;
         replace(s, "Import Composite Fonts", after)?;

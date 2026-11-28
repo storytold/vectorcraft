@@ -103,15 +103,22 @@ pub(crate) fn effect_params(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> 
     }
 }
 
-/// One row per default of an effect without a builder: the JSON type of the default decides the
-/// kind, and the rows follow the effect's parameter documentation.
+/// One row per default of a built-in effect without a builder: the JSON type of the default decides
+/// the kind, labels use the UI language, and the rows follow the effect's parameter documentation.
 pub(super) fn generic(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
     let id = cx.id.as_str();
     let Some(info) = vectorcraft_effects::effect_info(id) else { return Vec::new() };
     let relative = fields.contains("relative") && effect_rows::is_relative(fields);
     let mut defaults: Vec<(&String, &Value)> = info.defaults.as_object().into_iter().flatten().collect();
     defaults.sort_by_key(|(key, _)| doc_rank(info.params, key));
-    defaults.into_iter().filter_map(|(key, default)| generic_row(cx, key, default, relative)).collect()
+    defaults
+        .into_iter()
+        .filter_map(|(key, default)| {
+            let mut row = generic_row(cx, key, default, relative)?;
+            row.label = tl!(row.label.as_str()).to_owned().into();
+            Some(row)
+        })
+        .collect()
 }
 
 /// One row per stored value of an effect that has no rows of its own (a plug-in no longer
@@ -177,16 +184,14 @@ pub(crate) fn heading(cx: &EffectCx) -> String {
     }
 }
 
-/// The effect's name in the UI language: the catalog may carry it with or without its trailing
-/// ellipsis. A plug-in effect's name is shown as it is.
+/// The effect's name in the UI language as the Effect menu shows it ([`crate::i18n::effect_name`]).
+/// A plug-in effect's name is shown as it is.
 pub(crate) fn label(id: &str) -> String {
     let name = vectorcraft_effects::effect_info(id).map(|i| i.label.trim_end_matches('…').to_string()).unwrap_or_else(|| id.to_string());
     if vectorcraft_plugins::effect::plugin_id(id).is_some() {
         return name;
     }
-    let dotted = format!("{name}…");
-    let shown = tl!(&dotted);
-    if shown != dotted { shown.trim_end_matches('…').to_string() } else { tl!(&name).to_string() }
+    crate::i18n::effect_name(crate::i18n::current(), id).unwrap_or(name)
 }
 
 /// Film Grain's bounded, whole-number controls, in the same order as its parameter docs.
@@ -295,4 +300,62 @@ pub(super) fn doc_rank(doc: &str, key: &str) -> usize {
         .map(|(at, _)| at)
         .find(|at| starts(*at) && doc.get(at + key.len()..).is_some_and(|rest| rest.starts_with(':') || rest.starts_with("?:")))
         .unwrap_or(usize::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+    use serde_json::json;
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_engine::Session;
+
+    use crate::VectorcraftApp;
+
+    #[test]
+    fn gallery_cutout_setting_uses_its_localized_label() {
+        let viewport = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
+        let mut shown_labels = Vec::new();
+        for (language, expected) in [("en", "Levels"), ("de", "Stufen"), ("ja", "レベル数")] {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            app.session.prefs.interface_language = language.to_owned();
+            let lang = app.ui_language();
+            let ctx = app.ui_ctx.clone().unwrap();
+            let mut time = 0.0;
+            let mut frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+                ctx.enable_accesskit();
+                time += 0.1;
+                crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time), screen_rect: Some(viewport), ..Default::default() })
+            };
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let square = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+            frame(&mut app, vec![]);
+            assert_eq!(ctx.content_rect(), viewport);
+            app.run("ui.effectGalleryDialog", json!({})).unwrap();
+            frame(&mut app, vec![]);
+            let nodes = frame(&mut app, vec![]).platform_output.accesskit_update.unwrap().nodes;
+            let filter = crate::i18n::effect_name(lang, "artistic.cutout").unwrap();
+            let bounds = nodes.iter().filter(|(_, node)| node.label() == Some(filter.as_str())).find_map(|(_, node)| node.bounds()).unwrap();
+            let at = pos2((bounds.x0 + bounds.x1) as f32 * 0.5, (bounds.y0 + bounds.y1) as f32 * 0.5);
+            assert!(viewport.contains(at), "{language}: Cutout is reachable");
+            frame(&mut app, vec![Event::PointerMoved(at)]);
+            for pressed in [true, false] {
+                frame(&mut app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+            }
+            frame(&mut app, vec![]);
+            let output = frame(&mut app, vec![]);
+            let state = app.session.active().unwrap();
+            let affected = &state.doc.node(NodeId(square)).unwrap().appearance.effects;
+            assert_eq!(affected.first().map(|effect| effect.id.as_str()), Some("artistic.cutout"), "{language}: Cutout is previewed");
+
+            let nodes = output.platform_output.accesskit_update.unwrap().nodes;
+            let found = [expected, "Levels"].into_iter().find(|label| {
+                nodes
+                    .iter()
+                    .any(|(_, node)| node.label() == Some(*label) && node.bounds().is_some_and(|b| viewport.contains(pos2(b.x0 as f32, b.y0 as f32))))
+            });
+            eprintln!("{language}: expected {expected:?}, found {found:?}");
+            shown_labels.push(found);
+        }
+        assert_eq!(shown_labels, [Some("Levels"), Some("Stufen"), Some("レベル数")]);
+    }
 }

@@ -127,8 +127,8 @@ fn ask_item_name(app: &mut VectorcraftApp, library: &str, kind: ItemKind, item: 
 fn ask(app: &mut VectorcraftApp, command: &'static str, title: &'static str, name: String, fixed: Value) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
     let fields = DialogFields::from_pairs([("name", name.clone())]);
-    let dialog = HostedParamDialog::command(&ctx, command, fields, move |_| {
-        ParamDialog::command(command, tl!(title), vec![Param::new("name", tl!("Name"), ParamKind::text(name.clone()))])
+    let dialog = HostedParamDialog::command(&ctx, command, fields, move |fields| {
+        ParamDialog::command(command, tl!(title), vec![Param::new("name", tl!("Name"), ParamKind::text(name.clone()))]).values(Bind::bound(fields))
     });
     let opened = crate::dialogs::host::open_held(app, dialog, move |app, answer| {
         let mut params = fixed.clone();
@@ -190,7 +190,7 @@ fn swatch_add(drag: &PanelDrag, library: &str) -> Option<(ItemKind, Value)> {
 /// which keep their test, can read it: what a drop into a group, or out of every group, does.
 struct Membership {
     library: String,
-    active_document: Option<u64>,
+    active_document: Option<(u64, u64)>,
     /// The group of each grouped item, by its index in the library's groups.
     index: HashMap<(ItemKind, String), usize>,
     /// The groups' names, in the library's order.
@@ -198,7 +198,7 @@ struct Membership {
 }
 
 impl Membership {
-    fn of(library: &str, lib: &Library, active_document: Option<u64>) -> Self {
+    fn of(library: &str, lib: &Library, active_document: Option<(u64, u64)>) -> Self {
         let index = lib.group_index().into_iter().map(|((kind, item), group)| ((kind, item.to_string()), group)).collect();
         Membership { library: library.to_string(), active_document, index, names: lib.groups.iter().map(|g| g.name.clone()).collect() }
     }
@@ -210,8 +210,9 @@ impl Membership {
             PanelDrag::Paint { library: Some((l, item)), .. } if l == library => Some(Grab::Item(ItemKind::Color, item.clone())),
             PanelDrag::LibraryGraphic { library: l, item } if l == library => Some(Grab::Item(ItemKind::Graphic, item.clone())),
             PanelDrag::LibraryItem { library: l, kind, item } if l == library => Some(Grab::Item(*kind, item.clone())),
-            PanelDrag::Art { document, ids } if Some(*document) == self.active_document => {
-                let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
+            PanelDrag::Art { .. } => {
+                let (uid, reverts) = self.active_document?;
+                let ids: Vec<u64> = drag.artwork_for(uid, reverts)?.iter().map(|id| id.0).collect();
                 Some(Grab::New(ItemKind::Graphic, json!({ "kind": "graphic", "ids": ids })))
             }
             PanelDrag::Paint { .. } => swatch_add(drag, library).map(|(kind, add)| Grab::New(kind, add)),
@@ -305,7 +306,15 @@ struct View<'a> {
 }
 
 impl<'a> View<'a> {
-    fn new(library: &'a str, lib: &'a Library, query: &str, list: bool, fill_active: bool, active_document: Option<u64>, can_apply: bool) -> Self {
+    fn new(
+        library: &'a str,
+        lib: &'a Library,
+        query: &str,
+        list: bool,
+        fill_active: bool,
+        active_document: Option<(u64, u64)>,
+        can_apply: bool,
+    ) -> Self {
         let membership = Membership::of(library, lib, active_document);
         let query = query.trim().to_lowercase();
         let searching = !query.is_empty();
@@ -776,7 +785,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let acts = RefCell::new(Vec::new());
-    let active_document = app.session.active().map(|st| st.uid);
+    let active_document = app.session.active().map(|st| (st.uid, st.reverts));
     let has_doc = active_document.is_some();
     {
         // PLAN: assumed `UiState::{libraries_list_view: bool, library_search: String, library_groups_closed: HashSet<(String, String)>}` (ap.AS17, hub-w1).

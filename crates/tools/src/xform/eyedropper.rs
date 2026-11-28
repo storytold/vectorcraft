@@ -204,6 +204,8 @@ fn color_under(s: &mut Sampler, doc: &Document, levels: &mut [Option<Document>],
             *size.get_or_insert_with(|| s.symbol_nodes + doc.layers.iter().map(|l| l.count()).sum::<usize>())
         };
         s.spend(cost)?;
+        #[cfg(test)]
+        VISITED.with(|v| v.set(v.get() + s.symbol_nodes + doc.layers.iter().map(|l| l.count()).sum::<usize>()));
         let h = hit_test_visible_skipping(doc, p, opts, &|id| passed.contains(&id))?;
         if let Some(live) = drawn_live(doc, &h.ancestry) {
             if let Some(c) = live_color_at(s, levels, live, p) {
@@ -270,6 +272,9 @@ fn live_color_at(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, p: 
 thread_local! {
     /// The blends and envelopes [`live_color_at`] has evaluated on this thread.
     static EXPANSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The objects the hit tests of [`color_under`] may have visited on this thread: every object
+    /// of the document hit, and the symbols' art.
+    static VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The color `n` shows at `p`: an image's pixels, a mesh's interpolated patch color, a symbol
@@ -1584,11 +1589,23 @@ mod tests {
             d.insert(Some(l), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY })).unwrap();
         }
         let (s, p) = (Selection::default(), paint());
-        let start = std::time::Instant::now();
+        let cx = cx(&d, &s, &p);
+        let opts = sample_options(&cx);
+        let symbol_nodes = d.symbols.iter().map(|s| s.art.count()).sum();
         for at in [Point::new(150.5, 150.5), Point::new(350.5, 350.5), Point::new(350.5, 50.5)] {
-            assert_eq!(sample_color_at(&cx(&d, &s, &p), at), None, "{at:?}");
+            assert_eq!(sample_color_at(&cx, at), None, "{at:?}");
+            // Sampled on this thread, so the count is this sample's. Each hit test counts the
+            // objects it may visit against the limit first, except the first one in the document,
+            // which a click makes anyway.
+            VISITED.with(|v| v.set(0));
+            let mut s = Sampler { doc: &d, opts, raster_sample: cx.raster_sample, symbol_nodes, work: MAX_WORK, exhausted: false, patterns: 0 };
+            let mut levels: Vec<Option<Document>> = (0..MAX_NESTING).map(|_| None).collect();
+            let c = color_under(&mut s, &d, &mut levels, at, opts);
+            assert!(c.is_none() || s.exhausted, "{at:?}");
+            let allowed = MAX_WORK + symbol_nodes + d.layers.iter().map(|l| l.count()).sum::<usize>();
+            let visited = VISITED.with(|v| v.get());
+            assert!(visited <= allowed, "{at:?}: hit tests may have visited {visited} objects, {allowed} allowed");
         }
-        assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
     }
 
     /// Each hit test in a tile's art may measure the art of every symbol, so it counts the symbols'

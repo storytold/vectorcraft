@@ -6013,6 +6013,58 @@ fn a_symbol_pasted_with_a_graph_inside_draws_it_with_the_documents_design_of_tha
     assert_eq!(columns, [2, 2, 2, 2], "drawn with the document's design");
 }
 
+/// A symbol a loaded look or text style brings, through the pattern it paints with, draws its
+/// graph with the document's design of that name, as a pasted one does.
+#[test]
+fn a_symbol_a_loaded_look_or_text_style_brings_draws_its_graph_with_the_documents_design() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut src);
+    let id = graph(&mut src, "column");
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    src.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let instance = src.execute("symbol.new", &json!({"name": "Chart"})).unwrap()["id"].clone();
+    src.execute("object.pattern.make", &json!({"name": "Charts", "edit": false, "ids": [instance]})).unwrap();
+    let r = src.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Charts", "ids": [r]})).unwrap();
+    let t = src.execute("text.create", &json!({"x": 10, "y": 80, "text": "Charts"})).unwrap()["id"].clone();
+    src.execute("paint.setFill", &json!({"swatch": "Charts", "ids": [t]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Charted", "id": t})).unwrap();
+    let source = (*src.doc().unwrap().doc).clone();
+    let look = source.node(NodeId(r)).unwrap().appearance.clone();
+    assert!(source.pattern("Charts").is_some());
+
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let columns = |d: &vectorcraft_doc::Document| -> Vec<usize> {
+        let art = &d.symbols.iter().find(|x| x.name == "Chart").expect("the symbol came in").art;
+        let mut graphs = vec![];
+        art.walk(&mut |m| {
+            if m.extras().graph.is_some() {
+                graphs.push(m.clone());
+            }
+        });
+        series(&graphs[0], 0).children().unwrap().iter().map(|n| paths(n)).collect()
+    };
+    for styles in [false, true] {
+        // A document whose "Coin" is a rectangle and an ellipse.
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Coin");
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if styles {
+            crate::cmd::clipboard::resources::import_text_styles(&source, d, true, false).unwrap();
+        } else {
+            crate::cmd::clipboard::resources::import_looks(&source, d, &look, &serde_json::Map::new()).unwrap();
+        }
+        assert_eq!(columns(d), [2, 2, 2, 2], "styles {styles}: drawn with the document's design");
+    }
+}
+
 #[test]
 fn a_design_brought_in_from_a_library_redraws_the_graphs_in_symbols_that_name_it() {
     let mut s = Session::new();

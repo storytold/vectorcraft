@@ -37,10 +37,15 @@ pub fn step_name(lang: crate::i18n::Lang, label: &str) -> Option<String> {
 /// A step's name in `lang`. A name made from a template (`Apply {name}`,
 /// [`vectorcraft_engine::HistoryEntry::named`]) takes the template's plain row with the name in its
 /// placeholder. A name VectorCraft gives is shown in `lang`, and any other name is shown as the
-/// document holds it. It returns `None` when the catalog has no row for the template. Any other step
-/// takes [`step_name`] of its label.
+/// document holds it. It returns `None` when the catalog has no row for the template. A step that
+/// applied or edited a built-in effect ([`vectorcraft_engine::HistoryEntry::effect`]) takes the
+/// effect's name as the Effect menu shows it ([`crate::i18n::effect_name`]), `None` when the
+/// catalog has no row for it. Any other step takes [`step_name`] of its label.
 pub fn entry_name(lang: crate::i18n::Lang, h: &vectorcraft_engine::HistoryEntry) -> Option<String> {
-    use crate::i18n::{fmt, has, label_or_name, tr};
+    use crate::i18n::{effect_name, fmt, has, has_effect_name, label_or_name, tr};
+    if let Some(effect) = h.effect() {
+        return has_effect_name(lang, effect).then(|| effect_name(lang, effect)).flatten();
+    }
     match h.named() {
         Some(n) => has(lang, n.template).then(|| fmt(tr(lang, n.template), &[("name", label_or_name(lang, &n.name, n.built_in))])),
         None => step_name(lang, &h.label),
@@ -329,18 +334,95 @@ mod tests {
         assert_eq!(names(&app)[rows.len() - 6..rows.len() - 4], ["Apply Body", "Apply {name}"]);
     }
 
-    /// A step named after an effect whose catalog row has only the menu label with its ellipsis
-    /// takes that row's translation without the ellipsis; a name with no row has none.
+    /// A step that applies no effect, named like a menu item (Object › Path › Clean Up…), takes its
+    /// plain row, else the menu item's row without the ellipsis; a name with no row has none.
     #[test]
-    fn effect_steps_read_the_menu_row() {
-        let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
-        for effect in ["Revolve", "Feather"] {
-            let menu_row =
-                crate::i18n::has(ja, &format!("{effect}…")).then(|| crate::i18n::tr(ja, &format!("{effect}…")).trim_end_matches('…').to_string());
-            let plain_row = crate::i18n::has(ja, effect).then(|| crate::i18n::tr(ja, effect).to_string());
-            assert_eq!(step_name(ja, effect), plain_row.or(menu_row), "{effect}");
+    fn plain_steps_read_the_menu_row_and_unknown_steps_have_no_name() {
+        for lang in crate::i18n::Lang::all() {
+            let menu_row = crate::i18n::has(lang, "Clean Up…").then(|| crate::i18n::tr(lang, "Clean Up…").trim_end_matches('…').to_string());
+            let plain_row = crate::i18n::has(lang, "Clean Up").then(|| crate::i18n::tr(lang, "Clean Up").to_string());
+            assert_eq!(step_name(lang, "Clean Up"), plain_row.or(menu_row), "{}", lang.code());
         }
+        let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
         assert_eq!(step_name(ja, "No Such Step"), None);
+    }
+
+    /// Every built-in effect has one name in each language: History (and Edit › Undo and Redo)
+    /// names the step that applied it, and the Appearance panel its row, with the text of its
+    /// Effect menu item without the ellipsis, which is the effect's `@id` row or the row of its
+    /// menu label with the ellipsis.
+    #[test]
+    fn effects_have_the_same_name_in_history_appearance_and_the_effect_menu() {
+        let mut app = app_with_two_rectangles();
+        // The step each effect that applies to a rectangle with its defaults records.
+        let mut steps = Vec::new();
+        for e in vectorcraft_effects::effect_catalog() {
+            if app.session.execute("effect.apply", &json!({ "effect": e.id })).is_ok() {
+                let h = app.session.active().unwrap().history.undo.last().cloned().unwrap();
+                assert_eq!(h.effect(), Some(e.id), "{} names its step after the effect", e.id);
+                steps.push((e, h));
+                app.session.execute("edit.undo", &json!({})).unwrap();
+            }
+        }
+        assert!(steps.len() * 2 > vectorcraft_effects::effect_catalog().len(), "only {} effects applied", steps.len());
+        let mut differ = Vec::new();
+        for lang in crate::i18n::Lang::all() {
+            crate::i18n::set_current(lang);
+            for (e, h) in &steps {
+                let cmd = if e.defaults.as_object().is_some_and(|o| o.is_empty()) { "effect.apply" } else { "effect.dialog" };
+                let item = crate::menus::shown_label(&app, cmd, &json!({ "effect": e.id }), e.label);
+                let menu = item.trim_end_matches('…');
+                let row = crate::i18n::tr_id(lang, e.id, e.label).trim_end_matches('…').to_string();
+                let step = shown(h);
+                let shown_row = super::super::appearance::shown_effect_label(e.id);
+                if menu != row || step != menu || shown_row != menu {
+                    differ.push(format!("{} {}: catalog {row:?}, menu {menu:?}, History {step:?}, Appearance {shown_row:?}", lang.code(), e.id));
+                }
+            }
+        }
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert!(differ.is_empty(), "{differ:#?}");
+    }
+
+    /// A step another command names like an effect (Object › Transform's `Transform`, the name of
+    /// Distort & Transform › Transform) keeps its own name in every language.
+    #[test]
+    fn a_step_named_like_an_effect_keeps_its_own_name() {
+        let mut app = app_with_two_rectangles();
+        app.session.execute("object.transform", &json!({ "matrix": [1, 0, 0, 1, 5, 0] })).unwrap();
+        let h = app.session.active().unwrap().history.undo.last().cloned().unwrap();
+        assert_eq!((h.label.as_str(), h.effect()), ("Transform", None));
+        for lang in crate::i18n::Lang::all() {
+            assert_eq!(entry_name(lang, &h), step_name(lang, "Transform"), "{}", lang.code());
+        }
+    }
+
+    /// The Feather dialog's preview, kept with OK, records a step that History and Edit › Undo and
+    /// Redo name as the Effect menu names Feather, in French as in English.
+    #[test]
+    fn an_effect_kept_from_its_dialog_preview_is_named_after_the_effect() {
+        let fr = crate::i18n::Lang::from_code("fr").expect("fr registered");
+        let mut app = crate::testing::windowed(app_with_two_rectangles());
+        crate::i18n::set_current(fr);
+        let item = crate::menus::shown_label(&app, "effect.dialog", &json!({ "effect": "stylize.feather" }), "Feather…");
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let menu = item.trim_end_matches('…').to_string();
+        let ctx = app.ui_ctx.clone().expect("a window");
+        app.run("effect.dialog", json!({ "effect": "stylize.feather", "item": null })).unwrap();
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.session.in_interaction(), "the dialog previews");
+        let id = app.effect_dialogs.effect.as_ref().expect("the Feather dialog is open").id;
+        app.dialogs().expect("a window").with(|h| h.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(app.effect_dialogs.effect.is_none(), "OK closed the dialog");
+        let h = app.session.active().unwrap().history.undo.last().cloned().unwrap();
+        assert_eq!(h.effect(), Some("stylize.feather"));
+        app.session.execute("edit.undo", &json!({})).unwrap();
+        let undone = app.session.active().unwrap().history.redo.last().cloned().unwrap();
+        crate::i18n::set_current(fr);
+        let names = (shown(&h), shown(&undone));
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        assert_eq!(names, (menu.clone(), menu), "the step, and the step undone");
     }
 
     fn app_with_two_rectangles() -> VectorcraftApp {

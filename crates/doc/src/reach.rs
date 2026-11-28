@@ -291,9 +291,12 @@ impl StrokeLayer {
                 // past them are measured.
                 match self.body_along(&segs, side, out) {
                     Some(body) => out = out.union(body),
-                    // A subpath with no length paints at most its caps' dot.
+                    // A subpath with no length paints at most its caps' dot. A closed subpath with
+                    // no segment, a lone anchor, has its dot at that anchor under a round or
+                    // projecting cap.
                     None if !butt => {
-                        let dot = segments(&els[r]).iter().map(ParamCurveExtrema::bounding_box).reduce(|a, b| a.union(b));
+                        let lone = (self.cap != LineCap::Butt).then(|| els[r.start].end_point()).flatten().map(|p| Rect::from_points(p, p));
+                        let dot = segments(&els[r]).iter().map(ParamCurveExtrema::bounding_box).reduce(|a, b| a.union(b)).or(lone);
                         out = dot.map_or(out, |d| out.union(d.inflate(side, side)));
                     }
                     None => {}

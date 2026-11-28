@@ -1091,7 +1091,7 @@ font-technology	Variable	Değişken
 	Edit…	Düzenle…
 	Effect	Efekt
 	Effect Options	Efekt Seçenekleri
-	Effective PPI	Etkili ÜFE
+	Effective PPI	Etkili PPI
 	Effects	Efektler
 	Effect…	Etki…
 	Ellipse	elips
@@ -2679,7 +2679,7 @@ shape	Open	Açık
 	Position	Pozisyon
 	Postcard	Kartpostal
 	PostScript:	PostScript:
-	PPI	ÜFE
+	PPI	PPI
 	Preferences	Tercihler
 	Preferences…	Tercihler…
 	Prefix:	Önek:
@@ -4661,6 +4661,14 @@ axis	Both	Her İkisi
 	The script asks to read and write a folder you choose, with everything in it.	Betik, seçtiğiniz bir klasörü içindeki her şeyle birlikte okumak ve yazmak için izin istiyor.
 	Allow Once	Bir Kez İzin Ver
 	Always Allow This Script	Bu Betiğe Her Zaman İzin Ver
+	No script has kept file access.	Hiçbir betiğin kayıtlı dosya erişimi yok.
+	Read file	Dosya Okuma
+	Read and write file	Dosya Okuma ve Yazma
+	Read and write folder	Klasör Okuma ve Yazma
+	Revoke	İzni Kaldır
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	İzni Kaldır, betiğin her sürümü için kayıtlı erişimi kaldırır. Bir klasöre erişim, içindeki her şeyi kapsar.
+@msg	Script file access revoked	Betiğin dosya erişimi kaldırıldı
+@msg	The script file access was already revoked	Betiğin dosya erişimi zaten kaldırılmıştı
 	Deny	Reddet
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Bir betik açık belgeleri değiştirebilir ve çalıştırdığı komutlarla dosya yazabilir. Yalnızca güvendiğiniz betikleri çalıştırın.
 	Do not show this warning again	Bu uyarıyı bir daha gösterme
@@ -4843,6 +4851,7 @@ liquify-list-end	{0}, {1}	{0} ve {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	bir betiğin dosya iletişim kutusu için `answer` şunlardan biri olmalıdır: once, always, deny, stop
 @msg	choose a file or folder first, or deny	önce bir dosya veya klasör seçin ya da reddedin
 @msg	the script file permissions could not be saved: {e}	betiklerin dosya izinleri kaydedilemedi: {e}
+@msg	the script file permissions could not be read: {e}	betiklerin dosya izinleri okunamadı: {e}
 @msg	this script's file access can be allowed only once	bu betiğin dosya erişimine yalnızca bir kez izin verilebilir
 @msg	Only the person at the keyboard can allow a script's file access	Bir betiğin dosya erişimine yalnızca klavye başındaki kişi izin verebilir
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Bir betiğe en fazla 2.048 dosya verilir: bunlardan sonra seçilen dosyalar dışarıda bırakıldı
@@ -7655,6 +7664,21 @@ axis	Y Axis	Y ekseni
 @msg	time budget	zaman bütçesi
 @msg	memory budget (the selection is too large to hand over)	bellek bütçesi (seçim aktarılamayacak kadar büyük)
 @msg	output size ({what} is {len} bytes, limit {max})	çıktı boyutu ({what}: {len} bayt, sınır {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} satır {line}, sütun {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	bellek bütçesi
+@msg	call depth	çağrı derinliği
+@msg	run(input, params) returned no output object	run(input, params) bir çıktı nesnesi döndürmedi
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" için `script` gerekir: eklentinin bildirimin yanındaki .js dosyasının adı
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script`, bildirimin klasöründeki bir .js dosyasının adı olmalıdır: 1-128 bayt, klasör yok, `:` yok, `.` ile başlamaz
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` betiğin metnidir ve yalnızca plugin.install komutunun dataBase64 parametresinin aldığı JSON içinde verilir: bir .vcplugin dosyası betiğini `script` içinde adlandırır
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	bir JavaScript eklentisinin bildirimi `runtime` "js" verir
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" bir nesne filtresi içindir (`kind` "filter"), `kind` "{kind}" için değil
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	bir JavaScript eklentisi `{name}` iznini listeleyemez: ana makinenin izinlerinden `progress` iznini listeleyebilir
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	bir WebAssembly modülünün bildirimi `runtime` anahtarını atlar: "js" bir JavaScript eklentisi içindir
+@msg	a JavaScript plug-in makes no command calls	bir JavaScript eklentisi komut çağırmaz
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) iki sayı alır
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) bir düzey, 0 (hata), 1 (uyarı), 2 (bilgi) veya 3 (hata ayıklama), ve bir dize alır
 @msg	the plug-in's grant can't be removed from the plug-in store	eklentinin izni eklenti deposundan kaldırılamıyor
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	`{shown}` izni sonraki bir eklenti API’si için ayrılmıştır; bu ana bilgisayar bu izni vermez
 @msg	unknown permission `{shown}`	bilinmeyen izin `{shown}`

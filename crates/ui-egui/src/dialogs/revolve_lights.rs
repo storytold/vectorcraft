@@ -432,7 +432,6 @@ pub(crate) fn sphere(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut Cust
         moved.push(craft::behavior::EditEvent::set(craft::behavior::Mixed::Same(behind), !behind, text.into(), None));
         cx.gesture(&moved);
     }
-    ui.add_space(4.0);
     out.edit.response
 }
 

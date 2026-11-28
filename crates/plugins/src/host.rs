@@ -688,7 +688,7 @@ impl Run {
         }
     }
 
-    fn progress(&mut self, done: i64, total: i64) {
+    pub(crate) fn progress(&mut self, done: i64, total: i64) {
         let total = u64::try_from(total).unwrap_or(0);
         let done = u64::try_from(done).unwrap_or(0);
         let done = if total > 0 { done.min(total) } else { done };
@@ -710,12 +710,12 @@ impl Run {
         vectorcraft_doc::cancel::progress(done, total, PROGRESS_STEP);
     }
 
-    fn cancelled(&self) -> i32 {
+    pub(crate) fn cancelled(&self) -> i32 {
         i32::from(vectorcraft_doc::cancel::is_cancelled() || self.deadline.passed())
     }
 
     /// Writes the `len` bytes at `ptr` in `memory` as a line of `level` → what `vc_log` returns.
-    fn log(&mut self, level: i32, memory: &[u8], ptr: usize, len: usize) -> i32 {
+    pub(crate) fn log(&mut self, level: i32, memory: &[u8], ptr: usize, len: usize) -> i32 {
         let Some(level) = LogLevel::from_code(level) else { return LOG_BAD_LEVEL };
         let Some(bytes) = ptr.checked_add(len).and_then(|end| memory.get(ptr..end)) else { return LOG_OUTSIDE_MEMORY };
         if self.report.truncated {
