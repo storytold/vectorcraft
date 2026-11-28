@@ -1249,23 +1249,26 @@ fn hue_jitter_turns_type_every_colorization_and_linked_colors() {
     }
 }
 
-/// A stroke's own hue and saturation jitter replace the brush's, as its other scatter settings do,
-/// and are kept within their ranges.
+/// A stroke's own hue, saturation and brightness jitter replace the brush's, as its other scatter
+/// settings do, and are kept within their ranges.
 #[test]
 fn a_strokes_own_jitter_replaces_the_brushs() {
     let doc = Document::new(1.0, 1.0);
     let path = line(0.0, 0.0, 200.0, 0.0);
     let pink = Color::rgb(0.8, 0.4, 0.4);
     let b = sat_jittered(pink, Colorization::None, 0.0, 0.0);
-    let own = stroke_pieces(&doc, &b, &path, &with_options(serde_json::json!({"hue_jitter": 30.0, "saturation_jitter": 40.0})));
-    let brushed = stroke_pieces(&doc, &sat_jittered(pink, Colorization::None, 30.0, 40.0), &path, &stroke(1.0));
+    let own =
+        stroke_pieces(&doc, &b, &path, &with_options(serde_json::json!({"hue_jitter": 30.0, "saturation_jitter": 40.0, "brightness_jitter": 20.0})));
+    let brushed = stroke_pieces(&doc, &bri_jittered(sat_jittered(pink, Colorization::None, 30.0, 40.0), 20.0), &path, &stroke(1.0));
     assert_eq!(fill_colors(&own), fill_colors(&brushed));
     assert!(fill_colors(&own).iter().any(|c| *c != pink));
-    let options = serde_json::Map::from_iter([("saturation_jitter".to_string(), serde_json::json!(500.0))]);
-    assert_eq!(
-        b.stroke_options_that_differ(&options).unwrap(),
-        serde_json::Map::from_iter([("saturation_jitter".to_string(), serde_json::json!(100.0))])
-    );
+    // The brightness is part of what the stroke's own options give.
+    let without = stroke_pieces(&doc, &sat_jittered(pink, Colorization::None, 30.0, 40.0), &path, &stroke(1.0));
+    assert_ne!(fill_colors(&own), fill_colors(&without));
+    for (key, given, kept) in [("saturation_jitter", 500.0, 100.0), ("brightness_jitter", 500.0, 100.0)] {
+        let options = serde_json::Map::from_iter([(key.to_string(), serde_json::json!(given))]);
+        assert_eq!(b.stroke_options_that_differ(&options).unwrap(), serde_json::Map::from_iter([(key.to_string(), serde_json::json!(kept))]));
+    }
     // A stroke that sets 0 on a jittered brush draws the art's own color.
     let still =
         stroke_pieces(&doc, &sat_jittered(pink, Colorization::None, 0.0, 40.0), &path, &with_options(serde_json::json!({"saturation_jitter": 0.0})));
@@ -1429,6 +1432,170 @@ fn saturation_jitter_moves_type_and_linked_colors() {
     for n in &moved {
         assert!(matches!(n.appearance.fill_paint(), Paint::Solid { swatch: None, .. }), "{:?}", n.appearance.fill_paint());
         assert_eq!(n.appearance.stroke().map(|s| &s.paint), Some(&pattern));
+    }
+}
+
+/// `b` (a scatter brush) with `brightness_jitter`.
+fn bri_jittered(mut b: Brush, brightness_jitter: f64) -> Brush {
+    if let BrushKind::Scatter(s) = &mut b.kind {
+        s.brightness_jitter = brightness_jitter;
+    }
+    b
+}
+
+#[test]
+fn brightness_jitter_moves_each_copy_the_same_every_time() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    // A red at 50% saturation and 80% brightness.
+    let pink = Color::rgb(0.8, 0.4, 0.4);
+    let b = bri_jittered(sat_jittered(pink, Colorization::None, 0.0, 0.0), 15.0);
+    let out = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(out.len(), 20);
+    assert_eq!(stroke_pieces(&doc, &b, &path, &stroke(1.0)), out, "the same stroke draws the same colors");
+    let colors = fill_colors(&out);
+    let hsb: Vec<[f32; 3]> = colors.iter().map(rgb_hsb).collect();
+    // Each copy's brightness is within 15 points of 80%; its hue and saturation stay.
+    assert!(hsb.iter().all(|[h, s, v]| hue_gap(*h, 0.0) < 1e-3 && near(f64::from(*s), 0.5, 1e-4) && (v - 0.8).abs() <= 0.1501), "{hsb:?}");
+    assert!(hsb.iter().any(|[_, _, v]| *v > 0.85) && hsb.iter().any(|[_, _, v]| *v < 0.75), "the copies move both ways: {hsb:?}");
+    let distinct: std::collections::HashSet<String> = colors.iter().map(Color::to_hex).collect();
+    assert!(distinct.len() > 10, "each copy moves by its own amount: {distinct:?}");
+    // The copies stay where they were, at their size and angle.
+    let plain = stroke_pieces(&doc, &sat_jittered(pink, Colorization::None, 0.0, 0.0), &path, &stroke(1.0));
+    let boxes = |o: &[Node]| o.iter().map(|n| n.geometric_bounds().unwrap()).collect::<Vec<_>>();
+    assert_eq!(boxes(&out), boxes(&plain));
+    // Another path draws other amounts.
+    let other = fill_colors(&stroke_pieces(&doc, &b, &line(0.0, 10.0, 200.0, 10.0), &stroke(1.0)));
+    assert_ne!(other, colors);
+    // At 100 the copies reach black or full brightness and go no further.
+    let full: Vec<f32> =
+        fill_colors(&stroke_pieces(&doc, &bri_jittered(sat_jittered(pink, Colorization::None, 0.0, 0.0), 100.0), &path, &stroke(1.0)))
+            .iter()
+            .map(|c| rgb_hsb(c)[2])
+            .collect();
+    assert!(full.iter().all(|v| (0.0..=1.0).contains(v)), "{full:?}");
+    assert!(full.iter().any(|v| *v < 1e-6) && full.iter().any(|v| *v > 1.0 - 1e-6), "{full:?}");
+    // Brightness jitter leaves the hue and saturation jitter's amounts as they were.
+    let red = Color::rgb(1.0, 0.0, 0.0);
+    let hue_sat = fill_colors(&stroke_pieces(&doc, &sat_jittered(red, Colorization::None, 90.0, 50.0), &path, &stroke(1.0)));
+    let all = fill_colors(&stroke_pieces(&doc, &bri_jittered(sat_jittered(red, Colorization::None, 90.0, 50.0), 30.0), &path, &stroke(1.0)));
+    assert_eq!(all.len(), hue_sat.len());
+    assert_ne!(all, hue_sat);
+    for (a, h) in all.iter().zip(&hue_sat) {
+        let ([ha, sa, _], [hh, sh, _]) = (rgb_hsb(a), rgb_hsb(h));
+        assert!(hue_gap(ha, hh) < 0.01 && (sa - sh).abs() < 1e-4, "{a:?} from {h:?}");
+    }
+}
+
+#[test]
+fn brightness_jitter_of_zero_changes_nothing() {
+    let pink = Color::rgb(0.8, 0.4, 0.4);
+    let plain = sat_jittered(pink, Colorization::None, 0.0, 0.0);
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &bri_jittered(plain.clone(), 0.0), &line(0.0, 0.0, 200.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty() && fill_colors(&out).iter().all(|c| *c == pink));
+    // A brush without brightness jitter is saved as before, and one saved before reads as 0.
+    let v = serde_json::to_value(&plain).unwrap();
+    assert!(v.get("brightness_jitter").is_none(), "{v}");
+    let mut old = serde_json::to_value(bri_jittered(plain.clone(), 25.0)).unwrap();
+    assert_eq!(old.as_object_mut().unwrap().remove("brightness_jitter"), Some(serde_json::json!(25.0)));
+    let BrushKind::Scatter(s) = Brush::from_json(old).unwrap().kind else { panic!("not a scatter brush") };
+    assert_eq!(s.brightness_jitter, 0.0, "a brush saved without the key reads as 0");
+    let mut with = v.clone();
+    with["brightness_jitter"] = serde_json::json!(25.0);
+    let BrushKind::Scatter(s) = Brush::from_json(with).unwrap().kind else { panic!("not a scatter brush") };
+    assert_eq!(s.brightness_jitter, 25.0);
+    // Values outside 0..100 are clamped.
+    for (given, kept) in [(250.0, 100.0), (-5.0, 0.0)] {
+        let mut v = v.clone();
+        v["brightness_jitter"] = serde_json::json!(given);
+        let BrushKind::Scatter(s) = Brush::from_json(v).unwrap().kind else { panic!("not a scatter brush") };
+        assert_eq!(s.brightness_jitter, kept, "{given}");
+    }
+}
+
+#[test]
+fn brightness_jitter_moves_after_the_colorization_in_each_model() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    let jittered_fills = |art: Color, colorization: Colorization, amount: f64, key: &StrokeLayer| {
+        fill_colors(&stroke_pieces(&doc, &bri_jittered(sat_jittered(art, colorization, 0.0, 0.0), amount), &path, key))
+    };
+    // Tints: black art takes the blue stroke color, whose brightness then moves.
+    let blue = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 1.0);
+    let hsb: Vec<[f32; 3]> = jittered_fills(Color::BLACK, Colorization::Tints, 30.0, &blue).iter().map(rgb_hsb).collect();
+    assert!(!hsb.is_empty() && hsb.iter().all(|[h, s, v]| hue_gap(*h, 240.0) < 1e-3 && near(f64::from(*s), 1.0, 1e-4) && *v >= 0.6999), "{hsb:?}");
+    assert!(hsb.iter().any(|[_, _, v]| *v < 0.97), "{hsb:?}");
+    // White, black and grays move too, and stay neutral. RGB white gets darker.
+    let white: Vec<[f32; 3]> = jittered_fills(Color::WHITE, Colorization::None, 30.0, &stroke(1.0)).iter().map(rgb_hsb).collect();
+    assert!(white.iter().all(|[_, s, v]| *s == 0.0 && *v >= 0.6999) && white.iter().any(|[_, _, v]| *v < 0.95), "{white:?}");
+    // A gray's ink moves within 20 points of its 40%.
+    let gray = StrokeLayer::new(Paint::solid(Color::gray(0.4)), 1.0);
+    let grays = jittered_fills(Color::BLACK, Colorization::Tints, 20.0, &gray);
+    assert!(grays.iter().all(|c| matches!(*c, Color::Gray { k } if (k - 0.4).abs() <= 0.2001)), "{grays:?}");
+    assert!(grays.iter().any(|c| *c != Color::gray(0.4)), "{grays:?}");
+    // Black ink alone stays black ink alone, lighter by its K.
+    let k_only = jittered_fills(Color::cmyk(0.0, 0.0, 0.0, 1.0), Colorization::None, 30.0, &stroke(1.0));
+    assert!(k_only.iter().all(|c| matches!(*c, Color::Cmyk { c, m, y, k } if c == 0.0 && m == 0.0 && y == 0.0 && k >= 0.6999)), "{k_only:?}");
+    assert!(k_only.iter().any(|c| matches!(*c, Color::Cmyk { k, .. } if k < 0.97)), "{k_only:?}");
+    // A process color with room in its K moves by its K and keeps its C, M and Y.
+    let cmyk = jittered_fills(Color::cmyk(0.0, 0.6, 0.6, 0.25), Colorization::None, 20.0, &stroke(1.0));
+    assert!(cmyk.iter().any(|c| *c != Color::cmyk(0.0, 0.6, 0.6, 0.25)), "{cmyk:?}");
+    for c in &cmyk {
+        let Color::Cmyk { c, m, y, k } = *c else { panic!("not CMYK: {c:?}") };
+        assert!(c == 0.0 && m == 0.6 && y == 0.6 && (k - 0.25).abs() <= 0.2001, "{c} {m} {y} {k}");
+    }
+    // One brighter than its C, M and Y show with no K loses its K and takes less ink, its hue and
+    // saturation kept (full magenta and yellow, cyan the brightness).
+    let deep = jittered_fills(Color::cmyk(0.4, 1.0, 1.0, 0.0), Colorization::None, 30.0, &stroke(1.0));
+    let mut ways = (false, false);
+    for c in &deep {
+        let Color::Cmyk { c, m, y, k } = *c else { panic!("not CMYK: {c:?}") };
+        assert!(near(f64::from(m), 1.0, 1e-5) && near(f64::from(y), 1.0, 1e-5), "{c} {m} {y} {k}");
+        if k > 0.0 {
+            assert!(c == 0.4 && k <= 0.5001, "darker: {c} {k}");
+            ways.0 = true;
+        } else {
+            assert!((0.0999..=0.4).contains(&c), "brighter: {c}");
+            ways.1 |= c < 0.4;
+        }
+    }
+    assert!(ways.0 && ways.1, "the copies move both ways: {deep:?}");
+    // A Lab color keeps its a and b; its lightness moves within 20 of its 50.
+    let lab = jittered_fills(Color::lab(50.0, 40.0, 30.0), Colorization::None, 20.0, &stroke(1.0));
+    assert!(lab.iter().any(|c| *c != Color::lab(50.0, 40.0, 30.0)), "{lab:?}");
+    assert!(lab.iter().all(|c| matches!(*c, Color::Lab { l, a, b } if a == 40.0 && b == 30.0 && (l - 50.0).abs() <= 20.001)), "{lab:?}");
+}
+
+/// A swatch-linked color already at the end a copy's saturation or brightness moves toward stays as
+/// it is and keeps its link; the copies that move it lose the link.
+#[test]
+fn jitter_at_a_limit_keeps_the_swatch_link() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    // Full red (full saturation and brightness), full magenta and yellow ink, and a Lab red whose a
+    // is at its largest: saturation that grows and brightness that grows leave them as they are.
+    for (color, saturation_jitter, brightness_jitter) in [
+        (Color::rgb(1.0, 0.0, 0.0), 50.0, 0.0),
+        (Color::cmyk(0.0, 1.0, 1.0, 0.0), 50.0, 0.0),
+        (Color::lab(50.0, 127.0, 0.0), 50.0, 0.0),
+        (Color::rgb(1.0, 0.0, 0.0), 0.0, 50.0),
+        (Color::lab(100.0, 20.0, 10.0), 0.0, 50.0),
+    ] {
+        let linked = Paint::Solid { color, swatch: Some("Spot".into()), tint: 1.0 };
+        let mut art = rect_art(10.0, 4.0);
+        art.appearance.set_fill(linked.clone());
+        let mut s = Scatter { art, saturation_jitter, ..Default::default() };
+        s.brightness_jitter = brightness_jitter;
+        let out = stroke_pieces(&doc, &Brush { name: "s".into(), kind: BrushKind::Scatter(s) }, &path, &stroke(1.0));
+        let (mut kept, mut moved) = (0, 0);
+        for n in &out {
+            match n.appearance.fill_paint() {
+                p if p == linked => kept += 1,
+                Paint::Solid { color: c, swatch: None, .. } if c != color => moved += 1,
+                p => panic!("{color:?}: {p:?}"),
+            }
+        }
+        assert!(kept > 0 && moved > 0, "{color:?}: {kept} kept, {moved} moved");
     }
 }
 

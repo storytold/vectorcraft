@@ -125,6 +125,10 @@ const HUE_JITTER_SALT: u64 = 0x6875_655f_6a69_7474;
 /// jitter's and the hue jitter's amounts stay as they were without it.
 const SATURATION_JITTER_SALT: u64 = 0x7361_745f_6a69_7474;
 
+/// Mixed into a stroke's seed for its brightness jitter, so its amounts follow neither the hue
+/// jitter's nor the saturation jitter's, and theirs stay as they were without it.
+const BRIGHTNESS_JITTER_SALT: u64 = 0x6272_695f_6a69_7474;
+
 /// Recolor each of `copies` (a scatter brush's copies, in order along the path) with `adjust`,
 /// given that copy's own amount between −`amount` and `amount`, drawn from `seed` (the stroke's
 /// [`crate::track::seed_of`]) mixed with `salt`. `adjust` gives `None` for a color it leaves as it
@@ -149,6 +153,58 @@ pub(crate) fn jitter_saturations(copies: &mut [Node], amount: f64, seed: u64) {
     jitter_copies(copies, amount, seed, SATURATION_JITTER_SALT, saturated);
 }
 
+/// Move the brightness of each of `copies` by its own amount between −`amount` and `amount`
+/// percentage points (see [`jitter_copies`]).
+pub(crate) fn jitter_brightnesses(copies: &mut [Node], amount: f64, seed: u64) {
+    jitter_copies(copies, amount, seed, BRIGHTNESS_JITTER_SALT, brightened);
+}
+
+/// `c` with its brightness moved by `points` percentage points, worked out on its own components
+/// so its hue and saturation stay: RGB in HSB of its values, Gray by taking that much ink off or
+/// adding it, CMYK by changing its K over the brightness its C, M and Y leave (C, M and Y change
+/// only to go brighter than they show with no K), Lab by moving its lightness by `points` units
+/// with a and b kept. The result stays between black and full brightness. White, black and grays
+/// move too. `None` when the brightness stays as it is.
+fn brightened(c: &Color, points: f32) -> Option<Color> {
+    if !points.is_finite() {
+        return None;
+    }
+    let by = points / 100.0;
+    match *c {
+        Color::Rgb { r, g, b } => {
+            let [h, s, v] = vectorcraft_color::rgb_to_hsb([r, g, b]);
+            let to = (v + by).clamp(0.0, 1.0);
+            (to != v).then(|| {
+                let [r, g, b] = vectorcraft_color::hsb_to_rgb([h, s, to]);
+                Color::rgb(r, g, b)
+            })
+        }
+        Color::Gray { k } => {
+            let to = (k - by).clamp(0.0, 1.0);
+            (to != k).then_some(Color::gray(to))
+        }
+        Color::Cmyk { c, m, y, k } => {
+            // `v` is the brightness C, M and Y leave; with its K the color shows `v` × (1 − K).
+            let [h, s, v] = vectorcraft_color::rgb_to_hsb([1.0 - c, 1.0 - m, 1.0 - y]);
+            let shown = v * (1.0 - k);
+            let to = (shown + by).clamp(0.0, 1.0);
+            if to == shown {
+                None
+            } else if to <= v {
+                // v > 0 here: to < shown would need shown > 0, and to > shown leaves to > 0.
+                Some(Color::cmyk(c, m, y, (1.0 - to / v).clamp(0.0, 1.0)))
+            } else {
+                let [r, g, b] = vectorcraft_color::hsb_to_rgb([h, s, to]);
+                Some(Color::cmyk(1.0 - r, 1.0 - g, 1.0 - b, 0.0))
+            }
+        }
+        Color::Lab { l, a, b } => {
+            let to = (l + points).clamp(0.0, 100.0);
+            (to != l).then_some(Color::lab(to, a, b))
+        }
+    }
+}
+
 /// The largest a or b a Lab color takes.
 const LAB_AB_MAX: f64 = 127.0;
 
@@ -156,7 +212,8 @@ const LAB_AB_MAX: f64 = 127.0;
 /// so its hue and brightness stay: RGB in HSB of its values, CMYK over C, M and Y with K kept, Lab
 /// by moving its chroma (the length of a and b) by `points` with its lightness and hue angle kept.
 /// The result stays between no saturation and full. `None` for a color without a hue (white,
-/// black and grays, which have no saturation to move).
+/// black and grays, which have no saturation to move) and for one whose saturation stays as it is
+/// (already at the end it would move past), so such a color keeps its swatch link.
 fn saturated(c: &Color, points: f32) -> Option<Color> {
     if !points.is_finite() || vectorcraft_color::recolor::Neutral::of(c).is_some() {
         return None;
@@ -164,7 +221,8 @@ fn saturated(c: &Color, points: f32) -> Option<Color> {
     let by = points / 100.0;
     let move_by = |v: [f32; 3]| {
         let [h, s, b] = vectorcraft_color::rgb_to_hsb(v);
-        (s > 0.0).then(|| vectorcraft_color::hsb_to_rgb([h, (s + by).clamp(0.0, 1.0), b]))
+        let to = (s + by).clamp(0.0, 1.0);
+        (s > 0.0 && to != s).then(|| vectorcraft_color::hsb_to_rgb([h, to, b]))
     };
     match *c {
         Color::Rgb { r, g, b } => move_by([r, g, b]).map(|[r, g, b]| Color::rgb(r, g, b)),
@@ -180,7 +238,7 @@ fn saturated(c: &Color, points: f32) -> Option<Color> {
             // already reaches past that does not grow.
             let fit = (LAB_AB_MAX / a.abs().max(b.abs())).max(1.0);
             let scale = ((chroma + f64::from(points)).max(0.0) / chroma).min(fit);
-            Some(Color::lab(l, (a * scale) as f32, (b * scale) as f32))
+            (scale != 1.0).then(|| Color::lab(l, (a * scale) as f32, (b * scale) as f32))
         }
     }
 }

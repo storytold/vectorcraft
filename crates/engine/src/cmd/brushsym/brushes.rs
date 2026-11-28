@@ -33,11 +33,12 @@ pub(super) fn brush_get(s: &mut Session, p: &Value) -> Result<Value> {
     let name = name_param(p, "brush.get")?;
     let b = brush::find(&s.doc()?.doc, name).ok_or_else(|| EngineError::Other(format!("no brush named `{name}`")))?;
     let mut v = serde_json::to_value(&b).unwrap_or_default();
-    // A scatter brush saves its hue and saturation jitter only when they are not 0; brush.get shows
-    // them either way.
+    // A scatter brush saves its hue, saturation and brightness jitter only when they are not 0;
+    // brush.get shows them either way.
     if let (BrushKind::Scatter(sc), Some(o)) = (&b.kind, v.as_object_mut()) {
         o.entry("hue_jitter").or_insert(json!(sc.hue_jitter));
         o.entry("saturation_jitter").or_insert(json!(sc.saturation_jitter));
+        o.entry("brightness_jitter").or_insert(json!(sc.brightness_jitter));
     }
     Ok(v)
 }
