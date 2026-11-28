@@ -253,11 +253,16 @@ pub(super) fn apply(app: &mut VectorcraftApp, events: Vec<LayersEvent<RowId>>) {
     }
 }
 
-/// Runs the commands of one event other than a toggle sweep or an open.
+/// Runs the commands of one event other than a toggle sweep or an open. A plug-in command from a
+/// row's menu asks for its parameters first, as its menu item does.
 fn run_commands(app: &mut VectorcraftApp, event: LayersEvent<RowId>) {
     let Some(st) = app.session.active() else { return };
     for (c, p) in commands(app, st, event) {
-        app.run(&c, p).ok();
+        if vectorcraft_engine::cmd::plugin::is_command_id(&c) {
+            crate::menus::invoke(app, &c, p);
+        } else {
+            app.run(&c, p).ok();
+        }
     }
 }
 

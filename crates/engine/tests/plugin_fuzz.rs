@@ -793,10 +793,11 @@ proptest! {
     }
 
     /// Manifests with hostile `commands` (junk of every type, bad and repeated ids, labels with
-    /// control and bidirectional override characters, a `menu` of any shape naming any menu, junk
-    /// parameters) at API level 1 or 2 parse to an error or to commands whose menu labels show no
-    /// hidden character and that sit under Plug-ins, or at level 2 in one of the menus a manifest
-    /// may name, with the plug-in's name; installing one and running each of its commands ends as an
+    /// control and bidirectional override characters, a `menu` of any shape naming any menu or
+    /// context menu, junk parameters) at API level 1 or 2 parse to an error or to commands whose
+    /// menu labels show no hidden character and that sit under Plug-ins, or at level 2 in one of the
+    /// menus a manifest may name, with the plug-in's name, and in at most the capped number of
+    /// context menu items; installing one and running each of its commands ends as an
     /// error or an edit, never a panic, and the document then renders and exports.
     #[test]
     fn hostile_manifest_commands_never_crash(
@@ -819,6 +820,11 @@ proptest! {
                         Just(json!({"path": ["Select"], "after": "\u{202E}Inverse"})),
                         arb_junk().prop_map(|j| json!({"path": j})),
                         arb_junk().prop_map(|j| json!({"path": ["Select"], "after": j})),
+                        Just(json!({"context": [{"menu": "canvas", "when": "typeObject"}, {"menu": "layers", "when": "layerRow"}]})),
+                        Just(json!({"context": [{"menu": "canvas", "when": "layerRow"}]})),
+                        arb_junk().prop_map(|j| json!({"context": j})),
+                        arb_junk().prop_map(|j| json!({"context": [{"menu": "layers", "when": j}]})),
+                        arb_junk().prop_map(|j| json!({"path": ["Select"], "context": [j]})),
                         arb_junk(),
                     ],
                     prop_oneof![Just(Value::Null), Just(json!({"by": {"type": "number", "min": 0, "max": 10, "default": 2}})), arb_junk()],
@@ -860,6 +866,11 @@ proptest! {
                     prop_assert!(api >= 2 && vectorcraft_plugins::manifest::MENU_PLACES.contains(&place.path), "{:?}", place);
                     prop_assert!(placed.ends_with(')') && placed.len() > shown.len(), "a placed item names its plug-in: {}", placed);
                 }
+                prop_assert!(api >= 2 || c.context.is_empty(), "level 1 lists no context menu: {:?}", c.context);
+                prop_assert!(c.context.iter().all(|p| p.menu == vectorcraft_plugins::ContextMenu::Layers || p.when != Some(vectorcraft_plugins::ContextWhen::LayerRow)));
+            }
+            for menu in [vectorcraft_plugins::ContextMenu::Canvas, vectorcraft_plugins::ContextMenu::Layers] {
+                prop_assert!(man.context_commands(menu).count() <= vectorcraft_plugins::manifest::MAX_CONTEXT_COMMANDS);
             }
         }
         let mut s = rich_session();

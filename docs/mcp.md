@@ -10938,7 +10938,9 @@ one of them, in the layers, opacity-mask art, symbols, graph designs, patterns a
 `path` and `folder` and relinks each link to its own file. An unknown scope, `paths` without `each`, `each` with `ids`,
 `path` or `folder`, an entry without `path` or `ids`, an id in two entries and `missingInFolder` with `folder` are
 errors, and nothing is relinked. Each call is one undo step. The Links panel's Relink… opens the `relink` dialog
-(`ui.relinkDialog`) with a Replace menu of these four choices. A PNG, JPEG,
+(`ui.relinkDialog`) with a Replace menu of these four choices. Its OK relinks only in the document where the dialog
+opened; after File › Revert it relinks nothing and the status line reads "The document was reverted. Reopen this
+dialog to continue." A PNG, JPEG,
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
 `links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
 documents inside symbols, graph designs, patterns, opacity masks and the art of the stored brushes (a scatter or art
@@ -14895,9 +14897,10 @@ changes nothing when a new `pluginsFolder` is missing, is not a folder or can't 
 value or the folder the preference already holds, and the web build does not check folders.
 A filter or live effect may declare commands of its own ([plugins.md](plugins.md#commands)): each is the command
 `plugin.<id>.<command>` while the plug-in is installed, listed by `command_list` and in its `plugin.list` entry
-(`commands: [{id, command, label, params, paramsSchema, menu?}]`; `menu`, `{path, after?, placed?}`, is the menu its
-manifest places it in, with `placed: false` when the command stays in its plug-in's submenu, see
-[plugins.md](plugins.md#placing-a-command-in-another-menu)). Run it with `{ids?, params?}` (its parameters may also
+(`commands: [{id, command, label, params, paramsSchema, menu?}]`; `menu`, `{path?, after?, placed?, context?}`, is the
+menu its manifest places it in, with `placed: false` when the command stays in its plug-in's submenu, see
+[plugins.md](plugins.md#placing-a-command-in-another-menu), and `context`, `[{menu, when?}]`, lists the context menus
+that also list it, see [plugins.md](plugins.md#context-menus)). Run it with `{ids?, params?}` (its parameters may also
 be top-level keys) → `{plugin, command, ids, notice?, pluginName?}`, with `notice` and `pluginName` as `plugin.run`
 returns them: the parameters are checked before the plug-in runs, a run is one undo step named after the
 command, and a run that traps or runs out of its instruction budget returns an error that starts with the plug-in's
