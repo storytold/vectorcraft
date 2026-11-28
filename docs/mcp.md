@@ -10938,7 +10938,9 @@ one of them, in the layers, opacity-mask art, symbols, graph designs, patterns a
 `path` and `folder` and relinks each link to its own file. An unknown scope, `paths` without `each`, `each` with `ids`,
 `path` or `folder`, an entry without `path` or `ids`, an id in two entries and `missingInFolder` with `folder` are
 errors, and nothing is relinked. Each call is one undo step. The Links panel's Relink… opens the `relink` dialog
-(`ui.relinkDialog`) with a Replace menu of these four choices. A PNG, JPEG,
+(`ui.relinkDialog`) with a Replace menu of these four choices. Its OK relinks only in the document where the dialog
+opened; after File › Revert it relinks nothing and the status line reads "The document was reverted. Reopen this
+dialog to continue." A PNG, JPEG,
 another file (or each at the file of its name in a folder); images keep their bounds, one undo step each.
 `links.update`, and `document.open` when it reads a modified file, also read the file again for the images and placed
 documents inside symbols, graph designs, patterns, opacity masks and the art of the stored brushes (a scatter or art
