@@ -3,7 +3,7 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 
 use craft::automation::args::{ControlOptions, EnvNames};
-use craft::automation::client::ControlClient;
+use craft::automation::client::{ConnectError, ControlClient};
 use serde_json::Value;
 
 /// Something that answers control-channel methods (`engine.execute`, `document.inspect`,
@@ -35,22 +35,31 @@ pub fn control_token() -> Result<String, String> {
     }
 }
 
+/// Opens and signs in one control connection; [`ControlClient::connect`] outside tests.
+pub(crate) type Connect = fn(SocketAddr, &str) -> Result<ControlClient, ConnectError>;
+
 /// A running VectorCraft app, reached through its loopback control port.
 pub struct Remote {
     addr: String,
     sock: SocketAddr,
     token: String,
     client: Option<ControlClient>,
+    connect: Connect,
 }
 
 impl Remote {
     /// Connect to `addr` (e.g. `127.0.0.1:7979`) with the app's control `token`, failing fast when
     /// nothing is listening.
     pub fn connect(addr: &str, token: &str) -> std::io::Result<Self> {
+        Self::connect_with(addr, token, ControlClient::connect)
+    }
+
+    /// [`Remote::connect`], opening this connection and every reconnect with `connect`, one attempt each.
+    pub(crate) fn connect_with(addr: &str, token: &str, connect: Connect) -> std::io::Result<Self> {
         let sock =
             addr.to_socket_addrs()?.next().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("cannot resolve {addr}")))?;
-        let client = ControlClient::connect(sock, token).map_err(std::io::Error::other)?;
-        Ok(Self { addr: addr.to_string(), sock, token: token.to_string(), client: Some(client) })
+        let client = connect(sock, token).map_err(std::io::Error::other)?;
+        Ok(Self { addr: addr.to_string(), sock, token: token.to_string(), client: Some(client), connect })
     }
 
     pub fn addr(&self) -> &str {
@@ -67,7 +76,7 @@ impl Remote {
     fn open_client(&mut self, method: &str) -> Result<&mut ControlClient, String> {
         if !self.client.as_ref().is_some_and(ControlClient::is_usable) {
             self.client = None;
-            let client = ControlClient::connect(self.sock, &self.token)
+            let client = (self.connect)(self.sock, &self.token)
                 .map_err(|e| format!("VectorCraft app at {} is not reachable: {e}; `{method}`: nothing was sent", self.addr))?;
             self.client = Some(client);
         }

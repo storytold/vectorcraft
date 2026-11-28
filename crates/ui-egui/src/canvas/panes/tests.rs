@@ -1,5 +1,4 @@
 use std::collections::BTreeSet;
-use std::time::Duration;
 
 use craft::behavior::CanvasView;
 use craft::ui::primitives::textures::{CachedTexture, TextureState};
@@ -140,7 +139,8 @@ fn has_picture(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, uid: u64) 
 
 /// Run frames with `run` until window `w`'s pane has its picture and the upload of it was seen,
 /// starting from the uploads `seed` holds → the picture and its pixels and size as uploaded. The uploads are handled
-/// once read.
+/// once read. The test context runs the pictures' renders in line ([`crate::testing::ui_context`]), so a picture asked
+/// for in one frame is ready and uploaded within [`READY_FRAMES`] frames on every run.
 fn wait_ready(
     app: &mut VectorcraftApp,
     ctx: &egui::Context,
@@ -150,7 +150,7 @@ fn wait_ready(
 ) -> (CachedTexture, (Vec<Color32>, [usize; 2])) {
     let uid = app.session.documents()[w.0].uid;
     let mut uploads = seed;
-    for _ in 0..400 {
+    for frames in 0..=READY_FRAMES {
         if let TextureState::Ready(texture) = picture_of(app, ctx, w, uid)
             && (uploads.iter().flat_map(|d| d.set.iter()).any(|e| *e.0 == texture.id) || UPLOADED.with(|u| u.borrow().contains_key(&texture.id)))
         {
@@ -159,12 +159,17 @@ fn wait_ready(
             uploads.iter_mut().for_each(note_uploads);
             return (texture, picture);
         }
+        if frames == READY_FRAMES {
+            break;
+        }
         let mut out = run(app);
         uploads.push(std::mem::take(&mut out.textures_delta));
-        std::thread::sleep(Duration::from_millis(5));
     }
-    panic!("the pane of window {w:?} never got its picture");
+    panic!("the pane of window {w:?} did not get its picture within {READY_FRAMES} frames");
 }
+
+/// The frames [`wait_ready`] runs for a pane's picture at most.
+const READY_FRAMES: usize = 4;
 
 /// The picture `id` as `uploads` uploaded it, else as a frame of [`frame_in`] did: its pixels and size.
 fn uploaded(uploads: &[egui::TexturesDelta], id: egui::TextureId) -> (Vec<Color32>, [usize; 2]) {

@@ -469,6 +469,60 @@ fn visual_bounds_include_stroke() {
     assert_eq!(p.visual_bounds(), Some(Rect::new(-0.5, -0.5, 10.5, 10.5)));
 }
 
+/// A lone anchor 20 points right of a stroked square widens the path's geometric box, and its
+/// visual box only where the stroke draws it: as the dot of a round or projecting cap on a closed
+/// subpath. An open lone anchor, or a closed one under a butt cap, draws nothing.
+#[test]
+fn a_lone_anchor_widens_the_visual_box_only_where_its_cap_draws_a_dot() {
+    use crate::appearance::LineCap;
+    use vectorcraft_geom::{Point, SubPath};
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    let node = |closed: bool, cap: LineCap| {
+        let mut subpaths = square.subpaths.clone();
+        subpaths.push(SubPath::polyline(&[Point::new(30.0, 5.0)], closed));
+        let mut p = Node::path(NodeId(2), PathData::new(subpaths), Appearance::default_art());
+        let s = p.appearance.stroke_mut().unwrap();
+        (s.cap, s.join) = (cap, crate::appearance::LineJoin::Round);
+        p
+    };
+    for closed in [false, true] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            let p = node(closed, cap);
+            let geometric = p.geometric_bounds().unwrap();
+            let visual = p.visual_bounds().unwrap();
+            assert!(geometric.x1 >= 30.0, "{closed} {cap:?}: the geometric box {geometric:?} leaves out the lone anchor");
+            let dot = closed && cap != LineCap::Butt;
+            assert_eq!(visual.x1 > 30.0, dot, "{closed} {cap:?}: the visual box {visual:?}");
+            assert!(dot || visual.x1 < 11.0, "{closed} {cap:?}: the visual box {visual:?} reaches toward the lone anchor");
+        }
+    }
+}
+
+/// The dot a round or projecting cap draws for a closed lone anchor reaches half the stroke's
+/// width round the anchor under every join, miter and bevel joins included, which measure the
+/// stroke along its segments.
+#[test]
+fn a_lone_anchors_dot_reaches_half_the_stroke_width_under_every_join() {
+    use crate::appearance::{LineCap, LineJoin};
+    use vectorcraft_geom::{Point, SubPath};
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0));
+    for join in [LineJoin::Miter, LineJoin::Bevel, LineJoin::Round] {
+        for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+            let mut subpaths = square.subpaths.clone();
+            subpaths.push(SubPath::polyline(&[Point::new(30.0, 5.0)], true));
+            let mut p = Node::path(NodeId(2), PathData::new(subpaths), Appearance::default_art());
+            let s = p.appearance.stroke_mut().unwrap();
+            (s.cap, s.join, s.width) = (cap, join, 4.0);
+            let visual = p.visual_bounds().unwrap();
+            if cap == LineCap::Butt {
+                assert!(visual.x1 < 13.0, "{join:?} {cap:?}: the visual box {visual:?} reaches toward a lone anchor that draws nothing");
+            } else {
+                assert!(visual.x1 >= 32.0 - 1e-9 && visual.y1 >= 10.0, "{join:?} {cap:?}: the visual box {visual:?} leaves out the dot's reach");
+            }
+        }
+    }
+}
+
 /// A group's box from its members' boxes grows by the group's own strokes, leaves out members
 /// without a box, and is `None` when none has one.
 #[test]

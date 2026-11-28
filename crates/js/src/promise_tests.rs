@@ -89,6 +89,22 @@ fn promise_statics_accept_registered_host_constructors_and_bound_targets() {
 }
 
 #[test]
+fn promise_prototype_has_a_configurable_string_tag() {
+    assert_eq!(
+        string(
+            "var d = Object.getOwnPropertyDescriptor(Promise.prototype, Symbol.toStringTag); \
+             [Object.prototype.toString.call(Promise.prototype), \
+              Object.prototype.toString.call(Promise.resolve()), \
+              d.value, d.writable, d.enumerable, d.configurable].join()"
+        ),
+        "[object Promise],[object Promise],Promise,false,false,true"
+    );
+    let mut r = Realm::new();
+    r.add_es2015();
+    assert_eq!(r.run("Object.prototype.toString.call(Promise.resolve())").unwrap(), JsValue::String("[object Promise]".into()));
+}
+
+#[test]
 fn then_callbacks_run_after_the_scripts_code_in_order() {
     let src = "Promise.resolve(1).then(function (v) { log.push('a' + v); });\n\
                new Promise(function (res) { log.push('executor'); res(2); }).then(function (v) { log.push('b' + v); });\n\

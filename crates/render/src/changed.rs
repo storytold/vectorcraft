@@ -7,6 +7,8 @@ use std::sync::Arc;
 use vectorcraft_doc::{Document, Node, NodeId, NodeKind, SymbolBoxes};
 use vectorcraft_geom::{Affine, Rect};
 
+use crate::placed_document::{LayerMode, enter_layer};
+
 /// What may draw differently in a document than in its version before an edit ([`changed`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Changed {
@@ -94,6 +96,15 @@ impl crate::Renderer {
     /// renderer draws copies of the objects (`proof::prepare`), so they are measured afresh and
     /// nothing is held.
     pub fn changed(&mut self, old: &Document, new: &Document, opts: &crate::RenderOptions) -> Changed {
+        // Trim View clips each draw when blending reaches the page and clips one composited
+        // layer otherwise. Changing modes can change unchanged art at an artboard edge.
+        if opts.trim && !old.artboards.is_empty() {
+            let before = crate::proof::prepare(old, opts, &mut self.proof_art);
+            let after = crate::proof::prepare(new, opts, &mut self.proof_art);
+            if self.children_blend(&before.layers) != self.children_blend(&after.layers) {
+                return Changed::Everything;
+            }
+        }
         let renderer = (!crate::proof::overprints(opts)).then_some(self);
         changed_with(old, new, renderer, opts)
     }
@@ -120,6 +131,8 @@ fn changed_with(old: &Document, new: &Document, renderer: Option<&mut crate::Ren
         return Changed::Everything;
     }
     let mut diff = Diff { old: old.symbol_boxes(), new: new.symbol_boxes(), area: None, renderer, opts, sources: (None, None) };
+    // Measured as the frames with `opts` draw ([`crate::Renderer::cross_placed`]).
+    let _mode = LayerMode { options: opts.dim_templates && !opts.skip_templates, outline: opts.outline, images: new.setup.outline_images }.enter();
     diff.children(&old.layers, &new.layers);
     diff.area.map_or(Changed::Nothing, Changed::Area)
 }
@@ -170,11 +183,20 @@ impl Diff<'_, '_> {
         }
     }
 
+    /// [`Self::node_in`], the members of a layer that draws in the same mode in both versions
+    /// measured in that mode ([`LayerMode::inside`]). The two versions of a layer that draw in
+    /// different modes are each measured in their own ([`Self::bounds`]).
+    fn node(&mut self, old: &Arc<Node>, new: &Arc<Node>) {
+        let modes = LayerMode::now().map(|m| (m.inside(old), m.inside(new)));
+        let _mode = modes.and_then(|(a, b)| if a == b { b } else { None }).map(LayerMode::enter);
+        self.node_in(old, new);
+    }
+
     /// A group or layer that only its members changed in, without a clipping mask or effects of
     /// its own that draw from all of them, changed where they did. A path or compound path that
     /// only had anchors moved changed around them ([`moved_anchors`]). Any other object that
     /// changed counts whole, before and after.
-    fn node(&mut self, old: &Arc<Node>, new: &Arc<Node>) {
+    fn node_in(&mut self, old: &Arc<Node>, new: &Arc<Node>) {
         if Arc::ptr_eq(old, new) || self.unseen(Side::Old, old) && self.unseen(Side::New, new) {
             return;
         }
@@ -219,6 +241,8 @@ impl Diff<'_, '_> {
         if self.unseen(side, n) {
             return None;
         }
+        // A layer is measured in the mode its Layer Options draw it in.
+        let _mode = enter_layer(n);
         let Diff { old, new, renderer, .. } = self;
         let symbols = match side {
             Side::Old => old,

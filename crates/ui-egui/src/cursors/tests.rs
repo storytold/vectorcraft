@@ -23,7 +23,7 @@ fn every_tool_cursors_hotspot_is_on_its_glyph() {
     crate::testing::ui_context()
         .run_ui(Default::default(), |ui| {
             let env = Env::of(ui);
-            let ink = rgba_color(env.tokens.tokens().color.overlay.stroke);
+            let ink = rgba_color(env.tokens.tokens().color.overlay.cursor);
             let near_ink = |px: &[u8]| px[3] == 255 && [ink.r(), ink.g(), ink.b()].iter().zip(px).all(|(want, got)| want.abs_diff(*got) <= 8);
             for c in GLYPHS {
                 let cb::Cursor::Painted(painted @ PaintedCursor::Tool { .. }) = tool_cursor(c) else { continue };

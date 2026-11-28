@@ -4,6 +4,7 @@ use vectorcraft_engine::Session;
 
 use super::{ADJUSTMENTS, Picked};
 use crate::VectorcraftApp;
+use crate::i18n::LangExt;
 
 /// An app in a window with a selected red rectangle.
 fn app() -> VectorcraftApp {
@@ -58,6 +59,36 @@ fn every_adjustment_offered_is_a_colour_adjustment_with_its_defaults() {
         assert_eq!(picked, *id);
         for (key, ..) in fields.iter() {
             assert_eq!(params[key], defaults[key], "{id} {key}");
+        }
+    }
+}
+
+/// Apply as Filter records a step that History and Edit › Undo name as the panel names the
+/// adjustment, in every language (German's plain `Levels` row and its Effect menu row differ).
+#[test]
+fn history_names_a_filter_step_as_the_panel_names_its_adjustment() {
+    for (i, (id, _, fields)) in ADJUSTMENTS.iter().enumerate() {
+        let mut app = app();
+        app.run("paint.setFill", json!({"color": "#806040"})).unwrap();
+        let (_, mut params) = Picked { index: i, ..Picked::default() }.params();
+        if let Some((key, _, (_, max), ..)) = fields.first() {
+            params[*key] = json!(max);
+        }
+        app.run("addon.color.filter", json!({ "effect": id, "params": params })).unwrap();
+        let h = app.session.active().unwrap().history.undo.last().cloned().unwrap();
+        assert_eq!(h.effect(), Some(*id), "the step Apply as Filter records for {params}");
+        app.addon_panels.color = Picked { index: i, ..Picked::default() };
+        let app = std::rc::Rc::new(std::cell::RefCell::new(app));
+        let shown = std::rc::Rc::clone(&app);
+        let mut fixture = craft::ui::testing::Fixture::new(move |ui| super::show(&mut shown.borrow_mut(), ui));
+        fixture.room(egui::vec2(320.0, 700.0));
+        for lang in crate::i18n::Lang::all() {
+            crate::i18n::set_current(lang);
+            let step = crate::panels::history::shown(&h);
+            fixture.settle();
+            let texts: Vec<String> = fixture.texts().iter().map(|t| t.text.clone()).collect();
+            crate::i18n::set_current(crate::i18n::Lang::EN);
+            assert!(texts.contains(&step), "{} {id}: {step:?} in {texts:?}", lang.code());
         }
     }
 }

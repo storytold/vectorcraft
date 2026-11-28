@@ -619,7 +619,12 @@ fn moved_type(n: &Node, moves: &[serde_json::Value]) -> Option<Vec<Node>> {
     }
     let (_, all) = glyph_outlines(t);
     let outline = PathData::from_bezpath(&all).transformed(t.xf);
-    let ink = outline.bounds()?;
+    // A contour of one anchor paints only as the dot of a round or projecting character stroke cap.
+    let dots = t
+        .runs
+        .iter()
+        .any(|r| r.style.appearance().painted_strokes().any(|s| matches!(s.cap, vectorcraft_doc::LineCap::Round | vectorcraft_doc::LineCap::Square)));
+    let ink = outline.drawn_bounds(dots)?;
     let offsets = transform_offsets(moves, &outline)?;
     if offsets.len() > MAX_TYPE_COPIES {
         return None;
