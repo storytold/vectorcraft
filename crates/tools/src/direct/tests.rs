@@ -1306,6 +1306,83 @@ fn group_selection_distinguishes_selected_leaf_drags_from_clicks() {
     assert!(t.pointer(&context, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)).is_empty());
 }
 
+/// A path inside a selected group counts as selected whole. With Direct Selection a click on its
+/// fill keeps the group, a drag from its fill or an anchor moves the group whole, and a click on an
+/// anchor selects that anchor alone; its anchors show the selected-anchor cursor and an object
+/// above the group does not take a press on one. With Group Selection a click adds the next group
+/// up and keeps the selection at the outermost one, and a drag moves the selection.
+#[test]
+fn a_press_inside_a_selected_group_keeps_the_group() {
+    let (mut d, inside, _, inner, outer) = nested_group_doc();
+    let p = paint();
+    let mut s = Selection::default();
+    s.set([outer]);
+    let moves = |a: &[Action]| matches!(a, [Action::Begin(n), Action::Preview(c, _)] if n == "Move" && c == "object.transform");
+    for group in [false, true] {
+        let c = cx(&d, &s, &p);
+        let mut t = DirectSelectionTool::new(group);
+        let down = PointerEvent::new(PointerKind::Down, 150.0, 150.0);
+        assert!(t.pointer(&c, &down).is_empty(), "a press on the fill (group: {group})");
+        assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)).is_empty(), "a click on the fill (group: {group})");
+        assert!(t.pointer(&c, &down).is_empty());
+        let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 180.0, 165.0));
+        assert!(moves(&a), "a drag from the fill (group: {group}): {a:?}");
+        assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 180.0, 165.0)), vec![Action::Commit]);
+    }
+    let c = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    let corner = PointerEvent::new(PointerKind::Down, 100.0, 100.0);
+    assert!(t.pointer(&c, &corner).is_empty(), "a press on an anchor");
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 115.0));
+    assert!(moves(&a), "a drag from an anchor: {a:?}");
+    t.pointer(&c, &PointerEvent::new(PointerKind::Up, 130.0, 115.0));
+    t.pointer(&c, &corner);
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)),
+        vec![Action::Exec("select.anchors".into(), json!({"id": inside.0, "anchors": [[0, 0]], "mode": "set"}))],
+        "a click on an anchor"
+    );
+    assert_eq!(DirectSelectionTool::new(false).cursor(&c, Point::new(100.0, 100.0), Mods::default()), Cursor::DirectAnchorSelected);
+    let mut t = DirectSelectionTool::new(false);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 100.0)).is_empty(), "a press on a segment");
+    let a = t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 100.0));
+    assert!(matches!(a.as_slice(), [Action::Exec(c, v)] if c == "select.segments" && v["id"] == inside.0), "a click on a segment: {a:?}");
+    // Group Selection climbs from a selected inner group to the group around it.
+    let mut climb = Selection::default();
+    climb.set([inner]);
+    let c = cx(&d, &climb, &p);
+    let mut t = DirectSelectionTool::new(true);
+    assert!(t.pointer(&c, &PointerEvent::new(PointerKind::Down, 150.0, 150.0)).is_empty());
+    assert_eq!(t.pointer(&c, &PointerEvent::new(PointerKind::Up, 150.0, 150.0)), vec![Action::Exec("select.add".into(), json!({"ids": [outer.0]}))]);
+    // With two anchors of a path beside the group selected too, the click still selects the anchor
+    // alone: the key anchor is on a path selected itself.
+    let l = d.layers[0].id;
+    let beside = d.alloc_id();
+    let rect = vectorcraft_geom::shapes::rectangle(Rect::new(420.0, 420.0, 480.0, 480.0));
+    d.insert(Some(l), usize::MAX, vectorcraft_doc::Node::path(beside, rect, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut mixed = Selection::default();
+    mixed.set([outer, beside]);
+    mixed.anchors.insert(beside, BTreeSet::from([(0, 0), (0, 1)]));
+    let c = cx(&d, &mixed, &p);
+    let mut t = DirectSelectionTool::new(false);
+    assert!(t.pointer(&c, &corner).is_empty());
+    assert_eq!(
+        t.pointer(&c, &PointerEvent::new(PointerKind::Up, 100.0, 100.0)),
+        vec![Action::Exec("select.anchors".into(), json!({"id": inside.0, "anchors": [[0, 0]], "mode": "set"}))],
+        "a click on an anchor with anchors of {beside:?} selected"
+    );
+    // An opaque object above the group, over the anchor.
+    let cover = d.alloc_id();
+    let rect = vectorcraft_geom::shapes::rectangle(Rect::new(50.0, 50.0, 250.0, 250.0));
+    d.insert(Some(l), usize::MAX, vectorcraft_doc::Node::path(cover, rect, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let c = cx(&d, &s, &p);
+    let mut t = DirectSelectionTool::new(false);
+    assert_eq!(hovered_anchor(&c, Point::new(100.0, 100.0)), Some((inside, Point::new(100.0, 100.0))), "the anchor under {cover:?} is highlighted");
+    assert_eq!(t.cursor(&c, Point::new(100.0, 100.0), Mods::default()), Cursor::DirectAnchorSelected);
+    assert!(t.pointer(&c, &corner).is_empty(), "a press on an anchor under {cover:?}");
+    assert!(moves(&t.pointer(&c, &PointerEvent::new(PointerKind::Drag, 130.0, 115.0))));
+}
+
 /// Isolation mode: a marquee and an anchor click take the path inside the isolated group and
 /// leave the path beside it. Group Selection stops at the isolated group instead of adding
 /// the group around it.
