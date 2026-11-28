@@ -39,14 +39,20 @@ fn playback_steps(action: &Action) -> Vec<PlayStep> {
         .collect()
 }
 
-/// For command `id` `script.run`: gives its `params` the panel's actions as `actions`, which the
-/// script's `app.doScript` plays, unless the caller gave them: every action of every set, in panel
-/// order, with its steps as playback runs them ([`playback_steps`]) and each step's place in the
-/// action. An action that `actions` cannot hold (a step that is not a command, a name that is too
-/// long, or one past the limits of [`vectorcraft_engine::script::actions`]) is left out.
+/// For command `id` `script.run`, or the script of `script.startup.run`'s `then`: gives its
+/// `params` the panel's actions as `actions`, which the script's `app.doScript` plays, unless the
+/// caller gave them: every action of every set, in panel order, with its steps as playback runs
+/// them ([`playback_steps`]) and each step's place in the action. An action that `actions` cannot
+/// hold (a step that is not a command, a name that is too long, or one past the limits of
+/// [`vectorcraft_engine::script::actions`]) is left out.
 pub(crate) fn add_script_actions(app: &VectorcraftApp, id: &str, params: &mut Value) {
     use vectorcraft_engine::script::actions::{MAX_ACTIONS, MAX_ACTIONS_BYTES, MAX_ALL_STEPS, Playable, parse};
-    let Some(p) = params.as_object_mut().filter(|_| id == "script.run") else { return };
+    let target = match id {
+        "script.run" => Some(params),
+        "script.startup.run" => params.get_mut("then"),
+        _ => None,
+    };
+    let Some(p) = target.and_then(Value::as_object_mut) else { return };
     if p.contains_key("actions") {
         return;
     }

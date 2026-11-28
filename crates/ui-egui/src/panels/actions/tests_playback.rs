@@ -674,6 +674,19 @@ fn a_script_plays_the_panels_actions() {
     assert_eq!(objects(&app), 2);
 }
 
+/// The script that `script.startup.run` runs after the startup scripts (its `then`) plays the
+/// panel's actions too, as File › Scripts runs a script with Run Startup Scripts on.
+#[test]
+fn the_script_after_the_startup_scripts_plays_the_panels_actions() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    push_set(&mut app, "Mine", vec![action("Draw", &[("shape.rectangle", json!({"x": 0, "y": 10, "width": 10, "height": 10}))])]);
+    app.session.script_frames = false;
+    let then = json!({"source": "try { app.doScript('Draw', 'Mine'); vc.log('ok'); } catch (e) { vc.log(e.message); }", "name": "t.js"});
+    let r = app.run("script.startup.run", json!({"reason": "menu", "then": then})).unwrap();
+    assert_eq!(r["then"]["log"], json!(["ok"]), "{r}");
+}
+
 /// The steps a script's `app.doScript` plays act on the view's active artboard, as the panel's
 /// playback does: Align to Artboard in a recorded batch, and Fit to Selected Art.
 #[test]
