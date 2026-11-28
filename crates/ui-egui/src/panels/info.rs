@@ -6,12 +6,11 @@
 use craft::behavior::ColumnWidth;
 use craft::keymap::CommandRef;
 use craft::ui::contract::{Show as _, ShowContainer as _};
-use craft::ui::display::{Divider, Picture, Shade, Text};
+use craft::ui::display::{Divider, Picture};
 use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::list::ThumbAspect;
 use craft::ui::menu::PanelRow;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
-use craft::ui::style::TypeRole;
 use egui::Ui;
 use serde_json::Value;
 use vectorcraft_color::{Color, Paint};
@@ -86,14 +85,15 @@ pub(crate) struct InfoLines {
     type_block: Option<(String, String)>,
 }
 
-fn mono(ui: &mut Ui, s: &str) {
-    Text::new(s.to_string()).role(TypeRole::Mono).show(ui);
+fn mono(ui: &mut Ui, s: &str) -> bool {
+    super::doc_info::copy_value(ui, s, s, true)
 }
 
 /// One paint's tile and readout. A solid tint's name sits below its channel values.
 /// A mixed paint keeps the tile's room empty.
-fn paint_block(ui: &mut Ui, p: &PaintLines) {
+fn paint_block(ui: &mut Ui, p: &PaintLines) -> Option<String> {
     let (inline_note, tint_name) = if p.values.is_empty() { (p.note.as_ref(), None) } else { (None, p.note.as_ref()) };
+    let mut copy = None;
     Row::new().show(ui, |ui, _| {
         Picture::painter("", ThumbAspect::SQUARE, |cx, rect| {
             if !p.mixed {
@@ -102,15 +102,22 @@ fn paint_block(ui: &mut Ui, p: &PaintLines) {
         })
         .show(ui);
         for v in &p.values {
-            mono(ui, v);
+            if mono(ui, v) {
+                copy = Some(v.clone());
+            }
         }
-        if let Some(note) = inline_note {
-            Text::new(note.clone()).shade(Shade::Muted).show(ui);
+        if let Some(note) = inline_note
+            && super::doc_info::copy_value(ui, note, note, false)
+        {
+            copy = Some(note.clone());
         }
     });
-    if let Some(name) = tint_name {
-        Text::new(name.clone()).shade(Shade::Muted).show(ui);
+    if let Some(name) = tint_name
+        && super::doc_info::copy_value(ui, name, name, false)
+    {
+        copy = Some(name.clone());
     }
+    copy
 }
 
 /// What the panel reads from the document and the tool for its rows of numbers ([`Rows::of`]).
@@ -241,26 +248,38 @@ const HALVES: &[ColumnWidth] = &[ColumnWidth::fill(1.0); 2];
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let l = lines(app, ui.ctx());
+    let mut copy = None;
     // Two equal halves of the panel, as the reference app's columns were.
     let _ = Grid::new(HALVES).show(ui, |ui, _| {
         for column in [&l.left, &l.right] {
             Stack::new().show(ui, |ui, _| {
                 for s in column {
-                    mono(ui, s);
+                    if mono(ui, s) {
+                        copy = Some(s.clone());
+                    }
                 }
             });
         }
     });
     for s in l.zoom.iter().chain(&l.brush) {
-        mono(ui, s);
+        if mono(ui, s) {
+            copy = Some(s.clone());
+        }
     }
     Divider::horizontal().show(ui);
-    paint_block(ui, &l.fill);
-    paint_block(ui, &l.stroke);
+    copy = paint_block(ui, &l.fill).or(copy);
+    copy = paint_block(ui, &l.stroke).or(copy);
     if let Some((font, size)) = &l.type_block {
         Divider::horizontal().show(ui);
-        mono(ui, font);
-        mono(ui, size);
+        for value in [font, size] {
+            if mono(ui, value) {
+                copy = Some(value.clone());
+            }
+        }
+    }
+    if let Some(text) = copy {
+        app.clipboard_out = Some(text);
+        app.status("Copied the value");
     }
 }
 

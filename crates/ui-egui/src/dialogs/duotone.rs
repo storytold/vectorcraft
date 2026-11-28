@@ -112,7 +112,7 @@ fn tone_row(ui: &mut Ui, (i, name): (usize, &'static str), tone: &mut Value, swa
             set_active = Some(*on);
         }
         Picture::painter("", ThumbAspect::SQUARE, move |cx, rect| cx.data_shapes([egui::Shape::rect_filled(rect, 0.0, chip)])).show(ui);
-        if let Some(k) = Select::new(name, Bind::given(picked), entries).id_salt(("tone-swatch", i)).show(ui).value() {
+        if let Some(k) = Select::new(name, Bind::given(picked), entries).id_salt(("tone-swatch", i)).show(ui).events.committed() {
             set_pick = Some(*k);
         }
         if picked == 0 {
@@ -156,7 +156,7 @@ fn curve_rows(ui: &mut Ui, fields: &mut DialogFields) -> Response {
     let (mut set_tone, mut set_curve) = (None, None);
     let shown = Stack::new().fill_width().show(ui, |ui, _| {
         Field::new(tl!("Curve")).show(ui, |ui, _| {
-            if let Some(i) = Select::new(tl!("Curve"), Bind::given(picked), &entries).id_salt("curve-tone").show(ui).value() {
+            if let Some(i) = Select::new(tl!("Curve"), Bind::given(picked), &entries).id_salt("curve-tone").show(ui).events.committed() {
                 set_tone = Some(*i);
             }
         });
@@ -180,4 +180,123 @@ fn curve_rows(ui: &mut Ui, fields: &mut DialogFields) -> Response {
         fields.set("tones", FieldValue::Json(Value::Array(tones)));
     }
     shown.output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::VectorcraftApp;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+    use vectorcraft_doc::NodeId;
+    use vectorcraft_effects::addons::duotone::DUOTONE;
+
+    fn panel(color: Value) -> (Panel, NodeId) {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let id = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 80, "height": 50})).unwrap()["id"].as_u64().unwrap());
+        app.run("swatch.new", json!({"name": "Ink", "color": "#e07020", "spot": true})).unwrap();
+        app.run(
+            "effect.apply",
+            json!({"effect": DUOTONE, "item": null, "params": {"tones": [
+                {"color": color, "curve": LINEAR, "active": true},
+                {"color": "#654321", "curve": INVERSE, "active": false}
+            ]}}),
+        )
+        .unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(900.0, 900.0));
+        (panel, id)
+    }
+
+    fn fields(app: &VectorcraftApp) -> Value {
+        let id = app.effect_dialogs.effect.as_ref().unwrap().id;
+        super::super::tests_warp::json_fields(app, id)
+    }
+
+    fn open(panel: &mut Panel) {
+        panel.app().run("effect.dialog", json!({"effect": DUOTONE, "index": 0, "item": null})).unwrap();
+        panel.frame();
+    }
+
+    #[test]
+    fn canceled_swatch_and_curve_choices_preserve_the_process_tone() {
+        for commit in [false, true] {
+            let (mut panel, id) = panel(json!("#123456"));
+            let original = panel.app().session.active().unwrap().doc.clone();
+            let undo = panel.app().session.active().unwrap().history.undo.len();
+            open(&mut panel);
+            let opening = fields(&panel.app());
+            let tones = fields(&panel.app())["tones"].clone();
+            panel.click_role("Tone 1", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert_eq!(fields(&panel.app())["tones"], tones, "canceled swatch navigation preserves the original process color");
+            panel.click_role("Curve", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert_eq!(fields(&panel.app())[TONE], opening[TONE], "the curve remains on Tone 1 without adding a field");
+            assert_eq!(fields(&panel.app())["tones"], tones);
+            if commit {
+                panel.click_role("Tone 1", Role::COMBO_BOX);
+                panel.click_role("Ink", Role::LIST_BOX_OPTION);
+                panel.click_role("Curve", Role::COMBO_BOX);
+                panel.key(Key::ArrowDown, Modifiers::NONE);
+                panel.key(Key::Enter, Modifiers::NONE);
+                assert_eq!(fields(&panel.app())[TONE], 1);
+            }
+            panel.click("OK");
+            panel.frame();
+            assert!(panel.app().effect_dialogs.effect.is_none());
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + usize::from(commit));
+            if commit {
+                {
+                    let app = panel.app();
+                    let effect = &app.session.active().unwrap().doc.node(id).unwrap().appearance.effects[0];
+                    assert_eq!(effect.params["tones"][0]["swatch"], "Ink");
+                    assert_eq!(tone_color(&effect.params["tones"][0]), Color::from_hex("#e07020").unwrap());
+                }
+                panel.app().run("edit.undo", json!({})).unwrap();
+            }
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
+    }
+
+    #[test]
+    fn hex_escape_discards_the_modal_preview_for_each_color_representation() {
+        for color in [json!("#123456"), json!(Color::rgb(0.1, 0.2, 0.3)), json!(Color::cmyk(0.1, 0.2, 0.3, 0.4))] {
+            let (mut panel, id) = panel(color);
+            let original = panel.app().session.active().unwrap().doc.clone();
+            let undo = panel.app().session.active().unwrap().history.undo.len();
+            open(&mut panel);
+            let opening = fields(&panel.app());
+            let live = panel.app().session.active().unwrap().doc.node(id).unwrap().appearance.effects[0].params.clone();
+            panel.click_role("Tone 1", Role::TEXT_INPUT);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text("abcdef");
+            assert_ne!(fields(&panel.app()), opening, "the typed hex changes the color preview");
+            assert_eq!(tone_color(&fields(&panel.app())["tones"][0]), Color::from_hex("#abcdef").unwrap());
+            {
+                let app = panel.app();
+                let effect = &app.session.active().unwrap().doc.node(id).unwrap().appearance.effects[0];
+                assert_ne!(effect.params, live, "the effect previews the typed color");
+            }
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert!(panel.app().effect_dialogs.effect.is_none(), "Escape discards the modal dialog");
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            open(&mut panel);
+            panel.click_role("Tone 1", Role::TEXT_INPUT);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text("abcdef");
+            panel.key(Key::Tab, Modifiers::NONE);
+            assert_eq!(tone_color(&fields(&panel.app())["tones"][0]), Color::from_hex("#abcdef").unwrap());
+            panel.click("OK");
+            panel.frame();
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
+    }
 }

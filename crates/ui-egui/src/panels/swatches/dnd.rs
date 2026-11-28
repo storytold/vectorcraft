@@ -5,12 +5,11 @@ use craft::keymap::Mods;
 use craft::ui::contract::{DropAt, ReorderMove};
 
 /// Swatches take paints, and take swatch rows or canvas art from the current document.
-pub(super) fn accepts(drag: &PanelDrag, document: u64) -> bool {
+pub(super) fn accepts(drag: &PanelDrag, document: u64, reverts: u64) -> bool {
     match drag {
         PanelDrag::Paint { rows: Some(rows), .. } => rows.document == document,
         PanelDrag::Paint { .. } => true,
-        PanelDrag::Art { document: source, .. } => *source == document,
-        _ => false,
+        _ => drag.artwork_for(document, reverts).is_some(),
     }
 }
 
@@ -45,7 +44,6 @@ impl Drop {
                 Some(Drop::Move { names: r.names.clone(), target, after, with })
             }
             PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace: mods.alt, spot: mods.cmd }),
-            // PLAN: assumed `Art { document: u64, ids: Vec<NodeId> }` (widgets-w13).
             PanelDrag::Art { ids, .. } => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect(), target, replace: mods.alt }),
             _ => None,
         }
@@ -88,7 +86,7 @@ fn place(shown: &[SwatchKey], at: &DropAt<SwatchKey>) -> (Option<String>, bool) 
 /// `drag` dropped onto a swatch or between rows of the `shown` list (ap.AP2 `Dropped`); a gap with no
 /// row under the pointer is the end of the list.
 pub(super) fn on_dropped(app: &mut VectorcraftApp, shown: &[SwatchKey], at: &DropAt<SwatchKey>, drag: &PanelDrag, mods: Mods) {
-    if !app.session.active().is_some_and(|st| accepts(drag, st.uid)) {
+    if !app.session.active().is_some_and(|st| accepts(drag, st.uid, st.reverts)) {
         return;
     }
     let (target, after) = place(shown, at);

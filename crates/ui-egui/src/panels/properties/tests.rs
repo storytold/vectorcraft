@@ -1372,6 +1372,32 @@ fn one_effect_has_a_delete_icon_in_appearance() {
     assert!(!panel.shows(&name), "two objects");
 }
 
+#[test]
+fn properties_remove_effect_requires_the_whole_symbol_instance() {
+    let mut app = new_app();
+    let left = rect(&mut app, 20.0, 20.0, 20.0, 20.0);
+    let right = rect(&mut app, 60.0, 20.0, 20.0, 20.0);
+    let instance = app.run("symbol.new", json!({"type": "dynamic", "ids": [left, right]})).unwrap()["id"].clone();
+    let node = vectorcraft_doc::NodeId(instance.as_u64().unwrap());
+    app.run("effect.apply", json!({"ids": [instance], "effect": "stylize.dropShadow"})).unwrap();
+    app.run("symbol.instance.selectPart", json!({"id": instance, "path": [0]})).unwrap();
+    let mut panel = Panel::new(app, show);
+    let effects = |panel: &Panel| panel.app().session.active().unwrap().doc.node(node).unwrap().appearance.effects.len();
+    let depth = undo_depth(&panel.app());
+
+    assert_eq!(effects(&panel), 1);
+    panel.click("Remove Effect");
+    assert_eq!((effects(&panel), undo_depth(&panel.app())), (1, depth), "a part cannot remove the whole instance’s effect");
+    assert!(!panel.enabled("Remove Effect"));
+    assert!(panel.shows("Appearance panel"), "Appearance remains available for inspection");
+
+    panel.app().run("select.set", json!({"ids": [instance]})).unwrap();
+    panel.frame();
+    assert!(panel.enabled("Remove Effect"));
+    panel.click("Remove Effect");
+    assert_eq!((effects(&panel), undo_depth(&panel.app())), (0, depth + 1));
+}
+
 /// A rectangle at 100, 100, 100 × 60 pt, selected, with `then` run on it, and the Transform
 /// panel's reference point on the top-left square.
 fn reference_setup(then: &[(&str, Value)]) -> VectorcraftApp {
@@ -1873,4 +1899,48 @@ fn type_quick_actions_show_text_commands_and_create_outlines() {
     assert!(crate::panel_docking::visible(&panel.app(), retype), "Retype shows the Retype panel");
     panel.click("Retype");
     assert!(crate::panel_docking::visible(&panel.app(), retype), "a second click leaves it shown");
+}
+
+#[test]
+fn canceled_property_corner_kind_keeps_the_selected_anchors_and_undo() {
+    use craft::ui::contract::Role;
+    use vectorcraft_doc::{LiveCorners, NodeId};
+    use vectorcraft_geom::shapes::CornerKind;
+
+    let mut app = new_app();
+    let id = app.run("shape.star", json!({"cx": 200, "cy": 150, "radius1": 80, "radius2": 40})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 2]], "mode": "set"})).unwrap();
+    let mut panel = Panel::new(app, show);
+    panel.room(egui::vec2(420.0, 920.0));
+    panel.type_into("Corner Radius", "6");
+    let original = panel.app().session.active().unwrap().doc.clone();
+    let original_corners = LiveCorners::of(original.node(NodeId(id)).unwrap()).unwrap();
+    assert_eq!(original_corners.radius(2), 6.0);
+    assert_eq!(original_corners.kind(2), CornerKind::Round);
+    let undo = undo_depth(&panel.app());
+
+    panel.click_role("Corner", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    assert!(panel.app().session.active().unwrap().doc == original, "highlighting a kind leaves the star as it was");
+    panel.key(Key::Escape, Modifiers::NONE);
+    assert!(panel.app().session.active().unwrap().doc == original);
+    assert_eq!(undo_depth(&panel.app()), undo);
+
+    panel.click_role("Corner", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Enter, Modifiers::NONE);
+    {
+        let app = panel.app();
+        let doc = &app.session.active().unwrap().doc;
+        let corners = LiveCorners::of(doc.node(NodeId(id)).unwrap()).unwrap();
+        assert_eq!(corners.kind(2), CornerKind::ALL[1]);
+        for corner in [0, 1, 3, 4, 5, 6, 7, 8, 9] {
+            assert_eq!(corners.kind(corner), original_corners.kind(corner));
+        }
+        assert_eq!(corners.radius(2), 6.0);
+        assert_eq!(undo_depth(&app), undo + 1);
+    }
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert!(panel.app().session.active().unwrap().doc == original);
 }
