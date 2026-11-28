@@ -289,6 +289,8 @@ fn local_stop(kind: &Arrowhead) -> Stop {
         Arrowhead::DoubleSlash => Stop::At(1.05),
         Arrowhead::DoubleArrow => Stop::At(1.7),
         Arrowhead::HalfCircle => Stop::At(1.0),
+        // Between the bend in its sides and its notch, where it is wider than the line at 100 %.
+        Arrowhead::NotchedArrow => Stop::At(2.7),
         Arrowhead::Concave => Stop::At(2.6),
         Arrowhead::Hexagon => Stop::At(HEX / 2.0),
         _ => Stop::At(2.0),
@@ -395,6 +397,9 @@ fn local(kind: &Arrowhead) -> BezPath {
             let t = FRAC_1_SQRT_2;
             poly(&mut p, &[(0.0, 0.0), (4.0, 4.0), (4.0 + t, 4.0 - t), (2.0 * t, 0.0), (4.0 + t, t - 4.0), (4.0, -4.0)]);
         }
+        // Barbs 1.2 out at the back; each side bends in at (2.1, ±0.5), as wide as the line at
+        // 100 %, so the sides are concave; the notch reaches 0.7 into the back.
+        Arrowhead::NotchedArrow => poly(&mut p, &[(0.0, 0.0), (2.1, 0.5), (4.0, 1.2), (3.3, 0.0), (4.0, -1.2), (2.1, -0.5)]),
         Arrowhead::Custom(c) => p = c.path.to_bezpath(),
         // The first ten are drawn by `shape`.
         Arrowhead::Triangle

@@ -192,14 +192,18 @@ pub enum Arrowhead {
     /// more) meeting at right angles in a sharp tip, cut square at their ends. Twice as wide as
     /// the other heads.
     LineArrow,
+    /// A slender filled head, a little over half as wide as it is long, whose sides bend in
+    /// halfway back, with a V-shaped notch in its back: the arrow of mathematical diagrams.
+    NotchedArrow,
     /// A head the user drew, with its art.
     Custom(Arc<CustomArrowhead>),
 }
 
 impl Arrowhead {
     /// Every arrowhead, in menu order (arrows, then outlined shapes, then bars and marks).
-    pub const ALL: [Arrowhead; 41] = [
+    pub const ALL: [Arrowhead; 42] = [
         Arrowhead::Arrow,
+        Arrowhead::NotchedArrow,
         Arrowhead::ArrowOpen,
         Arrowhead::LineArrow,
         Arrowhead::Barbed,
@@ -322,6 +326,7 @@ impl Arrowhead {
             Arrowhead::TriangleBar => "Triangle to Bar",
             Arrowhead::Oval => "Oval",
             Arrowhead::LineArrow => "Line Arrow",
+            Arrowhead::NotchedArrow => "Notched Arrow",
             Arrowhead::Custom(_) => "Custom",
         }
     }

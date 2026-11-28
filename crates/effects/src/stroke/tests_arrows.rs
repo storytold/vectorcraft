@@ -4,20 +4,26 @@
 
 use kurbo::{BezPath, PathEl, Point, Shape};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{ArrowAlign, Arrowhead, StrokeLayer};
+use vectorcraft_doc::{ArrowAlign, Arrowhead, LineCap, StrokeLayer};
 
-use super::stroke_pieces;
+use super::{line_outline, stroke_pieces};
 
 /// A 2 pt line along +x ending at (100, 0) with `kind` at its end, tip on the end point: heads
 /// of weight 2, so 8 long and 8 wide.
 fn head(kind: Arrowhead) -> super::Arrow {
+    head_and_line(kind, LineCap::Butt).0
+}
+
+/// [`head`] and the outline of the line under it, drawn with `cap`.
+fn head_and_line(kind: Arrowhead, cap: LineCap) -> (super::Arrow, BezPath) {
     let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
-    st.end_arrow = Some(kind);
-    st.arrow_align = ArrowAlign::Tip;
+    (st.end_arrow, st.arrow_align, st.cap) = (Some(kind), ArrowAlign::Tip, cap);
     let mut l = BezPath::new();
     l.move_to((0.0, 0.0));
     l.line_to((100.0, 0.0));
-    stroke_pieces(&l, &st).heads.remove(0)
+    let mut p = stroke_pieces(&l, &st);
+    let line = line_outline(&p.line, &st, st.width, 1e-3);
+    (p.heads.remove(0), line)
 }
 
 /// The outline's closed contours as polygons (curves flattened).
@@ -102,6 +108,53 @@ fn the_line_arrow_is_a_right_angle_of_two_arms_as_thick_as_the_line() {
             let w = h.outline.winding(at(mx + nx * d, my + ny * d));
             assert_eq!(w != 0, inside, "arm {side} at {d} across");
         }
+    }
+}
+
+#[test]
+fn the_notched_arrow_is_slender_with_concave_sides_and_a_v_notch() {
+    // Weight 2 at 100 %: a local unit (x back from the tip, y across) is 2 pt.
+    let h = head(Arrowhead::NotchedArrow);
+    let at = |x: f64, y: f64| Point::new(100.0 - 2.0 * x, 2.0 * y);
+    // Six corners: the tip, a bend in each side, a barb on each side and the notch between them.
+    let pts: Vec<Point> = contours(&h.outline).concat();
+    let corners = [(0.0, 0.0), (2.1, 0.5), (4.0, 1.2), (3.3, 0.0), (4.0, -1.2), (2.1, -0.5)].map(|(x, y)| at(x, y));
+    assert_eq!(pts.len(), corners.len(), "{pts:?}");
+    for c in corners {
+        assert!(pts.iter().any(|p| p.distance(c) < 1e-9), "corner {c:?} in {pts:?}");
+    }
+    for side in [1.0, -1.0] {
+        // Concave: at the bend, the straight line from the tip to the barb (0.63 out) is outside.
+        assert_eq!(h.outline.winding(at(2.1, side * 0.6)), 0, "side {side}");
+        assert_ne!(h.outline.winding(at(2.1, side * 0.45)), 0, "side {side}");
+        // Slender: 2.4 units across at the barbs, not the 4 of the other arrows.
+        assert_eq!(h.outline.winding(at(3.9, side * 1.2)), 0, "side {side}");
+        assert_ne!(h.outline.winding(at(3.9, side * 1.1)), 0, "side {side}");
+    }
+    // Open in the notch, solid in front of it.
+    assert_eq!(h.outline.winding(at(3.5, 0.0)), 0);
+    assert_ne!(h.outline.winding(at(3.1, 0.0)), 0);
+    // The line stops between the bend and the notch, 2.7 units back from the tip.
+    assert!((h.inset - 5.4).abs() < 1e-9, "inset {}", h.inset);
+}
+
+#[test]
+fn the_line_under_the_notched_arrow_stays_inside_it_in_front_of_the_notch() {
+    // With every cap, no part of the 2 pt line between the notch and the tip shows beside the
+    // head, though the head is barely wider than the line at its bends.
+    for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+        let (h, line) = head_and_line(Arrowhead::NotchedArrow, cap);
+        let mut covered = 0;
+        for i in 0..=132 {
+            for j in -25..=25 {
+                let p = Point::new(100.0 - 6.6 + f64::from(i) * 0.05, f64::from(j) * 0.04);
+                if line.winding(p) != 0 {
+                    assert_ne!(h.outline.winding(p), 0, "{cap:?}: the line shows at {p:?}");
+                    covered += 1;
+                }
+            }
+        }
+        assert!(covered > 500, "{cap:?}: the line reaches under the head ({covered} samples)");
     }
 }
 

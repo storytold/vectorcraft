@@ -307,3 +307,16 @@ fn a_long_custom_arrowhead_preview_fits_in_its_box() {
         assert!(outside.is_empty(), "start {start}: {} pixels outside the box, e.g. {:?}", outside.len(), outside.first());
     }
 }
+
+/// The End arrowhead select lists the notched arrow under its name, right after Arrow, and
+/// picking it gives the stroke that end head.
+#[test]
+fn arrowhead_select_lists_the_notched_arrow_after_arrow() {
+    let mut panel = panel();
+    panel.frame();
+    panel.click("End arrowhead");
+    let (arrow, notched, open) = (panel.rect("Arrow"), panel.rect("Notched Arrow"), panel.rect("Arrow (open)"));
+    assert!(arrow.center().y < notched.center().y && notched.center().y < open.center().y, "{arrow:?} {notched:?} {open:?}");
+    panel.click("Notched Arrow");
+    assert_eq!(current_stroke(&panel.app()).and_then(|s| s.end_arrow), Some(vectorcraft_doc::Arrowhead::NotchedArrow));
+}
