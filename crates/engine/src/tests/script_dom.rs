@@ -707,6 +707,22 @@ fn a_listed_preset_keeps_more_rows_than_artboards() {
     assert_eq!(more.boards().iter().filter(|b| b.x0 == more.boards()[0].x0).count(), 4);
 }
 
+/// A layout that replaces the rows keeps the columns the rows gave the artboards there are now,
+/// whether or not the change of artboards came with a layout of its own.
+#[test]
+fn replacing_rows_keeps_the_columns_of_the_artboards_there_are_now() {
+    use crate::cmd::newdoc::{ArtboardLayout, DocSettings};
+    let settings = DocSettings { artboards: 2, layout: ArtboardLayout::GridByColumn, ..DocSettings::default() };
+    let settings = settings.with_params(&json!({"artboardLayout": {"rows": 4}}), "file.new").unwrap();
+    for change in [json!({"artboards": 9}), json!({"artboards": 9, "artboardLayout": {"spacing": 20}})] {
+        let more = settings.clone().with_params(&change, "file.new").unwrap();
+        for layout in [json!("gridByRow"), json!({"layout": "gridByRow"})] {
+            let by_row = more.clone().with_params(&json!({"artboardLayout": layout}), "file.new").unwrap();
+            assert_eq!(by_row.grid_columns(), 3, "{change} then {layout}");
+        }
+    }
+}
+
 #[test]
 fn stale_documents_throw_on_every_member() {
     let (mut s, _, _) = doc();

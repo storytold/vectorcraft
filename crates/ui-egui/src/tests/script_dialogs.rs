@@ -420,3 +420,64 @@ fn stopping_or_quitting_the_run_closes_its_color_picker() {
     assert!(!picker_open(&app), "no picker is left for the abandoned run");
     assert_eq!(objects(&app), 0);
 }
+
+#[test]
+fn the_color_picker_opens_on_the_scripts_color_with_only_web_colors_left_on() {
+    let mut app = app();
+    let ctx = app.ui_ctx.clone().unwrap();
+    // A frame of the window's dialogs starts the open pickers with the app's host, whose settings
+    // keep what a picker remembers.
+    let frame = |app: &mut VectorcraftApp| {
+        let _ = crate::testing::part_frame(app, &ctx, egui::RawInput::default(), |app, ui| {
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+        });
+    };
+    // A fill picker closed with Only Web Colors on, which later fill pickers recall.
+    color_picker::open(&mut app, &json!({})).unwrap();
+    frame(&mut app);
+    set(&app, "fill", "webColors", json!(true)).unwrap();
+    let id = open_id(&app, "fill");
+    assert!(script_run::with_host(&app, |host, ctx| host.confirm_by_id(ctx, id)).unwrap());
+    color_picker::pump(&mut app, &ctx);
+    color_picker::open(&mut app, &json!({})).unwrap();
+    frame(&mut app);
+    assert_eq!(fields(&app, "fill")["webColors"], json!(true), "the next fill picker recalls Only Web Colors");
+    let id = open_id(&app, "fill");
+    assert!(script_run::with_host(&app, |host, ctx| host.confirm_by_id(ctx, id)).unwrap());
+    color_picker::pump(&mut app, &ctx);
+    // A frame without the picker drops its overlay.
+    frame(&mut app);
+    assert!(!script_run::busy(&app), "no picker is left open");
+    start(
+        &mut app,
+        "var c = new RGBColor(); c.red = 18; c.green = 52; c.blue = 86; var p = app.showColorPicker(c); vc.log([p.typename, p.red, p.green, p.blue].join());",
+    );
+    assert!(until_picker(&mut app));
+    frame(&mut app);
+    answer_picker(&mut app, true);
+    assert!(!until_picker(&mut app));
+    assert_eq!(log(&app), json!(["RGBColor,18,52,86"]), "untouched OK gives the script's color, not its nearest web color");
+}
+
+#[test]
+fn a_pick_takes_the_model_of_the_document_the_script_made() {
+    for (doc, made, want) in [("{}", "CMYK", "CMYKColor"), ("{\"colorMode\": \"cmyk\"}", "RGB", "RGBColor")] {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), crate::Services::default()));
+        app.run("file.new", serde_json::from_str(doc).unwrap()).unwrap();
+        app.session.prefs.show_external_script_warning = false;
+        start(
+            &mut app,
+            &format!(
+                "app.documents.add(DocumentColorSpace.{made}, 50, 60, 1); var c = new RGBColor(); c.red = 255; \
+                 var p = app.showColorPicker(c); vc.log(p.typename);"
+            ),
+        );
+        assert!(until_picker(&mut app));
+        set(&app, color_picker::SCRIPT_KEY, "color", json!("#00ff00")).unwrap();
+        answer_picker(&mut app, true);
+        assert!(!until_picker(&mut app));
+        assert_eq!(log(&app), json!([want]), "an RGB pick in the {made} document the script made");
+    }
+}

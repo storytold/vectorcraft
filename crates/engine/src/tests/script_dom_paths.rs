@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{LineCap, LineJoin};
+use vectorcraft_geom::Point;
 use vectorcraft_geom::path::AnchorKind;
 
 use crate::*;
@@ -262,6 +263,9 @@ fn path_point_setters_edit_one_anchor() {
     for i in [0, 2, 3] {
         assert_eq!(anchors[i], anchors_before[i], "point {i} did not change");
     }
+    // The 300 pt tall document's y runs down, so script y 285 is document y 15.
+    let edited = &anchors[1];
+    assert_eq!((edited.p, edited.h_in, edited.h_out), (Point::new(45.0, 15.0), Point::new(35.0, 15.0), Point::new(55.0, 15.0)));
     assert!(failure(&mut s, "app.activeDocument.pathItems[0].pathPoints.index('a');").contains("Not found"));
     assert!(failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].pointType = 'SMOOTH';").contains("PointType"));
     assert!(failure(&mut s, "app.activeDocument.pathItems[0].pathPoints[0].anchor = [1, 'x'];").contains("finite"));
@@ -1206,4 +1210,91 @@ fn assigning_guides_throws_in_both_directions_while_guides_are_locked() {
     assert_eq!((is_guide(&s, a), is_guide(&s, b), undo_steps(&s)), (true, false, steps));
     log(&mut s, "var ps = app.activeDocument.pathItems; ps[0].guides = true; ps[1].guides = false;");
     assert_eq!((is_guide(&s, a), is_guide(&s, b), undo_steps(&s)), (true, false, steps), "a value the path has runs no command");
+}
+
+/// Reading and moving each point of a path with many subpaths works out where the subpaths' points
+/// start a few times for the whole loop, not once or more for each point.
+#[test]
+fn reading_and_moving_points_counts_the_subpaths_a_few_times() {
+    let (mut s, _, _) = doc();
+    let d: String = (0..500).map(|i| format!("M{x} 10 L{x} 20 ", x = i % 300)).collect();
+    let id = NodeId(s.execute("path.create", &json!({"d": d})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    crate::script::LAYOUTS_BUILT.with(|n| n.set(0));
+    let out = log(
+        &mut s,
+        "var pp = app.activeDocument.pathItems[0].pathPoints;\
+         for (var i = 0; i < pp.length; i++) { var q = pp[i]; q.anchor = [q.anchor[0], q.anchor[1] + 1]; }\
+         vc.log(pp.length);",
+    );
+    assert_eq!(out, vec![json!(1000)]);
+    let built = crate::script::LAYOUTS_BUILT.with(std::cell::Cell::get);
+    assert!(built < 10, "{built} layouts for 1000 points");
+    let n = node(&s, id);
+    assert!(n.path_data().unwrap().subpaths.iter().flat_map(|sp| &sp.anchors).all(|an| an.p.y == 9.0 || an.p.y == 19.0), "every point moved up");
+}
+
+/// `selectedPathPoints` lists the direct-selected anchors of a path with several subpaths in the
+/// order of `pathPoints`, whatever order they were selected in.
+#[test]
+fn selected_path_points_follow_the_order_of_path_points_across_subpaths() {
+    let (mut s, _, _) = doc();
+    let id = NodeId(s.execute("path.create", &json!({"d": "M0 0 L10 0 L10 10 M20 0 L30 0"})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.anchors", &json!({"id": id.0, "anchors": [[1, 1], [0, 2], [0, 0]], "mode": "set"})).unwrap();
+    let out = log(
+        &mut s,
+        "var sp = app.activeDocument.pathItems[0].selectedPathPoints, x = [];\
+         for (var i = 0; i < sp.length; i++) x.push(sp[i].anchor[0]); vc.log(x);",
+    );
+    assert_eq!(out, vec![json!([0, 10, 30])]);
+}
+
+/// `pageItems` and `pathItems` find a name that reads as a number but is not an index, and such a
+/// key that nothing has reads as `undefined`.
+#[test]
+fn collections_find_names_that_read_as_numbers() {
+    let (mut s, a, b) = doc();
+    s.execute("object.setProps", &json!({"ids": [a.0], "name": "-1"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [b.0], "name": "1.5"})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, g = d.pageItems, p = d.pathItems;\
+         vc.log([g['-1'].name, g[1.5].name, '-1' in g, p['-1'].name, p[-1].name, '1.5' in p]);\
+         vc.log([g[-2] === undefined, '-2' in p, p[2.5] === undefined, p[0].name, p[1].name]);",
+    );
+    assert_eq!(out, vec![json!(["-1", "1.5", true, "-1", "-1", true]), json!([true, false, true, "-1", "1.5"])]);
+}
+
+/// `typename` of a point or a point list throws for one that is stale, as the other members do.
+#[test]
+fn stale_points_throw_on_typename() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var pp = app.activeDocument.pathItems[0].pathPoints, q = pp[3]; vc.log(q.typename); pp[0].remove();\
+         try { q.typename; vc.log('read'); } catch (e) { vc.log(e.message); }\
+         var p = app.activeDocument.pathItems[0], ps = p.pathPoints; vc.log(ps.typename); p.remove();\
+         try { ps.typename; vc.log('read'); } catch (e) { vc.log(e.message); }",
+    );
+    assert_eq!(out, vec![json!("PathPoint"), json!("Stale path point"), json!("PathPoints"), json!("Stale page item")]);
+}
+
+/// A path the creators make in a document whose ids are past 2^53 is the new path, not one whose
+/// id a double rounds to.
+#[test]
+fn made_paths_keep_ids_past_two_to_the_53() {
+    let (mut s, _, _) = doc();
+    let big = 1u64 << 53;
+    s.edit("Raise Ids", |d, _| {
+        d.raise_next_id(big);
+        Ok(())
+    })
+    .unwrap();
+    let old = rect(&mut s, 200.0, 200.0, 10.0, 10.0);
+    assert_eq!(old.0, big);
+    s.execute("select.none", &json!({})).unwrap();
+    log(&mut s, "var p = app.activeDocument.pathItems; p.add().name = 'made'; p.rectangle(50, 50, 10, 10, true).name = 'reversed';");
+    assert_eq!(node(&s, old).name, None);
+    assert_eq!(node(&s, NodeId(big + 1)).name.as_deref(), Some("made"));
+    assert_eq!(node(&s, NodeId(big + 2)).name.as_deref(), Some("reversed"));
 }

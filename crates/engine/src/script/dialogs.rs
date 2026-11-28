@@ -91,6 +91,9 @@ pub struct ScriptDialog {
     pub preset: String,
     /// `showColorPicker`: the color the picker starts with. `None` for the other dialogs.
     pub color: Option<Color>,
+    /// `showColorPicker`: the run's active document is in CMYK when the picker opens, so the app
+    /// gives an RGB pick back as CMYK. False for the other dialogs.
+    pub cmyk_document: bool,
 }
 
 /// The answer to a [`ScriptDialog`].
@@ -387,12 +390,15 @@ fn open(host: &Host, kind: DialogKind, args: &[Data]) -> Result<Data, HostError>
     if preset.len() > MAX_PROMPT_BYTES {
         return Err(HostError::Range(format!("{name}: the text the field starts with is longer than 16 KiB")));
     }
-    wait_or_answer(host, ScriptDialog { kind, message, title, error_icon, no_as_default, preset, color: None })
+    wait_or_answer(host, ScriptDialog { kind, message, title, error_icon, no_as_default, preset, color: None, cmyk_document: false })
 }
 
 /// `app.showColorPicker(color)`: the Color Picker on `color`. It returns the color picked for OK,
 /// and a new object of `color` for Cancel.
 pub(super) fn show_color_picker(host: &Host, color: Color) -> Result<Data, HostError> {
+    // During a slice the session holds the run's working copy, whose active document may be one
+    // the script made; between slices the app sees the documents as they were before the run.
+    let cmyk_document = host.session.borrow().active().is_some_and(|s| s.doc.color_mode == crate::doc::ColorMode::Cmyk);
     let dialog = ScriptDialog {
         kind: DialogKind::ColorPicker,
         message: String::new(),
@@ -401,6 +407,7 @@ pub(super) fn show_color_picker(host: &Host, color: Color) -> Result<Data, HostE
         no_as_default: false,
         preset: String::new(),
         color: Some(color),
+        cmyk_document,
     };
     wait_or_answer(host, dialog)
 }

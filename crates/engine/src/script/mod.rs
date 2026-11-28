@@ -2744,6 +2744,9 @@ thread_local! {
     pub(crate) static TEST_GROWTH_BYTES: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the data a run may pass to and from commands in place of [`MAX_BRIDGE_BYTES`].
     pub(crate) static TEST_BRIDGE_BYTES: Cell<Option<u64>> = const { Cell::new(None) };
+    /// Tests: how many times the object model worked out where the points of each subpath of a
+    /// path start.
+    pub(crate) static LAYOUTS_BUILT: Cell<u64> = const { Cell::new(0) };
     /// Tests: the heap of a named engine in place of [`ENGINE_HEAP_BYTES`].
     pub(crate) static TEST_ENGINE_HEAP: Cell<Option<usize>> = const { Cell::new(None) };
     /// Tests: the bytes of source maps a named engine keeps, in place of [`KEPT_MAP_BYTES`].

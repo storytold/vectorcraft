@@ -13,7 +13,9 @@
 //! VectorCraft's own rules, which the help pages do not state: components left out count as 0;
 //! `new cmykColor()` is the same as `new CMYKColor()`; `LabColor.l` is 0 to 100 and `a` and `b`
 //! are -128 to 128. `GrayColor.gray` runs from 0 (black) to 100 (white), as the GrayColor page
-//! says. `GradientColor`, `SpotColor` and `PatternColor` can be read from an object but not
+//! says. A color read from an object gives that object the same color when it is assigned back,
+//! except a gray within about 1e-14 % of white: one number cannot hold it, so it reads as 100 and
+//! assigning it back makes the gray white. `GradientColor`, `SpotColor` and `PatternColor` can be read from an object but not
 //! assigned yet.
 
 use std::rc::Rc;

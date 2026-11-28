@@ -118,7 +118,7 @@ fn ask(app: &mut VectorcraftApp) -> bool {
                 && !script_run::busy(app)
                 && let Some(color) = dialog.color
             {
-                color_picker::open_for_script(app, color);
+                color_picker::open_for_script(app, color, dialog.cmyk_document);
             }
         } else if !script_run::busy(app) {
             script_run::open_notice(app, &dialog);

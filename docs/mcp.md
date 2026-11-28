@@ -2782,7 +2782,7 @@ other files through `$`:
   describes; in VectorCraft that holds for `activeDocument`, `documents` and `selection`. VectorCraft's own rules:
   assigning `activeDocument` or `selection` without `app.` assigns the application's member. A top-level
   `var selection = ...` does the same and does not make a variable of the script. Assigning `documents` keeps its
-  value. `app.documents`
+  value; in strict-mode code it throws a `TypeError`. `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
@@ -2909,7 +2909,8 @@ other files through `$`:
   radius = 50, innerRadius = 20, points = 5, reversed?)`, which run `shape.rectangle`, `path.create`,
   `shape.ellipse`, `shape.polygon` and `shape.star` (and `path.reverse` for `reversed`) and paint the new path as new
   art is painted. `add()` and the shape creators put the new path on top of the active layer whatever the drawing
-  mode, which stays as it was. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  mode, which stays as it was, or, while an object is isolated, where drawing puts a new path (in an isolated group,
+  for example). A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
   members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
   `guides`, `clipping`, `selectedPathPoints`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`,
   `stroked`, `strokeColor`, `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to
@@ -2919,8 +2920,8 @@ other files through `$`:
   stroke options through `stroke.set`, the fill rule through `path.setFillRule`, overprint through
   `object.setOverprint` and the transforms through `object.move`, `object.rotate` and `object.scale`. Changes to the
   points of a path (`closed`, `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one
-  `path.setAnchors` before the script uses any other member or command, or the points of another path, and when the
-  script ends; a path aligned to the pixel grid, or in an object that is, is written at each change, so its points
+  `path.setAnchors` before the script uses any other member or command, or changes the points of another path, and
+  when the script ends (reading the points of another path does not write them); a path aligned to the pixel grid, or in an object that is, is written at each change, so its points
   read as the grid snaps them.
   `pathPoints`
   (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
@@ -2933,7 +2934,8 @@ other files through `$`:
   `NOSELECTION` removes it, through `select.anchorsMany`, with the other selected objects and anchors kept.
   `selectedPathPoints` lists the points that read `ANCHORPOINT`, in the order of `pathPoints`. `new RGBColor()` (0 to
   255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100 white, as
-  https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
+  https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it; a gray within about 1e-14 % of white reads as
+  100, so assigning it back makes it white), `new LabColor()` and `new NoColor()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/NoColor/) make plain color objects; assigning a `NoColor` removes
   the fill or stroke. The enumerations `PointType`, `PathPointSelection`, `StrokeCap`, `StrokeJoin`, `PolarityValues`
   and `Transformation` hold strings such as `"StrokeCap.ROUNDENDCAP"`.
@@ -3341,8 +3343,10 @@ empty object are the same.
 `app.showColorPicker(color)` opens the Color Picker on `color` and returns a color, as the type definitions at
 https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts describe it. `color` must be an `RGBColor`,
 `CMYKColor`, `GrayColor` or `LabColor`; anything else throws a `TypeError`, and a component out of its range throws a
-`RangeError`. The rest of this paragraph gives VectorCraft's own rules. OK returns the color picked; in a CMYK
-document an RGB pick is returned as CMYK. OK with the color unchanged and Cancel return a new object of the color the
+`RangeError`. The rest of this paragraph gives VectorCraft's own rules. OK returns the color picked; when the
+run's active document (a document the script made included) is in CMYK, an RGB pick is returned as CMYK, so the
+color's `typename` can differ from the picker's model and from the color given. The picker opens on the color as
+given, whatever Only Web Colors was left at in another picker. OK with the color unchanged and Cancel return a new object of the color the
 script gave. The picker shows no preview on the selection and has no Stop button: the status bar's Stop and quitting
 end the run as they do at the other dialogs, and close the picker. A run with nobody to ask takes `{kind:
 "colorPicker", value: color}` from `answers`, with the color in any form `paint.setFill` takes, each component in its

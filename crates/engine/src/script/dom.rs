@@ -149,6 +149,13 @@ pub(super) struct State {
     /// A path and its subpaths with the point changes the run has made to it and not written yet
     /// ([`flush`]).
     pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
+    /// How many times the run has started point changes of a path, or added or removed points of
+    /// the path whose changes wait ([`paths::layout`]).
+    relayouts: Cell<u64>,
+    /// The waiting point changes add or remove points of their path.
+    relaid: Cell<bool>,
+    /// The last two point layouts the run worked out, the newest first ([`paths::layout`]).
+    layouts: RefCell<Vec<(paths::LayoutOf, Rc<paths::Layout>)>>,
     /// How many times the points the run read of each path went stale, by document uid and path id
     /// ([`paths`]).
     point_cuts: RefCell<std::collections::HashMap<(u64, u64), u64>>,
@@ -946,6 +953,9 @@ fn front_docs(s: &Session) -> impl Iterator<Item = &DocState> {
 
 /// `documents[i]`, and `documents["name"]` as `getByName` reads it.
 fn docs_at(h: &Host, a: &[Data]) -> Answer {
+    if let Some(r) = by_number_name(a, |a| docs_by_name(h, a)) {
+        return r;
+    }
     let s = h.session.borrow();
     let at = match arg(a, 1) {
         Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| front_docs(&s).nth(i)),
@@ -1608,8 +1618,35 @@ fn probing(a: &[Data]) -> bool {
     matches!(arg(a, 2), Data::Bool(true))
 }
 
+/// The name a collection's indexer key reads as, when the key is a number that is not an array
+/// index. The indexer passes a name that reads as a number, such as `"-1"` or `"1.5"`, as that
+/// number, so a collection looks the name up first and gives `undefined` when nothing has it.
+fn number_name(d: &Data) -> Option<String> {
+    match d {
+        Data::Number(n) if !(n.fract() == 0.0 && (0.0..4_294_967_295.0).contains(n)) => Some(vectorcraft_js::number_to_string(*n)),
+        _ => None,
+    }
+}
+
+/// Looks the indexer key of `a` up with `by_name` when it is a name that reads as a number
+/// ([`number_name`]). → `None` for any other key.
+fn by_number_name(a: &[Data], by_name: impl FnOnce(&[Data]) -> Answer) -> Option<Answer> {
+    let name = number_name(arg(a, 1))?;
+    let mut named = a.to_vec();
+    if let Some(key) = named.get_mut(1) {
+        *key = Data::String(name);
+    }
+    Some(match by_name(&named) {
+        Err(HostError::Error(e)) if e == NOT_FOUND => Ok(Data::Undefined),
+        r => r,
+    })
+}
+
 /// `pageItems[i]`, and `pageItems["name"]` as `getByName` reads it.
 fn items_at(h: &Host, a: &[Data]) -> Answer {
+    if let Some(r) = by_number_name(a, |a| items_by_name(h, a)) {
+        return r;
+    }
     let doc = items_doc(h, a)?;
     if let Data::String(_) = arg(a, 1) {
         return match items_by_name(h, a) {

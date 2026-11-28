@@ -372,6 +372,11 @@ impl DocSettings {
     /// `artboardLayout: {layout?, columns?, rows?, spacing?, rightToLeft?}` or just a layout id.
     fn layout_params(&mut self, l: &Value, cmd: &str) -> Result<()> {
         let bad_layout = || bad(cmd, "artboardLayout.layout must be gridByRow, gridByColumn, row or column");
+        // The columns that rows give the artboards as they are now, which a layout that replaces the
+        // rows without its own `columns` keeps.
+        if self.grid_rows().is_some() {
+            self.columns = u32::try_from(self.grid_columns()).unwrap_or(u32::MAX);
+        }
         if let Some(id) = l.as_str() {
             self.layout = ArtboardLayout::parse(id).ok_or_else(bad_layout)?;
             if self.layout != ArtboardLayout::GridByColumn {

@@ -178,6 +178,7 @@ fn a_framed_run_waits_at_each_dialog_and_takes_the_persons_answer() {
         no_as_default: true,
         preset: String::new(),
         color: None,
+        cmyk_document: false,
     };
     assert_eq!(s.script_dialog(), Some(want));
     assert!(!s.script_answer(DialogAnswer::Ok), "an answer for another kind of dialog is refused");
