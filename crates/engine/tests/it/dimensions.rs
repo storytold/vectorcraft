@@ -542,6 +542,92 @@ fn a_dimension_of_a_whole_path_measures_its_overall_width_and_height() {
     assert!((value(&s, id) - across).abs() < 0.1, "{} against {across}", text(&s, id));
 }
 
+/// A dimension of a whole path placed with Use Preview Bounds on (`"preview": true`) measures the
+/// outside of the stroke, the width or height W and H show, and follows a new stroke weight with
+/// its line as far outside the stroke as before. Without the flag the dimension measures between
+/// the outermost points. The flag survives a native file, and a value other than true or false is
+/// an error.
+#[test]
+fn a_dimension_of_a_whole_path_with_preview_bounds_measures_the_outside_of_the_stroke() {
+    use vectorcraft_engine::doc::dimension::DimensionSource;
+    let mut s = session();
+    let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":60}))["id"].as_u64().unwrap();
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "stroke.set", json!({"weight": 10.0}));
+    let create = |s: &mut Session, preview: bool, orientation: &str| {
+        let source = json!({"kind":"extent","node":rect,"preview":preview});
+        run(s, "dimension.create", json!({"source":source,"orientation":orientation,"offset":-30}))["id"].as_u64().unwrap()
+    };
+    let (wide, tall, plain) = (create(&mut s, true, "horizontal"), create(&mut s, true, "vertical"), create(&mut s, false, "horizontal"));
+    let texts = |s: &Session| [wide, tall, plain].map(|id| text(s, id));
+    assert_eq!(texts(&s), ["110.00 pt", "70.00 pt", "100.00 pt"]);
+    // 30 pt above the first point, the top left anchor: 25 pt above the stroke.
+    assert!((recipe(&s, wide).line_ends().0.y - 70.0).abs() < 1e-9, "{:?}", recipe(&s, wide).line_ends());
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "stroke.set", json!({"weight": 20.0}));
+    assert_eq!(texts(&s), ["120.00 pt", "80.00 pt", "100.00 pt"]);
+    assert!((recipe(&s, wide).line_ends().0.y - 65.0).abs() < 1e-9, "{:?}", recipe(&s, wide).line_ends());
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(texts(&s), ["110.00 pt", "70.00 pt", "100.00 pt"]);
+
+    let saved = vectorcraft_format::save(&s.doc().unwrap().doc, false);
+    let mut reopened = Session::new();
+    reopened.add_document(vectorcraft_format::load(&saved).unwrap(), None);
+    assert_eq!(recipe(&reopened, wide).source, Some(DimensionSource::Extent { node: NodeId(rect), preview: true }));
+    assert_eq!(recipe(&reopened, plain).source, Some(DimensionSource::Extent { node: NodeId(rect), preview: false }));
+    run(&mut reopened, "select.set", json!({"ids":[rect]}));
+    run(&mut reopened, "stroke.set", json!({"weight": 2.0}));
+    assert_eq!(texts(&reopened), ["102.00 pt", "62.00 pt", "100.00 pt"]);
+
+    let bad = json!({"source":{"kind":"extent","node":rect,"preview":"yes"},"orientation":"horizontal"});
+    assert!(s.execute("dimension.create", &bad).is_err());
+}
+
+/// With Use Preview Bounds, a dimension of a member of a compound path measures only the
+/// arrowheads the compound path draws on that member: the start head on the first member's line
+/// and the end head on the last one's. A member in the middle measures as the same line without
+/// arrowheads does.
+#[test]
+fn a_preview_bounds_dimension_of_a_compound_member_measures_only_its_own_arrowheads() {
+    let mut s = session();
+    let line = |s: &mut Session, y: f64| run(s, "shape.line", json!({"x1":100,"y1":y,"x2":200,"y2":y}))["id"].as_u64().unwrap();
+    let (first, middle, last) = (line(&mut s, 100.0), line(&mut s, 200.0), line(&mut s, 300.0));
+    run(&mut s, "select.set", json!({"ids":[first, middle, last]}));
+    run(&mut s, "object.compoundPath.make", json!({}));
+    run(&mut s, "stroke.set", json!({"weight": 4.0, "startArrow": "Triangle", "endArrow": "Triangle"}));
+    let alone = line(&mut s, 400.0);
+    run(&mut s, "select.set", json!({"ids":[alone]}));
+    run(&mut s, "stroke.set", json!({"weight": 4.0}));
+    let ends = |s: &mut Session, node: u64, orientation: &str| {
+        let source = json!({"kind":"extent","node":node,"preview":true});
+        let id = run(s, "dimension.create", json!({"source":source,"orientation":orientation,"offset":-30}))["id"].as_u64().unwrap();
+        let (a, b) = (recipe(s, id).a, recipe(s, id).b);
+        if orientation == "horizontal" { (a.x, b.x) } else { (a.y, b.y) }
+    };
+    let (bare, mid) = (ends(&mut s, alone, "horizontal"), ends(&mut s, middle, "horizontal"));
+    assert!((mid.0 - bare.0).abs() < 1e-9 && (mid.1 - bare.1).abs() < 1e-9, "{mid:?} against {bare:?}");
+    // Across the lines: the stroke weight alone, or wider where a head is drawn.
+    let across = |s: &mut Session, node: u64| {
+        let (a, b) = ends(s, node, "vertical");
+        b - a
+    };
+    let bare = across(&mut s, alone);
+    assert!((bare - 4.0).abs() < 1e-9, "{bare}");
+    assert!((across(&mut s, middle) - bare).abs() < 1e-9, "{}", across(&mut s, middle));
+    assert!(across(&mut s, first) > bare + 1.0, "start head on the first member: {}", across(&mut s, first));
+    assert!(across(&mut s, last) > bare + 1.0, "end head on the last member: {}", across(&mut s, last));
+
+    // Released, the middle line draws both heads itself, and its dimension measures them.
+    let source = json!({"kind":"extent","node":middle,"preview":true});
+    let kept = run(&mut s, "dimension.create", json!({"source":source,"orientation":"vertical","offset":-30}))["id"].as_u64().unwrap();
+    let span = |s: &Session| recipe(s, kept).b.y - recipe(s, kept).a.y;
+    assert!((span(&s) - bare).abs() < 1e-9, "{}", span(&s));
+    let compound = s.doc().unwrap().doc.parent_of(NodeId(middle)).unwrap();
+    run(&mut s, "select.set", json!({"ids":[compound.0]}));
+    run(&mut s, "object.compoundPath.release", json!({}));
+    assert!(span(&s) > bare + 1.0, "{}", span(&s));
+}
+
 /// A dimension of a whole path measures the segments the path draws: an anchor that starts no
 /// segment does not widen it. Its line stays clear of the whole path when only parts other than
 /// its measured points move, also when it is aligned or is scaled together with the path, when the
