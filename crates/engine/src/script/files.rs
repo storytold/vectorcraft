@@ -1026,7 +1026,7 @@ const LOCK_PAUSE: std::time::Duration = std::time::Duration::from_millis(50);
 /// then the result is `Err` with [`std::io::ErrorKind::TimedOut`]. A change is not made when the
 /// lock cannot be taken.
 #[cfg(not(target_arch = "wasm32"))]
-fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
+pub(crate) fn lock_store(store: &Path) -> std::io::Result<crate::store::LockedFile> {
     let lock = store.with_extension("lock");
     let opened = store
         .parent()
@@ -1041,11 +1041,11 @@ fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
 
 /// `file`, locked within [`lock_store`]'s tries.
 #[cfg(not(target_arch = "wasm32"))]
-fn take_lock(file: std::fs::File) -> std::io::Result<std::fs::File> {
+fn take_lock(file: std::fs::File) -> std::io::Result<crate::store::LockedFile> {
     let mut tries = 1;
     loop {
         match file.try_lock() {
-            Ok(()) => return Ok(file),
+            Ok(()) => return Ok(crate::store::LockedFile::new(file)),
             Err(std::fs::TryLockError::Error(e)) => return Err(e),
             Err(std::fs::TryLockError::WouldBlock) if tries >= LOCK_TRIES => {
                 return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "another process holds the lock"));
@@ -1068,7 +1068,7 @@ thread_local! {
 
 /// The browser has no folders to keep anything in.
 #[cfg(target_arch = "wasm32")]
-fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
+fn lock_store(_: &Path) -> std::io::Result<crate::store::LockedFile> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 

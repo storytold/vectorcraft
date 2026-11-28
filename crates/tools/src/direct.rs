@@ -70,7 +70,7 @@ use crate::guides::{HandleSnap, Leave, PointSnap, Targets};
 use crate::meshedit::{MeshEdit, grid_of};
 use crate::pathtype::{self, BracketDrag, near_bracket};
 use crate::rulerguide::GuideEdit;
-use crate::select::{MoveSnap, hit_center, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at, selection_bounds};
+use crate::select::{MoveSnap, held_on_path, hit_center, hold_point, is_area_type, is_path_type, matrix_json, release_guide_at, selection_bounds};
 use crate::{Action, Cursor, Mods, Overlay, PixelOp, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
 /// An ordinary path's handle drag keeps its owner across previews, which each start at Begin.
@@ -107,6 +107,9 @@ enum State {
         start: Point,
         grab: Option<Point>,
         hold: Point,
+        /// `hold` is a point of the path's stroke, outline or edge: it also lands on the other
+        /// art's paths, as with the Selection tool ([`MoveSnap::by_edge`]).
+        edge: bool,
         began: bool,
         /// Group Selection: Shift-click on a selected object toggles it off on release.
         deselect: Option<NodeId>,
@@ -1154,7 +1157,9 @@ impl Tool for DirectSelectionTool {
                 ));
                 out
             }
-            (PointerKind::Drag, State::MoveObject { start, grab, hold, began, .. }) => self.drag_move_object(cx, ev, p, (start, grab, hold, began)),
+            (PointerKind::Drag, State::MoveObject { start, grab, hold, edge, began, .. }) => {
+                self.drag_move_object(cx, ev, p, (start, grab, hold, edge, began))
+            }
             (PointerKind::Drag, State::TypeArea { items, start, began }) => {
                 let mut out = vec![];
                 let on_path = items.first().and_then(|(id, _)| cx.doc.node(*id)).is_some_and(is_path_type);
@@ -1496,7 +1501,7 @@ impl DirectSelectionTool {
             return None;
         }
         selected_hidden_at(cx.doc, p, cx.selection_hit_options(), &cx.selection.objects)?;
-        self.state = State::MoveObject { start: p, grab: None, hold: p, began: false, deselect: None };
+        self.state = State::MoveObject { start: p, grab: None, hold: p, edge: false, began: false, deselect: None };
         Some(vec![])
     }
     fn press_group(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point, tol: f64) -> Vec<Action> {
@@ -1536,7 +1541,7 @@ impl DirectSelectionTool {
             // A completed click climbs the group; a drag moves only the selected art.
             self.click_group = Some(target);
         }
-        self.state = State::MoveObject { start: p, grab: None, hold: hold_point(cx, &h, p), began: false, deselect };
+        self.state = Self::move_object(cx, &h, p, deselect);
         out
     }
     fn double_click(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point) -> Vec<Action> {
@@ -1574,7 +1579,7 @@ impl DirectSelectionTool {
         // Alt picks the whole path (and Alt-drag copies it), as on a segment. On a path
         // already selected whole, an Alt-click adds the next enclosing group on release.
         if ev.mods.alt {
-            self.state = State::MoveObject { start: p, grab: Some(grab), hold: grab, began: false, deselect: None };
+            self.state = State::MoveObject { start: p, grab: Some(grab), hold: grab, edge: false, began: false, deselect: None };
             let whole = in_selection(cx, id) && cx.selection.partial(id).is_none();
             if whole && !ev.mods.shift {
                 self.click_group = cx.doc.ancestry(id).and_then(|a| next_group(cx, &a));
@@ -1588,7 +1593,7 @@ impl DirectSelectionTool {
         // Paths all selected whole move as objects, held by this anchor, so Alt can turn
         // the copy on and off during the drag as with the Selection tool.
         self.state = if already && cx.selection.anchors.is_empty() {
-            State::MoveObject { start: p, grab: Some(grab), hold: grab, began: false, deselect: None }
+            State::MoveObject { start: p, grab: Some(grab), hold: grab, edge: false, began: false, deselect: None }
         } else {
             State::MoveAnchors { start: p, grab, began: false, segment: false }
         };
@@ -1606,7 +1611,7 @@ impl DirectSelectionTool {
     /// Press on the centre point of object `id`: it selects the object whole (Shift toggles it),
     /// as a press on its fill does, and a drag moves it held by that point (#4891).
     fn press_center(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point, id: NodeId, center: Point) -> Vec<Action> {
-        self.state = State::MoveObject { start: p, grab: None, hold: center, began: false, deselect: None };
+        self.state = State::MoveObject { start: p, grab: None, hold: center, edge: false, began: false, deselect: None };
         self.frame.clear();
         if ev.mods.shift {
             return vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))];
@@ -1634,7 +1639,7 @@ impl DirectSelectionTool {
             // The engine refuses any other object with a status message, and the selection stays,
             // so a drag from the press does not move it.
             if symbol_overrides::part(&sym.art, &path).is_some_and(symbol_overrides::takes_part_paint) {
-                self.state = State::MoveObject { start: p, grab: None, hold: hold_point(cx, &h, p), began: false, deselect: None };
+                self.state = Self::move_object(cx, &h, p, None);
             }
             if cx.selection.symbol_part.as_ref().is_some_and(|sp| sp.instance == h.leaf && sp.path == path) {
                 return vec![];
@@ -1690,7 +1695,7 @@ impl DirectSelectionTool {
         // Clicking the fill selects the whole leaf path (all anchors). With Alt, a click
         // on a path already selected whole adds the next enclosing group on release,
         // as Group Selection's click does; each further Alt-click climbs one level.
-        self.state = State::MoveObject { start: p, grab: None, hold: hold_point(cx, &h, p), began: false, deselect: None };
+        self.state = Self::move_object(cx, &h, p, None);
         if ev.mods.alt && whole && !ev.mods.shift {
             self.click_group = next_group(cx, &h.ancestry);
         }
@@ -1799,12 +1804,19 @@ impl DirectSelectionTool {
         out.push(Action::Preview("path.moveAnchors".into(), json!({"dx": d.x, "dy": d.y})));
         out
     }
+    /// A press at `p` on the object hit (`h`) that moves the selection, held where the press took
+    /// hold of it ([`hold_point`]): a point of the path's stroke, outline or edge also lands on
+    /// the other art's paths (#8568).
+    fn move_object(cx: &ToolContext, h: &Hit, p: Point, deselect: Option<NodeId>) -> State {
+        let (hold, edge) = held_on_path(cx, h, p).map_or((p, false), |q| (q, true));
+        State::MoveObject { start: p, grab: None, hold, edge, began: false, deselect }
+    }
     fn drag_move_object(
         &mut self,
         cx: &ToolContext,
         ev: &PointerEvent,
         p: Point,
-        (start, grab, hold, began): (Point, Option<Point>, Point, bool),
+        (start, grab, hold, edge, began): (Point, Option<Point>, Point, bool, bool),
     ) -> Vec<Action> {
         let mut out = vec![];
         if !began {
@@ -1821,7 +1833,7 @@ impl DirectSelectionTool {
                 grid.then(|| MoveSnap::grid_only(vectorcraft_effects::preview::anchor_bounds_with(cx.selection, cx.doc, cx.bounds_measure())));
             let copy = ev.mods.alt && self.partial_snap.is_none();
             out.push(Action::Begin(if copy { "Copy".into() } else { "Move".into() }));
-            self.state = State::MoveObject { start, grab, hold, began: true, deselect: None };
+            self.state = State::MoveObject { start, grab, hold, edge, began: true, deselect: None };
             if grab.is_some() {
                 // Alt can go down or up at any time: gather both while nothing has moved.
                 self.anchor_snap = Some(PointSnap::moving(cx, || Targets::for_anchor_drag(cx.doc, cx.selection)));
@@ -1830,7 +1842,7 @@ impl DirectSelectionTool {
                 let back = cx.smart_guides && !cx.snap_to_grid && cx.snap_to_last_location;
                 self.last_location = back.then(|| (Targets::last_location(cx), selection_bounds(cx)));
             } else {
-                self.move_snap = Some(MoveSnap::new(cx));
+                self.move_snap = Some(if edge { MoveSnap::by_edge(cx) } else { MoveSnap::new(cx) });
             }
         }
         let mut d = move_delta(start, p, ev.mods.shift, cx.constrain_angle);

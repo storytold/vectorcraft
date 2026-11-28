@@ -190,7 +190,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clean Up…",
             ["Object", "Path"],
             None,
-            "{strayPoints?: true, unpaintedObjects?: true, emptyTextPaths?: true} → {removed}",
+            "{strayPoints?: true, unpaintedObjects?: true, emptyTextPaths?: true} remove them, except the clipping paths of groups and layers and what a group or compound path used as one holds → {removed}",
             has_doc,
             clean_up
         ),
@@ -1725,9 +1725,14 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
         let mut v = vec![];
         fn visit(n: &Node, parent_compound: bool, parent_clip: bool, first: bool, v: &mut Vec<NodeId>, opts: (bool, bool, bool)) {
             let (stray, unpainted, empty_text) = opts;
+            // The clipping path of a group or layer stays as it is, whatever kind of object it is,
+            // and so does everything a group or compound path used as one holds.
+            if parent_clip && first {
+                return;
+            }
             match &n.kind {
                 NodeKind::Path { path, clipping, guide, .. } => {
-                    if *guide || *clipping || (parent_clip && first) {
+                    if *guide || *clipping {
                         return;
                     }
                     if (stray && path.anchor_count() <= 1) || (unpainted && !parent_compound && !is_painted(&n.appearance)) {
@@ -1735,7 +1740,7 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 }
                 NodeKind::Compound { children, .. } => {
-                    if unpainted && !(parent_clip && first) && !is_painted(&n.appearance) {
+                    if unpainted && !is_painted(&n.appearance) {
                         v.push(n.id);
                         return;
                     }
@@ -1744,14 +1749,10 @@ fn clean_up(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                 }
                 NodeKind::Text(t) if empty_text && t.plain_text().trim().is_empty() => v.push(n.id),
-                NodeKind::Layer { children, .. } => {
-                    for c in children {
-                        visit(c, false, false, false, v, opts);
-                    }
-                }
-                NodeKind::Group { children, clip } => {
+                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
+                    let clips = n.clips();
                     for (i, c) in children.iter().enumerate() {
-                        visit(c, false, *clip, i == 0, v, opts);
+                        visit(c, false, clips, i == 0, v, opts);
                     }
                 }
                 _ => {}

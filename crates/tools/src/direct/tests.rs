@@ -2312,6 +2312,50 @@ fn a_drag_from_a_fill_skips_the_anchors_of_a_path_in_a_selected_group() {
     assert_eq!((v, labels), (json!({"dx": 248.0, "dy": 251.0}), Vec::<String>::new()));
 }
 
+/// #8568: Direct Selection and Group Selection move a path selected whole held by a point of its
+/// edge (a press on the fill 3 points inside the bottom edge holds (150, 200); with Group
+/// Selection also a press on that edge), and with Smart Guides that point lands on another path
+/// ("path"), as with the Selection tool. A press farther inside holds no edge, and the pressed
+/// point does not land on the path.
+#[test]
+fn a_whole_path_held_by_its_edge_lands_on_another_path() {
+    let (a, b) = (Point::new(300.0, 400.0), Point::new(500.0, 300.0));
+    let (mut d, id) = doc_with_rect();
+    let l = d.layers[0].id;
+    let n = d.alloc_id();
+    let line = PathData::single(vectorcraft_geom::SubPath::polyline(&[a, b], false));
+    d.insert(Some(l), 1, Node::path(n, line, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let off_line = |q: Point| ((b - a).cross(q - a) / (b - a).hypot()).abs();
+    let p = paint();
+    let mut whole = Selection::default();
+    whole.add(id);
+    let c = cx(&d, &whole, &p);
+    let moved = |v: &Value| Vec2::new(v["matrix"][4].as_f64().unwrap_or(f64::NAN), v["matrix"][5].as_f64().unwrap_or(f64::NAN));
+    for group in [false, true] {
+        let presses: &[(f64, f64)] = if group { &[(150.0, 197.0), (150.0, 200.0)] } else { &[(150.0, 197.0)] };
+        for &(x, y) in presses {
+            let mut t = DirectSelectionTool::new(group);
+            // The held point (150, 200) is dropped half a point beside the line.
+            let (v, labels) = drag(&mut t, &c, (x, y), (x + 280.0, y + 135.5), Mods::default());
+            let edge = Point::new(150.0, 200.0) + moved(&v);
+            assert!(off_line(edge) < 1e-9, "group {group}, press ({x}, {y}): the edge lands at {edge:?}, {} off the line", off_line(edge));
+            assert_eq!(labels, vec!["path".to_string()], "group {group}, press ({x}, {y})");
+        }
+        if group {
+            // In Outline view, Group Selection holds the path by its outline.
+            let c = ToolContext { outline: true, ..cx(&d, &whole, &p) };
+            let mut t = DirectSelectionTool::new(group);
+            let (v, labels) = drag(&mut t, &c, (150.0, 200.0), (430.0, 335.5), Mods::default());
+            let edge = Point::new(150.0, 200.0) + moved(&v);
+            assert!(off_line(edge) < 1e-9 && labels == ["path"], "outline: the edge lands at {edge:?} {labels:?}");
+        }
+        let mut t = DirectSelectionTool::new(group);
+        let (v, _) = drag(&mut t, &c, (150.0, 190.0), (430.0, 334.5), Mods::default());
+        let pressed = Point::new(150.0, 190.0) + moved(&v);
+        assert!(off_line(pressed) > 0.4, "group {group}: the pressed point lands at {pressed:?}");
+    }
+}
+
 /// A dragged anchor lands on another path's anchor or segment, lines up with the other anchors
 /// of its own path, and with several selected the one pressed on snaps, the others following.
 #[test]
@@ -3023,7 +3067,7 @@ fn select_behind_is_measured_once_for_a_point() {
     let mut picked = Selection::default();
     picked.add(id);
     let memo = crate::select::PreviewMemo::default();
-    let c = ToolContext { preview_memo: Some(&memo), select_behind: true, ..cx(&d, &picked, &p) };
+    let c = ToolContext { preview_memo: Some(&memo), select_behind: true, behind_armed: true, ..cx(&d, &picked, &p) };
     let at = Point::new(150.0, 150.0);
     let before = MEASURED_PARTS.get();
     assert!(crate::select::selects_behind_at(&c, at), "inside the selected square, away from its anchors");

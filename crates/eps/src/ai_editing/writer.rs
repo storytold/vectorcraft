@@ -1623,6 +1623,18 @@ impl<'a> Writer<'a> {
         if !self.take_objects(stub) {
             return;
         }
+        // The art styles that hold the swatch links of its colors, its thread's too.
+        let members: Vec<&vectorcraft_doc::TextObject> = match thread {
+            Some(thread) => thread
+                .iter()
+                .filter_map(|id| match &doc.node(*id)?.kind {
+                    NodeKind::Text(t) => Some(t.as_ref()),
+                    _ => None,
+                })
+                .collect(),
+            None => vec![t],
+        };
+        self.link_type_colors(&members);
         let placed = if let Some(thread) = thread {
             // A thread is checked for what it loses, in every frame, when its story is written.
             let placed = self.texts.thread(doc, thread, n.id, self.canvas, &|id| !cut_to_clipping_object(doc, id), &self.wraps_held);

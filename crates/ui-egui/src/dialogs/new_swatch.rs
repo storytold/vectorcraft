@@ -26,8 +26,8 @@ pub(crate) struct Open {
     pub(crate) id: DialogId,
     /// The name the dialog proposes for its colour.
     auto: String,
-    /// The drawing that supplied the paint and the possible colour group.
-    document: u64,
+    /// The drawing that supplied the paint and the possible colour group, and its revert count.
+    document: (u64, u64),
 }
 
 /// Open New Swatch for the active paint, going into color `group`. A color opens as a spot color
@@ -35,7 +35,7 @@ pub(crate) struct Open {
 pub fn open(app: &mut VectorcraftApp, spot: bool, global: bool, group: Option<&str>) -> Result<Value, String> {
     let paint = crate::panels::active_paint(app);
     let source = app.session.active().ok_or("no document open")?;
-    let document = source.uid;
+    let document = (source.uid, source.reverts);
     let name = source.doc.new_swatch_name(&paint);
     let mut fields = DialogFields::new();
     fields.set("name", name.as_str());
@@ -52,8 +52,10 @@ pub fn open(app: &mut VectorcraftApp, spot: bool, global: bool, group: Option<&s
     let dialog = hosted(&ctx, KIND, tl!("New Swatch"), fields, rows, false);
     let group = group.unwrap_or_default().to_owned();
     let ok = move |app: &mut VectorcraftApp, answer: &ParamResult| -> Result<(), String> {
-        if app.session.active().is_none_or(|st| st.uid != document) {
-            return Err(tl!("Return to the original drawing to create this swatch").into());
+        let active =
+            app.session.active().filter(|st| st.uid == document.0).ok_or_else(|| tl!("Return to the original drawing to create this swatch"))?;
+        if active.reverts != document.1 {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
         }
         app.run("swatch.new", params(kept.as_ref(), &group, &answer.fields))?;
         app.ui.new_swatch = None;
@@ -68,7 +70,7 @@ pub fn open(app: &mut VectorcraftApp, spot: bool, global: bool, group: Option<&s
 /// Keeps the default name following the colour while the name has not been edited, and applies the corrections the
 /// colour row asked for.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    let Some(open) = app.ui.new_swatch.as_ref().filter(|o| app.session.active().is_some_and(|st| st.uid == o.document)) else { return };
+    let Some(open) = app.ui.new_swatch.as_ref().filter(|o| app.session.active().is_some_and(|st| (st.uid, st.reverts) == o.document)) else { return };
     let (id, auto) = (open.id, open.auto.clone());
     super::swatch_options::correct(app, id);
     let Some(fields) = with_dialog(app, id, |d| d.fields().clone()) else { return };
@@ -162,6 +164,34 @@ mod tests {
         assert!(app.ui.new_swatch.is_none());
         app.run("edit.undo", json!({})).unwrap();
         assert!(app.session.doc().unwrap().doc.swatch(name).is_none());
+    }
+
+    #[test]
+    fn a_new_swatch_is_not_made_in_the_restored_drawing() {
+        let (ctx, mut app) = setup();
+        let dir = vectorcraft_testkit::TempDir::new("new-swatch-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("swatch.new", json!({"name": "Ink", "color": "#cc0066", "spot": true})).unwrap();
+        app.run("paint.setFill", json!({"swatch": "Ink", "tint": 40})).unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        open(&mut app, false, false, None).unwrap();
+        let id = app.ui.new_swatch.as_ref().unwrap().id;
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let count = |app: &VectorcraftApp| app.session.doc().unwrap().doc.swatches_iter().count();
+        let before = count(&app);
+        ok(&mut app, &ctx);
+        let st = app.session.doc().unwrap();
+        assert!(st.doc.swatch("Ink 40%").is_none(), "OK made the draft's swatch in the restored drawing");
+        assert_eq!((count(&app), app.session.doc().unwrap().history.undo.len()), (before, undo));
+        assert!(matches!(
+            app.dialogs().unwrap().with(|h| h.held_state(id)),
+            Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+        assert_eq!(app.ui.new_swatch.as_ref().map(|o| o.id), Some(id), "the refused draft stays open");
     }
 
     /// Answers OK in the open dialog and lets the host run it.

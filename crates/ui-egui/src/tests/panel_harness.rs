@@ -207,9 +207,21 @@ impl Panel {
 
     /// [`Panel::type_into`] with `mods` held for the Enter.
     pub(crate) fn type_into_with(&mut self, name: &str, text: &str, mods: Modifiers) {
-        let target = self.find(name);
+        let target = self.find_typed(name);
         self.fixture.click(&target).key(Key::A, Modifiers::COMMAND).type_text(text).key(Key::Enter, mods);
         self.after();
+    }
+
+    /// A fresh frame, then the field named `name` that takes typing. An inline slider field shows its slider before its
+    /// number field and gives both its name, so the number field is looked for first.
+    fn find_typed(&mut self, name: &str) -> Target {
+        self.frame();
+        let tree = self.fixture.tree();
+        let typed = [Role::SPIN_BUTTON, Role::TEXT_INPUT]
+            .into_iter()
+            .flat_map(|role| self.fixture.by_role(role))
+            .find(|t| tree.name_of(t.node) == Some(name));
+        typed.unwrap_or_else(|| self.look(name))
     }
 
     /// Types `text` into the focused field.

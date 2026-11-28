@@ -153,6 +153,57 @@ fn native_file_revert_discards_pending_settings_for_reused_trace_ids() {
     }
 }
 
+#[test]
+fn closing_a_drawing_discards_only_its_own_trace_draft() {
+    for park_closed_draft in [true, false] {
+        let mut panel = panel_over(traced_app());
+        let remaining = shown(&panel).object.unwrap();
+        panel.click("Preview");
+        panel.click("Strokes");
+        assert_eq!(shown(&panel).params["strokes"], json!(true));
+
+        let dir = vectorcraft_testkit::TempDir::new("trace-native-close");
+        let path = dir.join("second.vectorcraft");
+        {
+            let mut app = panel.app();
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            let img = image::RgbaImage::from_fn(20, 20, |x, _| image::Rgba(if x < 10 { [100, 100, 100, 255] } else { [255, 255, 255, 255] }));
+            place_png(&mut app, "second.png", img);
+            app.run("imageTrace.make", json!({"preset": "Default"})).unwrap();
+            app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+            app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+            assert!(!app.session.active().unwrap().is_dirty());
+        }
+        panel.frame();
+        let closed = shown(&panel).object.unwrap();
+        assert_ne!(remaining.0, closed.0);
+        panel.click("Strokes");
+        assert_eq!(shown(&panel).params["strokes"], json!(true));
+        assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)));
+        if park_closed_draft {
+            panel.app().run("select.none", json!({})).unwrap();
+            panel.frame();
+            assert!(shown(&panel).drafts.contains_key(&closed));
+        }
+        assert!(shown(&panel).drafts.contains_key(&remaining));
+
+        panel.app().run("file.close", json!({})).unwrap();
+        assert_eq!(panel.app().session.documents().len(), 1);
+        assert_eq!(panel.app().session.active().unwrap().uid, remaining.0);
+        let after_close = shown(&panel);
+        assert!(!after_close.drafts.contains_key(&closed), "File Close releases the closed drawing's draft");
+        assert_ne!(after_close.object, Some(closed), "File Close releases the displayed draft's binding too");
+        assert!(after_close.drafts.contains_key(&remaining), "File Close preserves the open drawing's draft");
+
+        select(&mut panel, remaining.2);
+        assert!(shown(&panel).drafts.is_empty(), "the next frame does not put back the closed drawing's draft");
+        assert_eq!(shown(&panel).params["strokes"], json!(true));
+        assert_eq!(param(&panel.app(), "strokes"), Some(json!(false)));
+        panel.click("Preview");
+        assert_eq!(param(&panel.app(), "strokes"), Some(json!(true)));
+    }
+}
+
 fn scroll_settings(panel: &mut Panel, dy: f32) {
     panel.scroll_at(egui::pos2(30.0, 30.0), dy);
     panel.advance(1.0);

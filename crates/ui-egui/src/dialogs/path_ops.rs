@@ -114,6 +114,7 @@ pub(crate) struct Open {
     op: PathOp,
     id: DialogId,
     document: u64,
+    reverts: u64,
     preview: LivePreview,
     /// A distinct selection snapshot identifies the interaction that ran this preview.
     preview_selection: Option<Weak<Selection>>,
@@ -371,6 +372,7 @@ impl Open {
         let Some(selection) = &self.preview_selection else { return false };
         app.session.active().is_some_and(|state| {
             state.uid == self.document
+                && state.reverts == self.reverts
                 && state.interaction.as_ref().is_some_and(|interaction| selection.as_ptr() == Arc::as_ptr(&interaction.selection))
         })
     }
@@ -382,8 +384,11 @@ impl Open {
     }
 
     fn commit(&mut self, app: &mut VectorcraftApp, cmd: &str, params: Value) -> Result<(), String> {
-        if app.session.active().is_none_or(|state| state.uid != self.document) {
+        let Some(state) = app.session.active().filter(|state| state.uid == self.document) else {
             return Err(tl!("Return to the document where this dialog opened.").to_owned());
+        };
+        if state.reverts != self.reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
         if app.session.in_interaction() && !self.owns_preview(app) {
             return Err(tl!("Finish the active edit before confirming.").to_owned());
@@ -431,7 +436,8 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
         app.status("There is no window to show the dialog in.");
         return;
     };
-    let document = app.session.active().map(|state| state.uid);
+    let drawing = app.session.active().map(|state| (state.uid, state.reverts));
+    let document = drawing.map(|(uid, _)| uid);
     if op.previews() && document.is_none() {
         app.status("Open a document before editing paths.");
         return;
@@ -455,6 +461,9 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
             let Some(mut record) = take_open(app, op) else { return Err(tl!("The path dialog is closed.").to_owned()) };
             record.commit(app, cmd, params).inspect_err(|_| app.object_dialogs.path.push(record))?;
         } else {
+            if app.session.active().map(|state| (state.uid, state.reverts)) != drawing {
+                return Err(tl!("Return to the opening drawing, or reopen this dialog after File Revert.").to_owned());
+            }
             app.run(cmd, params).map(drop)?;
         }
         match op {
@@ -471,6 +480,7 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
     if let Some(old) = take_open(app, op) {
         old.cancel(app);
     }
+    let reverts = app.session.active().map_or(0, |state| state.reverts);
     let id = if op.previews() {
         let cancel = Box::new(move |app: &mut VectorcraftApp| {
             // A cancelled opening can leave a replacement with the same dialog ID.
@@ -494,6 +504,7 @@ fn open_dialog(app: &mut VectorcraftApp, op: PathOp, fields: DialogFields, remem
                 op,
                 id,
                 document,
+                reverts,
                 preview: LivePreview::default(),
                 preview_selection: None,
                 last: Value::Null,
@@ -562,7 +573,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 
 fn step(app: &mut VectorcraftApp, r: &mut Open) {
     let Some((on, fields)) = dialog_state(app, r.id) else { return };
-    let Some(state) = app.session.active().filter(|state| state.uid == r.document) else { return };
+    let Some(state) = app.session.active().filter(|state| state.uid == r.document && state.reverts == r.reverts) else { return };
     if !r.owns_preview(app) {
         r.preview = LivePreview::default();
         r.preview_selection = None;
@@ -620,6 +631,89 @@ pub(crate) fn original_paths(app: &VectorcraftApp) -> Vec<(NodeId, &PathData)> {
             _ => None,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod average_document_tests {
+    use super::*;
+    use crate::dialogs::tests::{app, cancel, confirm, is_open, set};
+
+    fn lines(app: &mut VectorcraftApp, top: i32) -> [u64; 2] {
+        let a = app.run("shape.line", json!({"x1": 10, "y1": top, "x2": 50, "y2": top})).unwrap()["id"].as_u64().unwrap();
+        let b = app.run("shape.line", json!({"x1": 60, "y1": top + 20, "x2": 100, "y2": top + 20})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [a, b]})).unwrap();
+        [a, b]
+    }
+
+    fn opening_owns_approval(op: PathOp) {
+        for revert in [false, true] {
+            let mut app = app();
+            let source_paths = lines(&mut app, 20);
+            let uid = app.session.active().unwrap().uid;
+            let generation = app.session.active().unwrap().reverts;
+            let dir = vectorcraft_testkit::TempDir::new("average-path-dialog-drawing");
+            if revert {
+                let path = dir.join("saved-paths.vectorcraft");
+                app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+                app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+                app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+                app.run("object.move", json!({"ids": source_paths, "dx": 12, "dy": 0})).unwrap();
+            } else {
+                app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+                assert_eq!(lines(&mut app, 80), source_paths);
+                app.run("document.activate", json!({"index": 0})).unwrap();
+            }
+            let open = |app: &mut VectorcraftApp| {
+                crate::menus::invoke(app, op.key(), json!({}));
+                assert!(is_open(app));
+                if op == PathOp::Average {
+                    set(app, "axis", json!("both"));
+                } else {
+                    set(app, "to", json!("smooth"));
+                }
+            };
+            open(&mut app);
+            if revert {
+                app.run("file.revert", json!({"confirmed": true})).unwrap();
+                app.run("select.set", json!({"ids": source_paths})).unwrap();
+                let restored = app.session.active().unwrap();
+                assert_eq!((restored.uid, restored.reverts), (uid, generation + 1));
+            } else {
+                app.run("document.activate", json!({"index": 1})).unwrap();
+                assert_ne!(app.session.active().unwrap().uid, uid);
+            }
+            let wrong = app.session.active().unwrap();
+            let (before, undo) = (wrong.doc.clone(), wrong.history.undo.len());
+            let accepted = confirm(&mut app);
+            let after = app.session.active().unwrap();
+            assert!(after.doc == before, "the old path approval must leave the other drawing contents intact");
+            assert_eq!(after.history.undo.len(), undo);
+            assert!(!accepted && is_open(&app));
+
+            if revert {
+                assert!(cancel(&mut app));
+                open(&mut app);
+            } else {
+                app.run("document.activate", json!({"index": 0})).unwrap();
+            }
+            let before = app.session.active().unwrap();
+            let (geometry, undo) = (before.doc.clone(), before.history.undo.len());
+            assert!(confirm(&mut app));
+            let after = app.session.active().unwrap();
+            assert!(after.doc != geometry, "a current approval edits the intended paths");
+            assert_eq!(after.history.undo.len(), undo + 1);
+        }
+    }
+
+    #[test]
+    fn average_path_approval_stays_with_its_drawing() {
+        opening_owns_approval(PathOp::Average);
+    }
+
+    #[test]
+    fn average_join_approval_stays_with_its_drawing() {
+        opening_owns_approval(PathOp::AverageJoin);
+    }
 }
 
 #[cfg(test)]
@@ -796,6 +890,8 @@ mod split_tests {
 
 #[cfg(test)]
 mod preview_document_tests {
+    use craft::ui::dialog::HeldOk;
+
     use super::*;
     use crate::dialogs::tests::{app, cancel, confirm, frame, set};
 
@@ -819,6 +915,84 @@ mod preview_document_tests {
     fn more_options(app: &mut VectorcraftApp) {
         crate::menus::invoke(app, "object.path.simplify", json!({}));
         crate::dialogs::simplify_slider::more_options(app).unwrap();
+    }
+
+    fn show_path_options(app: &mut VectorcraftApp, op: PathOp) {
+        if op == PathOp::Simplify {
+            more_options(app);
+        } else {
+            crate::menus::invoke(app, op.key(), json!({}));
+            set(app, "offset", json!(12.0));
+        }
+        set(app, "preview", json!(false));
+    }
+
+    fn path_options_after_revert(op: PathOp, hold_ok: bool) -> (VectorcraftApp, DialogId) {
+        let mut app = app();
+        let id = if op == PathOp::Simplify {
+            dense_path(&mut app, 50.0)
+        } else {
+            app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 100, "height": 60})).unwrap()["id"].as_u64().unwrap()
+        };
+        let folder = vectorcraft_testkit::TempDir::new("path-options-revert");
+        let path = folder.join("paths.vectorcraft");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        app.run("object.move", json!({"ids": [id], "dx": 5, "dy": 0})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let source = app.session.active().unwrap();
+        let (uid, reverts) = (source.uid, source.reverts);
+        show_path_options(&mut app, op);
+        let dialog_id = app.object_dialogs.path.iter().find(|open| open.op == op).unwrap().id;
+        if hold_ok {
+            let ctx = app.ui_ctx.clone().unwrap();
+            assert!(!app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, dialog_id)));
+        }
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let restored = app.session.active().unwrap();
+        assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+        assert!(restored.doc.node(NodeId(id)).is_some());
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        (app, dialog_id)
+    }
+
+    #[test]
+    fn path_options_revert_drops_old_preview() {
+        for op in [PathOp::Simplify, PathOp::OffsetPath] {
+            let (mut app, _) = path_options_after_revert(op, false);
+            let restored = app.session.active().unwrap().doc.clone();
+            set(&mut app, "preview", json!(true));
+            frame(&mut app, vec![]);
+            assert!(app.session.active().unwrap().doc == restored, "the old path preview reached restored artwork");
+            assert!(!app.session.in_interaction());
+        }
+    }
+
+    #[test]
+    fn path_options_revert_refuses_held_ok_and_accepts_a_new_opening() {
+        for op in [PathOp::Simplify, PathOp::OffsetPath] {
+            let (mut app, dialog) = path_options_after_revert(op, true);
+            let source = app.session.active().unwrap();
+            let (restored, undo) = (source.doc.clone(), source.history.undo.len());
+            frame(&mut app, vec![]);
+            let after = app.session.active().unwrap();
+            assert!(after.doc == restored, "the old path OK reached restored artwork");
+            assert_eq!(after.history.undo.len(), undo);
+            let held = app.dialogs().unwrap().with(|host| host.held_state(dialog));
+            let Some(HeldOk::Refused(message)) = held else { panic!("expected a held refusal") };
+            assert_eq!(message.as_str(), "The document was reverted. Reopen this dialog to continue.");
+
+            assert!(cancel(&mut app));
+            show_path_options(&mut app, op);
+            set(&mut app, "preview", json!(true));
+            frame(&mut app, vec![]);
+            assert!(app.session.in_interaction(), "a new opening can preview the restored paths");
+            assert!(confirm(&mut app));
+            let after = app.session.active().unwrap();
+            assert!(after.doc != restored, "the fresh OK applies the preview");
+            assert_eq!(after.history.undo.len(), undo + 1);
+        }
     }
 
     #[test]
