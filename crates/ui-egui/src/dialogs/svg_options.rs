@@ -56,7 +56,8 @@ const IMAGES: [(&str, &str); 2] = [("embed", "Embed"), ("link", "Link")];
 const OBJECT_IDS: [(&str, &str); 3] = [("layerNames", "Layer Names"), ("minimal", "Minimal"), ("unique", "Unique")];
 const PROFILES: [(&str, &str); 2] = [("svg11", "SVG 1.1"), ("tiny12", "SVG Tiny 1.2")];
 const ENCODINGS: [(&str, &str); 3] = [("utf8", "Unicode (UTF-8)"), ("utf16", "Unicode (UTF-16)"), ("latin1", "ISO 8859-1")];
-const UNITS: [(&str, &str); 5] = [("px", "Pixels"), ("pt", "Points"), ("mm", "Millimeters"), ("cm", "Centimeters"), ("in", "Inches")];
+const UNITS: [(&str, &str); 6] =
+    [("document", "Document"), ("px", "Pixels"), ("pt", "Points"), ("mm", "Millimeters"), ("cm", "Centimeters"), ("in", "Inches")];
 
 /// Dialog fields that are not SVG options.
 const UI_KEYS: [&str; 5] = ["mode", "path", "showCode", "allArtboards", "range"];
@@ -73,9 +74,9 @@ pub(crate) struct SvgCodeKey {
     selected: Option<Vec<vectorcraft_doc::NodeId>>,
 }
 
-/// The options a first SVG Options dialog starts from: the engine's defaults with Pixels,
-/// Internal CSS and Responsive on (as the reference app's Export As starts). Hidden layers are
-/// left to the command (Save keeps them, Export leaves them out).
+/// The options a first SVG export starts from: the engine's defaults with Pixels,
+/// Internal CSS and Responsive on. Saves choose Document unless a remembered unit overrides it.
+/// Hidden layers are left to the command (Save keeps them, Export leaves them out).
 pub(super) fn first_use() -> Map<String, Value> {
     let opts = vectorcraft_svg::ExportOptions { units: Some(vectorcraft_svg::SizeUnit::Px), ..Default::default() };
     let mut m = serde_json::to_value(opts).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
@@ -110,6 +111,10 @@ pub(crate) fn open_with(app: &mut VectorcraftApp, mode: Mode, path: Option<&str>
         if let Some(o) = last.as_object() {
             fields.extend(o.iter().map(|(k, v)| (k.clone(), v.clone())));
         }
+    }
+    if mode != Mode::Export && saved.as_ref().unwrap_or(&app.ui.svg_options).get("units").is_none() {
+        // A document's legacy SVG options must not inherit Pixels from the last export.
+        fields.insert("units".into(), json!("document"));
     }
     fields.insert("allArtboards".into(), json!(true));
     fields.insert("range".into(), json!(""));
@@ -148,7 +153,7 @@ fn pairs(key: &str, label: &'static str, choices: &[(&str, &'static str)]) -> Pa
 /// responsive, `<tspan>`s and metadata. `screens` (Export for Screens' Format Settings) leaves out
 /// Images and Variable Data: a linked image is another file. `tiny`: SVG Tiny has presentation
 /// attributes alone and no web fonts.
-pub(crate) fn svg_params(screens: bool, tiny: bool) -> Vec<Param> {
+pub(crate) fn svg_params(mode: Mode, screens: bool, tiny: bool) -> Vec<Param> {
     let styling = pairs("styling", tl!("Styling:"), &STYLING);
     let fonts = ParamKind::radio(FONTS.iter().map(|(v, l)| ((*v).to_string(), tl!(*l).into())).collect(), Some("false".into()));
     let (lo, hi) = (*vectorcraft_svg::DECIMALS.start() as f64, *vectorcraft_svg::DECIMALS.end() as f64);
@@ -164,7 +169,8 @@ pub(crate) fn svg_params(screens: bool, tiny: bool) -> Vec<Param> {
     rows.push(Param::number("decimals", tl!("Decimal:"), 3.0, 1.0, 0).bounds(Some(lo), Some(hi)));
     rows.push(pairs("encoding", tl!("Encoding:"), &ENCODINGS));
     // Responsive omits width and height, so the unit has nothing to act on.
-    rows.push(pairs("units", tl!("Units:"), &UNITS).enabled_when("responsive", false));
+    let units = if mode == Mode::Export { &UNITS[1..] } else { &UNITS[..] };
+    rows.push(pairs("units", tl!("Units:"), units).enabled_when("responsive", false));
     rows.push(check("minify", tl!("Minify"), false));
     rows.push(check("responsive", tl!("Responsive"), true));
     // Embedded fonts need SVG 1.1 and text that stays text.
@@ -193,7 +199,7 @@ fn artboard_rows(count: usize) -> Vec<Param> {
 /// Every row of the dialog for `mode`. Export Selection writes the selection's crop, without
 /// artboards to choose.
 fn dialog_params(mode: Mode, selection: bool, count: usize, tiny: bool) -> Vec<Param> {
-    let mut rows = svg_params(false, tiny);
+    let mut rows = svg_params(mode, false, tiny);
     match mode {
         Mode::Export if !selection => rows.extend(artboard_rows(count)),
         Mode::Export => {}
@@ -215,6 +221,9 @@ fn options(mode: Mode, f: &DialogFields) -> Value {
     let tiny = f.text("profile") == Some("tiny12");
     let mut o = json_of(&dialog_params(mode, false, 1, tiny), f);
     o.retain(|k, _| !UI_KEYS.contains(&k.as_str()) && !k.starts_with("__"));
+    if o.get("units").and_then(Value::as_str) == Some("document") {
+        o.remove("units");
+    }
     if mode == Mode::Export {
         o.remove("preserveEditing");
         if f.bool("useArtboards").unwrap_or(false) {
@@ -684,6 +693,58 @@ mod tests {
         confirm(&mut app);
         let svg = text(&written, 2);
         assert!(!svg.contains("mm\"") && svg.contains("viewBox=\"0 0 120 80\""), "{svg}");
+    }
+
+    #[test]
+    fn legacy_svg_saves_keep_document_units() {
+        for mode in [Mode::Save, Mode::SaveCopy] {
+            for last in [json!({"responsive": false}), json!({"responsive": false, "units": "px"})] {
+                let (mut app, written) = app();
+                let original = std::env::temp_dir().join("vc-original.svg").to_string_lossy().replace('\\', "/");
+                let path = std::env::temp_dir().join("vc-saved.svg").to_string_lossy().replace('\\', "/");
+                app.run("document.setUnits", json!({"units": "millimeters"})).unwrap();
+                app.run("file.saveAs", json!({"path": original, "svg": {"responsive": false}})).unwrap();
+                let before = vectorcraft_svg::import(&text(&written, 0)).unwrap();
+                app.ui.svg_options = last;
+                start(&mut app, mode, &path, false);
+                confirm(&mut app);
+                let after = vectorcraft_svg::import(&text(&written, 1)).unwrap();
+                assert_eq!(after.units, vectorcraft_doc::Unit::Millimeters, "{mode:?}: {}", text(&written, 1));
+                let (a, b) = (before.artboards[0].rect, after.artboards[0].rect);
+                assert!((a.width() - b.width()).abs() < 1e-6 && (a.height() - b.height()).abs() < 1e-6, "{mode:?}: {a:?} -> {b:?}");
+                let expected = if mode == Mode::SaveCopy { &original } else { &path };
+                assert_eq!(app.session.active().unwrap().path.as_deref(), Some(expected.as_str()));
+            }
+        }
+    }
+
+    #[test]
+    fn svg_saves_keep_explicit_units_and_allow_pixel_overrides() {
+        for mode in [Mode::Save, Mode::SaveCopy] {
+            let (mut app, written) = app();
+            let path = std::env::temp_dir().join("vc-explicit.svg").to_string_lossy().replace('\\', "/");
+            app.run("document.setUnits", json!({"units": "millimeters"})).unwrap();
+            app.run("file.saveAs", json!({"path": path, "svg": {"responsive": false, "units": "in"}})).unwrap();
+            app.ui.svg_options = json!({"responsive": false, "units": "px"});
+            start(&mut app, mode, &path, false);
+            confirm(&mut app);
+            assert_eq!(vectorcraft_svg::import(&text(&written, 1)).unwrap().units, vectorcraft_doc::Unit::Inches);
+            start(&mut app, mode, &path, false);
+            set(&mut app, "units", json!("px"));
+            confirm(&mut app);
+            assert_eq!(vectorcraft_svg::import(&text(&written, 2)).unwrap().units, vectorcraft_doc::Unit::Pixels);
+        }
+    }
+
+    #[test]
+    fn svg_export_keeps_pixels_when_legacy_options_omit_units() {
+        let (mut app, written) = app();
+        let path = std::env::temp_dir().join("vc-export.svg").to_string_lossy().replace('\\', "/");
+        app.run("document.setUnits", json!({"units": "millimeters"})).unwrap();
+        app.ui.svg_options = json!({"responsive": false});
+        start(&mut app, Mode::Export, &path, false);
+        confirm(&mut app);
+        assert_eq!(vectorcraft_svg::import(&text(&written, 0)).unwrap().units, vectorcraft_doc::Unit::Pixels);
     }
 
     /// OK with a range the document lacks keeps the dialog open with the reason, writes nothing and

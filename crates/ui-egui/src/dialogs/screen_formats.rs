@@ -509,7 +509,7 @@ pub(crate) fn settings(ui: &mut Ui, fields: &mut Map<String, Value>, presets: &[
     let mine = fields.get("settings").and_then(|all| all.get(id)).and_then(Value::as_object).cloned().unwrap_or_default();
     let tiny = mine.get("profile").and_then(Value::as_str) == Some("tiny12");
     let params = match id {
-        "svg" => svg_options::svg_params(true, tiny),
+        "svg" => svg_options::svg_params(svg_options::Mode::Export, true, tiny),
         "pdf" => Vec::new(),
         _ => png_options::raster_params(id, true, None),
     };
