@@ -357,6 +357,48 @@ fn convert_to_oklch_answers_lightness_chroma_and_hue() {
     assert!((l - 100.0).abs() < 0.01 && past["values"][1].as_f64().unwrap() < 1e-3, "{past}");
 }
 
+/// `color.parse` reads each notation into an RGB color, its hex and the alpha as a percentage (null
+/// when the text gives none), and answers an error for anything else.
+#[test]
+fn parse_reads_hex_with_alpha_and_css_colors() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let mut parse = |text: &str| s.execute("color.parse", &json!({ "text": text }));
+    for (text, opacity) in [
+        ("#33669980", json!(50.2)),
+        ("33669980", json!(50.2)),
+        ("#3698", json!(53.33)),
+        ("#336699", Value::Null),
+        ("#369", Value::Null),
+        ("rgb(51 102 153 / 50%)", json!(50.0)),
+        ("rgba(51, 102, 153, 0.25)", json!(25.0)),
+        ("rgb(20% 40% 60%)", Value::Null),
+        ("hsl(210 50% 40%)", Value::Null),
+        ("hsla(210deg, 50%, 40%, 1)", json!(100.0)),
+    ] {
+        let r = parse(text).unwrap();
+        assert_eq!(r["hex"], "#336699", "{text}: {r}");
+        assert_eq!(r["opacity"], opacity, "{text}: {r}");
+        let c: Color = serde_json::from_value(r["color"].clone()).unwrap();
+        let Color::Rgb { r: red, g, b } = c else { panic!("{text}: {c:?}") };
+        assert_eq!([red, g, b].map(|v| (v * 255.0).round() as u8), [0x33, 0x66, 0x99], "{text}");
+    }
+    let red = parse("oklch(62.8% 0.2577 29.23 / 0.5)").unwrap();
+    assert_eq!((&red["hex"], &red["opacity"]), (&json!("#ff0000"), &json!(50.0)), "{red}");
+    let message = "`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters";
+    let long = format!("rgb(1 2 3{})", " ".repeat(40));
+    for bad in ["", "#12345", "#gggggg", "rgb(1, 2%, 3)", "rgb(1 2)", "oklch(0.5, 0.1, 30)", "cmyk 0 100 100 0", "red", long.as_str()] {
+        let e = parse(bad).unwrap_err().to_string();
+        assert!(e.ends_with(message), "{bad:?}: {e}");
+    }
+    assert!(parse_err(&mut s, json!({})).ends_with("missing `text`"));
+    assert!(parse_err(&mut s, json!({"text": 5})).ends_with("`text` must be a string"));
+}
+
+fn parse_err(s: &mut Session, p: Value) -> String {
+    s.execute("color.parse", &p).unwrap_err().to_string()
+}
+
 #[test]
 fn assign_profile_is_stored_and_undoable() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());

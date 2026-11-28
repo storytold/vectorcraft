@@ -522,6 +522,9 @@
 	Fill Color	Barva výplně
 	Opacity	Krytí
 	Show Opacity	Zobrazit krytí
+	Show Hex Field	Zobrazit pole hex
+	Hex or CSS color	Barva hex nebo CSS
+	Parse Color	Analyzovat barvu
 	Stroke Color	Barva tahu
 	Fill Gradient	Přechod výplně
 	Stroke Gradient	Přechod tahu
@@ -5578,6 +5581,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musí být hue, saturation, brightness, red, green nebo blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` musí být none, oklch nebo hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH vyžaduje sRGB jako pracovní prostor RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` musí být barva hex (#rgb, #rgba, #rrggbb nebo #rrggbbaa) nebo barva CSS rgb(), hsl() nebo oklch() o nejvýše 48 znacích
 @msg	`{k}` must be [x, y]	`{k}` musí být [x, y]
 @msg	`{name}` has no options	`{name}` nemá žádné možnosti
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` je vestavěný pracovní prostor; zvolte jiný název
@@ -9999,7 +10003,9 @@ breakText	Glyphs	Glyfy
 @msg	more than {MAX_IMPORT} presets	více než {MAX_IMPORT} přednastavení
 @msg	moved must be [[x,y]…]	moved musí být [[x,y]…]
 @msg	must be an object with `kind` and `value`	musí být objekt s `kind` a `value`
-@msg	must have `kind` alert, confirm or prompt	musí mít `kind` alert, confirm nebo prompt
+@msg	must have `kind` alert, confirm, prompt or window	musí mít `kind` alert, confirm, prompt nebo window
+@msg	is a window's answer, whose `value` must be a list of steps	je odpověď okna, jejíž `value` musí být seznam kroků
+@msg	has a step {i} that is not a valid click, change or close	má krok {i}, který není platné kliknutí, změna ani zavření
 @msg	must have exactly `kind` and `value`	musí mít právě `kind` a `value`
 @msg	name (a toolbar's name) is required	name (název panelu nástrojů) je povinné
 @msg	name (a toolbar's name) must be a string	name (název panelu nástrojů) musí být řetězec

@@ -477,9 +477,7 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
     if let Some(drop) = &output.dropped {
         let run = if let Some(d) = drop.payload::<LayersDrag<RowId>>().filter(|d| own(d)) {
             footer_drop(tree, drop.index, FooterPayload::Rows(&d.layers()))
-        } else if let Some(PanelDrag::Appearance { document, source }) = drop.payload::<PanelDrag>()
-            && *document == st.uid
-        {
+        } else if let Some(source) = drop.payload::<PanelDrag>().and_then(|d| d.appearance_for(st.uid, st.reverts)) {
             footer_drop(tree, drop.index, FooterPayload::Appearance(source.0))
         } else {
             None

@@ -120,6 +120,9 @@ pub(crate) struct CanvasDrops<'a> {
     kind: BodyKind,
     /// The uid of the document the canvas shows.
     document: u64,
+    /// The revert count of the document the canvas shows: an appearance dragged from contents File › Revert replaced is
+    /// refused.
+    reverts: u64,
     /// `(uid, revision)` of every open document: carried art whose source is not listed unchanged is refused.
     sources: Vec<(u64, u64)>,
     /// Whether the art being carried is taken though its source's revision moved: its move was given up and the source
@@ -172,7 +175,7 @@ impl Component for CanvasDrops<'_> {
             // The art of this canvas's own document is not accepted as a panel payload: its move resumes.
             let panel = Target::new(rect, view, covered, |p: &PanelDrag| match p {
                 PanelDrag::Art { .. } => None,
-                PanelDrag::Appearance { document, .. } if *document != self.document => None,
+                PanelDrag::Appearance { .. } if p.appearance_for(self.document, self.reverts).is_none() => None,
                 _ => Some(Payload::Panel(p.clone())),
             });
             let style = Target::new(rect, view, covered, |d: &StyleDrag| (d.document == self.document).then(|| Payload::Style(d.clone())));
@@ -218,7 +221,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
         BodyKind::Live => app.canvas_view(),
         BodyKind::Pane => pane_view(app, win, rect),
     };
-    let (Some(view), Some(document)) = (view, app.session.documents().get(win.0).map(|d| d.uid)) else { return };
+    let (Some(view), Some((document, reverts))) = (view, app.session.documents().get(win.0).map(|d| (d.uid, d.reverts))) else { return };
     let sources = app.session.documents().iter().map(|d| (d.uid, d.revision)).chain(app.canvas.panes.released_from).collect();
     // A tab rest leaves the art to the document it showed while that is the current one: any canvas or pane takes it
     // then, and nothing once that document was closed or left by other means.
@@ -231,7 +234,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
     let ctx = ui.ctx().clone();
     let covered = |at: Pos2| crate::panel_docking::os_window_at(app, &ctx, at);
     let files = (CanvasFiles::new(app, rect, &view), &files_out);
-    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, given_up, covered: &covered, out: &out, files };
+    let drops = CanvasDrops { common: Common::new(), view, kind, document, reverts, sources, given_up, covered: &covered, out: &out, files };
     drops.id_salt(("canvas-drops", win)).show_at(ui, rect);
     if let Some(files) = files_out.take() {
         crate::place::canvas_drop(app, ui.ctx(), files);
@@ -394,7 +397,8 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             }
             run(app, cmd, params)
         }
-        Payload::Panel(PanelDrag::Appearance { document, source }) if app.session.active().is_some_and(|st| st.uid == *document) => {
+        Payload::Panel(drag @ PanelDrag::Appearance { .. }) => {
+            let Some(source) = app.session.active().and_then(|st| drag.appearance_for(st.uid, st.reverts)) else { return Ok(()) };
             let Some(hit) = hit() else { return Ok(()) };
             let target = top_object(app, &hit)?;
             if target == source.0 {

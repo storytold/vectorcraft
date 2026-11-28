@@ -1,8 +1,11 @@
 //! WebAssembly plug-ins in the menus and their generated dialogs.
 //!
-//! Object › Plug-ins lists the installed object filters (`plugin.dialog {id}`), then Install
-//! Plug-in… and Reload Plug-ins; Effect › Plug-ins lists the live-effect plug-ins, which open the
-//! effect dialog (`effect.dialog`). A filter with parameters opens a hosted dialog `plugin`: one row
+//! Object › Plug-ins lists the installed object filters and generators (`plugin.dialog {id}`),
+//! then Edit Generated Art…, Install Plug-in… and Reload Plug-ins. A generator with parameters
+//! opens a hosted dialog `pluginGenerate`, whose OK draws new generated art (`plugin.generate`);
+//! Edit Generated Art… opens it with a selected generated art object's parameters, and its OK draws
+//! the object again (`plugin.editGenerated`). Effect › Plug-ins lists the live-effect plug-ins,
+//! which open the effect dialog (`effect.dialog`). A filter with parameters opens a hosted dialog `plugin`: one row
 //! per declared parameter, shown while its `visibleWhen` holds, with a live Preview, and OK keeps the
 //! run as one undo step (`plugin.run`). A filter without parameters runs at once. A heavy filter (its
 //! manifest's `budget`) has no Preview, since a run may take minutes: it runs in the background
@@ -23,8 +26,9 @@
 //! files File › Open finds no built-in format for, and File › Open With lists them; one with
 //! parameters opens dialog `pluginImport` once the file is picked, and its Open button opens it.
 //!
-//! The one open filter, export or import dialog is [`PluginDialog`]: what the hosted dialog cannot
-//! hold (the plug-in, the live preview, the export's or open's own parameters) lives there, and
+//! The one open filter, generator, export or import dialog is [`PluginDialog`]: what the hosted
+//! dialog cannot hold (the plug-in, the live preview, the edited object, the export's or open's own
+//! parameters) lives there, and
 //! [`pump`] reads the dialog's values each frame and acts on its answer.
 //!
 //! [`InstallPrompt`] asks a person to approve a plug-in's permissions or heavy budget. What it
@@ -269,12 +273,13 @@ pub fn canvas_item_enabled(app: &VectorcraftApp, id: &str, p: &Value) -> bool {
     app.session.active().is_some_and(|st| context_holds(&st.doc, &ids, place.when))
 }
 
-/// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
-/// Install Plug-in…, Reload Plug-ins and Plug-ins That Didn't Load… ([`super::failed_plugins`]).
+/// Object › Plug-ins: the installed object filters (each with its commands, if it has any) and
+/// generators, then Edit Generated Art…, Install Plug-in…, Reload Plug-ins and Plug-ins That Didn't
+/// Load… ([`super::failed_plugins`]).
 pub fn object_menu() -> Vec<Node> {
     let mut items: Vec<Node> = registry::list()
         .iter()
-        .filter(|p| p.manifest().kind == Kind::Filter)
+        .filter(|p| matches!(p.manifest().kind, Kind::Filter | Kind::Generator))
         .map(|p| with_commands(p, cp(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
         .collect();
     if items.is_empty() {
@@ -282,6 +287,7 @@ pub fn object_menu() -> Vec<Node> {
     }
     items.extend([
         Sep,
+        c(EDIT_GENERATED, EDIT_COMMAND),
         c("Install Plug-in…", "ui.installPlugin"),
         c("Reload Plug-ins", "plugin.reload"),
         c("Plug-ins That Didn't Load…", super::failed_plugins::COMMAND),
@@ -349,6 +355,9 @@ pub(crate) enum Opened {
         /// for a filter's own dialog, which runs on the active document.
         doc: Option<u64>,
     },
+    /// A generator's parameters: for new generated art (`edit` is `None`), or for drawing the
+    /// generated art object `edit` names again.
+    Generate { plugin: String, edit: Option<EditTarget>, params: Arc<[Param]> },
     /// An exporter's parameters, with Export As's own parameters (`format`, `path`, …) kept for Export.
     Export {
         plugin: String,
@@ -383,13 +392,13 @@ impl PluginDialog {
 impl Opened {
     fn plugin(&self) -> &str {
         match self {
-            Opened::Filter { plugin, .. } | Opened::Export { plugin, .. } | Opened::Import { plugin, .. } => plugin,
+            Opened::Filter { plugin, .. } | Opened::Generate { plugin, .. } | Opened::Export { plugin, .. } | Opened::Import { plugin, .. } => plugin,
         }
     }
 
     fn params(&self) -> &Arc<[Param]> {
         match self {
-            Opened::Filter { params, .. } | Opened::Export { params, .. } | Opened::Import { params, .. } => params,
+            Opened::Filter { params, .. } | Opened::Generate { params, .. } | Opened::Export { params, .. } | Opened::Import { params, .. } => params,
         }
     }
 
@@ -669,15 +678,26 @@ pub fn open_last(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// `plugin.dialog {id, params?}`: run filter `id` at once when it takes no parameters or `params`
-/// are given, else open its dialog prefilled with the parameters it last ran with in this session
-/// ([`remembered`]), or with its defaults.
+/// `plugin.dialog {id, params?}`: run filter or generator `id` at once when it takes no parameters
+/// or `params` are given, else open its dialog prefilled with the parameters a filter last ran with
+/// in this session ([`remembered`]), or with its defaults.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("id").and_then(Value::as_str).ok_or("missing `id` (see plugin.list)")?;
     let plugin = registry::get(id).ok_or_else(|| format!("no plug-in {id:?} is installed"))?;
     let m = plugin.manifest();
     match m.kind {
         Kind::Filter => {}
+        Kind::Generator => {
+            let given = p.get("params");
+            if given.is_some_and(|value| !value.is_object()) {
+                return Err(vectorcraft_plugins::Error::Params("plug-in parameters must be a JSON object".into()).to_string());
+            }
+            if m.params.is_empty() || given.is_some() {
+                return app.run(GENERATE, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
+            }
+            open_generate(app, &plugin, None, &Map::new())?;
+            return Ok(Value::Null);
+        }
         Kind::Effect => return Err(format!("{} is a live effect (Effect › Plug-ins)", m.name)),
         Kind::Exporter => return Err(format!("{} is an exporter (File › Export › Export As…)", m.name)),
         Kind::Importer => return Err(format!("{} is an importer (File › Open With)", m.name)),
@@ -783,6 +803,78 @@ fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, Str
     match in_background(plugin.manifest()) || crate::plugin_runs::in_workers(app) {
         false => app.run(CMD, p),
         true => crate::plugin_runs::start(app, p),
+    }
+}
+
+/// The key of a generator's parameters dialog: for new generated art, or for drawing a generated
+/// art object again.
+pub const GENERATE_KIND: &str = "pluginGenerate";
+
+const GENERATE: &str = "plugin.generate";
+
+/// Object › Plug-ins › Edit Generated Art…, and the UI command it runs.
+pub const EDIT_GENERATED: &str = "Edit Generated Art…";
+pub const EDIT_COMMAND: &str = "ui.editGeneratedArt";
+
+/// The generated art object an Edit Generated Art… dialog draws again: its id, and the
+/// [`uid`](vectorcraft_engine::DocState::uid) of the document it is in.
+pub(crate) struct EditTarget {
+    object: Value,
+    doc: Option<u64>,
+}
+
+/// OK's error when the document of an Edit Generated Art… dialog is no longer the active one.
+const EDIT_DOC_GONE: &str = "the document it was prepared for is no longer active";
+
+/// Opens the dialog of generator `plugin`: its rows at the parameters `values` holds, else at their
+/// defaults, for new generated art, or for drawing the object of `edit` again.
+fn open_generate(app: &mut VectorcraftApp, plugin: &Plugin, edit: Option<EditTarget>, values: &Map<String, Value>) -> Result<(), String> {
+    let m = plugin.manifest();
+    let look = Look { title: m.name.trim_end_matches('…').to_string(), description: m.description.clone(), previews: false, note: false, ok: None };
+    let rows = vectorcraft_plugins::generate::resolve_over(plugin, values, &Value::Null).map_err(|error| error.to_string())?;
+    let (id, params) = open_hosted(app, GENERATE_KIND, plugin.id(), m.clone(), rows, look)?;
+    app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Generate { plugin: plugin.id().to_string(), edit, params } });
+    Ok(())
+}
+
+/// `ui.editGeneratedArt {id?}`: opens the dialog of generated art object `id` (else the one
+/// selected) with the parameters it was drawn with, for the parameters its plug-in still declares.
+/// An object whose plug-in isn't installed, or whose saved fields are damaged, is an error that says
+/// so, and its art stays as it is.
+pub fn open_edit(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let mut q = json!({});
+    if let Some(id) = p.get("id").filter(|v| !v.is_null()) {
+        q["id"] = id.clone();
+    }
+    let info = app.run("plugin.generatedInfo", q)?;
+    let id = info.get("id").cloned().unwrap_or(Value::Null);
+    let installed = info.get("installed") == Some(&Value::Bool(true));
+    let Some(plugin) = info.get("plugin").and_then(Value::as_str).and_then(registry::get).filter(|_| installed) else {
+        // The engine's error says which plug-in is missing or that the saved fields are damaged.
+        return app.run("plugin.editGenerated", json!({"id": id, "params": {}}));
+    };
+    let saved = info.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+    let edit = EditTarget { object: id, doc: app.session.active().map(|st| st.uid) };
+    open_generate(app, &plugin, Some(edit), &saved)?;
+    Ok(Value::Null)
+}
+
+/// Is the selection one object, a generated art object, which Edit Generated Art… edits?
+pub fn one_generated_selected(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|st| match st.selection.objects.as_slice() {
+        [id] => st.doc.node(*id).is_some_and(|n| n.extras().generated.is_some()),
+        _ => false,
+    })
+}
+
+/// OK of a generator dialog: draws new generated art (`plugin.generate`), or draws the object of
+/// `edit` again (`plugin.editGenerated`), as one undo step. When another document has come to the
+/// front since Edit Generated Art… opened the dialog, it draws nothing and says so.
+fn generate_with(app: &mut VectorcraftApp, plugin: String, edit: Option<EditTarget>, values: Map<String, Value>) -> Result<Value, String> {
+    match edit {
+        Some(e) if e.doc != app.session.active().map(|st| st.uid) => Err(EDIT_DOC_GONE.into()),
+        Some(e) => app.run("plugin.editGenerated", json!({"id": e.object, "params": values})),
+        None => app.run(GENERATE, json!({"id": plugin, "params": values})),
     }
 }
 
@@ -947,6 +1039,7 @@ fn pump_dialog(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The dialog is already closed, so a failure goes to the status line.
     let done = match open.kind {
         Opened::Filter { .. } => confirm_filter(app, open.kind, values),
+        Opened::Generate { plugin, edit, .. } => generate_with(app, plugin, edit, values),
         Opened::Export { export, document, .. } => export_with(app, export, document, values),
         Opened::Import { open, .. } => import_with(app, open, values),
     };

@@ -41,26 +41,36 @@ impl Kind {
     }
 }
 
-/// What the pointer is over. `Extent` is a path hovered with Alt held: its overall width or height.
+/// What the pointer is over. `Extent` is a path hovered with Alt held: its overall width or height,
+/// with `preview` (Use Preview Bounds on) to the outside of its strokes.
 #[derive(Clone, Debug, PartialEq)]
 enum Target {
     Segment(SegmentRef),
     Corner { first: SegmentRef, second: SegmentRef, at: Point },
     Radial { source: DimensionSource, center: Point, radius: f64 },
-    Extent { node: NodeId },
+    Extent { node: NodeId, preview: bool },
 }
 
-/// A path and the document its outermost points ([`dimension::extents`]) were read from
-/// ([`whole_box_source`]), with the points.
-type WholeBox = ((NodeId, (u64, u64, usize)), Option<[(Point, Point); 2]>);
+/// A path, whether its points are moved out to its strokes, and the document its outermost points
+/// ([`whole_ends`]) were read from ([`whole_box_source`]).
+type WholeBoxKey = (NodeId, bool, (u64, u64, usize));
+
+/// The key of a path's outermost points ([`WholeBoxKey`]), with the points.
+type WholeBox = (WholeBoxKey, Option<[(Point, Point); 2]>);
 
 /// The document a path's box is read from, with what identifies it: while an interaction is in
 /// progress, the document as it began; otherwise the document `cx` shows, at its revision.
-fn whole_box_source<'a>(cx: &ToolContext<'a>, node: NodeId) -> (&'a vectorcraft_doc::Document, (NodeId, (u64, u64, usize))) {
+fn whole_box_source<'a>(cx: &ToolContext<'a>, node: NodeId, preview: bool) -> (&'a vectorcraft_doc::Document, WholeBoxKey) {
     match cx.interaction_doc {
-        Some(began) => (began, (node, (cx.revision.0, 0, std::ptr::from_ref(began).addr()))),
-        None => (cx.doc, (node, (cx.revision.0, cx.revision.1, 0))),
+        Some(began) => (began, (node, preview, (cx.revision.0, 0, std::ptr::from_ref(began).addr()))),
+        None => (cx.doc, (node, preview, (cx.revision.0, cx.revision.1, 0))),
     }
+}
+
+/// The outermost points a dimension of the whole path `node` measures: [`dimension::extents`], or
+/// with `preview` [`dimension::preview_extents`], moved out to the outside of the path's strokes.
+fn whole_ends(doc: &vectorcraft_doc::Document, node: NodeId, preview: bool) -> Option<[(Point, Point); 2]> {
+    if preview { dimension::preview_extents(doc, node) } else { dimension::extents(doc, node) }
 }
 
 #[derive(Default)]
@@ -165,8 +175,7 @@ fn orientation_at(a: Point, b: Point, p: Point) -> Orientation {
         .map_or(Orientation::Aligned, |(_, orientation)| orientation)
 }
 
-/// The box through a path's outermost points ([`dimension::extents`]): left, top, right and
-/// bottom.
+/// The box through a path's outermost points ([`whole_ends`]): left, top, right and bottom.
 fn extent_box([(left, right), (top, bottom)]: [(Point, Point); 2]) -> Rect {
     Rect::new(left.x, top.y, right.x, bottom.y)
 }
@@ -1032,27 +1041,27 @@ impl DimensionTool {
         };
         Some(now.or(self.first_pick).unwrap_or(*at))
     }
-    /// The outermost points of `node` ([`dimension::extents`]), read again only when the path or
-    /// the document changes. While an interaction is in progress they are read from the document
-    /// as the interaction began, which each preview starts again from (as the levels in
+    /// The outermost points of `node` ([`whole_ends`]), read again only when the path or the
+    /// document changes. While an interaction is in progress they are read from the document as
+    /// the interaction began, which each preview starts again from (as the levels in
     /// [`Self::preview`] are), so the previews themselves do not make the tool read the path again.
-    fn whole_box(&mut self, cx: &ToolContext, node: NodeId) -> Option<[(Point, Point); 2]> {
-        let (from, key) = whole_box_source(cx, node);
+    fn whole_box(&mut self, cx: &ToolContext, node: NodeId, preview: bool) -> Option<[(Point, Point); 2]> {
+        let (from, key) = whole_box_source(cx, node, preview);
         if let Some((kept, ends)) = self.whole_box
             && kept == key
         {
             return ends;
         }
-        let ends = dimension::extents(from, node);
+        let ends = whole_ends(from, node, preview);
         self.whole_box = Some((key, ends));
         ends
     }
     /// What the pointer at `p` is over. A Linear path hovered with `alt` held, before any point
-    /// is picked, is the whole path.
+    /// is picked, is the whole path: with Use Preview Bounds on, to the outside of its strokes.
     fn target(&self, cx: &ToolContext, p: Point, alt: bool) -> Option<Target> {
         let edge = pick(cx, p)?;
         match self.kind {
-            Kind::Linear if alt && self.points.is_empty() => Some(Target::Extent { node: edge.node }),
+            Kind::Linear if alt && self.points.is_empty() => Some(Target::Extent { node: edge.node, preview: cx.preview_bounds }),
             Kind::Linear => Some(Target::Segment(edge)),
             Kind::Angular => {
                 let (anchor, at) = anchor_near(cx, &edge, p)?;
@@ -1104,9 +1113,9 @@ impl DimensionTool {
                 let mode = if p.distance(*center) >= *radius { DimensionMode::Radius } else { DimensionMode::Diameter };
                 self.recipe(mode, *center, p, Point::ZERO, Some(source.clone()))
             }
-            Target::Extent { node } => {
-                let mut d =
-                    self.recipe(DimensionMode::Linear, Point::ZERO, Point::new(1.0, 0.0), Point::ZERO, Some(DimensionSource::Extent { node: *node }));
+            Target::Extent { node, preview } => {
+                let source = DimensionSource::Extent { node: *node, preview: *preview };
+                let mut d = self.recipe(DimensionMode::Linear, Point::ZERO, Point::new(1.0, 0.0), Point::ZERO, Some(source));
                 d.orientation = Orientation::Horizontal;
                 d
             }
@@ -1130,7 +1139,7 @@ impl DimensionTool {
         }
         self.level_guide = None;
         let whole = match self.pending.as_ref().and_then(|d| d.source.as_ref()) {
-            Some(DimensionSource::Extent { node }) => Some(self.whole_box(cx, *node)),
+            Some(DimensionSource::Extent { node, preview }) => Some(self.whole_box(cx, *node, *preview)),
             _ => None,
         };
         let Some(d) = &mut self.pending else { return vec![] };
@@ -1399,8 +1408,8 @@ impl Tool for DimensionTool {
                 }
                 self.hover = self.target(cx, ev.pos, ev.mods.alt);
                 let whole = match self.hover {
-                    Some(Target::Extent { node }) => {
-                        self.whole_box(cx, node);
+                    Some(Target::Extent { node, preview }) => {
+                        self.whole_box(cx, node, preview);
                         true
                     }
                     _ => false,
@@ -1553,14 +1562,15 @@ impl Tool for DimensionTool {
                         out.push(Overlay::Line { a: *center, b: *center + toward / toward.hypot() * *radius, color, dashed: true });
                     }
                 }
-                Some(Target::Extent { node }) => {
-                    // The box through the path's outermost points: a Smart Guide, or with Smart
-                    // Guides off a line in the tool's own color.
-                    // Read again when the path changed since the pointer last moved.
-                    let (from, at) = whole_box_source(cx, *node);
+                Some(Target::Extent { node, preview }) => {
+                    // The box through the path's outermost points (with Use Preview Bounds on, out
+                    // to its strokes): a Smart Guide, or with Smart Guides off a line in the
+                    // tool's own color. Read again when the path changed since the pointer last
+                    // moved.
+                    let (from, at) = whole_box_source(cx, *node, *preview);
                     let b = match self.whole_box {
                         Some((key, ends)) if key == at => ends,
-                        _ => dimension::extents(from, *node),
+                        _ => whole_ends(from, *node, *preview),
                     }
                     .map(extent_box);
                     if let Some(b) = b {
@@ -2880,7 +2890,7 @@ mod tests {
         };
         let mut t = DimensionTool::default();
         t.pointer(&c, &held(PointerKind::Move, 150.0, 100.0));
-        assert_eq!(t.hover, Some(Target::Extent { node: id }));
+        assert_eq!(t.hover, Some(Target::Extent { node: id, preview: false }));
         assert!(t.overlays(&c).iter().any(|o| matches!(o, Overlay::Line { color, .. } if *color == c.smart_guide_color)));
         // With Smart Guides off the box is not a Smart Guide, and at a high zoom the size stays by
         // the pointer.
@@ -2942,6 +2952,34 @@ mod tests {
         let o = t.overlays(&zoomed);
         let near = |o: &Overlay| matches!(o, Overlay::Measure { p, .. } if p.distance(Point::new(150.0, 100.0)) < zoomed.tol(20.0));
         assert!(o.iter().any(near), "{o:?}");
+    }
+
+    /// With Use Preview Bounds on, the box Alt shows over a stroked path reaches the outside of its
+    /// stroke, and the dimension of the whole path it places measures to there, as W and H do; it
+    /// keeps doing so after the art changes (`"preview": true`). With the preference off, the box
+    /// and the dimension go through the outermost points.
+    #[test]
+    fn with_preview_bounds_an_alt_placed_dimension_measures_the_outside_of_the_stroke() {
+        let (d, id) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let held = |kind, x: f64, y: f64| PointerEvent::new(kind, x, y).with_mods(Mods { alt: true, ..Mods::default() });
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        for (preview, (left, right)) in [(true, (99.5, 200.5)), (false, (100.0, 200.0))] {
+            let c = ToolContext { preview_bounds: preview, ..cx(&d, &s, &p) };
+            let mut t = DimensionTool::default();
+            t.pointer(&c, &held(PointerKind::Move, 150.0, 100.0));
+            assert_eq!(t.hover, Some(Target::Extent { node: id, preview }));
+            let xs: Vec<f64> = t.overlays(&c).iter().filter_map(|o| if let Overlay::Line { a, .. } = o { Some(a.x) } else { None }).collect();
+            assert!(xs.iter().any(|x| near(*x, left)) && xs.iter().any(|x| near(*x, right)), "preview {preview}: {xs:?}");
+            t.pointer(&c, &held(PointerKind::Down, 150.0, 100.0));
+            t.pointer(&c, &held(PointerKind::Up, 150.0, 100.0));
+            let acts = t.pointer(&c, &PointerEvent::new(PointerKind::Move, 150.0, 60.0));
+            let Some(Action::Preview(_, params)) = acts.last() else { panic!("{acts:?}") };
+            let source = if preview { json!({"kind":"extent","node":id,"preview":true}) } else { json!({"kind":"extent","node":id}) };
+            assert_eq!(params["source"], source);
+            let (a, b) = (params["a"][0].as_f64().unwrap_or(f64::NAN), params["b"][0].as_f64().unwrap_or(f64::NAN));
+            assert!(near(a, left) && near(b, right), "preview {preview}: {a} to {b}");
+        }
     }
 
     /// A point that Smart Guides leave where the pointer already is (the pointer right in line

@@ -235,7 +235,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	is a confirm's answer, whose `value` must be true or false	er svaret på en confirm, hvis `value` skal være true eller false
 @msg	is longer than 16 KiB	er længere end 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	er svaret på en prompt, hvis `value` skal være en streng eller null
-@msg	must have `kind` alert, confirm or prompt	skal have `kind` alert, confirm eller prompt
+@msg	must have `kind` alert, confirm, prompt or window	skal have `kind` alert, confirm, prompt eller window
+@msg	is a window's answer, whose `value` must be a list of steps	er et vindues svar, hvis `value` skal være en liste over trin
+@msg	has a step {i} that is not a valid click, change or close	har et trin {i}, der ikke er et gyldigt klik, en gyldig ændring eller en gyldig lukning
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` er kun til en kørsel uden nogen at spørge: i appen besvarer personen hver dialog
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` skal være et heltal fra 1 til {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` er indlejret mere end 64 niveauer dybt
@@ -3321,6 +3323,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Fill Color	Fyldfarve
 	Opacity	Opacitet
 	Show Opacity	Vis opacitet
+	Show Hex Field	Vis hex-felt
+	Hex or CSS color	Hex- eller CSS-farve
+	Parse Color	Fortolk farve
 	Stroke Color	Stregfarve
 	Fill Gradient	Fyldgradient
 	Stroke Gradient	Streggradient
@@ -9284,6 +9289,7 @@ variable-list-end	{0}, {1}	{0} og {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` skal være hue, saturation, brightness, red, green eller blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` skal være none, oklch eller hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH kræver sRGB som RGB-arbejdsfarverum
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` skal være en hex-farve (#rgb, #rgba, #rrggbb eller #rrggbbaa) eller en CSS-farve rgb(), hsl() eller oklch() på højst 48 tegn
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler

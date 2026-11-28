@@ -580,6 +580,9 @@ digits	Malayalam	말라얄람어
 	Make Sides Equal	변 길이 같게
 	Opacity	불투명도
 	Show Opacity	불투명도 표시
+	Show Hex Field	16진수 필드 표시
+	Hex or CSS color	16진수 또는 CSS 색상
+	Parse Color	색상 구문 분석
 	Pie End Angle:	파이 끝 각도:
 	Pie Start Angle:	파이 시작 각도:
 	Stroke Color	선 색상
@@ -5644,6 +5647,7 @@ variable-list-end	{0}, {1}	{0} 및 {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`은(는) hue, saturation, brightness, red, green, blue 중 하나여야 합니다
 @msg	`sliders` must be none, oklch or hsl	`sliders`는 none, oklch 또는 hsl이어야 합니다
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH를 사용하려면 작업 RGB 공간이 sRGB여야 합니다
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text`은(는) 16진수 색상(#rgb, #rgba, #rrggbb 또는 #rrggbbaa)이거나 최대 48자의 CSS rgb(), hsl() 또는 oklch() 색상이어야 합니다
 @msg	`{key}` must be true or false	`{key}`은(는) true 또는 false여야 합니다
 @msg	`top` and `below` can't both be true	`top`과 `below`를 동시에 true로 지정할 수 없습니다
 @msg	`select` must be true or false	`select`은(는) true 또는 false여야 합니다
@@ -9637,7 +9641,9 @@ breakText	Glyphs	글리프
 @msg	more than {MAX_IMPORT} presets	사전 설정이 {MAX_IMPORT}개보다 많습니다
 @msg	moved must be [[x,y]…]	moved는 [[x,y]…]여야 합니다
 @msg	must be an object with `kind` and `value`	`kind`와 `value`가 있는 개체여야 합니다
-@msg	must have `kind` alert, confirm or prompt	`kind`가 alert, confirm 또는 prompt여야 합니다
+@msg	must have `kind` alert, confirm, prompt or window	`kind`가 alert, confirm, prompt 또는 window여야 합니다
+@msg	is a window's answer, whose `value` must be a list of steps	창의 답이며, `value`는 단계 목록이어야 합니다
+@msg	has a step {i} that is not a valid click, change or close	단계 {i}이(가) 올바른 클릭, 변경 또는 닫기가 아닙니다
 @msg	must have exactly `kind` and `value`	`kind`와 `value`만 있어야 합니다
 @msg	name (a toolbar's name) is required	name(도구 막대 이름)이 필요합니다
 @msg	name (a toolbar's name) must be a string	name(도구 막대 이름)은 문자열이어야 합니다

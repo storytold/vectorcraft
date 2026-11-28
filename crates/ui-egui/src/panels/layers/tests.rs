@@ -590,7 +590,8 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
         let id = app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
         let dst = app.run("layer.new", json!({"name": "Destination"})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [id]})).unwrap();
-        (app.session.active().unwrap().uid, NodeId(id), source, NodeId(dst))
+        let st = app.session.active().unwrap();
+        ((st.uid, st.reverts), NodeId(id), source, NodeId(dst))
     };
     let (first_doc, first, _, _) = setup(10);
     let (second_doc, second, source, destination) = setup(60);
@@ -603,7 +604,11 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
     panel.drag_hold_role("Select art of Source", Role::BUTTON, to - from);
     assert!(drag::mark(panel.ctx()).is_some(), "the destination accepts artwork in its own document");
     panel.key(Key::F6, Modifiers::COMMAND);
-    assert_eq!(panel.app().session.active().unwrap().uid, second_doc);
+    {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), second_doc);
+    }
     let carried = drag::active::<cells::ArtDrag>(panel.ctx()).expect("the shortcut leaves the drag held");
     assert_eq!((carried.document, carried.ids.as_slice()), (first_doc, &[first][..]));
     assert!(drag::mark(panel.ctx()).is_none(), "the destination rejects the foreign artwork");
@@ -613,6 +618,57 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
 
     panel.drag("Select art of Source", "Destination", Modifiers::NONE);
     assert_eq!(layer(&panel.app()), Some(destination), "a same-document selection-square drag still moves the rectangle");
+}
+
+#[test]
+fn a_selection_square_drop_after_file_revert_leaves_the_restored_artwork_in_place() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::Modifiers;
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let source = app.session.active().unwrap().doc.layers[0].id;
+    name_row(&mut app, source, "Source");
+    let rect = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    let destination = NodeId(app.run("layer.new", json!({"name": "Destination"})).unwrap()["id"].as_u64().unwrap());
+    let folder = vectorcraft_testkit::TempDir::new("layers-art-drag-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("shape.rectangle", json!({"x": 120, "y": 30, "width": 30, "height": 30})).unwrap();
+    app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Select art of Source", Role::BUTTON).center();
+    let to = panel.rect("Destination").center();
+    panel.drag_hold_role("Select art of Source", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "the destination accepts the selected artwork before the revert");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+    }
+    assert!(drag::active::<cells::ArtDrag>(panel.ctx()).is_some(), "the revert leaves the drag held");
+    assert!(drag::mark(panel.ctx()).is_none(), "the destination rejects artwork carried from before the revert");
+    panel.release();
+    let layer = |app: &VectorcraftApp| app.session.active().unwrap().doc.layer_of(rect);
+    assert_eq!(layer(&panel.app()), Some(source), "the restored rectangle with the same ID has not moved");
+
+    panel.app().run("select.set", json!({"ids": [rect.0]})).unwrap();
+    panel.frame();
+    panel.drag("Select art of Source", "Destination", Modifiers::NONE);
+    assert_eq!(layer(&panel.app()), Some(destination), "a selection-square drag started after the revert still moves the rectangle");
 }
 
 /// The target and the selected objects, sorted.
@@ -929,4 +985,66 @@ fn row_menus_list_plugin_commands() {
 
     app.run("plugin.remove", json!({"id": id})).unwrap();
     assert!(plugins(&app, b).is_empty(), "removed: no Plug-ins submenu");
+}
+
+/// A target circle's appearance held across File › Revert and dropped on another row's circle
+/// leaves the restored objects with the same IDs as they were; a drag started after the revert
+/// still moves the appearance.
+#[test]
+fn a_target_circle_drop_after_file_revert_leaves_the_restored_appearance_in_place() {
+    use crate::panel_drag::PanelDrag;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::Modifiers;
+
+    let (mut app, _, [a, b]) = two_rects();
+    name_row(&mut app, a, "A");
+    name_row(&mut app, b, "B");
+    app.run("paint.setFill", json!({"color": "#ff0000", "ids": [a.0]})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff", "ids": [b.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let folder = vectorcraft_testkit::TempDir::new("layers-appearance-drag-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    let fill = |app: &VectorcraftApp, id: NodeId| app.session.active().unwrap().doc.node(id).unwrap().appearance.fill_paint();
+    let (red, blue) = (fill(&app, a), fill(&app, b));
+    assert_ne!(red, blue);
+    // An edit that leaves the rows where they are, so the revert has changes to discard.
+    app.run("paint.setFill", json!({"color": "#00ff00", "ids": [b.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Target A", Role::BUTTON).center();
+    let to = panel.rect_role("Target B", Role::BUTTON).center();
+    panel.drag_hold_role("Target A", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "the other row's circle takes the appearance before the revert");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    let history = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+        st.history.undo.len()
+    };
+    let carried = drag::active::<PanelDrag>(panel.ctx());
+    assert!(matches!(carried.as_deref(), Some(PanelDrag::Appearance { source, .. }) if *source == a), "the revert leaves the drag held");
+    assert!(drag::mark(panel.ctx()).is_none(), "the circle refuses an appearance carried from before the revert");
+    panel.release();
+    {
+        let app = panel.app();
+        assert_eq!((fill(&app, a), fill(&app, b)), (red.clone(), blue.clone()), "the restored objects with the same IDs keep their looks");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), history, "the stale drop makes no edit");
+    }
+
+    panel.drag("Target A", "Target B", Modifiers::NONE);
+    assert_eq!(fill(&panel.app(), b), red, "a target circle drag started after the revert still moves the appearance");
 }

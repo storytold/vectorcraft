@@ -40,6 +40,9 @@ in `crates/engine/src/cmd/plugin.rs`).
 | `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
 | `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` and `*.vcplugin` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` and `*.vcplugin` files past the first 1,000, which were not tried. |
 | `plugin.retry` | `{"file"?}` (a file `plugin.list`'s `failed` names; default: every one) | Loads a plug-in file that [didn't load](#plug-ins-that-didnt-load) again, with the same checks as the load it failed in. Returns `{"retried": [{file, loaded, id?, error?}]}`. |
+| `plugin.generate` | `{"id", "params"?: {…}}` | Runs a [generator](#generators) and adds its art to the current layer as a new generated art object, selected. One undo step named after the plug-in. Returns `{"id", "plugin"}`. |
+| `plugin.editGenerated` | `{"id"?: object, "params": {…}}` (default: the selected generated art object) | Runs the object's generator again with the saved parameters changed by `params` and replaces its art, one undo step; parameters that change nothing run nothing and make no undo step. Returns `{"id", "plugin", "changed"}`. |
+| `plugin.generatedInfo` | `{"id"?: object}` (default: the selected one) | `{"id", "plugin", "name", "params", "state", "installed"}`: `state` is `"intact"`, `"damaged"` (its saved plug-in id, parameters, transforms or scales can't be read) or `"changed"` (its art doesn't match the hash its file gave). |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
@@ -144,6 +147,49 @@ that lists its extension reads it with its parameters' defaults. **File › Open
 too (on the web this is how plug-ins get in). A heavy filter asks before it is installed, and runs in the background
 ([below](#heavy-filters)). A plug-in that lists permissions asks for them before it is installed
 ([below](#permissions)).
+
+### Generators
+
+A plug-in of kind `generator` draws art from its parameters alone. Its art goes into a **generated art object**: a group that keeps the plug-in's id and name, the parameters the
+art was drawn with and the art itself, so the art can be drawn again when the parameters change.
+
+- **Menus.** Installed generators are listed under **Object › Plug-ins** with the filters. One without parameters
+  draws its art at once; one with parameters opens a dialog generated from its schema, and OK draws the art.
+  **Object › Plug-ins › Edit Generated Art…** (`ui.editGeneratedArt`), enabled while one generated art object is
+  selected, opens the same dialog with the parameters the object was drawn with, and OK draws it again.
+- **Runs.** The generator is given `{"objects": []}` and its parameters with `_context.mode` `"generate"`
+  ([Parameters](#parameters)), and returns new objects as a filter does (`{"objects": [...]}`, each without `id`), or
+  `{"error": "…"}` to decline. It runs under its own instruction budget and the Plug-in Instruction Budget preference,
+  and Cancel stops it as it stops a filter. Its output is checked before the document changes: an output with no
+  objects, a key other than `objects` and `error`, an object with an `id`, an object the filter checks refuse, art
+  outside the canvas and art past 16 MiB of JSON are errors, and the document is left as it was.
+- **Parameters.** Given parameters are checked against the manifest: a name it doesn't declare, a value of the wrong
+  type, a number outside its range (each number of a `numberList` too) and text longer than its `maxLength` are
+  errors, and parameters left out take their defaults. The parameters a generated art object keeps are at most 64 KiB
+  of JSON. `plugin.editGenerated`
+  checks the parameters it is given the same way and takes the others from the object; saved parameters the plug-in
+  no longer declares are dropped, and saved values outside a narrower range are brought into it.
+- **Editing.** Drawing the art again replaces the group's art as one undo step named **Edit Generated Art**, placed
+  as the object has been moved, scaled, rotated, reflected or sheared since it was drawn. The new art's stroke weights,
+  dashes and effect distances are scaled as Scale Strokes & Effects scaled the old art's, and its pattern tiles are
+  moved as Transform Patterns moved them. Object › Expand makes a generated art object an ordinary group of its art. A
+  generated art object can't be drawn again while its plug-in isn't installed or is installed as a plug-in of another
+  kind, or while its saved fields are damaged. The error names the plug-in when it is missing or of another kind, and
+  the object's art stays as it is.
+- **Files.** The native file keeps each generated art object's plug-in id, its name (at most 64 characters), the
+  parameters, the transform since it was drawn, what its strokes and effects were scaled by and its pattern tiles
+  transformed by (`strokeScale`, `effectScale`, `patternTransform`), and a SHA-256 of its art's JSON (`generated`).
+  Opening a file never runs a plug-in: each object is drawn from the art the file holds. When its plug-in isn't
+  installed or is a plug-in of another kind, when its saved plug-in id is not a plug-in id or its parameters,
+  transforms or scales can't be read, or when its art doesn't match the hash, the art stays as the file has it and the
+  open's warnings say so. The warnings name the plug-in, except for damaged fields, where they say that a generated
+  art object's plug-in id or parameters are damaged. Saving writes the hash of the art as it is then, and an object whose
+  saved fields were damaged is saved with `damaged: true`, so it still can't be drawn again after the file is opened
+  again. A generated art object inside another one's art is saved as plain art, without its own settings. A file that
+  has settings on such an object anyway opens with them left out, and the outer object reads as `changed`.
+- **Permissions.** A generator implies `doc.write`, and a list of `permissions` must hold it.
+
+These rules are VectorCraft's own.
 
 ### Commands
 
@@ -382,7 +428,7 @@ capability model proposed for PhotoCraft plug-ins
 | Permission | Kinds | What it allows |
 |---|---|---|
 | `doc.read` | filter, effect, exporter | Read the objects it is given, and the [document information](#document-information) its `context` lists. |
-| `doc.write` | filter, effect with `commands` | Change, add and delete objects in the document. |
+| `doc.write` | filter, effect with `commands`, generator | Change, add and delete objects in the document. |
 | `state` | filter, effect with `commands` | Keep data of its own with the document (`documentData`). |
 | `effect.render` | effect | Change how the objects its effect is applied to are drawn. |
 | `export.write` | exporter | Write the document as a file in its own format. |
@@ -394,11 +440,11 @@ capability model proposed for PhotoCraft plug-ins
 
 - A manifest without `permissions` gets the ones its kind implies, as plug-ins did before the key existed: a filter
   `doc.read`, `doc.write` and `state`; an effect `doc.read` and `effect.render`, and also `doc.write` and `state`
-  when it declares [commands](#commands); an exporter `doc.read` and `export.write`; an importer `import.read`. Such a
-  plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is empty may do none of
+  when it declares [commands](#commands); an exporter `doc.read` and `export.write`; an importer `import.read`; a generator `doc.write`.
+  Such a plug-in installs without a prompt. This rule is VectorCraft's own. A filter whose list is empty may do none of
   these, and also installs without a prompt.
-- An effect, an exporter or an importer that lists permissions lists all of its implied ones (`doc.read` and
-  `effect.render`; `doc.read` and `export.write`; `import.read`). An effect with commands may add `doc.write` and
+- An effect, an exporter, an importer or a generator that lists permissions lists all of its implied ones (`doc.read`
+  and `effect.render`; `doc.read` and `export.write`; `import.read`; `doc.write`). An effect with commands may add `doc.write` and
   `state`, which only its commands use. A filter may list any of its three, and `commands` with a `commandAllowlist`.
   Any kind may add `progress`, `settings` and `cache`, which no kind implies. An unknown name, a name listed twice, a
   name that doesn't apply to the kind, more than 16 names, `progress`, `settings`, `cache` or `commands` with an `api`
@@ -818,8 +864,9 @@ the module's start function, in a run that isn't a filter's run on a document, o
 - `id`: 1–64 characters from `A-Z a-z 0-9 . _ -` (reverse-DNS recommended). Installing a module with the same id
   replaces the old one. A live effect's effect id is `plugin.<id>`.
 - `name`: the menu label, or an exporter's or importer's format name in Export As, Open and Open With (1–64 printable
-  characters). `kind`: `"filter"` (object filter), `"effect"` (live effect), `"exporter"` or `"importer"`. Exporters
-  and importers came after the first ABI v1 hosts, which refuse the kind when the plug-in is installed.
+  characters). `kind`: `"filter"` (object filter), `"effect"` (live effect), `"exporter"`, `"importer"` or
+  `"generator"` ([generators](#generators)). Exporters, importers and generators came after the first ABI v1 hosts,
+  which refuse the kind when the plug-in is installed.
 - `budget` (filters only): `"light"` (the default) or `"heavy"`, for work that takes minutes ([heavy
   filters](#heavy-filters)). Hosts from before it ignore the key, so there the filter gets a light run's budget.
 - `api`: the plug-in API level, `1` when left out. `permissions`: what the plug-in may do, a list of names

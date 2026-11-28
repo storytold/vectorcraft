@@ -10,8 +10,9 @@
 //! opens Add Tool…, a menu of every tool where a click adds the tool at the end, and whose Remove Tool
 //! items take tools out: VectorCraft's own way to fill a toolbar without a drag. The same menu's Add
 //! Command submenu searches the Command Palette's results and adds a command button after the tools,
-//! which runs what the command's menu item runs (`toolbar.addCommand`, `toolbar.removeCommand`);
-//! command buttons are VectorCraft's own. Each toolbar is listed under Window › Toolbars, where its
+//! which runs what the command's menu item runs (`toolbar.addCommand`, `toolbar.removeCommand`), and
+//! whose Rename Button… gives it a label of its own (`toolbar.renameCommand`); command buttons are
+//! VectorCraft's own. Each toolbar is listed under Window › Toolbars, where its
 //! item shows or hides it. Window › Toolbars › Manage Toolbars (also in the drawer's menu) renames,
 //! copies and deletes them.
 //!
@@ -53,6 +54,8 @@ pub(crate) const MAX: usize = 64;
 const MAX_NAME: usize = 200;
 /// The most command buttons a toolbar holds.
 const MAX_COMMANDS: usize = 200;
+/// The most characters a command button's own label has (Rename Button…).
+const MAX_LABEL: usize = 64;
 /// Where the first toolbar made floats, right of the Tools panel; the next ones go lower.
 const NEW_AT: [f32; 2] = [96.0, 120.0];
 /// The kind every Manage Toolbars entry has: all of them rename in place.
@@ -61,6 +64,8 @@ const ENTRY_KIND: u32 = 0;
 const NEW_KEY: &str = "window.toolbar.new";
 /// The key of Manage Toolbars' dialog.
 const MANAGE_KEY: &str = "window.toolbar.manage";
+/// The key of Rename Button's dialog.
+const RENAME_KEY: &str = "toolbar.renameCommand";
 /// The id of Manage Toolbars' copy action.
 const DUPLICATE: &str = "duplicate";
 /// The id the framework gives the delete action ([`ListManagerAction::delete`]).
@@ -186,6 +191,7 @@ fn blank(id: u32, name: String) -> CustomToolbar {
         double: false,
         floating: Vec::new(),
         commands: Vec::new(),
+        labels: Default::default(),
     }
 }
 
@@ -284,7 +290,8 @@ pub(crate) fn delete(app: &mut VectorcraftApp, name: &str) -> Result<(), String>
 /// at most [`MAX_COMMANDS`] command buttons, each command once and none for a tool, and each with an
 /// id of its own: one saved without an id or repeating an earlier toolbar's gets the lowest id nobody
 /// holds (a hand-edited preferences file or workspace). A command that is not known now stays: it may
-/// be an uninstalled plug-in's.
+/// be an uninstalled plug-in's. A button's own label loses the spaces at its ends, and stays only while
+/// the toolbar holds its command and [`check_label`] takes it and it is not empty.
 pub(crate) fn sanitize(bars: &mut Vec<CustomToolbar>) {
     let mut names = BTreeSet::new();
     bars.retain_mut(|b| {
@@ -297,6 +304,11 @@ pub(crate) fn sanitize(bars: &mut Vec<CustomToolbar>) {
         let mut commands = BTreeSet::new();
         b.commands.retain(|id| !id.trim().is_empty() && !id.starts_with("tool:") && commands.insert(id.clone()));
         b.commands.truncate(MAX_COMMANDS);
+        let held = &b.commands;
+        b.labels.retain(|id, label| {
+            *label = label.trim().to_string();
+            held.contains(id) && !label.is_empty() && check_label(label).is_ok()
+        });
         let old = std::mem::take(&mut b.last_used);
         for (first, slot) in b.slots.iter().filter_map(|s| Some((s.first()?, s))) {
             let at = crate::toolbar::slot_id(first);
@@ -571,8 +583,9 @@ fn run_choice(app: &mut VectorcraftApp, choice: &ListManagerChoice) {
     }
 }
 
-/// The toolbar the `toolbar` param of `toolbar.addCommand` and `toolbar.removeCommand` names,
-/// which must be one made with New Toolbar: the Tools panel's toolbar holds tools only.
+/// The toolbar the `toolbar` param of `toolbar.addCommand`, `toolbar.renameCommand` and
+/// `toolbar.removeCommand` names, which must be one made with New Toolbar: the Tools panel's
+/// toolbar holds tools only.
 fn command_target(ui: &UiState, p: &Value) -> Result<usize, String> {
     let name = target(ui, p)?.ok_or("toolbar (a toolbar's name) is required: only toolbars made with New Toolbar hold commands")?;
     index(ui, &name)
@@ -603,6 +616,74 @@ pub(crate) fn add_command(bar: &mut CustomToolbar, id: &str, at: Option<usize>) 
     };
     list.insert(at, id.to_string());
     bar.commands = list;
+    Ok(())
+}
+
+/// `label` as a command button keeps it: without leading and trailing spaces, at most
+/// [`MAX_LABEL`] characters; empty means the command's own label.
+fn check_label(label: &str) -> Result<&str, String> {
+    let label = label.trim();
+    if label.chars().count() > MAX_LABEL {
+        return Err(format!("a button label has at most {MAX_LABEL} characters"));
+    }
+    Ok(label)
+}
+
+/// Give the button for `id` on `bar` the label `label` (Rename Button…); an empty one gives it back
+/// its command's label.
+pub(crate) fn set_label(bar: &mut CustomToolbar, id: &str, label: &str) -> Result<(), String> {
+    let label = check_label(label)?;
+    if !bar.commands.iter().any(|c| c == id) {
+        return Err(format!("the toolbar `{}` has no button for `{id}`", bar.name));
+    }
+    if label.is_empty() {
+        bar.labels.remove(id);
+    } else {
+        bar.labels.insert(id.to_string(), label.to_string());
+    }
+    Ok(())
+}
+
+/// The `label` param of `toolbar.addCommand` and `toolbar.renameCommand`: `None` while it is left
+/// out.
+fn label_param(p: &Value) -> Result<Option<&str>, String> {
+    match p.get("label") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => check_label(s).map(|_| Some(s.as_str())),
+        Some(v) => Err(format!("label must be a string (got {v})")),
+    }
+}
+
+/// A button's own `label` as it is shown: control characters and the characters that change the
+/// direction text is laid out in are written as `\u{…}` escapes, as other names from outside are.
+/// The limit leaves room for every character of a label as an escape (at most 10 characters each),
+/// so the escapes do not cut a label short.
+fn shown_label(label: &str) -> String {
+    vectorcraft_plugins::permissions::display_text(label, MAX_LABEL * 10)
+}
+
+/// Opens Rename Button for the button of `command` on the toolbar named `toolbar`: a Label box
+/// holding the button's label as it is now (empty: the command's own), whose OK is held while the
+/// label is refused, the refusal shown under the row. An OK after the workspace changed is refused,
+/// since the toolbar it names belongs to the workspace left.
+fn open_rename(app: &mut VectorcraftApp, toolbar: String, command: String, now: String) -> Result<(), String> {
+    let ctx = app.ui_ctx.clone().ok_or("no window")?;
+    let workspace = app.ui.workspaces.set.current.clone();
+    let fields = DialogFields::from_pairs([("label", now)]);
+    let dialog = HostedParamDialog::new(&ctx, RENAME_KEY, fields, |fields| {
+        ParamDialog::new(RENAME_KEY, tl!("Rename Button"), vec![Param::new("label", tl!("Label:"), ParamKind::text(""))]).values(Bind::bound(fields))
+    });
+    crate::dialogs::host::open_held(app, dialog, move |app, answer: &ParamResult| {
+        if app.ui.workspaces.set.current != workspace {
+            return Err(format!("the toolbar `{toolbar}` is in another workspace"));
+        }
+        let label = match answer.fields.get("label") {
+            Some(FieldValue::Text(label)) => label.clone(),
+            _ => String::new(),
+        };
+        app.run("toolbar.renameCommand", json!({ "toolbar": toolbar, "command": command, "label": label })).map(|_| ())
+    })
+    .ok_or("no window")?;
     Ok(())
 }
 
@@ -647,14 +728,36 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                     v.as_u64().and_then(|n| usize::try_from(n).ok()).ok_or_else(|| format!("`at` must be 0 or a larger whole number (got {v})"))?,
                 ),
             };
+            let label = label_param(p)?;
             let bar = app.ui.custom_toolbars.get_mut(k).ok_or("no such toolbar")?;
-            add_command(bar, id, at).map(|_| json!(bar.commands))
+            add_command(bar, id, at)?;
+            if let Some(label) = label {
+                set_label(bar, id, label)?;
+            }
+            Ok(json!(bar.commands))
+        })(),
+        "toolbar.renameCommand" => (|| {
+            let k = command_target(&app.ui, p)?;
+            let id = p.get("command").and_then(Value::as_str).ok_or("command (a command's id) is required")?;
+            let label = label_param(p)?;
+            let bar = app.ui.custom_toolbars.get_mut(k).ok_or("no such toolbar")?;
+            let Some(label) = label else {
+                // Without `label`: the Rename Button dialog, with the button's label as it is now.
+                if !bar.commands.iter().any(|c| c == id) {
+                    return Err(format!("the toolbar `{}` has no button for `{id}`", bar.name));
+                }
+                let (name, now) = (bar.name.clone(), bar.labels.get(id).cloned().unwrap_or_default());
+                return open_rename(app, name, id.to_string(), now).map(|()| Value::Null);
+            };
+            set_label(bar, id, label)?;
+            Ok(json!({ "command": id, "label": bar.labels.get(id) }))
         })(),
         "toolbar.removeCommand" => (|| {
             let k = command_target(&app.ui, p)?;
             let id = p.get("command").and_then(Value::as_str).ok_or("command (a command's id) is required")?;
             let bar = app.ui.custom_toolbars.get_mut(k).ok_or("no such toolbar")?;
             bar.commands.retain(|c| c != id);
+            bar.labels.remove(id);
             Ok(json!(bar.commands))
         })(),
         "window.toolbar.dock" => dock(app, p),
@@ -676,6 +779,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                             "double": double,
                             "slots": b.slots,
                             "commands": b.commands,
+                            "labels": b.labels,
                             "floating": docked.is_none(),
                             "side": side_name(last_edge(&app.ui, &panel)),
                             "order": docked.map(|(_, n)| *n),
@@ -726,12 +830,23 @@ struct CommandLook {
     /// Its label, name and command; none while the palette lists no result with its id (an
     /// uninstalled plug-in's command).
     text: Option<crate::palette::ButtonText>,
+    /// The label given to it with Rename Button…, as it is shown ([`shown_label`]).
+    own: Option<String>,
 }
 
 impl CommandLook {
-    /// The label the button shows: the command's, or its id while the command is gone.
+    /// The label the button shows: its own, else the command's, or its id while the command is gone.
     fn label(&self) -> &str {
-        self.text.as_ref().map_or(self.id.as_str(), |t| t.label.as_str())
+        self.own.as_deref().unwrap_or_else(|| self.text.as_ref().map_or(self.id.as_str(), |t| t.label.as_str()))
+    }
+
+    /// The name a screen reader says for the button: its label, followed by the command's full name
+    /// when the button has a label of its own that is neither the command's label nor its name.
+    fn said(&self) -> String {
+        match &self.own {
+            Some(own) if own != self.name() && self.text.as_ref().is_none_or(|t| &t.label != own) => format!("{own}, {}", self.name()),
+            _ => self.label().to_owned(),
+        }
     }
 
     /// Its full name, with the menu path that tells it apart from a command of the same label, or
@@ -743,17 +858,36 @@ impl CommandLook {
 
 /// How each command button of the toolbar with id `id` looks now.
 fn command_looks(app: &mut VectorcraftApp, ui: &egui::Ui, id: u32) -> Vec<CommandLook> {
-    let commands = app.ui.custom_toolbars.iter().find(|b| b.id == id).map(|b| b.commands.clone()).unwrap_or_default();
+    let bar = app.ui.custom_toolbars.iter().find(|b| b.id == id);
+    let commands = bar.map(|b| b.commands.clone()).unwrap_or_default();
+    let labels = bar.map(|b| b.labels.clone()).unwrap_or_default();
     let texts = crate::palette::button_texts(app, ui, &commands);
-    commands.into_iter().zip(texts).map(|(id, text)| CommandLook { id, text }).collect()
+    commands
+        .into_iter()
+        .zip(texts)
+        .map(|(id, text)| {
+            let own = labels.get(&id).map(|l| shown_label(l));
+            CommandLook { id, text, own }
+        })
+        .collect()
 }
 
-/// A command button on the toolbar named `bar`: the command's label, cut short with … when it is
-/// longer than the toolbar is wide, and its full name and shortcut in its tooltip. A click runs what a
-/// pick of the command in the Command Palette runs, and while the command's menu item is dimmed the
-/// button is dimmed too. A command that is gone shows its id, dimmed. Its context menu moves it up or
-/// down among the toolbar's command buttons (`place`: its place and how many there are) and takes it
-/// out; `measuring`: the rail measures its footer, which draws the button alone.
+/// Each command button of the toolbar named `name`: (the label it shows, the name a screen reader
+/// says).
+#[cfg(test)]
+pub(crate) fn button_texts(app: &mut VectorcraftApp, ui: &egui::Ui, name: &str) -> Vec<(String, String)> {
+    let Some(id) = find(&app.ui, name).map(|b| b.id) else { return vec![] };
+    command_looks(app, ui, id).iter().map(|l| (l.label().to_owned(), l.said())).collect()
+}
+
+/// A command button on the toolbar named `bar`: its own label or the command's, cut short with …
+/// when it is longer than the toolbar is wide, and the command's full name and shortcut in its
+/// tooltip (never the button's own label); a screen reader says [`CommandLook::said`]. A click runs
+/// what a pick of the command in the Command Palette runs, and while the command's menu item is
+/// dimmed the button is dimmed too. A command that is gone shows its own label or its id, dimmed. Its
+/// context menu moves it up or down among the toolbar's command buttons (`place`: its place and how
+/// many there are), gives it a label of its own (Rename Button…) and takes it out; `measuring`: the
+/// rail measures its footer, which draws the button alone.
 fn command_button(app: &VectorcraftApp, ui: &mut egui::Ui, bar: &str, look: &CommandLook, place: (usize, usize), measuring: bool) {
     let shortcut = crate::menus::shortcut_of(app, &look.id).map(|c| c.display(crate::keymap::platform()));
     let tip = match (&look.text, shortcut) {
@@ -762,9 +896,11 @@ fn command_button(app: &VectorcraftApp, ui: &mut egui::Ui, bar: &str, look: &Com
         (Some(t), None) => t.name.clone(),
     };
     let button = match &look.text {
-        Some(t) => Button::command(t.command.clone()).label(look.label().to_string()),
-        None => Button::new(look.label().to_string()).enabled(false),
+        Some(t) => Button::command(t.command.clone()).label(look.said()),
+        None => Button::new(look.said()).enabled(false),
     };
+    // The face paints the label; the accessible name stays `said`.
+    let button = if look.own.is_some() { button.painted(look.label().to_string()) } else { button };
     let response = button.tooltip(tip).show(ui).response;
     if measuring {
         return;
@@ -772,9 +908,11 @@ fn command_button(app: &VectorcraftApp, ui: &mut egui::Ui, bar: &str, look: &Com
     let (i, n) = place;
     let moved = |at: usize| CommandRef::with_params("toolbar.addCommand", json!({ "command": look.id, "toolbar": bar, "at": at }));
     let removed = CommandRef::with_params("toolbar.removeCommand", json!({ "command": look.id, "toolbar": bar }));
+    let renamed = CommandRef::with_params("toolbar.renameCommand", json!({ "command": look.id, "toolbar": bar }));
     Menu::context(look.name().to_string(), &response).show(ui, |ui, _| {
         MenuItem::command(moved(i.saturating_sub(1))).label(tl!("Move Up")).enabled(i > 0).show(ui);
         MenuItem::command(moved(i + 1)).label(tl!("Move Down")).enabled(i + 1 < n).show(ui);
+        MenuItem::command(renamed.clone()).label(tl!("Rename Button…")).show(ui);
         MenuItem::command(removed.clone()).label(tl!("Remove from Toolbar")).show(ui);
     });
 }
@@ -1008,7 +1146,7 @@ mod tests {
         let names: Vec<String> = toolbars_menu(&app).into_iter().filter(|(_, id, _)| *id == "window.toolbar.custom").map(|(l, ..)| l).collect();
         assert_eq!(names, ["Mine", "Toolbar 1"]);
         let list = app.run("window.toolbar.list", json!({})).unwrap();
-        let blank = |name: &str| json!({"name": name, "shown": true, "double": false, "slots": [], "commands": [], "floating": true, "side": "left", "order": null});
+        let blank = |name: &str| json!({"name": name, "shown": true, "double": false, "slots": [], "commands": [], "labels": {}, "floating": true, "side": "left", "order": null});
         assert_eq!(list, json!([blank("Mine"), blank("Toolbar 1")]));
     }
 
