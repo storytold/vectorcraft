@@ -63,7 +63,16 @@
 //! closes its iterator. In a realm made without the option and later given it with
 //! [`Realm::set_es2015`], which has no `Symbol.iterator`, they walk arrays and `arguments` objects
 //! by index and strings by code point, and throw a `TypeError` for other values.
-//! Object rest properties (`{ a, ...rest }`), classes, generators and modules stay syntax errors.
+//! Object rest properties (`{ a, ...rest }`), classes and modules stay syntax errors.
+//!
+//! With [`Options::es2015`], the parser and the realm also have generators (ECMA-262 11th edition,
+//! sections 14.4 and 25.4): `function*` declarations and expressions, `*name() {…}` methods in
+//! object literals, `yield` and `yield*`, which passes `next`, `throw` and `return` on to the
+//! iterator it delegates to, and generator objects with `next`, `return` and `throw` from
+//! `%GeneratorPrototype%`, reached through `%GeneratorFunction%`. Outside a generator function's
+//! body and parameters, `yield` stays an identifier in sloppy code. A generator's suspended frame
+//! lives in the heap, each resumption takes fuel and counts against the frame limit, and resuming a
+//! generator while its body runs is a `TypeError`.
 //!
 //! With [`Options::es2015`], the realm also has `Symbol` (ECMA-262 11th edition, section 19.4,
 //! <https://262.ecma-international.org/11.0/>): `Symbol.for` and `Symbol.keyFor` over a registry
@@ -96,6 +105,7 @@ mod compiler;
 mod date_builtins;
 mod error;
 mod file_classes;
+mod generator;
 mod heap;
 mod host;
 mod host_classes;
@@ -116,6 +126,8 @@ mod unit_value;
 mod value;
 mod xml;
 mod xml_builtins;
+mod xmp;
+mod xmp_classes;
 mod xpath;
 
 pub use ast::{
@@ -133,6 +145,7 @@ pub use realm::{
     Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, Rejection, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE,
 };
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
+pub use xmp::{MAX_BYTES as XMP_MAX_BYTES, PacketSpan, find_packet as find_xmp_packet};
 
 /// How a script is read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -273,6 +286,8 @@ mod es2020_tests;
 #[cfg(test)]
 mod extension_tests;
 #[cfg(test)]
+mod generator_tests;
+#[cfg(test)]
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
@@ -288,3 +303,5 @@ mod text_tests;
 mod unit_value_tests;
 #[cfg(test)]
 mod xml_tests;
+#[cfg(test)]
+mod xmp_tests;

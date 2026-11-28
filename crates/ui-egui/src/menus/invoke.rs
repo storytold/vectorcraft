@@ -140,6 +140,21 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
+    // Retype and Find Matching Fonts read the installed fonts off the UI thread, with their
+    // progress; Find more font matches lists what the last search found at once, and before any
+    // search it is a new one.
+    let new_search = match p.get("more") {
+        None | Some(serde_json::Value::Null | serde_json::Value::Bool(false)) => true,
+        Some(serde_json::Value::Bool(true)) => !app.ui.retype.searched,
+        Some(_) => false,
+    };
+    if id == "type.retype" || (id == "retype.find" && new_search) {
+        let r = if id == "type.retype" { crate::retype_runs::start(app, id, p, false) } else { crate::panels::retype::find_in_background(app, &p) };
+        if let Err(e) = r {
+            app.status(e);
+        }
+        return;
+    }
     if let Some(r) = crate::panels::artboards::run_menu_item(app, id, &p) {
         if let Err(e) = r {
             app.status(e);

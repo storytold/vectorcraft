@@ -1,5 +1,6 @@
-use super::bounds::{cull_bounds, effected_path_carrying, node_bezpath, rasterize_stage};
+use super::bounds::{cull_bounds, dotted, drawn_box, effected_path_carrying, node_bezpath, rasterize_stage};
 use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, KeptImage, Made, Reads, Shadow, ShadowEntry};
+use super::pixels::FilterReach;
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
 use super::raster::{
     DRAG_PIXEL_BUDGET, MAX_RASTERIZE, PIXEL_BUDGET, ViewCrop, content_changing, doc_raster_ppi, image_size, linear_key, pan_margin, pcolor,
@@ -134,6 +135,9 @@ impl Renderer {
                 // During a drag, a larger shadow on a multithreaded context is filtered within the
                 // drag's budget (`with_filters`), and no raster is kept.
                 if f.opts.dragging && f.mt && w * h > DRAG_PIXEL_BUDGET {
+                    // The fallback can differ from a still raster (a glow blurs soft alpha here).
+                    // A patch over a still frame cannot splice these pictures together.
+                    self.stats.view_sized += 1;
                     return None;
                 }
                 let (w, h) = (w as u16, h as u16);
@@ -258,7 +262,7 @@ impl Renderer {
         let reach = reach + Vec2::new(dx, dy);
         #[cfg(test)]
         note_silhouette();
-        self.with_filters(ctx, f, reach, blur, Some((mode, opacity)), |r, c, fr, comp| {
+        self.with_filters(ctx, f, FilterReach::Spreads(reach), blur, Some((mode, opacity)), |r, c, fr, comp| {
             c.set_transform(fr.view);
             c.push_layer(None, comp.map(|m| blend_mode(m.0)), comp.map(|m| m.1), None, Some(filter));
             let ink = darkness.map_or(fr.ink, |d| fr.ink.darkened(d));
@@ -449,7 +453,7 @@ impl Renderer {
         let rfx = effects::raster_effects(&paints.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
-        let reach = g.bounding_box().inflate(outset, outset);
+        let reach = drawn_box(g, paints.appearance.painted_strokes().any(dotted)).unwrap_or_default().inflate(outset, outset);
         let bounds = rasterize_bounds(f.symbols, n, &rfx);
         // Under Rasterize the content reaches as far as its fills' and strokes' raster effects paint.
         let reach = bounds.map_or(reach, |b| reach.union(b));
@@ -470,7 +474,7 @@ impl Renderer {
         let opacity = self.opacity_of(a);
         if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_doc::color::BlendMode::Normal || a.isolate) {
             let blends = self.blends_through(a);
-            let bounds = if blends { self.bounds_of(f.symbols, a) } else { None };
+            let bounds = if blends { self.frame_bounds_of(f, a) } else { None };
             let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
             self.group(ctx, f, comp, &mut |r, c, fr| r.draw_object_fx_art(c, fr, a, cache));
         } else {
@@ -484,9 +488,9 @@ impl Renderer {
         // A placed document whose effects make no art of their own (raster effects and color
         // adjustments, which Outline mode does not draw) shows its box crossed as without effects
         // ([`Self::draw_placed`]). Effects that change geometry (plug-in effects among them,
-        // [`effects::is_geometry`]), 3D and Pathfinder make art from
-        // the file's art, which is drawn; Crop Marks and Vector Halftone draw the placed document
-        // itself among their art.
+        // [`effects::is_geometry`]), 3D and Pathfinder make art from the crossed box, which the
+        // frame gives as the placed document's art ([`Self::cross_placed`]), and that art is drawn;
+        // Crop Marks and Vector Halftone draw the placed document itself among their art.
         if let NodeKind::PlacedDocument(p) = &a.kind
             && self.crosses_placed(f)
             && !effects::has_geometry(&a.appearance.effects)
@@ -816,6 +820,9 @@ impl Renderer {
         rfx: &[RasterFx],
         paint: &mut dyn FnMut(&mut Self, &mut RenderContext, &Frame),
     ) {
+        if !rfx.is_empty() && f.reject_patch() {
+            return;
+        }
         // Only the last MAX_RASTERIZE Rasterize effects are drawn.
         let count = rfx.iter().filter(|fx| matches!(fx, RasterFx::Rasterize(_))).count();
         let capped: Vec<RasterFx>;
@@ -995,7 +1002,7 @@ impl Renderer {
             let RasterFx::InnerGlow { mode, opacity, blur, color, center } = fx else { continue };
             let filter = shadow_filter(0.0, 0.0, *blur, pcolor(f.ink, color));
             if pixels {
-                self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |r, c, fr, comp| {
+                self.with_filters(ctx, f, FilterReach::Clipped(g.bounding_box()), *blur, Some((*mode, *opacity)), |r, c, fr, comp| {
                     if let Some((m, o)) = comp {
                         c.set_transform(Affine::IDENTITY);
                         c.push_layer(None, Some(blend_mode(m)), Some(o), None, None);
@@ -1029,7 +1036,7 @@ impl Renderer {
                 });
                 continue;
             }
-            self.with_filters(ctx, f, g.bounding_box(), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
+            self.with_filters(ctx, f, FilterReach::Clipped(g.bounding_box()), *blur, Some((*mode, *opacity)), |_, c, fr, comp| {
                 // The blend layer goes outside the clip: a clip layer is isolated, so a blend
                 // inside it would mix with nothing instead of the content below.
                 if let Some((m, o)) = comp {
@@ -1128,6 +1135,7 @@ mod tests {
         let opts = RenderOptions::default();
         let frame = Frame {
             mt: false,
+            patch: None,
             doc: &doc,
             symbols: &symbols,
             view: Affine::IDENTITY,

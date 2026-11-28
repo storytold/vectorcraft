@@ -2,6 +2,7 @@
 //! circle to draw, or all), which previews the circles on the canvas and runs
 //! `addon.pathtools.tangentCircle` on OK.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 
@@ -71,7 +72,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
                 .enabled_when("twoShapes", FieldValue::Bool(true)),
             Param::new("circle", tl!("Circle:"), ParamKind::choice(options, Some("0".into()))),
         ];
-        ParamDialog::new(COMMAND, tl!("Tangent Circle"), rows).previews(true)
+        ParamDialog::new(COMMAND, tl!("Tangent Circle"), rows).values(Bind::bound(fields)).previews(true)
     })
 }
 
@@ -85,6 +86,97 @@ mod tests {
 
     fn circle(app: &mut VectorcraftApp, cx: f64, cy: f64, r: f64) -> u64 {
         app.run("shape.ellipse", json!({"x": cx - r, "y": cy - r, "width": 2.0 * r, "height": 2.0 * r})).unwrap()["id"].as_u64().unwrap()
+    }
+
+    #[test]
+    fn actual_radius_and_circle_edits_control_preview_cancel_and_ok() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use craft::ui::patterns::form_dialogs::HostedParamDialog;
+
+        fn app() -> VectorcraftApp {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            let a = circle(&mut app, 100.0, 100.0, 10.0);
+            let b = circle(&mut app, 130.0, 100.0, 10.0);
+            app.run("select.set", json!({"ids": [a, b]})).unwrap();
+            app
+        }
+
+        fn draw(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+            crate::dialogs::host::pump(app, ui.ctx());
+        }
+
+        fn previewing(app: &VectorcraftApp) -> bool {
+            let id = dialog_id(app);
+            app.dialogs().unwrap().with(|host| host.get_by_id::<HostedParamDialog>(id).unwrap().is_previewing())
+        }
+
+        fn count(app: &VectorcraftApp) -> usize {
+            app.session.active().unwrap().doc.layers[0].children().unwrap().len()
+        }
+
+        fn last_bounds(app: &VectorcraftApp) -> vectorcraft_geom::Rect {
+            app.session.active().unwrap().doc.layers[0].children().unwrap().last().unwrap().geometric_bounds().unwrap()
+        }
+
+        let mut expected = app();
+        expected.run(super::COMMAND, json!({"radius": 20, "circle": 2})).unwrap();
+        let expected = last_bounds(&expected);
+
+        for cancel in [true, false] {
+            let app = app();
+            let original = app.session.active().unwrap().doc.clone();
+            let selection = app.session.active().unwrap().selection.clone();
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, draw);
+            panel.room(egui::vec2(800.0, 600.0));
+            crate::addons::dialogs::tests::open_item(&mut panel.app(), "Path Precision Tools", "Tangent Circle…");
+            panel.frame();
+            let id = dialog_id(&panel.app());
+            assert!(previewing(&panel.app()), "the hosted dialog starts with Preview on");
+            assert_eq!(count(&panel.app()), 10);
+            panel.click_role("Preview", Role::CHECK_BOX);
+            assert!(!previewing(&panel.app()));
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            panel.click_role("Radius", Role::SPIN_BUTTON);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text("20 pt");
+            panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+            assert_eq!(read(&panel.app(), id, |fields| fields.number("radius")), Some(20.0));
+            assert_eq!(count(&panel.app()), 2, "editing with Preview off keeps the originals");
+            panel.click_role("Preview", Role::CHECK_BOX);
+            assert!(previewing(&panel.app()));
+            assert_eq!(count(&panel.app()), 8);
+            assert_eq!(read(&panel.app(), id, |fields| fields.int("found")), Some(6));
+            panel.click("Circle");
+            panel.click("2");
+            assert_eq!(read(&panel.app(), id, |fields| fields.text("circle").map(str::to_owned)), Some("2".into()));
+            assert_eq!(count(&panel.app()), 3);
+            let actual = last_bounds(&panel.app());
+            assert!((actual.x0 - expected.x0).abs() < 1e-6 && (actual.y0 - expected.y0).abs() < 1e-6);
+            assert!((actual.x1 - expected.x1).abs() < 1e-6 && (actual.y1 - expected.y1).abs() < 1e-6);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            panel.click(if cancel { "Cancel" } else { "OK" });
+            assert!(panel.app().dialogs().unwrap().with(|host| host.open_dialogs().is_empty()));
+            assert!(!panel.app().session.in_interaction());
+            if cancel {
+                let app = panel.app();
+                let state = app.session.active().unwrap();
+                assert_eq!(state.doc, original);
+                assert_eq!(state.selection, selection);
+                assert_eq!(state.history.undo.len(), undo);
+            } else {
+                assert_eq!(count(&panel.app()), 3);
+                assert_eq!(last_bounds(&panel.app()), actual);
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+                panel.app().run("edit.undo", json!({})).unwrap();
+                assert_eq!(panel.app().session.active().unwrap().doc, original);
+            }
+        }
     }
 
     #[test]

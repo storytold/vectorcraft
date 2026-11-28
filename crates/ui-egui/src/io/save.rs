@@ -877,7 +877,7 @@ pub(super) fn ask_before_losing(app: &mut VectorcraftApp, path: &str, command: &
     if command != "file.save" {
         params["path"] = json!(path);
     }
-    dialogs::confirm::ask(app, &message, &detail, command, params);
+    dialogs::confirm::ask_in_document(app, &message, &detail, command, params);
     Some(json!({ "pending": dialogs::confirm::KIND }))
 }
 

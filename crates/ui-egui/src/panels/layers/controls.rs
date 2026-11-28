@@ -1,8 +1,8 @@
 use craft::behavior::IconId;
 use craft::keymap::Mods;
-use craft::layers::ui::panel::MenuTarget; // PLAN: assumed path of craft-layers' panel types
+use craft::layers::ui::panel::{LayersDrag, MenuTarget, document_hash};
 use craft::layers::ui::tree::LayerRowKey;
-use craft::ui::contract::{Entry, ListDrag, Show as _};
+use craft::ui::contract::{Entry, Show as _};
 use craft::ui::display::{Elide, Text};
 use craft::ui::menu::{MenuRow, PanelRow};
 use craft::ui::primitives::IconSpec;
@@ -361,19 +361,18 @@ fn spine_menu(tree: &DocLayers, blend: NodeId) -> Vec<MenuRow<String>> {
 /// What was dropped on a footer action.
 pub(super) enum FooterPayload<'a> {
     /// Rows of the panel.
-    Rows(&'a [LayerRowKey<RowId>]),
+    Rows(&'a [&'a RowId]),
     /// The target circle of an appearance (its node id).
     Appearance(u64),
 }
 
 /// The node ids and the ruler guide indexes among `keys`.
-fn row_ids(keys: &[LayerRowKey<RowId>]) -> (Vec<u64>, Vec<usize>) {
+fn row_ids(keys: &[&RowId]) -> (Vec<u64>, Vec<usize>) {
     let (mut nodes, mut guides) = (vec![], vec![]);
     for key in keys {
         match key {
-            LayerRowKey::Layer(RowId::Node(id) | RowId::Spine(id)) => nodes.push(id.0),
-            LayerRowKey::Layer(RowId::Guide(i)) => guides.push(*i),
-            _ => {}
+            RowId::Node(id) | RowId::Spine(id) => nodes.push(id.0),
+            RowId::Guide(i) => guides.push(*i),
         }
     }
     (nodes, guides)
@@ -447,19 +446,19 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
     let locate_ok = !layers_only || super::rows::locate_layer_listed(tree.doc(), tree.root());
     let root = tree.root();
     let icon = |name: &'static str| IconSpec::svg(IconId::new(name));
-    let layer_rows = |keys: &[LayerRowKey<RowId>]| keys.iter().all(|key| matches!(key, LayerRowKey::Layer(_)));
+    let document = document_hash((st.uid, st.reverts));
+    let own = move |drag: &LayersDrag<RowId>| drag.document() == Some(document);
+    let duplicate = move |drag: &LayersDrag<RowId>| {
+        let (nodes, guides) = row_ids(&drag.layers());
+        own(drag) && !nodes.is_empty() && guides.is_empty() && !root.is_some_and(|r| nodes.contains(&r.0))
+    };
     let actions = [
         // PLAN: the framework's `accepts_drops` takes one payload type, so Delete cannot also take
         // `PanelDrag` (the appearance drop `footer_drop` maps); it needs a second payload there.
         FooterAction::new(icon("trash-2"), tl!("Delete Selection").to_string())
             .takes_drops_disabled(true)
-            .accepts_drops(move |d: &ListDrag<LayerRowKey<RowId>>| layer_rows(&d.keys)),
-        FooterAction::new(icon("file-plus"), tl!("Create New Layer").to_string()).enabled(new_layer_ok).accepts_drops(
-            move |d: &ListDrag<LayerRowKey<RowId>>| {
-                let (nodes, guides) = row_ids(&d.keys);
-                layer_rows(&d.keys) && guides.is_empty() && !root.is_some_and(|r| nodes.contains(&r.0))
-            },
-        ),
+            .accepts_drops(move |d: &LayersDrag<RowId>| own(d) && !d.layers().is_empty()),
+        FooterAction::new(icon("file-plus"), tl!("Create New Layer").to_string()).enabled(new_layer_ok).accepts_drops(duplicate),
         FooterAction::new(icon("plus"), tl!("Create New Sublayer").to_string()).enabled(new_sublayer_ok),
         FooterAction::new(icon("frame"), tl!("Make/Release Clipping Mask").to_string()),
         FooterAction::new(icon("search"), if layers_only { tl!("Locate Layer").to_string() } else { tl!("Locate Object").to_string() })
@@ -476,8 +475,8 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
     }
     out.extend(output.picked.and_then(|index| footer_pick(tree, index, output.mods)));
     if let Some(drop) = &output.dropped {
-        let run = if let Some(d) = drop.payload::<ListDrag<LayerRowKey<RowId>>>() {
-            footer_drop(tree, drop.index, FooterPayload::Rows(&d.keys))
+        let run = if let Some(d) = drop.payload::<LayersDrag<RowId>>().filter(|d| own(d)) {
+            footer_drop(tree, drop.index, FooterPayload::Rows(&d.layers()))
         } else if let Some(PanelDrag::Appearance(id)) = drop.payload::<PanelDrag>() {
             footer_drop(tree, drop.index, FooterPayload::Appearance(id.0))
         } else {
@@ -487,13 +486,14 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
     }
 }
 
-/// `ui.layerDelete {ids?|id?, doc?, confirmed?}`: Delete Selection as the Layers panel runs it (the
+/// `ui.layerDelete {ids?|id?, doc?, reverts?, confirmed?}`: Delete Selection as the Layers panel runs it (the
 /// trash button, rows dropped on it, the panel menu, Delete and Backspace), on the rows
 /// `layer.delete` takes (default: the highlighted rows, else the current layer; in isolation mode a
 /// current layer outside the isolated art is an error). When a layer or sublayer among them holds art (an object other than a
 /// guide, hidden, locked and nested ones included), it asks first: OK deletes those rows, by id, in
-/// the same document (`doc`, its uid, with `confirmed`); with another document active then, nothing
-/// is deleted. In isolation mode a row outside the isolated art is an error, and nothing is deleted. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
+/// the same document (`doc`, its uid, and `reverts`, its saved-content generation, with `confirmed`).
+/// Switching documents or reverting the drawing invalidates the approval. In isolation mode a row
+/// outside the isolated art is an error. Other rows, and rows `layer.delete` refuses (an unknown id, every top-level layer),
 /// go to `layer.delete` at once. → `layer.delete`'s result, or null while the question is open
 pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     super::unrevealed(app, |app| delete_rows(app, p))
@@ -502,14 +502,18 @@ pub fn delete(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 /// [`delete`], which locates nothing.
 fn delete_rows(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let confirmed = crate::menus::opt_bool(p, "confirmed")?.unwrap_or(false);
-    let key = "doc";
-    let doc = match p.get(key) {
-        None | Some(Value::Null) => None,
-        Some(v) => Some(v.as_u64().ok_or_else(|| format!("`{key}` must be a whole number of 0 or more"))?),
+    let opening = |key| match p.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v.as_u64().map(Some).ok_or_else(|| format!("`{key}` must be a whole number of 0 or more")),
     };
+    let doc = opening("doc")?;
+    let reverts = opening("reverts")?;
     let st = app.session.active().ok_or("no document open")?;
     if doc.is_some_and(|d| d != st.uid) {
         return Err("the active document changed while the question was open; nothing was deleted".into());
+    }
+    if reverts.is_some_and(|reverts| reverts != st.reverts) {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
     }
     let rows: serde_json::Map<String, Value> = ["ids", "id"].iter().filter_map(|k| Some((k.to_string(), p.get(*k)?.clone()))).collect();
     // An id the engine refuses: `layer.delete` gives the error, and deletes nothing.
@@ -547,7 +551,7 @@ fn delete_rows(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         [n] if n.is_layer() => tl!("Delete this layer and its artwork?"),
         _ => tl!("Delete the selected items and their artwork?"),
     };
-    let params = json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "doc": st.uid, "confirmed": true});
+    let params = json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "doc": st.uid, "reverts": st.reverts, "confirmed": true});
     crate::dialogs::confirm::ask(app, message, "", "ui.layerDelete", params);
     Ok(Value::Null)
 }

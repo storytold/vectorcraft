@@ -21,6 +21,9 @@ There are four kinds of plug-in:
   paths and compound paths. File › Open lists their files, File › Open With lists the importers by name, and the host
   hands them the file's bytes.
 
+An object filter may also be written in JavaScript, as a manifest and a `.js` file ([JavaScript
+filters](#javascript-filters)).
+
 This page is the contract for plug-in authors and the reference for the host (`crates/plugins`, the `plugin.*` commands
 in `crates/engine/src/cmd/plugin.rs`).
 
@@ -28,17 +31,39 @@ in `crates/engine/src/cmd/plugin.rs`).
 
 | Command | Params | What it does |
 |---|---|---|
-| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `cacheBytes` is the size of its [cache](#settings-and-cache)) |
+| `plugin.list` | `{}` | `{"plugins": [{id, name, version, kind, author, description, params, paramsSchema, effect?, format?, extensions?, budget?, commands?, commandAllowlist?, context?, size, source, api, paintOutput?, permissions, hash, cacheBytes}], "folder": report}` (`api` is the manifest's [plug-in API level](#permissions); `context` lists the [document information](#document-information) it reads; `budget: "heavy"` for a [heavy filter](#heavy-filters); `commands` lists its [commands](#commands); `commandAllowlist` lists the commands it may [call](#command-calls); `paintOutput: true` marks a [painted live effect](#painted-live-effects); `permissions` lists what it [may do](#permissions), `hash` is the module's SHA-256; `runtime: "js"` and `script` mark a [JavaScript filter](#javascript-filters); `cacheBytes` is the size of its [cache](#settings-and-cache)), `"failed": [{file, error, from}]` (the plug-in files that [didn't load](#plug-ins-that-didnt-load)) |
 | `plugin.info` | `{"id"}` | One plug-in: the `plugin.list` entry plus `manifest`, `defaults` and `lastError` (a live effect's last failure). |
 | `plugin.run` | `{"id", "params"?: {…}, "ids"?: [...]}` (plug-in params may also be top-level keys) | Runs an object filter on the selection (or `ids`; an `ids` that is not a list of object ids is an error). One undo step; the result is selected, except the objects it locked or made guides. An output that changes no object and none of the data it keeps with the document ([`documentData`](#output)) records no undo step and leaves the document unmodified. |
-| `plugin.install` | `{"path": "/x/y.wasm"}` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
+| `plugin.install` | `{"path": "/x/y.wasm"}` or a [JavaScript filter's](#javascript-filters) `.vcplugin` (desktop) or `{"dataBase64": "…", "name"?}`, `"replace"?: bool`, `"allowHeavy": bool = false`, `"grant"?: [permission]`, `"hash"?: "sha256 hex"` | Validates and installs a module; returns its `plugin.list` entry. The desktop app and `vectorcraft-cli` keep it in the `Plug-ins` folder next to the preferences, so it is installed again after a restart (#2541). A module with other bytes than the plug-in installed with its id, or, with none installed, one whose id has [settings and a cache](#settings-and-cache) in the `Plug-ins` folder, installs only with `replace: true`, once the user agreed; it takes that plug-in's place and gets its settings and cache. The same module installs again without `replace`, and `replace: false` refuses a module whose id is installed. A [heavy filter](#heavy-filters) installs only with `allowHeavy: true`. A plug-in whose manifest lists [permissions](#permissions) installs only when `grant` lists every one of them, unless a grant is already recorded for a module with the same SHA-256. A request's `grant` and `allowHeavy` are refused except in a session started with `vectorcraft-cli --allow-plugin-grants`. With `hash`, a module whose SHA-256 differs is refused. A module whose `commandAllowlist` lists a command no plug-in may call is refused; ids no command has are listed as `unknownCommands` ([command calls](#command-calls)). |
 | `plugin.inspect` | as `plugin.install`: `{"path"}` or `{"dataBase64", "name"?}` | Validates a module without installing it; returns the `plugin.list` entry it would have, plus `needsApproval` (true when installing it needs a person's approval), `needsReplace` (true when `plugin.install` needs `replace: true`), and the `commandAllowlist` ids no command has (`unknownCommands`) and those no plug-in may call (`refusedCommands`). |
 | `plugin.remove` | `{"id"}` | Uninstalls, and deletes it from the `Plug-ins` folder with its [settings and cache](#settings-and-cache). |
 | `plugin.clearCache` | `{"id"?}` | Deletes every entry in the [cache](#settings-and-cache) of plug-in `id`, or of every installed plug-in; settings stay. Returns `{"cleared": [id], "bytesFreed"}`. |
-| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` files past the first 1,000, which were not tried. |
+| `plugin.reload` | `{"path"?: "folder"}` (default: the preference folder) | Installs every `*.wasm` and `*.vcplugin` in a folder, the first 1,000 by file name; a bad module is reported and skipped, and so are an entry that is not a regular file, a heavy filter and a plug-in whose permissions the user hasn't granted (nobody was asked). Returns `{"folder", "loaded", "failed": [{file, error}], "leftOut"}`; `leftOut` counts the `*.wasm` and `*.vcplugin` files past the first 1,000, which were not tried. |
+| `plugin.retry` | `{"file"?}` (a file `plugin.list`'s `failed` names; default: every one) | Loads a plug-in file that [didn't load](#plug-ins-that-didnt-load) again, with the same checks as the load it failed in. Returns `{"retried": [{file, loaded, id?, error?}]}`. |
 
 Live effects are applied like any effect: `effect.apply {"effect": "plugin.<id>", "params": {…}}`, edited with
 `effect.setParams`, listed by `effect.list` (menu `Effect › Plug-ins`) and baked by Object › Expand Appearance.
+
+### Plug-ins that didn't load
+
+`plugin.list`'s `failed` lists each plug-in file that didn't load in this process, with why and where it was loaded
+from (`from`: `"store"` for the `Plug-ins` folder, `"folder"` for the Additional Plug-ins Folder or the folder
+`plugin.reload` loaded last). A file of the `Plug-ins` folder stays listed until it installs or the folder is loaded
+again. The folder's files are the ones its last load report lists as failed, so a `plugin.reload` replaces them and
+leaves the `Plug-ins` folder's files listed. A `plugin.reload` of the `Plug-ins` folder itself lists a file that failed
+in both loads once, as a `"store"` file. Disabled plug-ins (listed in `disabled`, also a file turned off with
+`plugin.setEnabled {"file"}` after it failed) and modules skipped because the plug-in with their id was installed or
+removed elsewhere while they loaded are not listed.
+
+`plugin.retry {"file"}` loads one of those files again, and `plugin.retry {}` loads all of them: a file of the
+`Plug-ins` folder loads as that folder's files load at startup, and a folder file as `plugin.reload` loads it, with the
+same permission and budget checks. A folder file's row in the folder report then moves to `loaded`, or keeps its new
+error. Each row of the reply says whether this retry installed the file. Under automation read roots, a file outside
+them is not read again and stays listed, and its row says why, naming the file and its folder by their names.
+Installing or removing a plug-in whose module is stored in a file that didn't load, or a later load that installs it,
+takes that file off the list. In Safe Mode `plugin.retry` returns an error. Object › Plug-ins › Plug-ins That Didn't
+Load… lists the files by name with why, and its Retry All loads them again under the read roots the list opened
+under; the status bar says how many loaded. The item is disabled while no plug-in failed to load.
 
 An exporter adds a write-only format, `plugin.<id>`, which `document.formats` lists with its `plugin` id.
 `document.export {"format": "plugin.<id>", "params"?: {…}, "path"?}` writes it, and so does a `path` ending in one of
@@ -226,8 +251,8 @@ finish. Plug-in commands, commands that edit a document, exports, File › Open,
 opened at launch wait for them first; view commands and queries chosen from a menu do not. Until then a live effect
 whose plug-in is still loading is drawn as if it weren't there, and another window's `plugin.list` reports the folder
 as `{"folder", "loading": true}`. A folder set later in Preferences, `vectorcraft-cli` and `plugin.reload` wait for
-the loads before they go on. A module whose load panics is reported as failed or skipped with a log record, and the
-others install. So is a module whose read and load take 10 s or longer (VectorCraft's own limit), also one that would have
+the loads before they go on. A module whose load panics is skipped with a log record and listed as one that
+[didn't load](#plug-ins-that-didnt-load), and the others install. So is a module whose read and load take 10 s or longer (VectorCraft's own limit), also one that would have
 finished later, such as a module on a slow network share. The launch marker names every module still loading, so when
 the app stops during the loads, the next launch's Safe Mode choice lists all of them. A module whose load panicked or
 failed is no longer named; one past its 10 s limit is named until its load returns. A module is also skipped when the
@@ -1232,8 +1257,8 @@ nothing of any width or height, places nothing.
 ## Writing a plug-in in Rust
 
 [`crates/plugins/example`](../crates/plugins/example) is a complete object filter, **Desaturate**: it moves every
-colour of the selection towards grey, in each colour's own model, using `serde_json` (no imports, no WASI). Build it
-with:
+colour of the selection towards grey, in each colour's own model, using `serde_json` (no imports, no WASI). It hands
+each object back without its `path`, so the geometry stays exactly as it was. Build it with:
 
 ```sh
 rustup target add wasm32-unknown-unknown
@@ -1254,6 +1279,61 @@ written `(@custom "vc_manifest" "…")`); `wat::echo_exporter` is an exporter wh
 and `wat::when_given` a plug-in whose output depends on whether its input or parameters hold a given text, which shows
 in a live effect's geometry. `wat::reporting` and `wat::cooperating` build level 2 plug-ins that import the host
 functions.
+
+## JavaScript filters
+
+An object filter may also be written in JavaScript (ECMAScript 5.1, the language VectorCraft's scripts use). The
+plug-in is two files in one folder: a manifest, `<name>.vcplugin`, and the `.js` file it names in `script`.
+
+```json
+{"id": "org.example.tint", "name": "Tint Blue", "kind": "filter", "runtime": "js", "script": "tint.js",
+ "params": {"blue": {"type": "number", "min": 0, "max": 1, "default": 1}}}
+```
+
+```js
+function run(input, params) {
+  return {objects: input.objects.map(function (o) {
+    return {id: o.id, fills: [{type: "solid", color: {model: "rgb", r: 0, g: 0, b: params.blue}}]};
+  })};
+}
+```
+
+The manifest has the keys of a module's [manifest](#manifest), with `"runtime": "js"` and `script`, a file name of 1 to
+128 bytes ending in `.js`, without a folder or `:`, and not starting with `.`. Left out, `runtime` is WebAssembly, so
+existing modules load as before; a module's own manifest may not give `"js"`. A JavaScript plug-in is a filter (`kind`
+`"filter"`), and of the host's [permissions](#permissions) it may list `progress` but not `settings`, `cache` or
+`commands`, so it has no `commandAllowlist`.
+
+`plugin.install {path}` and `plugin.inspect {path}` take the `.vcplugin` file, and File › Open and `plugin.reload`
+install it like a `.wasm` file. The host refuses a manifest without `script`, with `source`, or with a `runtime` other
+than `"js"`, and refuses a manifest file over 64 KiB or a script over 8 MiB by its size before reading it; under
+automation read roots the script must be inside them too. The host reads the two files into one JSON object, the
+manifest with the script's text in `source`: `plugin.install {dataBase64}` takes that object, the `Plug-ins` folder keeps
+it as the plug-in's file, and `hash` is its SHA-256, so a changed manifest or script needs a new approval. Installing
+parses the script and runs none of it; a syntax error is an install error with its line and column.
+
+Each run gets a new interpreter with its own heap, so nothing one run defines or changes, the built-ins' prototypes
+included, reaches the next. The script's top level runs, then `run(input, params)` is called with the parsed
+[input](#input) and [parameters](#parameters), and what it returns is written as JSON and checked
+as a module's [output](#output) is, before anything in the document changes. The global object holds the language's
+built-ins and `vc`:
+
+| Member | What it is |
+|---|---|
+| `vc.input`, `vc.params` | The input and parameter JSON as text. |
+| `vc.progress(done, total)` | As `vc_progress` ([host imports](#host-imports-api-level-2)); with `progress` only. |
+| `vc.cancelled()` | `true` once the user cancelled or the time budget ran out; with `progress` only. |
+| `vc.log(level, text)` | Writes a log line as `vc_log` does: `level` 0 (error) to 3 (debug), `true` when written and `false` when the run's log budget dropped it; with `progress` only. |
+
+The realm has no `$`, `File`, `Folder`, `app`, `#include` or other part of the script runner, no file, network or
+command access, and no clock: `Date.now()` is `NaN`. A run gets a filter's instruction budget (one budget for the top
+level and the call, plus the budget per byte of input) and wall-clock budget, checked between slices of 1,000,000
+instructions, where Cancel stops it too; its heap is at most the interpreter's default heap and the plug-in's memory cap (512 MiB), whichever is smaller, and
+an input and parameters larger than an eighth of the heap fail the run with the memory-budget error for a selection
+too large to hand over. A thrown error, a limit, a missing `run`, a result that is not an object JSON can write, or an
+output larger than 64 MiB fails the run, and the document and undo history stay as they were. The error names the
+plug-in, its script and, for an error in the script, the line and column, for example `plug-in exceeded its
+instruction budget (org.example.tint, tint.js line 3, column 5)`.
 
 ## Performance
 

@@ -308,10 +308,12 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
         "file.cancelPlace" => crate::placing::can_cancel(app),
+        crate::dialogs::failed_plugins::COMMAND => vectorcraft_engine::cmd::plugin::failed_load_count(&app.session) > 0,
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
         "imageTrace.hideRuns" => crate::trace_runs::any_shown(app),
+        "retype.cancelSearch" => crate::retype_runs::any_running(app),
         "file.place"
         | "file.export.svg"
         | "file.export.png"

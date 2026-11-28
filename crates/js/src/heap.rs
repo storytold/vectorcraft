@@ -181,6 +181,8 @@ pub(crate) enum NativeKind {
     Apply,
     /// The global `eval`: a call to it by that name is a direct eval.
     Eval,
+    /// `%GeneratorPrototype%`'s `next`, `return` or `throw`.
+    Resume(crate::generator::ResumeMode),
 }
 
 /// What a function object runs. `Bound` is a function made by `Function.prototype.bind` (section
@@ -245,6 +247,8 @@ pub(crate) enum Class {
     /// The Iterator Record of a `for-of` loop, an array pattern or a spread in progress, on the
     /// operand stack only.
     IterRecord(Box<crate::iteration::IterRecord>),
+    /// A generator object and its state (ECMA-262 11th edition, section 25.4).
+    Generator(Box<crate::generator::GenState>),
     ForIn(Box<ForIn>),
     /// The `Math` object (section 15.8).
     Math,
@@ -264,6 +268,10 @@ pub(crate) enum Class {
     },
     /// A `.( )` filter in progress.
     XmlFilter(Box<XmlFilterState>),
+    /// An `XMPMeta` object and its metadata ([`crate::xmp_classes`]).
+    Xmp(Box<crate::xmp::Meta>),
+    /// An object the `XMPFile` constructor made ([`crate::xmp_classes`]).
+    XmpFile(Box<PropMap<Value>>),
     /// An object of a class a host defined ([`crate::host_classes`]).
     Host(crate::host_classes::HostObj),
     /// A `UnitValue` object and its measurement ([`crate::unit_value`]).
@@ -335,11 +343,17 @@ impl Class {
             Class::XmlList(_) => "XMLList",
             Class::Namespace(_) => "Namespace",
             Class::QName { .. } => "QName",
-            Class::XmlFilter(_) | Class::PromiseRecord(_) => "Object",
+            Class::XmlFilter(_) | Class::Xmp(_) | Class::XmpFile(_) | Class::PromiseRecord(_) => "Object",
             Class::Promise(_) => "Promise",
             Class::Math => "Math",
             Class::Json => "JSON",
-            Class::Ordinary | Class::ForIn(_) | Class::Host(_) | Class::Symbol(_) | Class::Iterator(_) | Class::IterRecord(_) => "Object",
+            Class::Ordinary
+            | Class::ForIn(_)
+            | Class::Host(_)
+            | Class::Symbol(_)
+            | Class::Iterator(_)
+            | Class::IterRecord(_)
+            | Class::Generator(_) => "Object",
             Class::Array { .. } => "Array",
             Class::Function(_) => "Function",
             Class::Error(_) => "Error",
@@ -526,6 +540,16 @@ impl Heap {
     pub(crate) fn object_ids(&self) -> Vec<ObjId> {
         let ids = self.cells.iter().enumerate().filter(|(_, c)| matches!(c, Cell::Object(_)));
         ids.filter_map(|(i, _)| u32::try_from(i).ok().map(ObjId)).collect()
+    }
+
+    pub(crate) fn reset_xmp_files(&mut self) {
+        for cell in &mut self.cells {
+            if let Cell::Object(object) = cell
+                && let Class::XmpFile(fields) = &mut object.class
+            {
+                crate::xmp_classes::reset_file_state(fields);
+            }
+        }
     }
 
     /// Live cells, for tests.
@@ -759,6 +783,24 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             crate::builtins::iterator::IterState::Array { target, .. } => work.extend(target.iter().map(|o| o.0)),
             crate::builtins::iterator::IterState::String { text, .. } => text.iter().for_each(|s| strings.add(s)),
         },
+        Class::Generator(state) => {
+            if let Some(saved) = state.saved() {
+                work.push(saved.env.0);
+                work.push(saved.var_env.0);
+                work.extend(saved.callee.iter().map(|o| o.0));
+                work.extend(saved.marks.iter().map(|&(id, _, _)| id.0));
+                mark_value(&saved.this, work, strings);
+                mark_value(&saved.completion, work, strings);
+                for v in &saved.stack {
+                    mark_value(v, work, strings);
+                }
+                mark_code(&saved.code, strings);
+                for ((code, _), _) in &saved.sites {
+                    mark_code(code, strings);
+                }
+                extra = crate::generator::saved_bytes(saved);
+            }
+        }
         Class::Xml(node) => {
             work.extend(node.parent.iter().chain(&node.attrs).chain(&node.children).map(|o| o.0));
             strings.add(&node.value);
@@ -782,6 +824,14 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
         Class::XmlFilter(state) => {
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
+        }
+        Class::Xmp(meta) => extra = meta.heap_bytes(),
+        Class::XmpFile(fields) => {
+            for (name, value) in fields.iter() {
+                strings.add_key(name);
+                mark_value(value, work, strings);
+            }
+            extra = std::mem::size_of::<PropMap<Value>>() + PROP_BYTES * fields.len();
         }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
         Class::Promise(p) => {
@@ -847,6 +897,28 @@ mod tests {
         let id = heap.alloc_object(object);
         heap.collect(&Roots { objects: vec![id], ..Roots::default() });
         assert_eq!(heap.bytes, OBJECT_BYTES + 2 * PROP_BYTES + string_bytes(1000) + string_bytes(5));
+    }
+
+    #[test]
+    fn xmp_file_buffers_are_traced_and_released_at_the_file_run_boundary() {
+        let mut heap = Heap::default();
+        let pending = heap.alloc_object(Object::new(Class::Ordinary, None));
+        let mut fields = PropMap::default();
+        fields.insert(key("__vcXmpPacket"), Value::str(&"p".repeat(8192)));
+        fields.insert(key("__vcXmpPending"), Value::Object(pending));
+        fields.insert(key("__vcXmpPath"), Value::str("kept.xmp"));
+        let file = heap.alloc_object(Object::new(Class::XmpFile(Box::new(fields)), None));
+        let roots = Roots { objects: vec![file], ..Roots::default() };
+        heap.collect(&roots);
+        assert!(heap.object(pending).is_some(), "native values keep their objects reachable");
+        let before = heap.bytes;
+        assert!(before >= string_bytes(8192), "native packet strings count toward the heap limit");
+        heap.reset_xmp_files();
+        heap.collect(&roots);
+        assert!(heap.object(pending).is_none(), "the prior run's pending value is released");
+        assert!(before - heap.bytes >= string_bytes(8192), "the prior run's packet is released");
+        let Class::XmpFile(fields) = &heap.object(file).unwrap().class else { panic!("native file") };
+        assert!(matches!(fields.get(&key("__vcXmpPath")), Some(Value::String(path)) if path.to_rust_string() == "kept.xmp"));
     }
 
     #[test]
