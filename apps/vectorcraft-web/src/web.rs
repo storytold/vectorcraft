@@ -176,7 +176,7 @@ async fn run(host: Host, canvas: web_sys::HtmlCanvasElement, moving: Option<Movi
                     }
                 };
                 app.adopt_context(ctx);
-                Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss }))
+                Ok(Box::new(WebShell { app: Some(app), host, canvas: page, loss, dropped: Vec::new() }))
             }),
         )
         .await;
@@ -376,6 +376,7 @@ struct WebShell {
     host: Host,
     canvas: web_sys::HtmlCanvasElement,
     loss: GraphicsLoss,
+    dropped: Vec<egui::DroppedFileHandle>,
 }
 
 impl WebShell {
@@ -410,9 +411,11 @@ impl eframe::App for WebShell {
         embed::logic(ctx, || app.close_decision());
     }
 
-    /// Forward host-gathered pointer events into this frame's raw input, then let the app apply its
-    /// shared input hook before egui runs.
+    /// Gather browser drops and forward host pointer events before egui runs.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        // The shared file router reads drops at the start of a pass, before `ui` can take them.
+        // Keep them for the browser's drop position and async read path.
+        self.dropped.append(&mut raw.dropped_files);
         raw.events.extend(self.host.pointers.borrow_mut().take());
         if let Some(app) = &mut self.app {
             app.raw_input(ctx, raw);
@@ -425,13 +428,12 @@ impl eframe::App for WebShell {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         if let Some(app) = &mut self.app {
-            // DOM paste and drop are host input: read them in the UI phase, once per pass, not in
-            // `logic` where a hidden tab replays the last shown frame's input.
+            // Deliver host input in a visible UI pass. Hidden tabs only run `logic`.
             let pasted = self.host.pasted.borrow_mut().flavour.take();
             if let Some((f, held)) = pasted {
                 app.paste_from_host(&ctx, f, held);
             }
-            let dropped = ctx.input_mut(|i| std::mem::take(&mut i.raw.dropped_files));
+            let dropped = std::mem::take(&mut self.dropped);
             if !dropped.is_empty() {
                 let at = self.host.drag.take();
                 let z = ctx.zoom_factor();
