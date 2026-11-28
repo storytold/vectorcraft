@@ -1311,6 +1311,13 @@ fn a_handle_drag_keeps_the_opposite_edge_of_the_offset_shape() {
     }
 }
 
+/// Holds the fonts, the hyphenation exceptions and the plug-ins steady on other threads: the memo
+/// also answers for them ([`vectorcraft_doc::hit::live_inputs`]), and a test that counts what it
+/// measures or checks must not count a refresh that another test's change caused.
+fn steady_live_inputs() -> (vectorcraft_text::test_fonts::SteadyFonts, vectorcraft_plugins::steady::SteadyPlugins) {
+    (vectorcraft_text::test_fonts::steady_fonts(vectorcraft_text::FontDb::global()), vectorcraft_plugins::steady::steady_plugins())
+}
+
 #[test]
 fn a_hover_checks_the_memo_as_often_however_many_objects_are_selected() {
     let checks = |objects: u32| {
@@ -1326,6 +1333,7 @@ fn a_hover_checks_the_memo_as_often_however_many_objects_are_selected() {
             s.pointer(&PointerEvent::new(PointerKind::Move, 350.0, 350.0), v).unwrap();
             s.cursor(Point::new(350.0, 350.0), Mods::default(), v)
         };
+        let _steady = steady_live_inputs();
         hover(&mut s);
         let before = s.preview_memo.checks();
         hover(&mut s);
@@ -1350,6 +1358,7 @@ fn hovering_over_an_unchanged_document_measures_nothing_again() {
         s.cursor(Point::new(x, 150.0), Mods::default(), v)
     };
     let xs = [210.0, 150.0, 151.0, 180.0, 250.0];
+    let _steady = steady_live_inputs();
     for x in xs {
         hover(&mut s, x);
     }
