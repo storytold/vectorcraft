@@ -545,6 +545,17 @@ fn blur_glow_and_feather_soften() {
     assert_eq!(lum(feather.pixel(26, 50)), WHITE, "feather stays inside");
 }
 
+/// Feather fades the object out to nothing at its outline, with no hard edge left there, and in to
+/// the full object a radius inside it, darkening all the way in (#9761).
+#[test]
+fn feather_fades_to_nothing_at_the_outline() {
+    let feather = render(&doc_with(Rect::new(20.0, 20.0, 80.0, 80.0), Color::BLACK, vec![("stylize.feather", json!({"radius": 10}))]));
+    let row: Vec<u32> = (20..=50).map(|x| lum(feather.pixel(x, 50))).collect();
+    assert!(row[0] > WHITE * 9 / 10, "the pixel on the outline is nearly clear: {row:?}");
+    assert!(row[10] < WHITE / 10, "a radius in, the object is nearly solid: {row:?}");
+    assert!(row.windows(2).all(|w| w[1] <= w[0]), "it darkens all the way in: {row:?}");
+}
+
 #[test]
 fn an_outer_glow_blurs_a_solid_silhouette_of_faint_art() {
     // GUARDS: the glow's strength comes from where the art is, not how opaque it is (a glow round a glow relies on it).

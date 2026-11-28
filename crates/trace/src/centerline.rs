@@ -30,6 +30,13 @@ mod thin;
 
 use vectorcraft_geom::{PathData, Point};
 
+/// Exact squared distances (in pixels²) from each pixel of a `w` × `h` grid to the nearest `seeds`
+/// pixel, a very large value everywhere when there is none. `None` for a grid under 3 × 3 or over
+/// [`crate::MAX_PIXELS`].
+pub fn squared_distances(seeds: &[bool], w: usize, h: usize) -> Option<Vec<f32>> {
+    distance::to_seeds(seeds, w, h)
+}
+
 use crate::Raster;
 use crate::fit;
 use crate::logo::Style;

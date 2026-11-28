@@ -67,6 +67,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use serde::{Deserialize, Serialize};
 use vectorcraft_geom::PathData;
 
+pub use centerline::squared_distances;
 pub use contour::{Component, Loop, trace_mask};
 pub use gradient::TracedGradient;
 pub use mosaic::mosaic;
