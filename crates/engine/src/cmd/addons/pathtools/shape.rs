@@ -4,14 +4,15 @@
 //! (`vectorcraft_tools::addons::parametric_shape`), which SVG export leaves out.
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{Document, Node, NodeKind};
-use vectorcraft_geom::{FillRule, PathData, Point};
+use vectorcraft_doc::{Document, Node, NodeKind, Scaling};
+use vectorcraft_geom::{Affine, FillRule, PathData, Point};
 use vectorcraft_pathops::addons::pathtools::shapes::{ParametricShape, ShapeKind, recognise};
 use vectorcraft_render::effects;
 use vectorcraft_tools::addons::parametric_shape::{CREATE, EDIT, KEY, apply, read, stored, to_json};
 
 use super::super::super::menucmds::whole_or;
-use super::super::super::{CommandSpec, bad, checked_id, checked_ids_or_selection, cmd, has_doc, has_selection};
+use super::super::super::object;
+use super::super::super::{CommandSpec, bad, check_switches, checked_id, checked_ids_or_selection, cmd, has_doc, has_selection};
 use crate::{EngineError, MAX_COORD, Result, Session};
 
 /// The undo step's name and the command's label.
@@ -33,7 +34,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Edit Parametric Shape",
             [],
             None,
-            "{id, kind?, center?, width?, height?, rotation?: degrees clockwise (0: upright), count?, a?, b?, radius?, reference?: 0..8 (a point on the 9-point grid of the bounding box as object.setBounds measures it, rotated with rotated objects)} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; with `reference` and no `center`, that point of the bounding box keeps its place (as the Transform panel's W and H do; snapping to the pixel grid and an attachment to a path apply afterwards), with `center` the shape's center moves to it, otherwise the center stays; with none, or the same ones, nothing changes → {id, shape (its numbers now; null when snapping to the pixel grid left a plain path)}",
+            "{id, kind?, center?, width?, height?, rotation?: degrees clockwise (0: upright), count?, a?, b?, radius?, reference?: 0..8 (a point on the 9-point grid of the bounding box as object.setBounds measures it, rotated with rotated objects), strokes?, patterns?: bool (Scale Strokes & Effects and Transform Patterns, as object.scale takes them; default: the preferences)} change a parametric shape's numbers (as addon.pathtools.shape.create takes them; a new kind takes its own defaults for the values not given), as one undo step; a new center, size or rotation moves, scales or turns the object as a transform does, so a linked opacity mask, placed gradients and (with `patterns`) pattern tiles go with it, and with `strokes` its strokes and effects scale; with `reference` and no `center`, that point of the bounding box keeps its place (as the Transform panel's W and H do; snapping to the pixel grid and an attachment to a path apply afterwards), with `center` the shape's center moves to it, otherwise the center stays; with none, or the same ones, nothing changes → {id, shape (its numbers now; null when snapping to the pixel grid left a plain path)}",
             has_doc,
             set
         ),
@@ -60,6 +61,25 @@ fn shape_node(n: &mut Node, s: &ParametricShape, path: PathData) {
         Some(e) => e.1 = entry,
         None => a.data.push((KEY.into(), entry)),
     });
+}
+
+/// The transform that takes the outline of `old` to the one `new` would have if only their
+/// center, size and rotation differed: what moves, turns and scales the rest of the object (a
+/// linked opacity mask, gradients and patterns placed on it) with the new numbers.
+fn carry(old: &ParametricShape, new: &ParametricShape) -> Option<Affine> {
+    let same = old.center == new.center && old.width == new.width && old.height == new.height && old.rotation == new.rotation;
+    (!same).then(|| new.frame() * Affine::scale_non_uniform(new.width / old.width, new.height / old.height) * old.frame().inverse())
+}
+
+/// Path node `n`, shape `old`, becomes shape `new`: the node takes the transform between them
+/// ([`carry`]) with `sc`, and then the outline and numbers of `new` ([`shape_node`]).
+fn reshape(n: &mut Node, old: &ParametricShape, new: &ParametricShape, sc: Scaling, cmd: &str) -> Result<()> {
+    let path = outline(new, cmd)?;
+    if let Some(xf) = carry(old, new) {
+        n.transform(xf, sc);
+    }
+    shape_node(n, new, path);
+    Ok(())
 }
 
 /// The outline of `s`, checked already.
@@ -97,6 +117,7 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "the path is locked or hidden"));
     }
     let old = d.node(id).and_then(read).ok_or_else(|| bad(C, "the object is not an editable parametric shape"))?;
+    check_switches(p, &["strokes", "corners", "patterns"], C)?;
     let reference = match p.get("reference").filter(|v| !v.is_null()) {
         Some(_) => match whole_or(p, "reference", 4, C)? {
             i @ 0..=8 => Some(i as usize),
@@ -121,17 +142,21 @@ fn set(s: &mut Session, p: &Value) -> Result<Value> {
             }
             None => None,
         };
-        let path = outline(&shape, C)?;
+        // A new center, size or rotation moves, turns or scales the object as a transform does,
+        // with Scale Strokes & Effects and Transform Patterns from `strokes` and `patterns` or the
+        // preferences.
+        let scales = carry(&old, &shape).is_some_and(|xf| Scaling::factor(xf).is_some());
+        let base = if scales { object::scaling(s, p) } else { Scaling::default() };
+        let sc = Scaling { patterns: object::transform_patterns(s, p, &[id])?, ..base };
         s.edit(EDIT, |d, sel| {
-            shape_node(d.node_mut(id).ok_or(EngineError::NoNode(id))?, &shape, path);
+            reshape(d.node_mut(id).ok_or(EngineError::NoNode(id))?, &old, &shape, sc, C)?;
             if let Some((i, m, was)) = keep
                 && let Some(now) = boxed(d, m).map(|(_, b)| b.reference_point(i))
                 && now != was
             {
                 let mut moved = shape;
                 moved.center += was - now;
-                let path = outline(&moved, C)?;
-                shape_node(d.node_mut(id).ok_or(EngineError::NoNode(id))?, &moved, path);
+                reshape(d.node_mut(id).ok_or(EngineError::NoNode(id))?, &shape, &moved, sc, C)?;
             }
             // A shape named by `id` and not selected is not checked after the edit: one the edit
             // takes past the coordinate limit is an error here, and nothing changes.
