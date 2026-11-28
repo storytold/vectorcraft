@@ -2783,8 +2783,9 @@ other files through `$`:
   [Accessing and referencing objects](https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/)
   describes; in VectorCraft that holds for `activeDocument`, `documents` and `selection`. VectorCraft's own rules:
   assigning `activeDocument` or `selection` without `app.` assigns the application's member. A top-level
-  `var selection = ...` does the same and does not make a variable of the script. Assigning `documents` keeps its
-  value. `app.documents`
+  `var selection = ...` does the same and does not make a variable of the script. An assignment to `documents`
+  leaves its value unchanged. Outside strict mode the assignment is ignored, and in strict mode code
+  (`'use strict'`) or with `#strict on` it throws a `TypeError`. `app.documents`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Documents/) has `length`, `[i]`, `index(key)`, `getByName(name)`
   and `add(colorSpace?, width?, height?, numArtBoards?, artboardLayout?, artboardSpacing?, artboardRowsOrCols?)`,
   which runs `file.new` (`artboardRowsOrCols` is the number of rows for `GridByCol` and `RLGridByCol`, and of
