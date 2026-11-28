@@ -907,6 +907,8 @@ mod tests {
 
     #[test]
     fn new_document_choice_enter_commits_before_create() {
+        // Preview Mode's last choice, Overprint, turns on the whole process's Overprint Preview.
+        let _view = crate::testing::DefaultProofView::new();
         let mut panel = actual_preset_dialog();
         panel.click("Advanced Options");
         for (label, key) in [

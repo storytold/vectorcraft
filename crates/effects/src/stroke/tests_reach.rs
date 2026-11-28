@@ -38,6 +38,12 @@ fn check(bp: &BezPath, st: &StrokeLayer, what: &str) {
     let painted = region.bounding_box();
     let bounds = st.bounds_on(bp, bp.bounding_box());
     assert!(bounds.inflate(0.05, 0.05).contains_rect(painted), "{what}: paints {painted:?} outside {bounds:?}");
+    check_clicks(bp, st, &region, what);
+}
+
+/// Check that points of `region`, what `st` paints along `bp`, hit as [`check`] says.
+fn check_clicks(bp: &BezPath, st: &StrokeLayer, region: &BezPath, what: &str) {
+    let painted = region.bounding_box();
     let tol = if st.profile.is_some() { 1.0 } else { 0.25 };
     // Off the outline's own coordinates, so no sample sits level with a vertex.
     let (mut x, mut checked) = (painted.x0 + 0.371, 0);
@@ -45,7 +51,7 @@ fn check(bp: &BezPath, st: &StrokeLayer, what: &str) {
         let mut y = painted.y0 + 0.293;
         while y <= painted.y1 {
             let p = Point::new(x, y);
-            if fill_contains(&region, FillRule::EvenOdd, p) {
+            if fill_contains(region, FillRule::EvenOdd, p) {
                 assert!(st.hits(bp, FillRule::NonZero, p, tol), "{what}: painted {p:?} doesn't hit");
                 checked += 1;
             }
@@ -138,6 +144,58 @@ fn custom_heads() -> Vec<Arrowhead> {
         Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new(name.into(), path)))
     };
     vec![head("Wedge", &[(0.0, 0.0), (3.0, 2.0), (3.0, -1.0)]), head("Spindle", &[(-10.0, 0.0), (0.0, 2.0), (10.0, 0.0), (0.0, -2.0)])]
+}
+
+/// Paths with a subpath that never leaves its first point, which a round or projecting cap draws
+/// as a dot at (140, 130): a closed lone anchor, a line to the same point, open and closed, and a
+/// curve with every handle on the point, alone and after a closed triangle.
+fn dot_paths() -> Vec<BezPath> {
+    let at = Point::new(140.0, 130.0);
+    let mut lone = BezPath::new();
+    lone.move_to(at);
+    lone.close_path();
+    let mut line = BezPath::new();
+    line.move_to(at);
+    line.line_to(at);
+    let mut closed_line = line.clone();
+    closed_line.close_path();
+    let mut curve = BezPath::new();
+    curve.move_to(at);
+    curve.curve_to(at, at, at);
+    curve.close_path();
+    let mut beside = paths()[2].clone();
+    beside.extend(lone.iter());
+    vec![lone, line, closed_line, curve, beside]
+}
+
+/// A click on the dot a round or projecting cap draws for a subpath that never leaves its first
+/// point hits the path, and where no dot is drawn (butt caps, dashes, width profiles, an inside
+/// stroke of a closed subpath) a click beside the point misses.
+#[test]
+fn clicks_hit_the_dot_a_cap_draws_for_a_subpath_with_no_length() {
+    let beside = Point::new(142.0, 130.0);
+    let mut painted = 0;
+    for (pi, bp) in dot_paths().iter().enumerate() {
+        for align in [StrokeAlign::Center, StrokeAlign::Inside, StrokeAlign::Outside] {
+            for cap in [LineCap::Butt, LineCap::Round, LineCap::Square] {
+                for profile in [None, Some(WidthProfile::lens())] {
+                    for dash in [None, Some(Dash { pattern: vec![7.0, 4.0], offset: 0.0, align_corners: false })] {
+                        let mut st = StrokeLayer::new(Paint::solid(Color::BLACK), 6.0);
+                        (st.align, st.cap, st.profile, st.dash) = (align, cap, profile.clone(), dash.clone());
+                        let what = format!("path {pi} {align:?} {cap:?} profile {} dashed {}", profile.is_some(), dash.is_some());
+                        let region = outline_region(&PathData::from_bezpath(bp), FillRule::NonZero, &st).to_bezpath();
+                        if !fill_contains(&region, FillRule::EvenOdd, beside) {
+                            assert!(!st.hits(bp, FillRule::NonZero, beside, 0.25), "{what}: a click beside the point hits, where no dot is drawn");
+                            continue;
+                        }
+                        painted += 1;
+                        check_clicks(bp, &st, &region, &what);
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(painted, 22, "dots drawn");
 }
 
 #[test]

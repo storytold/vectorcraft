@@ -22,11 +22,17 @@ pub(super) fn node_bezpath(n: &Node) -> Option<BezPath> {
     }
 }
 
+/// The box geometry effects on `bp` work from: the object's geometric bounds, lone anchors
+/// included, as [`vectorcraft_geom::PathData::bounds`] measures them.
+fn reference_box(bp: &BezPath) -> Rect {
+    vectorcraft_geom::path::anchored_curve_bounds(bp).unwrap_or_default()
+}
+
 pub(super) fn apply(effects: &[Effect], bp: &BezPath, ctx: &GeomContext) -> BezPath {
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
         return bp.clone();
     }
-    effects::apply_geometry_bez(effects, bp, bp.bounding_box(), ctx)
+    effects::apply_geometry_bez(effects, bp, reference_box(bp), ctx)
 }
 
 /// The object-level effected geometry of `n` (base path `bp`), with the swatches and patterns that
@@ -40,7 +46,7 @@ pub(super) fn apply_carrying(effects: &[Effect], bp: &BezPath, ctx: &GeomContext
     if !effects::has_geometry(effects) || bp.elements().is_empty() {
         return (bp.clone(), effects::Carry::default());
     }
-    effects::apply_geometry_bez_carrying(effects, bp, bp.bounding_box(), ctx)
+    effects::apply_geometry_bez_carrying(effects, bp, reference_box(bp), ctx)
 }
 
 /// [`effected_path`], and how `n`'s gradients follow its effects.
@@ -666,6 +672,9 @@ pub(crate) fn path_cull_bounds(symbols: &SymbolBoxes, n: &Node, visual: impl FnO
 /// linear part. With `brush` true, the members of a group or layer are measured with the room
 /// their brushed strokes leave for brush art ([`member_cull_bounds`]).
 fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: bool) -> Option<Rect> {
+    // A layer is measured in the mode its Layer Options draw it in, as the renderer measures the
+    // members of a group or layer without effects ([`crate::Renderer::bounds_of`]).
+    let _mode = crate::placed_document::enter_layer(n);
     let inner = |c: &Node| cull_bounds_in(symbols, c, after_reshape, false);
     let member = |c: &Node| member_cull_bounds(symbols, c, after_reshape, brush);
     // The art that a group's or layer's crop marks or Vector Halftone draw holds its members. The

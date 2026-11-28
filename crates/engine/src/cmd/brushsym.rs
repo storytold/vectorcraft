@@ -38,7 +38,7 @@ mod dynamic;
 mod symbolism;
 mod symbols;
 
-pub(crate) use brushes::{apply_brush, brush_targets, stroke_paint};
+pub(crate) use brushes::{apply_brush, brush_targets, frame_marker, stroke_paint};
 use brushes::{
     brush_apply, brush_delete, brush_duplicate, brush_freehand, brush_get, brush_list, brush_move, brush_new, brush_object_options, brush_options,
     brush_place_art, brush_remove, brush_replace_art, brush_selection_art, brush_set_current, brush_unused, expand_brush,

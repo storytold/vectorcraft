@@ -213,6 +213,13 @@ fn directives_are_read_at_the_start_of_a_line_in_both_forms() {
 }
 
 #[test]
+fn reflection_needs_only_the_language() {
+    let r = report("var p = obj.reflect.properties;\nvar m = $.reflect.find('write');\n");
+    assert_eq!(feature(&r, "reflection").map(|f| f.lines.clone()), Some(vec![1, 2]));
+    assert_eq!(r.needs, [Need::Language], "VectorCraft runs reflect");
+}
+
+#[test]
 fn a_byte_order_mark_and_every_line_break_are_read() {
     // U+2028 ends line 2.
     let r = check("t.jsx", b"\xEF\xBB\xBF#target acme\nvar a = 1;\xE2\x80\xA8#target b\r\n", None, &Limits::default());
@@ -1613,6 +1620,17 @@ fn type_names_compared_or_created_are_listed() {
     let types: Vec<&str> = r.types.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(types, ["AcmeColor", "AcmeShape"]);
     assert_eq!(r.needs, [Need::Dom]);
+}
+
+#[test]
+fn collections_and_typed_arrays_are_not_type_names() {
+    let r = report(concat!(
+        "var m = new Map(), s = new Set(), wm = new WeakMap(), ws = new WeakSet();\n",
+        "var b = new ArrayBuffer(8), v = new DataView(b), u = new Uint8Array(b), c = new Uint8ClampedArray(2);\n",
+        "var i = [new Int8Array(1), new Int16Array(1), new Uint16Array(1), new Int32Array(1), new Uint32Array(1)];\n",
+        "var f = [new Float32Array(1), new Float64Array(1)];\n",
+    ));
+    assert!(r.types.is_empty(), "{:?}", r.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>());
 }
 
 #[test]

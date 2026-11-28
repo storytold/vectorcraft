@@ -58,6 +58,34 @@ fn symbol_for_and_key_for_use_the_registry() {
 }
 
 #[test]
+fn symbol_registry_hashing_charges_flat_keys_on_hits_and_misses() {
+    for hit in [false, true] {
+        let mut realm = es2015(Limits::default());
+        let key = "x".repeat(32_768);
+        assert_eq!(realm.run(&format!("var registryKey = '{key}';")), Ok(JsValue::Undefined));
+        if hit {
+            assert_eq!(realm.run("typeof Symbol.for(registryKey)"), Ok(JsValue::String("symbol".into())));
+        }
+        realm.set_limits(Limits { fuel: 500, ..Limits::default() });
+        assert!(matches!(realm.run("Symbol.for(registryKey)"), Err(RunError { kind: RunErrorKind::Limit(LimitKind::Fuel), .. })), "hit={hit}");
+        realm.set_limits(Limits { fuel: 10_000, ..Limits::default() });
+        assert_eq!(realm.run("Symbol.for(registryKey) === Symbol.for(registryKey)"), Ok(JsValue::Bool(true)));
+    }
+}
+
+#[test]
+fn symbol_registry_keeps_a_flat_key_buffer_only_once() {
+    let mut realm = es2015(Limits::default());
+    let key = "x".repeat(32_768);
+    assert_eq!(realm.run(&format!("var sharedKey = '{key}';")), Ok(JsValue::Undefined));
+    let used = realm.collect_garbage();
+    let room = crate::heap::SYMBOL_BYTES + crate::symbol::REGISTRY_ENTRY_BYTES + 4_096;
+    realm.set_limits(Limits { heap_bytes: used + room, ..Limits::default() });
+    assert_eq!(realm.run("var registered = Symbol.for(sharedKey); Symbol.keyFor(registered) === sharedKey"), Ok(JsValue::Bool(true)));
+    assert!(realm.collect_garbage() <= used + room);
+}
+
+#[test]
 fn implicit_conversion_of_a_symbol_throws_a_type_error() {
     throws("Symbol() + ''", "TypeError");
     throws("'' + Symbol('a')", "TypeError");

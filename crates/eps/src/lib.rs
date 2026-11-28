@@ -49,6 +49,8 @@ mod scene;
 mod tiff;
 
 pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_ai_editing, private_data as ai_private_data};
+#[cfg(any(test, feature = "work-count"))]
+pub use import::blend_work;
 pub use import::{
     AiLayers, Imported, NameEncoding, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard,
     family_style, import, import_ai, import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
@@ -58,6 +60,18 @@ pub use print::{PrintFonts, PrintJob, PrintPage, print};
 
 use vectorcraft_doc::Document;
 use vectorcraft_geom::{Point, Rect};
+
+#[cfg(any(test, feature = "work-count"))]
+std::thread_local! {
+    /// Included EPS files parsed by open checks on this thread.
+    pub(crate) static INCLUDED_EPS_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Included EPS files parsed by open checks on this thread, for tests that count work instead of timing it.
+#[cfg(any(test, feature = "work-count"))]
+pub fn included_eps_reads() -> usize {
+    INCLUDED_EPS_READS.with(std::cell::Cell::get)
+}
 
 /// The PostScript language level the file needs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
