@@ -51,6 +51,21 @@ impl Embedded {
         }
     }
 
+    /// What the font program says of its licence (OS/2 `fsType`) and its ascent and descent
+    /// (thousandths of an em, the descent negative): a TrueType font's tables. A Type 1 font
+    /// says neither.
+    pub fn facts(&self) -> (Option<u16>, Option<(f64, f64)>) {
+        use skrifa::MetadataProvider;
+        use skrifa::raw::TableProvider;
+        let Self::TrueType(f) = self else { return (None, None) };
+        let Ok(font) = skrifa::FontRef::new(&f.data) else { return (None, None) };
+        let fs_type = font.os2().ok().map(|o| o.fs_type());
+        let m = font.metrics(skrifa::instance::Size::unscaled(), skrifa::instance::LocationRef::default());
+        let k = 1000.0 / f64::from(m.units_per_em.max(1));
+        let (ascent, descent) = (f64::from(m.ascent) * k, f64::from(m.descent) * k);
+        (fs_type, (ascent.is_finite() && descent.is_finite() && ascent > 0.0 && descent <= 0.0).then_some((ascent, descent)))
+    }
+
     /// The character glyph `gid` stands for, when the font says (a TrueType font's character
     /// map or `post` names; a Type 1 glyph's name).
     pub fn char_of(&self, gid: u32) -> Option<char> {

@@ -5,103 +5,144 @@
 //! new stop (no `set` and `action`: the recording in progress). An invalid place is an error, and
 //! the dialog stays open.
 //!
-//! The message box's fields: `action` (the action's name, shown as the heading), `message` and
-//! `allowContinue`. Stop or Cancel closes it, and the playback keeps waiting for Play Current
-//! Selection or Stop Playing/Recording. With `allowContinue`, Continue or `ui.dialog.confirm` plays
-//! on; without it, `ui.dialog.confirm` presses Stop.
+//! The message box is a standard prompt titled with the action's name. Stop or Cancel closes it, and
+//! the playback keeps waiting for Play Current Selection or Stop Playing/Recording. With
+//! `allowContinue`, Continue plays on.
 
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, HeldOk, PromptChoice, StackDialog, StandardPrompt, dialog_id};
+use craft::ui::form::{Field, FieldGroup};
+use craft::ui::runtime::env::Label;
+use craft::ui::text::TextField;
+use egui::{Context, Ui};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::{DialogAction, DialogSpec};
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
+use super::actions::{ActionDialog, Form, Target, label, merged, open_or_say};
+use crate::VectorcraftApp;
+use crate::panels::actions::INSERT_STOP;
 
-/// The dialog kind of Record Stop.
-pub const RECORD_KIND: &str = "actionStopRecord";
-
-/// The dialog kind of a stop's message box.
+/// The key of a stop's message box.
 pub const MESSAGE_KIND: &str = "actionStopMessage";
 
-/// The width of Record Stop's label column.
-const LABEL_W: f32 = 70.0;
+/// The key Record Stop answers for.
+const KEY: &str = "actionStopRecord";
 
-pub(super) const RECORD_SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Record Stop").into(), body: record_body, confirm: record_confirm, min_width: 340.0, ..DialogSpec::FORM };
+/// A stop's message box on the dialog host. The wrapper keeps its answer apart from the app's other
+/// prompts, which take the bare [`StandardPrompt`]'s.
+pub(crate) struct StopMessage(pub(crate) StandardPrompt);
 
-pub(super) const MESSAGE_SPEC: DialogSpec = DialogSpec {
-    heading: |d| d.str("action"),
-    body_with_actions: Some(message_body),
-    confirm: message_confirm,
-    ok: None,
-    min_width: 300.0,
-    max_width: Some(460.0),
-    ..DialogSpec::FORM
-};
+crate::dialogs::confirm::wrapped_dialog!(StopMessage, StandardPrompt, MESSAGE_KIND);
+
+/// What Record Stop edits.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordStopFields {
+    /// The text playback shows at the stop.
+    pub message: String,
+    /// Whether the message box offers Continue.
+    pub allow_continue: bool,
+}
+
+/// OK is always on: a stop may have no message.
+fn check(_: &RecordStopFields) -> Option<Label> {
+    None
+}
+
+/// The Record Stop dialog on the dialog host.
+pub struct RecordStopDialog {
+    id: DialogId,
+    /// Where the stop goes.
+    pub target: Target,
+    form: Form<RecordStopFields>,
+}
 
 /// Opens Record Stop for action `target` as (set, action), after `step`, else for the recording in
 /// progress.
 pub fn open_record(app: &mut VectorcraftApp, target: Option<(usize, usize)>, step: Option<usize>) {
-    let mut fields = json!({"message": "", "allowContinue": false});
-    if let Some((set, action)) = target {
-        fields["set"] = json!(set);
-        fields["action"] = json!(action);
-        if let Some(step) = step {
-            fields["step"] = json!(step);
-        }
-    }
-    app.ui.dialog = Some(Dialog::new(RECORD_KIND, fields));
+    let dialog = RecordStopDialog { id: dialog_id(KEY), target: Target::new(target, step), form: Form::new(RecordStopFields::default(), check) };
+    open_or_say(app, dialog);
 }
 
-fn record_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    widgets::label_row(ui, "Message:", LABEL_W, |ui| {
-        super::form::text(ui, d, "message", 240.0);
-    });
-    super::form::check(ui, d, "allowContinue", "Allow Continue");
-    false
+impl ActionDialog for RecordStopDialog {
+    type Answer = (Target, RecordStopFields);
+
+    fn take_ok(&mut self) -> Option<Self::Answer> {
+        self.form.take().map(|fields| (self.target, fields))
+    }
+
+    fn answer_ok(&mut self, answer: Result<(), Label>) {
+        self.form.answer(answer);
+    }
+
+    fn run(app: &mut VectorcraftApp, (target, fields): Self::Answer) -> Result<(), String> {
+        let mut params = json!({"message": fields.message, "allowContinue": fields.allow_continue});
+        target.add_to(&mut params);
+        app.run(INSERT_STOP, params).map(|_| ())
+    }
 }
 
-fn record_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let mut params = json!({"message": d.str("message"), "allowContinue": d.bool("allowContinue")});
-    for key in ["set", "action", "step"] {
-        if let Some(value) = d.fields.get(key) {
-            params[key] = value.clone();
+impl StackDialog for RecordStopDialog {
+    type Result = RecordStopFields;
+
+    fn id(&self) -> DialogId {
+        self.id
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(KEY)
+    }
+
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<RecordStopFields>> {
+        self.form.show(ui, label("Record Stop"), None, |ui, fields| {
+            FieldGroup::new(label("Record Stop")).show(ui, |ui, _| {
+                Field::new(label("Message:")).show(ui, |ui, _| {
+                    TextField::new(label("Message:"), Bind::bound(&mut fields.message)).show(ui);
+                });
+                Checkbox::new(Bind::bound(&mut fields.allow_continue)).label(label("Allow Continue")).show(ui);
+            });
+        })
+    }
+
+    fn confirm(&mut self, _: &Context) -> Option<RecordStopFields> {
+        self.form.confirm()
+    }
+
+    fn held_state(&self) -> Option<HeldOk> {
+        self.form.held_state()
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        Some(merged(self.form.json_fields()?, self.target.json()))
+    }
+
+    fn set_json_field(&mut self, ctx: &Context, field: &str, value: Value) -> Result<(), String> {
+        match self.target.set_field(field, &value) {
+            Some(done) => done,
+            None => self.form.set_field(ctx, field, value),
         }
     }
-    let r = app.run(crate::panels::actions::INSERT_STOP, params)?;
-    app.ui.dialog = None;
-    Ok(r)
 }
 
 /// Shows the message box of a stop in the action named `action`.
 pub(crate) fn open_message(app: &mut VectorcraftApp, action: &str, message: &str, allow_continue: bool) {
-    app.ui.dialog = Some(Dialog::new(MESSAGE_KIND, json!({"action": action, "message": message, "allowContinue": allow_continue})));
+    let mut prompt = StandardPrompt::custom(Label::from(message.to_owned()))
+        .title(Label::from(action.to_owned()))
+        .paragraph(label("Press Play Current Selection in the Actions panel to go on."));
+    if allow_continue {
+        prompt = prompt.button(PromptChoice::Proceed, label("Continue"));
+    }
+    open_or_say(app, StopMessage(prompt.button(PromptChoice::Cancel, label("Stop"))));
 }
 
-fn message_body(_: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> DialogAction {
-    let message = d.str("message");
-    if !message.is_empty() {
-        ui.label(message);
-        ui.add_space(8.0);
-    }
-    ui.label(egui::RichText::new(tl!("Press Play Current Selection in the Actions panel to go on.")).color(Tokens::get(ui.ctx()).text_dim));
-    ui.add_space(16.0);
-    let mut action = DialogAction::None;
-    ui.horizontal(|ui| {
-        if d.bool("allowContinue") && widgets::primary_button_enabled(ui, tl!("Continue"), true).clicked() {
-            action = DialogAction::Confirm;
-        }
-        if widgets::secondary_button(ui, tl!("Stop")).clicked() {
-            action = DialogAction::Cancel;
+/// Closes a stop's message box as Stop does; the playback keeps waiting. The closer consumes the
+/// Cancel it caused, so the pump does not read it as an answer.
+pub(crate) fn close_message(app: &VectorcraftApp) {
+    let (Some(dialogs), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) else { return };
+    dialogs.with(|host| {
+        if host.cancel::<StopMessage>(&ctx) {
+            let _ = host.take::<StopMessage>();
         }
     });
-    action
-}
-
-fn message_confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    if d.bool("allowContinue") {
-        return app.run(crate::panels::actions::CONTINUE_PLAYBACK, json!({}));
-    }
-    app.ui.dialog = None;
-    Ok(Value::Null)
 }

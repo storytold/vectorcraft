@@ -1548,6 +1548,54 @@ fn only_a_style_of_one_pattern_paint_holds_a_pattern_for_type() {
     }
 }
 
+/// A style that is one paint holds a swatch colour for type when its paint is a fill colour with a
+/// swatch: the paint at its tint and the named colour that makes the swatch. A process colour,
+/// another paint after the colour, a stroke's colour before it, a fill that is off, or filters
+/// beside it give none.
+#[test]
+fn only_a_style_of_one_swatch_colour_holds_it_for_type() {
+    let painted = |paint: &str, xd: &str| format!("/SimpleStyle :\n0 O\n{paint}\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n{xd}/Paint ;\n");
+    let simple = |paint: &str| painted(paint, "0 1 Xd\n");
+    let active = "/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+        /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n1 /FillOrStroke ,\n/Dictionary : /NotRecorded ,\n\
+        /FillStyle : 0 O\n1 0 0 0 k\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n;\n";
+    let color = |body: &str| {
+        let styles = art_styles_in(format!("/KnownStyle :\n(S) /Name ,\n{body} /Def ;\n").as_bytes(), &mut Names::default());
+        styles.get("S").and_then(|s| s.simple_color.clone())
+    };
+    let red = Color::cmyk(0.0, 1.0, 1.0, 0.0);
+    let ink = "0 1 1 0 (Red Ink) 0.25 x";
+    let linked = Paint::Solid { color: red.tinted(0.75), swatch: Some("Red Ink".into()), tint: 0.75 };
+    let named = |spot: bool| paint::Named { name: "Red Ink".into(), color: red, tint: 0.75, spot };
+    assert_eq!(color(&simple(ink)), Some((linked.clone(), Some(named(true)))));
+    // A global process colour is no ink of its own.
+    assert_eq!(color(&simple("0 1 1 0 (Red Ink) 0.25 0 Xk")), Some((linked, Some(named(false)))));
+    // Registration has the built-in swatch.
+    let registration = color(&simple("1 1 1 1 ([Registration]) 0 Xs"));
+    assert!(matches!(&registration, Some((p, None)) if p.is_registration()), "{registration:?}");
+    let dots = "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p";
+    for body in [
+        simple("0 1 1 0 k"),
+        simple(&format!("{ink}\n{dots}")),
+        simple(&format!("{ink}\n0 0 0 1 K")),
+        simple(&format!("{ink}\n0 1 1 0 k")),
+        // The order of the paints doesn't matter: a stroke's colour before the fill's.
+        simple(&format!("0 0 0 1 K\n{ink}")),
+        simple(&format!("(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P\n{ink}")),
+        // The fill is off, both are off, the stroke is on too, or nothing says which is on.
+        painted(ink, "1 0 Xd\n"),
+        painted(ink, "0 0 Xd\n"),
+        painted(ink, "1 1 Xd\n"),
+        painted(ink, ""),
+        format!("{}{active}", simple(ink)),
+        format!("{active}{}", simple(ink)),
+    ] {
+        assert_eq!(color(&body), None, "{body}");
+    }
+    // The last fill colour is the style's.
+    assert!(color(&simple(&format!("{dots}\n{ink}"))).is_some());
+}
+
 /// A style that is one paint reads as the fill and stroke its `Xd` turns on, in the paint's colors
 /// and the stroke's style; one that turns on a paint not read here, or has no `Xd`, isn't read.
 #[test]

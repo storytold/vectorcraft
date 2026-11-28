@@ -3250,6 +3250,24 @@ fn ending_deferred_typing_for_another_edit_keeps_the_typing() {
     });
 }
 
+/// An effect applied while typing waits for its session to end keeps the typing as its own step
+/// first, and the effect's own step still keeps the effect it applied.
+#[test]
+fn an_effect_applied_while_typing_waits_keeps_its_effect_on_its_step() {
+    let mut s = session();
+    s.prefs.real_time_drawing = false;
+    let v = ViewInfo::default();
+    let id = text(&mut s, "Hello");
+    s.select_tool("type", v).unwrap();
+    let b = s.doc().unwrap().doc.bounds_of(&[id], false).unwrap();
+    click(&mut s, b.x1 - 1.0, b.center().y);
+    s.tool_text(" world", v).unwrap();
+    s.execute("effect.apply", &json!({"effect": "stylize.feather", "ids": [id.0]})).unwrap();
+    assert_eq!(undo_labels(&s).iter().rev().take(2).collect::<Vec<_>>(), ["Feather", "Typing"]);
+    let h = s.doc().unwrap().history.undo.last().unwrap();
+    assert_eq!(h.effect(), Some("stylize.feather"));
+}
+
 /// #1950: a colour previewed while typing (the Color Picker, a Color panel slider) colours the
 /// typed text: its interaction used to join the typing session and preview from the document
 /// before the typing, so the new type came back as its placeholder text.

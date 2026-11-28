@@ -1,5 +1,27 @@
+use vectorcraft_doc::color::BlendMode;
+
 use super::catalog::{catalog_index, plugin_info};
 use super::{CROP_MARKS, Effect, Map, Node, PIXEL_EFFECTS, RASTERIZE, Value, is_adjustment, is_pathfinder, is_three_d, json, util};
+
+/// Whether parameter `key` of effect `effect` is the blend mode the effect draws in.
+pub fn takes_blend_mode(effect: &str, key: &str) -> bool {
+    key == "mode" && matches!(effect, "stylize.dropShadow" | "stylize.innerGlow" | "stylize.outerGlow")
+}
+
+/// Read a blend mode name as the effect renderer does. Case and punctuation do not change the mode.
+pub fn parse_blend_mode(s: &str) -> Option<BlendMode> {
+    let name: String = s.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    BlendMode::parse(&name)
+}
+
+/// The name an effect stores for blend mode `mode`, such as `normal`, `multiply`, or `colorBurn`.
+pub fn blend_mode_id(mode: BlendMode) -> String {
+    let mut name = format!("{mode:?}");
+    if let Some(first) = name.get_mut(..1) {
+        first.make_ascii_lowercase();
+    }
+    name
+}
 
 /// Dialog defaults for `id` (`None` for unknown effects).
 pub fn default_params(id: &str) -> Option<Value> {
@@ -131,9 +153,12 @@ pub fn scale_effect(e: &mut Effect, s: f64) {
     let mut keys: Vec<&str> = info.lengths.keys(relative).collect();
     keys.extend(merged.as_object().into_iter().flat_map(|m| m.keys()).map(String::as_str).filter(|k| crate::raster_px_range(&e.id, k).is_some()));
     for k in keys {
-        let missing =
-            if k == "precision" && crate::takes_pathfinder_options(&e.id) { crate::PathfinderEffectOptions::default().precision } else { f64::NAN };
-        let v = util::num(&merged, k, missing);
+        // A Pathfinder effect's precision that is not a number scales the precision it evaluates with.
+        let v = if k == "precision" && crate::takes_pathfinder_options(&e.id) {
+            crate::group::stored_precision(&merged).unwrap_or(crate::PathfinderEffectOptions::default().precision)
+        } else {
+            util::num(&merged, k, f64::NAN)
+        };
         if v.is_finite() {
             if !e.params.is_object() {
                 e.params = Value::Object(Map::new());
