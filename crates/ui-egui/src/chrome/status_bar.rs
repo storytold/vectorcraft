@@ -9,6 +9,7 @@ use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::Menu;
 use craft::ui::pickers::{Select, SelectLook};
+use craft::ui::runtime::env::Env;
 use craft::ui::style::TypeRole;
 use craft::ui::text::ZoomField;
 
@@ -20,7 +21,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(secs) = next {
         ui.ctx().request_repaint_after(std::time::Duration::from_secs(secs));
     }
-    let print = app.session.prefs.display_print_size;
+    let print = app.print_ppi();
     let nab = app.session.active().map(|d| d.doc.artboards.len()).unwrap_or(0);
     let cur = crate::panels::artboards::selected(app, nab);
     // PLAN: assumed Artboard::rect has `width()` and `height()`.
@@ -32,8 +33,12 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         .map(|d| d.doc.artboards.iter().enumerate().map(|(i, a)| Entry::new(i, format!("{}  {}", i + 1, a.name))).collect())
         .unwrap_or_default();
     let angles: Vec<Entry<usize>> = ROTATE_VIEW_ANGLES.iter().enumerate().map(|(i, (label, _))| Entry::new(i, *label)).collect();
-    let rotation = app.view().map_or(0.0, |v| v.rotation);
+    let view = app.view();
+    let rotation = view.map_or(0.0, |v| v.rotation);
     let turned = ROTATE_VIEW_ANGLES.iter().position(|(_, a)| (rotation - a).abs() < 1e-9).unwrap_or(usize::MAX);
+    // An angle between the presets, from the Rotate View tool or `view.rotate`, shows in whole degrees; adding 0.0
+    // turns the -0 of a small negative angle into 0.
+    let angle = format!("{}°", rotation.round() + 0.0);
     let shows: Vec<Entry<StatusBarShow>> =
         StatusBarShow::ALL.into_iter().map(|s| Entry::new(s, s.label()).checked(app.ui.status_bar_show == s)).collect();
     let unit = app.session.general_unit();
@@ -43,24 +48,44 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let busy = busy_labels(app);
 
     let (mut zoom_to, mut rotate_to, mut go, mut show_pick, mut stop) = (None, None, None, None, false);
-    // The readouts end the bar, the pointer's position and then the timings; a narrow bar leaves out the timings
-    // first, then the position, before the message.
+    let mut invalid_zoom = None;
+    let mut snapping = None;
+    // Convenience controls leave first: direct toggles, then the menu. The existing timings and pointer position
+    // retain their priority, and all trailing groups leave before the navigation, info field or message narrows.
     let readouts = |ui: &mut Ui, _: &mut BodyCx<'_>| {
         // With no hover point the axes stay empty and keep their width.
         let origin = app.ruler_origin();
-        Row::new().gap(Gap::Item).fit_rank(2).show(ui, |ui, _| {
+        Row::new().gap(Gap::Item).fit_rank(4).show(ui, |ui, _| {
             for (axis, value) in [("X", app.hover_doc.map(|p| p.x - origin.x)), ("Y", app.hover_doc.map(|p| p.y - origin.y))] {
                 let text = value.map(|v| format!("{axis}: {}", unit.readout(v))).unwrap_or_default();
                 Text::new(text).role(TypeRole::Mono).shade(Shade::Muted).sample(format!("{axis}: -8888.88 {}", unit.suffix())).show(ui);
             }
         });
         let readout = |text: String, sample: String| Text::new(text).shade(Shade::Faint).sample(sample);
-        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
+        Row::new().gap(Gap::Item).fit_rank(3).show(ui, |ui, _| {
             readout(format!("{render} {:.1} ms", app.perf.render_ms), format!("{render} 8888.8 ms")).show(ui);
             readout(format!("{ui_name} {:.1} ms", app.perf.frame_ms), format!("{ui_name} 8888.8 ms")).show(ui);
             // No rate until the window has drawn continuously for a moment (`frame_rate`).
             let fps = if app.perf.fps > 0.0 { format!("{:.0} fps", app.perf.fps) } else { "\u{2013} fps".into() };
             readout(fps, "8888 fps".into()).show(ui);
+        });
+        Row::new().gap(Gap::Item).fit_rank(1).show(ui, |ui, _| {
+            for (icon, label, command, on) in [
+                ("sparkles", tl!("Smart Guides"), "view.smartGuides", app.ui.view.smart_guides),
+                ("dc-reference-point", tl!("Snap to Point"), "view.snapToPoint", app.ui.view.snap_to_point),
+                ("grid-3x3", tl!("Snap to Grid"), "view.snapToGrid", app.ui.view.snap_to_grid),
+            ] {
+                if IconButton::new(IconId::new(icon)).label(label).selected(on).show(ui).clicked() {
+                    snapping = Some((command, json!({})));
+                }
+            }
+        });
+        Row::new().fit_rank(2).show(ui, |ui, _| {
+            let label = tl!("Snapping");
+            let button = Button::new(label).trailing_icon(IconId::new("chevron-down")).show(ui);
+            Menu::new(label).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+                snapping = super::control_bar::snapping_menu_contents(app, ui).or(snapping.take());
+            });
         });
     };
     // PLAN: assumed VectorcraftApp::canvas_view() -> Option<CanvasView> (cv.S4) and the label msgid "Status Bar".
@@ -68,13 +93,22 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         let zoom = Field::new(tl!("Zoom"))
             .side(SideLabel::new().kind(LabelKind::Hidden))
             .show(ui, |ui, _| ZoomField::new(tl!("Zoom"), app.canvas_view(), document).scrub(true).show(ui));
-        // PLAN: assumed CanvasView::zoom and crate::state::zoom_display_percent(zoom, print) through the scheme (cv.S4).
-        if let Some(view) = zoom.inner.and_then(|z| z.view.committed().copied()) {
-            zoom_to = Some(crate::state::zoom_display_percent(view.zoom, print));
+        // The field edits the canvas view, whose zoom is divided by UI Scaling; `view.setZoom` takes the view's zoom.
+        if let Some(zoom) = zoom.inner {
+            if let Some(view) = zoom.view.committed() {
+                zoom_to = Some(crate::state::zoom_display_percent(crate::state::View::zoom_of_canvas(view, app.ui_scaling()), print));
+            }
+            invalid_zoom = zoom.invalid_zoom.map(|invalid| invalid.message(&Env::of(ui)));
         }
         Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             // Entries are keyed by index: an angle is not a hashable value.
-            rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles).look(SelectLook::Filled).show(ui).value().copied();
+            rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles)
+                .placeholder(angle.clone())
+                .look(SelectLook::Filled)
+                .enabled(view.is_some())
+                .show(ui)
+                .value()
+                .copied();
         });
         Divider::vertical().show(ui);
         for (icon, to, tip, enabled) in
@@ -129,6 +163,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     if stop {
         app.session.script_interrupt().set();
     }
+    if let Some((id, params)) = snapping {
+        crate::menus::invoke(app, id, params);
+    }
     // It fails only without a document, when there is no view to turn or zoom.
     if let Some(zoom) = zoom_to {
         app.run("view.setZoom", json!({"zoom": zoom})).ok();
@@ -145,6 +182,9 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
         && let Err(e) = app.run("view.statusBarShow", json!({ "show": show.param() }))
     {
         app.status(e);
+    }
+    if let Some(message) = invalid_zoom {
+        app.status(message);
     }
 }
 
@@ -310,14 +350,21 @@ fn date_time_now() -> (String, u64) {
 }
 
 /// The status message in the interface language. While it is the error of the last script run
-/// and that error's message is text the script supplied, that text is shown as it is and only the
-/// words around it are translated.
+/// and that error's message is text the script supplied, or a plug-in run's notice
+/// ([`crate::state::UiState::status_kept`]), that text is shown as it is and only the words around
+/// it are translated.
 pub(crate) fn status_message(app: &VectorcraftApp) -> String {
     let status = app.ui.status.as_str();
+    let is = |before: &str, kept: &str, after: &str| status.strip_prefix(before).and_then(|rest| rest.strip_suffix(after)) == Some(kept);
     if let Some((before, kept, after)) = app.session.script_authored_failure()
-        && status.strip_prefix(before.as_str()).and_then(|rest| rest.strip_suffix(after.as_str())) == Some(kept)
+        && is(&before, kept, &after)
     {
         return crate::i18n::msg_keeping(&before, kept, &after);
+    }
+    if let Some((before, kept, after)) = &app.ui.status_kept
+        && is(before, kept, after)
+    {
+        return crate::i18n::msg_keeping(before, kept, after);
     }
     crate::i18n::msg(status)
 }

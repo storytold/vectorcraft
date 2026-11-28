@@ -11,6 +11,7 @@ use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Segmented;
 use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, Sizing, TooltipSpec};
+use craft::ui::display::Divider;
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
@@ -23,11 +24,9 @@ use craft::ui::style::DataColor;
 use craft::ui::text::{LinkMode, LinkedFields};
 use craft::ui::text::{NumberField, NumberOutput, NumberPick, StepArrows};
 use egui::{Rect, Ui, pos2};
-use serde::Serialize;
-use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, Node, StrokeLayer, Unit, WidthProfile};
+use vectorcraft_doc::{Appearance, ArrowAlign, Arrowhead, Dash, Document, LineCap, LineJoin, Node, StrokeAlign, StrokeLayer, Unit, WidthProfile};
 use vectorcraft_engine::inspect::StrokeMixed;
 
 use super::{Live, character, current_stroke, live_run, stroke_mixed};
@@ -135,7 +134,7 @@ pub(crate) fn builtin_arrow_name(label: &str) -> &str {
     crate::i18n::tr_ctx(crate::i18n::current(), "arrowhead", label)
 }
 
-/// The preview cache key of `a`: its name, and for a custom head its art.
+/// The preview cache key of `a`: its name, and for a custom head its art and where the stroke ends.
 fn arrow_key(a: Option<&Arrowhead>) -> String {
     match a {
         Some(Arrowhead::Custom(c)) => {
@@ -147,6 +146,7 @@ fn arrow_key(a: Option<&Arrowhead>) -> String {
                     (p.x.to_bits(), p.y.to_bits()).hash(&mut h);
                 }
             }
+            c.stop().to_bits().hash(&mut h);
             format!("custom:{}:{:x}", c.name, h.finish())
         }
         _ => format!("{a:?}"),
@@ -169,11 +169,6 @@ pub(crate) fn shown_weight(app: &VectorcraftApp, st: Option<&StrokeLayer>, mixed
     (!mixed.weight).then(|| st.map_or(app.session.paint.stroke_width, |s| s.width))
 }
 
-/// A document enum as the editor's enum of the same name: both serialise as the same camelCase word.
-fn convert<A: Serialize, B: DeserializeOwned + Default>(a: A) -> B {
-    serde_json::to_value(a).ok().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default()
-}
-
 /// The style the stroke editor shows for `st` (the defaults without a stroke). Dashes count document units, so the
 /// pattern is the stroke's own numbers.
 pub(crate) fn style_of(st: Option<&StrokeLayer>) -> draw::StrokeStyle {
@@ -183,9 +178,21 @@ pub(crate) fn style_of(st: Option<&StrokeLayer>) -> draw::StrokeStyle {
         s.dash.as_ref().map_or((vec![], 0.0, false), |d| (d.pattern.iter().map(|v| *v as f32).collect(), d.offset, d.align_corners));
     draw::StrokeStyle {
         width: s.width as f32,
-        align: convert(s.align),
-        cap: convert(s.cap),
-        join: convert(s.join),
+        align: match s.align {
+            StrokeAlign::Center => draw::StrokeAlign::Center,
+            StrokeAlign::Inside => draw::StrokeAlign::Inside,
+            StrokeAlign::Outside => draw::StrokeAlign::Outside,
+        },
+        cap: match s.cap {
+            LineCap::Butt => draw::LineCap::Butt,
+            LineCap::Round => draw::LineCap::Round,
+            LineCap::Square => draw::LineCap::Square,
+        },
+        join: match s.join {
+            LineJoin::Miter => draw::LineJoin::Miter,
+            LineJoin::Round => draw::LineJoin::Round,
+            LineJoin::Bevel => draw::LineJoin::Bevel,
+        },
         miter_limit: s.miter_limit as f32,
         dashes,
         dash_offset: offset as f32,
@@ -210,13 +217,12 @@ fn num(v: f32) -> f64 {
 /// The `stroke.set` params of an edit of `field` that turned `old` into `new`: only what the field changes, so
 /// each selected stroke keeps its other options (its dash offset and alignment included).
 pub(crate) fn params_of(old: &draw::StrokeStyle, new: &draw::StrokeStyle, field: StrokeField) -> Value {
-    let word = |v: &dyn erased::Word| v.word();
     let dash = if new.dashes.is_empty() { Value::Null } else { json!(new.dashes.iter().map(|v| num(*v)).collect::<Vec<_>>()) };
     let corners = new.dash_align == draw::DashAlign::Corners;
     match field {
-        StrokeField::Align => json!({"align": word(&new.align)}),
-        StrokeField::Cap => json!({"cap": word(&new.cap)}),
-        StrokeField::Join => json!({"join": word(&new.join)}),
+        StrokeField::Align => json!({"align": new.align}),
+        StrokeField::Cap => json!({"cap": new.cap}),
+        StrokeField::Join => json!({"join": new.join}),
         StrokeField::MiterLimit => json!({"miterLimit": num(new.miter_limit)}),
         StrokeField::Dashed => json!({"dash": dash, "alignDashes": corners}),
         StrokeField::Dash(_) => json!({"dash": dash}),
@@ -226,24 +232,6 @@ pub(crate) fn params_of(old: &draw::StrokeStyle, new: &draw::StrokeStyle, field:
         StrokeField::Preset => json!({"dash": dash}),
         // The panel shows no opacity row.
         _ => json!({}),
-    }
-}
-
-/// The word `stroke.set` reads for an editor enum.
-mod erased {
-    use serde::Serialize;
-    use serde_json::Value;
-
-    /// An enum that serialises as its camelCase word.
-    pub trait Word {
-        /// The word.
-        fn word(&self) -> Value;
-    }
-
-    impl<T: Serialize> Word for T {
-        fn word(&self) -> Value {
-            serde_json::to_value(self).unwrap_or(Value::Null)
-        }
     }
 }
 
@@ -369,6 +357,8 @@ pub(crate) fn link_field(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static 
 /// The Stroke panel: the weight, the stroke editor (cap, corner, align, dashes), arrowheads, scale, align and the
 /// width profile.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use craft::ui::runtime::env::{WordRows, WordsOverride, with_env};
+
     let st = current_stroke(app);
     let mixed = stroke_mixed(app, ui.ctx());
     let weight = shown_weight(app, st.as_ref(), &mixed);
@@ -379,17 +369,25 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     }
     let style = style_of(st.as_ref());
-    let output = StrokeEditor::new(tl!("Stroke"), Bind::given(style.clone()))
+    let editor = StrokeEditor::new(tl!("Stroke"), Bind::given(style.clone()))
         .sections(StrokeSections::PANEL | StrokeSections::DASH_ALIGN)
         .closed(mixed.can_align)
-        .mixed(&mixed_of(&mixed))
-        .show(ui);
+        .mixed(&mixed_of(&mixed));
+    // VectorCraft's catalog calls this field "Miter Limit".
+    let word = craft::i18n::Word::keyed("strokeEditor.miterLimit", "Miter limit");
+    let lang = app.ui_language();
+    let translated = crate::i18n::tr(lang, "Miter Limit");
+    let output = if translated != "Miter Limit" && crate::i18n::tr_id(lang, word.id, word.english) == word.english {
+        with_env(ui, |env| env.words = Some(WordsOverride::Overlay(WordRows::new().row(word, translated))), |ui| editor.show(ui))
+    } else {
+        editor.show(ui)
+    };
     if let (Some(new), Some(field)) = (output.events.landed(), output.field) {
         apply_style(app, &style, new.clone(), field);
     }
-    ui.separator();
+    Divider::horizontal().show(ui);
     arrow_rows(app, ui, st.as_ref());
-    ui.separator();
+    Divider::horizontal().show(ui);
     Field::new(tl!("Profile")).show(ui, |ui, _| {
         Row::new().wrap(true).show(ui, |ui, _| {
             profile_select(app, ui);
@@ -486,8 +484,13 @@ pub(super) fn arrow_doc(mut a: Option<Arrowhead>, start: bool, w: f64, h: f64) -
         let weight = fit(w - 6.0, long).min(fit(h / 2.0 - 1.0, half)).min(2.5);
         inset = -b.x0.min(0.0) * weight;
         if weight < LEAST {
-            let path = c.path.transformed(vectorcraft_geom::Affine::scale(weight / LEAST));
-            a = Some(Arrowhead::Custom(std::sync::Arc::new(vectorcraft_doc::CustomArrowhead::new(c.name.clone(), path))));
+            let shrink = weight / LEAST;
+            let path = c.path.transformed(vectorcraft_geom::Affine::scale(shrink));
+            let mut head = vectorcraft_doc::CustomArrowhead::new(c.name.clone(), path);
+            if let Some(stop) = c.stop {
+                head = head.with_stop(stop * shrink);
+            }
+            a = Some(Arrowhead::Custom(std::sync::Arc::new(head)));
         }
         scale = scale.min(weight.max(LEAST) / WIDTH * 100.0);
     }
@@ -544,24 +547,157 @@ pub(crate) fn arrow_thumb(cx: &ContentPainterCx, rect: Rect, arrow: Option<&Arro
     thumbs.paint(cx, rect, &state, &ThumbPaint::default().checker(false).tint(DataColor::new(cx.ink())));
 }
 
-/// The silhouette of a width profile (its points; None: the plain bar) in `r` as its top and bottom edges. A profile
-/// made with the Width tool can be many times the stroke's weight: the silhouette is scaled to fit `r` by its widest
-/// point (#909).
-fn profile_outline(r: Rect, points: Option<&[(f64, f64, f64)]>) -> (Vec<egui::Pos2>, Vec<egui::Pos2>) {
-    let n = 32;
+/// The widths entering and leaving one position in a thumbnail's stroke profile.
+#[derive(Clone, Copy)]
+struct ProfileKnot {
+    t: f64,
+    incoming: (f64, f64),
+    outgoing: (f64, f64),
+}
+
+const PROFILE_KNOT_SPACING: f64 = 1e-9;
+
+/// Extracts the knots to draw. Long profiles keep the largest steps and the knots furthest from
+/// the line between their neighbors, along with those neighbors.
+fn profile_knots(mut points: &[(f64, f64, f64)]) -> Vec<ProfileKnot> {
+    const MAX_KNOTS: usize = 512;
+    let knots: Vec<_> = std::iter::from_fn(|| {
+        let (&(t, left, right), rest) = points.split_first()?;
+        let joined = rest.iter().take_while(|point| point.0 - t <= PROFILE_KNOT_SPACING).count();
+        let &(_, outgoing_left, outgoing_right) = &points[joined];
+        points = &rest[joined..];
+        Some(ProfileKnot { t, incoming: (left, right), outgoing: (outgoing_left, outgoing_right) })
+    })
+    .filter(|knot| (0.0..=1.0).contains(&knot.t))
+    .collect();
+    if knots.len() <= MAX_KNOTS {
+        return knots;
+    }
+
+    let width_difference = |from: (f64, f64), to: (f64, f64)| (from.0 - to.0).abs().max((from.1 - to.1).abs());
+    let mut steps = Vec::new();
+    let mut bends = Vec::new();
+    for (i, knot) in knots.iter().enumerate() {
+        if knot.t == 0.0 || knot.t == 1.0 {
+            continue;
+        }
+        let step = width_difference(knot.incoming, knot.outgoing);
+        if step > 0.0 && step.is_finite() {
+            steps.push((i, step));
+        } else if let Some((before, after)) = i.checked_sub(1).and_then(|prev| knots.get(prev).zip(knots.get(i + 1))) {
+            let t = (knot.t - before.t) / (after.t - before.t);
+            let interpolate = |a: f64, b: f64| (1.0 - t) * a + t * b;
+            let line = (interpolate(before.outgoing.0, after.incoming.0), interpolate(before.outgoing.1, after.incoming.1));
+            let bend = width_difference(knot.incoming, line);
+            if bend > 0.0 && bend.is_finite() {
+                bends.push((i, bend));
+            }
+        }
+    }
+    let mut keep = vec![false; knots.len()];
+    for candidates in [&mut steps, &mut bends] {
+        if candidates.len() > MAX_KNOTS {
+            candidates.select_nth_unstable_by(MAX_KNOTS, |a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        }
+        for &(i, _) in candidates.iter().take(MAX_KNOTS) {
+            let first = i.saturating_sub(1);
+            let last = (i + 1).min(knots.len() - 1);
+            keep[first..=last].fill(true);
+        }
+    }
+    knots.into_iter().zip(keep).filter_map(|(knot, keep)| (keep || knot.t == 0.0 || knot.t == 1.0).then_some(knot)).collect()
+}
+
+/// Widest factor that occupies at least half a physical pixel in the piecewise-linear mesh.
+fn profile_scale(widths: &[(f64, f64, f64)], pixel_width: f64) -> f64 {
+    let maximum = widths.iter().flat_map(|&(_, left, right)| [left, right]).filter(|w| w.is_finite()).fold(1.0, f64::max);
+    if maximum == 1.0 || pixel_width <= 0.0 {
+        return 1.0;
+    }
+    let has_span = |factor: f64| {
+        let mut length = [0.0; 2];
+        for pair in widths.windows(2) {
+            let [(from, left, right), (to, next_left, next_right)] = pair else { continue };
+            let span = to - from;
+            for (side, (&before, &after)) in [left, right].into_iter().zip([next_left, next_right]).enumerate() {
+                let before = if before.is_finite() { before } else { 0.0 };
+                let after = if after.is_finite() { after } else { 0.0 };
+                let continues = after >= factor;
+                length[side] = match (before >= factor, continues) {
+                    (true, true) => length[side] + span,
+                    (true, false) => length[side] + span * (before - factor) / (before - after),
+                    (false, true) => span * (after - factor) / (after - before),
+                    (false, false) => 0.0,
+                };
+                if length[side] * pixel_width >= 0.5 {
+                    return true;
+                }
+                if !continues {
+                    length[side] = 0.0;
+                }
+            }
+        }
+        false
+    };
+    if has_span(maximum) {
+        return maximum;
+    }
+    // Search exponents so even a huge imported width at a subpixel spike cannot dominate the result.
+    let (mut low, mut high) = (0.0, maximum.log2());
+    for _ in 0..20 {
+        let middle = (low + high) * 0.5;
+        if has_span(middle.exp2()) {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    low.exp2()
+}
+
+/// The silhouette of a width profile (its points; None: the plain bar) in `r` as its top and bottom edges.
+/// A profile made with the Width tool can be many times the stroke's weight, so scale its silhouette to fit `r`.
+fn profile_outline(r: Rect, pixels_per_point: f32, points: Option<&[(f64, f64, f64)]>) -> (Vec<egui::Pos2>, Vec<egui::Pos2>) {
+    const SEGMENTS: usize = 32;
     let half = r.height() / 2.0 - 1.0;
-    let widths: Vec<(f64, f64)> = (0..=n).map(|i| points.map_or((0.35, 0.35), |p| WidthProfile::at_points(p, i as f64 / n as f64))).collect();
-    let widest = widths.iter().map(|(l, rr)| l.max(*rr)).filter(|w| w.is_finite()).fold(1.0, f64::max);
+    let mut widths = Vec::new();
+    let mut covered = [false; SEGMENTS + 1];
+    for knot in profile_knots(points.unwrap_or_default()) {
+        let ProfileKnot { t, incoming: (left, right), outgoing: (outgoing_left, outgoing_right) } = knot;
+        let nearby = (t * SEGMENTS as f64).round() as usize;
+        let grid = nearby as f64 / SEGMENTS as f64;
+        if t == grid || ((1..SEGMENTS).contains(&nearby) && (t - grid).abs() <= PROFILE_KNOT_SPACING) {
+            covered[nearby] = true;
+        }
+        // The first point contributes only its outgoing width, the last only its incoming width.
+        if t > 0.0 {
+            widths.push((t, left, right));
+        }
+        if t == 0.0 || (t < 1.0 && knot.incoming != knot.outgoing) {
+            widths.push((t, outgoing_left, outgoing_right));
+        }
+    }
+    for (i, covered) in covered.into_iter().enumerate() {
+        if !covered {
+            let t = i as f64 / SEGMENTS as f64;
+            let (l, r) = points.map_or((0.35, 0.35), |p| WidthProfile::at_points(p, t));
+            widths.push((t, l, r));
+        }
+    }
+    // Keep incoming and outgoing values in order where they share an x coordinate.
+    widths.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let x = |t: f64| r.left() + t as f32 * r.width();
+    let pixel_width = f64::from(r.width()) * f64::from(pixels_per_point);
+    let widest = profile_scale(&widths, pixel_width);
     let side = |w: f64| if w.is_finite() { (w / widest).clamp(0.0, 1.0) as f32 * half } else { 0.0 };
-    let x = |i: usize| r.left() + i as f32 / n as f32 * r.width();
-    let top = widths.iter().enumerate().map(|(i, (l, _))| pos2(x(i), r.center().y - side(*l))).collect();
-    let bottom = widths.iter().enumerate().map(|(i, (_, rr))| pos2(x(i), r.center().y + side(*rr))).collect();
+    let top = widths.iter().map(|(t, left, _)| pos2(x(*t), r.center().y - side(*left))).collect();
+    let bottom = widths.iter().map(|(t, _, right)| pos2(x(*t), r.center().y + side(*right))).collect();
     (top, bottom)
 }
 
 /// Draws a width profile's silhouette ([`profile_outline`]) into `rect` in the surface's ink, clipped to it.
 pub fn paint_profile(cx: &ContentPainterCx, rect: Rect, points: Option<&[(f64, f64, f64)]>) {
-    let (top, bottom) = profile_outline(rect, points);
+    let (top, bottom) = profile_outline(rect, cx.pixels_per_point(), points);
     let ink = cx.ink();
     let mut mesh = egui::Mesh::default();
     for (t, b) in top.iter().zip(&bottom) {
@@ -586,7 +722,7 @@ pub fn paint_profile(cx: &ContentPainterCx, rect: Rect, points: Option<&[(f64, f
 /// first member's.
 pub(crate) fn brush_keeps_size(app: &mut VectorcraftApp, shown: Option<&StrokeLayer>) -> Option<bool> {
     let st = app.session.active()?;
-    let bucket = app.session.bucket_paints();
+    let bucket = app.session.tool_paints(true);
     if bucket || (st.selection.objects.is_empty() && st.selection.subjects().is_empty()) {
         let s = shown?;
         let name = s.brush.as_deref()?;
@@ -725,13 +861,131 @@ mod tests {
     #[test]
     fn wide_profiles_fit_their_preview() {
         let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
-        let (top, bottom) = profile_outline(r, Some(&[(0.0, 1.0, 1.0), (0.5, 10.0, 10.0), (1.0, 1.0, 1.0)]));
+        let (top, bottom) = profile_outline(r, 1.0, Some(&[(0.0, 1.0, 1.0), (0.5, 10.0, 10.0), (1.0, 1.0, 1.0)]));
         let all: Vec<_> = top.iter().chain(&bottom).collect();
         assert!(all.iter().all(|p| p.y >= r.top() && p.y <= r.bottom()), "{all:?}");
         let middle = all.iter().map(|p| (p.y - r.center().y).abs()).fold(0.0, f32::max);
         assert!((middle - (r.height() / 2.0 - 1.0)).abs() < 1e-3, "the widest point fills the box ({middle})");
-        let (top, bottom) = profile_outline(r, None);
+        let (top, bottom) = profile_outline(r, 1.0, None);
         assert!(top.iter().chain(&bottom).all(|p| (p.y - r.center().y).abs() <= 0.35 * (r.height() / 2.0 - 1.0) + 1e-3));
+    }
+
+    #[test]
+    fn custom_arrowhead_thumbnails_preserve_where_the_stroke_ends() {
+        use vectorcraft_doc::CustomArrowhead;
+        use vectorcraft_geom::{PathData, Point, SubPath};
+
+        let outline = PathData::single(SubPath::polyline(&[Point::new(0.0, -60.0), Point::new(4.0, 60.0), Point::new(4.0, -60.0)], true));
+        let custom = CustomArrowhead::new("Wide Flag".into(), outline);
+        let halfway = Arrowhead::Custom(std::sync::Arc::new(custom.clone()));
+        let explicit_stop = Arrowhead::Custom(std::sync::Arc::new(custom.with_stop(0.75)));
+        assert_ne!(arrow_key(Some(&halfway)), arrow_key(Some(&explicit_stop)), "each stroke attachment needs its own thumbnail");
+
+        let preview = arrow_doc(Some(explicit_stop), true, 56.0, 22.0).unwrap();
+        let node = preview.node(preview.selectable_art()[0]).unwrap();
+        let Some(Arrowhead::Custom(head)) = &node.appearance.stroke().unwrap().start_arrow else {
+            panic!("the preview should draw the custom arrowhead");
+        };
+        // The preview has 10 points above the line. At the minimum weight, 60 units would need 15.
+        assert_eq!(head.stop, Some(0.5));
+    }
+
+    #[test]
+    fn width_profile_thumbnails_keep_sharp_changes_and_visible_endpoints() {
+        let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
+        let pulse =
+            [(0.0, 1.0, 1.0), (0.47, 1.0, 1.0), (0.47, 10.0, 10.0), (0.475, 10.0, 10.0), (0.49, 10.0, 10.0), (0.49, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        let long_pulse: Vec<_> = std::iter::once(pulse[0])
+            .chain((1..=512).flat_map(|i| [(f64::from(i) / 1200.0, 1.0, 1.0); 2]))
+            .chain(pulse[1..].iter().copied())
+            .collect();
+        for profile in [&pulse[..], long_pulse.as_slice()] {
+            let (top, _) = profile_outline(r, 1.0, Some(profile));
+            for t in [0.47, 0.49] {
+                let x = r.left() + t * r.width();
+                let edge: Vec<_> = top.iter().filter(|point| (point.x - x).abs() < 1e-3).collect();
+                assert_eq!(edge.len(), 2, "both sides of each step remain");
+                assert!((edge[1].y - edge[0].y).abs() > 5.0, "the step keeps its height");
+            }
+        }
+
+        let with_taper: Vec<_> =
+            long_pulse.iter().copied().filter(|p| p.0 < 0.47).chain([(0.475, 1.0, 1.0), (0.475, 10.0, 10.0), (0.485, 1.0, 1.0), pulse[6]]).collect();
+        let (top, _) = profile_outline(r, 1.0, Some(&with_taper));
+        let taper_end = r.left() + 0.485 * r.width();
+        assert!(top.iter().any(|p| (p.x - taper_end).abs() < 1e-3 && p.y > r.top() + 5.0), "the continuous knot sets where the taper ends");
+
+        let plateau = [(0.0, 1.0, 1.0), (0.4945, 1.0, 1.0), (0.4945, 10.0, 10.0), (0.502, 10.0, 10.0), (0.502, 1.0, 1.0), pulse[6]];
+        let (top, _) = profile_outline(r, 1.0, Some(&plateau));
+        assert!(top[0].y > r.top() + 5.0, "a grid sample cannot split a visible plateau for scaling");
+
+        let narrow: Vec<_> = long_pulse
+            .iter()
+            .copied()
+            .filter(|p| p.0 < 0.47)
+            .chain([(0.47, 1.0, 1.0), (0.47, 100.0, 100.0), (0.4701, 100.0, 100.0), (0.4702, 1.0, 1.0), pulse[6]])
+            .collect();
+        let (top, _) = profile_outline(r, 1.0, Some(&narrow));
+        assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "adding distant knots cannot make a subpixel spike visible");
+
+        let continuous: Vec<_> = long_pulse
+            .iter()
+            .copied()
+            .filter(|p| p.0 < 0.47)
+            .chain([(0.47, 1.0, 1.0), (0.4799, 1.1, 1.1), (0.48, 100.0, 100.0), (0.4801, 1.1, 1.1), (0.49, 1.0, 1.0), pulse[6]])
+            .collect();
+        let (top, _) = profile_outline(r, 1.0, Some(&continuous));
+        assert!(top[0].y < r.top() + 3.0, "a subpixel continuous peak cannot shrink the whole stroke");
+
+        let endpoints = [(0.0, 100.0, 100.0), (0.0, 1.0, 1.0), (1.0, 1.0, 1.0), (1.0, 100.0, 100.0)];
+        let (top, bottom) = profile_outline(r, 1.0, Some(&endpoints));
+        assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3));
+        assert!(bottom.iter().all(|p| (p.y - (r.bottom() - 1.0)).abs() < 1e-3));
+
+        let cluster = [(0.0, 1.0, 1.0), (0.48, 1.0, 1.0), (0.48 + 2e-10, 100.0, 100.0), (0.48 + 5e-10, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        let (top, _) = profile_outline(r, 1.0, Some(&cluster));
+        assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "the preview samples the same exposed widths as the stroke");
+
+        let nearby = [(0.0, 1.0, 1.0), (0.48, 1.0, 1.0), (0.48, 10.0, 10.0), (0.48000005, 10.0, 10.0), (0.48000005, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        let wide = Rect::from_min_size(r.min, egui::vec2(20_000_000.0, r.height()));
+        let (top, _) = profile_outline(wide, 1.0, Some(&nearby));
+        let falling = wide.left() + 0.48000005_f32 * wide.width();
+        let outgoing = top.iter().rfind(|point| point.x == falling).unwrap();
+        assert!(outgoing.y > wide.top() + 5.0, "the second step ends the pulse");
+        for thumbnail in [r, r.translate(egui::vec2(1000.0, 0.0))] {
+            let (top, _) = profile_outline(thumbnail, 1.0, Some(&nearby));
+            assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "a subpixel pulse cannot change the scale as the panel moves");
+        }
+
+        let collapsed = [(0.0, 1.0, 1.0), (0.48 - 2e-9, 1.0, 1.0), (0.48, 100.0, 100.0), (0.48 + 2e-9, 1.0, 1.0), (1.0, 1.0, 1.0)];
+        let (top, _) = profile_outline(r, 1.0, Some(&collapsed));
+        assert!(top.iter().all(|p| (p.y - (r.top() + 1.0)).abs() < 1e-3), "a peak collapsed to one x cannot scale the thumbnail");
+    }
+
+    #[test]
+    fn width_profile_thumbnails_keep_a_late_peak() {
+        let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
+        let mut noisy: Vec<_> = (0..514)
+            .map(|i| {
+                let width = if i % 2 == 0 { 1.0 } else { 1.01 };
+                (f64::from(i) / 1200.0, width, width)
+            })
+            .collect();
+        noisy.extend([(0.474, 1.0, 1.0), (0.48, 10.0, 10.0), (0.486, 1.0, 1.0), (1.0, 1.0, 1.0)]);
+        let (top, _) = profile_outline(r, 1.0, Some(&noisy));
+        let peak_x = r.left() + 0.48 * r.width();
+        assert!(top.iter().any(|p| (p.x - peak_x).abs() < 1e-3 && p.y < r.top() + 2.0), "the later peak survives the earlier small turns");
+    }
+
+    #[test]
+    fn width_profile_thumbnails_do_not_widen_a_short_taper() {
+        let r = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(80.0, 16.0));
+        let flat = (0..514).map(|i| (f64::from(i) / 1200.0, 1.0, 1.0));
+        let short_taper: Vec<_> = flat
+            .chain([(0.47, 1.0, 1.0), (0.47, 10.0, 10.0), (0.47001, 9.999, 9.999), (0.4702, 1.1, 1.1), (0.49, 1.02, 1.02), (1.0, 1.0, 1.0)])
+            .collect();
+        let (top, _) = profile_outline(r, 1.0, Some(&short_taper));
+        assert!(top[0].y < r.top() + 3.0, "the short taper cannot shrink the baseline");
     }
 
     #[test]

@@ -272,8 +272,8 @@ impl Component for LightSphere<'_> {
 
     /// The row's width and the height of the sphere that fits it, with its suns.
     fn measure(&mut self, cx: &MeasureCx<'_, Self>) -> Vec2 {
-        let width = cx.picture_width((24.0 + SUN + 8.0) * 2.0, f32::INFINITY);
-        Vec2::new(width, (radius_in(width) + SUN + 6.0) * 2.0)
+        // The height follows the width: a column that measures the sphere with no room measures it again at its width.
+        cx.picture_size((24.0 + SUN + 8.0) * 2.0, f32::INFINITY, |width| (radius_in(width) + SUN + 6.0) * 2.0)
     }
 
     fn sense(&self) -> Sense {
@@ -432,7 +432,6 @@ pub(crate) fn sphere(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut Cust
         moved.push(craft::behavior::EditEvent::set(craft::behavior::Mixed::Same(behind), !behind, text.into(), None));
         cx.gesture(&moved);
     }
-    ui.add_space(4.0);
     out.edit.response
 }
 

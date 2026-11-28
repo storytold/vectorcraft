@@ -19,10 +19,21 @@ pub(crate) fn navigation(p: &Prefs) -> NavigationOptions {
     options
 }
 
-/// The zoom rungs and range of the app, with 100 % at the device zoom Display Print Size at 100 %
-/// Zoom gives on a display of `native_ppp` pixels per point.
-pub(crate) fn zoom_scheme(p: &Prefs, native_ppp: f32) -> ZoomScheme {
-    ZoomScheme::ILLUSTRATOR.with_hundred(crate::state::zoom_baseline(p.display_print_size) * f64::from(native_ppp))
+/// The zoom rungs and range of the app, with 100 % at the device zoom that shows a document inch in
+/// `print` screen points ([`crate::state::print_ppi`]; one document point per screen point when
+/// `None`) on a display of `native_ppp` pixels per point.
+pub(crate) fn zoom_scheme(print: Option<f64>, native_ppp: f32) -> ZoomScheme {
+    ZoomScheme::ILLUSTRATOR.with_hundred(crate::state::zoom_baseline(print) * f64::from(native_ppp))
+}
+
+/// Whether view command `command` fits the view to the window (`Some(true)`), sets a zoom
+/// percentage (`Some(false)`), or leaves the zoom alone (`None`).
+pub(crate) fn fits_window(command: ViewCommands) -> Option<bool> {
+    match command {
+        ViewCommands::FitOnScreen | ViewCommands::FillScreen | ViewCommands::FitArtboard | ViewCommands::FitLayers => Some(true),
+        ViewCommands::RotateClockwise | ViewCommands::RotateCounterclockwise | ViewCommands::ResetRotation => None,
+        _ => Some(false),
+    }
 }
 
 impl VectorcraftApp {
@@ -47,8 +58,11 @@ impl VectorcraftApp {
         }
         self.views.truncate(docs.len());
         self.views.extend(docs.iter().skip(self.views.len()).map(View::of));
+        // A new view counts its zoom from the main window's display, where it is first shown.
+        let main = self.main_ppi();
         for (view, doc) in self.views.iter_mut().zip(docs) {
             view.artboard = view.artboard.min(doc.doc.artboards.len().saturating_sub(1));
+            view.shown_ppi.get_or_insert(main);
         }
         let uids: Vec<u64> = docs.iter().map(|d| d.uid).collect();
         if let Some(ctx) = &self.ui_ctx {
@@ -135,6 +149,169 @@ impl VectorcraftApp {
         self.session.active().map_or(vectorcraft_geom::Point::ZERO, |d| d.doc.ruler_origin_for(artboard))
     }
 
+    /// The screen points an inch takes at 100% zoom with Display Print Size at 100% Zoom on, for
+    /// the current window's display; `None` with it off ([`crate::state::print_ppi`]).
+    pub(crate) fn print_ppi(&self) -> Option<f64> {
+        self.print_ppi_of(crate::doc_windows::current(self))
+    }
+
+    /// [`Self::print_ppi`] for window `w`: the density its view's zoom counts from, which is the
+    /// density of the display that shows it once [`Self::settle_screen_ppi`] has run.
+    pub(crate) fn print_ppi_of(&self, w: Option<crate::doc_windows::Win>) -> Option<f64> {
+        let counted = w.and_then(|w| crate::doc_windows::view(self, w)?.shown_ppi);
+        let ppi = counted.unwrap_or_else(|| w.map_or(self.main_ppi(), |w| self.window_ppi(w)));
+        crate::state::print_ppi(self.session.prefs.display_print_size, ppi.ppi())
+    }
+
+    /// The density of the display that shows window `w`: its own OS window's when it floats in one
+    /// that the host found on a display, else the main window's ([`Self::main_ppi`]).
+    fn window_ppi(&self, w: crate::doc_windows::Win) -> crate::ScreenPpi {
+        crate::doc_windows::screen_ppi(self, w).unwrap_or(self.main_ppi())
+    }
+
+    /// The density the main window's views count from: the host's reading, or while the main
+    /// window's display has not answered, the last reading, so every view there counts from the
+    /// same density.
+    fn main_ppi(&self) -> crate::ScreenPpi {
+        match self.services.screen_ppi {
+            crate::ScreenPpi::Unread => self.canvas.windows.main_read.unwrap_or(crate::ScreenPpi::Unread),
+            read => read,
+        }
+    }
+
+    /// Takes `ppi` as the density the host read for the main window's display, `None` for a
+    /// display that reports no size ([`crate::Services::screen_ppi`]), and settles the views
+    /// ([`Self::settle_screen_ppi`]). Returns whether the density changed.
+    pub fn set_screen_ppi(&mut self, ppi: Option<f64>) -> bool {
+        self.set_screen_reading(crate::ScreenPpi::Read(ppi))
+    }
+
+    /// [`Self::set_screen_ppi`] with the host's reading, [`crate::ScreenPpi::Unread`] while the
+    /// main window's display is unknown or has not answered.
+    pub fn set_screen_reading(&mut self, ppi: crate::ScreenPpi) -> bool {
+        if self.services.screen_ppi == ppi {
+            return false;
+        }
+        // A switch of the preference made since the last frame applies before the reading does.
+        self.follow_print_size_switch();
+        self.services.screen_ppi = ppi;
+        if ppi != crate::ScreenPpi::Unread && self.session.prefs.display_print_size {
+            self.canvas.windows.main_read = Some(ppi);
+        }
+        self.settle_screen_ppi();
+        true
+    }
+
+    /// Gives each window's view the density of the display that shows it. With Display Print Size
+    /// at 100% Zoom on, a view moved between two displays the host has read keeps its zoom
+    /// percentage (a display that reports no size counts 96 points to an inch), so the art keeps
+    /// its physical size on the new display; the views of other displays keep their zoom. At the
+    /// first reading of a view's display, a view that still has the zoom a fit or the document's
+    /// saved view gave it keeps that zoom, and any other view keeps its percentage, counted from
+    /// 96 points to an inch until then.
+    pub(crate) fn settle_screen_ppi(&mut self) {
+        for w in crate::doc_windows::windows(self) {
+            self.settle_window_ppi(w, true);
+        }
+    }
+
+    /// [`Self::settle_screen_ppi`] for window `w` alone. With `keep` false (a fit made for the
+    /// window), the view counts from the display's reading, without a change of zoom; while the
+    /// display is being read, it counts from the last reading, and the reading still to come
+    /// leaves its zoom alone.
+    pub(crate) fn settle_window_ppi(&mut self, w: crate::doc_windows::Win, keep: bool) {
+        let on = self.session.prefs.display_print_size;
+        let now = self.window_ppi(w);
+        let reading = crate::doc_windows::screen_ppi(self, w).unwrap_or(self.services.screen_ppi);
+        let Some(v) = crate::doc_windows::view_mut(self, w) else { return };
+        // Off, a view counts from no reading, so the first one after the preference is turned on
+        // keeps the zoom chosen meanwhile.
+        if !on {
+            v.shown_ppi = Some(crate::ScreenPpi::Unread);
+            v.fit_unread = false;
+            return;
+        }
+        if !keep {
+            // While the display is being read, the fit counts from the last reading, as the other
+            // views there do, and the reading keeps its zoom. A floating window whose display has
+            // not answered keeps counting from the density it was last shown at.
+            match now {
+                crate::ScreenPpi::Unread => {
+                    v.shown_ppi.get_or_insert(now);
+                }
+                read => v.shown_ppi = Some(read),
+            }
+            v.fit_unread = reading == crate::ScreenPpi::Unread;
+            return;
+        }
+        // A fit made while its display is being read waits for that reading.
+        if v.fit_unread && reading == crate::ScreenPpi::Unread {
+            return;
+        }
+        // A display that has not answered yet leaves the view counting from the last one read, so
+        // the answer, when it comes, keeps the zoom percentage.
+        let crate::ScreenPpi::Read(after) = now else {
+            v.shown_ppi.get_or_insert(now);
+            return;
+        };
+        let fitted = v.fit_zoom == Some(v.zoom);
+        let before = match v.shown_ppi {
+            _ if fitted && v.fit_unread => None,
+            Some(crate::ScreenPpi::Read(before)) => Some(before),
+            _ if fitted => None,
+            _ => Some(None),
+        };
+        v.fit_unread = false;
+        if let Some(before) = before
+            && before != after
+            && let (Some(b), Some(a)) = (crate::state::print_ppi(on, before), crate::state::print_ppi(on, after))
+        {
+            v.zoom = (v.zoom * a / b).clamp(0.0313, 640.0);
+        }
+        v.shown_ppi = Some(now);
+    }
+
+    /// [`Self::settle_screen_ppi`] when the main window's density or a floating window's changed
+    /// since it last ran from here, or a window started or stopped floating, or Presentation Mode
+    /// started or ended. With Display Print Size at 100% Zoom off, the desktop host does not read
+    /// the displays: every density read before is forgotten, so the readings after the preference
+    /// is turned on again count as first readings.
+    pub(crate) fn settle_screen_ppi_if_changed(&mut self) {
+        self.follow_print_size_switch();
+        let key = (self.services.screen_ppi, crate::doc_windows::floating_ppi(self));
+        if self.canvas.windows.settled.as_ref() != Some(&key) {
+            self.settle_screen_ppi();
+            self.canvas.windows.settled = Some(key);
+        }
+    }
+
+    /// Takes in a change of Display Print Size at 100% Zoom since this last ran: turned off, every
+    /// density read before is forgotten; turned on, every view's zoom counts as the one its first
+    /// reading keeps.
+    fn follow_print_size_switch(&mut self) {
+        let off = !self.session.prefs.display_print_size;
+        let was_off = std::mem::replace(&mut self.canvas.windows.print_size_off, off);
+        if off && !was_off {
+            crate::doc_windows::forget_ppi(self);
+            self.services.screen_ppi = crate::ScreenPpi::Unread;
+            self.canvas.windows.main_read = None;
+            self.services.screens.clear();
+            for w in crate::doc_windows::windows(self) {
+                if let Some(v) = crate::doc_windows::view_mut(self, w) {
+                    v.shown_ppi = Some(crate::ScreenPpi::Unread);
+                }
+            }
+        }
+        if was_off && !off {
+            // The zoom chosen while it was off stays when the displays are read.
+            for w in crate::doc_windows::windows(self) {
+                if let Some(v) = crate::doc_windows::view_mut(self, w) {
+                    v.fit_zoom = Some(v.zoom);
+                }
+            }
+        }
+    }
+
     pub fn view_mut(&mut self) -> Option<&mut View> {
         self.sync_views();
         let i = self.session.active_index()?;
@@ -150,7 +327,7 @@ impl VectorcraftApp {
 
     /// Preferences › User Interface › UI Scaling, as the interface applies it.
     pub(crate) fn ui_scaling(&self) -> f32 {
-        self.session.prefs.ui_scaling.clamp(0.75, 2.0) as f32
+        super::applied_ui_scaling(self.session.prefs.ui_scaling)
     }
 
     /// Ask the active view's canvas to run `request` in its next pass; `bounds` are the layers' bounds
@@ -178,14 +355,35 @@ impl VectorcraftApp {
         };
         let target = crate::canvas::view_target(self, win);
         let (scaling, ppp) = (self.ui_scaling(), ctx.pixels_per_point());
-        let scheme = zoom_scheme(&self.session.prefs, ppp / ctx.zoom_factor());
+        self.before_view_command(win, command);
+        let scheme = zoom_scheme(self.print_ppi_of(Some(win)), ppp / ctx.zoom_factor());
         let Some(v) = self.view_mut() else { return };
         let before = *v;
         let mut cv = v.canvas(scaling, v.rect);
         let layers = move || bounds;
         if command.apply(&mut cv, &target, Some(&layers), ppp, &scheme) {
             v.set_canvas(&cv, scaling);
+            self.after_view_command(win, command);
             self.ease_view(before);
+        }
+    }
+
+    /// Before view command `command` runs on window `w`'s view: a fit to the window is made for the
+    /// display the window is on now, and a zoom percentage (Actual Size) counts from the density the
+    /// view counts from, which a reading still to come rescales (Display Print Size at 100% Zoom).
+    pub(crate) fn before_view_command(&mut self, w: crate::doc_windows::Win, command: ViewCommands) {
+        if let Some(fit) = fits_window(command) {
+            self.settle_window_ppi(w, !fit);
+        }
+    }
+
+    /// After view command `command` ran on window `w`'s view: a fit to the window is kept at the
+    /// first reading of its display; a zoom percentage keeps its percentage then.
+    pub(crate) fn after_view_command(&mut self, w: crate::doc_windows::Win, command: ViewCommands) {
+        if let Some(fit) = fits_window(command)
+            && let Some(v) = crate::doc_windows::view_mut(self, w)
+        {
+            v.fit_zoom = fit.then_some(v.zoom);
         }
     }
 
@@ -208,7 +406,33 @@ impl VectorcraftApp {
             shape_widgets: self.ui.view.shape_widgets,
             screen: self.screen_frame(),
             artboard: self.view().map_or(0, |v| v.artboard),
-            ..ViewInfo::default()
+            precise: self.precise_cursors(),
+        }
+    }
+
+    /// Whether the drawing tools show precise cursors: General › Use Precise Cursors is on, or Caps Lock is
+    /// (`Session::caps_lock`, which the canvas keeps at the host's state and `view.capsLock` sets). The canvas's pointer
+    /// and the tools' brush tips both follow it.
+    pub(crate) fn precise_cursors(&self) -> bool {
+        self.session.prefs.use_precise_cursors || self.session.caps_lock
+    }
+
+    /// Takes the host's Caps Lock state `on` when it changes: the session follows it until the next change, and a
+    /// `view.capsLock` call between changes stays in place.
+    pub(crate) fn follow_caps_lock(&mut self, on: bool) {
+        if self.canvas.host_caps_lock == Some(on) {
+            return;
+        }
+        let first_reading = self.canvas.host_caps_lock.is_none();
+        self.canvas.host_caps_lock = Some(on);
+        // A `view.capsLock` call that ran before the first reading stays in place; that reading is only the baseline.
+        if first_reading && self.session.caps_lock {
+            return;
+        }
+        if self.session.caps_lock != on
+            && let Err(err) = self.run("view.capsLock", serde_json::json!({ "on": on }))
+        {
+            log::error!("Could not update the Caps Lock state: {err}");
         }
     }
 }

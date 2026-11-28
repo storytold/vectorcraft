@@ -158,6 +158,28 @@ fn a_rectangle_shows_linked_and_unlinked_corner_types() {
     assert!(!p.shows("Corner") && p.shows("Top Left Corner") && p.shows("Bottom Left Corner"));
 }
 
+/// The four corner labels of an unlinked Corner Radius, in the Transform panel and in the
+/// Properties panel, start at one edge of their column whatever their widths, and the radius
+/// fields after them line up.
+#[test]
+fn unlinked_corner_labels_start_in_one_column() {
+    use craft::ui::contract::Role;
+    let corners = ["Top Left", "Top Right", "Bottom Right", "Bottom Left"];
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = new_app();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 120, "height": 80, "radius": 10})).unwrap();
+        set_pref(&mut app, "singleCornerRadius", false);
+        let p = Panel::new(app, draw);
+        let labels = corners.map(|name| p.rect_role(name, Role::LABEL));
+        let fields = corners.map(|name| p.rect_role(name, Role::SPIN_BUTTON));
+        assert!(labels[2].width() > labels[0].width() + 1.0, "Bottom Right {:?} is wider than Top Left {:?}", labels[2], labels[0]);
+        for (name, (label, field)) in corners.iter().zip(labels.iter().zip(&fields)) {
+            assert!((label.left() - labels[0].left()).abs() < 0.5, "{name} starts at {}, Top Left at {}", label.left(), labels[0].left());
+            assert!((field.left() - fields[0].left()).abs() < 0.5, "{name}'s field starts at {}, Top Left's at {}", field.left(), fields[0].left());
+        }
+    }
+}
+
 /// A corner kind set with no live rectangle selected leaves the selected polygon, the document and
 /// its undo history as they are.
 #[test]

@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use craft::behavior::{Axis, DockSide, IconId};
 use craft::ui::buttons::IconButton;
-use craft::ui::contract::{Bind, BodyCx, PlainData, Show as _, Tracked};
+use craft::ui::contract::{Bind, BodyCx, PlainData, Props as _, Show as _, SizeLimits, Tracked};
 use craft::ui::docking::{
     ColumnCards, DockCommands, DockConfig, DockEvent, DockGrid, DockPanels, DockScene, DockSizes, DockTo, DragUnit, FloatSpace, GroupAt, HidePanels,
     PanelKey, PanelSpec, PanelSpecs, actions as command_actions, move_actions, request_actions,
@@ -155,6 +155,12 @@ fn rail_owner_among(toolbars: impl Iterator<Item = u32>, id: &str) -> Option<Own
 /// canvas, and at the end edge the Properties · Layers · Libraries column and the icon column.
 /// Each of `fronts` comes to the front of the group that holds it.
 pub(crate) fn default_workspace(fronts: &[&str]) -> Workspace<String> {
+    builtin_workspace(fronts, 1)
+}
+
+/// [`default_workspace`] with the Tools panel laying its tools out in `tools_steps` columns, as a
+/// built-in workspace defines it.
+pub(crate) fn builtin_workspace(fronts: &[&str], tools_steps: u16) -> Workspace<String> {
     let mut placed: Vec<String> = Vec::new();
     let mut group = |ids: &[&str]| {
         let fresh: Vec<String> = ids.iter().filter(|id| registered(id) && !placed.iter().any(|p| p == *id)).map(|id| (*id).to_owned()).collect();
@@ -168,7 +174,7 @@ pub(crate) fn default_workspace(fronts: &[&str]) -> Workspace<String> {
     if !icons.is_empty() {
         columns.push(Column::new(icons).with_iconic(true));
     }
-    let tools = Column::new(vec![Group::new(vec![crate::toolbar::TOOLS.to_owned()], 0)]).with_steps(1);
+    let tools = Column::new(vec![Group::new(vec![crate::toolbar::TOOLS.to_owned()], 0)]).with_steps(tools_steps);
     let centre = Node::split(Axis::X, BESIDE_DOCK, Node::tabs(vec![CANVAS.to_owned()], 0), Node::dock(DockEdge::End, columns));
     let root = Node::split(Axis::X, BESIDE_DOCK, Node::dock(DockEdge::Start, vec![tools]), centre);
     Workspace::new(Layout::new(Some(root), Vec::new()))
@@ -267,7 +273,7 @@ fn dock_columns(layout: &Layout<String>) -> Vec<&Column<String>> {
 }
 
 /// The columns of the dock on `edge`, from the window edge inwards; none when that edge has no dock.
-fn edge_columns(layout: &Layout<String>, edge: DockEdge) -> &[Column<String>] {
+pub(crate) fn edge_columns(layout: &Layout<String>, edge: DockEdge) -> &[Column<String>] {
     let dock = layout.dock_path(edge).and_then(|path| node_at(layout.root.as_ref()?, &path));
     match dock {
         Some(Node::Dock { columns, .. }) => columns,
@@ -1113,14 +1119,18 @@ pub(crate) fn place_floating(app: &mut VectorcraftApp, panel: &str, pos: egui::P
     }
     // A rail's window is a stepped column, which the dock fits to the rail's grid; it keeps the steps it had.
     let steps = is_rail(&id).then(|| column_of(layout, &id).and_then(|(_, column)| column.steps).unwrap_or(1));
-    actions.push(match floating_window(layout, &id) {
-        Some(window) if window.panels().count() == 1 => Action::move_floating(id.clone(), rect),
-        _ => Action::float(id.clone(), rect),
-    });
+    let ctx = app.ui_ctx.clone();
+    match floating_window(layout, &id) {
+        // An open OS window moves with its window: the dock keeps it where its record says.
+        Some(window) if window.panels().count() == 1 => {
+            actions.push(Action::move_floating(id.clone(), rect));
+            actions.extend(native_moved(ctx.as_ref(), window, rect));
+        }
+        _ => actions.push(Action::float(id.clone(), rect)),
+    }
     if let Some(steps) = steps {
         actions.push(Action::set_column_steps(id, steps));
     }
-    let ctx = app.ui_ctx.clone();
     apply(app, ctx.as_ref(), actions).map(drop)
 }
 
@@ -1192,9 +1202,10 @@ impl PanelSpecs<String> for Specs {
         if panel == CANVAS {
             return spec.canvas();
         }
+        // A toolbar's column is as wide as its grid's steps; every other panel is at least PANEL_MIN_WIDTH wide.
         let spec = match self.grids.iter().find(|(rail, _)| rail == panel) {
             Some((_, grid)) => spec.grid(*grid),
-            None => spec,
+            None => spec.limits(SizeLimits::at_least(egui::vec2(PANEL_MIN_WIDTH, 0.0))),
         };
         let icon = crate::state::rail_panel(panel).map(|p| p.2).or_else(|| crate::panels::library_panel::parse(panel).map(|_| "library"));
         match icon {
@@ -1250,12 +1261,19 @@ impl DockPanels<String> for Panels<'_> {
         // A rail shares its column with nothing, so its group is the rail alone. Its view draws
         // the Edit Toolbar drawer while the drawer targets it.
         let owner = panels.iter().find_map(|p| rail_owner(&self.app.ui, p))?;
+        // A floating toolbar's OS window runs a pass of its own, as a floating panel's does.
+        if matches!(at, GroupAt::Show(_)) && ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+            crate::shortcuts::leave_to_labels(self.app, ui.ctx());
+        }
         Some(crate::toolbar::rail_view(self.app, ui, owner, at, cx))
     }
 
     fn group_header(&mut self, panels: &[String], active: usize, ui: &mut egui::Ui, _cx: &mut BodyCx<'_>) {
         let Some(panel) = panels.get(active).filter(|p| sizes::has_sizes(p)) else { return };
-        IconButton::command(IconId::new("dc-cycle-sizes"), CommandRef::with_params("window.panel.cycleOptions", json!({"panel": panel}))).show(ui);
+        // The command has no menu item, so its label comes from here: the button and its tooltip are named by it.
+        IconButton::command(IconId::new("dc-cycle-sizes"), CommandRef::with_params("window.panel.cycleOptions", json!({"panel": panel})))
+            .label(tl!("Cycle Display Sizes"))
+            .show(ui);
     }
 
     fn panel_rows(&mut self, panel: &String) -> Vec<PanelRow> {

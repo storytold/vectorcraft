@@ -71,6 +71,10 @@ pub struct Prefs {
     pub show_tool_cards: bool,
     /// Other Script… warns before it runs a chosen script.
     pub show_external_script_warning: bool,
+    /// General › Run Startup Scripts: the `.jsx` files of the Startup Scripts folder run when the
+    /// app starts and before each script chosen from File › Scripts (`script.startup.run`). Off by
+    /// default.
+    pub run_startup_scripts: bool,
     pub anti_aliased_artwork: bool,
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
@@ -93,6 +97,8 @@ pub struct Prefs {
     /// Artboard Options › Update While Dragging: the area outside the artboards stays darker while
     /// the Artboard tool moves or resizes an artboard; off, it draws as usual until the drag ends.
     pub artboard_update_while_dragging: bool,
+    /// General › Display Print Size at 100% Zoom (on by default): 100% shows an inch of the
+    /// document in an inch of the display. A preferences file without the key reads as on.
     pub display_print_size: bool,
     pub double_click_to_isolate: bool,
     pub transform_pattern_tiles: bool,
@@ -494,6 +500,7 @@ impl Default for Prefs {
             show_tool_tips: true,
             show_tool_cards: false,
             show_external_script_warning: true,
+            run_startup_scripts: false,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
             show_home_screen: true,
@@ -503,7 +510,7 @@ impl Default for Prefs {
             type_glyph_bounds: false,
             fade_region_outside_artboard: true,
             artboard_update_while_dragging: true,
-            display_print_size: false,
+            display_print_size: true,
             double_click_to_isolate: true,
             transform_pattern_tiles: false,
             scale_corners: false,

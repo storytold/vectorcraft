@@ -146,8 +146,9 @@ object is where the art was.
 
 Holes stay holes, with walls of their own. Bevels move each corner along its bisector. A corner the bevel opens (a
 sharp point with the bevel outside, a narrow notch with it inside) whose miter would reach past four times the width is
-cut square across instead; at the other corners the miter is limited to four times the width. A bevel wider than a
-narrow part of the shape folds over itself. Each facet has a seam ([Seams](#seams)).
+cut square across instead; at the other corners the miter is limited to four times the width. An inside bevel on
+a single straight triangle or parallelogram with ordinary miters stops before its edges meet, keeping the requested
+bevel height. Other outlines can still fold where a bevel is wider than a narrow part of the shape. Each facet has a seam ([Seams](#seams)).
 
 ### Custom bevels
 

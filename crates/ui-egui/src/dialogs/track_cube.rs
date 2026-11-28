@@ -304,7 +304,7 @@ impl Component for TrackCube<'_> {
         let center = cx.rect.center();
         let mut held = *cx.press_slot::<CubeDrag>();
         let result = cx.part(CUBE);
-        let (press, hover) = (result.press, result.hover_pos.filter(|_| result.hovered));
+        let (press, hover) = (result.press, cx.hover_pos(CUBE));
         match press.phase {
             PressPhase::Down { start, .. } if start.button == PointerButton::Primary => {
                 cx.focus_part(CUBE);
