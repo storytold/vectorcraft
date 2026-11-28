@@ -585,7 +585,28 @@ fn thumbnail(args: &[String]) -> Result<(), String> {
         .filter(|img| img.pixels.as_chunks::<4>().0.iter().any(|px| px[3] != 0))
         .ok_or_else(|| format!("{input}: the document shows nothing"))?;
     let png = img.to_png().map_err(|e| format!("{input}: {e}"))?;
-    vectorcraft_format::write_atomic(Path::new(output), &png).map_err(|e| format!("{output}: {e}"))
+    write_whole(Path::new(output), &png, |tmp, out| std::fs::rename(tmp, out)).map_err(|e| format!("{output}: {e}"))
+}
+
+/// Writes `bytes` to a temporary file beside `out` and moves it over `out` with `rename`. When the
+/// temporary file can't be written or `rename` fails, this returns the error, removes the temporary
+/// file and leaves `out` unchanged; it never copies into `out`.
+fn write_whole(out: &Path, bytes: &[u8], rename: impl FnOnce(&Path, &Path) -> std::io::Result<()>) -> std::io::Result<()> {
+    let name = out.file_name().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a file name"))?;
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(name);
+    tmp_name.push(format!(".{}.tmp", std::process::id()));
+    let tmp = out.with_file_name(tmp_name);
+    // A file already at `tmp` is not this run's: the error leaves it in place.
+    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+    let written = f.write_all(bytes).and_then(|()| vectorcraft_format::sync_file(&f));
+    drop(f);
+    let written = written.and_then(|()| rename(&tmp, out));
+    if written.is_err() {
+        // Best effort: the temporary file is all there is to clean up.
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written
 }
 
 enum Step {
@@ -836,4 +857,42 @@ fn bench(args: &[String]) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod write_whole_tests {
+    use super::write_whole;
+
+    #[test]
+    fn a_failed_rename_leaves_out_unchanged_and_no_temporary_file() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let out = dir.path().join("out.png");
+        std::fs::write(&out, b"old").unwrap_or_else(|e| panic!("{e}"));
+        let refused = write_whole(&out, b"new picture", |_, _| Err(std::io::Error::other("refused")));
+        assert!(refused.is_err());
+        assert_eq!(std::fs::read(&out).unwrap_or_else(|e| panic!("{e}")), b"old");
+        let names: Vec<_> = std::fs::read_dir(dir.path()).unwrap_or_else(|e| panic!("{e}")).flatten().map(|e| e.file_name()).collect();
+        assert_eq!(names, ["out.png"]);
+    }
+
+    #[test]
+    fn a_file_already_at_the_temporary_name_is_kept() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let out = dir.path().join("out.png");
+        let tmp = dir.path().join(format!(".out.png.{}.tmp", std::process::id()));
+        std::fs::write(&tmp, b"someone else's").unwrap_or_else(|e| panic!("{e}"));
+        assert!(write_whole(&out, b"new picture", |tmp, out| std::fs::rename(tmp, out)).is_err());
+        assert_eq!(std::fs::read(&tmp).unwrap_or_else(|e| panic!("{e}")), b"someone else's");
+        assert!(!out.exists());
+    }
+
+    #[test]
+    fn a_rename_replaces_out() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let out = dir.path().join("out.png");
+        std::fs::write(&out, b"old").unwrap_or_else(|e| panic!("{e}"));
+        write_whole(&out, b"new picture", |tmp, out| std::fs::rename(tmp, out)).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(std::fs::read(&out).unwrap_or_else(|e| panic!("{e}")), b"new picture");
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap_or_else(|e| panic!("{e}")).count(), 1);
+    }
 }
