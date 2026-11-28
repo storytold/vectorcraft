@@ -13,29 +13,37 @@
 //! Fields: `tab` (`color` or `swatches`). Agents can set `color` (hex), `opacity` and `location` (a
 //! point: `spread`) as percentages, and confirm; confirming reports no stop index.
 
+use std::sync::Arc;
+
 use craft::behavior::IconId;
-use craft::color_ui::ui::{ColorPanel, ColorPanelLayout, ColorPanelOutput, ColorPanelShown, ColorPanelState, DropperButton, SwatchPalette};
+use craft::color_ui::ui::{
+    ColorPanel, ColorPanelLayout, ColorPanelMode, ColorPanelOutput, ColorPanelShown, ColorPanelState, ColorPanelWords, DropperButton, SwatchPalette,
+};
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
+use craft::ui::buttons::Button;
 use craft::ui::choice::Segmented;
-use craft::ui::contract::{Bind, Entry, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, PopupKind, Show as _, ShowContainer as _, Trigger};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, StackDialog, dialog_id};
 use craft::ui::form::Field;
-use craft::ui::layout_components::Stack;
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::notices::Notice;
 use craft::ui::popover::Popover;
-use craft::ui::runtime::env::{Label, UnitKind};
+use craft::ui::runtime::env::{Env, Label, UnitKind};
 use craft::ui::runtime::overlay::CloseReason;
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, vec2};
 use serde_json::{Value, json};
 use vectorcraft_color::gradient::move_stop;
-use vectorcraft_color::{Color, FreeformPoint, GradientKind, GradientStop, Paint};
+use vectorcraft_color::{Color, FreeformPoint, GradientPaint, GradientStop, Paint};
+use vectorcraft_doc::NodeId;
+use vectorcraft_engine::GradientEditPaints;
 use vectorcraft_geom::{Point, Rect};
 use vectorcraft_tools::params::color_json;
 
 use crate::VectorcraftApp;
-use crate::panels::gradient::{edit_point, set_stops, set_stops_keeping_models, shown_points};
+use crate::panels::gradient::{edit_point, edits_points, set_stops, set_stops_keeping_models, shown_points};
 use crate::panels::{Live, active_paint, c32};
 
 /// The dialog kind of the gradient stop popover.
@@ -54,41 +62,196 @@ pub(crate) enum Anchor {
 /// What the popover edits: the selected stop of the gradient behind the active proxy (with all
 /// its stops), or the selected point of a freeform gradient.
 enum Target {
-    Stop(Vec<GradientStop>, usize),
-    Point(FreeformPoint, usize),
+    Stop(Box<GradientPaint>, usize),
+    Point(Box<GradientPaint>, FreeformPoint, usize),
+}
+
+/// The paint target and selected stop or point shown when the popover opened.
+#[derive(Clone, PartialEq, Eq)]
+struct TargetKey {
+    /// The document's uid and revert count: File > Revert keeps the uid and replaces the content.
+    document: (u64, u64),
+    objects: Vec<NodeId>,
+    item: Option<usize>,
+    fill: bool,
+    tool_paint: bool,
+    point: bool,
+    index: usize,
+}
+
+impl TargetKey {
+    fn of(app: &VectorcraftApp, target: &Target) -> Option<Self> {
+        let doc = app.session.active()?;
+        let fill = app.session.fill_active;
+        let (point, index) = match target {
+            Target::Stop(_, index) => (false, *index),
+            Target::Point(_, _, index) => (true, *index),
+        };
+        Some(Self {
+            document: (doc.uid, doc.reverts),
+            objects: doc.selection.objects.clone(),
+            item: app.session.appearance_item(),
+            fill,
+            tool_paint: app.session.tool_paints(!fill),
+            point,
+            index,
+        })
+    }
+
+    fn matches(&self, app: &VectorcraftApp, target: &Target) -> bool {
+        Self::of(app, target).as_ref() == Some(self)
+    }
+}
+
+/// A Color mode command from the popover's menu that has not been seen to finish.
+struct OwnMode {
+    /// The document's history step when it ran.
+    from: (u64, u64),
+    /// The mode it picked.
+    mode: ColorPanelMode,
+    /// The Color panel showed `mode` at an earlier pass with no new history step.
+    shown: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OwnModeNow {
+    /// No command is pending.
+    None,
+    /// The command has not been seen to finish.
+    Waiting,
+    /// The command made the new history step: the changed paint is the popover's own edit.
+    Edited,
+    /// The command finished without a history step.
+    Unchanged,
+}
+
+impl OwnMode {
+    /// What the command has done by this pass, with the document at history `step` and the Color panel showing
+    /// `shown_mode`. The first new history step after it is its own edit. Once the panel shows the picked mode, one
+    /// more pass with no new step means it changed nothing.
+    fn now(&mut self, step: Option<(u64, u64)>, shown_mode: ColorPanelMode) -> OwnModeNow {
+        if step != Some(self.from) {
+            return OwnModeNow::Edited;
+        }
+        if shown_mode != self.mode {
+            return OwnModeNow::Waiting;
+        }
+        if std::mem::replace(&mut self.shown, true) { OwnModeNow::Unchanged } else { OwnModeNow::Waiting }
+    }
+}
+
+/// The gradient in that slot as the popover last saw it, including any live edits it applied.
+#[derive(Clone)]
+struct TargetOwner {
+    key: TargetKey,
+    paints: Arc<TargetPaints>,
+    /// The history step when the popover took `paints`.
+    step: Option<(u64, u64)>,
+    /// The document's count of Undo and Redo steps as of the popover's last pass.
+    restores: Option<u64>,
+    /// The paints the popover owned before its own later edits, newest last, each with the history step it was
+    /// current at and the stop or point it edited then, so that Undo and Redo of those edits keep it open on the
+    /// same stop or point.
+    earlier: Vec<Earlier>,
+}
+
+#[derive(Clone)]
+struct Earlier {
+    step: Option<(u64, u64)>,
+    key: TargetKey,
+    paints: Arc<TargetPaints>,
+}
+
+struct TargetPaints {
+    shown: GradientPaint,
+    edited: GradientEditPaints,
+}
+
+impl TargetOwner {
+    /// The most earlier paints kept.
+    const EARLIER: usize = 32;
+
+    fn new(key: TargetKey, paints: Arc<TargetPaints>, step: Option<(u64, u64)>, restores: Option<u64>) -> Self {
+        Self { key, paints, step, restores, earlier: Vec::new() }
+    }
+
+    fn matches(&self, app: &VectorcraftApp, target: &Target) -> bool {
+        self.key.matches(app, target) && self.owns(app, target, &self.paints)
+    }
+
+    /// The earlier owned paint and stop or point that the target shows now after Undo or Redo of one of the popover's
+    /// own edits. A stop selected after Undo that is not the one that paint belonged to matches nothing, and so does
+    /// an earlier paint set again by anything other than Undo or Redo.
+    fn owned_earlier(&self, app: &VectorcraftApp, target: &Target, restores: Option<u64>) -> Option<TargetKey> {
+        if restores == self.restores {
+            return None;
+        }
+        self.earlier.iter().rev().find(|e| e.key.matches(app, target) && self.owns(app, target, &e.paints)).map(|e| e.key.clone())
+    }
+
+    fn owns(&self, app: &VectorcraftApp, target: &Target, paints: &TargetPaints) -> bool {
+        paints.shown == *target.paint() && app.session.gradient_edit_paints(!self.key.fill).is_ok_and(|now| now == paints.edited)
+    }
+
+    /// The popover now owns `paints`, taken at history step `step`; the paints it owned until now are kept as earlier
+    /// ones, with `was`, the stop or point they belonged to.
+    fn adopt(&mut self, paints: Arc<TargetPaints>, was: TargetKey, step: Option<(u64, u64)>) {
+        let old = std::mem::replace(&mut self.paints, paints);
+        let old_step = std::mem::replace(&mut self.step, step);
+        self.earlier.retain(|e| !Arc::ptr_eq(&e.paints, &old));
+        // Undo and Redo return only to the first or the last paints of one history step. The samples of a live drag
+        // between them replace each other, so a long drag does not push out the paints before it.
+        if let [.., before, last] = self.earlier.as_slice()
+            && before.step == old_step
+            && last.step == old_step
+        {
+            self.earlier.pop();
+        }
+        self.earlier.push(Earlier { step: old_step, key: was, paints: old });
+        if self.earlier.len() > Self::EARLIER {
+            self.earlier.remove(0);
+        }
+    }
 }
 
 impl Target {
+    fn paint(&self) -> &GradientPaint {
+        match self {
+            Self::Stop(paint, _) | Self::Point(paint, _, _) => paint,
+        }
+    }
+
     fn color(&self) -> Color {
         match self {
-            Target::Stop(stops, i) => stops.get(*i).map_or(Color::BLACK, |s| s.color),
-            Target::Point(p, _) => p.color,
+            Target::Stop(paint, i) => paint.gradient.stops[*i].color,
+            Target::Point(_, p, _) => p.color,
         }
     }
     fn opacity(&self) -> f32 {
         match self {
-            Target::Stop(stops, i) => stops.get(*i).map_or(1.0, |s| s.opacity),
-            Target::Point(p, _) => p.opacity,
+            Target::Stop(paint, i) => paint.gradient.stops[*i].opacity,
+            Target::Point(_, p, _) => p.opacity,
         }
     }
     /// The location of a stop or the spread of a point, 0 to 1.
     fn amount(&self) -> f32 {
         match self {
-            Target::Stop(stops, i) => stops.get(*i).map_or(0.0, |s| s.offset),
-            Target::Point(p, _) => p.spread,
+            Target::Stop(paint, i) => paint.gradient.stops[*i].offset,
+            Target::Point(_, p, _) => p.spread,
         }
     }
 }
 
 fn selected(app: &VectorcraftApp) -> Option<Target> {
     let Paint::Gradient(g) = active_paint(app) else { return None };
-    if g.gradient.kind == GradientKind::Freeform {
+    if edits_points(app, &g) {
         let f = shown_points(&g);
         let i = app.session.selected_freeform_point().filter(|i| *i < f.points.len())?;
-        return Some(Target::Point(f.points[i], i));
+        let point = f.points[i];
+        return Some(Target::Point(g, point, i));
     }
     let i = app.session.selected_stop().filter(|i| *i < g.gradient.stops.len())?;
-    Some(Target::Stop(g.gradient.stops, i))
+    Some(Target::Stop(g, i))
 }
 
 /// `stops` with stop `i` given `color`, linked to `link` (a global swatch and tint) or unlinked.
@@ -127,11 +290,16 @@ impl Tab {
 /// The fields set from outside the popover or edited in it, as percentages where the field is one; each `None` is
 /// a field left alone.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct PopoverFields {
+struct PopoverFields {
     color: Option<Color>,
     opacity: Option<f64>,
     location: Option<f64>,
     spread: Option<f64>,
+}
+
+pub(crate) struct PopoverAnswer {
+    target: TargetOwner,
+    fields: PopoverFields,
 }
 
 /// The target's values and what the Color panel shows, as `pump` last pushed them.
@@ -159,10 +327,15 @@ struct Filed {
     swatch: Option<(String, Color)>,
     eyedropper: bool,
     panels: Vec<ColorPanelOutput>,
+    /// Only an actual Shift-cycle changes this; an unchanged local snapshot must not overwrite a menu command.
+    mode: Option<ColorPanelMode>,
+    /// The mode whose row of the popover's Color mode menu ran its command this pass.
+    mode_command: Option<ColorPanelMode>,
 }
 
 /// The gradient stop popover.
 pub(crate) struct GradientStopPopover {
+    target: TargetOwner,
     /// Where it opened.
     pub(crate) anchor: Anchor,
     /// The view it shows.
@@ -174,11 +347,15 @@ pub(crate) struct GradientStopPopover {
     /// The fields set from outside, applied at confirm.
     set: PopoverFields,
     filed: Filed,
+    /// A command the popover's Color mode menu ran, which runs outside `pump`: the document's history step when it
+    /// ran, the mode it picked, and whether the Color panel already showed that mode at an earlier pass.
+    own_mode: Option<OwnMode>,
 }
 
 impl GradientStopPopover {
-    fn new(anchor: Anchor) -> Self {
+    fn new(anchor: Anchor, target: TargetOwner) -> Self {
         Self {
+            target,
             anchor,
             tab: Tab::default(),
             at: Pos2::ZERO,
@@ -186,6 +363,7 @@ impl GradientStopPopover {
             feed: None,
             set: PopoverFields::default(),
             filed: Filed::default(),
+            own_mode: None,
         }
     }
 
@@ -199,21 +377,24 @@ fn rejects(field: &str, value: &Value) -> String {
 }
 
 impl StackDialog for GradientStopPopover {
-    type Result = PopoverFields;
+    type Result = PopoverAnswer;
 
     fn id(&self) -> DialogId {
         dialog_id(KIND)
     }
 
-    fn show(&mut self, ui: &mut Ui, _stack: &DialogStack) -> Option<DialogResult<PopoverFields>> {
-        let Self { feed: Some(feed), tab, panel, filed, at, set, .. } = self else { return None };
+    fn show(&mut self, ui: &mut Ui, _stack: &DialogStack) -> Option<DialogResult<PopoverAnswer>> {
+        let Self { feed: Some(feed), tab, panel, filed, at, .. } = self else { return None };
         let mut open = true;
         let shown = Popover::new("Gradient stop", Bind::bound(&mut open))
             .at_point(*at)
             .close_on_enter(true)
             .show(ui, |ui, _| body(ui, feed, tab, panel, filed));
+        if shown.inner == Some(true) {
+            return Some(DialogResult::Cancel);
+        }
         match shown.output.closed {
-            Some(CloseReason::Enter) => Some(DialogResult::Ok(set.clone())),
+            Some(CloseReason::Enter) => self.confirm(ui.ctx()).map(DialogResult::Ok),
             Some(_) => Some(DialogResult::Cancel),
             None => None,
         }
@@ -255,16 +436,17 @@ impl StackDialog for GradientStopPopover {
     }
 
     /// OK (agents): the fields that were set, which `pump` applies; an untouched popover confirms to no change.
-    fn confirm(&mut self, _ctx: &egui::Context) -> Option<PopoverFields> {
-        Some(self.set.clone())
+    fn confirm(&mut self, _ctx: &egui::Context) -> Option<PopoverAnswer> {
+        Some(PopoverAnswer { target: self.target.clone(), fields: self.set.clone() })
     }
 }
 
 /// The popover's body: the tabs and the eyedropper, the Color panel or the swatches, then opacity and location (a
 /// point: spread). What the user edits is filed in `filed`.
-fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, filed: &mut Filed) {
+fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, filed: &mut Filed) -> bool {
+    let mut outside = false;
     Stack::new().show(ui, |ui, _| {
-        ui.horizontal(|ui| {
+        Row::new().show(ui, |ui, _| {
             let tabs = [
                 Entry::new(Tab::Color, tl!("Color").to_owned()).icon(IconId::new("palette")),
                 Entry::new(Tab::Swatches, tl!("Swatches").to_owned()).icon(IconId::new("swatch-book")),
@@ -275,25 +457,58 @@ fn body(ui: &mut Ui, feed: &Feed, tab: &mut Tab, panel: &mut ColorPanelState, fi
                 let tip = tl!("Eyedropper: click the art to sample the stop's colour").to_owned();
                 filed.eyedropper |= DropperButton::new(tip, Bind::given(false)).show(ui).edit.value() == Some(&true);
             }
+            if *tab == Tab::Color {
+                let (closed, picked) = mode_menu(ui, &feed.shown, panel.mode);
+                outside |= closed;
+                filed.mode_command = picked.or(filed.mode_command);
+            }
         });
         match *tab {
             // The Color panel edits the selected stop (or point) of the active gradient.
             Tab::Color => {
+                let before = panel.mode;
                 filed.panels.push(
                     ColorPanel::new(Bind::bound(&mut *panel), [feed.current; 2])
                         .layout(ColorPanelLayout::FillStroke)
                         .shown(feed.shown.clone())
                         .show(ui),
                 );
+                if panel.mode != before {
+                    filed.mode = Some(panel.mode);
+                }
             }
             Tab::Swatches => swatches(ui, feed, filed),
         }
-        ui.horizontal(|ui| {
+        Row::new().show(ui, |ui, _| {
             filed.fields.opacity = percent_field(ui, tl!("Opacity").to_owned(), feed.opacity).or(filed.fields.opacity);
             let (label, amount) = if feed.point { (tl!("Spread"), &mut filed.fields.spread) } else { (tl!("Location"), &mut filed.fields.location) };
             *amount = percent_field(ui, label.to_owned(), feed.amount).or(*amount);
         });
     });
+    outside
+}
+
+/// The Color panel's existing five mode commands. Native menu ownership keeps its parent popover
+/// open on a pick and gives the child the first Escape, including rows outside the parent bounds. Returns whether
+/// an outside press closed the menu, and the mode whose row ran its command.
+fn mode_menu(ui: &mut Ui, shown: &ColorPanelShown, fallback: ColorPanelMode) -> (bool, Option<ColorPanelMode>) {
+    let words = Env::of(ui).words::<ColorPanelWords>();
+    let label = match shown {
+        ColorPanelShown::Mode(mode) => mode.label(&words),
+        ColorPanelShown::Tint(_) => words.tint.clone(),
+        _ => fallback.label(&words),
+    };
+    let button = Button::new(label).popup(PopupKind::Menu).show(ui);
+    let mut picked = None;
+    let menu = Menu::new(tl!("Color mode")).opened_by(&button, Trigger::Click).show(ui, |ui, _| {
+        for mode in ColorPanelMode::FILL_STROKE {
+            if MenuItem::command(mode.command()).show(ui).ran {
+                picked = Some(mode);
+            }
+        }
+    });
+    // The child absorbs an outside press before its parent sees it. Close both for that event only.
+    (menu.output.closed == Some(CloseReason::Outside), picked)
 }
 
 /// Document swatches as tiles: a pick gives the stop (or point) that colour.
@@ -380,6 +595,9 @@ fn refresh(app: &VectorcraftApp, ctx: &egui::Context, id: DialogId, target: &Tar
     dialogs.with(|host| {
         if let Some(popover) = host.get_mut_by_id::<GradientStopPopover>(id) {
             (popover.at, popover.feed) = (at, Some(feed));
+            popover.panel = app.ui.color_panel;
+            // This panel edits the active stop/point, never the other paint behind the proxy.
+            popover.panel.background = false;
         }
     });
 }
@@ -390,15 +608,20 @@ pub(crate) fn open_at(app: &mut VectorcraftApp, index: usize, anchor: Anchor) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
     let Some(dialogs) = app.dialogs() else { return };
     if let Paint::Gradient(g) = active_paint(app)
-        && g.gradient.kind != GradientKind::Freeform
+        && !edits_points(app, &g)
         && app.session.selected_stop() != Some(index)
     {
         // An index past the last stop selects nothing, and `selected` then finds nothing to edit.
         app.run("gradient.selectStop", json!({ "index": index })).ok();
     }
     let Some(target) = selected(app) else { return };
+    let Some(key) = TargetKey::of(app, &target) else { return };
+    let Ok(edited) = app.session.gradient_edit_paints(!key.fill) else { return };
+    let paints = Arc::new(TargetPaints { shown: target.paint().clone(), edited });
+    let step = app.session.active().map(|st| st.history.step());
+    let restores = app.session.active().map(|st| st.history_restores);
     dialogs.with(|host| {
-        host.open(GradientStopPopover::new(anchor));
+        host.open(GradientStopPopover::new(anchor, TargetOwner::new(key, paints, step, restores)));
     });
     refresh(app, &ctx, dialog_id(KIND), &target);
 }
@@ -409,9 +632,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KIND);
     match dialogs.with(|host| host.take_by_id::<GradientStopPopover>(id)) {
-        Some(DialogResult::Ok(fields)) => {
+        Some(DialogResult::Ok(PopoverAnswer { target: owner, fields })) => {
             if fields != PopoverFields::default()
                 && let Some(target) = selected(app)
+                && owner.matches(app, &target)
             {
                 apply(app, &target, &fields);
             }
@@ -420,17 +644,50 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         Some(_) => return,
         None => {}
     }
-    if !dialogs.with(|host| host.is_open::<GradientStopPopover>()) {
+    let step = app.session.active().map(|st| st.history.step());
+    let restores = app.session.active().map(|st| st.history_restores);
+    let shown_mode = app.ui.color_panel.mode;
+    let Some((mut owner, own_mode)) = dialogs.with(|host| {
+        host.get_mut_by_id::<GradientStopPopover>(id).map(|popover| {
+            if let Some(mode) = popover.filed.mode_command.take() {
+                popover.own_mode = step.map(|from| OwnMode { from, mode, shown: false });
+            }
+            let own = popover.own_mode.as_mut().map_or(OwnModeNow::None, |pending| pending.now(step, shown_mode));
+            if own != OwnModeNow::Waiting {
+                popover.own_mode = None;
+            }
+            (popover.target.clone(), own == OwnModeNow::Edited)
+        })
+    }) else {
         return;
-    }
-    let Some(target) = selected(app) else {
-        // The stop or point went away (undo, another object selected): nothing left to edit.
+    };
+    let accepted = selected(app).and_then(|target| {
+        if owner.matches(app, &target) || (own_mode && owner.key.matches(app, &target)) {
+            Some((target, None))
+        } else {
+            owner.owned_earlier(app, &target, restores).map(|key| (target, Some(key)))
+        }
+    });
+    let Some((target, earlier)) = accepted else {
         dialogs.with(|host| host.cancel_by_id(ctx, id));
         return;
     };
+    // The stop or point the paints owned until now belong to, before Undo or Redo or this pass's edits move it.
+    let owned_key = owner.key.clone();
+    if let Some(key) = earlier {
+        owner.key = key;
+    }
+    owner.restores = restores;
     let filed = dialogs.with(|host| host.get_mut_by_id::<GradientStopPopover>(id).map(GradientStopPopover::take_filed)).unwrap_or_default();
     if filed.fields != PopoverFields::default() {
         apply(app, &target, &filed.fields);
+    }
+    if filed.fields.location.is_some()
+        && !owner.key.point
+        && let Some(index) = app.session.selected_stop()
+    {
+        // The stop can cross its neighbor when its location changes.
+        owner.key.index = index;
     }
     if let Some((name, color)) = filed.swatch
         && let Some(target) = selected(app)
@@ -441,25 +698,44 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         // PLAN: assumed `panels::color::apply_output(app, &ColorPanelOutput)` (color-w9's decision).
         crate::panels::color::apply_output(app, output);
     }
+    if let Some(mode) = filed.mode {
+        let target = crate::panels::color::target_now(app);
+        crate::panels::color::set_mode(app, &target, mode);
+    }
     if filed.eyedropper {
         dialogs.with(|host| host.cancel_by_id(ctx, id));
         crate::panels::gradient::stop_eyedropper(app);
         return;
     }
-    if let Some(target) = selected(app) {
-        refresh(app, ctx, id, &target);
+    let updated = selected(app).filter(|target| owner.key.matches(app, target)).zip(app.session.gradient_edit_paints(!owner.key.fill).ok());
+    let Some((target, edited)) = updated else {
+        dialogs.with(|host| host.cancel_by_id(ctx, id));
+        return;
+    };
+    // The popover can continue with the paints resulting from its own edits in this pass.
+    if owner.paints.shown != *target.paint() || owner.paints.edited != edited {
+        let step = app.session.active().map(|st| st.history.step());
+        owner.adopt(Arc::new(TargetPaints { shown: target.paint().clone(), edited }), owned_key, step);
     }
+    dialogs.with(|host| {
+        if let Some(popover) = host.get_mut_by_id::<GradientStopPopover>(id) {
+            popover.target = owner;
+        }
+    });
+    refresh(app, ctx, id, &target);
 }
 
 /// Gives the target the swatch `name`'s colour. A global or spot color (or a tint of one) stays linked, and the
 /// swatch's color keeps its model.
 fn pick_swatch(app: &mut VectorcraftApp, target: &Target, name: &str, color: Color) {
     match target {
-        Target::Stop(stops, i) => {
+        Target::Stop(paint, i) => {
             let link = crate::panels::gradient::dropped_link(app, &json!({ "swatch": name }));
-            set_stops_keeping_models(app, &recolor(stops.clone(), *i, color, link), Some(*i), Live::Released);
+            set_stops_keeping_models(app, &recolor(paint.gradient.stops.clone(), *i, color, link), Some(*i), Live::Released);
         }
-        Target::Point(_, i) => edit_point(app, "paint.freeform.setPoint", json!({ "index": i, "color": color_json(&color), "keepModel": true })),
+        Target::Point(_, _, i) => {
+            edit_point(app, "paint.freeform.setPoint", json!({ "index": i, "color": color_json(&color), "keepModel": true }));
+        }
     }
 }
 
@@ -467,8 +743,8 @@ fn pick_swatch(app: &mut VectorcraftApp, target: &Target, name: &str, color: Col
 fn apply(app: &mut VectorcraftApp, target: &Target, f: &PopoverFields) {
     let pct = |v: Option<f64>| v.map(|v| (v / 100.0).clamp(0.0, 1.0));
     match target {
-        Target::Stop(stops, i) => {
-            let (mut stops, mut i) = (stops.clone(), *i);
+        Target::Stop(paint, i) => {
+            let (mut stops, mut i) = (paint.gradient.stops.clone(), *i);
             if let Some(c) = f.color {
                 stops = recolor(stops, i, c, None);
             }
@@ -482,7 +758,7 @@ fn apply(app: &mut VectorcraftApp, target: &Target, f: &PopoverFields) {
             }
             set_stops(app, &stops, Some(i), Live::Released);
         }
-        Target::Point(_, i) => {
+        Target::Point(_, _, i) => {
             let mut p = json!({ "index": i });
             if let Some(c) = f.color {
                 p["color"] = color_json(&c);
@@ -499,6 +775,8 @@ fn apply(app: &mut VectorcraftApp, target: &Target, f: &PopoverFields) {
 
 #[cfg(test)]
 mod tests {
+    use craft::behavior::{EditEvent, GestureId, Mixed};
+    use craft::color_ui::ui::{PanelTarget, PickedColor};
     use vectorcraft_engine::Session;
 
     use super::*;
@@ -565,7 +843,7 @@ mod tests {
 
     fn stops(app: &VectorcraftApp) -> Vec<GradientStop> {
         match selected(app) {
-            Some(Target::Stop(stops, _)) => stops,
+            Some(Target::Stop(paint, _)) => paint.gradient.stops,
             _ => panic!("no stop selected"),
         }
     }
@@ -592,12 +870,315 @@ mod tests {
     }
 
     #[test]
+    fn the_popover_discards_a_pending_edit_after_selecting_other_art() {
+        let mut app = app();
+        let first = app.session.doc().unwrap().selection.objects[0];
+        let gradient = json!({"stops": [{"offset": 0, "color": "#000000"}, {"offset": 0.5, "color": "#0000ff"}, {"offset": 1, "color": "#ffffff"}]});
+        let second = app.run("shape.rectangle", json!({"x": 230, "y": 80, "width": 50, "height": 90})).unwrap()["id"].clone();
+        app.run("paint.setFill", json!({"gradient": gradient})).unwrap();
+        app.run("select.set", json!({"ids": [first.0]})).unwrap();
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        confirm(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, before);
+        assert!(!is_open(&app));
+
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        confirm(&mut app);
+        assert_eq!(stops(&app)[1].opacity, 0.25);
+    }
+
+    #[test]
+    fn the_popover_discards_a_pending_edit_after_file_revert() {
+        let mut app = app();
+        let dir = vectorcraft_testkit::TempDir::new("gradient-stop-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let art = app.session.doc().unwrap().selection.objects[0];
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [art.0]})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        let before = app.session.doc().unwrap().doc.clone();
+        confirm(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, before, "OK must leave the restored gradient as it is");
+        assert!(!is_open(&app));
+
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        confirm(&mut app);
+        assert_eq!(stops(&app)[1].opacity, 0.25);
+    }
+
+    #[test]
+    fn the_popover_does_not_send_live_edits_to_another_stop() {
+        let mut app = app();
+        open_popover(&mut app);
+        let dialogs = app.dialogs().unwrap();
+        let ctx = ctx(&app);
+        dialogs.with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.opacity = Some(25.0);
+        });
+        app.run("gradient.selectStop", json!({"index": 2})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app));
+        assert_eq!(stops(&app)[2].opacity, 1.0);
+    }
+
+    fn replace_gradient(app: &mut VectorcraftApp) {
+        let stops = json!([{"offset": 0, "color": "#000000"}, {"offset": 0.5, "color": "#0000ff"}, {"offset": 1, "color": "#ffffff"}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": stops, "start": [100, 150], "end": [200, 150]}})).unwrap();
+        assert_eq!(app.session.selected_stop(), Some(1));
+    }
+
+    #[test]
+    fn the_popover_discards_confirmed_edits_to_a_replacement_gradient() {
+        let mut app = app();
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        let ctx = ctx(&app);
+        app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, dialog_id(KIND)));
+        replace_gradient(&mut app);
+        host::pump(&mut app, &ctx);
+        assert_eq!(stops(&app)[1].opacity, 1.0, "the finished answer belongs to the original gradient");
+    }
+
+    #[test]
+    fn the_popover_discards_live_edits_to_a_replacement_gradient() {
+        let mut app = app();
+        open_popover(&mut app);
+        app.dialogs().unwrap().with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.opacity = Some(25.0);
+        });
+        replace_gradient(&mut app);
+        let ctx = ctx(&app);
+        host::pump(&mut app, &ctx);
+        assert_eq!(stops(&app)[1].opacity, 1.0, "the live edit belongs to the original gradient");
+        assert!(!is_open(&app));
+    }
+
+    #[test]
+    fn a_mode_command_that_changes_nothing_stops_counting_as_its_own_edit() {
+        let (from, other) = ((3, 0), ColorPanelMode::FILL_STROKE[0]);
+        let picked = ColorPanelMode::FILL_STROKE[1];
+        let mut pending = OwnMode { from, mode: picked, shown: false };
+        assert!(OwnModeNow::Waiting == pending.now(Some(from), other), "the command has not run yet");
+        assert!(OwnModeNow::Waiting == pending.now(Some(from), picked), "the panel shows the mode; one more pass");
+        assert!(OwnModeNow::Unchanged == pending.now(Some(from), picked), "no history step followed: nothing changed");
+        let mut pending = OwnMode { from, mode: picked, shown: false };
+        assert!(OwnModeNow::Edited == pending.now(Some((4, 0)), picked), "the first new step is the command's own");
+    }
+
+    #[test]
+    fn undo_after_a_stop_crosses_its_neighbor_does_not_edit_the_neighbor() {
+        let mut app = app();
+        open_at(&mut app, 0, Anchor::Screen(egui::pos2(200.0, 200.0)));
+        assert!(is_open(&app));
+        let ctx = ctx(&app);
+        let edit = |app: &VectorcraftApp, fields: PopoverFields| {
+            app.dialogs().unwrap().with(|host| host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields = fields);
+        };
+        edit(&app, PopoverFields { location: Some(75.0), ..PopoverFields::default() });
+        host::pump(&mut app, &ctx);
+        assert_eq!(app.session.selected_stop(), Some(1), "the stop crossed its neighbor");
+        app.run("edit.undo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        if is_open(&app) {
+            edit(&app, PopoverFields { opacity: Some(25.0), ..PopoverFields::default() });
+            host::pump(&mut app, &ctx);
+            let stops = stops(&app);
+            assert!(stops[0].opacity < 1.0, "the edit reaches the stop the popover opened on");
+            assert_eq!(stops[1].opacity, 1.0, "the neighbor is left alone");
+        }
+    }
+
+    #[test]
+    fn redo_after_a_stop_crosses_its_neighbor_does_not_reopen_on_the_neighbor() {
+        let mut app = app();
+        open_at(&mut app, 0, Anchor::Screen(egui::pos2(200.0, 200.0)));
+        let ctx = ctx(&app);
+        app.dialogs().unwrap().with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.location = Some(75.0);
+        });
+        host::pump(&mut app, &ctx);
+        assert_eq!(app.session.selected_stop(), Some(1), "the stop crossed its neighbor");
+        app.run("edit.undo", json!({})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app), "Undo returns to the paint it owned on stop 0");
+        app.run("edit.redo", json!({})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 0})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app), "after Redo, stop 0 is the neighbor");
+    }
+
+    #[test]
+    fn its_earlier_paint_set_again_from_elsewhere_closes_the_popover() {
+        let mut app = app();
+        open_popover(&mut app);
+        let ctx = ctx(&app);
+        let queue = |app: &VectorcraftApp, opacity: f64| {
+            app.dialogs().unwrap().with(|host| {
+                host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.opacity = Some(opacity);
+            });
+        };
+        queue(&app, 25.0);
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app) && stops(&app)[1].opacity < 1.0, "the live edit applied");
+        // The fixture's gradient again, set without Undo.
+        let stops_json = json!([{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#000000"}]);
+        app.run("paint.setFill", json!({"gradient": {"stops": stops_json, "start": [100, 150], "end": [200, 150]}})).unwrap();
+        assert_eq!(app.session.selected_stop(), Some(1));
+        queue(&app, 50.0);
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app), "a gradient from elsewhere closes it, even one it owned before");
+        assert_eq!(stops(&app)[1].opacity, 1.0, "the pending edit is discarded");
+    }
+
+    #[test]
+    fn undo_after_a_long_live_drag_keeps_the_popover_open() {
+        let mut app = app();
+        open_popover(&mut app);
+        let ctx = ctx(&app);
+        let dialogs = app.dialogs().unwrap();
+        let gesture = GestureId::new(1);
+        let pick = |hex: &str| PickedColor::rgb(Srgba::from_hex(hex).unwrap());
+        let before = pick("#00ff00");
+        let original = stops(&app)[1].color.to_hex();
+        let samples = (0..2 * TargetOwner::EARLIER).map(|i| EditEvent::update(gesture, pick(&format!("#{:02x}0000", 40 + i))));
+        for edit in samples.chain([EditEvent::commit(gesture, Mixed::Same(before), pick("#0000ff"))]) {
+            let mut edit = Some(edit);
+            ctx.run_ui(Default::default(), |ui| {
+                let Some(edit) = edit.take() else { return };
+                let mut state = ColorPanelState::default();
+                let mut output = ColorPanel::new(Bind::bound(&mut state), [before.color; 2]).show(ui);
+                output.edits.push((PanelTarget::Foreground, edit));
+                dialogs.with(|host| {
+                    host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.panels.push(output);
+                });
+            })
+            .textures_delta
+            .clear();
+            host::pump(&mut app, &ctx);
+        }
+        assert_eq!(stops(&app)[1].color.to_hex(), "#0000ff");
+        app.run("edit.undo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert_eq!(stops(&app)[1].color.to_hex(), original, "Undo returns to the paint before the drag");
+        assert!(is_open(&app), "the paint before the drag is still the popover's own");
+    }
+
+    #[test]
+    fn undo_of_its_own_edit_keeps_the_popover_open() {
+        let mut app = app();
+        open_popover(&mut app);
+        app.dialogs().unwrap().with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.opacity = Some(25.0);
+        });
+        let ctx = ctx(&app);
+        host::pump(&mut app, &ctx);
+        assert!(stops(&app)[1].opacity < 1.0, "the live edit applied");
+        app.run("edit.undo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert_eq!(stops(&app)[1].opacity, 1.0);
+        assert!(is_open(&app), "Undo returns to a paint the popover owned");
+        app.run("edit.redo", json!({})).unwrap();
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app), "Redo returns to a paint the popover owned");
+        replace_gradient(&mut app);
+        host::pump(&mut app, &ctx);
+        assert!(!is_open(&app), "a gradient from elsewhere still closes it");
+    }
+
+    #[test]
+    fn discards_edits_when_only_a_secondary_selected_gradient_is_replaced() {
+        let mut app = app();
+        let first = app.session.active().unwrap().selection.objects[0];
+        let second = app.run("shape.rectangle", json!({"x": 230, "y": 80, "width": 50, "height": 90})).unwrap()["id"].clone();
+        let initial = json!({"stops": [{"offset": 0, "color": "#ffffff"}, {"offset": 0.5, "color": "#00ff00"}, {"offset": 1, "color": "#000000"}],
+            "start": [100, 150], "end": [200, 150]});
+        app.run("paint.setFill", json!({"id": second, "gradient": initial})).unwrap();
+        app.run("select.set", json!({"ids": [first.0, second]})).unwrap();
+        app.run("gradient.selectStop", json!({"index": 1})).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects[0], first);
+        open_popover(&mut app);
+        set(&app, "opacity", json!(25)).unwrap();
+        let proxy = active_paint(&app);
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let gradient = json!({"stops": [{"offset": 0, "color": "#000000"}, {"offset": 0.5, "color": "#0000ff"}, {"offset": 1, "color": "#ffffff"}]});
+        app.run("paint.setFill", json!({"id": second, "gradient": gradient})).unwrap();
+        assert_eq!(app.session.active().unwrap().selection.objects, selected);
+        assert_eq!(app.session.selected_stop(), Some(1));
+        assert_eq!(active_paint(&app), proxy);
+        let before = app.session.active().unwrap().doc.clone();
+        confirm(&mut app);
+        assert!(app.session.active().unwrap().doc == before, "the edit must not overwrite the secondary replacement");
+    }
+
+    #[test]
+    fn its_live_color_drag_stays_open_and_commits_once() {
+        let mut app = app();
+        open_popover(&mut app);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let ctx = ctx(&app);
+        let dialogs = app.dialogs().unwrap();
+        let gesture = GestureId::new(1);
+        let pick = |hex| PickedColor::rgb(Srgba::from_hex(hex).unwrap());
+        let before = pick("#00ff00");
+        for (edit, expected) in
+            [(EditEvent::update(gesture, pick("#ff0000")), "#ff0000"), (EditEvent::commit(gesture, Mixed::Same(before), pick("#0000ff")), "#0000ff")]
+        {
+            let mut edit = Some(edit);
+            ctx.run_ui(Default::default(), |ui| {
+                let Some(edit) = edit.take() else { return };
+                let mut state = ColorPanelState::default();
+                let mut output = ColorPanel::new(Bind::bound(&mut state), [before.color; 2]).show(ui);
+                output.edits.push((PanelTarget::Foreground, edit));
+                dialogs.with(|host| {
+                    host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.panels.push(output);
+                });
+            })
+            .textures_delta
+            .clear();
+            host::pump(&mut app, &ctx);
+            assert!(is_open(&app));
+            assert_eq!(stops(&app)[1].color.to_hex(), expected);
+        }
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    }
+
+    #[test]
+    fn the_popover_keeps_editing_the_stop_after_moving_it() {
+        let mut app = app();
+        open_popover(&mut app);
+        app.dialogs().unwrap().with(|host| {
+            host.get_mut_by_id::<GradientStopPopover>(dialog_id(KIND)).unwrap().filed.fields.location = Some(100.0);
+        });
+        let ctx = ctx(&app);
+        host::pump(&mut app, &ctx);
+        assert!(is_open(&app));
+        assert_eq!(app.session.selected_stop(), Some(2));
+        set(&app, "opacity", json!(25)).unwrap();
+        confirm(&mut app);
+        assert_eq!(stops(&app)[1].opacity, 1.0);
+        assert_eq!(stops(&app)[2].opacity, 0.25);
+    }
+
+    #[test]
     fn on_a_freeform_gradient_it_edits_the_selected_point() {
         let mut app = app();
         app.run("paint.editGradient", json!({"kind": "freeform"})).unwrap();
         app.run("paint.freeform.addPoint", json!({"at": [150, 150], "color": "#0000ff"})).unwrap();
         let point = |app: &VectorcraftApp| match selected(app) {
-            Some(Target::Point(p, i)) => (p, i),
+            Some(Target::Point(_, p, i)) => (p, i),
             _ => panic!("no point selected"),
         };
         let (p, i) = point(&app);

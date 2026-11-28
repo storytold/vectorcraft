@@ -1,5 +1,4 @@
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
 
 /// Invalid roots must exit before desktop initialization on every platform, including a CI
 /// machine with no display. A regression must fail rather than hang with a window open.
@@ -7,9 +6,14 @@ fn rejects(args: &[&str], message: &str) {
     rejects_with_env(args, &[], message);
 }
 
+/// Runs the desktop binary without a display, so on Linux a regression exits with a display
+/// error, which the exact stderr check rejects, instead of opening a window.
 fn rejects_with_env(args: &[&str], env: &[(&str, &str)], message: &str) {
-    let mut child = Command::new(crate::bin())
+    let child = Command::new(crate::bin())
         .args(args)
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("WAYLAND_SOCKET")
         .env_remove("VECTORCRAFT_CONTROL_PORT")
         .env_remove("VECTORCRAFT_AUTOMATION_READ_ROOT")
         .env_remove("VECTORCRAFT_AUTOMATION_WRITE_ROOT")
@@ -20,21 +24,7 @@ fn rejects_with_env(args: &[&str], env: &[(&str, &str)], message: &str) {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    // Long enough for the binary to start on a loaded machine (the workspace's other tests run
-    // meanwhile), short enough to catch a desktop that started instead of exiting.
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let timed_out = loop {
-        if child.try_wait().unwrap().is_some() {
-            break false;
-        }
-        if Instant::now() >= deadline {
-            child.kill().unwrap();
-            break true;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    };
-    let out = child.wait_with_output().unwrap();
-    assert!(!timed_out, "{args:?}: desktop started or did not exit promptly");
+    let out = crate::exit_output(child, &format!("{args:?}: the desktop started instead of exiting"));
     assert!(!out.status.success(), "{args:?}");
     assert!(out.stdout.is_empty(), "{args:?}: {:?}", out.stdout);
     // Exact stderr excludes unrelated startup warnings or display errors that could otherwise

@@ -260,7 +260,7 @@ pub(super) struct SelectionWidgets {
 
 impl SelectionWidgets {
     fn new(layout: Layout) -> Self {
-        SelectionWidgets { common: Common::new(), layout, presses: vec![] }.label("Selection widgets")
+        SelectionWidgets { common: Common::new(), layout, presses: vec![] }.label(tl!("Selection widgets"))
     }
 }
 
@@ -531,26 +531,34 @@ pub(super) fn end_hidden(app: &mut VectorcraftApp, held: &mut Option<Held>, layo
     }
 }
 
-/// Which widgets the app's tool and view show.
-pub(super) fn shown(app: &VectorcraftApp) -> Show {
-    let tool = app.session.tool_id();
+/// Which widgets `tool` and the app's view show. `tool` is the tool whose widgets the canvas shows
+/// ([`super::shown_tool`]): while Cmd is held, the selection tool a press borrows.
+pub(super) fn shown(app: &VectorcraftApp, tool: &str) -> Show {
     let revolve_edit = super::revolve_editing(app);
     let selecting = tool == "selection" && app.ui.view.edges && !revolve_edit;
     Show { nine: true, selecting, shaper: matches!(tool, "shaper" | "selection") && !revolve_edit, trace: selecting && !app.outline_view() }
 }
 
 /// Shows the widgets over the document and runs the presses on them. Runs before the tool host, so a press on a part
-/// never reaches the tool.
+/// never reaches the tool. While Cmd lends the Selection tool, its widgets show and take a press as that tool's,
+/// without Cmd, and a press on one keeps them until the release.
 pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSpace, win: super::Win, kind: BodyKind) {
     if kind != BodyKind::Live || app.ui.screen_mode == 3 {
         return;
     }
-    let (visible, info) = (shown(app), app.view_info());
-    let layout = app.session.with_tool_context(info, |cx| Layout::of(cx, &space.view, visible));
     let id = super::canvas_id(win).with("selection_widget_drag");
+    let tool_id = id.with("tool");
     let mut held: Option<Held> = ui.data(|d| d.get_temp::<Option<Held>>(id)).flatten();
+    let tool = match held {
+        Some(_) => ui.data(|d| d.get_temp::<&'static str>(tool_id)),
+        None => None,
+    }
+    .unwrap_or_else(|| super::shown_tool(app, ui.ctx()));
+    let lent = tool != app.session.tool_id();
+    let (visible, info) = (shown(app, tool), app.view_info());
+    let layout = app.session.with_tool_context(info, |cx| Layout::of(cx, &space.view, visible));
     end_hidden(app, &mut held, &layout);
-    let out = SelectionWidgets::new(layout).show(ui);
+    let out = SelectionWidgets::new(layout).show_at(ui, space.view.rect);
     for (widget, press) in out.presses {
         if !press.phase.start().is_some_and(|s| s.button == PointerButton::Primary) {
             continue;
@@ -563,7 +571,13 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &CanvasSp
             PressPhase::Cancel { .. } => Gesture::Cancel,
             _ => continue,
         };
-        advance(app, &mut held, widget, g, super::tool_adapter::tool_mods(press.mods, false));
+        let mut mods = super::tool_adapter::tool_mods(press.mods, false);
+        // The lent tool takes the press as a plain one, as the session lends it.
+        mods.cmd &= !lent;
+        advance(app, &mut held, widget, g, mods);
     }
-    ui.data_mut(|d| d.insert_temp(id, held));
+    ui.data_mut(|d| {
+        d.insert_temp(id, held);
+        d.insert_temp(tool_id, tool);
+    });
 }

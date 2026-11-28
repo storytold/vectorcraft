@@ -61,10 +61,141 @@ fn open(app: &mut VectorcraftApp) {
     assert_eq!(kind(app).as_deref(), Some(export_for_screens::KIND));
 }
 
+#[test]
+fn the_first_artboard_is_clickable_on_open_in_a_short_web_viewport() {
+    use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
+
+    for view in ["grid", "list"] {
+        let (mut app, log) = app(2, true);
+        app.run("artboard.rename", json!({"indices": [0], "name": "First audit board"})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(640.0, 500.0));
+        let mut time = 0.0;
+        let mut draw = |app: &mut VectorcraftApp, events| {
+            time += 0.2;
+            crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() })
+        };
+        draw(&mut app, vec![]);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        for _ in 0..5 {
+            draw(&mut app, vec![]);
+        }
+        let out = draw(&mut app, vec![]);
+        let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+        let bounds = nodes
+            .iter()
+            .find_map(|(_, node)| {
+                if node.role() == Role::CheckBox && node.label().is_some_and(|label| label.contains("First audit board")) {
+                    node.bounds()
+                } else {
+                    None
+                }
+            })
+            .expect("the first artboard has a checkbox");
+        let pos = pos2(((bounds.x0 + bounds.x1) / 2.0) as f32, ((bounds.y0 + bounds.y1) / 2.0) as f32);
+
+        assert_eq!(field(&app, "boards"), json!([true, true]));
+        draw(&mut app, vec![Event::PointerMoved(pos)]);
+        for pressed in [true, false] {
+            draw(&mut app, vec![Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+        }
+        draw(&mut app, vec![]);
+        assert_eq!(field(&app, "boards"), json!([false, true]), "the first {view} checkbox should be clickable without scrolling");
+        assert!(log.borrow().is_empty());
+    }
+}
+
 /// Presses OK, which the dialog refuses or does not offer: it stays open.
 fn stays_open(app: &mut VectorcraftApp) {
     let _ = try_confirm(app);
     assert_eq!(kind(app).as_deref(), Some(export_for_screens::KIND));
+}
+
+#[test]
+fn a_queued_download_requires_fresh_confirmation_after_file_revert() {
+    use craft::ui::dialog::{HeldOk, dialog_id};
+
+    for artboards in [1, 2] {
+        let dir = vectorcraft_testkit::TempDir::new("screens-held-revert");
+        let path = dir.join("saved.vectorcraft").to_string_lossy().into_owned();
+        let (mut app, log) = app(artboards, true);
+        app.run("artboard.rename", json!({"indices": [0], "name": "Saved"})).unwrap();
+        app.session.execute("document.save", &json!({"path": path})).unwrap();
+        app.run("artboard.rename", json!({"indices": [0], "name": "Edited"})).unwrap();
+        let uid = app.session.active().unwrap().uid;
+        let reverts = app.session.active().unwrap().reverts;
+        open(&mut app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialogs = app.dialogs().unwrap();
+        let id = dialog_id(export_for_screens::KIND);
+        assert!(!dialogs.with(|host| host.confirm_by_id(&ctx, id)));
+        assert_eq!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Waiting));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        assert_eq!(app.session.active().unwrap().uid, uid);
+        assert!(app.session.active().unwrap().reverts > reverts, "the actual file was loaded back into its tab");
+        let settings = app.session.active().unwrap().doc.export_settings.clone();
+        export_for_screens::pump(&mut app, &ctx);
+        assert!(log.borrow().is_empty(), "the retired drawing's approval exports no restored content");
+        assert_eq!(app.session.active().unwrap().doc.export_settings, settings);
+        assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+        try_confirm(&mut app).unwrap();
+        let log = log.borrow();
+        let [(name, bytes)] = log.as_slice() else { panic!("one download") };
+        if artboards == 1 {
+            assert_eq!(name, "Saved.png");
+        } else {
+            let names = zip_names(bytes);
+            assert!(names.iter().any(|name| name.ends_with("Saved.png")));
+            assert!(!names.iter().any(|name| name.contains("Edited")));
+        }
+    }
+}
+
+#[test]
+fn a_queued_download_still_uses_ordinary_edits_in_the_same_loaded_drawing() {
+    use craft::ui::dialog::dialog_id;
+
+    let (mut app, log) = app(1, true);
+    open(&mut app);
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
+    let id = dialog_id(export_for_screens::KIND);
+    assert!(!dialogs.with(|host| host.confirm_by_id(&ctx, id)));
+    app.run("artboard.rename", json!({"indices": [0], "name": "Current"})).unwrap();
+    export_for_screens::pump(&mut app, &ctx);
+    assert_eq!(log.borrow().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["Current.png"]);
+}
+
+#[test]
+fn a_queued_export_requires_fresh_confirmation_after_switching_documents() {
+    use craft::ui::dialog::{HeldOk, dialog_id};
+
+    let (mut app, log) = app(1, true);
+    let source = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 40, "height": 30})).unwrap();
+    app.run("artboard.rename", json!({"indices": [0], "name": "Destination"})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    app.run("window.previousDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, source);
+    open(&mut app);
+
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialogs = app.dialogs().unwrap();
+    let id = dialog_id(export_for_screens::KIND);
+    dialogs.with(|host| {
+        assert!(!host.confirm_by_id(&ctx, id));
+        assert_eq!(host.held_state(id), Some(HeldOk::Waiting));
+    });
+    app.run("window.nextDocument", json!({})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, destination);
+    export_for_screens::pump(&mut app, &ctx);
+
+    assert!(log.borrow().is_empty(), "the earlier OK cannot download from the destination tab");
+    assert!(matches!(dialogs.with(|host| host.held_state(id)), Some(HeldOk::Refused(_))));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(log.borrow().iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["Destination.png"]);
 }
 
 fn temp_folder(tag: &str) -> std::path::PathBuf {
@@ -159,6 +290,42 @@ fn checked_artboards_read_as_a_range() {
         (vec![false], ""),
     ] {
         assert_eq!(export_for_screens::range_text(&boards), text);
+    }
+}
+
+/// The rect the frame `shapes` paint `texture` over; `None` when none paints it.
+fn painted(shapes: &[egui::epaint::ClippedShape], texture: egui::TextureId) -> Option<egui::Rect> {
+    fn walk(shape: &egui::Shape, texture: egui::TextureId, out: &mut Option<egui::Rect>) {
+        match shape {
+            egui::Shape::Vec(all) => all.iter().for_each(|s| walk(s, texture, out)),
+            egui::Shape::Mesh(mesh) if mesh.texture_id == texture => {
+                let at = mesh.calc_bounds();
+                *out = Some(out.map_or(at, |r| r.union(at)));
+            }
+            _ => {}
+        }
+    }
+    let mut out = None;
+    shapes.iter().for_each(|clipped| walk(&clipped.shape, texture, &mut out));
+    out
+}
+
+/// The grid's tiles and the list's thumbnails are square; an artboard of another shape keeps its
+/// proportions in them.
+#[test]
+fn an_artboards_picture_keeps_its_proportions() {
+    let (mut app, _) = app(1, false);
+    open(&mut app);
+    for view in ["grid", "list"] {
+        set(&mut app, "view", json!(view));
+        frame(&mut app);
+        let ctx = app.ui_ctx.clone().expect("a test app has a window");
+        let out = crate::testing::part_frame(&mut app, &ctx, Default::default(), |app, ui| app.ui(ui));
+        let tex = app.canvas.artboard_thumbs.as_ref().and_then(|(_, thumbs)| thumbs.first().cloned().flatten()).expect("the artboard has a picture");
+        let drawn = painted(&out.shapes, tex.id()).expect("the artboard's picture is drawn");
+        let (picture, shown) = (tex.size_vec2(), drawn.size());
+        assert!(picture.x > picture.y, "the 60×40 pt artboard is wider than high");
+        assert!((shown.x / shown.y - picture.x / picture.y).abs() < 0.02, "{view}: a {picture:?} picture is drawn {shown:?}");
     }
 }
 
@@ -801,18 +968,25 @@ fn big_tiff_tags(bytes: &[u8]) -> Vec<(u16, u16, u32, u16)> {
 }
 
 /// Frames of the app's own window (`app.ui_ctx`, where its dialogs are) with the accessibility
-/// tree, input events and a clock; each frame runs the dialog layer's pump after it.
+/// tree, input events and a clock; each frame runs the dialog layer's pump after it. The window is
+/// 1280 by 900 unless `sized` gives another size.
 #[derive(Default)]
 pub(super) struct Window {
     time: f64,
+    size: Option<egui::Vec2>,
 }
 
 impl Window {
+    /// A window of `size` instead of the default 1280 by 900.
+    fn sized(size: egui::Vec2) -> Self {
+        Self { size: Some(size), ..Self::default() }
+    }
+
     fn run(&mut self, app: &mut VectorcraftApp, events: Vec<egui::Event>) -> egui::FullOutput {
         let ctx = app.ui_ctx.clone().expect("a test app has a window");
         ctx.enable_accesskit();
         self.time += 0.1;
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, self.size.unwrap_or(egui::vec2(1280.0, 900.0)));
         let input = egui::RawInput { events, time: Some(self.time), screen_rect: Some(screen), ..Default::default() };
         // The window's frame with the app's frame input, as the hosts run it: the controls' commands reach the app.
         let out = crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui));
@@ -1375,6 +1549,30 @@ fn renaming_an_artboard_in_export_for_screens_renames_it() {
     }
 }
 
+/// A rename begun before File Revert cannot rename an artboard restored from the saved file.
+#[test]
+fn an_artboard_name_cannot_reach_the_contents_loaded_by_file_revert() {
+    for view in ["grid", "list"] {
+        let dir = vectorcraft_testkit::TempDir::new("screens-rename-revert");
+        let path = dir.join("saved.vectorcraft").to_string_lossy().into_owned();
+        let (mut app, log) = app(2, true);
+        app.session.execute("document.save", &json!({"path": path})).unwrap();
+        app.run("shape.rectangle", json!({"x": 1, "y": 1, "width": 5, "height": 5})).unwrap();
+        let reverts = app.session.active().unwrap().reverts;
+        let mut w = Window::default();
+        w.names(&mut app);
+        open(&mut app);
+        set(&mut app, "view", json!(view));
+        type_artboard_name(&mut w, &mut app, "2  Artboard 2", "Retired Name");
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        assert!(app.session.active().unwrap().reverts > reverts);
+        w.key(&mut app, egui::Key::Enter);
+        assert_eq!(app.session.active().unwrap().doc.artboards[1].name, "Artboard 2");
+        assert!(app.session.active().unwrap().history.undo.is_empty());
+        assert!(log.borrow().is_empty(), "the stale name does not export either");
+    }
+}
+
 /// A name typed while another document becomes active (a command from the control channel or MCP)
 /// renames no artboard of the active document.
 #[test]
@@ -1392,4 +1590,83 @@ fn an_artboard_name_stays_with_its_document() {
     assert_eq!(names(&app, 0), ["Artboard 1", "Artboard 2"]);
     assert_eq!(names(&app, 1), ["Artboard 1", "Artboard 2"]);
     assert!(log.borrow().is_empty(), "renaming must not export");
+}
+
+/// In a window of the default size and in one of the app's least size, every control of the dialog stays between its
+/// sides, the format rows stay in the right column, and in the default window the Formats heading's buttons end at
+/// the column's right edge.
+#[test]
+fn the_format_rows_fit_the_right_column_at_the_default_and_least_window_sizes() {
+    let rows = json!([
+        {"scale": "1x", "suffix": "", "format": "png"},
+        {"scale": "2x", "suffix": "@2x-long-suffix", "format": "jpg", "quality": 100},
+        {"scale": "100w", "format": "pdf"},
+    ]);
+    // The default window, then the least size the desktop app's window takes.
+    for (size, default) in [(egui::vec2(1280.0, 900.0), true), (egui::vec2(800.0, 500.0), false)] {
+        let (mut app, _) = app(2, false);
+        let mut w = Window::sized(size);
+        w.run(&mut app, vec![]);
+        open(&mut app);
+        set(&mut app, "formats", rows.clone());
+        w.run(&mut app, vec![]);
+        let out = w.run(&mut app, vec![]);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let rect = |n: &egui::accesskit::Node| {
+            n.bounds().map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+        };
+        let find = |label: &str, role: Role| {
+            nodes
+                .iter()
+                .find(|(_, n)| n.label() == Some(label) && n.role() == role)
+                .and_then(|(_, n)| rect(n))
+                .unwrap_or_else(|| panic!("no {role:?} {label:?}"))
+        };
+        let Some((dialog_id, dialog)) = nodes.iter().find(|(_, n)| n.role() == Role::Dialog) else { panic!("no dialog at {size:?}") };
+        let dialog = rect(dialog).expect("the dialog's bounds");
+        // The Export to: section spans the right column.
+        let column = find("Export to:", Role::Group);
+        let by_id: std::collections::HashMap<_, _> = nodes.iter().map(|(id, n)| (*id, n)).collect();
+        let mut under = vec![*dialog_id];
+        while let Some(id) = under.pop() {
+            let Some(n) = by_id.get(&id) else { continue };
+            under.extend(n.children().iter().copied());
+            if let Some(r) = rect(n) {
+                assert!(
+                    r.left() >= dialog.left() - 0.5 && r.right() <= dialog.right() + 0.5,
+                    "{:?} {:?} at {r:?} is outside the dialog at {dialog:?} in a {size:?} window",
+                    n.role(),
+                    n.label()
+                );
+            }
+        }
+        // Each control with how many of it the three rows show.
+        let format_rows = [
+            ("Formats:", Role::Label, 1),
+            ("iOS", Role::Button, 1),
+            ("Android", Role::Button, 1),
+            ("Format Presets", Role::Button, 1),
+            ("Format Settings", Role::Button, 1),
+            ("Scale", Role::ComboBox, 3),
+            ("Suffix", Role::TextInput, 3),
+            ("Format", Role::ComboBox, 3),
+            ("Remove", Role::Button, 3),
+            ("+ Add Scale", Role::Button, 1),
+        ];
+        for (label, role, count) in format_rows {
+            let shown: Vec<_> = nodes.iter().filter(|(_, n)| n.label() == Some(label) && n.role() == role).collect();
+            assert_eq!(shown.len(), count, "{role:?} {label:?} in a {size:?} window");
+            for (_, n) in shown {
+                let r = rect(n).expect("bounds");
+                assert!(
+                    r.left() >= column.left() - 0.5 && r.right() <= column.right() + 0.5,
+                    "{label} at {r:?} is outside the column at {column:?} in a {size:?} window"
+                );
+            }
+        }
+        if default {
+            let gear = find("Format Settings", Role::Button);
+            assert!((gear.right() - column.right()).abs() <= 0.5, "the gear at {gear:?} ends at the column's edge {column:?}");
+        }
+    }
 }

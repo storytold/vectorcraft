@@ -144,7 +144,7 @@ fn list_events_and_menu_rows_reach_their_commands() {
     assert!(run(&mut app, "ui.artboards.rename", &json!({})).is_some());
     assert_eq!(app.ui.artboards_ui.rename, Some(2));
     assert!(run(&mut app, "ui.artboards.nothing", &json!({})).is_none());
-    assert_eq!(menu_rows(&app).len(), 11);
+    assert_eq!(menu_rows(&app).len(), 12);
 }
 
 /// #1006: Select › All on Active Artboard selects the art of the artboard made active here,
@@ -527,6 +527,58 @@ fn the_panel_menus_convert_to_artboards_converts_the_selected_objects() {
 fn boards(app: &VectorcraftApp) -> (Vec<vectorcraft_geom::Rect>, usize, Vec<String>) {
     let st = app.session.active().unwrap();
     (st.doc.artboards.iter().map(|a| a.rect).collect(), st.history.undo.len(), st.doc.artboards.iter().map(|a| a.name.clone()).collect())
+}
+
+#[test]
+fn control_bar_name_cancels_typing_and_commits_one_rename() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    fn draw(app: &mut VectorcraftApp, ui: &mut Ui) {
+        assert!(control_bar(app, ui, true, false));
+    }
+
+    for commit in [Key::Enter, Key::Tab] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        select(&mut app, 1);
+        let mut panel = Panel::new(app, draw);
+        panel.room(egui::vec2(1000.0, 500.0));
+        let original = panel.app().session.active().unwrap().doc.clone();
+        let revision = panel.app().session.active().unwrap().revision;
+        let undo = undo_steps(&panel.app());
+        let name = panel.value_role("Name:", Role::TEXT_INPUT);
+        panel.click_role("Name:", Role::TEXT_INPUT);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("Discarded");
+        panel.type_text(" draft");
+        assert_eq!(panel.value_role("Name:", Role::TEXT_INPUT).as_deref(), Some("Discarded draft"));
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "typing only changes the field draft");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(panel.value_role("Name:", Role::TEXT_INPUT), name);
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+        assert_eq!(panel.app().session.active().unwrap().revision, revision);
+        assert_eq!(undo_steps(&panel.app()), undo);
+
+        panel.click_role("Name:", Role::TEXT_INPUT);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("Renamed");
+        panel.type_text(" board");
+        panel.key(commit, Modifiers::NONE);
+        {
+            let app = panel.app();
+            let doc = &app.session.active().unwrap().doc;
+            assert_eq!(doc.artboards[1].name, "Renamed board");
+            assert_eq!(doc.artboards[0], original.artboards[0]);
+            assert_eq!(doc.artboards[2], original.artboards[2]);
+            assert_eq!(undo_steps(&app), undo + 1);
+        }
+        panel.app().run("edit.undo", json!({})).unwrap();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+    }
 }
 
 /// The Control bar's size fields resize the active artboard about the reference point in one undo
@@ -913,16 +965,17 @@ fn the_artboard_tools_menu_lists_the_pages_entries_in_order() {
 }
 
 /// An entry whose command can't run is left out: Cut with every artboard selected, or a locked one;
-/// Delete Artboards in a document of one; Select All Artboards with all selected; Rearrange with one;
-/// Fit to Artwork Bounds without art; Switch Orientation on a square artboard.
+/// Delete Artboards in a document of one; Select All Artboards with all selected; Fit to Artwork
+/// Bounds without art; Switch Orientation on a square artboard. Rearrange lays out the one selected
+/// artboard.
 #[test]
 fn the_artboard_tools_menu_leaves_out_what_cannot_run() {
     let shown = |app: &VectorcraftApp, label: &str| menu_labels(&crate::menus::context_items(app)).contains(&label);
     let mut app = menu_app(1);
-    for label in ["Cut", "Delete Artboards", "Delete Empty Artboards", "Select All Artboards", "Rearrange", "Fit to Artwork Bounds"] {
+    for label in ["Cut", "Delete Artboards", "Delete Empty Artboards", "Select All Artboards", "Fit to Artwork Bounds"] {
         assert!(!shown(&app, label), "{label} with one empty artboard");
     }
-    assert!(shown(&app, "Copy") && shown(&app, "Switch Orientation"));
+    assert!(shown(&app, "Copy") && shown(&app, "Switch Orientation") && shown(&app, "Rearrange"));
     app.session.execute("artboard.setProps", &json!({"index": 0, "width": 50})).unwrap();
     assert!(!shown(&app, "Switch Orientation"), "a square artboard");
 
@@ -1085,6 +1138,33 @@ fn the_artboard_tools_menu_deletes_empty_artboards_and_opens_dialogs() {
     assert_eq!(selected(&app, 1), 0);
 }
 
+/// The panel menu's Rearrange… lays out the artboards the Artboard tool has selected, once each and
+/// in document order; with another tool nothing is selected by it, so Rearrange… is off and opens
+/// nothing, while the other entries still act on the active artboard. The list's Rearrange button
+/// stays Rearrange All Artboards.
+#[test]
+fn the_panels_rearrange_lays_out_only_what_the_artboard_tool_selected() {
+    let mut app = menu_app(3);
+    let ctx = app.ui_ctx.clone().expect("a window");
+    app.session.set_tool_option("selected", &json!([2, 0, 2]));
+    assert_eq!(tool_selection(&app, 3), [0, 2]);
+    assert!(enabled_state(&app, "ui.artboards.rearrange"));
+    run(&mut app, "ui.artboards.rearrange", &Value::Null).unwrap().unwrap();
+    assert!(is_open::<RearrangeArtboardsDialog>(&app));
+    assert_eq!(dialog_fields(&app)["indices"], json!([0, 2]));
+    cancel_open(&mut app, &ctx);
+    apply(&mut app, vec![PageListEvent::Rearrange]);
+    assert!(is_open::<RearrangeArtboardsDialog>(&app));
+    assert!(dialog_fields(&app).get("indices").is_none(), "the list's button lays out every artboard");
+    cancel_open(&mut app, &ctx);
+    app.select_tool("selection");
+    select(&mut app, 1);
+    assert_eq!((tool_selection(&app, 3), picked(&app, 3)), (vec![], vec![1]), "another tool");
+    assert!(!enabled_state(&app, "ui.artboards.rearrange"));
+    run(&mut app, "ui.artboards.rearrange", &Value::Null).unwrap().unwrap();
+    assert!(!is_open::<RearrangeArtboardsDialog>(&app));
+}
+
 /// A lock entry lists only the artboards it changes and is left out when it has none, so it never
 /// records an undo step that changes nothing.
 #[test]
@@ -1193,4 +1273,45 @@ fn select_all_artboards_chooses_the_tool_and_needs_a_document() {
     assert_eq!(app.session.tool_id(), "artboard");
     let mut empty = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     assert_eq!(empty.run("artboard.selectAll", json!({})).unwrap_err(), "no document");
+}
+
+thread_local! {
+    /// The row and section gaps the last frame's interface resolved.
+    static GAPS: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((0.0, 0.0)) };
+}
+
+/// Artboard Options shows its groups (the preset, the size and position, the colors, the marks and Global) a
+/// section gap apart, and the rows inside a group a row gap apart.
+#[test]
+fn artboard_options_groups_are_a_section_gap_apart() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+    let mut panel = crate::tests::panel_harness::Panel::new(app, |app, ui| {
+        let gap = craft::ui::runtime::env::Env::of(ui).tokens.space.gap;
+        GAPS.with(|c| c.set((gap.row, gap.section)));
+        crate::tests::picks::dialogs(app, ui);
+    });
+    panel.room(egui::vec2(800.0, 1200.0));
+    panel.app().run("tool.options", json!({"tool": "artboard"})).unwrap();
+    panel.frame();
+    panel.frame();
+    let (row, section) = GAPS.with(std::cell::Cell::get);
+    assert!(row > 0.0 && section > row, "the interface resolved its gaps: row {row}, section {section}");
+    let between = |upper: &str, lower: &str| panel.rect(lower).min.y - panel.rect(upper).max.y;
+    let groups =
+        [("Preset:", "Name:"), ("Y:", "Background Color:"), ("Guide Label:", "Show Center Mark"), ("Video Ruler Pixel Aspect Ratio:", "Global")];
+    for (upper, lower) in groups {
+        let gap = between(upper, lower);
+        assert!((gap - section).abs() < 0.01, "{upper} to {lower}: {gap} apart, the section gap is {section}");
+    }
+    let rows = [
+        ("Name:", "Width:"),
+        ("Background Color:", "Guide Label:"),
+        ("Show Center Mark", "Show Cross Hairs"),
+        ("Global", "Fade Region Outside Artboard"),
+    ];
+    for (upper, lower) in rows {
+        let gap = between(upper, lower);
+        assert!((gap - row).abs() < 0.01, "{upper} to {lower}: {gap} apart, the row gap is {row}");
+    }
 }

@@ -93,7 +93,10 @@ fn redeclarations_and_bad_declarations_are_syntax_errors() {
     syntax("try {} catch (e) { let e; }");
     syntax("const c;");
     syntax("let let = 1;");
-    syntax("let [a] = [1];");
+    syntax("let [a];");
+    syntax("let [let] = [1];");
+    syntax("let [a, a] = [1, 2];");
+    syntax("try {} catch ([e]) { let e; }");
     syntax("'use strict'; { function f() {} function f() {} }");
     syntax("for (let x = 1 in {}) {}");
     syntax("if (1) let x = 1;");
@@ -168,6 +171,20 @@ fn global_lexical_bindings_stay_across_runs_and_cannot_be_redeclared() {
     assert_eq!(realm.run("kept"), Ok(JsValue::Number(5.0)));
     let restricted = realm.run("let undefined = 1;");
     assert!(restricted.is_err(), "{restricted:?}");
+}
+
+#[test]
+fn a_var_an_inherited_property_satisfied_does_not_stop_a_later_let() {
+    let mut realm = Realm::new();
+    assert_eq!(realm.run("Object.prototype.x = 1; true"), Ok(JsValue::Bool(true)));
+    let first = realm.run("var x; delete Object.prototype.x && !this.hasOwnProperty('x')");
+    assert_eq!(first, Ok(JsValue::Bool(true)));
+    realm.set_es2015(true);
+    assert_eq!(realm.run("let x = 2; x"), Ok(JsValue::Number(2.0)));
+    // A `var` that made an own property still stops one.
+    assert_eq!(realm.run("var y; true"), Ok(JsValue::Bool(true)));
+    let again = realm.run("let y = 1;");
+    assert!(matches!(&again, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("SyntaxError")), "{again:?}");
 }
 
 #[test]
@@ -467,6 +484,18 @@ fn tagged_templates_get_one_frozen_strings_object_for_each_site() {
 }
 
 #[test]
+fn unreachable_closures_release_their_template_objects_in_one_collection() {
+    let mut realm = es();
+    assert_eq!(
+        realm.run("function tag(value) { return value; } var site = function () { return tag`gone`; }; site(); site = null; 0"),
+        Ok(JsValue::Number(0.0)),
+    );
+    assert_eq!(realm.interp().template_objects.len(), 1);
+    realm.collect_garbage();
+    assert_eq!(realm.interp().template_objects.len(), 0);
+}
+
+#[test]
 fn template_objects_go_once_their_code_cannot_run() {
     // Each eval makes code with two template sites; once it has run, nothing can run that code.
     let mut realm = es();
@@ -537,14 +566,16 @@ fn rest_parameters_collect_the_remaining_arguments() {
 // ---- spread ----
 
 #[test]
-fn spread_expands_arrays_strings_and_array_like_objects() {
+fn spread_expands_what_an_iterator_gives() {
     truth("var a = [1, 2]; var b = [0, ...a, 3]; b.join() === '0,1,2,3' && b.length === 4");
     truth("var b = [...'a\\uD83D\\uDE00b']; b.length === 3 && b[1] === '\\uD83D\\uDE00'");
-    truth("var b = [...{ length: 2, 0: 'x', 1: 'y' }]; b.join() === 'x,y'");
-    // A negative, NaN or fractional length is read as ToLength reads it.
-    truth("[...{ length: -1, 0: 'x' }].length === 0 && [...{ length: NaN }].length === 0");
-    truth("var b = [...{ length: 1.9, 0: 'x', 1: 'y' }]; b.join() === 'x'");
-    truth("function f() { return arguments.length; } f(...{ length: -4294967295, 0: 1 }) === 0");
+    truth("function f() { return [...arguments]; } f(1, 2).join() === '1,2'");
+    // Any object with an @@iterator method spreads, in the order its iterator gives.
+    truth(
+        "var n = 0; var it = { [Symbol.iterator]: function () { return { next: function () { n++; return { value: n, done: n > 3 }; } }; } }; \
+         var b = [...it]; b.join() === '1,2,3' && n === 4",
+    );
+    truth("var a = [1, 2]; a[Symbol.iterator] = function () { return [9][Symbol.iterator](); }; [...a].join() === '9'");
     truth("var b = [...[1, , 3]]; b.length === 3 && 1 in b && b[1] === undefined");
     truth("var b = [, ...[1]]; b.length === 2 && !(0 in b)");
     truth("function f() { return arguments.length; } f(...[1, 2], 3, ...[]) === 3");
@@ -571,8 +602,8 @@ fn spread_reads_an_array_s_length_again_before_each_element() {
     let grow = "var a = [1]; Object.defineProperty(a, 0, { get: function () { a.push(2); return 'v'; } }); \
                 var b = [...a]; b.join() === 'v,2'";
     truth(grow);
-    // An object that is not an array keeps the length it had when spread began.
-    truth("var o = { length: 2, get 0() { o.length = 1; return 'v'; }, 1: 'w' }; [...o].join() === 'v,w'");
+    // An object without an iterator is not spread by its length.
+    throws("var o = { length: 2, 0: 'v', 1: 'w' }; [...o];", "TypeError");
 }
 
 #[test]
@@ -585,55 +616,46 @@ fn an_array_s_spread_is_checked_against_the_elements_it_reads() {
     let then_more = "var a = []; a.length = 4294967295; Object.defineProperty(a, 0, { get: function () { a.length = 1; return 7; } }); \
                      var b = [...a, ...[1, 2]]; b.join() === '7,1,2'";
     truth(then_more);
-    // An array no getter reads is checked when spread begins, without reading its elements.
+    // An array's iterator steps through every index, so a long array ends at the fuel limit.
     let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
     let long = realm.run("var a = []; a.length = 4294967295; [...a]");
-    assert!(is_thrown(&long, "RangeError"), "{long:?}");
-    // An object that is not an array is still checked against the length it has when spread
-    // begins.
-    throws("[0, ...{ length: 4294967295 }];", "RangeError");
+    assert!(matches!(&long, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Fuel)), "{long:?}");
+    // An object without an iterator is not spread by its length.
+    throws("[0, ...{ length: 4294967295 }];", "TypeError");
 }
 
 #[test]
-fn an_index_setter_without_a_getter_does_not_delay_the_spread_s_check() {
-    // A setter does not run when the elements are read, so the array is still checked when
-    // spread begins, on its own and on its prototype.
+fn an_index_setter_without_a_getter_does_not_run_when_the_array_is_spread() {
+    // The iterator reads the element and the new array defines its own, so a setter on the array
+    // or on its prototype does not run, and the long array ends at the fuel limit.
     for setter in ["a", "Array.prototype"] {
         let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
-        let src = format!("var a = []; a.length = 4294967295; Object.defineProperty({setter}, 0, {{ set: function () {{}} }}); [...a]");
+        let src = format!(
+            "var ran = false; var a = []; a.length = 4294967295; Object.defineProperty({setter}, 0, {{ set: function () {{ ran = true; }} }}); [...a]"
+        );
         let long = realm.run(&src);
-        assert!(is_thrown(&long, "RangeError"), "{setter}: {long:?}");
+        assert!(matches!(&long, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Fuel)), "{setter}: {long:?}");
+        realm.set_limits(Limits::default());
+        assert_eq!(realm.run("ran"), Ok(JsValue::Bool(false)), "{setter}");
     }
 }
 
 #[test]
-fn a_prototype_getter_behind_an_own_element_does_not_delay_the_spread_s_check() {
-    // The array's own element 0 is read instead of the getter on its prototype, so no getter can
-    // shrink it, and it is checked when spread begins.
+fn a_prototype_getter_behind_an_own_element_is_not_read_by_the_spread() {
+    // The array's own element 0 is read instead of the getter on its prototype, so the getter does
+    // not shrink it, and the long array ends at the fuel limit.
     let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
     let src = "var a = [7]; Object.defineProperty(Array.prototype, 0, { get: function () { a.length = 1; return 0; } }); \
                a.length = 4294967295; [...a]";
     let long = realm.run(src);
-    assert!(is_thrown(&long, "RangeError"), "{long:?}");
+    assert!(matches!(&long, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Fuel)), "{long:?}");
+    realm.set_limits(Limits::default());
+    assert_eq!(realm.run("a.length"), Ok(JsValue::Number(4294967295.0)));
     // A getter on the prototype with no own element in front of it is read, and shrinks the array.
     let shrink = "var a = []; a.length = 4294967295; \
                   Object.defineProperty(Array.prototype, 0, { get: function () { a.length = 1; return 7; } }); \
                   var b = [...a]; b.length === 1 && b[0] === 7";
     truth(shrink);
-}
-
-#[test]
-fn looking_for_index_getters_takes_fuel_for_each_property() {
-    // Each attempt to spread the long array looks at every one of its 10,000 elements, so each
-    // takes at least that much fuel.
-    let fuel = 10_000_000;
-    let mut realm = Realm::with_options(es_options(), Limits { fuel, ..Limits::default() });
-    let setup = "var a = []; for (var i = 0; i < 10000; i++) a[i] = i; a.length = 4294967295; 0";
-    assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
-    let attempt = "var ok = false; try { [...a]; } catch (e) { ok = e instanceof RangeError; } ok";
-    assert_eq!(realm.run(attempt), Ok(JsValue::Bool(true)));
-    let used = fuel - realm.interp().fuel;
-    assert!(used >= 10_000, "{used}");
 }
 
 #[test]
@@ -704,20 +726,82 @@ fn spreading_other_values_is_a_type_error() {
     throws("[...null];", "TypeError");
     throws("[...undefined];", "TypeError");
     throws("[...{}];", "TypeError");
+    // An object with a length is not iterable for that.
+    throws("[...{ length: 2, 0: 'x', 1: 'y' }];", "TypeError");
+    throws("[...{ [Symbol.iterator]: function () { return 1; } }];", "TypeError");
+    throws("[...{ [Symbol.iterator]: function () { return { next: function () { return 1; } }; } }];", "TypeError");
     throws("Math.max(...true);", "TypeError");
     throws("new Array(...{ a: 1 });", "TypeError");
+}
+
+/// Runs `setup`, which gives `true`, and collects its garbage, then `call` once to measure the
+/// bytes it adds. Then, for every room from none to one byte less than that, in steps of 8
+/// bytes, it runs `call` in a new realm with that room: the run ends with the heap limit or a
+/// collection makes room, and the heap does not pass the limit either way.
+fn stays_within_every_limit(setup: &str, call: &str) {
+    let ready = || {
+        let mut realm = es();
+        assert_eq!(realm.run(setup), Ok(JsValue::Bool(true)), "{setup}");
+        realm.collect_garbage();
+        realm
+    };
+    let mut realm = ready();
+    let before = realm.interp().heap.bytes;
+    assert!(realm.run(call).is_ok(), "{call}");
+    let added = realm.interp().heap.bytes.saturating_sub(before);
+    for room in (0..added).rev().step_by(8) {
+        let mut realm = ready();
+        let limit = realm.interp().heap.bytes + room;
+        realm.set_limits(Limits { heap_bytes: limit, ..Limits::default() });
+        let r = realm.run(call);
+        let used = realm.interp().heap.bytes;
+        assert!(r.is_ok() || matches!(&r, Err(e) if e.kind == RunErrorKind::Limit(LimitKind::Heap)), "{call} with {room}: {r:?}");
+        assert!(used <= limit, "{call} with {room}: {used} of {limit}");
+    }
+}
+
+#[test]
+fn iterator_results_and_template_objects_stay_within_the_heap_limit() {
+    stays_within_every_limit("var it = [1, 2][Symbol.iterator](), r; true", "r = it.next(); true");
+    stays_within_every_limit("var it = [][Symbol.iterator](), r; true", "r = it.next(); true");
+    let parts = (0..60).map(|i| format!("part{i}${{{i}}}")).collect::<String>();
+    stays_within_every_limit(&format!("var r; function tag(s) {{ return s; }} function go() {{ r = tag`{parts}end`; return true; }} true"), "go()");
+}
+
+#[test]
+fn declarations_stay_within_the_heap_limit() {
+    let lets = (0..40).map(|i| format!("let a_long_global_lexical_name_{i} = {i};")).collect::<String>();
+    stays_within_every_limit("true", &format!("{lets} const fixed = 1; true"));
+    let body = (0..30).map(|i| format!("let a_long_body_lexical_name_{i} = {i}; function a_long_body_function_name_{i}() {{}}")).collect::<String>();
+    stays_within_every_limit(&format!("function f(a = 1) {{ {body} return true; }} true"), "f()");
+}
+
+#[test]
+fn code_stopped_by_the_frame_limit_declares_nothing() {
+    let mut realm = es();
+    realm.set_limits(Limits { frames: 0, ..Limits::default() });
+    let e = realm.run("let kept = 1; var also = 2;").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Frames), "{e:?}");
+    realm.set_limits(Limits { frames: 1, ..Limits::default() });
+    let e = realm.run("eval('var leaked = 1; let inner = 2;')").unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Frames), "{e:?}");
+    realm.set_limits(Limits::default());
+    assert_eq!(realm.run("let kept = 3; typeof also === 'undefined' && typeof leaked === 'undefined' && kept === 3"), Ok(JsValue::Bool(true)));
 }
 
 #[test]
 fn spread_and_templates_stay_within_the_limits() {
     let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
-    let e = realm.run("[...{ length: 4294967294 }]").unwrap_err();
+    let endless = "{ [Symbol.iterator]: function () { return { next: function () { return { value: 1, done: false }; } }; } }";
+    let e = realm.run(&format!("[...{endless}]")).unwrap_err();
+    assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "{e:?}");
+    let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
+    let e = realm.run("var a = []; a.length = 4294967294; [0, ...a];").unwrap_err();
     assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "{e:?}");
     let mut realm = Realm::with_options(es_options(), Limits { heap_bytes: 4 << 20, ..Limits::default() });
     let e = realm.run("var s = 'x'; for (var i = 0; i < 22; i++) s += s; [...s]").unwrap_err();
     assert!(matches!(e.kind, RunErrorKind::Limit(_)), "{e:?}");
-    throws("function f() {} f(...{ length: 100000 });", "RangeError");
-    throws("var a = []; a.length = 4294967294; [0, ...a];", "RangeError");
+    throws("function f() {} var a = []; a.length = 100000; f(...a);", "RangeError");
 }
 
 #[test]
@@ -729,9 +813,14 @@ fn spreading_a_rope_counts_its_flattened_length_first() {
     let build = "var s = 'x'; for (var i = 0; i < 18; i++) s = s + s; function f(c) { return s + c; } \
                  function mk() { var a = f('a'); a[0]; return a + 'b'; }";
     let limits = Limits { heap_bytes: 4 * 262_146, fuel: 20_000, ..Limits::default() };
-    for spread in ["[...mk()]", "Math.max(...mk())"] {
+    for spread in ["[...mk()]", "Math.max(...mk())", "var [c] = mk()", "for (var c of mk()) break"] {
         let e = Realm::with_options(es_options(), limits.clone()).run(&format!("{build} {spread}; 0")).unwrap_err();
         assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "{spread}: {e:?}");
+        // A realm without `Symbol.iterator` walks the string, and flattens it the same way.
+        let mut walking = Realm::with_options(Options::default(), limits.clone());
+        walking.set_es2015(true);
+        let e = walking.run(&format!("{build} {spread}; 0")).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Heap), "walking {spread}: {e:?}");
     }
     let made = Realm::with_options(es_options(), limits).run(&format!("{build} mk(); 0"));
     assert_eq!(made, Ok(JsValue::Number(0.0)), "the rope is made within the fuel");
@@ -946,12 +1035,405 @@ fn for_each_takes_let_and_const_with_e4x() {
     assert_eq!(e.kind, RunErrorKind::Syntax, "{e:?}");
 }
 
+#[test]
+fn for_each_takes_an_assignment_pattern_with_e4x() {
+    let mut realm = Realm::with_options(Options { e4x: true, ..es_options() }, Limits::default());
+    let src = "var x, y; for each ([x] in { a: [7] }); for each ({ p: y } in [{ p: 8 }]); x + y";
+    assert_eq!(realm.run(src), Ok(JsValue::Number(15.0)));
+    let legacy = Realm::with_options(Options { e4x: true, ..Options::default() }, Limits::default()).run("var x; for each ([x] in {});");
+    assert!(matches!(&legacy, Err(e) if e.kind == RunErrorKind::Syntax), "{legacy:?}");
+}
+
+// ---- for-of and destructuring ----
+
+/// An iterable whose iterator gives 1 to `n` and counts the calls to its `return` method in
+/// `closed`.
+const COUNTED: &str = "var closed = 0; function it(n) { var i = 0; return { [Symbol.iterator]: function () { return this; }, \
+     next: function () { i++; return { value: i, done: i > n }; }, return: function () { closed++; return {}; } }; } ";
+
+fn counted(src: &str) {
+    truth(&format!("{COUNTED}{src}"));
+}
+
+#[test]
+fn for_of_runs_the_body_for_each_value() {
+    truth("var s = ''; for (var x of ['a', 'b']) s += x; s === 'ab' && x === 'b'");
+    truth("var s = []; for (var c of 'a\\uD83D\\uDE00') s.push(c); s.length === 2 && s[1] === '\\uD83D\\uDE00'");
+    truth("var n = 0; for (var x of []) n++; n === 0");
+    truth("var o = {}; for (o.p of [1, 2]); o.p === 2");
+    truth("var r = []; for (var [a, b] of [[1, 2], [3, 4]]) r.push(a + b); r.join() === '3,7'");
+    truth("var a, b; for ([a, { b }] of [[1, { b: 2 }]]); a === 1 && b === 2");
+    truth("var r = []; outer: for (var i = 0; i < 2; i++) { for (var x of [1, 2]) { if (x === 2) continue outer; r.push(i); } } r.join() === '0,1'");
+    truth("var s = 0; for (var x of [1, 2, 3]) { if (x === 2) continue; s += x; } s === 4");
+    truth("eval('1; for (var x of []) {}') === undefined && eval('1; for (var x of [2]) { break; }') === undefined");
+    truth("eval('1; for (var x of [2, 3]) { x; }') === 3");
+}
+
+#[test]
+fn loops_whose_body_never_completes_give_undefined() {
+    for src in [
+        "42; for (let i = 0; i < 0; i++) {}",
+        "42; for (const k in {}) {}",
+        "42; for (let k in {}) {}",
+        "42; for (var i = 0; i < 0; i++) {}",
+        "42; for (var k in {}) {}",
+        "42; while (false) {}",
+        "42; do { break; } while (true)",
+    ] {
+        assert_eq!(es().run(src), Ok(JsValue::Undefined), "{src}");
+    }
+    assert_eq!(es().run("42; for (let i = 0; i < 2; i++) { i; }"), Ok(JsValue::Number(1.0)));
+    assert_eq!(es().run("42; for (let k in { a: 1 }) { k; }"), Ok(JsValue::String("a".into())));
+    // ECMAScript 5.1 code keeps the value before the loop.
+    assert_eq!(Realm::new().run("42; for (var i = 0; i < 0; i++) {}"), Ok(JsValue::Number(42.0)));
+    assert_eq!(Realm::new().run("42; while (false) {}"), Ok(JsValue::Number(42.0)));
+}
+
+#[test]
+fn if_switch_with_and_try_without_a_value_give_undefined() {
+    for src in [
+        "for (let i = 0; i < 2; i++) { if (i === 0) 7; }",
+        "42; if (false) 7;",
+        "42; if (true) {}",
+        "42; switch (1) { case 2: 7; }",
+        "42; with ({}) {}",
+        "42; try {} finally {}",
+        "42; try { 7; throw 1; } catch (e) {}",
+        "42; do { 7; if (true) break; } while (false)",
+    ] {
+        assert_eq!(es().run(src), Ok(JsValue::Undefined), "{src}");
+        assert_eq!(es().run(&format!("eval({src:?})")), Ok(JsValue::Undefined), "{src}");
+    }
+    assert_eq!(es().run("42; ;"), Ok(JsValue::Number(42.0)));
+    assert_eq!(es().run("42; if (true) 7;"), Ok(JsValue::Number(7.0)));
+    assert_eq!(es().run("42; try { 7; } catch (e) {}"), Ok(JsValue::Number(7.0)));
+    // ECMAScript 5.1 code keeps the earlier value.
+    assert_eq!(Realm::new().run("42; if (false) 7;"), Ok(JsValue::Number(42.0)));
+    assert_eq!(Realm::new().run("42; try { 7; throw 1; } catch (e) {}"), Ok(JsValue::Number(7.0)));
+}
+
+#[test]
+fn for_of_let_and_const_get_a_binding_for_each_iteration() {
+    truth("var fs = []; for (let x of [1, 2]) fs.push(function () { return x; }); fs[0]() === 1 && fs[1]() === 2");
+    truth("var fs = []; for (const [k, v] of [[1, 2], [3, 4]]) fs.push(() => k + v); fs[0]() === 3 && fs[1]() === 7");
+    truth("for (let x of [1]) {} typeof x === 'undefined'");
+    throws("for (const x of [1]) x = 2;", "TypeError");
+    // The iterable is read where the head's names are not yet initialized.
+    throws("let x = [1]; for (let x of x) {}", "ReferenceError");
+}
+
+#[test]
+fn for_of_closes_the_iterator_when_the_loop_is_left_early() {
+    counted("for (var x of it(5)) break; closed === 1 && x === 1");
+    counted("function f() { for (var x of it(5)) return x * 10; } f() === 10 && closed === 1");
+    counted("try { for (var x of it(5)) throw 1; } catch (e) {} closed === 1");
+    counted("outer: for (var i = 0; i < 2; i++) for (var x of it(5)) continue outer; closed === 2");
+    counted("for (var x of it(5)) for (var y of it(5)) break; closed === 5");
+    counted("try { for (var x of it(5)) { try { break; } finally { closed += 10; } } } finally {} closed === 11");
+    counted(
+        "var t = it(5); t.next = function () { return { value: [], done: false }; }; \
+         var r; try { for (var [a = (function () { throw 7; })()] of t); } catch (e) { r = e; } r === 7 && closed === 1",
+    );
+    // An iterator that finishes, or whose own next method throws, is not closed.
+    counted("for (var x of it(2)); closed === 0");
+    counted("var t = it(5); t.next = function () { throw 3; }; try { for (var x of t); } catch (e) {} closed === 0");
+    // Nor is one whose result's `value` getter throws (sections 13.7.5.13 and 13.3.3.6).
+    let bad_value = "var t = it(5); t.next = function () { return { done: false, get value() { throw 4; } }; };";
+    counted(&format!("{bad_value} var r; try {{ for (var x of t); }} catch (e) {{ r = e; }} r === 4 && closed === 0"));
+    counted(&format!("{bad_value} var r; try {{ var [a] = t; }} catch (e) {{ r = e; }} r === 4 && closed === 0"));
+}
+
+#[test]
+fn closing_an_iterator_reports_a_bad_return_unless_an_exception_is_on_its_way() {
+    let bad = "var bad = { [Symbol.iterator]: function () { return this; }, next: function () { return { value: 1, done: false }; }, \
+               return: function () { return 1; } }; ";
+    throws(&format!("{bad} for (var x of bad) break;"), "TypeError");
+    truth(&format!("{bad} var r; try {{ for (var x of bad) throw new RangeError('x'); }} catch (e) {{ r = e; }} r instanceof RangeError"));
+    let throwing = "var t = { [Symbol.iterator]: function () { return this; }, next: function () { return { value: 1, done: false }; }, \
+                    return: function () { throw new SyntaxError('r'); } }; ";
+    throws(&format!("{throwing} for (var x of t) break;"), "SyntaxError");
+    truth(&format!("{throwing} var r; try {{ for (var x of t) throw 5; }} catch (e) {{ r = e; }} r === 5"));
+    // A close that throws when `return` or a jump to an outer statement leaves the loop reaches
+    // the enclosing catch clause. Inner iterators are closed first, and a throwing inner close
+    // still closes the outer iterators.
+    let caught = |src: &str| format!("{COUNTED}{throwing} var r; try {{ {src} }} catch (e) {{ r = e; }} r instanceof SyntaxError");
+    for src in [
+        "(function () { for (var x of t) return 1; })();",
+        "(function () { for (var x of [1]) for (var y of t) return 1; })();",
+        "outer: for (var i = 0; i < 2; i++) for (var x of t) continue outer;",
+        "outer: for (var x of t) for (var y of [1, 2]) break outer;",
+        "outer: for (var x of t) for (var y of it(5)) for (var z of it(5)) break outer;",
+    ] {
+        truth(&format!("{} && closed === {}", caught(src), src.matches("it(5)").count()));
+    }
+    truth(&format!("{} && closed === 1", caught("outer: for (var x of it(5)) for (var y of t) break outer;")));
+    truth(&format!("{} && closed === 1", caught("(function () { for (var x of it(5)) for (var y of t) return 1; })();")));
+}
+
+#[test]
+fn an_exception_that_closes_an_iterator_keeps_where_it_was_thrown() {
+    let src = "var t = { [Symbol.iterator]: function () { return this; }, next: function () { return { value: 1, done: false }; }, \
+               return: function () { return {}; } };\nfor (var x of t) {\n  if (x) throw 1;\n  x = String(x);\n}";
+    // A collection runs at each reservation, so one runs while `return` is called.
+    let mut realm = es();
+    crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(true));
+    let r = realm.run(src);
+    crate::interp::COLLECT_ON_RESERVE.with(|c| c.set(false));
+    let e = r.unwrap_err();
+    assert_eq!((&e.kind, e.line, e.column), (&RunErrorKind::Thrown, 3, 10), "{e:?}");
+    // A `return` getter that throws does not replace the exception (ECMA-262 2023 section 7.4.8).
+    truth(
+        "var t = { [Symbol.iterator]: function () { return this; }, next: function () { return { value: 1, done: false }; }, \
+         get return() { throw 2; } }; var r; try { for (var x of t) throw 1; } catch (e) { r = e; } r === 1",
+    );
+}
+
+#[test]
+fn array_patterns_step_the_iterator_and_close_it() {
+    truth("var [a, , b = 3, ...c] = [1, 2, undefined, 4, 5]; a === 1 && b === 3 && c.join() === '4,5'");
+    truth("var [a, b] = 'xy'; a + b === 'xy'");
+    truth("var [a, b] = [1]; a === 1 && b === undefined");
+    truth("let [[a], [b]] = [[1], [2]]; a + b === 3");
+    truth("var [...[a, b]] = [1, 2]; a + b === 3");
+    counted("var [a] = it(5); closed === 1 && a === 1");
+    counted("var [a, ...r] = it(2); closed === 0 && r.join() === '2'");
+    counted("var [] = it(5); closed === 1");
+    counted("var [a, b] = it(1); closed === 0 && b === undefined");
+    // A hole steps the iterator without reading the result's `value`.
+    let bad_value = "var t = it(5); t.next = function () { return { done: false, get value() { throw 4; } }; };";
+    counted(&format!("{bad_value} var [,] = t; closed === 1"));
+    counted(&format!("{bad_value} [,] = t; for (let [,] of [t]); closed === 2"));
+    counted("try { var [a = (function () { throw 1; })()] = it(0); } catch (e) {} closed === 0");
+    counted("try { var [a, b = (function () { throw 1; })()] = [1]; } catch (e) {} closed === 0");
+    counted("var o = { set p(v) { throw 2; } }; try { [o.p] = it(5); } catch (e) {} closed === 1");
+    throws("var [a] = {};", "TypeError");
+    throws("var [a] = 1;", "TypeError");
+}
+
+#[test]
+fn object_patterns_read_properties_by_name() {
+    truth("let { x, y: z = 2, ['w' + 1]: w } = { x: 1, w1: 4 }; x === 1 && z === 2 && w === 4");
+    truth("const [{ a: [b] }] = [{ a: [7] }]; b === 7");
+    truth("var { length } = 'abc'; length === 3");
+    truth("var s = Symbol(); var { [s]: v } = { [s]: 9 }; v === 9");
+    truth("var { 0: a, 'b c': b } = { 0: 1, 'b c': 2 }; a + b === 3");
+    truth(
+        "var order = []; var o = { get a() { order.push('a'); return 1; }, get b() { order.push('b'); return 2; } }; \
+           var { b, a } = o; order.join() === 'b,a'",
+    );
+    // A `var` pattern's names are resolved before their values are read (sections 13.3.3.6
+    // and 13.3.3.7).
+    truth(
+        "var o = { x: 0 }; var t = { [Symbol.iterator]: function () { return this; }, \
+         next: function () { delete o.x; return { value: 1, done: false }; }, return: function () { return {}; } }; \
+         with (o) { var [x] = t; } o.x === 1 && x === undefined",
+    );
+    truth("var o = { y: 0 }; with (o) { var { a: y } = { get a() { delete o.y; return 2; } }; } o.y === 2 && y === undefined");
+}
+
+#[test]
+fn destructuring_assignment_writes_to_any_assignment_target() {
+    truth("var a = 1, b = 2; [a, b] = [b, a]; a === 2 && b === 1");
+    truth("var a; var v = [1, 2]; var r = ([a] = v); r === v && a === 1");
+    truth("var o = {}; [o.a, o['b']] = [1, 2]; ({ c: o.c } = { c: 3 }); o.a + o.b + o.c === 6");
+    truth("var a, b; ({ a, b = 5 } = { a: 1 }); a === 1 && b === 5");
+    truth("var x, y; [x = 1, [y] = [2]] = []; x === 1 && y === 2");
+    truth("var r = []; var a; [a = r.push('default')] = [undefined]; a === 1 && r.length === 1");
+}
+
+#[test]
+fn destructured_parameters_and_catch_clauses() {
+    truth("function f([a, b], { c } = { c: 3 }) { return a + b + c; } f([1, 2]) === 6");
+    truth("(([a], { b }) => a + b)([1], { b: 2 }) === 3");
+    truth("function f(...[a, b]) { return a + b; } f(1, 2) === 3");
+    truth("function f(a, [b], c = 1) {} f.length === 2");
+    truth("function f({ a }, b) {} f.length === 2");
+    truth("function f([a], b = a) { return b; } f([4]) === 4");
+    truth("function f({ a }) { var a; return a; } f({ a: 6 }) === 6");
+    truth("var r; try { throw { m: 'x', d: [1] }; } catch ({ m, d: [n] }) { r = m + n; } r === 'x1'");
+    truth("var r; try { throw [1, 2]; } catch ([a, b]) { r = function () { return a + b; }; } r() === 3");
+    // A function in a block is not also made a `var` when that `var` would clash with a
+    // destructured catch parameter (ECMA-262 11th edition sections B.3.3 and B.3.5).
+    truth("function g() { try { throw [1]; } catch ([f]) { { function f() {} } } return typeof f; } g() === 'undefined'");
+    truth("try { throw {}; } catch ({ h }) { { function h() {} } } typeof h === 'undefined'");
+    truth("function g() { try { throw 1; } catch (f) { { function f() {} } } return typeof f; } g() === 'function'");
+    throws("function f({ a }) {} f();", "TypeError");
+    throws("try { throw null; } catch ({ a }) {}", "TypeError");
+    throws("function f([a], b = a) {} f([]); f(undefined);", "TypeError");
+}
+
+#[test]
+fn defaults_run_only_for_undefined() {
+    truth(
+        "var n = 0; function d() { n++; return 5; } var [a = d()] = [null]; var { b = d() } = { b: 0 }; var [c = d()] = []; \
+         var { e = d() } = { e: undefined }; a === null && b === 0 && c === 5 && e === 5 && n === 2",
+    );
+    truth("var n = 0; function f([a = n++] = [], { b = n++ } = {}) { return a + b; } f([3], { b: 4 }) === 7 && n === 0");
+}
+
+#[test]
+fn destructuring_undefined_or_null_is_a_type_error() {
+    throws("var { a } = null;", "TypeError");
+    throws("var {} = undefined;", "TypeError");
+    throws("var [a] = null;", "TypeError");
+    throws("({ a } = undefined);", "TypeError");
+    throws("for (var { a } of [null]);", "TypeError");
+    throws("let { a: { b } } = { a: null };", "TypeError");
+    truth("var { toFixed } = 1; typeof toFixed === 'function'");
+}
+
+#[test]
+fn object_literals_take_shorthand_and_computed_names() {
+    truth("var a = 1; var o = { a, ['b' + 1]: 2 }; o.a === 1 && o.b1 === 2");
+    truth("var s = Symbol('k'); var o = { [s]: 3 }; o[s] === 3 && Object.keys(o).length === 0");
+    truth("var o = { get ['x' + 1]() { return 4; }, set ['x' + 1](v) { this.y = v; } }; o.x1 = 5; o.x1 === 4 && o.y === 5");
+    truth("var order = []; var o = { [(order.push(1), 'a')]: order.push(2) }; order.join() === '1,2' && o.a === 2");
+}
+
+#[test]
+fn bad_patterns_are_syntax_errors() {
+    for src in [
+        "({ a = 1 });",
+        "var o = { a = 1 };",
+        "[...a, b] = [];",
+        "[...a,] = [];",
+        "var [...a, b] = [];",
+        "({ get a() { return 1; } } = {});",
+        "([a]) = [];",
+        "[(a = 1)] = [];",
+        "[a()] = [];",
+        "[a + 1] = [];",
+        "'use strict'; [eval] = [];",
+        "'use strict'; var { arguments } = {};",
+        "var [a];",
+        "const { a };",
+        "for (var x = 1 of []) ;",
+        "for (let x = 1 of []) ;",
+        "for (var [x] = 1 in {}) ;",
+        "for (x of [], []) ;",
+        "for (let.x of []) ;",
+        "for (async of []) ;",
+        "for (var x of []) let\n[a] = 0;",
+        "if (1) let [a] = [];",
+        "for (a() of []) ;",
+        "function f([a]) { 'use strict'; }",
+        "function f([a, a]) {}",
+        "function f(a, [a]) {}",
+        "([a, a]) => 1;",
+        "try {} catch ([e, e]) {}",
+        "try {} catch ([e]) { for (var e of []); }",
+        "({ a: 1 } = {});",
+        "[...[a] = []] = [];",
+        "var a; [a = { b = 1 }] = [];",
+        "var a; ({ a = { b = 1 } } = {});",
+        "var a; ({ [{ b = 1 }]: a } = {});",
+        "for ([a = { b = 1 }] of []) ;",
+        "(a = { b = 1 }) => 0;",
+        "([a = { b = 1 }]) => 0;",
+    ] {
+        syntax(src);
+    }
+    // A shorthand property with an initializer is a target only in the pattern that holds it.
+    truth("var a, b; [{ b = 1 }] = [{}]; ({ a: { b = 2 } = {} } = {}); b === 2");
+    truth("var f = ({ a = 1 }, [{ b = 2 }] = [{}]) => a + b; f({}) === 3");
+    // `of` stays a name.
+    truth("var of = [1]; var n = 0; for (var x of of) n += x; n === 1");
+}
+
+#[test]
+fn large_patterns_take_their_shorthand_defaults() {
+    let defaults = (0..20_000).map(|i| format!("a{i} = {i}")).collect::<Vec<_>>().join(", ");
+    truth(&format!("({{ {defaults} }} = {{}}); a0 === 0 && a19999 === 19999"));
+    truth(&format!("var f = ({{ {defaults} }}) => a19999; f({{}}) === 19999"));
+    // A shorthand default inside a default value or a computed name is still an error.
+    syntax(&format!("({{ {defaults}, b = {{ c = 1 }} }} = {{}});"));
+    syntax(&format!("({{ [{{ c = 1 }}]: b, {defaults} }} = {{}});"));
+    let small = "[{ b = 1 }] = [{}]; ".repeat(20_000);
+    truth(&format!("var b; {small} b === 1"));
+    syntax(&format!("var b; {small} ({{ c = 1 }});"));
+}
+
+#[test]
+fn a_realm_without_the_later_built_ins_walks_arrays_arguments_and_strings() {
+    let mut realm = Realm::new();
+    realm.set_es2015(true);
+    let src = "var s = ''; for (var x of [1, 2]) s += x; for (var c of 'a\\uD83D\\uDE00') s += c.length; \
+               (function () { for (var a of arguments) s += a; })(3); var [p, ...q] = 'xyz'; \
+               s === '1212' + '3' && [...[4, 5]].length === 2 && p === 'x' && q.join('') === 'yz'";
+    assert_eq!(realm.run(src), Ok(JsValue::Bool(true)));
+    let boxed = "var b = new String('ab'); b.toString = function () { return 'cd'; }; \
+                 [...new String('ab')].join() === 'a,b' && [...b].join() === 'c,d'";
+    assert_eq!(realm.run(boxed), Ok(JsValue::Bool(true)));
+    let r = realm.run("for (var x of {}) {}");
+    assert!(matches!(&r, Err(RunError { kind: RunErrorKind::Thrown, message, .. }) if message.starts_with("TypeError")), "{r:?}");
+}
+
+#[test]
+fn for_of_and_patterns_stay_within_the_limits() {
+    let endless = "{ [Symbol.iterator]: function () { return { next: function () { return { value: 1, done: false }; } }; } }";
+    for src in [format!("for (var x of {endless});"), format!("var [...r] = {endless};")] {
+        let mut realm = Realm::with_options(es_options(), Limits { fuel: 10_000, ..Limits::default() });
+        let e = realm.run(&src).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Limit(LimitKind::Fuel), "{src}: {e:?}");
+    }
+    // Spread and a rest element reserve each new element's whole size, its index name included,
+    // so the run ends at the heap limit without passing it, wherever the limit falls. A realm
+    // without `Symbol.iterator` walks the array by index and makes no result objects.
+    let walking = |limits: Limits| {
+        let mut realm = Realm::with_options(Options::default(), limits);
+        realm.set_es2015(true);
+        realm
+    };
+    let setup = "var a = []; for (var i = 0; i < 2000; i++) a.push(i); 0";
+    let mut measure = walking(Limits::default());
+    assert_eq!(measure.run(setup), Ok(JsValue::Number(0.0)));
+    measure.interp().collect_garbage();
+    let base = measure.interp().heap.bytes + 100_000;
+    let mut wrong = Vec::new();
+    for src in ["var b = [...a]; 0", "var [...b] = a; 0"] {
+        for heap_bytes in (base..base + 128).step_by(2) {
+            let mut realm = walking(Limits { heap_bytes, ..Limits::default() });
+            assert_eq!(realm.run(setup), Ok(JsValue::Number(0.0)));
+            let r = realm.run(src).map_err(|e| e.kind);
+            let bytes = realm.interp().heap.bytes;
+            if r != Err(RunErrorKind::Limit(LimitKind::Heap)) || bytes > heap_bytes {
+                wrong.push((src, heap_bytes, r, bytes));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "runs that ended past the heap limit: {wrong:?}");
+    // Patterns nested past the nesting limit are a SyntaxError.
+    for src in [format!("var {}a{} = 1;", "[".repeat(5000), "]".repeat(5000)), format!("({}a{} = 1);", "[".repeat(5000), "]".repeat(5000))] {
+        let e = es().run(&src).unwrap_err();
+        assert_eq!(e.kind, RunErrorKind::Syntax, "{e:?}");
+    }
+}
+
 // ---- the language mode ----
 
 #[test]
 fn without_the_option_the_new_forms_are_syntax_errors() {
-    for src in ["let x = 1; x", "const c = 1;", "var f = x => x;", "`t`", "function f(a = 1) {}", "function f(...r) {}", "f(...a)", "[...a]"] {
+    for src in [
+        "let x = 1; x",
+        "const c = 1;",
+        "var f = x => x;",
+        "`t`",
+        "function f(a = 1) {}",
+        "function f(...r) {}",
+        "f(...a)",
+        "[...a]",
+        "for (var x of []) {}",
+        "var [a] = [1];",
+        "var { a } = {};",
+        "({ a } = {});",
+        "function f([a]) {}",
+        "try {} catch ({ a }) {}",
+        "var o = { ['a']: 1 };",
+    ] {
         let r = Realm::new().run(src);
+        assert!(matches!(r, Err(RunError { kind: RunErrorKind::Syntax, .. })), "{src}: {r:?}");
+        let extendscript = Options { e4x: true, preprocessor_lines: true, ..Options::default() };
+        let r = Realm::with_options(extendscript, Limits::default()).run(src);
         assert!(matches!(r, Err(RunError { kind: RunErrorKind::Syntax, .. })), "{src}: {r:?}");
     }
     // `let` stays a name outside strict mode code.
@@ -993,6 +1475,8 @@ fn a_run_keeps_its_language_for_the_code_it_evaluates() {
 // ---- robustness ----
 
 const FRAGMENTS: &[&str] = &[
+    " of ",
+    "...",
     "let ",
     "const ",
     "var ",

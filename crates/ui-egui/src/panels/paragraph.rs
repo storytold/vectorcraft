@@ -8,18 +8,21 @@
 // PLAN: assumed import paths for the framework items below (behavior::{IconId, Mixed}, keymap::CommandRef,
 // text::ui::character, ui::{buttons, choice::Select, controls::Checkbox, menu, popover, runtime::access::PopupKind}).
 use craft::behavior::{IconId, Mixed};
+use craft::i18n::WordSet as _;
 use craft::keymap::CommandRef;
-use craft::text::ui::character::{DirectionRow, ParagraphChange, ParagraphControls, ParagraphDirection, ParagraphValues, TextAlign};
+use craft::text::ui::character::{DirectionRow, ParagraphChange, ParagraphControls, ParagraphDirection, ParagraphValues, ParagraphWords, TextAlign};
 use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, MemoProps, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::form::Field;
+use craft::ui::layout_components::Row;
 use craft::ui::menu::{Menu, PanelRow};
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::{Glyph, IconSpec};
 use craft::ui::runtime::access::PopupKind;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::{WordRows, WordsOverride, with_env};
 use craft::ui::style::UiTokens;
 use egui::{Color32, Painter, Rect, Stroke, Ui, vec2};
 use serde_json::{Value, json};
@@ -433,19 +436,19 @@ pub(crate) fn alignment_toggles(app: &mut VectorcraftApp, ui: &mut Ui, count: us
 /// The Control bar's paragraph controls while type is selected or edited (#5372), after its
 /// Character controls: the Paragraph link, which opens the Paragraph panel in a popover under it,
 /// and the Align left, Align center and Align right buttons. Always `true`: the bar trims these
-/// itself as it narrows.
+/// itself as it narrows, the link and the buttons as two members of the type groups' rank, so the
+/// buttons leave before the link.
 pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     if text_style(app).is_none() {
         return true;
     }
-    // PLAN: the members' `Row::fit_rank` (ch.K30: toggles out before the link) belongs to chrome-w16's row; `horizontal` stands in until it lands.
-    ui.horizontal(|ui| {
+    Row::new().fit_rank(crate::chrome::rank::TYPE).show(ui, |ui, _| {
         let link = crate::panels::option_link(tl!("Paragraph:")).tooltip(tl!("Paragraph options")).show(ui);
         Popover::new(tl!("Paragraph"), Bind::kept())
             .overlay(|overlay| overlay.opened_by(&link.response, Trigger::Click))
             .show(ui, |ui, _| show(app, ui));
-        alignment_toggles(app, ui, CONTROL_BAR_ALIGNMENTS);
     });
+    Row::new().fit_rank(crate::chrome::rank::TYPE).show(ui, |ui, _| alignment_toggles(app, ui, CONTROL_BAR_ALIGNMENTS));
     true
 }
 
@@ -660,7 +663,7 @@ fn list_control(ui: &mut Ui, kind: ListKind, pressed: bool, entries: &[Entry<u32
 /// turns the list off, and the one every paragraph has is checked. More Options after them opens
 /// Bullets and Numbering on the kind's tab.
 fn lists_row(app: &mut VectorcraftApp, ui: &mut Ui) {
-    ui.horizontal(|ui| {
+    Row::new().show(ui, |ui, _| {
         let shown = bullets_shown(app);
         match list_control(ui, ListKind::Bullets, matches!(shown, Some(Some(_))), &bullet_entries(shown)) {
             Some(ListEvent::Toggle) => toggle_list(app, ListKind::Bullets),
@@ -757,12 +760,13 @@ fn apply(app: &mut VectorcraftApp, change: &ParagraphChange) {
     }
 }
 
-/// A labelled select whose entries are numbered from 0; the pick, if any, this pass. `current` is blank when `None`.
+/// A labelled select whose entries are numbered from 0; the committed pick, if any, this pass.
+/// `current` is blank when `None`. Browsing a popup must not apply paragraph formatting.
 fn pick_row(ui: &mut Ui, label: &'static str, salt: &'static str, entries: &[Entry<u32>], current: Option<u32>) -> Option<u32> {
     let mut picked = None;
     Field::new(label).id_salt(salt).show(ui, |ui, _| {
         let shown = current.map_or(Mixed::Mixed, Mixed::Same);
-        picked = Select::new(label, Bind::given(shown), entries).id_salt(salt).show(ui).value().copied();
+        picked = Select::new(label, Bind::given(shown), entries).id_salt(salt).show(ui).events.committed().copied();
     });
     picked
 }
@@ -820,6 +824,30 @@ fn kinsoku_row(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
+/// Maps the toolkit's different English names to the translations already in the app catalogs.
+fn localized_control_words() -> WordRows {
+    [
+        ("paragraph.left", ALIGNMENTS[0].2),
+        ("paragraph.center", ALIGNMENTS[1].2),
+        ("paragraph.right", ALIGNMENTS[2].2),
+        ("paragraph.justifyLeft", ALIGNMENTS[3].2),
+        ("paragraph.justifyCenter", ALIGNMENTS[4].2),
+        ("paragraph.justifyRight", ALIGNMENTS[5].2),
+        ("paragraph.justifyAll", ALIGNMENTS[6].2),
+        ("paragraph.spaceBefore", "Space Before Paragraph"),
+        ("paragraph.spaceAfter", "Space After Paragraph"),
+    ]
+    .into_iter()
+    .filter_map(|(id, source)| {
+        let translated = tl!(source);
+        if translated == source {
+            return None;
+        }
+        ParagraphWords::word(id).map(|word| (word, translated))
+    })
+    .fold(WordRows::new(), |rows, (word, translated)| rows.row(word, translated))
+}
+
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some((_, para)) = text_style(app) else {
         super::empty_state(ui, "pilcrow", tl!("No text selected"), tl!("Select a text object to edit its paragraph attributes."));
@@ -830,11 +858,12 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Paragraph direction, with the Middle Eastern (Indic) options.
     let direction = if app.session.prefs.show_indic_options { DirectionRow::Explicit } else { DirectionRow::Hidden };
     // Indents and paragraph spacing are distances (General); type sizes follow Units ▸ Type.
-    let out = ParagraphControls::new(tl!("Paragraph"), &shown)
-        .unit(doc_unit(app.session.general_unit()))
-        .hyphenate(!hidden)
-        .direction_row(direction)
-        .show_with(ui, |ui| lists_row(app, ui));
+    let controls =
+        ParagraphControls::new(tl!("Paragraph"), &shown).unit(doc_unit(app.session.general_unit())).hyphenate(!hidden).direction_row(direction);
+    let words = localized_control_words();
+    let show = |ui: &mut Ui| controls.show_with(ui, |ui| lists_row(app, ui));
+    let out =
+        if words.iter().next().is_some() { with_env(ui, |overrides| overrides.words = Some(WordsOverride::Overlay(words)), show) } else { show(ui) };
     for event in &out.edits {
         edits::apply_event(app, event, &EditPath::Scope, &mut |app, change, _| apply(app, change));
     }

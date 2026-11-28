@@ -6,6 +6,7 @@ use super::*;
 
 mod clipfx;
 mod imageoutline;
+mod loneanchor;
 mod painted;
 mod rasterfollow;
 mod scale;
@@ -1117,10 +1118,10 @@ fn transform_copies_before_offset_path_evaluates_without_ram_spike() {
         fx("path.offsetPath", json!({"offset": 10.0, "joins": "round"})),
     ];
     let path = shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0));
-    let start = std::time::Instant::now();
+    crate::geometry::OFFSET_SUBPATHS.with(|n| n.set(0));
     let out = apply_geometry(&effects, &path, path.bounds().unwrap());
-    let elapsed = start.elapsed();
-    assert!(elapsed < std::time::Duration::from_secs(2), "elapsed: {:?}", elapsed);
+    // Offset Path offsets the one rectangle, not the 31 overlapping copies.
+    assert_eq!(crate::geometry::OFFSET_SUBPATHS.with(|n| n.get()), path.subpaths.len());
     assert_eq!(out.subpaths.len(), 31);
 }
 
@@ -1135,10 +1136,10 @@ fn reshape_leaves_within_optimizes_transform_before_terminal_offset_path() {
     let transform = fx("distort.transform", json!({"moveH": 2.0, "moveV": 2.0, "copies": 10}));
     let offset = fx("path.offsetPath", json!({"offset": 4.0, "joins": "round"}));
 
-    let start = std::time::Instant::now();
+    crate::geometry::OFFSET_SUBPATHS.with(|n| n.set(0));
     crate::reshape::reshape_leaves_within(&mut art, &[&transform, &offset], Budget::EFFECTS, None);
-    let elapsed = start.elapsed();
-    assert!(elapsed < std::time::Duration::from_secs(2));
+    // Offset Path offsets each leaf's one rectangle, not its 11 copies.
+    assert_eq!(crate::geometry::OFFSET_SUBPATHS.with(|n| n.get()), 5);
 
     let children = art.children().unwrap();
     assert_eq!(children.len(), 5);
@@ -2184,5 +2185,25 @@ fn a_pathfinder_effects_precision_is_a_distance_that_scales_with_the_object() {
         crate::scale_effect(&mut e, 2.0);
         crate::scale_effect(&mut e, 0.5);
         assert_eq!(e.params["precision"].as_f64(), Some(8.0), "{id}");
+    }
+}
+
+#[test]
+fn a_pathfinder_effects_stored_precision_that_is_not_a_number_is_the_default() {
+    let d = PathfinderEffectOptions::default().precision;
+    for v in [json!(true), json!(false), json!("1abc"), json!("5 pt"), json!(null), json!([2.0])] {
+        assert_eq!(PathfinderEffectOptions::from_params(&json!({ "precision": v })).precision, d, "{v}");
+    }
+    // A number out of range takes its nearest bound.
+    assert_eq!(PathfinderEffectOptions::from_params(&json!({"precision": 50.0})).precision, *PATHFINDER_EFFECT_PRECISION.end());
+    assert_eq!(PathfinderEffectOptions::from_params(&json!({"precision": 0})).precision, *PATHFINDER_EFFECT_PRECISION.start());
+    // Scale Strokes & Effects scales the precision such an effect evaluates with.
+    for (id, _, _) in PATHFINDER_EFFECTS {
+        for v in [json!(true), json!("1abc")] {
+            let mut e = crate::new_effect(id, &json!({ "precision": v })).unwrap();
+            crate::scale_effect(&mut e, 3.0);
+            let scaled = e.params["precision"].as_f64().unwrap_or(f64::NAN);
+            assert!((scaled - d * 3.0).abs() < 1e-12, "{id} {v}: {scaled}");
+        }
     }
 }

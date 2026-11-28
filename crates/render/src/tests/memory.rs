@@ -10,6 +10,30 @@ use crate::blobs::blob_key;
 use crate::tests_fontchange::fonts_steady;
 use crate::*;
 
+#[test]
+fn geometry_from_measurement_only_frames_releases_old_node_versions() {
+    let mut doc = Document::new(100.0, 100.0);
+    let layer = doc.layers[0].id;
+    let id = doc.alloc_id();
+    let path = Node::path(
+        id,
+        vectorcraft_geom::shapes::rectangle(Rect::new(5.0, 10.0, 25.0, 30.0)),
+        vectorcraft_doc::Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+    );
+    doc.insert(Some(layer), 0, path).unwrap();
+    let oldest = Arc::downgrade(&doc.layers[0].children().unwrap()[0]);
+    let mut renderer = Renderer::new();
+    let opts = RenderOptions::default();
+    for _ in 0..12 {
+        let mut next = doc.clone();
+        next.node_mut(id).unwrap().transform(Affine::translate((1.0, 0.0)), false);
+        assert!(matches!(renderer.changed(&doc, &next, &opts), Changed::Area(_)));
+        renderer.finish_measurement_only();
+        doc = next;
+    }
+    assert!(oldest.upgrade().is_none(), "obsolete measured nodes must be released without a full draw");
+}
+
 /// A `w`×`h` PNG whose pixels depend on `seed` (each test its own image: the store is shared by
 /// the tests running alongside).
 fn png(w: u32, h: u32, seed: u8) -> Vec<u8> {
@@ -2205,6 +2229,74 @@ fn rasters_follow_the_view_options() {
     draws_as_new(&mut d, &isolated, &on_white, unchanged);
 }
 
+/// Overprinting white characters over red in Overprint Preview: paper white knocks out while
+/// Discard White Overprint is on and vanishes into the red when it is turned off; a white spot ink
+/// overprints with it on. In Separations Preview paper white characters knock the plate out too.
+#[test]
+fn overprinting_white_characters_follow_discard_white_overprint() {
+    let _fonts = fonts_steady();
+    use vectorcraft_doc::text::{CharStyle, TextObject};
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let typed = || {
+        let mut d = Document::new(200.0, 100.0);
+        d.swatches.push(vectorcraft_color::Swatch { name: "Opaque White".into(), paint: Paint::solid(white), global: true, spot: true });
+        let red =
+            filled(&mut d, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)), Paint::solid(Color::rgb(1.0, 0.0, 0.0)), vec![]);
+        let style = CharStyle { size: 50.0, fill: Paint::solid(white), overprint_fill: true, ..Default::default() };
+        let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Hamburg", style))));
+        with_art(d, vec![red, text])
+    };
+    let overprints = RenderOptions { overprint_preview: true, background: Some([255, 255, 255, 255]), ..Default::default() };
+    draws_as_new(&mut typed(), &overprints, &overprints, |d| d.setup.discard_white_overprint = false);
+    draws_as_new(&mut typed(), &overprints, &overprints, |d| {
+        let text = d.layers[0].children().unwrap()[1].id;
+        if let Some(NodeKind::Text(t)) = d.node_mut(text).map(|n| &mut n.kind) {
+            t.runs.iter_mut().for_each(|r| r.style.fill = Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 });
+        }
+    });
+    // Knocking out shows the white of the characters; overprinting leaves only the red.
+    let whites = |d: &Document, opts: &RenderOptions| {
+        Renderer::new().render(d, 200, 100, Affine::IDENTITY, opts).pixels.chunks(4).filter(|p| p[0] > 250 && p[1] > 250 && p[2] > 250).count()
+    };
+    let mut d = typed();
+    assert!(whites(&d, &overprints) > 0, "paper white knocks out");
+    d.setup.discard_white_overprint = false;
+    assert_eq!(whites(&d, &overprints), 0, "with the option off it overprints");
+    let mut d = typed();
+    let text = d.layers[0].children().unwrap()[1].id;
+    if let Some(NodeKind::Text(t)) = d.node_mut(text).map(|n| &mut n.kind) {
+        t.runs.iter_mut().for_each(|r| r.style.fill = Paint::Solid { color: white, swatch: Some("Opaque White".into()), tint: 1.0 });
+    }
+    assert_eq!(whites(&d, &overprints), 0, "a white spot ink overprints");
+    // Separations Preview: paper white characters over cyan knock the Cyan plate out.
+    let mut d = Document::new(200.0, 100.0);
+    let cyan =
+        filled(&mut d, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)), Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)), vec![]);
+    let style = CharStyle { size: 50.0, fill: Paint::solid(white), overprint_fill: true, ..Default::default() };
+    let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Hamburg", style))));
+    let mut d = with_art(d, vec![cyan, text]);
+    let seps = RenderOptions { background: Some([255, 255, 255, 255]), ..proof_views(&["Cyan"]).1 };
+    assert!(whites(&d, &seps) > 0, "paper white knocks the Cyan plate out");
+    d.setup.discard_white_overprint = false;
+    assert_eq!(whites(&d, &seps), 0, "with the option off the cyan shows through");
+    // Magenta characters over cyan, with only the Cyan plate shown: they put none of it down, so
+    // the cyan shows through them, as if they were not there.
+    let magenta = |with_text: bool| {
+        let mut d = Document::new(200.0, 100.0);
+        let cyan = filled(
+            &mut d,
+            vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 100.0)),
+            Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0)),
+            vec![],
+        );
+        let style = CharStyle { size: 50.0, fill: Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), overprint_fill: true, ..Default::default() };
+        let text = Node::new(d.alloc_id(), NodeKind::Text(Box::new(TextObject::point(vectorcraft_geom::Point::new(10.0, 70.0), "Hamburg", style))));
+        let d = with_art(d, if with_text { vec![cyan, text] } else { vec![cyan] });
+        Renderer::new().render(&d, 200, 100, Affine::IDENTITY, &proof_views(&["Cyan"]).1).pixels
+    };
+    assert!(magenta(true) == magenta(false), "the characters leave the cyan plate as it is");
+}
+
 /// A document for the proof previews: a cyan square, a magenta circle over it whose black stroke
 /// overprints, a white square over the cyan one that overprints, a blurred rectangle in spot color
 /// `Spot`, and an instance of symbol `S`, a group holding a yellow square.
@@ -2273,8 +2365,8 @@ fn proof_previews_keep_their_art_between_frames() {
 
 /// With Overprint Preview or Separations Preview on, a renderer draws what a new renderer draws
 /// after a change to the art or to what the previews read: an object recolored, Discard White
-/// Overprint turned off, a symbol's art recolored (its instance shows the plates of the new art),
-/// the spot color redefined, a spot color in a color group redefined, the Spot Colors option set
+/// Overprint turned off, an overprinting white's swatch made a spot color, a symbol's art
+/// recolored (its instance shows the plates of the new art), the spot color redefined, a spot color in a color group redefined, the Spot Colors option set
 /// to CMYK values, a plate hidden, Simulate Paper Color, another proof profile, and one preview
 /// after the other.
 #[test]
@@ -2296,6 +2388,19 @@ fn proof_previews_draw_changes_as_a_new_renderer_does() {
     for opts in [&overprint, &separations] {
         draws_as_new(&mut proof_doc(), opts, opts, recolor_square);
         draws_as_new(&mut proof_doc(), opts, opts, |d| d.setup.discard_white_overprint = false);
+        // The overprinting white square's swatch becomes a spot color, a white ink.
+        let mut linked = proof_doc();
+        let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+        linked.swatches.push(vectorcraft_color::Swatch { name: "White".into(), paint: Paint::solid(white), global: true, spot: false });
+        let square = linked.layers[0].children().unwrap()[2].id;
+        if let Some(f) = linked.node_mut(square).unwrap().appearance.fill_mut() {
+            f.paint = Paint::Solid { color: white, swatch: Some("White".into()), tint: 1.0 };
+        }
+        draws_as_new(&mut linked, opts, opts, |d| {
+            if let Some(s) = d.swatch_mut("White") {
+                s.spot = true;
+            }
+        });
     }
     draws_as_new(&mut proof_doc(), &separations, &separations, recolor_symbol);
     draws_as_new(&mut proof_doc(), &separations, &separations, |d| {

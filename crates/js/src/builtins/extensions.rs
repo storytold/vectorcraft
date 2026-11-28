@@ -1,6 +1,6 @@
 //! The script extensions a host adds with [`crate::Realm::add_script_extensions`]: the global
-//! `localize`, the global `toSource` and `Object.prototype.toSource`, and the getters behind
-//! [`crate::ScriptItem`]. `localize` and `Object.prototype.toString` read the locale of
+//! `localize`, the global `toSource` and `Object.prototype.toSource`, `Object.prototype.reflect`
+//! ([`crate::reflect`]), and the getters behind [`crate::ScriptItem`]. `localize` and `Object.prototype.toString` read the locale of
 //! [`Localization`].
 //!
 //! `toSource` writes primitives, arrays and plain objects as the text of a JavaScript expression
@@ -96,7 +96,8 @@ pub(crate) fn install(interp: &mut Interp) -> JsResult<()> {
     method(interp, global, "localize", localize, 1)?;
     method(interp, global, "toSource", to_source, 1)?;
     let object_proto = interp.intrinsics.object_proto;
-    method(interp, object_proto, "toSource", to_source_method, 0)
+    method(interp, object_proto, "toSource", to_source_method, 0)?;
+    crate::reflect::install(interp)
 }
 
 /// The text of the localization object `id` for the current locale: the string value of the first
@@ -235,6 +236,7 @@ impl Source {
             }
             Value::String(s) => self.quoted(interp, &s.flat()),
             Value::Object(id) => self.object(interp, *id),
+            Value::Symbol(_) => Err(interp.type_error("toSource: a Symbol cannot be written as source")),
         }
     }
 
@@ -280,13 +282,18 @@ impl Source {
         // only, so an array with other properties, an object with another prototype and a property
         // that is not enumerable are refused.
         let enumerable = o.props.iter().all(|(_, p)| p.enumerable());
+        let has_symbols = o.syms.as_ref().is_some_and(|m| m.len() > 0);
         let shape = match &o.class {
             Class::Array { length, .. }
-                if o.proto == Some(array_proto) && enumerable && o.props.iter().all(|(k, _)| array_index(k).is_some_and(|i| i < *length)) =>
+                if o.proto == Some(array_proto)
+                    && enumerable
+                    && !has_symbols
+                    && o.props.iter().all(|(k, _)| array_index(k).is_some_and(|i| i < *length)) =>
             {
                 Some(Err(*length))
             }
             Class::Array { .. } => return Err(interp.type_error(NOT_PLAIN_ARRAY)),
+            Class::Ordinary if has_symbols => return Err(interp.type_error("toSource: an object with a Symbol property cannot be written as source")),
             Class::Ordinary if o.proto == Some(object_proto) && enumerable => {
                 Some(Ok(o.props.iter().map(|(k, p)| (k.clone(), p.clone())).collect::<Vec<_>>()))
             }

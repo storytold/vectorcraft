@@ -178,6 +178,11 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   `startup` and `demand` faces of `crates/text/web-fonts.txt` are served under `fonts/ui/`
   instead: the stack fetches the UI language's at once and the others the first time text needs
   them.
+- Document tab titles: desktop builds also embed the Noto Sans Condensed SemiBold row of the
+  checkout's opt-in `fonts/latin-manifest.txt` (`Embed::tab_face` in `crates/text/build.rs`).
+  The interface font stack draws document tab titles in it, scaled to the x-height of the
+  semibold face; the document font list leaves it out. Without `CRAFT_FONTS_DIR`, on the web, or
+  with a checkout that lacks the row (a build warning), tab titles draw in the semibold face.
 - Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
@@ -312,7 +317,7 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
   row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
   doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
-  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch, Danish and Indonesian
+  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch, Danish, Indonesian and Bulgarian
   translate status and error messages (`COMPLETE_MESSAGES` in `i18n::tests`); the untranslated report lists the
   message literals the scan finds, and the phrases a parameter schema's error builds at run time
   (`SCHEMA_PHRASES`), that one of them has no row for. The scan covers the crates in `MESSAGE_CRATES`, the

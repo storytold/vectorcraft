@@ -66,7 +66,7 @@ pub const PATHFINDER_EFFECT_PRECISION: std::ops::RangeInclusive<f64> = 0.001..=1
 /// The documentation of [`PATHFINDER_OPTION_KEYS`], as a literal for `concat!`.
 macro_rules! options_doc {
     () => {
-        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing; results are refit to within it and pieces thinner than it are dropped), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, a compound shape's area going by the shape's own fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
+        "precision?: pt 0.001..10 (effect.apply: Pathfinder Options › Precision; 0.01 when missing, and a stored value that is not a number evaluates as 0.01; results are refit to within it and pieces thinner than it are dropped; Outline treats crossings closer together than precision / 10000 as one point, or than the tolerance for the art's size when that is larger), removeRedundantPoints?: bool (effect.apply: Pathfinder Options › Remove Redundant Points; false when missing; results lose the anchors that don't change their shape to within precision), removeUnpainted?: bool (effect.apply: Pathfinder Options › Divide and Outline Will Remove Unpainted Artwork; false when missing; Divide and Outline leave out the pieces of members with no visible fill, a compound shape's area going by the shape's own fill, except that Divide keeps every piece when the group or compound shape has a visible fill of its own; the other operations ignore it)"
     };
 }
 
@@ -102,14 +102,21 @@ impl Default for PathfinderEffectOptions {
     }
 }
 
+/// The `precision` stored in a Pathfinder effect's parameters `p`, out of range or not, when it is a
+/// JSON number. A value of another type (`true`, `"1 pt"`) is not a precision.
+pub(crate) fn stored_precision(p: &Value) -> Option<f64> {
+    p.get("precision").and_then(Value::as_f64).filter(|v| v.is_finite())
+}
+
 impl PathfinderEffectOptions {
-    /// The options in `p`: a missing or non-numeric value takes its default and a precision out of
-    /// range its nearest bound, so a live effect always evaluates.
+    /// The options in `p`: a missing value, or one of the wrong type (a precision that is not a
+    /// number), takes its default, and a precision out of range its nearest bound, so a live effect
+    /// always evaluates.
     pub fn from_params(p: &Value) -> Self {
         let d = PathfinderEffectOptions::default();
         let (lo, hi) = (*PATHFINDER_EFFECT_PRECISION.start(), *PATHFINDER_EFFECT_PRECISION.end());
         PathfinderEffectOptions {
-            precision: crate::util::num(p, "precision", d.precision).clamp(lo, hi),
+            precision: stored_precision(p).unwrap_or(d.precision).clamp(lo, hi),
             remove_redundant_points: crate::util::flag(p, "removeRedundantPoints", d.remove_redundant_points),
             remove_unpainted: crate::util::flag(p, "removeUnpainted", d.remove_unpainted),
         }
@@ -343,7 +350,7 @@ fn reshaped_art(doc: Option<&Document>, n: &Node, hook: Option<OutlineHook>, nod
 fn reshaped(src: &Node, n: &Node, doc: Option<&Document>) -> Node {
     let mut m = src.clone();
     if let Some((path, rule)) = geometry(src) {
-        let bounds = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
+        let bounds = path.bounds().unwrap_or_default();
         let (g, carry) =
             crate::apply_geometry_carrying(&n.appearance.effects, &path, bounds, &crate::GeomContext { doc, ..crate::GeomContext::of(n) });
         m.kind = NodeKind::Path { path: g, rule, live: None, clipping: false, guide: false };

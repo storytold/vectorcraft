@@ -434,7 +434,7 @@ fn number_cell(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str
         .enabled(enabled)
         .id_salt(key)
         .show(ui);
-    if let Some(Some(value)) = typed.edit.value() {
+    if let Some(Some(value)) = typed.edit.events.landed() {
         f.set(key, *value);
     }
     typed.edit.response.clone()
@@ -448,7 +448,7 @@ fn clamped_number(key: &'static str, label: &'static str, range: (f64, f64), uni
 
 /// A menu over `ids` (id, label) bound to the text field `key`, showing `current`.
 fn id_select(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str, entries: &[Entry<String>], current: String) {
-    if let Some(picked) = Select::new(label, Bind::given(current), entries).id_salt(key).show(ui).value() {
+    if let Some(picked) = Select::new(label, Bind::given(current), entries).id_salt(key).show(ui).events.committed() {
         f.set(key, picked.as_str());
     }
 }
@@ -501,8 +501,9 @@ fn art_rows(object: bool) -> Vec<Param> {
             .show(ui, |ui, _| {
                 let slid =
                     Slider::new(Bind::given(clamped(f, "width", range)), range.0..=range.1).step(1.0).label(tl!("Width")).id_salt("width").show(ui);
-                if let Some(value) = slid.value() {
-                    f.set("width", value.round());
+                if let Some(value) = slid.events.landed() {
+                    // The slider quantizes new edits; Cancel restores the exact opening width.
+                    f.set("width", *value);
                 }
                 number_cell(ui, f, "widthMax", tl!("Width"), range, UnitKind::Percent, mode.follows_pen());
                 id_select(ui, f, "widthMode", tl!("Width"), &entries, mode.id().to_string());
@@ -528,15 +529,20 @@ fn art_rows(object: bool) -> Vec<Param> {
     rows
 }
 
-/// The direction of the art along the stroke: a segment per direction in [`DIRECTIONS`] order.
+/// The direction of the art along the stroke: an arrow segment per direction in [`DIRECTIONS`] order,
+/// named by its tooltip.
 fn direction_row() -> Param {
-    // PLAN: the arrows are text until sh.S5's `APP_ICONS` names its arrow icons (with the tooltips Left to Right, Right to Left, Top to Bottom, Bottom to Top); a screen reader reads each segment as its glyph.
-    let arrows = ["→", "←", "↓", "↑"];
+    let arrows = [
+        ("dc-arrow-right", tl!("Left to Right")),
+        ("dc-arrow-left", tl!("Right to Left")),
+        ("dc-arrow-down", tl!("Top to Bottom")),
+        ("dc-arrow-up", tl!("Bottom to Top")),
+    ];
     Param::custom("direction", tl!("Direction"), move |ui, f, _| {
         let current = DIRECTIONS.iter().position(|d| *d == parse_field::<Direction>(f, "direction")).unwrap_or(0);
-        let entries: Vec<Entry<usize>> = arrows.iter().enumerate().map(|(i, arrow)| Entry::new(i, *arrow)).collect();
+        let entries: Vec<Entry<usize>> = arrows.iter().enumerate().map(|(i, (icon, tip))| Entry::new(i, *tip).icon(IconId::new(icon))).collect();
         let shown = Segmented::new(tl!("Direction"), Bind::given(current), &entries).show(ui);
-        if let Some(dir) = shown.value().and_then(|i| DIRECTIONS.get(*i)) {
+        if let Some(dir) = shown.events.committed().and_then(|i| DIRECTIONS.get(*i)) {
             f.set("direction", id_of(dir));
         }
         shown.response().clone()

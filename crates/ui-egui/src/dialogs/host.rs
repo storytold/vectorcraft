@@ -44,6 +44,7 @@ pub(crate) type Cancel = Box<dyn FnOnce(&mut VectorcraftApp)>;
 type Drain = Box<dyn FnMut(&mut VectorcraftApp) -> Option<bool>>;
 
 struct Record {
+    id: DialogId,
     drain: Drain,
     cancel: Option<Cancel>,
 }
@@ -52,20 +53,39 @@ struct Record {
 #[derive(Default)]
 pub(crate) struct Held(Vec<Record>);
 
-fn drain<D: HoldsOk>(id: DialogId, mut ok: impl FnMut(&mut VectorcraftApp, &D::Answer) -> Result<(), String> + 'static) -> Drain {
+impl Held {
+    fn reopened(&self, id: DialogId) -> bool {
+        self.0.iter().any(|record| record.id == id)
+    }
+}
+
+fn drain<D: HoldsOk>(id: DialogId, serial: u64, mut ok: impl FnMut(&mut VectorcraftApp, &D::Answer) -> Result<(), String> + 'static) -> Drain {
     Box::new(move |app| {
         // Without a window nothing can answer: the dialog counts as cancelled so its rollback runs.
         let Some(host) = app.dialogs() else { return Some(true) };
+        match host.with(|h| h.open_serial(id)) {
+            None => return host.with(|h| h.take_by_id::<D>(id)).map(|r| matches!(r, DialogResult::Cancel)),
+            Some(open) if open != serial => return Some(false),
+            Some(_) => {}
+        }
         if let Some(answer) = host.with(|h| h.get_mut_by_id::<D>(id).and_then(D::take_ok)) {
             // The host's lock is released while `ok` runs: it may open dialogs.
             let verdict = ok(app, &answer).map_err(Into::into);
+            // A callback can reopen the same key. Its old verdict cannot answer that opening.
+            if app.held.reopened(id) {
+                return Some(false);
+            }
             host.with(|h| {
-                if let Some(d) = h.get_mut_by_id::<D>(id) {
+                if h.open_serial(id) == Some(serial)
+                    && let Some(d) = h.get_mut_by_id::<D>(id)
+                {
                     d.answer_ok(verdict);
                 }
             });
         }
-        host.with(|h| h.take_by_id::<D>(id)).map(|r| matches!(r, DialogResult::Cancel))
+        // A replace-by-open can leave the retired opening's Cancel under the same dialog ID.
+        // A live opening has no final result for this record yet.
+        None
     })
 }
 
@@ -88,11 +108,16 @@ pub(crate) fn open_held_with<D: HoldsOk>(
 ) -> Option<DialogId> {
     let host = app.dialogs()?;
     let dialog = dialog.held_ok();
-    let id = host.with(|h| match options.parent {
-        Some(parent) => h.open_child(dialog, parent),
-        None => h.open(dialog),
-    });
-    app.held.0.push(Record { drain: drain::<D>(id, ok), cancel: options.cancel });
+    let (id, serial) = host.with(|h| {
+        let id = match options.parent {
+            Some(parent) => h.open_child(dialog, parent),
+            None => h.open(dialog),
+        };
+        h.open_serial(id).map(|serial| (id, serial))
+    })?;
+    // A host key can be reopened before the previous result has been pumped.
+    app.held.0.retain(|record| record.id != id);
+    app.held.0.push(Record { id, drain: drain::<D>(id, serial, ok), cancel: options.cancel });
     Some(id)
 }
 
@@ -216,6 +241,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
         super::new_swatch::pump,
         super::brush_options::pump,
         super::brush_delete::pump,
+        super::failed_plugins::pump,
         super::brush_replace_art::pump,
         super::symbol_delete::pump,
         crate::find_font::pump,
@@ -226,6 +252,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // A drain's `ok` may open held dialogs: those join the records that stay.
     let mut kept = Vec::new();
     for mut record in std::mem::take(&mut app.held.0) {
+        if app.held.reopened(record.id) {
+            continue;
+        }
         match (record.drain)(app) {
             None => kept.push(record),
             Some(true) => {
@@ -236,6 +265,119 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
             Some(false) => {}
         }
     }
+    kept.retain(|record| !app.held.reopened(record.id));
     kept.append(&mut app.held.0);
     app.held.0 = kept;
+}
+
+#[cfg(test)]
+mod opening_tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use craft::ui::dialog::HeldOk;
+    use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog};
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    const KEY: &str = "testHeldOpening";
+
+    fn app() -> (VectorcraftApp, egui::Context) {
+        let app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        let ctx = app.ui_ctx.clone().unwrap();
+        (app, ctx)
+    }
+
+    fn dialog(ctx: &egui::Context) -> HostedParamDialog {
+        HostedParamDialog::new(ctx, KEY, DialogFields::new(), |_| ParamDialog::new(KEY, "Test dialog", vec![]))
+    }
+
+    #[test]
+    fn held_ok_uses_the_replacement_openings_callback() {
+        let (mut app, ctx) = app();
+        let host = app.dialogs().unwrap();
+        let retired = Rc::new(RefCell::new(Vec::new()));
+        let before = retired.clone();
+        let first = open_held(&mut app, dialog(&ctx), move |_, _| {
+            before.borrow_mut().push("old");
+            Ok(())
+        })
+        .unwrap();
+        assert!(host.with(|h| h.cancel_by_id(&ctx, first)));
+
+        let answers = retired.clone();
+        let fresh = open_held(&mut app, dialog(&ctx), move |_, _| {
+            answers.borrow_mut().push("new");
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(first, fresh);
+        assert!(!host.with(|h| h.confirm_by_id(&ctx, fresh)));
+        assert_eq!(host.with(|h| h.held_state(fresh)), Some(HeldOk::Waiting));
+        pump(&mut app, &ctx);
+        assert_eq!(*retired.borrow(), ["new"]);
+        assert_eq!(host.with(|h| h.held_state(fresh)), Some(HeldOk::Accepted));
+    }
+
+    #[test]
+    fn pumping_a_replacement_before_ok_keeps_its_callback() {
+        let (mut app, ctx) = app();
+        let host = app.dialogs().unwrap();
+        open_held(&mut app, dialog(&ctx), |_, _| panic!("the retired opening cannot answer")).unwrap();
+
+        let accepted = Rc::new(RefCell::new(Vec::new()));
+        let seen = accepted.clone();
+        let fresh = open_held(&mut app, dialog(&ctx), move |_, _| {
+            seen.borrow_mut().push("new");
+            Ok(())
+        })
+        .unwrap();
+
+        pump(&mut app, &ctx);
+        assert!(!host.with(|h| h.confirm_by_id(&ctx, fresh)));
+        pump(&mut app, &ctx);
+        assert_eq!(*accepted.borrow(), ["new"]);
+        assert_eq!(host.with(|h| h.held_state(fresh)), Some(HeldOk::Accepted));
+    }
+
+    #[test]
+    fn cancelling_a_replacement_runs_only_its_cancel_callback() {
+        let (mut app, ctx) = app();
+        let host = app.dialogs().unwrap();
+        let cancelled = Rc::new(RefCell::new(Vec::new()));
+        for flag in ["old", "new"] {
+            let log = cancelled.clone();
+            open_held_with(
+                &mut app,
+                dialog(&ctx),
+                |_, _| Ok(()),
+                HeldOptions { parent: None, cancel: Some(Box::new(move |_| log.borrow_mut().push(flag))) },
+            )
+            .unwrap();
+        }
+        assert!(host.with(|h| h.cancel_by_id(&ctx, craft::ui::dialog::dialog_id(KEY))));
+        pump(&mut app, &ctx);
+        assert_eq!(*cancelled.borrow(), ["new"]);
+    }
+
+    #[test]
+    fn an_old_verdict_does_not_answer_a_replacement_opened_by_its_callback() {
+        let (mut app, ctx) = app();
+        let host = app.dialogs().unwrap();
+        let replacement_ctx = ctx.clone();
+        let id = open_held(&mut app, dialog(&ctx), move |app, _| {
+            let id = open_held(app, dialog(&replacement_ctx), |_, _| Ok(())).unwrap();
+            let host = app.dialogs().unwrap();
+            assert!(!host.with(|h| h.confirm_by_id(&replacement_ctx, id)));
+            assert_eq!(host.with(|h| h.held_state(id)), Some(HeldOk::Waiting));
+            Err("old verdict".into())
+        })
+        .unwrap();
+        assert!(!host.with(|h| h.confirm_by_id(&ctx, id)));
+        pump(&mut app, &ctx);
+        assert_eq!(host.with(|h| h.held_state(id)), Some(HeldOk::Waiting));
+        pump(&mut app, &ctx);
+        assert_eq!(host.with(|h| h.held_state(id)), Some(HeldOk::Accepted));
+    }
 }

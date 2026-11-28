@@ -136,6 +136,15 @@ pub(crate) enum Op {
     /// `object function` → `object`.
     InitGetter(u32),
     InitSetter(u32),
+    /// `object value` → `object`: `__proto__: value` sets the object's prototype to the value
+    /// when it is an object or `null` (ECMA-262 2015 section B.3.1).
+    InitProto,
+    /// `function` → `function`: gives the new function the `name` `names[i]` (ECMA-262 2015
+    /// section 9.2.11).
+    SetFunctionName(u32),
+    /// `name function` → `name function`: gives the new function the computed `name` on the
+    /// stack, after the prefix.
+    SetFunctionNameKey(NamePrefix),
     /// Pushes a new function made from `functions[i]` and the current environment.
     Closure(u32),
     /// Pushes a new regular expression object for `regexps[i]`.
@@ -214,6 +223,53 @@ pub(crate) enum Op {
     ToStr,
     /// Pushes the template object of `templates[i]`, the same object for each evaluation.
     TemplateObject(u32),
+    /// `value` → its Iterator Record (GetIterator, ECMA-262 11th edition section 7.4.1).
+    GetIterator,
+    /// `record` → `record value`, or jumps with `record` when the iterator is done.
+    IterStep(u32),
+    /// `record x₁…xₙ` → `record x₁…xₙ value`: the next value, `undefined` once it is done.
+    IterValue(u32),
+    /// `record` → `record`: steps the iterator without reading the result's `value`, for a hole
+    /// in an array pattern.
+    IterSkip,
+    /// `record x₁…xₙ` → `record x₁…xₙ array`: the values left, in an array.
+    IterRest(u32),
+    /// `record` → nothing: closes the iterator unless it is done (IteratorClose).
+    IterClose,
+    /// `record exception` → throws the exception after closing the iterator unless it is done.
+    IterCloseThrow,
+    /// `value` → `value`: a `TypeError` when it is `undefined` or `null`.
+    RequireObjectCoercible,
+    /// `object key x₁…xₙ` → `object key x₁…xₙ object[key]`: an object pattern's property.
+    PatternGet(u32),
+    /// `object key value` → `object`: a property with a computed name.
+    InitIndex,
+    /// `object key function` → `object`: a getter (`true`) or a setter with a computed name.
+    InitAccessorIndex(bool),
+    /// Ends a generator function's call once its parameters are initialized: the frame becomes a
+    /// new generator object, which the call returns. The first `next` goes on after it.
+    GeneratorStart,
+    /// `value` → `received mode`: suspends the generator, giving its caller `{ value, done: false }`
+    /// (or, when true, the value itself, an iterator result from `yield*`'s delegate). It goes on
+    /// when the generator is resumed, with the value it was resumed with and how (0 `next`, 1
+    /// `throw`, 2 `return`).
+    Yield(bool),
+    /// `received mode` → `received`: goes on for `next`, throws the value for `throw`, and jumps
+    /// with it for `return`.
+    Resume(u32),
+    /// `value` → `iterator next`: GetIterator (ECMA-262 11th edition, section 7.4.1) for `yield*`,
+    /// which calls the iterator's methods itself.
+    DelegateIterator,
+    /// `iterator next received mode` → `iterator next mode method iterator received`, ready for
+    /// `Call(1)`: the delegate's `next`, `throw` or `return`. With `return` and no `return` method
+    /// it jumps with `iterator next received`; with `throw` and no `throw` method it closes the
+    /// iterator and throws a `TypeError` (section 14.4.14).
+    DelegateCall(u32),
+    /// `mode result` → `result` when the iterator result is not done; when it is, jumps with
+    /// `mode value`. A result that is not an object is a `TypeError`.
+    DelegateResult(u32),
+    /// `mode value` → `value`; for `return`, jumps with it.
+    DelegateDone(u32),
 }
 
 /// The names a block declares, entered with [`Op::PushBlock`].
@@ -305,9 +361,56 @@ pub(crate) struct Code {
     pub(crate) arrow: bool,
     /// The code reads `this` or calls `eval`, itself or in an arrow function inside it.
     pub(crate) uses_this: bool,
-    /// The function has default or rest parameters: its parameters start uninitialized, its
-    /// code initializes them and then enters its body with [`Op::BodyEnv`].
+    /// The function has default, rest or destructured parameters: its parameters start
+    /// uninitialized, its code initializes them and then enters its body with [`Op::BodyEnv`].
     pub(crate) param_init: bool,
+    /// The names the destructured parameters bind, which start uninitialized beside the
+    /// parameters. A destructured parameter's own entry in `params` is a name no script can
+    /// write.
+    pub(crate) pattern_names: Vec<Key>,
+    /// The code was read with [`crate::Options::es2015`]: its function's `length` can be
+    /// redefined, as ECMA-262 2015 section 19.2.4.1 has it.
+    pub(crate) es2015: bool,
+    /// The `name` its function objects get when they are made (ECMA-262 2015 sections 14.1.19
+    /// and 14.1.20): a declaration's or a named function expression's name, with
+    /// [`crate::Options::es2015`].
+    pub(crate) own_name: Option<Key>,
+    /// The code is a method's, a getter's or a setter's, read with [`crate::Options::es2015`]:
+    /// its functions have no `prototype` and cannot be constructed (section 14.3.8).
+    pub(crate) method: bool,
+    /// The code is a generator function's: a call makes a generator object ([`Op::GeneratorStart`]),
+    /// and it is not a constructor.
+    pub(crate) generator: bool,
+}
+
+/// What [`Op::SetFunctionNameKey`] puts before a computed name: `get ` and `set ` for accessors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NamePrefix {
+    None,
+    Get,
+    Set,
+}
+
+impl NamePrefix {
+    /// The prefix's code units, with the space that follows it.
+    pub(crate) fn units(self) -> &'static [u16] {
+        const GET: &[u16] = &[0x67, 0x65, 0x74, 0x20];
+        const SET: &[u16] = &[0x73, 0x65, 0x74, 0x20];
+        match self {
+            NamePrefix::None => &[],
+            NamePrefix::Get => GET,
+            NamePrefix::Set => SET,
+        }
+    }
+
+    /// The prefix with the space that follows it, as text.
+    pub(crate) fn text(self) -> &'static str {
+        match self {
+            NamePrefix::None => "",
+            NamePrefix::Get => "get ",
+            NamePrefix::Set => "set ",
+        }
+    }
 }
 
 impl Code {
@@ -361,7 +464,9 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::Neg | Op::Plus | Op::BitNot | Op::Not | Op::Typeof | Op::ToNumber | Op::ArrayHole | Op::ForInStart | Op::CheckObject => e(1, 1),
         Op::GetMemberThis(_) => e(1, 2),
         Op::SetMember(_) | Op::GetIndex | Op::DeleteIndex | Op::IncIndex { .. } | Op::Binary(_) => e(2, 1),
-        Op::ArrayPush | Op::InitProp(_) | Op::InitGetter(_) | Op::InitSetter(_) => e(2, 1),
+        Op::ArrayPush | Op::InitProp(_) | Op::InitGetter(_) | Op::InitSetter(_) | Op::InitProto => e(2, 1),
+        Op::SetFunctionName(_) => e(1, 1),
+        Op::SetFunctionNameKey(_) => e(2, 2),
         Op::GetIndexThis => e(2, 2),
         Op::SetIndex => e(3, 1),
         Op::Call(n) | Op::CallEval(n) => e(n.checked_add(2).ok_or("operand too large")?, 1),
@@ -391,7 +496,19 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
         Op::ArraySpread | Op::NewSpread => e(2, 1),
         Op::CallSpread(_) => e(3, 1),
-        Op::ToStr => e(1, 1),
+        Op::ToStr | Op::GetIterator | Op::IterSkip | Op::RequireObjectCoercible => e(1, 1),
+        Op::IterStep(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
+        Op::IterValue(n) | Op::IterRest(n) => e(n.checked_add(1).ok_or("operand too large")?, n.checked_add(2).ok_or("operand too large")?),
+        Op::PatternGet(n) => e(n.checked_add(2).ok_or("operand too large")?, n.checked_add(3).ok_or("operand too large")?),
+        Op::IterClose => e(1, 0),
+        Op::IterCloseThrow => end(2),
+        Op::InitIndex | Op::InitAccessorIndex(_) => e(3, 1),
+        Op::GeneratorStart => e(0, 0),
+        Op::Yield(_) => e(1, 2),
+        Op::Resume(t) | Op::DelegateDone(t) => Effect { pops: 2, next: Some(1), jumps: vec![(t, 1)] },
+        Op::DelegateIterator => e(1, 2),
+        Op::DelegateCall(t) => Effect { pops: 2, next: Some(4), jumps: vec![(t, 1)] },
+        Op::DelegateResult(t) => Effect { pops: 2, next: Some(1), jumps: vec![(t, 2)] },
     })
 }
 
@@ -418,6 +535,7 @@ fn check_indices(op: Op, code: &Code) -> Result<(), String> {
         | Op::InitProp(i)
         | Op::InitGetter(i)
         | Op::InitSetter(i)
+        | Op::SetFunctionName(i)
         | Op::PushCatch(i)
         | Op::InitVar(i)
         | Op::LoadParam(i)
@@ -426,6 +544,7 @@ fn check_indices(op: Op, code: &Code) -> Result<(), String> {
         Op::PushBlock(i) => check(i, code.scopes.len(), "scope"),
         Op::TemplateObject(i) => check(i, code.templates.len(), "template"),
         Op::RegExp(i) => check(i, code.regexps.len(), "regular expression"),
+        Op::GeneratorStart | Op::Yield(_) if !code.generator => Err("a generator instruction outside a generator function".into()),
         _ => Ok(()),
     }
 }

@@ -344,6 +344,9 @@
 	Artboards	Radne ploče
 	Convert to Artboards	Pretvori u radne ploče
 	Rearrange All Artboards…	Preuredi sve radne ploče…
+	Rearrange…	Preuredi…
+	Selected Artboards: {n}	Odabrane radne ploče: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Kliknite na platno da postavite radne ploče (Esc otkazuje)
 	Fit to Artwork Bounds	Uklopi u granice crteža
 	Fit to Selected Art	Uklopi u odabrani crtež
 	Graph	Grafikon
@@ -504,6 +507,7 @@
 	Fill & Stroke	Ispuna i potez
 	Fill Color	Boja ispune
 	Opacity	Neprozirnost
+	Show Opacity	Prikaži neprozirnost
 	Stroke Color	Boja poteza
 	Fill Gradient	Gradijent ispune
 	Stroke Gradient	Gradijent poteza
@@ -653,6 +657,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft generički CMYK (sličan SWOP-u)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft premazani CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft nepremazani CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Naslijeđeni Macintosh RGB (gama 1.8)
 	Internet Standard RGB (sRGB)	Internet standardni RGB (sRGB)
 	Monitor RGB	RGB monitora
@@ -2101,6 +2107,17 @@ digits	Malayalam	Malajalam
 @msg	`Custom` stands for changed settings: save the preset under another name	`Custom` označava promijenjene postavke: sačuvajte unaprijed postavljeno pod drugim nazivom
 @msg	`{key}` must be an array of these names: {_1}	`{key}` mora biti niz ovih naziva: {_1}
 	Graphics	Grafika
+	Show Contrast	Prikaži kontrast
+	Contrast For	Kontrast za
+	Normal Text	Normalni tekst
+	Large Text	Veliki tekst
+	Contrast Background	Pozadina kontrasta
+	Behind Selection	Iza odabira
+	Current Color	Trenutna boja
+	Pass	Prolazi
+	Fail	Ne prolazi
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Minimalni kontrast po WCAG 2.2: normalni tekst AA 4.5:1 (1.4.3) i AAA 7:1 (1.4.6), veliki tekst AA 3:1 i AAA 4.5:1, grafike i kontrole AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Pozadina se očitava u sredini odabira.
 	Local Libraries	Lokalne biblioteke
 	Add Content	Dodaj sadržaj
 	Click to apply to the selected type	Kliknite da primijenite na odabrani tekst
@@ -3677,6 +3694,12 @@ theme	Appearance	Izgled
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	rezolucija nije dostupna
+	estimated memory {memory}	procijenjena memorija {memory}
+	memory unavailable	memorija nije dostupna
+	Unknown format	Nepoznat format
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -4127,6 +4150,7 @@ theme	Appearance	Izgled
 	Data Recovery	Oporavak podataka
 	Default Language	Zadani jezik
 	Disable Auto Add/Delete	Onemogući automatsko dodavanje/brisanje
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete uklanja sidrene tačke i zadržava putanje spojenim
 	Interpolate Control Points When Moving Anchors	Interpoliraj ručke smjera pri pomjeranju sidrenih tačaka
 	Display All Blacks Accurately	Prikaži sve crne tačno
 	Display All Blacks as Rich Black	Prikaži sve crne kao bogatu crnu
@@ -4697,7 +4721,7 @@ font-technology	Variable	Varijabilni
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Odabir › Isto › Boja ispune, Boja poteza i Ispuna i potez pronalaze samo istu nijansu globalnog ili spot uzorka, a ne bilo koju njegovu nijansu.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Prikazuje početni ekran kada nijedan dokument nije otvoren; kada je isključeno, prozor ostaje prazan dok ne kliknete Početna.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mjeri objekte zajedno s potezima i efektima koji mijenjaju oblik za veličinu, položaj i poravnanje; sjene, sjaj i zamućenja se ne mjere.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Pri zumu od 100% jedan inč dokumenta zauzima 96 tačaka ekrana umjesto 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Pri zumu od 100% jedan inč dokumenta ispunjava jedan inč ekrana, ili 96 tačaka ekrana kada sistem ne javlja upotrebljivu veličinu ekrana.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Dvostruki klik na grupu, putanju ili sliku alatom Odabir otvara ih u načinu izolacije.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Ispune i potezi s uzorkom transformišu se zajedno s grafikom, osim ako transformacija ili meni panela Transformiši ne odabere drugačije.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Poluprečnici dinamičnih uglova skaliraju se zajedno s grafikom, osim ako skaliranje ne odabere drugačije.
@@ -4708,6 +4732,7 @@ font-technology	Variable	Varijabilni
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Pokret rotacije s dva prsta na dodirnoj podlozi rotira prikaz platna.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Držanje tipke pokreće alat ili naredbu iz njene kolone „Zadrži“ u Prečicama na tastaturi; kratki pritisak pokreće njenu uobičajenu prečicu.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Koliko sekundi tipka mora biti pritisnuta prije nego što se umjesto uobičajene prečice pokrene njena prečica zadržavanjem.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete uklanja odabrane sidrene tačke i ponovo prilagođava krivu oko svake od njih, umjesto da tamo otvori putanju.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Kada pomjerate sidrene tačke, svaka kriva s jednim pomjerenim krajem zadržava svoj oblik u odnosu na svoje krajeve.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Držanje prečice alata bira taj alat dok je ne pustite, a zatim se ponovo bira prethodni alat.
 	Shows the bounding box while you move the selection or draw a shape.	Prikazuje granični okvir dok pomjerate odabir ili crtate oblik.
@@ -5116,6 +5141,14 @@ imageTrace	Outline	Obris
 	The script asks to read and write a folder you choose, with everything in it.	Skripta traži da čita i piše folder koji odaberete, sa svim što je u njemu.
 	Allow Once	Dozvoli jednom
 	Always Allow This Script	Uvijek dozvoli ovu skriptu
+	No script has kept file access.	Nijedna skripta nema sačuvan pristup datotekama.
+	Read file	Čitanje datoteke
+	Read and write file	Čitanje i pisanje datoteke
+	Read and write folder	Čitanje i pisanje foldera
+	Revoke	Opozovi
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Opozovi uklanja pristup sačuvan za svaku verziju skripte. Pristup folderu obuhvata sve u njemu.
+@msg	Script file access revoked	Pristup skripte datotekama je opozvan
+@msg	The script file access was already revoked	Pristup skripte datotekama je već opozvan
 	Deny	Odbij
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skripta može mijenjati otvorene dokumente i pisati datoteke putem naredbi koje pokreće. Pokrećite samo skripte kojima vjerujete.
 	Do not show this warning again	Ne prikazuj više ovo upozorenje
@@ -6304,6 +6337,9 @@ file-filter	Swatch libraries	Biblioteke uzoraka boja
 file-filter	Flattener presets	Predlošci spljoštavanja
 file-filter	PDF presets	PDF predlošci
 file-filter	Print presets	Predlošci štampanja
+file-filter	Tracing presets	Predlošci praćenja
+file-filter	Action sets	Skupovi akcija
+file-filter	Composite fonts	Kompozitni fontovi
 file-filter	Preferences	Postavke
 file-filter	Export presets	Predlošci izvoza
 file-filter	SVG Compressed	Komprimirani SVG
@@ -6712,6 +6748,7 @@ axis	Y Axis	Y osa
 @msg	“{name}” is another module than the plug-in with id {_1} and would get the settings and cache kept for it: install it with `replace: true` once the user agrees	„{name}” je drugi modul od dodatka s ID-om {_1} i dobio bi postavke i predmemoriju sačuvane za njega: instalirajte ga s `replace: true` kada korisnik pristane
 	File SHA-256: {hash}	SHA-256 datoteke: {hash}
 	Read the objects it is given	Čitati objekte koje dobije
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Čitati objekte koje dobije, kao i postavke, radne ploče, slojeve i uzorke boja dokumenta
 	Change, add and delete objects in the document	Mijenjati, dodavati i brisati objekte u dokumentu
 	Keep data of its own with the document	Čuvati vlastite podatke uz dokument
 	Change how the objects its effect is applied to are drawn	Mijenjati kako se crtaju objekti na koje je primijenjen njegov efekt
@@ -7568,6 +7605,7 @@ shape	Open	Otvoren
 	Place Brush Art	Postavi crtež četkice
 	Replace Brush Art	Zamijeni crtež četkice
 	Replace Pattern Art	Zamijeni crtež uzorka
+	Place Pattern Art	Postavi crtež uzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Potezi koriste ovu četkicu. Primijeniti novi crtež na te poteze ili ih ostaviti kakvi jesu i dodati kopiju četkice s novim crtežom?
 	Apply to Strokes	Primijeni na poteze
 	Leave Strokes	Ostavi poteze
@@ -7637,6 +7675,8 @@ shape	Open	Otvoren
 	Tangent Circle	Tangentna kružnica
 	Tangent Circle Tool	Alat tangentna kružnica
 	No tangent circle here	Ovdje nema tangentne kružnice
+	Ask For Circle Radius	Pitaj za poluprečnik kružnice
+	Auto-Update Default	Automatski ažuriraj zadanu vrijednost
 	Circle:	Kružnica:
 @msg	`ids` names an object twice	`ids` navodi objekat dvaput
 @msg	select two or three paths or compound paths	odaberite dvije ili tri putanje ili složene putanje
@@ -7958,6 +7998,11 @@ shape	Open	Otvoren
 	No objects are selected.	Nijedan objekat nije odabran.
 	Open a document to mark its fold lines.	Otvorite dokument da označite njegove linije savijanja.
 	Remove Fold Line Role	Ukloni vrstu linije
+	Fold Angle	Ugao savijanja
+	Set Fold Angle…	Postavi ugao savijanja…
+	Set Fold Angle	Postavi ugao savijanja
+	Reset Fold Angle	Poništi ugao savijanja
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	odaberite liniju bigovanja, djelimičnog rezanja ili perforacije koja nije zaključana ni skrivena
 	Check	Provjeri
 	Check Fold Lines	Provjeri linije savijanja
 @msg	No cut lines are in the selection.	U odabiru nema linija rezanja.

@@ -207,9 +207,16 @@ pub fn unconfined<T>(f: impl FnOnce() -> T) -> T {
     with_gate_reads_exempt(true, || with_scope(Some(Scope::Unconfined), f))
 }
 
+/// Run `f`, a read of a file in one of the app's own folders, with reads exempt from the gate of
+/// the script command this thread runs. Unlike [`unconfined`], the roots in force still apply.
+pub(crate) fn app_folder_read<T>(f: impl FnOnce() -> T) -> T {
+    with_gate_reads_exempt(true, f)
+}
+
 thread_local! {
     /// Are reads on this thread exempt from the gate of the script command it runs? Only inside an
-    /// [`unconfined`] entered after the gate was put in force ([`with_script_gate`]).
+    /// [`unconfined`] or an [`app_folder_read`] entered after the gate was put in force
+    /// ([`with_script_gate`]).
     static GATE_READS_EXEMPT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -227,6 +234,14 @@ fn with_gate_reads_exempt<T>(exempt: bool, f: impl FnOnce() -> T) -> T {
     f()
 }
 
+/// `scope`, or for a thread without one, the `process` roots in force now (none: unconfined).
+fn resolved(scope: Option<Scope>, process: Option<&Arc<AutomationRoots>>) -> Scope {
+    scope.unwrap_or_else(|| match process {
+        Some(r) => Scope::Confined(r.clone()),
+        None => Scope::Unconfined,
+    })
+}
+
 /// This thread's scope, with the gate of the script command it runs, to carry to work it hands to
 /// another thread ([`ScopeHandle::run`]).
 #[derive(Clone, Debug)]
@@ -236,6 +251,15 @@ impl ScopeHandle {
     /// The scope of the calling thread.
     pub fn capture() -> Self {
         Self(SCOPE.with(|s| s.borrow().clone()), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
+    }
+
+    /// [`ScopeHandle::capture`], except that a thread with no scope of its own takes the process's
+    /// roots as they are now ([`confine_process`]): work captured before the process is confined
+    /// stays unconfined on the thread that runs it, as it would have been had it run on the calling
+    /// thread at once.
+    pub fn capture_now() -> Self {
+        let scope = resolved(SCOPE.with(|s| s.borrow().clone()), PROCESS.get());
+        Self(Some(scope), GATE.with(|g| g.borrow().clone()), GATE_READS_EXEMPT.with(std::cell::Cell::get))
     }
 
     /// Run `f` in the captured scope.
@@ -338,7 +362,8 @@ impl ScriptGate {
         ScriptGate { also: Some(also), ..self.clone() }
     }
 
-    fn check(&self, path: &str, access: Access) -> Result<(), String> {
+    /// May `path` be read (or written) through this gate?
+    pub(crate) fn check(&self, path: &str, access: Access) -> Result<(), String> {
         if let Some(also) = &self.also {
             also.check(path, access)?;
         }
@@ -1324,6 +1349,24 @@ mod tests {
         assert!(r.is_err());
         assert_eq!(check_read(&outside), Ok(()), "restored after a panic");
         assert_eq!(confine(None, || check_read(&outside)), Ok(()));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// Work captured with [`ScopeHandle::capture_now`] before the process is confined stays
+    /// unconfined when it runs after; work captured with [`ScopeHandle::capture`] is confined then.
+    #[test]
+    fn a_scope_captured_now_stays_unconfined_after_the_process_is_confined() {
+        if !crate::tests::in_own_process("file_access::tests::a_scope_captured_now_stays_unconfined_after_the_process_is_confined") {
+            return;
+        }
+        let (base, roots) = folders("captured-process");
+        let outside = s(base.join("outside/secret.svg"));
+        let (now, plain) = std::thread::spawn(|| (ScopeHandle::capture_now(), ScopeHandle::capture())).join().unwrap();
+        assert!(confine_process(roots));
+        assert_eq!(now.run(|| check_read(&outside)), Ok(()), "captured now, before the process was confined");
+        assert!(plain.run(|| check_read(&outside)).is_err(), "captured plainly, run after the process was confined");
+        let later = std::thread::spawn(ScopeHandle::capture_now).join().unwrap();
+        assert!(later.run(|| check_read(&outside)).is_err(), "captured now, after the process was confined");
         let _ = std::fs::remove_dir_all(base);
     }
 

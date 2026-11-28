@@ -198,6 +198,7 @@ fn rasterize(
         let v = view * def.instance_xf(o);
         let frame = Frame {
             mt: false,
+            patch: None,
             doc,
             symbols: &symbols,
             view: v,

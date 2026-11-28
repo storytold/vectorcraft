@@ -11,7 +11,7 @@ use vectorcraft_geom::PathData;
 use vectorcraft_tools::builder::is_live_paint;
 
 use super::appearance::{ItemTarget, edit_items, item_target};
-use super::paint::{live_paint_covered, live_paint_parts_skipped, painted};
+use super::paint::{live_paint_parts_skipped, painted};
 use super::{CommandSpec, Result, Session, always, bad, bool_or, cmd, has_doc, ok, str_param};
 use crate::DocState;
 use crate::inspect::{ALIGNS, CAPS, JOINS, StrokeMixed, node_stroke, scale_layer};
@@ -241,7 +241,7 @@ fn stroke_set(s: &mut Session, p: &Value) -> Result<Value> {
     let change = StrokeChange::parse(p, C)?;
     // The stroke the Live Paint Bucket paints with changes; the selection keeps its own, and its
     // active Appearance row is not a target.
-    let bucket_p = super::paint::bucket_color_params(s, p, C)?;
+    let bucket_p = super::paint::tool_color_params(s, p, C, true)?;
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
     let item = item_target(s, p, C)?.of_kind(s, false);
@@ -397,7 +397,7 @@ fn stroke_step(s: &mut Session, p: &Value, up: bool) -> Result<Value> {
     let unit = s.stroke_unit();
     // The weight the Live Paint Bucket paints with changes; the selection keeps its own, and its
     // active Appearance row is not a target.
-    let bucket_p = super::paint::bucket_color_params(s, p, c)?;
+    let bucket_p = super::paint::tool_color_params(s, p, c, true)?;
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
     let item = item_target(s, p, c)?.of_kind(s, false);
@@ -450,7 +450,7 @@ impl Session {
     /// selection's stroke.
     pub fn shown_stroke(&self) -> Option<StrokeLayer> {
         let st = self.active()?;
-        if self.bucket_paints() {
+        if self.tool_paints(true) {
             return Some(self.new_art_stroke());
         }
         if let Some(part) = st.selected_symbol_part() {
@@ -465,7 +465,7 @@ impl Session {
         // A Live Paint group without edges shows the next selected object's stroke; any other object
         // without a painted object shows none. A face or edge selected with its Live Paint group counts
         // with the group, wherever it is in the selection.
-        let covered = live_paint_covered(&st.doc, &st.selection.objects);
+        let covered = st.selection_live_paint_covered(&st.selection.objects);
         for id in st.selection.objects.iter().filter(|id| !covered.contains(*id)) {
             let Some(n) = st.doc.node(*id) else { continue };
             let mut nodes = vec![];
@@ -497,6 +497,32 @@ impl Session {
     /// and with a target that has no stroke row, since `stroke.set` gives such a target a plain
     /// stroke.
     pub fn brushed_strokes_profiled(&self) -> Option<bool> {
+        let st = self.active()?;
+        let strokes: Vec<&StrokeLayer> = self.edited_strokes(false)?.into_iter().map(|s| s.filter(|s| s.brush.is_some())).collect::<Option<_>>()?;
+        if strokes.is_empty() {
+            return None;
+        }
+        // The library is read only when every stroke names a brush.
+        let lib = vectorcraft_brush::library(&st.doc);
+        strokes.iter().all(|s| vectorcraft_brush::keeps_brush_size(&lib, s)).then(|| strokes.iter().any(|s| s.profile.is_some()))
+    }
+
+    /// Does any of the strokes that `stroke.set` edits without `ids` or `item` have a width
+    /// profile? The strokes are the ones [`Session::brushed_strokes_profiled`] reads, with or without
+    /// a brush. Type without an active Appearance row is left out, since `stroke.set` gives its
+    /// characters no profile. False with nothing selected, with an object inside a symbol instance
+    /// selected, and with a target that has no stroke row, which a profile from `stroke.set` would
+    /// give a plain stroke.
+    pub fn edited_strokes_profiled(&self) -> bool {
+        self.edited_strokes(true)
+            .and_then(|strokes| strokes.into_iter().collect::<Option<Vec<_>>>())
+            .is_some_and(|strokes| strokes.iter().any(|s| s.profile.is_some()))
+    }
+
+    /// The strokes that `stroke.set` edits without `ids` or `item`, one for each target, `None` for
+    /// a target without a stroke row (see [`Session::brushed_strokes_profiled`]). Type without an
+    /// active Appearance row is skipped with `skip_type`, and makes the result `None` without it.
+    fn edited_strokes(&self, skip_type: bool) -> Option<Vec<Option<&StrokeLayer>>> {
         const C: &str = "stroke.set";
         let st = self.active()?;
         if st.selected_symbol_part().is_some() {
@@ -510,20 +536,18 @@ impl Session {
             ids.retain(|id| !matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Image(_) | NodeKind::SymbolInstance { .. })));
         }
         let mut strokes = vec![];
-        for (id, each) in ids.iter().zip(item.per_target(self, &ids)) {
+        for (id, each) in ids.iter().zip(item.each_target(self, &ids)) {
             let n = st.doc.node(*id)?;
             let row = each?.resolve(&n.appearance, false, C).ok()?;
             if row.is_none() && matches!(n.kind, NodeKind::Text(_)) {
+                if skip_type {
+                    continue;
+                }
                 return None;
             }
-            strokes.push(n.appearance.stroke_at(row).filter(|s| s.brush.is_some())?);
+            strokes.push(n.appearance.stroke_at(row));
         }
-        if strokes.is_empty() {
-            return None;
-        }
-        // The library is read only when every stroke names a brush.
-        let lib = vectorcraft_brush::library(&st.doc);
-        strokes.iter().all(|s| vectorcraft_brush::keeps_brush_size(&lib, s)).then(|| strokes.iter().any(|s| s.profile.is_some()))
+        Some(strokes)
     }
 }
 
@@ -540,7 +564,7 @@ impl DocState {
         } else {
             let selected: Vec<&Node> = self.selection.objects.iter().filter_map(|id| self.doc.node(*id)).collect();
             // The faces and edges of the selected Live Paint groups: selected as well, they count with their group's.
-            let covered = live_paint_covered(&self.doc, &self.selection.objects);
+            let covered = self.selection_live_paint_covered(&self.selection.objects);
             for n in selected.into_iter().filter(|n| !covered.contains(&n.id)) {
                 painted(n, true, true, &mut nodes);
             }
@@ -622,7 +646,7 @@ fn stroke_advanced(s: &mut Session, p: &Value) -> Result<Value> {
     if brush.is_some() && super::switch_or(p, "defaultsOnly", false, C)? {
         return Err(bad(C, "`defaultsOnly` cannot be combined with `brush`"));
     }
-    let bucket_p = if brush.is_none() { super::paint::bucket_color_params(s, p, C)? } else { None };
+    let bucket_p = if brush.is_none() { super::paint::tool_color_params(s, p, C, true)? } else { None };
     let bucket = bucket_p.is_some();
     let p = bucket_p.as_ref().unwrap_or(p);
     let item = item_target(s, p, C)?.of_kind(s, false);

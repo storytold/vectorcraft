@@ -33,12 +33,38 @@
 //! chains and `??`) without and with that option, and
 //! prints both counts; its failures with the option go to `es2015-failures.txt`.
 //!
+//! A sixth test runs the tests under the folders [`ES2015_COLLECTION_BUILT_INS`] names (`Map`, `Set`,
+//! `WeakMap`, `WeakSet`, `ArrayBuffer`, `DataView`, `TypedArray` and `TypedArrayConstructors`) in
+//! realms with [`Options::es2015`], each test whose feature tags are all in
+//! [`ES2015_COLLECTION_FEATURES`]; its failures go to `es2015-builtins-failures.txt`. It fails when
+//! the interpreter panics.
+//!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
 //! test under `test/annexB/language/` without a feature tag the same way as the ES5 parse subset
 //! (failures in `annexb-parse-failures.txt`), and one runs those tests and the tests under the
 //! folders [`ANNEX_B_BUILT_INS`] names through the interpreter (failures in
 //! `annexb-language-failures.txt` and `annexb-builtins-failures.txt`). A suite without
 //! `test/annexB/` skips them; a folder there with no test to parse or run fails them.
+//!
+//! Another test runs the tests under `test/built-ins/Promise` in realms with `Options::es2015`:
+//! those whose feature tags name only `Promise`, `Promise.allSettled` and
+//! `Promise.prototype.finally`, whose code parses and uses only the built-ins present. `async` tests
+//! run with the suite's `doneprintHandle.js` and pass when they print the completion line. Its
+//! failures go to `promise-failures.txt`.
+//!
+//! Another test runs the tests of `Symbol`, `Object.getOwnPropertySymbols` and the iterators of
+//! arrays and strings (the folders [`SYMBOL_BUILT_INS`] names) in a realm with
+//! [`Options::es2015`]: tests of any edition whose feature tags are all in [`SYMBOL_FEATURES`] and
+//! that parse with that option. Its failures go to `symbol-failures.txt`.
+//!
+//! Another test reads the tests of `for-of` and destructuring (the folders
+//! [`FOR_OF_AND_PATTERN_FOLDERS`] names) with [`Options::es2015`]: tests of any edition whose
+//! feature tags are all in [`FOR_OF_AND_PATTERN_FEATURES`]. Negative parse tests must give a
+//! `SyntaxError`; the others run as the Symbol tests run. Its failures go to `for-of-failures.txt`.
+//!
+//! The last test reads and runs the tests of generator functions, `yield` and the generator objects
+//! (the folders [`GENERATOR_FOLDERS`] names) the same way, with the `generators` tag and the tags of
+//! the two tests before it. Its failures go to `generators-failures.txt`.
 //!
 //! The runner reads only regular files inside the suite: it does not follow symbolic links, refuses
 //! an `includes:` name that leaves the `harness/` folder, and refuses a file over
@@ -48,7 +74,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use vectorcraft_js::{JsValue, Limits, Options, Punct, Realm, RunErrorKind, Token, TokenKind, parse, tokenize};
-
 /// A test file's metadata, from its `/*--- … ---*/` block.
 #[derive(Default)]
 struct Meta {
@@ -354,7 +379,7 @@ fn parse_check(source: &str, meta: &Meta, strict: bool) -> Result<(), String> {
 
 /// Globals and method names the interpreter does not provide yet: a test that names one, in its
 /// own source or in a harness file it includes, is skipped.
-const MISSING_BUILTINS: &str = "String Number Boolean Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
+const MISSING_BUILTINS: &str = "String Number Date RegExp print $262 $DONE Symbol Proxy Reflect Promise Map Set WeakMap \
     WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array charAt charCodeAt fromCharCode substring substr split replace \
     match search exec test toUpperCase toLowerCase trim toFixed toPrecision toExponential now";
 
@@ -455,6 +480,11 @@ fn runs_strings_as_code(tokens: &[Token]) -> bool {
         }
         _ => false,
     })
+}
+
+/// Runs one test in a new realm made with `options`; `Err` describes a failure.
+fn run_one_with(options: &Options, script: &str, negative_type: Option<&str>) -> Result<(), String> {
+    run_one(script, negative_type, options)
 }
 
 /// Runs one test in a new realm made with `options`; `Err` describes a failure.
@@ -605,6 +635,108 @@ fn run_text_builtins(dir: &Path) {
     assert_eq!(panicked, 0, "the interpreter panicked; see {}", path.display());
 }
 
+/// The directories under `test/built-ins/` that hold the tests of the ECMAScript 2015 collections
+/// and binary data, which run in a realm with [`Options::es2015`].
+const ES2015_COLLECTION_BUILT_INS: &[&str] = &["Map", "Set", "WeakMap", "WeakSet", "ArrayBuffer", "DataView", "TypedArray", "TypedArrayConstructors"];
+
+/// The names in [`MISSING_BUILTINS`] that a realm with [`Options::es2015`] provides.
+const ES2015_BUILTINS: &str = "Map Set WeakMap WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array";
+
+/// The feature tags a test under [`ES2015_COLLECTION_BUILT_INS`] may have and still run: the built-ins
+/// themselves and the stable typed array sort. A tag starting `DataView.prototype.` names one of
+/// the `DataView` methods. Tests with any other tag (symbols, `Reflect`, classes, resizable or
+/// detached buffers, `BigInt` and later additions) are counted as skipped.
+const ES2015_COLLECTION_FEATURES: &[&str] = &[
+    "Map",
+    "Set",
+    "WeakMap",
+    "WeakSet",
+    "ArrayBuffer",
+    "DataView",
+    "TypedArray",
+    "Int8Array",
+    "Uint8Array",
+    "Float64Array",
+    "stable-typedarray-sort",
+];
+
+#[test]
+fn es2015_collections_and_binary_data_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 ECMAScript 2015 built-ins: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_es2015_built_ins(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under the folders [`ES2015_COLLECTION_BUILT_INS`] names in realms with
+/// [`Options::es2015`], prints each folder's counts and writes the failures to
+/// `es2015-builtins-failures.txt` beside the suite.
+fn run_es2015_built_ins(dir: &Path) {
+    let missing = missing_builtins(&[TEXT_BUILTINS, ES2015_BUILTINS]);
+    let mut report = String::new();
+    let mut panicked = 0;
+    for name in ES2015_COLLECTION_BUILT_INS {
+        let root = or_fail(inside(dir, &format!("test/built-ins/{name}")));
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        let counts = run_es2015_tests(dir, &root, &missing);
+        println!("test262 built-ins/{name} in an ECMAScript 2015 realm: {}.", counts.summary());
+        report.push_str(&format!("# built-ins/{name}\n{}\n", counts.failures));
+        panicked += counts.panicked;
+    }
+    let path = dir.join("es2015-builtins-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 ECMAScript 2015 built-ins failures: {}", path.display());
+    assert_eq!(panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// Runs the tests under `root` whose feature tags are all in [`ES2015_COLLECTION_FEATURES`], as
+/// [`run_tests`] runs the ES5 tests, each in a new realm with [`Options::es2015`].
+fn run_es2015_tests(dir: &Path, root: &Path, missing: &HashSet<&str>) -> RunCounts {
+    // A harness file is named by the test's `includes:`, so it is read only inside `harness/`.
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let mut counts = RunCounts::default();
+    for path in or_fail(test_files(root)) {
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if matches!(meta.negative_phase.as_deref(), Some("parse" | "resolution")) || meta.flags.iter().any(|f| f == "module") {
+            continue;
+        }
+        let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+        let known = meta.features.iter().all(|f| ES2015_COLLECTION_FEATURES.contains(&f.as_str()) || f.starts_with("DataView.prototype."));
+        if !known || meta.flags.iter().any(|f| f == "async") || needs_missing_builtin(&[&source, &includes], missing) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let mode = if strict { "strict" } else { "sloppy" };
+            let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+            let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+            let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+            match std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref(), &Options { es2015: true, ..Options::default() })) {
+                Ok(Ok(())) => counts.passed += 1,
+                Ok(Err(why)) => {
+                    counts.failed += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                }
+            }
+        }
+    }
+    counts
+}
+
 /// Runs the tests under `root` that have no feature tag and are not module, asynchronous or
 /// negative parse tests, each in a new realm after the harness. Returns the counts for the tests
 /// that name an ES5 section and, when `later` is set, for the others (otherwise those are left out).
@@ -665,13 +797,37 @@ const ES2015_FOLDERS: &[&str] = &[
     "expressions/template-literal",
     "expressions/tagged-template",
     "rest-parameters",
+    "expressions/object",
+    "computed-property-names",
     "expressions/optional-chaining",
     "expressions/coalesce",
 ];
 
+/// The folders under `test/built-ins/` that [`run_es2015`] also reads: the `Function` tests hold
+/// those of the `name` and `length` properties of functions.
+const ES2015_BUILT_INS: &[&str] = &["Function"];
+
+/// The test files under `test/language/` that [`run_es2015`] also reads wherever they are: those
+/// of the `name` a function gets from its declaration or from the binding or property it is first
+/// assigned to.
+fn es2015_name_test(rel: &str) -> bool {
+    let file = rel.rsplit('/').next().unwrap_or(rel);
+    file.starts_with("fn-name-") || (file == "name.js" && (rel.contains("/function/") || rel.contains("/arrow-function/")))
+}
+
 /// The feature tags of the forms [`Options::es2015`] reads.
-const ES2015_FEATURES: &[&str] =
-    &["let", "const", "arrow-function", "template", "default-parameters", "rest-parameters", "optional-chaining", "coalesce-expression"];
+const ES2015_FEATURES: &[&str] = &[
+    "let",
+    "const",
+    "arrow-function",
+    "template",
+    "default-parameters",
+    "rest-parameters",
+    "computed-property-names",
+    "__proto__",
+    "optional-chaining",
+    "coalesce-expression",
+];
 
 #[test]
 fn es2015_subset_runs() {
@@ -694,7 +850,8 @@ struct Es2015Counts {
     failures: String,
 }
 
-/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`] whose feature
+/// Runs the ES2015 subset: the tests under `test/language/` in [`ES2015_FOLDERS`], under
+/// `test/built-ins/` in [`ES2015_BUILT_INS`] and those [`es2015_name_test`] picks, whose feature
 /// tags are all in [`ES2015_FEATURES`], and the tests elsewhere under `test/language/` with feature
 /// tags that are all in it. Negative parse tests must give a `SyntaxError`; the other tests run in a
 /// new realm after the harness, as [`run_tests`] runs them, skipping module and asynchronous tests
@@ -712,9 +869,15 @@ fn run_es2015(dir: &Path) {
     let editions = [Options::default(), modern.clone()];
     let mut counts = [Es2015Counts::default(), Es2015Counts::default()];
     let (mut selected, mut skipped, mut other_features) = (0usize, 0usize, 0usize);
-    for path in or_fail(test_files(&language)) {
+    let mut paths = or_fail(test_files(&language));
+    for folder in ES2015_BUILT_INS {
+        paths.extend(or_fail(inside(dir, &format!("test/built-ins/{folder}")).and_then(|d| test_files(&d))));
+    }
+    for path in paths {
         let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
-        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")));
+        let in_folder = ES2015_FOLDERS.iter().any(|f| rel.starts_with(&format!("test/language/{f}/")))
+            || ES2015_BUILT_INS.iter().any(|f| rel.starts_with(&format!("test/built-ins/{f}/")))
+            || es2015_name_test(&rel);
         let source = or_fail(read_source(&path));
         let meta = meta(&source);
         let tags_in_set = meta.features.iter().all(|f| ES2015_FEATURES.contains(&f.as_str()));
@@ -851,6 +1014,424 @@ fn run_annex_b(dir: &Path) {
     }
     println!("test262 Annex B built-ins failures: {}", path.display());
     assert_eq!(panicked, 0, "the interpreter panicked; see the Annex B failure files in {}", dir.display());
+}
+
+/// The feature tags a `test/built-ins/Promise` test may carry and still run: `Promise`,
+/// `Promise.allSettled` and `Promise.prototype.finally`.
+const PROMISE_FEATURES: &[&str] = &["Promise", "Promise.allSettled", "Promise.prototype.finally"];
+
+#[test]
+fn promise_builtins_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 Promise: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_promise(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+#[test]
+fn promise_async_completion_requires_an_exact_print_argument() {
+    assert!(run_promise_one("print('not Test262:AsyncTestComplete');", None, true).is_err());
+    assert!(run_promise_one("print('Test262:AsyncTestComplete suffix');", None, true).is_err());
+    assert!(run_promise_one("print('message', 'Test262:AsyncTestComplete');", None, true).is_ok());
+    assert!(run_promise_one("print('Test262:AsyncTestComplete');", None, true).is_ok());
+}
+
+#[test]
+fn promise_async_failure_checks_each_print_argument() {
+    assert!(run_promise_one("print('Test262:AsyncTestComplete', 'Test262:AsyncTestFailure: failed');", None, true).is_err());
+    assert!(run_promise_one("print('not Test262:AsyncTestFailure'); print('Test262:AsyncTestComplete');", None, true).is_ok());
+}
+
+/// Runs one Promise test with a global `print` that collects every argument. An `async` test
+/// needs an exact `Test262:AsyncTestComplete` argument and no `Test262:AsyncTestFailure` prefix.
+fn run_promise_one(script: &str, negative_type: Option<&str>, asynchronous: bool) -> Result<(), String> {
+    let options = Options { es2015: true, ..Options::default() };
+    let mut realm = Realm::with_options(options, Limits { fuel: 20_000_000, heap_bytes: 256 << 20, ..Limits::default() });
+    let printed = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let out = printed.clone();
+    realm.define_function("print", move |args| {
+        let mut printed = out.borrow_mut();
+        for arg in args {
+            printed.push(match arg {
+                JsValue::String(s) => s.clone(),
+                other => format!("{other:?}"),
+            });
+        }
+        Ok(JsValue::Undefined)
+    });
+    let result = realm.run(script);
+    if asynchronous && result.is_ok() && negative_type.is_none() {
+        let printed = printed.borrow();
+        return if printed.iter().any(|arg| arg == "Test262:AsyncTestComplete")
+            && !printed.iter().any(|arg| arg.starts_with("Test262:AsyncTestFailure"))
+        {
+            Ok(())
+        } else {
+            Err(format!("printed {printed:?}"))
+        };
+    }
+    match (result, negative_type) {
+        (Ok(_), None) => Ok(()),
+        (Ok(_), Some(t)) => Err(format!("completed; a {t} was expected")),
+        (Err(e), Some(t)) if e.kind == RunErrorKind::Thrown => {
+            realm.bind_last_thrown("__thrown");
+            match realm.run(&format!("typeof __thrown === 'object' && __thrown !== null && __thrown.constructor === {t}")) {
+                Ok(JsValue::Bool(true)) => Ok(()),
+                _ => Err(format!("threw {} (line {}); a {t} was expected", e.message, e.line)),
+            }
+        }
+        (Err(e), _) => Err(format!("{:?}: {} (line {}, column {})", e.kind, e.message, e.line, e.column)),
+    }
+}
+
+/// Runs the tests under `test/built-ins/Promise` whose feature tags are all in
+/// [`PROMISE_FEATURES`], whose code parses as ES5 and uses only the built-ins present, as sloppy
+/// and strict code as [`run_tests`] does, `async` tests included. Prints the counts and writes the
+/// failures to `promise-failures.txt` beside the suite.
+fn run_promise(dir: &Path) {
+    let root = or_fail(inside(dir, "test/built-ins/Promise"));
+    assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+    // A harness file is named by the test's `includes:`, so it is read only inside `harness/`.
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let done = harness("doneprintHandle.js");
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Promise $DONE print"]);
+    let mut groups: std::collections::BTreeMap<String, RunCounts> = std::collections::BTreeMap::new();
+    let (mut files, mut other_features) = (0usize, 0usize);
+    for path in or_fail(test_files(&root)) {
+        files += 1;
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if meta.features.iter().any(|f| !PROMISE_FEATURES.contains(&f.as_str())) {
+            other_features += 1;
+            continue;
+        }
+        let asynchronous = meta.flags.iter().any(|f| f == "async");
+        let tags = if meta.features.is_empty() { "no feature tag".to_string() } else { meta.features.join(", ") };
+        let counts = groups.entry(format!("{tags}, {}", if asynchronous { "async" } else { "sync" })).or_default();
+        let negative_parse = matches!(meta.negative_phase.as_deref(), Some("parse" | "resolution"));
+        if negative_parse || meta.flags.iter().any(|f| f == "module") {
+            counts.skipped += 1;
+            continue;
+        }
+        let mut includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+        if asynchronous {
+            includes.push_str(&done);
+            includes.push('\n');
+        }
+        if parse(&source, &Options::default()).is_err() || needs_missing_builtin(&[&source, &includes], &missing) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let has = |flag: &str| meta.flags.iter().any(|f| f == flag);
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let mode = if strict { "strict" } else { "sloppy" };
+            let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+            let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+            let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+            match std::panic::catch_unwind(|| run_promise_one(&script, negative_type.as_deref(), asynchronous)) {
+                Ok(Ok(())) => counts.passed += 1,
+                Ok(Err(why)) => {
+                    counts.failed += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                }
+            }
+        }
+    }
+    let mut all = RunCounts::default();
+    for (group, counts) in &groups {
+        println!("test262 built-ins/Promise, {group}: {}.", counts.summary());
+        all.tests += counts.tests;
+        all.skipped += counts.skipped;
+        all.passed += counts.passed;
+        all.failed += counts.failed;
+        all.panicked += counts.panicked;
+        all.failures.push_str(&counts.failures);
+    }
+    let report = dir.join("promise-failures.txt");
+    if let Err(e) = std::fs::write(&report, &all.failures) {
+        println!("could not write {}: {e}", report.display());
+    }
+    println!(
+        "test262 built-ins/Promise through the interpreter: {files} files, {other_features} with other feature tags left out; {}. Failures: {}",
+        all.summary(),
+        report.display()
+    );
+    assert!(all.tests > 0, "no Promise tests ran under {}", root.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", report.display());
+}
+
+/// The folders of the tests of `Symbol`, Symbol-keyed properties and the iterators of arrays and
+/// strings, which run in a realm with [`Options::es2015`].
+const SYMBOL_BUILT_INS: &[&str] = &[
+    "built-ins/Symbol",
+    "built-ins/ArrayIteratorPrototype",
+    "built-ins/StringIteratorPrototype",
+    "built-ins/Object/getOwnPropertySymbols",
+    "built-ins/Array/prototype/values",
+    "built-ins/Array/prototype/keys",
+    "built-ins/Array/prototype/entries",
+    "built-ins/Array/prototype/Symbol.iterator",
+    "built-ins/String/prototype/Symbol.iterator",
+];
+
+/// The feature tags of the tests under [`SYMBOL_BUILT_INS`] that run; a test with any other tag is
+/// skipped.
+const SYMBOL_FEATURES: &[&str] = &[
+    "Symbol",
+    "Symbol.iterator",
+    "Symbol.toStringTag",
+    "Symbol.hasInstance",
+    "Symbol.toPrimitive",
+    "Symbol.asyncIterator",
+    "Symbol.prototype.description",
+];
+
+#[test]
+fn es2015_symbol_and_iterators_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 Symbol and iterators: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_symbol_built_ins(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Runs the tests under each folder [`SYMBOL_BUILT_INS`] names in a realm with
+/// [`Options::es2015`], prints the counts of each and writes the failures to
+/// `symbol-failures.txt` beside the suite.
+fn run_symbol_built_ins(dir: &Path) {
+    let options = Options { es2015: true, ..Options::default() };
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
+    let mut all = RunCounts::default();
+    let mut report = String::new();
+    for folder in SYMBOL_BUILT_INS {
+        let root = or_fail(inside(dir, &format!("test/{folder}")));
+        assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
+        let counts = run_tagged_tests(dir, &root, &missing, &options, SYMBOL_FEATURES);
+        println!("test262 {folder} with Options::es2015: {}.", counts.summary());
+        report.push_str(&format!("# {folder}\n{}\n", counts.failures));
+        all.add(counts);
+    }
+    assert!(all.tests > 0, "no Symbol or iterator tests ran under {}", dir.display());
+    let path = dir.join("symbol-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 Symbol and iterators with Options::es2015: {}. Failures: {}", all.summary(), path.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// The folders of the tests of `for-of` and destructuring, which are read in a realm with
+/// [`Options::es2015`].
+const FOR_OF_AND_PATTERN_FOLDERS: &[&str] = &[
+    "language/statements/for-of",
+    "language/expressions/assignment/destructuring",
+    "language/expressions/assignment/dstr",
+    "language/statements/variable/dstr",
+    "language/statements/let/dstr",
+    "language/statements/const/dstr",
+    "language/statements/function/dstr",
+    "language/expressions/function/dstr",
+    "language/expressions/arrow-function/dstr",
+    "language/statements/try/dstr",
+    "language/statements/for/dstr",
+    "language/statements/for-in/dstr",
+];
+
+/// The feature tags of the tests under [`FOR_OF_AND_PATTERN_FOLDERS`] that are read; a test with
+/// any other tag is skipped.
+const FOR_OF_AND_PATTERN_FEATURES: &[&str] = &[
+    "let",
+    "const",
+    "arrow-function",
+    "template",
+    "default-parameters",
+    "rest-parameters",
+    "destructuring-binding",
+    "destructuring-assignment",
+    "computed-property-names",
+    "Symbol",
+    "Symbol.iterator",
+];
+
+#[test]
+fn es2015_for_of_and_destructuring_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 for-of and destructuring: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_for_of_and_patterns(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Reads the tests under each folder [`FOR_OF_AND_PATTERN_FOLDERS`] names whose feature tags are
+/// all in [`FOR_OF_AND_PATTERN_FEATURES`] with [`Options::es2015`]: a negative parse test must give
+/// a `SyntaxError`, and the others run as [`run_tagged_tests`] runs them. Prints the counts of each
+/// folder and writes the failures to `for-of-failures.txt` beside the suite.
+fn run_for_of_and_patterns(dir: &Path) {
+    let options = Options { es2015: true, ..Options::default() };
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
+    let mut all = RunCounts::default();
+    let mut report = String::new();
+    for folder in FOR_OF_AND_PATTERN_FOLDERS {
+        let Some(root) = or_fail(present(dir, &format!("test/{folder}"))) else {
+            println!("test262 {folder}: SKIPPED (not in this suite)");
+            continue;
+        };
+        let mut counts = run_parse_negatives(dir, &root, &options, FOR_OF_AND_PATTERN_FEATURES);
+        counts.add(run_tagged_tests(dir, &root, &missing, &options, FOR_OF_AND_PATTERN_FEATURES));
+        println!("test262 {folder} with Options::es2015: {}.", counts.summary());
+        report.push_str(&format!("# {folder}\n{}\n", counts.failures));
+        all.add(counts);
+    }
+    assert!(all.tests > 0, "no for-of or destructuring tests ran under {}", dir.display());
+    let path = dir.join("for-of-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 for-of and destructuring with Options::es2015: {}. Failures: {}", all.summary(), path.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// The folders of the tests of generator functions, `yield` and the generator objects, which run
+/// in a realm with [`Options::es2015`].
+const GENERATOR_FOLDERS: &[&str] = &[
+    "language/statements/generators",
+    "language/expressions/generators",
+    "language/expressions/yield",
+    "built-ins/GeneratorPrototype",
+    "built-ins/GeneratorFunction",
+];
+
+#[test]
+fn es2015_generators_run() {
+    let Some(dir) = suite_dir() else {
+        println!("test262 generators: SKIPPED (no suite; run cargo xtask test262)");
+        return;
+    };
+    let handle = std::thread::Builder::new().stack_size(64 << 20).spawn(move || run_generators(&dir)).unwrap();
+    handle.join().unwrap();
+}
+
+/// Reads the tests under each folder [`GENERATOR_FOLDERS`] names whose feature tags are all
+/// `generators` or in [`FOR_OF_AND_PATTERN_FEATURES`] or [`SYMBOL_FEATURES`] with
+/// [`Options::es2015`], as [`run_for_of_and_patterns`] reads its tests. Prints the counts of each
+/// folder and writes the failures to `generators-failures.txt` beside the suite.
+fn run_generators(dir: &Path) {
+    let options = Options { es2015: true, ..Options::default() };
+    let missing: HashSet<&str> = missing_builtins(&[TEXT_BUILTINS, "Symbol"]);
+    let mut features: Vec<&str> = vec!["generators"];
+    features.extend(FOR_OF_AND_PATTERN_FEATURES);
+    features.extend(SYMBOL_FEATURES);
+    let mut all = RunCounts::default();
+    let mut report = String::new();
+    for folder in GENERATOR_FOLDERS {
+        let Some(root) = or_fail(present(dir, &format!("test/{folder}"))) else {
+            println!("test262 {folder}: SKIPPED (not in this suite)");
+            continue;
+        };
+        let mut counts = run_parse_negatives(dir, &root, &options, &features);
+        counts.add(run_tagged_tests(dir, &root, &missing, &options, &features));
+        println!("test262 {folder} with Options::es2015: {}.", counts.summary());
+        report.push_str(&format!("# {folder}\n{}\n", counts.failures));
+        all.add(counts);
+    }
+    assert!(all.tests > 0, "no generator tests ran under {}", dir.display());
+    let path = dir.join("generators-failures.txt");
+    if let Err(e) = std::fs::write(&path, &report) {
+        println!("could not write {}: {e}", path.display());
+    }
+    println!("test262 generators with Options::es2015: {}. Failures: {}", all.summary(), path.display());
+    assert_eq!(all.panicked, 0, "the interpreter panicked; see {}", path.display());
+}
+
+/// Parses the negative parse tests under `root` whose feature tags are all in `features`, in
+/// each mode the test names, with `options`; each must give a `SyntaxError`.
+fn run_parse_negatives(dir: &Path, root: &Path, options: &Options, features: &[&str]) -> RunCounts {
+    let mut counts = RunCounts::default();
+    for path in or_fail(test_files(root)) {
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if meta.flags.iter().any(|f| f == "module") || meta.negative_phase.as_deref() != Some("parse") {
+            continue;
+        }
+        if meta.features.iter().any(|f| !features.contains(&f.as_str())) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let text = if strict { format!("\"use strict\";\n{source}") } else { source.clone() };
+            match std::panic::catch_unwind(|| parse(&text, options).is_err()) {
+                Ok(true) => counts.passed += 1,
+                Ok(false) => {
+                    counts.failed += 1;
+                    let mode = if strict { "strict" } else { "sloppy" };
+                    counts.failures.push_str(&format!("{rel} ({mode}): parsed; a SyntaxError was expected\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel}: PANIC\n"));
+                }
+            }
+        }
+    }
+    counts
+}
+
+/// Runs the script tests under `root` of any edition whose feature tags are all in `features`,
+/// each in a new realm made with `options` after the harness, the way [`run_tests`] runs the
+/// others. A test with another tag is counted as skipped.
+fn run_tagged_tests(dir: &Path, root: &Path, missing: &HashSet<&str>, options: &Options, features: &[&str]) -> RunCounts {
+    let harness = |name: &str| or_fail(inside(dir, &format!("harness/{name}")).and_then(|p| read_source(&p)));
+    let prelude = format!("{}\n{}\n", harness("assert.js"), harness("sta.js"));
+    let mut counts = RunCounts::default();
+    for path in or_fail(test_files(root)) {
+        let source = or_fail(read_source(&path));
+        let meta = meta(&source);
+        if meta.flags.iter().any(|f| f == "module") || matches!(meta.negative_phase.as_deref(), Some("parse" | "resolution")) {
+            continue;
+        }
+        let tagged_elsewhere = meta.features.iter().any(|f| !features.contains(&f.as_str()));
+        let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
+        if tagged_elsewhere || meta.flags.iter().any(|f| f == "async") || needs_missing_builtin_in(&[&source, &includes], missing, options) {
+            counts.skipped += 1;
+            continue;
+        }
+        counts.tests += 1;
+        let rel = path.strip_prefix(dir).unwrap_or(&path).display().to_string().replace('\\', "/");
+        for &strict in modes(&meta) {
+            let mode = if strict { "strict" } else { "sloppy" };
+            let body = if meta.flags.iter().any(|f| f == "raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
+            let script = if strict { format!("\"use strict\";\n{body}") } else { body };
+            let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
+            match std::panic::catch_unwind(|| run_one_with(options, &script, negative_type.as_deref())) {
+                Ok(Ok(())) => counts.passed += 1,
+                Ok(Err(why)) => {
+                    counts.failed += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): {why}\n"));
+                }
+                Err(_) => {
+                    counts.failed += 1;
+                    counts.panicked += 1;
+                    counts.failures.push_str(&format!("{rel} ({mode}): PANIC\n"));
+                }
+            }
+        }
+    }
+    counts
 }
 
 /// `needs_missing_builtin` with `Map`, `Symbol` and `Set` missing.

@@ -8,6 +8,56 @@ fn app() -> VectorcraftApp {
     app
 }
 
+#[test]
+fn changing_one_tip_component_preserves_the_other_fractional_tool_setting() {
+    use crate::tests::panel_harness::Panel;
+    use egui::{Key, Modifiers};
+
+    for tool in ["eraser", "blobBrush"] {
+        for component in ["none", "angle", "roundness"] {
+            for save in [false, true] {
+                let mut app = app();
+                app.run("tool.setOption", json!({"tool": tool, "values": {"angle": 17.25, "roundness": 25.5}})).unwrap();
+                let original = app.session.tool_options_of(tool);
+                assert_eq!(original["angle"], 17.25);
+                assert_eq!(original["roundness"], 25.5);
+                let document = app.session.active().unwrap().doc.clone();
+                let revision = app.session.active().unwrap().revision;
+                let undo = app.session.active().unwrap().history.undo.len();
+                let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+                panel.room(egui::vec2(1000.0, 1200.0));
+                crate::toolbar::open_options(&mut panel.app(), tool).unwrap();
+                panel.frame();
+                let mut expected = original.clone();
+                if component != "none" {
+                    // Focus is an actual accessibility action. A disc click would itself edit the tip.
+                    panel.focus("Tip");
+                    assert!(panel.focused("Tip"));
+                    if component == "angle" {
+                        panel.key(Key::ArrowRight, Modifiers::NONE);
+                        expected["angle"] = json!(18.0);
+                    } else {
+                        panel.key(Key::ArrowUp, Modifiers::ALT);
+                        expected["roundness"] = json!(27.0);
+                    }
+                }
+                let draft = panel.app().dialogs().unwrap().with(|host| host.get::<HostedParamDialog>().unwrap().fields().clone());
+                assert_eq!(draft.number("angle"), expected["angle"].as_f64());
+                assert_eq!(draft.number("roundness"), expected["roundness"].as_f64(), "editing one component must not round its untouched partner");
+                assert_eq!(panel.app().session.tool_options_of(tool), original, "the tool changes only on OK");
+                panel.click(if save { "OK" } else { "Cancel" });
+                panel.frame();
+                panel.frame();
+                assert!(!panel.app().dialogs().unwrap().with(|host| host.is_open::<HostedParamDialog>()));
+                assert_eq!(panel.app().session.tool_options_of(tool), if save { expected } else { original });
+                assert_eq!(panel.app().session.active().unwrap().doc, document);
+                assert_eq!(panel.app().session.active().unwrap().revision, revision);
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            }
+        }
+    }
+}
+
 /// The id of the open dialog `key`.
 fn open_id(app: &VectorcraftApp, key: &str) -> DialogId {
     app.dialogs()
@@ -43,6 +93,32 @@ fn the_fidelity_keys_step_finely_at_the_low_end() {
     assert_eq!((fidelity_step(0.035, 1.0), fidelity_step(0.035, -1.0), fidelity_step(1.5, 1.0), fidelity_step(1.5, -1.0)), (0.04, 0.03, 2.0, 1.0));
 }
 
+/// Smooth Tool Options shows Smoothness under Fidelity, at 50% until it is set, and OK sets it from 0% to 100%; a
+/// Smoothness past 100% is refused and sets nothing. The other freehand tools have no Smoothness.
+#[test]
+fn smooth_tool_options_set_the_smoothness() {
+    let mut app = app();
+    let smooth = app.session.tool_options_of("smooth");
+    assert_eq!(smooth["smoothness"], json!(50.0));
+    let present: Vec<&str> = KEYS.iter().copied().filter(|key| smooth.get(*key).is_some()).collect();
+    let keys: Vec<String> = params("smooth", &present).iter().map(|p| p.key.to_string()).collect();
+    let (fidelity, smoothness) = (keys.iter().position(|k| k == "fidelity"), keys.iter().position(|k| k == "smoothness"));
+    assert!(fidelity.is_some() && fidelity < smoothness, "{keys:?}");
+    for value in [30.0, 0.0, 100.0] {
+        set_through_dialog(&mut app, "smooth", &[("smoothness", json!(value))]);
+        assert_eq!(app.session.tool_options_of("smooth")["smoothness"], json!(value));
+    }
+    let key = app.run("tool.options", json!({"tool": "smooth"})).unwrap()["dialog"].as_str().unwrap().to_owned();
+    let (ctx, id) = (app.ui_ctx.clone().expect("a window"), open_id(&app, &key));
+    let host = app.dialogs().expect("a window");
+    assert!(host.with(|host| host.set_json_field(&ctx, id, "smoothness", json!(120))).is_err(), "120% is refused");
+    host.with(|host| host.cancel_by_id(&ctx, id));
+    assert_eq!(app.session.tool_options_of("smooth")["smoothness"], json!(100.0));
+    for tool in ["pencil", "paintbrush", "blobBrush", "eraser"] {
+        assert!(app.session.tool_options_of(tool).get("smoothness").is_none(), "{tool}");
+    }
+}
+
 /// Each tool's dialog, opened as the user opens it, stores the values set in it as the tool's options: the field
 /// keys, the units (Liquify's percent is a fraction) and the companion keys of the variation rows.
 #[test]
@@ -51,6 +127,7 @@ fn ok_sets_each_tools_options() {
     let layers = app.session.doc().unwrap().doc.layers.clone();
     let circle = vectorcraft_tools::circle::ID;
     let arc = vectorcraft_tools::three_point_arc::ID;
+    let curvature = vectorcraft_tools::curvature_circle::ID;
     // The tool opened, the fields set, the tool whose options are read, and the options expected there.
     let rows: Vec<(&str, Value, &str, Value)> = vec![
         (
@@ -60,7 +137,7 @@ fn ok_sets_each_tools_options() {
             json!({"fidelity": 6.5, "fill": true, "altSmooth": true, "closeWithin": 0.0, "editWithin": 20.0, "liveFit": false}),
         ),
         ("paintbrush", json!({"fidelity": 3, "keepSelected": false}), "paintbrush", json!({"fidelity": 3.0, "keepSelected": false})),
-        ("smooth", json!({"fidelity": 5}), "smooth", json!({"fidelity": 5.0})),
+        ("smooth", json!({"fidelity": 5, "smoothness": 75}), "smooth", json!({"fidelity": 5.0, "smoothness": 75.0})),
         (
             "blobBrush",
             json!({"angle": 45, "roundness": 0, "sizeMode": "pressure", "sizeVariation": 6, "fidelity": 0.01, "keepSelected": true, "mergeOnlySelection": true}),
@@ -80,6 +157,12 @@ fn ok_sets_each_tools_options() {
             json!({"radii": false, "standardAnchors": false, "dragThird": false, "color": "magenta"}),
             circle,
             json!({"radii": false, "standardAnchors": false, "dragThird": false, "color": "magenta"}),
+        ),
+        (
+            curvature,
+            json!({"snapTolerance": 8, "annotateRadius": false, "standardAnchors": false}),
+            curvature,
+            json!({"snapTolerance": 8.0, "snapWithoutGuides": true, "annotateRadius": false, "standardAnchors": false, "constantRadius": true}),
         ),
         (arc, json!({"direction": true}), arc, json!({"direction": true})),
         ("objectsOnPath", json!({"pivot": 7, "rotate": 30}), "objectsOnPath", json!({"pivot": 7, "rotate": 30.0})),
@@ -305,4 +388,31 @@ fn the_blob_brush_and_eraser_size_can_follow_the_pen_pressure() {
     }
     let o = app.session.tool_options_of("pencil");
     assert!(o.get("sizeMode").is_none() && o.get("sizeVariation").is_none());
+}
+
+/// The names and values the window's access tree shows.
+fn shown_text(app: &mut VectorcraftApp) -> String {
+    crate::dialogs::tests::settle(app);
+    let out = crate::dialogs::tests::frame(app, vec![]);
+    let update = out.platform_output.accesskit_update.expect("an accessibility tree");
+    update.nodes.iter().flat_map(|(_, node)| [node.label(), node.value()]).flatten().collect::<Vec<_>>().join("\n")
+}
+
+/// The Blob Brush's Size menu offers Stylus Wheel beside Fixed and Pressure, Fixed still the
+/// default; the menu shows it once chosen, and OK sets it with the Variation.
+#[test]
+fn the_blob_brush_size_offers_the_stylus_wheel() {
+    let mut app = app();
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    assert_eq!(crate::dialogs::tests::fields(&app)["sizeMode"], json!("fixed"), "Fixed by default");
+    crate::dialogs::tests::set(&mut app, "sizeMode", json!("stylusWheel"));
+    crate::dialogs::tests::set(&mut app, "sizeVariation", json!(5));
+    let text = shown_text(&mut app);
+    assert!(text.contains("Stylus Wheel"), "{text}");
+    assert!(crate::dialogs::tests::confirm(&mut app), "OK closes the dialog");
+    let o = app.session.tool_options_of("blobBrush");
+    assert_eq!((o["sizeMode"].clone(), o["sizeVariation"].as_f64()), (json!("stylusWheel"), Some(5.0)));
+    app.run("tool.options", json!({"tool": "blobBrush"})).unwrap();
+    let text = shown_text(&mut app);
+    assert!(text.contains("Stylus Wheel"), "it shows again on the next open: {text}");
 }
