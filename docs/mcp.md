@@ -8632,6 +8632,10 @@ and those shape tools: hidden widgets are not drawn, and those tools do not answ
 on them. `on`, when given and not `null`, must be `true` or `false` and sets the state; without it, or with `null`, the
 command toggles. The reply is the new state (`true` when shown, the default). The bounding box, the center point and
 Direct Selection's corner widgets, which follow `view.cornerWidget` alone, stay as they are, and no undo step is added.
+While the pointer is within 5 px of a corner widget that shows, with any tool that shows it, the desktop app draws the
+cut of that widget's corner (round, inverted round or chamfer) in a 2 px line of the layer color. A square corner has
+no cut and gets no line, and no line is drawn while a mouse button is down. The 5 px reach, the 2 px width and the
+color are VectorCraft's own values. No command runs and no undo step is added.
 In the desktop app, the Corners link in the Control bar (beside the anchor controls) and in the Properties panel (with
 Direct Selection, while a corner is selected or one live rectangle or polygon is selected) opens the Corners pop-up for the picked corners of every selected path:
 the corners holding a Direct-Selected anchor, or every corner of a path selected whole; a path whose selected anchors
