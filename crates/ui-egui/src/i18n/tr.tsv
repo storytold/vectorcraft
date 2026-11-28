@@ -1091,7 +1091,7 @@ font-technology	Variable	Değişken
 	Edit…	Düzenle…
 	Effect	Efekt
 	Effect Options	Efekt Seçenekleri
-	Effective PPI	Etkili ÜFE
+	Effective PPI	Etkili PPI
 	Effects	Efektler
 	Effect…	Etki…
 	Ellipse	elips
@@ -2679,7 +2679,7 @@ shape	Open	Açık
 	Position	Pozisyon
 	Postcard	Kartpostal
 	PostScript:	PostScript:
-	PPI	ÜFE
+	PPI	PPI
 	Preferences	Tercihler
 	Preferences…	Tercihler…
 	Prefix:	Önek:
