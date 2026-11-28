@@ -403,10 +403,31 @@ impl SubPath {
     /// Bend segment `seg` so its point at `t` moves by `dv`: both inner control points move by
     /// dv / 3t(1-t), since B(t) moves by 3t(1-t) times that. A smooth anchor stays smooth: its other
     /// handle turns with the moved one. False when there is no such segment.
+    ///
+    /// A straight segment's handles lie on its anchors, so moving them as they are curls its ends
+    /// round (#9225). It is bent as the same line with its handles at its thirds instead, so it
+    /// bows evenly, the point at `t` still landing `dv` away.
     pub fn bend_segment(&mut self, seg: usize, t: f64, dv: kurbo::Vec2) -> bool {
         let n = self.anchors.len();
         if seg >= self.segment_count() || n == 0 {
             return false;
+        }
+        if dv == kurbo::Vec2::ZERO {
+            return true;
+        }
+        let mut t = t;
+        if self.segment_is_line(seg) {
+            let c = self.segment(seg);
+            let third = (c.p3 - c.p0) / 3.0;
+            if let Some(a) = self.anchors.get_mut(seg % n) {
+                a.set_handle(true, c.p0 + third, false);
+            }
+            if let Some(b) = self.anchors.get_mut((seg + 1) % n) {
+                b.set_handle(false, c.p3 - third, false);
+            }
+            // With its handles on its anchors, the line is at t²(3 - 2t) of the way along at t; with
+            // them at its thirds, that far along is where it is at that same parameter.
+            t = t * t * (3.0 - 2.0 * t);
         }
         let v = dv / (3.0 * t * (1.0 - t));
         if let Some(a) = self.anchors.get_mut(seg % n) {
@@ -940,6 +961,28 @@ fn push_curve(cur: &mut Option<SubPath>, last: Point, c1: Point, c2: Point, p: P
 
 #[cfg(test)]
 mod tests {
+    /// #9225: a straight segment bent from its middle bows evenly: its handles leave from along the
+    /// line, toward the middle, not straight out of its anchors, and the grabbed point follows.
+    #[test]
+    fn bending_a_straight_segment_pulls_its_handles_from_along_the_line() {
+        for t in [0.5, 0.3, 0.1] {
+            let mut sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(300.0, 0.0)], false);
+            let grabbed = sp.segment(0).eval(t);
+            let dv = kurbo::Vec2::new(0.0, 60.0);
+            assert!(sp.bend_segment(0, t, dv));
+            let (a, b) = (sp.anchors[0], sp.anchors[1]);
+            assert!(a.h_out.x > a.p.x + 1.0 && b.h_in.x < b.p.x - 1.0, "t {t}: {a:?} {b:?}");
+            let landed = sp.segment(0).nearest(grabbed + dv, 1e-9).distance_sq.sqrt();
+            assert!(landed < 1e-6, "t {t}: the grabbed point is {landed} off the pointer");
+        }
+        // No move leaves it as it was, a smooth end's other handle included.
+        let mut sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(300.0, 0.0)], false);
+        sp.anchors[1].h_out = Point::new(300.0, 50.0);
+        sp.anchors[1].kind = AnchorKind::Smooth;
+        let before = sp.clone();
+        assert!(sp.bend_segment(0, 0.5, kurbo::Vec2::ZERO));
+        assert_eq!(sp.anchors, before.anchors);
+    }
     use super::*;
 
     /// `bounds` walks the anchors in place: bit for bit what the kurbo path it stands for gives,
