@@ -54,7 +54,9 @@
 //!   for, loses the grant before that code runs. A run with nobody to ask gets `null` and
 //!   [`NO_PICKER`].
 //! - The commands a script runs with `vc.run` read and write only in the places above and in the
-//!   files of the open documents ([`crate::file_access::ScriptGate`]).
+//!   files the person gave the open documents ([`crate::file_access::ScriptGate`]). They also read
+//!   the files that the documents open when the run began link to, as the person last left those
+//!   documents and as those links led then.
 //! - `open('w')` empties the file at once; what a script writes is kept in memory, at most
 //!   [`MAX_FILE_BYTES`] a file, and written when it closes the file or the run ends; a run writes at
 //!   most [`MAX_RUN_BYTES`] in all and ends past that. `write` encodes in the file's encoding (an
@@ -67,8 +69,15 @@
 //!   file and once more for each such object. `write` joins its values only for an open file and
 //!   only up to twice [`MAX_FILE_BYTES`] UTF-16 code units. Each file written is named in the
 //!   report's `written` (at most [`super::MAX_WRITTEN`]), also after a run that failed.
-//! - Hidden settings, aliases and `execute` are not available: they return `false` and set `error`.
-//!   `execute` is counted in the report's `fileExecutes`.
+//! - On Unix, where a name that starts with a dot is hidden, setting `hidden` renames the file in
+//!   its folder, adding one dot or taking its leading dots off, under the rules for `rename`: the
+//!   old and the new name must both be places the script may write, and a name in use is refused.
+//!   `createAlias` makes a symbolic link at the object's path, a place the script may write where
+//!   nothing is, that leads to the real path of a file the script may read. `hidden` and `alias`
+//!   tell of a link itself, and setting `hidden`, `rename` and `remove` change the link, never what
+//!   it leads to. On other systems both set `error` and change nothing.
+//! - `execute` is not available: it returns `false`, sets `error`, and is counted in the report's
+//!   `fileExecutes`.
 //! - In a wasm build every lookup fails with [`NO_WEB`].
 
 use std::collections::HashMap;
@@ -118,6 +127,7 @@ pub(crate) const WRITE_FAILED: &str = "Script file could not be written";
 pub(crate) const NOT_EMPTY: &str = "Script folder is not empty";
 pub(crate) const NAME_TAKEN: &str = "Script file name is already in use";
 pub(crate) const BAD_NAME: &str = "Script file name must be a name without a folder";
+#[cfg(not(unix))]
 pub(crate) const NO_ALIAS: &str = "Script files cannot make aliases";
 pub(crate) const NO_HIDDEN: &str = "Script file hidden setting cannot be changed";
 pub(crate) const PROTECTED: &str = "Script file access to the app's own folders is not allowed";
@@ -454,10 +464,11 @@ impl Disk {
         }
     }
 
-    /// The gate for a command the script runs: the places it reads and writes now, and the files of
-    /// the open documents, `documents`.
-    pub(crate) fn gate(&self, documents: Vec<String>) -> crate::file_access::ScriptGate {
-        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, also: None }
+    /// The gate for a command the script runs: the places it reads and writes now, the files the
+    /// person gave the open documents, `documents`, and the files it may only read because the documents open when
+    /// the run began link to them, `linked`.
+    pub(crate) fn gate(&self, documents: Vec<String>, linked: crate::file_access::LinkedFiles) -> crate::file_access::ScriptGate {
+        crate::file_access::ScriptGate { read: self.scope.clone(), write: self.writes.clone(), documents, linked, also: None }
     }
 
     /// The files written since this was last asked, to name in the report.
@@ -912,8 +923,15 @@ fn read_head(real: &Path, max: usize) -> std::io::Result<Vec<u8>> {
 /// that is not well formed is left out. It is read under [`lock_store`]'s lock, so it is read
 /// between two changes, and none are read when the lock cannot be taken.
 fn read_store(store: &Path) -> Vec<serde_json::Value> {
-    let Ok(_lock) = lock_store(store) else { return Vec::new() };
-    load_store(store, false).unwrap_or_default()
+    list_store(store).unwrap_or_default()
+}
+
+/// The grants [`read_store`] reads; none when the grants file is missing, and `Err` when the lock
+/// cannot be taken or the file is there but cannot be read, is too large, is not a grants file of
+/// this version or holds no list of grants.
+fn list_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    let _lock = lock_store(store)?;
+    load_store(store, false)
 }
 
 /// The grants the grants file at `store` holds, to change and write back; none when it is missing,
@@ -929,7 +947,8 @@ fn try_read_store(store: &Path) -> std::io::Result<Vec<serde_json::Value>> {
 fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Value>> {
     let bytes = match read_head(store, MAX_STORE_BYTES) {
         Ok(bytes) => bytes,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        // A link whose target is missing is there but cannot be read.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(store).is_err() => return Ok(Vec::new()),
         Err(e) => return Err(e),
     };
     if bytes.len() > MAX_STORE_BYTES {
@@ -947,14 +966,14 @@ fn load_store(store: &Path, strict: bool) -> std::io::Result<Vec<serde_json::Val
             && g["write"].is_boolean()
             && g["folder"].is_boolean()
     };
+    let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
     if strict {
-        let grants = v["grants"].as_array().ok_or_else(|| std::io::Error::other("the grants file holds no list of grants"))?;
         if grants.len() > MAX_STORED_GRANTS || !grants.iter().all(valid) {
             return Err(std::io::Error::other("the grants file holds a grant that cannot be read"));
         }
         return Ok(grants.clone());
     }
-    Ok(v["grants"].as_array().map(|a| a.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect()).unwrap_or_default())
+    Ok(grants.iter().filter(|g| valid(g)).take(MAX_STORED_GRANTS).cloned().collect())
 }
 
 /// The number in the name of the next file [`write_store`] writes before it takes the grants file's
@@ -1007,7 +1026,7 @@ const LOCK_PAUSE: std::time::Duration = std::time::Duration::from_millis(50);
 /// then the result is `Err` with [`std::io::ErrorKind::TimedOut`]. A change is not made when the
 /// lock cannot be taken.
 #[cfg(not(target_arch = "wasm32"))]
-fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
+pub(crate) fn lock_store(store: &Path) -> std::io::Result<crate::store::LockedFile> {
     let lock = store.with_extension("lock");
     let opened = store
         .parent()
@@ -1022,11 +1041,11 @@ fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
 
 /// `file`, locked within [`lock_store`]'s tries.
 #[cfg(not(target_arch = "wasm32"))]
-fn take_lock(file: std::fs::File) -> std::io::Result<std::fs::File> {
+fn take_lock(file: std::fs::File) -> std::io::Result<crate::store::LockedFile> {
     let mut tries = 1;
     loop {
         match file.try_lock() {
-            Ok(()) => return Ok(file),
+            Ok(()) => return Ok(crate::store::LockedFile::new(file)),
             Err(std::fs::TryLockError::Error(e)) => return Err(e),
             Err(std::fs::TryLockError::WouldBlock) if tries >= LOCK_TRIES => {
                 return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "another process holds the lock"));
@@ -1049,26 +1068,40 @@ thread_local! {
 
 /// The browser has no folders to keep anything in.
 #[cfg(target_arch = "wasm32")]
-fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
+fn lock_store(_: &Path) -> std::io::Result<crate::store::LockedFile> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
 /// The grants the grants file beside the data folder `data_dir` keeps: each script, the SHA-256 of
-/// its text, the path and whether it may be written (`script.grants`).
-pub(crate) fn stored_grants(data_dir: &Path) -> Vec<serde_json::Value> {
-    read_store(&data_dir.with_file_name(GRANTS_FILE))
+/// its text, the path and whether it may be written (`script.grants`); as [`list_store`] reads them.
+pub(crate) fn stored_grants(data_dir: &Path) -> std::io::Result<Vec<serde_json::Value>> {
+    list_store(&data_dir.with_file_name(GRANTS_FILE))
 }
 
 /// Removes from the grants file beside `data_dir` the grants of the script `script` and of the path
 /// `path`, of both when both are given and of every grant when neither is (`script.grants.revoke`).
-/// → how many were removed.
-pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&str>, path: Option<&str>) -> std::io::Result<usize> {
+/// The spellings of each are tried in order, the script's first, and the first pair that some grant
+/// holds is the one removed, so a grant kept under the spellings given first is removed without the
+/// grants of later ones. → how many were removed.
+pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&[String]>, path: Option<&[String]>) -> std::io::Result<usize> {
     let store = data_dir.with_file_name(GRANTS_FILE);
     let _lock = lock_store(&store)?;
     let grants = try_read_store(&store)?;
     let before = grants.len();
-    let kept: Vec<serde_json::Value> =
-        grants.into_iter().filter(|g| !(script.is_none_or(|s| g["script"] == *s) && path.is_none_or(|p| g["path"] == *p))).collect();
+    // `None` matches any value; `Some(name)` only that name.
+    fn spellings(names: Option<&[String]>) -> Vec<Option<&str>> {
+        match names {
+            None => vec![None],
+            Some(names) => names.iter().map(|n| Some(n.as_str())).collect(),
+        }
+    }
+    let matches = |g: &serde_json::Value, (script, path): (Option<&str>, Option<&str>)| {
+        script.is_none_or(|s| g["script"] == s) && path.is_none_or(|p| g["path"] == p)
+    };
+    let pairs = spellings(script).into_iter().flat_map(|s| spellings(path).into_iter().map(move |p| (s, p)));
+    let pair = pairs.into_iter().find(|&pair| grants.iter().any(|g| matches(g, pair)));
+    let Some(pair) = pair else { return Ok(0) };
+    let kept: Vec<serde_json::Value> = grants.into_iter().filter(|g| !matches(g, pair)).collect();
     let removed = before - kept.len();
     if removed > 0 {
         write_store(&store, kept)?;
@@ -1651,8 +1684,12 @@ fn millis(t: Option<std::time::SystemTime>) -> Data {
 
 /// One host function of `__vcFiles`, counted and charged as a host call of the run `link` holds.
 fn call(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> HostItem {
+    HostItem::Function(call_function(link, f))
+}
+
+fn call_function(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> vectorcraft_js::HostFunction {
     let l = link.clone();
-    HostItem::Function(Rc::new(move |a| {
+    Rc::new(move |a| {
         let h = super::current(&l)?;
         bump(&h.counts.file_calls);
         let r = f(&h, &a);
@@ -1660,7 +1697,7 @@ fn call(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) ->
         let r = r?;
         h.charge_call(super::data_size(&r).saturating_add(a.iter().map(super::data_size).sum()))?;
         Ok(r)
-    }))
+    })
 }
 
 /// `Ok(true)`, or `{error}` for a failure.
@@ -1842,6 +1879,228 @@ fn copy(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     Ok(done(r.map_err(|_| WRITE_FAILED)))
 }
 
+/// Is `path` an XMP sidecar file, by its `.xmp` extension in any case?
+fn is_sidecar(path: &str) -> bool {
+    Path::new(path).extension().is_some_and(|e| e.eq_ignore_ascii_case("xmp"))
+}
+
+/// The text of a sidecar's bytes and its character form as `XMPFile.getPacketInfo` gives it: 0 for
+/// UTF-8, 2 for UTF-16 big-endian and 3 for UTF-16 little-endian, by its byte order mark.
+fn sidecar_text(bytes: &[u8]) -> Option<(String, u32)> {
+    let utf16 = |rest: &[u8], big: bool| {
+        let units = rest.as_chunks::<2>().0.iter().map(|&pair| if big { u16::from_be_bytes(pair) } else { u16::from_le_bytes(pair) });
+        rest.len().is_multiple_of(2).then(|| char::decode_utf16(units).collect::<Result<String, _>>().ok()).flatten()
+    };
+    match bytes {
+        [0xEF, 0xBB, 0xBF, rest @ ..] => std::str::from_utf8(rest).ok().map(|t| (t.to_string(), 0)),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, true).map(|t| (t, 2)),
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, false).map(|t| (t, 3)),
+        _ => std::str::from_utf8(bytes).ok().map(|t| (t.to_string(), 0)),
+    }
+}
+
+/// `xmpOpen(path, update, scan)`: the XMP packet of the file at `path` for `XMPFile`, read under
+/// the rules for reading; with `update`, a file that can take a packet must also be one the run may write. A `.xmp` file
+/// is read whole as its packet unless `scan`; any other file is scanned for its first UTF-8 packet.
+/// → `{packet, offset, length, writeable, sidecar, charForm}`, with `packet` null when the file has
+/// none.
+fn xmp_open(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let path = arg_text(a, 0);
+    let (update, scan) = (matches!(a.get(1), Some(Data::Bool(true))), matches!(a.get(2), Some(Data::Bool(true))));
+    let mut disk = host.disk.borrow_mut();
+    match disk.stat(&path) {
+        Ok(Some(e)) if !e.file => return Ok(error(NOT_REGULAR)),
+        Ok(Some(e)) if e.len > MAX_FILE_BYTES as u64 => return Ok(error(TOO_LARGE)),
+        Ok(Some(_)) => {}
+        Ok(None) => return Ok(error(NOT_FOUND)),
+        Err(m) => return Ok(error(m)),
+    }
+    let (real, bytes) = match disk.scope.read(Path::new(&path), MAX_FILE_BYTES) {
+        Ok(read) => read,
+        Err(ScriptRead::TooLarge) => return Ok(error(TOO_LARGE)),
+        Err(ScriptRead::Missing) => return Ok(error(NOT_FOUND)),
+        Err(ScriptRead::Refused) => return Ok(error(ACCESS_DENIED)),
+        Err(ScriptRead::Failed(_)) => return Ok(error(READ_FAILED)),
+    };
+    disk.charge_read(&real, bytes.len())?;
+    let sidecar = is_sidecar(&path) && is_sidecar(&real.to_string_lossy()) && !scan;
+    // Only a file that can take a packet needs to be one the run may write.
+    if update
+        && sidecar
+        && let Err(m) = disk.target(&path, true)
+    {
+        return Ok(error(m));
+    }
+    let number = |n: usize| Data::Number(n as f64);
+    let (packet, offset, length, writeable, char_form) = if sidecar {
+        let Some((text, form)) = sidecar_text(&bytes) else { return Ok(error(UNDECODABLE)) };
+        (Data::String(text), 0, bytes.len(), true, form)
+    } else {
+        match vectorcraft_js::find_xmp_packet(&bytes) {
+            Some(span) => match bytes.get(span.start..span.end).map(std::str::from_utf8) {
+                Some(Ok(text)) => (Data::String(text.to_string()), span.start, span.end - span.start, span.writeable, 0),
+                _ => return Ok(error(UNDECODABLE)),
+            },
+            None => (Data::Null, 0, 0, false, 0),
+        }
+    };
+    Ok(Data::Object(vec![
+        ("packet".into(), packet),
+        ("offset".into(), number(offset)),
+        ("length".into(), number(length)),
+        ("writeable".into(), Data::Bool(writeable)),
+        ("sidecar".into(), Data::Bool(sidecar)),
+        ("charForm".into(), Data::Number(f64::from(char_form))),
+    ]))
+}
+
+fn xmp_utf8_packet(text: &str) -> Result<Vec<u8>, &'static str> {
+    let body = text.strip_prefix('\u{feff}').unwrap_or(text);
+    if body.starts_with("<?xml") && body.as_bytes().get(5).is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) {
+        let options = craft_xml::Options { pis: true, comments: true, drop_blank_text: false, ..craft_xml::Options::default() }.strict();
+        let mut events = options.events(body.as_bytes());
+        match events.next() {
+            Ok(Some(_)) => Ok(body.as_bytes()[events.span().start..].to_vec()),
+            _ => Err(UNDECODABLE),
+        }
+    } else {
+        Ok(text.as_bytes().to_vec())
+    }
+}
+
+/// `xmpWrite(path, packet, safely)`: the `.xmp` file at `path` replaced by `packet` in UTF-8, under
+/// the rules for writing. The packet goes to a temporary file in the same folder that then takes the
+/// file's name, when the run may write there; otherwise to the file itself, unless `safely`, which
+/// fails and leaves the file as it is. Open objects of the file hold the new bytes.
+/// The writer omits a leading XML declaration.
+/// On Unix, the destination folder is flushed after writing. A folder flush failure returns an
+/// error after the written path is recorded and open readers receive the replacement packet.
+fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let path = arg_text(a, 0);
+    let packet = match xmp_utf8_packet(&arg_text(a, 1)) {
+        Ok(packet) => packet,
+        Err(message) => return Ok(error(message)),
+    };
+    let safely = matches!(a.get(2), Some(Data::Bool(true)));
+    if !is_sidecar(&path) {
+        return Ok(error(ACCESS_DENIED));
+    }
+    if packet.len() > MAX_FILE_BYTES {
+        return Ok(error(TOO_LARGE));
+    }
+    let mut disk = host.disk.borrow_mut();
+    let target = match disk.target(&path, true) {
+        Ok(t) => t,
+        Err(m) => return Ok(error(m)),
+    };
+    // A `.xmp` link that leads to another kind of file does not make that file a sidecar.
+    if !is_sidecar(&target.to_string_lossy()) {
+        return Ok(error(ACCESS_DENIED));
+    }
+    if std::fs::metadata(&target).is_ok_and(|m| !m.is_file()) {
+        return Ok(error(NOT_REGULAR));
+    }
+    // An open object of the file with changes not yet written keeps them: the packet is not written
+    // over them.
+    if disk.open.values().any(|o| o.dirty && o.holds(&target)) {
+        return Ok(error(WRITE_FAILED));
+    }
+    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let temp_name = |n: u32| target.with_file_name(format!(".{name}.{}.{n}.tmp", std::process::id()));
+    let first = temp_name(0);
+    let temp_allowed = disk.target(&first.to_string_lossy(), false).is_ok_and(|t| t == first);
+    // A safe update writes only through a temporary file.
+    if safely && !temp_allowed {
+        return Ok(error(WRITE_FAILED));
+    }
+    let holders = disk.open.values().filter(|o| o.holds(&target)).count();
+    disk.charge_write(packet.len().saturating_mul(holders.saturating_add(1)))?;
+    // `changed` is whether the file's bytes may differ from before: after a replacement, or once a
+    // direct write has opened (and so emptied) the file.
+    let (r, changed) = if temp_allowed {
+        // The temporary file takes a name no file or link has, so only the sidecar is replaced; when
+        // none of the names is free the sidecar is left as it is.
+        // Each name is checked against the places the run may write before it is made.
+        let allowed = |t: &Path| disk.target(&t.to_string_lossy(), false).is_ok_and(|r| r == t);
+        let new_file = |t: &Path| {
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            // On Unix the file starts readable and writable by its owner alone, until the packet is in
+            // it and the sidecar's permission bits are copied to it.
+            #[cfg(unix)]
+            std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+            allowed(t).then(|| options.open(t).ok()).flatten()
+        };
+        let Some((temp, mut out)) = (0..16).map(temp_name).find_map(|t| new_file(&t).map(|f| (t, f))) else {
+            return Ok(error(WRITE_FAILED));
+        };
+        let mut write_temp = || {
+            #[cfg(test)]
+            if XMP_WRITE_FAILS.with(std::cell::Cell::get) {
+                return Err(std::io::Error::other("write failed"));
+            }
+            #[cfg(all(test, unix))]
+            {
+                let mode = std::os::unix::fs::PermissionsExt::mode(&out.metadata()?.permissions());
+                XMP_TEMP_MODE.with(|m| m.set(Some(mode)));
+            }
+            std::io::Write::write_all(&mut out, &packet)?;
+            // The packet is on the disk before it takes the sidecar's name, as a saved document's is.
+            #[cfg(not(target_arch = "wasm32"))]
+            vectorcraft_format::sync_file(&out)?;
+            Ok(())
+        };
+        let r = write_temp();
+        drop(out);
+        // The replacement keeps the sidecar's permission bits, group and (Linux) access ACL, or is
+        // readable by its owner alone, as a saved document is (`vectorcraft_format::keep_permissions`).
+        // On Windows the only permission is the read-only attribute, and a read-only temporary file
+        // could not be removed after a failed rename. The web build has no such files. Keeping them
+        // is best effort, as for a saved document: a volume without Unix permissions (SMB, FAT) refuses them, and the
+        // update still goes through.
+        #[cfg(not(target_arch = "wasm32"))]
+        if r.is_ok() {
+            let _ = vectorcraft_format::keep_permissions(&target, &temp);
+        }
+        let r = r.and_then(|()| std::fs::rename(&temp, &target)).inspect_err(|_| {
+            let _ = std::fs::remove_file(&temp);
+        });
+        let changed = r.is_ok();
+        (r, changed)
+    } else {
+        match std::fs::File::create(&target) {
+            Ok(mut f) => (std::io::Write::write_all(&mut f, &packet), true),
+            Err(e) => (Err(e), false),
+        }
+    };
+    if changed {
+        disk.wrote(&target);
+    }
+    if r.is_ok() {
+        for file in disk.open.values_mut().filter(|o| o.holds(&target)) {
+            let reset = file.bytes.starts_with(&[0xEF, 0xBB, 0xBF]) || matches!(file.encoding, Encoding::Utf16Le | Encoding::Utf16Be);
+            file.bytes.clone_from(&packet);
+            // `File` readers with a UTF-8 byte order mark or UTF-16 encoding restart in UTF-8.
+            if reset {
+                file.encoding = Encoding::Utf8;
+                file.name = Encoding::Utf8.name().to_string();
+                file.pos = 0;
+            }
+            file.pos = file.pos.min(packet.len());
+            file.dirty = false;
+        }
+    }
+    #[cfg(all(unix, not(target_arch = "wasm32")))]
+    let r = r.and_then(|()| {
+        #[cfg(test)]
+        if XMP_DIRECTORY_SYNC_FAILS.with(std::cell::Cell::get) {
+            return Err(std::io::Error::other("directory flush failed"));
+        }
+        vectorcraft_format::sync_parent(&target)
+    });
+    Ok(done(r.map_err(|_| WRITE_FAILED)))
+}
+
 /// `remove(path)`: the file, or the folder when it is empty; a link itself, never what it leads to.
 fn remove(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let mut disk = host.disk.borrow_mut();
@@ -1883,44 +2142,41 @@ fn remove(host: &Host, a: &[Data]) -> Result<Data, HostError> {
 /// `rename(path, name)`: the file or folder named `name` in the same folder; → `{fs}`, its new path.
 fn rename(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     let (path, name) = (arg_text(a, 0), arg_text(a, 1));
+    let mut disk = host.disk.borrow_mut();
+    Ok(match rename_in(&mut disk, &path, &name) {
+        Ok(new) => Data::Object(vec![("fs".into(), Data::String(new))]),
+        Err(m) => error(m),
+    })
+}
+
+/// Renames the file or folder at `path`, a link itself, to `name` in the same folder. → its new
+/// path.
+fn rename_in(disk: &mut Disk, path: &str, name: &str) -> Result<String, &'static str> {
     let bad = name.is_empty() || name == "." || name == ".." || name.contains('/') || (WINDOWS && (name.contains('\\') || name.contains(':')));
     if bad || name.contains('\0') {
-        return Ok(error(BAD_NAME));
+        return Err(BAD_NAME);
     }
-    let Some(new) = Path::new(&path).parent().map(|p| p.join(&name).to_string_lossy().into_owned()) else { return Ok(error(ACCESS_DENIED)) };
-    let mut disk = host.disk.borrow_mut();
-    let (from, to) = match (disk.target(&path, false), disk.target(&new, false)) {
-        (Ok(f), Ok(t)) => (f, t),
-        (Err(m), _) | (_, Err(m)) => return Ok(error(m)),
-    };
-    let Ok(was) = std::fs::symlink_metadata(&from) else { return Ok(error(NOT_FOUND)) };
+    let new = Path::new(path).parent().map(|p| p.join(name).to_string_lossy().into_owned()).ok_or(ACCESS_DENIED)?;
+    let (from, to) = (disk.target(path, false)?, disk.target(&new, false)?);
+    let was = std::fs::symlink_metadata(&from).map_err(|_| NOT_FOUND)?;
     // A folder that holds the settings folder is not moved, also when its name is given in another
     // case where case does not matter.
     let holds = |f: &Path| std::fs::canonicalize(&from).map_or(true, |kept| crate::file_access::path_inside(f, &kept));
     if was.is_dir() && disk.fenced.as_deref().is_some_and(holds) {
-        return Ok(error(ACCESS_DENIED));
+        return Err(ACCESS_DENIED);
     }
     // A name that differs in case alone may name the same file, which then takes the new name.
     if let Ok(there) = std::fs::symlink_metadata(&to)
         && !(from.to_string_lossy().eq_ignore_ascii_case(&to.to_string_lossy()) && same_file((&from, &was), (&to, &there)))
     {
-        return Ok(error(NAME_TAKEN));
+        return Err(NAME_TAKEN);
     }
     // Open objects hold real paths with the names the file system keeps, and `from` keeps the last
     // name as given, which where case does not matter can differ in case: they are matched by the
     // kept name. A link is renamed itself, and no object holds a path through it. When the kept
     // name cannot be learned, nothing is renamed, so no object goes on under the old path's rules.
-    let kept = if was.file_type().is_symlink() {
-        from.clone()
-    } else {
-        match std::fs::canonicalize(&from) {
-            Ok(kept) => kept,
-            Err(_) => return Ok(error(WRITE_FAILED)),
-        }
-    };
-    if std::fs::rename(&from, &to).is_err() {
-        return Ok(error(WRITE_FAILED));
-    }
+    let kept = if was.file_type().is_symlink() { from.clone() } else { std::fs::canonicalize(&from).map_err(|_| WRITE_FAILED)? };
+    std::fs::rename(&from, &to).map_err(|_| WRITE_FAILED)?;
     // Open objects of the file, or of files in the folder, write to the new path, and the rules for
     // reading apply to them there.
     let moved = |p: &mut Option<std::path::PathBuf>| {
@@ -1935,7 +2191,102 @@ fn rename(host: &Host, a: &[Data]) -> Result<Data, HostError> {
     // The old path no longer holds the file, so the report names it as well as the new one.
     disk.wrote(&from);
     disk.wrote(&to);
-    Ok(Data::Object(vec![("fs".into(), Data::String(new))]))
+    Ok(new)
+}
+
+/// `setHidden(path, hidden)`: on Unix, where a name that starts with a dot is hidden, the file or
+/// link at `path` (a link itself, never what it leads to) renamed with one dot added or its leading
+/// dots taken off; → `{fs}`, its path. A file already as asked keeps its name. A name that would be
+/// left empty, a folder, and every system that is not Unix give `{error}`.
+fn set_hidden(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let (path, on) = (arg_text(a, 0), matches!(a.get(1), Some(Data::Bool(true))));
+    let mut disk = host.disk.borrow_mut();
+    let at = match disk.target(&path, false) {
+        Ok(t) => t,
+        Err(m) => return Ok(error(m)),
+    };
+    if !cfg!(unix) {
+        return Ok(error(NO_HIDDEN));
+    }
+    match std::fs::symlink_metadata(&at) {
+        Err(_) => return Ok(error(NOT_FOUND)),
+        Ok(m) if m.is_dir() => return Ok(error(NOT_REGULAR)),
+        Ok(_) => {}
+    }
+    let Some(name) = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()) else { return Ok(error(ACCESS_DENIED)) };
+    if name.starts_with('.') == on {
+        return Ok(Data::Object(vec![("fs".into(), Data::String(path))]));
+    }
+    let new = if on { format!(".{name}") } else { name.trim_start_matches('.').to_string() };
+    if new.is_empty() {
+        return Ok(error(NO_HIDDEN));
+    }
+    Ok(match rename_in(&mut disk, &path, &new) {
+        Ok(fs) => Data::Object(vec![("fs".into(), Data::String(fs))]),
+        Err(m) => error(m),
+    })
+}
+
+/// `createAlias(path, target)`: on Unix a symbolic link at `path` that leads to the real path of the
+/// file `target`. `path` must be a place the script may write where nothing is, not even a link
+/// that leads nowhere, and `target` a file the script may read. Every system that is not Unix gives
+/// `{error}`.
+fn create_alias(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let (path, to) = (arg_text(a, 0), arg_text(a, 1));
+    let mut disk = host.disk.borrow_mut();
+    let at = match disk.target(&path, false) {
+        Ok(t) => t,
+        Err(m) => return Ok(error(m)),
+    };
+    if std::fs::symlink_metadata(&at).is_ok() {
+        return Ok(error(NAME_TAKEN));
+    }
+    if to.is_empty() {
+        return Ok(error(NOT_FOUND));
+    }
+    let real = match disk.stat(&to) {
+        Ok(Some(e)) if e.file => disk.checked(&to).ok().and_then(|p| disk.scope.locate(p).ok()),
+        Ok(Some(_)) => return Ok(error(NOT_REGULAR)),
+        Ok(None) => return Ok(error(NOT_FOUND)),
+        Err(m) => return Ok(error(m)),
+    };
+    let Some(real) = real else { return Ok(error(ACCESS_DENIED)) };
+    #[cfg(test)]
+    if let Some(hook) = BEFORE_ALIAS_LINK.with(|h| h.borrow_mut().take()) {
+        hook(&at);
+    }
+    Ok(make_link(&mut disk, &at, &real))
+}
+
+/// A symbolic link at the real path `at` that leads to the real path `real`. → `true`, or `{error}`.
+#[cfg(unix)]
+fn make_link(disk: &mut Disk, at: &Path, real: &Path) -> Data {
+    // Making the link fails when something took its place since it was looked up.
+    if std::os::unix::fs::symlink(real, at).is_err() {
+        return error(WRITE_FAILED);
+    }
+    // A link put in place of a folder above it since it was looked up may have taken the new link
+    // elsewhere: that link is removed again, when it is still the one made here.
+    let placed = at.parent().is_some_and(|p| std::fs::canonicalize(p).is_ok_and(|c| c == p));
+    let ours = std::fs::read_link(at).is_ok_and(|l| l == real);
+    if !placed {
+        if ours {
+            let _ = std::fs::remove_file(at);
+        }
+        return error(ACCESS_DENIED);
+    }
+    // Something else at `at` replaced the new link since it was made: it is left alone.
+    if !ours {
+        return error(WRITE_FAILED);
+    }
+    disk.wrote(at);
+    Data::Bool(true)
+}
+
+/// Every system that is not Unix: `{error}` with [`NO_ALIAS`].
+#[cfg(not(unix))]
+fn make_link(_: &mut Disk, _: &Path, _: &Path) -> Data {
+    error(NO_ALIAS)
 }
 
 /// Do the paths `a` and `b`, with their metadata, name one file? On Unix by device and inode; on
@@ -2309,13 +2660,8 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         }))
     };
     let value = |s: &str| HostItem::Value(Data::String(s.to_string()));
-    let text = HostItem::Object(vec![
-        ("notOpen".into(), value(NOT_OPEN)),
-        ("badMode".into(), value(BAD_MODE)),
-        ("noAlias".into(), value(NO_ALIAS)),
-        ("noHidden".into(), value(NO_HIDDEN)),
-        ("tooLarge".into(), value(TOO_LARGE)),
-    ]);
+    let text =
+        HostItem::Object(vec![("notOpen".into(), value(NOT_OPEN)), ("badMode".into(), value(BAD_MODE)), ("tooLarge".into(), value(TOO_LARGE))]);
     let system = if WINDOWS {
         "Windows"
     } else if cfg!(target_os = "macos") {
@@ -2357,9 +2703,23 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         ("create".into(), call(link, create)),
         ("setLength".into(), call(link, set_length)),
         ("setReadonly".into(), call(link, set_readonly)),
+        ("setHidden".into(), call(link, set_hidden)),
+        ("createAlias".into(), call(link, create_alias)),
         ("pick".into(), call(link, pick)),
+        ("xmpOpen".into(), call(link, xmp_open)),
+        (
+            "xmpWrite".into(),
+            HostItem::FunctionWithLimits {
+                limits: vectorcraft_js::DataLimits {
+                    bytes: 3 * vectorcraft_js::XMP_MAX_BYTES + (128 << 10),
+                    ..vectorcraft_js::DataLimits::default()
+                },
+                function: call_function(link, xmp_write),
+            },
+        ),
     ];
-    realm.define_file_classes(items)
+    realm.define_file_classes(items)?;
+    realm.define_external_object()
 }
 
 /// Tests: what the next `copy` does with its source's path, as given and as its real path, after
@@ -2367,11 +2727,25 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
 #[cfg(test)]
 pub(crate) type CopyHook = Box<dyn FnOnce(&Path, &Path)>;
 
+/// Tests: what the next `createAlias` does with the real path of its link.
+#[cfg(test)]
+pub(crate) type AliasHook = Box<dyn FnOnce(&Path)>;
+
 #[cfg(test)]
 thread_local! {
     pub(crate) static BEFORE_COPY_READ: std::cell::RefCell<Option<CopyHook>> = const { std::cell::RefCell::new(None) };
+    /// Tests: what the next `createAlias` does with the real path of its link, after looking it up
+    /// and before making the link.
+    pub(crate) static BEFORE_ALIAS_LINK: std::cell::RefCell<Option<AliasHook>> = const { std::cell::RefCell::new(None) };
     /// Tests: while set, the bytes `flush` writes fail after the file was opened for them.
     pub(crate) static FLUSH_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: while set, `xmpWrite` fails after its checks and before it writes.
+    pub(crate) static XMP_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    #[cfg(unix)]
+    pub(crate) static XMP_DIRECTORY_SYNC_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: the permission bits of the last temporary file `xmpWrite` made, before it wrote to it.
+    #[cfg(unix)]
+    pub(crate) static XMP_TEMP_MODE: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
 }
 
 #[cfg(test)]

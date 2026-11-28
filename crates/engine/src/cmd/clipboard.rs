@@ -19,7 +19,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_brush::Brush;
 use vectorcraft_color::Swatch;
-use vectorcraft_doc::{Document, GraphicStyle, ImageBlob, Node, NodeId, NodeKind, PatternDef, Selection, Symbol, TextStyleDef};
+use vectorcraft_doc::{Document, GraphDesign, GraphicStyle, ImageBlob, Node, NodeId, NodeKind, PatternDef, Selection, Symbol, TextStyleDef};
 use vectorcraft_geom::{PathData, Rect};
 
 pub use flavours::{AI, BITMAP, EMF, EPS, FILE_HEAD, Flavour, PASTE_ORDER, PDF, PNG, SVG, TEXT, file_flavour, is_address, names_a_picture};
@@ -47,7 +47,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Swatch Conflicts",
             [],
             None,
-            "{profileMismatch?: as edit.paste} → {swatches: [{name, document, clipboard, spot}]} the global or spot swatches the copied objects use whose name the active document gives another colour (`document`/`clipboard`: #rrggbb, the pasted colour as the paste brings it, converted when profileMismatch or the policy converts it): Paste asks Merge or Add for each (pass the answer as edit.paste* {swatchConflict}). Pasting back into the document the objects came from raises none, unless the paste converts its colours",
+            "{profileMismatch?: as edit.paste, allArtboards?: false (true: for edit.pasteOnAllArtboards, which leaves the background colors of copied artboards behind)} → {swatches: [{name, document, clipboard, spot}]} the global or spot swatches the copied objects use whose name the active document gives another colour (`document`/`clipboard`: #rrggbb, the pasted colour as the paste brings it, converted when profileMismatch or the policy converts it): Paste asks Merge or Add for each (pass the answer as edit.paste* {swatchConflict}). Pasting back into the document the objects came from raises none, unless the paste converts its colours",
             has_doc,
             conflicts
         ),
@@ -94,6 +94,9 @@ pub struct Clipboard {
     pub para_styles: Vec<TextStyleDef>,
     /// Brushes the objects' strokes use.
     pub brushes: Vec<Brush>,
+    /// Graph designs the copied graphs draw their columns, bars or markers with. Pasting adds the
+    /// ones the document lacks; a design the document has under the same name stays as it is.
+    pub graph_designs: Vec<GraphDesign>,
     /// The artboard the objects were copied from (none when they lie on no artboard; the first of
     /// [`Self::artboards`] when there are any): Paste on All Artboards keeps their offset to it.
     pub source_artboard: Option<Rect>,
@@ -109,6 +112,9 @@ pub struct Clipboard {
     /// The selected ruler guides copied with (or without) the objects (#3226), as canvas guides on
     /// no layer: pasting puts them on the layer new art goes to, moved as the objects are.
     pub guides: Vec<vectorcraft_doc::Guide>,
+    /// The Symbol Set Density recorded at Copy for each copied symbol set, by its id in
+    /// [`Self::nodes`]: a pasted set packs from it.
+    pub set_densities: BTreeMap<NodeId, Value>,
     /// The RGB and CMYK profiles the objects' colors showed through in the document they were
     /// copied from (its assigned profiles, else the working spaces then), by name; none for objects
     /// from outside an open document. Paste compares them with the destination's
@@ -392,7 +398,7 @@ impl Clipboard {
         if self.source_doc == Some(st.uid) && !self.colors_converted {
             return vec![];
         }
-        self.conflicts(&st.doc, &self.used())
+        self.conflicts(&st.doc, &self.used(&st.doc))
     }
 
     /// A standalone document holding the objects and their resources (SVG export).
@@ -405,6 +411,7 @@ impl Clipboard {
         d.graphic_styles.extend(self.graphic_styles.iter().cloned());
         d.char_styles = self.char_styles.clone().into();
         d.para_styles = self.para_styles.clone().into();
+        d.graph_designs = self.graph_designs.clone();
         if !self.brushes.is_empty() {
             let mut lib = vectorcraft_brush::library(&d);
             // Each brush's place in the library by name: finding it by scanning the growing list
@@ -466,6 +473,7 @@ impl Clipboard {
             char_styles: d.char_styles.to_vec(),
             para_styles: d.para_styles.to_vec(),
             brushes: vectorcraft_brush::library(&d),
+            graph_designs: d.graph_designs.clone(),
             images: self.images.clone(),
             symbol_options: self.symbol_options.clone(),
             source_artboard: self.source_artboard,
@@ -484,6 +492,7 @@ impl Clipboard {
                 })
                 .collect(),
             guides: self.guides.clone(),
+            set_densities: self.set_densities.clone(),
             source_profiles: self.source_profiles.clone(),
             colors_converted: self.colors_converted,
         }
@@ -559,9 +568,12 @@ fn import_svg(s: &mut Session, p: &Value) -> Result<Value> {
 fn conflicts(s: &mut Session, p: &Value) -> Result<Value> {
     let hex = |w: &Swatch| w.paint.color().map(|c| c.to_hex());
     // The swatches as the paste brings them: converted from another profile when it converts.
-    let profile = super::colormgmt::PasteProfile::param(p, "clipboard.conflicts")?;
+    const CMD: &str = "clipboard.conflicts";
+    let profile = super::colormgmt::PasteProfile::param(p, CMD)?;
+    // Paste on All Artboards leaves the copied artboards, and so their backgrounds, behind.
+    let all_artboards = super::switch_or(p, "allArtboards", false, CMD)?;
     let st = s.doc()?;
-    let (converted, _) = super::colormgmt::paste_profiles(&s.clipboard, &st.doc, profile, true);
+    let (converted, _) = super::colormgmt::paste_profiles(&s.clipboard, &st.doc, profile, !all_artboards);
     let list: Vec<Value> = converted
         .as_ref()
         .unwrap_or(&s.clipboard)

@@ -1,15 +1,30 @@
 //! Free Distort's dialog body (Effect › Distort & Transform › Free Distort…): a box in the
-//! proportions of the first selected object's bounds with a handle on each of its four corners.
-//! Dragging a handle moves that corner. A handle focused by a click or Tab moves with the arrow
-//! keys, and ten times as far with Shift. Reset puts every corner back on the box. The corners are
-//! the effect's `corners` field, which the effect dialog previews and applies.
+//! proportions of the first selected object's bounds with a handle on each of its four corners, as
+//! the transform box's Distort mode draws them. Dragging a handle moves that corner; the keys of
+//! the box move the picked one (an arrow a hundredth of the box side, ten times as far with Shift).
+//! Reset puts every corner back on the box. The corners are the effect's `corners` field, which the
+//! effect dialog previews and applies.
 
-use egui::{Key, Modifiers, Pos2, Rect, Sense, Stroke, Vec2, vec2};
+use craft::behavior::CanvasView;
+use craft::behavior::geometry::quad::{BoxRules, BoxState, TransformMode};
+use craft::behavior::kurbo::{Point, Rect as DocRect};
+use craft::draw::ui::transform::TransformBox;
+use craft::ui::buttons::Button;
+use craft::ui::canvas::Canvas;
+use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::Picture;
+use craft::ui::layout_components::Stack;
+use craft::ui::list::ThumbAspect;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param};
+use craft::ui::primitives::{ContentPainterCx, PaintShape};
+use craft::ui::runtime::env::Env;
+use egui::{Response, Sense, vec2};
 use serde_json::{Value, json};
 
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::{VectorcraftApp, widgets};
+use super::effect_adjust::json_value;
+// PLAN: assumed `EffectCx` is declared in `effect_params.rs` (ef.C3, effects-w4).
+use super::effect_params::EffectCx;
+use crate::VectorcraftApp;
 
 /// The Free Distort effect.
 pub(crate) const FREE_DISTORT: &str = "distort.freeDistort";
@@ -18,28 +33,20 @@ pub(crate) const FREE_DISTORT: &str = "distort.freeDistort";
 /// coordinates.
 pub(super) const IDENTITY: [[f64; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
 
-/// The area the handles move in.
-const PAD: Vec2 = vec2(260.0, 200.0);
-/// The space between the box and the edges of the area.
-const MARGIN: f32 = 40.0;
-/// The drawn size of a handle.
-const HANDLE: f32 = 9.0;
-/// The size of the square that takes a press on a handle.
-const GRAB: f32 = 16.0;
-/// How far an arrow key moves a corner, as a share of the box's side.
-const STEP: f64 = 0.01;
+/// The box's side in document units: one unit is a hundredth of the side, the step of an arrow key.
+const SIDE: f64 = 100.0;
+/// The space between the box and the edge of the pad in document units: the share of its side
+/// the box always left (40 of 180 points).
+const MARGIN: f64 = SIDE * 40.0 / 180.0;
+/// How many cells the grid across the distorted box has along each side.
+const GRID: u32 = 4;
 
-/// The handles' names for screen readers, in the order of the corners.
-fn names() -> [&'static str; 4] {
-    [tl!("Top Left"), tl!("Top Right"), tl!("Bottom Right"), tl!("Bottom Left")]
-}
-
-/// The corners in `d.fields["corners"]`. A missing or malformed corner reads as its place on the
+/// The corners in `fields["corners"]`. A missing or malformed corner reads as its place on the
 /// box, as the effect reads it.
-pub(super) fn corners(d: &Dialog) -> [[f64; 2]; 4] {
+pub(super) fn corners(fields: &DialogFields) -> [[f64; 2]; 4] {
     let mut c = IDENTITY;
-    if let Some(list) = d.fields.get("corners").and_then(Value::as_array) {
-        for (slot, v) in c.iter_mut().zip(list) {
+    if let Some(Value::Array(list)) = json_value(fields, "corners") {
+        for (slot, v) in c.iter_mut().zip(&list) {
             if let Some(a) = v.as_array()
                 && let (Some(x), Some(y)) = (a.first().and_then(Value::as_f64), a.get(1).and_then(Value::as_f64))
                 && x.is_finite()
@@ -54,7 +61,7 @@ pub(super) fn corners(d: &Dialog) -> [[f64; 2]; 4] {
 
 /// The width of the first selected object's bounds over their height, limited to 1/8 to 8; 1 when
 /// nothing is selected or the bounds are empty.
-fn aspect(app: &VectorcraftApp) -> f32 {
+pub(super) fn aspect(app: &VectorcraftApp) -> f32 {
     let bounds = app.session.active().and_then(|st| st.selection.objects.first().and_then(|id| st.doc.node(*id))).and_then(|n| n.geometric_bounds());
     match bounds {
         Some(b) if b.width() > 0.0 || b.height() > 0.0 => (b.width().max(1e-9) / b.height().max(1e-9)).clamp(0.125, 8.0) as f32,
@@ -67,106 +74,158 @@ fn round(x: f64) -> f64 {
     (x * 1e4).round() / 1e4
 }
 
-/// The box, the handles and Reset. Changes go to `d.fields["corners"]`.
-pub(super) fn fields(app: &VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) {
-    let before = corners(d);
-    let mut c = before;
-    let (pad, _) = ui.allocate_exact_size(PAD, Sense::hover());
-    let inner = pad.shrink(MARGIN);
-    let aspect = aspect(app);
-    let size = if aspect >= inner.width() / inner.height() {
-        vec2(inner.width(), inner.width() / aspect)
-    } else {
-        vec2(inner.height() * aspect, inner.height())
-    };
-    let bx = Rect::from_center_size(inner.center(), size);
-    let to_screen = |[x, y]: [f64; 2]| Pos2::new(bx.left() + x as f32 * bx.width(), bx.top() + y as f32 * bx.height());
-    let to_unit = |p: Pos2| [f64::from((p.x - bx.left()) / bx.width()), f64::from((p.y - bx.top()) / bx.height())];
-    let (lo, hi) = (to_unit(pad.min), to_unit(pad.max));
-    let names = names();
-    // Per handle: whether it is held or hovered, and whether it has the keyboard focus.
-    let mut states = [(false, false); 4];
-    for (i, corner) in c.iter_mut().enumerate() {
-        let id = ui.scope_id().with(("free-distort-corner", i));
-        let at = pad.clamp(to_screen(*corner));
-        let resp = ui.interact(Rect::from_center_size(at, Vec2::splat(GRAB)), id, Sense::click_and_drag());
-        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), names[i]));
-        if resp.drag_started() || resp.clicked() {
-            resp.request_focus();
-        }
-        if resp.drag_started()
-            && let Some(origin) = ui.input(|i| i.pointer.press_origin())
-        {
-            // The offset from the press to the handle's center, kept for the drag.
-            ui.data_mut(|m| m.insert_temp(id, at - origin));
-        }
-        if resp.dragged()
-            && let Some(p) = resp.interact_pointer_pos()
-        {
-            let grip: Vec2 = ui.data(|m| m.get_temp(id)).unwrap_or_default();
-            *corner = to_unit(pad.clamp(p + grip)).map(round);
-        }
-        if resp.has_focus() {
-            ui.memory_mut(|m| {
-                m.set_focus_lock_filter(id, egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, ..Default::default() })
-            });
-            for (key, dx, dy) in [(Key::ArrowLeft, -1.0, 0.0), (Key::ArrowRight, 1.0, 0.0), (Key::ArrowUp, 0.0, -1.0), (Key::ArrowDown, 0.0, 1.0)] {
-                // Shift first: a key without modifiers also matches the key with Shift.
-                for (modifiers, step) in [(Modifiers::SHIFT, STEP * 10.0), (Modifiers::NONE, STEP)] {
-                    if ui.input_mut(|i| i.consume_key(modifiers, key)) {
-                        // A corner stays inside the area, or, when it lies outside, no farther out.
-                        let [x, y] = &mut *corner;
-                        for (v, d, lo, hi) in [(x, dx, lo[0], hi[0]), (y, dy, lo[1], hi[1])] {
-                            *v = round((*v + d * step).clamp(lo.min(*v), hi.max(*v)));
-                        }
-                    }
-                }
-            }
-        }
-        states[i] = (resp.dragged() || resp.hovered(), resp.has_focus());
-        if resp.dragged() || resp.hovered() {
-            ui.ctx().set_cursor_icon(if resp.dragged() { egui::CursorIcon::Grabbing } else { egui::CursorIcon::Grab });
-        }
-    }
-    ui.add_space(4.0);
-    let reset = ui
-        .add_enabled_ui(c != IDENTITY, |ui| {
-            let r = widgets::flat_button(ui, tl!("Reset"), 64.0);
-            r.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), tl!("Reset")));
-            r
-        })
-        .inner;
-    if reset.clicked() {
-        c = IDENTITY;
-    }
-    paint(ui, pad, bx, c.map(to_screen), states);
-    if c != before {
-        d.fields.insert("corners".into(), json!(c));
-    }
+/// The row of the Free Distort dialog: the box with its handles and Reset.
+pub(super) fn params(cx: &EffectCx, _fields: &DialogFields) -> Vec<Param> {
+    let aspect = cx.aspect;
+    vec![Param::custom("corners", tl!("Free Distort"), move |ui, fields, _| pad(ui, fields, aspect)).full_width()]
 }
 
-/// The pad: the box at rest, the distorted box with a grid across it, and the handles (filled in
-/// the accent color while focused).
-fn paint(ui: &egui::Ui, pad: Rect, bx: Rect, q: [Pos2; 4], states: [(bool, bool); 4]) {
-    let t = Tokens::get(ui.ctx());
-    let painter = ui.painter_at(pad);
-    painter.rect_filled(pad, 2.0, t.input);
-    painter.rect_stroke(bx, 0.0, Stroke::new(1.0, t.text_dim.gamma_multiply(0.5)), egui::StrokeKind::Middle);
-    let at = |u: f32, v: f32| q[0].lerp(q[1], u).lerp(q[3].lerp(q[2], u), v);
-    let faint = Stroke::new(1.0, t.text_dim.gamma_multiply(0.6));
-    for k in 1..4 {
-        let f = k as f32 / 4.0;
-        painter.line_segment([at(f, 0.0), at(f, 1.0)], faint);
-        painter.line_segment([at(0.0, f), at(1.0, f)], faint);
-    }
-    painter.add(egui::Shape::closed_line(q.to_vec(), Stroke::new(1.5, t.text)));
-    for (p, (active, focused)) in q.into_iter().zip(states) {
-        let r = Rect::from_center_size(pad.clamp(p), Vec2::splat(HANDLE));
-        painter.rect_filled(r, 1.0, if focused { t.accent } else { t.panel });
-        painter.rect_stroke(r, 1.0, Stroke::new(if active { 2.0 } else { 1.0 }, t.text), egui::StrokeKind::Middle);
-        if focused {
-            painter.rect_stroke(r.expand(3.0), 2.0, Stroke::new(1.0, t.accent), egui::StrokeKind::Outside);
+/// A corner of the unit box as a document point.
+fn doc_point([x, y]: [f64; 2]) -> Point {
+    Point::new(x * SIDE, y * SIDE)
+}
+
+/// The corners the box's `now` moves `before` to. A corner the box did not move stays as it was, so
+/// a click that moved nothing changes nothing. A coordinate the move left alone is kept exactly as
+/// it was, so a nudge along one axis does not round the other. A moved coordinate stays inside the
+/// document `shown`, or, when it lies outside already, goes no farther out.
+fn moved(before: [[f64; 2]; 4], given: [Point; 4], now: [Point; 4], shown: DocRect) -> [[f64; 2]; 4] {
+    let (lo, hi) = ([shown.x0 / SIDE, shown.y0 / SIDE], [shown.x1 / SIDE, shown.y1 / SIDE]);
+    let mut c = before;
+    for (i, corner) in c.iter_mut().enumerate() {
+        let (Some(&was), Some(&to)) = (given.get(i), now.get(i)) else { continue };
+        if (to - was).hypot() <= 1e-9 {
+            continue;
+        }
+        let target = [to.x / SIDE, to.y / SIDE];
+        let delta = [to.x - was.x, to.y - was.y];
+        for (k, v) in corner.iter_mut().enumerate() {
+            if delta[k].abs() <= 1e-9 {
+                continue;
+            }
+            // `max` then `min`, as the bounds may be reversed by a degenerate view.
+            *v = round(target[k].max(lo[k].min(*v)).min(hi[k].max(*v)));
         }
     }
-    painter.rect_stroke(pad, 2.0, Stroke::new(1.0, t.input_border), egui::StrokeKind::Inside);
+    c
+}
+
+/// The pad: the box at rest, the distorted box with a grid across it and the handles, drawn through
+/// `view`.
+fn paint(cx: &ContentPainterCx<'_>, view: &CanvasView, quad: [Point; 4]) {
+    let screen = |p: Point| view.to_screen(p);
+    let q = quad.map(screen);
+    let at = |u: f32, v: f32| q[0].lerp(q[1], u).lerp(q[3].lerp(q[2], u), v);
+    cx.outline(&PaintShape::Polygon(IDENTITY.map(|c| screen(doc_point(c))).to_vec()));
+    for k in 1..GRID {
+        let f = k as f32 / GRID as f32;
+        cx.outline(&PaintShape::Path(vec![at(f, 0.0), at(f, 1.0)]));
+        cx.outline(&PaintShape::Path(vec![at(0.0, f), at(1.0, f)]));
+    }
+    cx.outline(&PaintShape::Polygon(q.to_vec()));
+}
+
+/// The box, the handles and Reset. Changes go to `fields["corners"]`.
+fn pad(ui: &mut egui::Ui, fields: &mut DialogFields, aspect: f64) -> Response {
+    let before = corners(fields);
+    let aspect = if aspect.is_finite() && aspect > 0.0 { aspect } else { 1.0 };
+    let (least_width, height) = {
+        let plot = &Env::of(ui).tokens.size.plot;
+        (plot.width, plot.height)
+    };
+    let mut after = before;
+    let mut reset = false;
+    let shown = Stack::new().fill_width().show(ui, |ui, _| {
+        let (room, _) = ui.allocate_exact_size(vec2(ui.available_width().max(least_width), height), Sense::hover());
+        // The document is the box with a margin round it; its units are `aspect` times as wide as tall.
+        let extent = SIDE + 2.0 * MARGIN;
+        let zoom = (f64::from(room.width()) / (extent * aspect)).min(f64::from(room.height()) / extent);
+        let view = CanvasView::new(room, Point::new(SIDE / 2.0, SIDE / 2.0), zoom).aspect(aspect);
+        let quad = before.map(doc_point);
+        let mut state = BoxState::from_rect(DocRect::new(0.0, 0.0, SIDE, SIDE));
+        state.quad = quad;
+        let canvas = Canvas::new(tl!("Free Distort")).view(view).show_at(ui, room, |ui, body| {
+            Picture::painter("", ThumbAspect::SQUARE, move |cx, _| paint(cx, &view, quad)).show_at(ui, body.rect);
+            TransformBox::new(tl!("Free Distort"), Bind::given(state), DocRect::new(0.0, 0.0, SIDE, SIDE), 0.0)
+                .rules(BoxRules::in_mode(TransformMode::Distort))
+                .reference_point(false)
+                .inside_moves(false)
+                .session_commit(false)
+                .show_at(ui, body.rect)
+        });
+        if let Some(output) = canvas.inner
+            && let Some(edit) = output.edit.value()
+        {
+            after = moved(before, quad, edit.quad, view.visible());
+        }
+        reset = Button::new(tl!("Reset")).enabled(after != IDENTITY).show(ui).clicked();
+    });
+    if reset {
+        after = IDENTITY;
+    }
+    if after != before {
+        fields.set("corners", FieldValue::Json(json!(after)));
+    }
+    shown.output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::patterns::form_dialogs::HostedParamDialog;
+    use egui::{Key, Modifiers};
+    use vectorcraft_doc::NodeId;
+
+    fn shown(app: &VectorcraftApp) -> [[f64; 2]; 4] {
+        app.dialogs().unwrap().with(|host| corners(host.get::<HostedParamDialog>().unwrap().fields()))
+    }
+
+    fn applied(app: &VectorcraftApp, id: NodeId) -> Value {
+        app.session.active().unwrap().doc.node(id).unwrap().appearance.effects[0].params["corners"].clone()
+    }
+
+    #[test]
+    fn axis_nudges_keep_the_other_coordinate_exact_through_preview_and_ok() {
+        let precise =
+            [[0.012345678901, 0.123456789012], [1.012345678901, 0.234567890123], [0.987654321098, 1.012345678901], [0.123456789012, 0.987654321098]];
+        for (key, axis) in [(Key::ArrowRight, 0), (Key::ArrowDown, 1)] {
+            for save in [false, true] {
+                let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+                app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+                let id = NodeId(app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 80, "height": 80})).unwrap()["id"].as_u64().unwrap());
+                app.run("select.set", json!({"ids": [id.0]})).unwrap();
+                app.run("effect.apply", json!({"effect": FREE_DISTORT, "ids": [id.0], "item": null, "params": {"corners": precise}})).unwrap();
+                let original = app.session.active().unwrap().doc.clone();
+                let undo = app.session.active().unwrap().history.undo.len();
+                let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+                panel.room(egui::vec2(900.0, 900.0));
+                panel.app().run("effect.dialog", json!({"effect": FREE_DISTORT, "index": 0, "item": null})).unwrap();
+                panel.frame();
+                panel.frame();
+                assert_eq!(shown(&panel.app()), precise, "the fractional fixture reaches the real canvas unchanged");
+                // A handle reached by a pointer leaves no keyboard-picked part; arrows nudge the whole box.
+                panel.click("Top right corner");
+                assert_eq!(shown(&panel.app()), precise, "a click without motion changes no corner");
+                panel.key(key, Modifiers::NONE);
+                let after = shown(&panel.app());
+                for i in 0..4 {
+                    assert_ne!(after[i][axis], precise[i][axis], "the actual key moves every corner on its requested axis");
+                    assert_eq!(after[i][1 - axis], precise[i][1 - axis], "an axis nudge must not round the other coordinate");
+                }
+                assert_eq!(applied(&panel.app(), id), json!(after), "the normal effect preview receives the exact corners");
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+                panel.click(if save { "OK" } else { "Cancel" });
+                panel.frame();
+                panel.frame();
+                assert!(panel.app().effect_dialogs.effect.is_none());
+                assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + usize::from(save));
+                if save {
+                    assert_eq!(applied(&panel.app(), id), json!(after));
+                    panel.app().run("edit.undo", json!({})).unwrap();
+                }
+                assert_eq!(panel.app().session.active().unwrap().doc, original);
+            }
+        }
+    }
 }

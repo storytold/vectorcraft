@@ -11,7 +11,7 @@ use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::{Appearance, Document, LayerColor, Node, NodeId, NodeKind};
 use vectorcraft_geom::{Rect, shapes};
 
-use super::{live_paint_parts, painted, picked_colors, proxy_paint, same_in_proxy};
+use super::{live_paint_covered, painted, picked_colors, proxy_paint, same_in_proxy};
 use crate::{DocState, Session};
 
 thread_local! {
@@ -39,12 +39,11 @@ fn walked(st: &DocState, item: Option<usize>, points: &[(NodeId, Vec<usize>)]) -
     }
     let ids: HashSet<NodeId> = st.selection.objects.iter().copied().collect();
     let (mut selected, mut fills, mut strokes) = (vec![], vec![], vec![]);
-    let mut covered = HashSet::new();
+    let covered = live_paint_covered(&st.doc, &st.selection.objects);
     st.doc.walk(|n| {
         if ids.contains(&n.id) {
             selected.push(n);
             if !covered.contains(&n.id) {
-                covered.extend(live_paint_parts(n));
                 painted(n, true, false, &mut fills);
                 painted(n, true, true, &mut strokes);
             }
@@ -265,6 +264,36 @@ fn random_selections_match_a_walk_of_the_document() {
         st.selection.objects = sel.clone();
         agree(s.active().unwrap(), &[], &format!("round {round}: {sel:?}"));
     }
+}
+
+/// With an Appearance row active and many objects selected, the opacity proxy (read on every repaint of the Color
+/// Wheel panel) and `first_edited` match only the targets they read against the first object's stack, not every
+/// target, and still answer with the first object's row.
+#[test]
+fn an_active_row_matches_only_the_targets_read() {
+    use super::super::appearance::{ItemTarget, first_edited, stacks_matched};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 612, "height": 792})).unwrap();
+    let ids: Vec<NodeId> = (0..30).map(|i| rect(&mut s, f64::from(i) * 25.0, "#ff0000", "#0000ff")).collect();
+    s.execute("paint.setFill", &json!({"ids": [ids[0].0], "opacity": 40})).unwrap();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    let fill = s.active().unwrap().doc.node(ids[0]).unwrap().appearance.items.iter().position(|it| it.is_fill()).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": fill})).unwrap();
+    assert_eq!(s.appearance_item(), Some(fill));
+
+    let before = stacks_matched();
+    assert!((s.proxy_opacity(false).unwrap() - 0.4).abs() < 1e-6, "the first object's fill opacity");
+    assert!(stacks_matched() - before <= 1, "proxy_opacity matched {} stacks for {} targets", stacks_matched() - before, ids.len());
+
+    let row = ItemTarget::Item { index: fill, explicit: false, aligned: true };
+    let before = stacks_matched();
+    assert_eq!(first_edited(&s, row, None, &ids), Some((ids[0], row)));
+    assert!(stacks_matched() - before <= 1, "first_edited matched {} stacks for {} targets", stacks_matched() - before, ids.len());
+
+    // Reading every target still matches each one but the first.
+    let before = stacks_matched();
+    assert_eq!(row.per_target(&s, &ids).len(), ids.len());
+    assert_eq!(stacks_matched() - before, ids.len() as u64 - 1);
 }
 
 /// The CPU time this thread has used, from Linux's scheduler statistics; `None` elsewhere.

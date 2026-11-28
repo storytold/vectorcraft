@@ -207,6 +207,7 @@ fn art_on_a_facet_with_a_curved_edge_is_clipped_to_that_edge() {
         end: None,
         plane: None,
         surface: None,
+        membrane: None,
         cell: None,
     };
     let cell = MapCell { surface: 0, page: quad.clone(), uv: quad.clone() };
@@ -251,6 +252,7 @@ fn art_on_a_facet_whose_curved_edge_bows_out_covers_the_whole_facet() {
         end: None,
         plane: None,
         surface: None,
+        membrane: None,
         cell: None,
     };
     let cell = MapCell { surface: 0, page: quad.clone(), uv: quad };
@@ -290,6 +292,7 @@ fn the_bounds_tests_of_contours_away_from_a_cell_count_as_cuts() {
         end: None,
         plane: None,
         surface: None,
+        membrane: None,
         cell: None,
     };
     let cell = MapCell { surface: 0, page: quad.clone(), uv: quad };

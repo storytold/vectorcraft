@@ -23,7 +23,10 @@ use vectorcraft_doc::{DataSet, DataValue, Document, NodeId, NodeKind, Selection,
 use super::edit::selected_roots;
 use super::fileio::{absolute_path, read_file_head, write_file};
 use super::textedit::set_story_text;
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_or_selection, cmd, has_doc, has_selection, links, str_param};
+use super::{
+    CommandSpec, EngineError, Result, Session, bad, bool_or, checked_ids_or_selection, checked_ids_param, cmd, has_doc, has_selection, links,
+    str_param,
+};
 
 mod csv;
 mod library;
@@ -435,7 +438,8 @@ fn bind(s: &mut Session, p: &Value) -> Result<Value> {
 
 fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.unbind";
-    let ids = checked_ids_or_selection(s, p, C)?;
+    // Explicit bindings can include both a group and its children; retain every supplied ID.
+    let ids = if p.get("ids").is_some_and(|v| !v.is_null()) { checked_ids_param(s, p, "ids", C)? } else { checked_ids_or_selection(s, p, C)? };
     let name = defined_variable(s, p, C)?;
     let n = edit_variables(s, "Unbind Variable", |vars| {
         let mut n = 0;
@@ -449,6 +453,73 @@ fn unbind(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(n)
     })?;
     Ok(json!({"unbound": n}))
+}
+
+/// The kind of variable that drives the content of `n`: text for type, image for an image object
+/// and graph for a graph root. `None` for other objects, which have only a visibility slot.
+pub(crate) fn content_kind(n: &vectorcraft_doc::Node) -> Option<VariableKind> {
+    match &n.kind {
+        NodeKind::Text(_) => Some(VariableKind::Text),
+        NodeKind::Image(_) => Some(VariableKind::Image),
+        _ if n.extras().graph.is_some() => Some(VariableKind::Graph),
+        _ => None,
+    }
+}
+
+/// The variables of `kind` bound to `id`, in the order they are defined.
+fn bound_of_kind(vars: &Variables, id: NodeId, kind: VariableKind) -> Vec<String> {
+    let Some(bound) = vars.bindings.get(&id) else { return Vec::new() };
+    vars.variables.iter().filter(|v| v.kind == kind && bound.contains(&v.name)).map(|v| v.name.clone()).collect()
+}
+
+/// The slot `variable.setBinding` names: an object's visibility, or its content.
+fn slot_kind(doc: &Document, id: NodeId, p: &Value, cmd: &str) -> Result<(&'static str, VariableKind)> {
+    let node = doc.node(id).ok_or(EngineError::NoNode(id))?;
+    match str_param(p, "slot") {
+        Some("visibility") => Ok(("visibility", VariableKind::Visibility)),
+        Some("content") => {
+            content_kind(node).map(|k| ("content", k)).ok_or_else(|| bad(cmd, format!("node {} has no content a variable can drive", id.0)))
+        }
+        _ => Err(bad(cmd, "`slot` must be `visibility` or `content`")),
+    }
+}
+
+/// Bind one object's visibility or content to one variable, or to none, in one undo step: the
+/// object's other variables of that slot's kind are unbound. The content of type takes a text
+/// variable, of a linked image an image variable and of a graph root a graph variable; an embedded
+/// image can't be bound to an image variable. The checks of `variable.bind` apply, and nothing
+/// changes when one fails. A call that leaves the bindings as they were adds no undo step.
+fn set_binding(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "variable.setBinding";
+    let id = p.get("id").and_then(Value::as_u64).map(NodeId).ok_or_else(|| bad(C, "`id` must be an object id"))?;
+    let variable = match p.get("variable") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(named(v.as_str(), "variable", C)?),
+    };
+    let doc = &s.doc()?.doc;
+    let (slot, kind) = slot_kind(doc, id, p, C)?;
+    if let Some(name) = &variable {
+        let have = doc.variables.variable(name).map(|v| v.kind).ok_or_else(|| bad(C, format!("no variable named `{name}`")))?;
+        if have != kind {
+            return Err(bad(C, format!("variable `{name}` is a {} variable, and this slot takes a {} variable", have.label(), kind.label())));
+        }
+        check_bindable(doc, &[id], kind, C)?;
+        if kind == VariableKind::Image && matches!(doc.node(id).map(|n| &n.kind), Some(NodeKind::Image(im)) if im.link.is_none()) {
+            return Err(bad(C, format!("node {} is an embedded image, and an image variable drives only a linked image", id.0)));
+        }
+    }
+    let unbound: Vec<String> = bound_of_kind(&doc.variables, id, kind).into_iter().filter(|n| Some(n) != variable.as_ref()).collect();
+    let label = if variable.is_some() { "Bind Variable" } else { "Unbind Variable" };
+    edit_variables(s, label, |vars| {
+        for n in &unbound {
+            vars.unbind(id, n);
+        }
+        if let Some(n) = &variable {
+            vars.bind(id, n);
+        }
+        Ok(())
+    })?;
+    Ok(json!({"id": id.0, "slot": slot, "variable": variable, "unbound": unbound}))
 }
 
 /// The `variable` a command names, which must be defined; `None` when it names none.
@@ -690,13 +761,18 @@ fn dataset_capture(s: &mut Session, p: &Value) -> Result<Value> {
 /// other than a visibility variable, locked or inside a locked layer or group, or, for any
 /// variable, on a locked artboard) keeps the row's value. With `all`, every other variable the
 /// objects report a value for is added to the row. Without an active row there is nothing to
-/// update, so say so rather than picking one. With every bound object locked, no value is
-/// written; an update that writes no value adds no undo step.
+/// update, so say so rather than picking one. `name` updates that row instead, and leaves the
+/// active row as it is. With every bound object locked, no value is written; an update that
+/// writes no value adds no undo step.
 fn dataset_update(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "dataset.update";
     let all = bool_or(p, "all", false);
+    let given = match p.get("name") {
+        None => None,
+        Some(v) => Some(named(v.as_str(), "name", C)?),
+    };
     let st = s.doc()?;
-    let Some(name) = st.doc.variables.active_dataset.clone() else {
+    let Some(name) = given.or_else(|| st.doc.variables.active_dataset.clone()) else {
         return Err(bad(C, "no active data set"));
     };
     if !anything_bound(&st.doc) {
@@ -872,11 +948,17 @@ fn dataset_step(s: &mut Session, cmd: &str, forward: bool) -> Result<Value> {
 /// result is that command's, with `format` set to `csv` or `xml`.
 fn variable_import(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "variable.import";
-    let path = str_param(p, "path").ok_or_else(|| bad(C, "missing `path`"))?;
-    let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    let (name, input) = if let Some(path) = str_param(p, "path") {
+        (path, json!({"path": path}))
+    } else {
+        let name = str_param(p, "name").ok_or_else(|| bad(C, "missing `path` or `name` with `dataBase64`"))?;
+        let bytes = str_param(p, "dataBase64").ok_or_else(|| bad(C, "missing `dataBase64`"))?;
+        (name, json!({"dataBase64": bytes}))
+    };
+    let ext = std::path::Path::new(name).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
     let (format, mut out) = match ext.as_deref() {
-        Some("csv" | "tsv" | "txt") => ("csv", dataset_import(s, &json!({"path": path}))?),
-        Some("xml") => ("xml", load_library(s, &json!({"path": path}))?),
+        Some("csv" | "tsv" | "txt") => ("csv", dataset_import(s, &input)?),
+        Some("xml") => ("xml", load_library(s, &input)?),
         _ => return Err(bad(C, "Import reads a data source file ending in .csv, .tsv, .txt or .xml")),
     };
     out["format"] = json!(format);
@@ -976,6 +1058,15 @@ pub fn specs() -> Vec<CommandSpec> {
             unbind
         ),
         cmd!(
+            "variable.setBinding",
+            "Bind Variable",
+            [],
+            None,
+            "{id, slot: visibility|content, variable?} bind the object `id`'s visibility or content to one variable, or with `variable` left out or null to none, in one undo step (none when the bindings stay as they were): the object's other variables of that slot's kind are unbound. The content of type takes a text variable, of a linked image an image variable and of a graph root a graph variable; other objects have no content slot, and an embedded image can't be bound to an image variable. A variable of another kind is refused, and so is art variable.bind refuses → {id, slot, variable, unbound: [name…]}",
+            has_doc,
+            set_binding
+        ),
+        cmd!(
             "variable.lock",
             "Lock Variables",
             ["Window", "Variables"],
@@ -1027,7 +1118,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Data Set",
             ["Window", "Variables"],
             None,
-            "{all?: bool} write what the bound objects hold now into the active dataset, for each variable the dataset holds; a variable whose objects report no value (gone, on a locked artboard, or, for a variable other than a visibility variable, locked or inside a locked layer or group) keeps the dataset's value. `all: true` also adds every other variable the objects report a value for; `left` names the variables it didn't write → {values, left}",
+            "{all?: bool, name?} write what the bound objects hold now into the active dataset (with `name`, into that dataset, leaving the active one as it is), for each variable the dataset holds; a variable whose objects report no value (gone, on a locked artboard, or, for a variable other than a visibility variable, locked or inside a locked layer or group) keeps the dataset's value. `all: true` also adds every other variable the objects report a value for; `left` names the variables it didn't write → {values, left}",
             has_doc,
             dataset_update
         ),
@@ -1080,7 +1171,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import…",
             ["Window", "Variables"],
             None,
-            "{path} import a data source file, chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes)} import a data source chosen by its extension (any case): a .csv, .tsv or .txt file is read as dataset.import reads it, and an .xml file as variable.loadLibrary reads it, with their refusals and undo steps; any other extension, or none, is refused before the file is read → the result of that command with `format`: `csv` or `xml`",
             has_doc,
             variable_import
         ),

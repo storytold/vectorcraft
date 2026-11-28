@@ -55,6 +55,22 @@ impl AiArtboard {
     }
 }
 
+/// The pages the art may be compared with in the document's space, art space being moved there by
+/// `to_doc` (none before the art starts): each of `artboards` (else `first`, the first artboard),
+/// then `art_box`, the art's bounding box. A page that is an earlier one to half a point is left out.
+fn pages_of(to_doc: Option<Affine>, artboards: &[AiArtboard], first: Option<Rect>, art_box: Option<Rect>) -> Vec<Rect> {
+    let Some(to_doc) = to_doc else { return vec![] };
+    let boards: Vec<Rect> = if artboards.is_empty() { first.into_iter().collect() } else { artboards.iter().map(|b| b.rect).collect() };
+    let mut pages: Vec<Rect> = vec![];
+    for page in boards.into_iter().chain(art_box).map(|r| to_doc.transform_rect_bbox(r)) {
+        let same = |p: &Rect| [p.x0 - page.x0, p.y0 - page.y0, p.x1 - page.x1, p.y1 - page.y1].iter().all(|d| d.abs() <= 0.5);
+        if !pages.iter().any(same) {
+            pages.push(page);
+        }
+    }
+    pages
+}
+
 /// The number of entry `key` in `o` when it is written as one finite number of the type `ty`
 /// (`/Int`, `/Real`, `/Bool`; a whole number unless `/Real`), else `None`.
 fn typed(o: &Obj, key: &str, ty: &str) -> Option<f64> {
@@ -783,6 +799,19 @@ impl<'a> Reader<'a> {
         {
             head.registration = Some(*r);
         }
+        if self.frames.len() == 1
+            && let Some(head) = self.symbol.as_mut()
+            && o.nums(crate::ai_editing::DYNAMIC_KEY).first().is_some_and(|v| *v != 0.0)
+        {
+            head.dynamic = true;
+        }
+        if let Some(text) = o.text(crate::ai_editing::OVERRIDES_KEY)
+            && let Some(bytes) = crate::ai_editing::hex_decode(&text)
+            && let Ok(list) = serde_json::from_slice::<Vec<vectorcraft_doc::SymbolOverride>>(&bytes)
+            && let Some(n) = self.last_object().filter(|n| matches!(n.kind, NodeKind::SymbolInstance { .. }))
+        {
+            n.extras_mut().symbol_overrides = list.into_iter().filter(|s| !s.is_empty()).collect();
+        }
         self.constraint_art(o);
         self.placed_page(o);
         // A blend's key object or spine.
@@ -910,10 +939,21 @@ impl<'a> Reader<'a> {
         self.artboards.first().map(|b| b.rect).or(self.cropmarks).or_else(|| self.sized_board())
     }
 
-    /// The page the art is compared with in the document's space, once the art has started.
-    pub(super) fn page_in_doc(&self) -> Option<Rect> {
-        let board = self.first_board().or_else(|| self.bbox_board())?;
-        Some(self.to_doc?.transform_rect_bbox(board))
+    /// Every page the art may be compared with, in the document's space, once the art has started:
+    /// each artboard (else the first artboard [`Self::first_board`] gives), since a page of a file's
+    /// PDF part can show any of them, and the art's bounding box ([`Self::bbox_board`]), which a page
+    /// cropped to the art and the page of the legacy format show ([`pages_of`]). Worked out again
+    /// only when the artboards, the art's box or the move into the document have changed.
+    pub(super) fn pages_in_doc(&mut self) -> Arc<[Rect]> {
+        let sources = (self.to_doc, self.artboards.len(), self.first_board(), self.bbox_board());
+        if let Some((from, pages)) = &self.page_cache
+            && *from == sources
+        {
+            return pages.clone();
+        }
+        let pages: Arc<[Rect]> = pages_of(sources.0, &self.artboards, sources.2, sources.3).into();
+        self.page_cache = Some((sources, pages.clone()));
+        pages
     }
 
     /// The page of a file that says nothing of its artboard (the legacy format as other apps write
@@ -1052,7 +1092,7 @@ impl<'a> Reader<'a> {
     /// whose name another swatch has, take the first free "Name 2", "Name 3"…
     /// ([`Document::free_swatch_name`]) once the other colors and the patterns have their swatches;
     /// a pattern a swatch already paints with gets no other.
-    fn file_swatches(&self, doc: &mut Document, own_palette: bool) -> HashMap<String, String> {
+    fn file_swatches(&self, doc: &mut Document, own_palette: bool, type_colors: &[super::Named]) -> HashMap<String, String> {
         let mut defined = std::collections::HashSet::new();
         let mut clashes = vec![];
         // The swatch names there are, looked up rather than scanned for each name a file defines
@@ -1062,7 +1102,8 @@ impl<'a> Reader<'a> {
         // The names a swatch of another kind than a gradient or pattern has.
         let mut solid: std::collections::HashSet<String> =
             doc.swatches_iter().filter(|s| !matches!(s.paint, Paint::Gradient(_) | Paint::Pattern { .. })).map(|s| s.name.clone()).collect();
-        let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
+        let colors =
+            self.spots.iter().chain(&self.stop_spots).chain(type_colors).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
         for (n, spot) in colors {
             let first = defined.insert(n.name.clone());
             let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
@@ -1225,8 +1266,8 @@ impl<'a> Reader<'a> {
         }
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
-        // Before the artboards are taken below: the page is the first artboard's.
-        let page = self.page_in_doc();
+        // Before the artboards are taken below: the pages are the artboards' and the art's box.
+        let pages = self.pages_in_doc();
         self.check_symbols();
         self.order_symbols();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
@@ -1314,7 +1355,26 @@ impl<'a> Reader<'a> {
             }
             None => false,
         };
-        let renamed = self.file_swatches(&mut doc, own_palette);
+        // The swatch colors of the styles that are one paint, which the text document's characters
+        // name for their fills and strokes, in the order of the styles' names.
+        let mut type_colors: Vec<(&String, &(Paint, Option<super::Named>))> =
+            self.styles.iter().filter_map(|(style, st)| Some((style, st.simple_color.as_ref()?))).collect();
+        type_colors.sort_by_key(|(style, _)| *style);
+        let type_named: Vec<super::Named> = type_colors.iter().filter_map(|(_, (_, named))| named.clone()).collect();
+        let renamed = self.file_swatches(&mut doc, own_palette, &type_named);
+        let type_colors: Vec<(String, Paint)> = type_colors
+            .into_iter()
+            .map(|(style, (paint, _))| {
+                let mut paint = paint.clone();
+                // A color that took a free name is linked by that name.
+                if let Paint::Solid { swatch: Some(link), .. } = &mut paint
+                    && let Some(new) = renamed.get(link.as_str())
+                {
+                    link.clone_from(new);
+                }
+                (style.clone(), paint)
+            })
+            .collect();
         if let Some(author) = self.author.take() {
             doc.metadata.author = author;
         }
@@ -1381,8 +1441,9 @@ impl<'a> Reader<'a> {
         }
         warnings.extend(self.names.notes());
         // The patterns of the styles that are one paint, which the text document's characters
-        // name for their fills and strokes: those that place in the document.
-        let text_patterns = self
+        // name for their fills and strokes: those that place in the document. With them, those
+        // styles' swatch colors.
+        let text_paints = self
             .styles
             .iter()
             .filter_map(|(style, st)| {
@@ -1390,6 +1451,7 @@ impl<'a> Reader<'a> {
                 let paint = super::ops::style_pattern(name, *matrix, controls, &self.pattern_tiles, &self.v7_patterns, &self.global_names, to_doc)?;
                 Some((style.clone(), paint))
             })
+            .chain(type_colors)
             .collect();
         Ok(Structure {
             doc,
@@ -1406,18 +1468,19 @@ impl<'a> Reader<'a> {
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
             placed_pages: self.placed_pages,
+            placed_eps: self.placed_eps,
             envelopes_drawn: self.envelopes_drawn,
             warped_type: super::super::envelope::WarpedType {
                 looks: self.warped_type,
                 envelopes: self.typed_envelopes,
                 checks: self.envelope_checks,
                 spent: self.envelope_spent,
-                page,
+                pages: pages.to_vec(),
                 alone: None,
                 type_clips: self.type_clips,
             },
             styles_read,
-            text_patterns,
+            text_paints,
             canvas_scale: self.canvas_scale,
             symbols_own_size: self.symbols_own_size,
             xml_ids: self.xml_ids,

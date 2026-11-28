@@ -131,6 +131,13 @@ impl Node {
         matches!(self.kind, NodeKind::Layer { template: true, .. })
     }
 
+    /// Whether a view that hides template layers (`templates`) or guides (`guides`) leaves this
+    /// object out: a template layer while templates are hidden, or a path made into a guide while
+    /// guides are hidden. The canvas draws ruler guides apart from the art.
+    pub fn hidden_by_view(&self, templates: bool, guides: bool) -> bool {
+        (templates && self.is_template()) || (guides && matches!(self.kind, NodeKind::Path { guide: true, .. }))
+    }
+
     /// The art objects of this container: its children, looking through sublayers, which are not
     /// objects (bottom first). With `editable`, only the visible, unlocked objects in visible,
     /// unlocked, non-template sublayers.
@@ -360,15 +367,30 @@ impl Node {
         self.geometric(Some(symbols))
     }
 
-    /// Children that contribute to a container's editing bounds and selection highlights. A live trace retains a
-    /// hidden bitmap for re-tracing/release; only source-image views measure that bitmap.
+    /// Children that contribute to a container's editing bounds. A live trace retains a hidden bitmap for
+    /// re-tracing/release; only source-image views measure that bitmap. Selection highlights outline
+    /// [`Node::drawn_children`].
     pub fn editing_children(&self) -> &[Arc<Node>] {
         let children = self.children().map(Vec::as_slice).unwrap_or_default();
-        let trace_source = self.extras().trace.is_some()
-            && !self.trace_view().shows_source()
-            && children.first().is_some_and(|n| !n.visible && matches!(n.kind, NodeKind::Image(_)));
+        let trace_source = !self.trace_view().shows_source() && self.trace_source().is_some_and(|n| !n.visible);
         let skip = usize::from(self.extras().shaper.is_some() || trace_source);
         children.get(skip..).unwrap_or_default()
+    }
+
+    /// The children a selection highlight outlines: [`Node::editing_children`] without the hidden
+    /// members, which the canvas does not draw. An Image Trace object's hidden source image stays
+    /// when the object's view shows it, and every path of a compound path stays, since the compound
+    /// path draws all of them.
+    pub fn drawn_children(&self) -> impl Iterator<Item = &Arc<Node>> {
+        let members = !matches!(self.kind, NodeKind::Compound { .. });
+        let source = self.trace_source().filter(|_| self.trace_view().shows_source());
+        self.editing_children().iter().filter(move |c| !members || c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)))
+    }
+
+    /// The first child of an Image Trace object when it is an image: the bitmap the trace keeps.
+    fn trace_source(&self) -> Option<&Arc<Node>> {
+        self.extras().trace.as_ref()?;
+        self.children()?.first().filter(|n| matches!(n.kind, NodeKind::Image(_)))
     }
 
     /// The box of [`Node::geometric_bounds`], or of [`Node::geometric_bounds_with`] when `symbols`
@@ -386,6 +408,10 @@ impl Node {
                 .filter(|c| c.visible || !matches!(self.kind, NodeKind::Layer { .. }))
                 .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.geometric(symbols))),
             NodeKind::Text(t) => self.projected(t.bounds()),
+            // A distorted image is bounded by its corners.
+            NodeKind::Image(_) if self.is_distorted_image() => {
+                self.image_corners().map(|q| q[1..].iter().fold(Rect::from_points(q[0], q[0]), |r, p| r.union_pt(*p)))
+            }
             NodeKind::Image(im) => Some(im.xf.transform_rect_bbox(Rect::new(0.0, 0.0, im.width as f64, im.height as f64))),
             NodeKind::SymbolInstance { symbol, xf } => {
                 let art = symbols.and_then(|s| s.art(symbol)).map_or(SYMBOL_SQUARE, |a| a.geometric);
@@ -402,6 +428,17 @@ impl Node {
             NodeKind::Intertwine { children } => union(children),
             // A ruler guide runs across the canvas (or an artboard): it adds nothing to a box.
             NodeKind::RulerGuide { .. } => None,
+        }
+    }
+
+    /// The box of what a path, or the paths of a compound path, draw before the strokes' reach
+    /// ([`PathData::drawn_bounds`]): lone anchors of closed subpaths count only with `dots`. Other
+    /// members of a compound path count by their geometric box. `None` when nothing is drawn.
+    fn drawn(&self, symbols: Option<&SymbolBoxes>, dots: bool) -> Option<Rect> {
+        match &self.kind {
+            NodeKind::Path { path, .. } => path.drawn_bounds(dots),
+            NodeKind::Compound { .. } => self.editing_children().iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.drawn(symbols, dots))),
+            _ => self.geometric(symbols),
         }
     }
 
@@ -459,7 +496,9 @@ impl Node {
                 self.geometric(symbols).map(|b| b.inflate(o, o))
             }
             NodeKind::Path { .. } | NodeKind::Compound { .. } => {
-                let b = self.geometric(symbols)?;
+                // A lone anchor is drawn only as the dot of a round or projecting cap on a closed subpath.
+                let dots = self.appearance.painted_strokes().any(|s| matches!(s.cap, crate::LineCap::Round | crate::LineCap::Square));
+                let b = self.drawn(symbols, dots).or_else(|| self.geometric(symbols))?;
                 Some(self.appearance.stroked_bounds(b, || self.stroke_path().unwrap_or_default()))
             }
             NodeKind::SymbolInstance { symbol, xf } => {
@@ -528,6 +567,9 @@ impl Node {
         }
         // The path the objects are attached to, before it is transformed.
         let on_path_before = self.on_path_data().cloned();
+        // A distorted image's placement nearest its corners, before they are transformed (`None`
+        // within when its stored corners are refused, and `None` for anything else).
+        let image_before = self.extras().image_quad.is_some().then(|| crate::image_quad::nearest_affine(self));
         if !self.is_layer() {
             self.bbox_angle = crate::orient::transformed_angle(self.bbox_angle, a);
         }
@@ -637,7 +679,8 @@ impl Node {
         {
             Arc::make_mut(&mut m.art).transform_scaled(a, sc);
         }
-        // The area where an Intertwine member is drawn over the others moves with it.
+        // The area where an Intertwine member is drawn over the others moves with it, and so do a
+        // distorted image's corners.
         if let Some(e) = self.extras_if_any() {
             if let Some(area) = e.intertwine.as_mut() {
                 area.transform(a);
@@ -645,6 +688,23 @@ impl Node {
             for area in &mut e.intertwine_tiers {
                 area.transform(a);
             }
+            if let Some(q) = e.image_quad.as_mut() {
+                for p in q.iter_mut() {
+                    *p = a * *p;
+                }
+            }
+        }
+        // Corners that a scale squeezes past what a perspective map can place (or that were
+        // refused already) leave the image placed by its transform: for valid corners, the
+        // placement that was nearest them, transformed, rather than the rectangle it had before
+        // it was distorted.
+        if let Some(before) = image_before
+            && self.image_quad().is_none()
+        {
+            if let (Some(near), NodeKind::Image(im)) = (before, &mut self.kind) {
+                im.xf = a * near;
+            }
+            self.extras_mut().image_quad = None;
         }
     }
 

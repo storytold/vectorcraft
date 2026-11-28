@@ -527,11 +527,11 @@ struct Style {
     v_scale: f64,
     fill: Option<Color>,
     stroke: Option<Color>,
-    /// The pattern that paints the fill or the stroke in place of its colour: the one the art
-    /// style named by key 5 of its paint gives ([`Texts::with_patterns`]), placed in the document.
-    /// `None` for any other paint, which keeps its colour.
-    fill_pattern: Option<Paint>,
-    stroke_pattern: Option<Paint>,
+    /// The paint of the fill or the stroke in place of its colour: the one the art style named by
+    /// key 5 of its paint gives ([`Texts::with_paints`]), a pattern placed in the document or a
+    /// colour linked to its swatch. `None` for any other paint, which keeps its colour.
+    fill_paint: Option<Paint>,
+    stroke_paint: Option<Paint>,
     stroke_width: f64,
     /// Key 61, the stroke's cap: 0 butt, 1 round, 2 projecting (square).
     stroke_cap: LineCap,
@@ -613,24 +613,30 @@ pub(super) struct Texts {
     /// attributes (key 5) and the paragraph style it is based on (key 6, an index into these).
     para_sheets: Vec<Val>,
     frames: Vec<Val>,
-    /// The patterns that paint characters, by the name of the art style that gives each
-    /// ([`Self::with_patterns`]).
-    patterns: HashMap<String, Paint>,
+    /// The paints characters take in place of their colours, by the name of the art style that
+    /// gives each ([`Self::with_paints`]).
+    paints: HashMap<String, Paint>,
     /// The document's Kinsoku sets (key 4 of its resources), in order, each by its name (key 0):
     /// Hard or Soft, `None` for any other set.
     kinsoku_sets: Vec<Option<Kinsoku>>,
 }
 
 impl Texts {
-    /// The text document with its characters painted by `patterns`: the patterns of the editing
-    /// data's art styles that paint with one, each placed in the document, by the style's name.
-    /// A run's fill or stroke (key 53 or 54) is a paint whose key 0 is a colour and whose key 5
-    /// names the art style that paints it. In users' files (used locally, never committed), such a
-    /// style is one paint: a colour, which key 0 already has, or a pattern, whose key 0 is black
-    /// (`/0 0 /1 [ 1 0 ]`). The pattern's matrix is in art space, as a path's pattern fill has it:
-    /// the files' own pages tile the type with the matrix a path's fill would get there.
-    pub(super) fn with_patterns(self, patterns: HashMap<String, Paint>) -> Texts {
-        Texts { patterns, ..self }
+    /// The text document with its characters painted by `paints`: the paints of the editing data's
+    /// art styles that are one paint, a pattern placed in the document or a colour linked to its
+    /// swatch, by the style's name. A run's fill or stroke (key 53 or 54) is a paint whose key 0
+    /// is a colour (grey, RGB or CMYK) and whose key 5 names the art style that paints it. In
+    /// users' files (used locally, never committed), such a style is one paint, always its fill's,
+    /// for a run's stroke too:
+    /// - a process colour, which key 0 already has;
+    /// - a spot ink or a global process colour at a tint (`c m y k (name) tint x`, `Xx`, `Xk`),
+    ///   whose process values at that tint are all key 0 keeps: the name and the tint are only in
+    ///   the style, so the type keeps its ink only when it takes the style's paint;
+    /// - a pattern, whose key 0 is black (`/0 0 /1 [ 1 0 ]`). Its matrix is in art space, as a
+    ///   path's pattern fill has it: the files' own pages tile the type with the matrix a path's
+    ///   fill would get there.
+    pub(super) fn with_paints(self, paints: HashMap<String, Paint>) -> Texts {
+        Texts { paints, ..self }
     }
 
     /// The text document in the editing copy `data`, if it has one that can be read.
@@ -699,7 +705,7 @@ impl Texts {
             char_sheets,
             para_sheets,
             frames: doc.take("0")?.take("8")?.take("0")?.into_list(),
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets,
         })
     }
@@ -939,8 +945,8 @@ impl Texts {
         let on = |k: &str| !matches!(pick(k), Some(Val::Bool(false)));
         let font = num("0").and_then(|i| self.fonts.get(i as usize)).filter(|f| !f.name.is_empty());
         let size = num("1").filter(|v| *v > 0.0 && *v < 1e5).unwrap_or(12.0);
-        // Key 5 of a paint names the art style that paints it ([`Self::with_patterns`]).
-        let pattern = |k: &str| pick(k).and_then(|p| p.get("5")).and_then(Val::str).and_then(|name| self.patterns.get(name)).cloned();
+        // Key 5 of a paint names the art style that paints it ([`Self::with_paints`]).
+        let styled = |k: &str| pick(k).and_then(|p| p.get("5")).and_then(Val::str).and_then(|name| self.paints.get(name)).cloned();
         Style {
             font: font.map(|f| f.font().clone()),
             size,
@@ -951,8 +957,8 @@ impl Texts {
             v_scale: num("7").filter(|v| *v > 0.0 && *v < 100.0).unwrap_or(1.0),
             fill: if on("56") { Some(pick("53").and_then(paint).unwrap_or(Color::BLACK)) } else { None },
             stroke: if matches!(pick("57"), Some(Val::Bool(true))) { pick("54").and_then(paint) } else { None },
-            fill_pattern: pattern("53"),
-            stroke_pattern: pattern("54"),
+            fill_paint: styled("53"),
+            stroke_paint: styled("54"),
             stroke_width: num("63").filter(|v| *v >= 0.0 && *v < 1e4).unwrap_or(1.0),
             // Numbered as PostScript's `setlinecap` and `setlinejoin` operators number them
             // (PostScript Language Reference, 3rd ed.): in users' files the page strokes type with
@@ -1588,16 +1594,18 @@ fn para_style(p: &Para, scale: f64) -> ParaStyle {
 
 /// The character style of character attributes `s`: its font from the fonts the app has (the
 /// installed copy its font record names, [`DocFont::font`]), its lengths (size, leading, baseline
-/// shift, stroke width) scaled by `scale`, and its patterns placed in the type's text space by
-/// `to_text` (the document → its text space), where they stay as the document has them.
+/// shift, stroke width) scaled by `scale`, its patterns placed in the type's text space by
+/// `to_text` (the document → its text space), where they stay as the document has them, and its
+/// swatch colours linked to their swatches.
 fn char_style(s: &Style, scale: f64, to_text: Affine) -> CharStyle {
     let (family, style, version) = s.font.clone().unwrap_or_else(|| (CharStyle::default().font_family, "Regular".to_string(), None));
-    // A fill or stroke that is on takes its pattern in place of its colour.
-    let paint = |color: Option<Color>, pattern: &Option<Paint>| match (color, pattern) {
+    // A fill or stroke that is on takes its style's paint in place of its colour.
+    let paint = |color: Option<Color>, styled: &Option<Paint>| match (color, styled) {
         // A pattern that can't be placed (the type's text space out of range) keeps the colour.
         (Some(_), Some(Paint::Pattern { pattern, xf })) if (to_text * *xf).is_finite() => {
             Paint::Pattern { pattern: pattern.clone(), xf: to_text * *xf }
         }
+        (Some(_), Some(linked @ Paint::Solid { swatch: Some(_), .. })) => linked.clone(),
         (color, _) => color.map_or(Paint::None, Paint::solid),
     };
     // Type without a stroke keeps the stroke's defaults, as its weight is 0.
@@ -1616,8 +1624,8 @@ fn char_style(s: &Style, scale: f64, to_text: Affine) -> CharStyle {
         baseline_shift: s.baseline_shift * scale,
         h_scale: s.h_scale * 100.0,
         v_scale: s.v_scale * 100.0,
-        fill: paint(s.fill, &s.fill_pattern),
-        stroke: paint(s.stroke, &s.stroke_pattern),
+        fill: paint(s.fill, &s.fill_paint),
+        stroke: paint(s.stroke, &s.stroke_paint),
         stroke_width: if s.stroke.is_some() { s.stroke_width * scale } else { 0.0 },
         stroke_cap,
         stroke_join,
@@ -1655,7 +1663,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let justify = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justify;
@@ -1680,7 +1688,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let auto = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).justification.auto_leading;
@@ -1704,7 +1712,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let options = |own: &[u8], scale: f64| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), scale).hyphenation;
@@ -1723,7 +1731,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let own = |own: &[u8]| para_style(&bare.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).hyphenation;
@@ -1765,7 +1773,7 @@ mod tests {
             // [Normal Paragraph Style] has the Soft set; the second style has Force burasagari.
             para_sheets: vec![read(b"/5 << /27 1 >>").unwrap(), read(b"/5 << /24 2 /23 true >>").unwrap()],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![Some(Kinsoku::Hard), Some(Kinsoku::Soft), None],
         };
         let para = |run: &[u8]| texts.para(Some(&read(run).unwrap()));
@@ -1824,7 +1832,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let tabs = |own: &[u8], scale: f64| {
@@ -1892,7 +1900,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         }
         .para(None);
@@ -1941,7 +1949,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: cases.iter().map(|c| frame(c)).collect(),
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let vertical: Vec<bool> = (0..cases.len() + 1).map(|i| texts.frame_vertical(i)).collect();
@@ -1960,7 +1968,7 @@ mod tests {
             char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Block) /6 << /35 3 >>").unwrap()],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let tcy = |run: &[u8]| texts.style(Some(&read(run).unwrap())).tate_chu_yoko;
@@ -1985,7 +1993,7 @@ mod tests {
             char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Rotated) /6 << /35 2 >>").unwrap()],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let roman = |defaults: &[u8], run: &[u8]| texts(defaults).style(Some(&read(run).unwrap())).standard_vertical_roman;
@@ -2021,7 +2029,7 @@ mod tests {
             ],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let aki = |defaults: &[u8], normal: &[u8], run: &[u8]| {
@@ -2059,7 +2067,7 @@ mod tests {
             char_sheets: vec![read(b"/0 ([Normal Character Style]) /6 << >>").unwrap(), read(b"/0 (Rounded) /6 << /61 1 /62 1 >>").unwrap()],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let stroke = |run: &[u8]| {
@@ -2102,10 +2110,10 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         }
-        .with_patterns(patterns)
+        .with_paints(patterns)
     }
 
     /// Key 5 of a run's fill or stroke names the art style that paints it: one that paints with a
@@ -2142,6 +2150,25 @@ mod tests {
         }
     }
 
+    /// A run whose art style paints with a colour linked to a swatch takes that paint, the swatch
+    /// and its tint, in place of the process values key 0 keeps for it; a fill or stroke that is
+    /// off stays off.
+    #[test]
+    fn a_run_painted_by_a_swatch_colours_art_style_takes_the_swatch() {
+        // GUARDS: type in a spot ink came in as the process colour key 0 keeps for it.
+        let ink = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0).tinted(0.5), swatch: Some("Red Ink".into()), tint: 0.5 };
+        let texts = patterned_texts().with_paints(HashMap::from([("Anon 1".to_string(), ink.clone())]));
+        let paints = |run: &str| {
+            let s = char_style(&texts.style(Some(&read(run.as_bytes()).unwrap())), 1.0, Affine::IDENTITY);
+            (s.fill, s.stroke)
+        };
+        let red = |style: &str| format!("<< /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 .5 .5 0.0 ] >> {style} >>");
+        let process = Paint::solid(Color::cmyk(0.0, 0.5, 0.5, 0.0));
+        assert_eq!(paints(&format!("/6 << /53 {} >>", red("/5 (Anon 1)"))), (ink.clone(), Paint::None));
+        assert_eq!(paints(&format!("/6 << /53 {} /57 true /54 {} >>", red(""), red("/5 (Anon 1)"))), (process, ink));
+        assert_eq!(paints(&format!("/6 << /56 false /53 {} /54 {} >>", red("/5 (Anon 1)"), red("/5 (Anon 1)"))), (Paint::None, Paint::None));
+    }
+
     /// A run's pattern stays where the document has it whatever the type's own text space: turned
     /// and moved point type, and area type, whose text space is the document's.
     #[test]
@@ -2154,9 +2181,9 @@ mod tests {
         ] {
             let mut st = story("type", &[0.0], &Para::default());
             st.frames = vec![frame.clone()];
-            st.runs[0].1.fill_pattern = Some(dots_at((10.0, 20.0)));
+            st.runs[0].1.fill_paint = Some(dots_at((10.0, 20.0)));
             st.runs[0].1.stroke = Some(Color::BLACK);
-            st.runs[0].1.stroke_pattern = Some(dots_at((-3.0, 8.0)));
+            st.runs[0].1.stroke_paint = Some(dots_at((-3.0, 8.0)));
             let node = st.node(NodeId(1), 0, (0.0, 0.0), to_doc).unwrap();
             let NodeKind::Text(t) = node.kind else { panic!("not type") };
             for (paint, at) in [(&t.runs[0].style.fill, Point::new(10.0, 20.0)), (&t.runs[0].style.stroke, Point::new(-3.0, 8.0))] {
@@ -2186,7 +2213,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![read(b"/0 << /0 [ 0 0 ] /2 << /0 0 >> >>").unwrap()],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let text = |kerns: &[u8]| -> TextObject {
@@ -2254,7 +2281,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         let direction = |own: &[u8]| para_style(&texts.para(Some(&read(&[b"/5 << ", own, b" >>"].concat()).unwrap())), 1.0).direction;
@@ -2303,7 +2330,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         texts.frame(0)
@@ -2511,8 +2538,8 @@ mod tests {
                     v_scale: 1.0,
                     fill: Some(Color::BLACK),
                     stroke: None,
-                    fill_pattern: None,
-                    stroke_pattern: None,
+                    fill_paint: None,
+                    stroke_paint: None,
                     stroke_width: 1.0,
                     stroke_cap: LineCap::Butt,
                     stroke_join: LineJoin::Miter,
@@ -2964,7 +2991,7 @@ mod tests {
             char_sheets: vec![],
             para_sheets: vec![],
             frames: vec![read(doc.as_bytes()).unwrap()],
-            patterns: HashMap::new(),
+            paints: HashMap::new(),
             kinsoku_sets: vec![],
         };
         texts.frame(0).unwrap()

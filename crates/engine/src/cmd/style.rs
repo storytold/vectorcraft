@@ -31,7 +31,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Apply Graphic Style",
             ["Window", "Graphic Styles"],
             None,
-            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows (with `add`: of the kinds of row the style shows) and, without `add`, its object opacity and blend mode for every label or line of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
+            "{name, add?: bool, ids?|id? (layers too), target?: \"object\"|\"contents\"} give the objects (default: the selection; a group or layer itself, its fills and strokes painting its members and its effects applying to them as one piece; target contents: the objects inside instead) the style's appearance, opacity, blend mode, isolate and knockout, and link them to it (placed gradients land at the same place relative to each object's bounds); add: true (Alt-click) adds its fills, strokes and effects on top of the existing appearance instead and unlinks. In the contents of a Live Paint group, each face takes only the style's fills and each edge only its strokes, and neither is linked. On a path directly in a graph series (a series group's id stands for those paths), the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke (with `add`: of the kinds of row the style shows) and, without `add`, the object's opacity and blend mode (exceptions, and the art of a graph design in a series, which is left out: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows (with `add`: of the kinds of row the style shows) and, without `add`, its object opacity and blend mode for every label or line of its kind. With nothing selected (and no ids) the next object drawn takes the style instead (see appearance.newArt) → {newArt: true}",
             has_doc,
             style_apply
         ),
@@ -76,7 +76,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Redefine Graphic Style",
             ["Window", "Appearance"],
             None,
-            "{name?, id?} | {name, from} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object (a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own: the topmost path directly in it; a graph's Axes or Legend group: its topmost line or label); the objects still linked to it update, and that object becomes linked. With `from`, the style takes the look of the style named `from` (its fills, strokes, effects, opacity, blend mode, isolate and knockout) and keeps its own name and place; `from` and the objects linked to it stay as they are, `from` naming the style itself or a style with the same look changes nothing, and `from` with `id` is an error. The art of a graph design in a series keeps its look and is unlinked, as the source or as a linked object. A linked graph series group passes the style to the paths directly in it, a linked Axes group to its lines and labels and a linked Legend group to its labels, other than the source and paths linked to the style whose look was edited, and is left cleared (as appearance.clear) and unlinked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind → {name}",
+            "{name?, id?} | {name, from} replace the style (default: the one the object was last linked to) with the look of object `id` or the first selected object (a graph series group with no fill, stroke, effect, opacity, blend mode, isolation, knockout or style link of its own: the topmost path directly in it; a graph's Axes or Legend group: its topmost line or label); the objects still linked to it update, and that object becomes linked. With `from`, the style takes the look of the style named `from` (its fills, strokes, effects, opacity, blend mode, isolate and knockout) and keeps its own name and place; `from` and the objects linked to it stay as they are, `from` naming the style itself or a style with the same look changes nothing, and `from` with `id` is an error. The art of a graph design in a series keeps its look and is unlinked, as the source or as a linked object. A linked graph series group passes the style to the paths directly in it, a linked Axes group to its lines and labels and a linked Legend group to its labels, other than the source, paths linked to the style whose look was edited and members linked to another style, and is left cleared (as appearance.clear) and unlinked. On a linked path directly in a graph series, the graph also stores the paint, weight, opacity and blend mode of the topmost visible fill and stroke and the object's opacity and blend mode (exceptions: docs/mcp.md); on a graph label, or a graph's axis line, tick mark or radar ring (a graph's Axes group stands for the lines and labels directly in it, its Legend group for the labels), the graph stores that object's topmost visible fill and stroke rows and object opacity and blend mode for every label or line of its kind → {name}",
             has_doc,
             style_redefine
         ),
@@ -329,14 +329,15 @@ impl Session {
         let g = st.doc.graphic_style_by_id(n.extras().graphic_style?)?;
         Some((g, in_sync(n, g)))
     }
+}
 
-    /// A copy of `n` with style `g` applied as `graphicStyle.apply` applies it (Override Character
-    /// Color as set): the Graphic Styles panel's previews.
-    pub fn styled(&self, n: &Node, g: &GraphicStyle) -> Node {
-        let mut n = n.clone();
-        style_node(&mut n, g, &mut None, self.prefs.override_char_color);
-        n
-    }
+/// A copy of `n` with style `g` applied as `graphicStyle.apply` applies it, type's characters too
+/// with `override_char_color` (the preference Override Character Color): the Graphic Styles
+/// panel's previews.
+pub fn styled_node(n: &Node, g: &GraphicStyle, override_char_color: bool) -> Node {
+    let mut n = n.clone();
+    style_node(&mut n, g, &mut None, override_char_color);
+    n
 }
 
 // ---------- commands ----------
@@ -351,6 +352,9 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
     // The series groups their paths stand for: a style that replaces the appearance clears what they hold themselves,
     // and a style added on top unlinks them.
     let groups = super::appearance::stood_for(&own, &ids);
+    // In the contents of a Live Paint group, a face takes the style's fills and an edge its strokes.
+    let (faces, edges) = super::appearance::contents_parts(s, p)?;
+    let part = |id: &NodeId| (faces.contains(id) || edges.contains(id)).then(|| faces.contains(id));
     if ids.is_empty() {
         if p.get("ids").is_some() || p.get("id").is_some() {
             return Err(bad("graphicStyle.apply", "no such objects"));
@@ -361,13 +365,20 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(json!({ "newArt": true }));
     }
     let before = s.doc()?.doc.clone();
-    s.edit("Apply Graphic Style", |d, _| {
+    // An apply that changes nothing (a fill-only style added to edges only) records no undo step.
+    super::overprint::edit_counted(s, "Apply Graphic Style", |d| {
         if add {
             let g = d.graphic_styles[i].clone();
             for id in &ids {
                 if let Some(n) = d.node_mut(*id) {
                     let ap = g.appearance_on(n).into_owned();
-                    n.appearance.items.extend(ap.items);
+                    let kind = part(id);
+                    let rows: Vec<_> = ap.items.into_iter().filter(|it| kind.is_none_or(|fill| it.is_fill() == fill)).collect();
+                    // A face or edge the style adds nothing to keeps its appearance and its link.
+                    if kind.is_some() && rows.is_empty() && ap.effects.is_empty() {
+                        continue;
+                    }
+                    n.appearance.items.extend(rows);
                     n.appearance.effects.extend(ap.effects);
                     n.extras_mut().graphic_style = None;
                 }
@@ -387,13 +398,18 @@ fn style_apply(s: &mut Session, p: &Value) -> Result<Value> {
             let mut shared = None;
             for id in &ids {
                 apply_style(d, *id, &g, &mut shared, chars);
+                // A face or edge that keeps only the rows of its kind no longer has the style's look, so it is not linked.
+                if let (Some(fill), Some(n)) = (part(id), d.node_mut(*id)) {
+                    super::appearance::keep_rows_of_kind(n, fill);
+                    n.extras_mut().graphic_style = None;
+                }
             }
             super::appearance::clear_stood_for(d, &groups);
             super::appearance::capture_series_writes(&before, d, &ids, (true, true), (true, true), false, true);
             // A label or graph line keeps its new rows for its kind.
             super::graph::capture_label_rows(d, &ids);
         }
-        Ok(())
+        Ok(usize::from(*d != *before))
     })?;
     ok()
 }
@@ -529,35 +545,48 @@ fn style_redefine(s: &mut Session, p: &Value) -> Result<Value> {
     let chars = s.prefs.override_char_color;
     let before = s.doc()?.doc.clone();
     s.edit_named("Redefine Graphic Style “{name}”", &name, false, |d, _| {
-        let id = d.graphic_style_id(i);
-        let old = std::mem::replace(&mut d.graphic_styles[i], GraphicStyle { name: name.clone(), id, ..look });
-        // Objects still linked follow the new definition; edited ones are unlinked (they keep their look), and the
-        // source keeps its own. The art of a graph design in a series is unlinked and keeps its look too, as the
-        // source or as a linked object: the graph draws it again from the design.
-        let linked = objects_where(d, |n| n.extras().graphic_style == Some(id) && Some(n.id) != src);
-        let (follow, edited): (Vec<NodeId>, Vec<NodeId>) =
-            linked.into_iter().partition(|nid| !super::graph::is_design_art(d, *nid) && d.node(*nid).is_some_and(|n| in_sync(n, &old)));
-        set_link(d, &edited, None);
-        // A linked graph series group passes the style to the paths directly inside it, so the graph stores it, and
-        // goes back to the empty appearance the graph draws it with. The source and the edited paths keep their look.
-        let mut follow_marks = super::graph::series_group_marks(d, &follow);
-        let edited: HashSet<NodeId> = edited.into_iter().collect();
-        follow_marks.retain(|nid| Some(*nid) != src && !edited.contains(nid));
-        super::appearance::clear_stood_for(d, &super::appearance::stood_for(&follow, &follow_marks));
-        let g = d.graphic_styles[i].clone();
-        let mut shared = None;
-        for nid in &follow_marks {
-            apply_style(d, *nid, &g, &mut shared, chars);
-        }
-        super::appearance::capture_series_writes(&before, d, &follow_marks, (true, true), (true, true), false, true);
-        super::graph::capture_label_rows(d, &follow_marks);
-        if let Some(src) = src {
-            let link = (!super::graph::is_design_art(d, src)).then_some(id);
-            set_link(d, &[src], link);
-        }
+        redefine_in(d, &before, i, look, src, chars);
         Ok(())
     })?;
     Ok(json!({ "name": name }))
+}
+
+/// Replace graphic style `i` of `d` with the fills, strokes, effects and transparency of `look`,
+/// keeping its name and id, as Redefine Graphic Style does: the objects still linked to it follow
+/// the new definition, edited ones are unlinked and keep their look, and object `src` (the one the
+/// look comes from, if any) becomes linked. `before` is `d` before the edit; `chars` is Override
+/// Character Color.
+pub(crate) fn redefine_in(d: &mut Document, before: &Document, i: usize, look: GraphicStyle, src: Option<NodeId>, chars: bool) {
+    let id = d.graphic_style_id(i);
+    let name = d.graphic_styles[i].name.clone();
+    let old = std::mem::replace(&mut d.graphic_styles[i], GraphicStyle { name, id, ..look });
+    // Objects still linked follow the new definition; edited ones are unlinked (they keep their look), and the
+    // source keeps its own. The art of a graph design in a series is unlinked and keeps its look too, as the
+    // source or as a linked object: the graph draws it again from the design.
+    let linked = objects_where(d, |n| n.extras().graphic_style == Some(id) && Some(n.id) != src);
+    let (follow, edited): (Vec<NodeId>, Vec<NodeId>) =
+        linked.into_iter().partition(|nid| !super::graph::is_design_art(d, *nid) && d.node(*nid).is_some_and(|n| in_sync(n, &old)));
+    set_link(d, &edited, None);
+    // A linked graph series group passes the style to the paths directly inside it, so the graph stores it, and
+    // goes back to the empty appearance the graph draws it with; a linked Axes or Legend group does the same with its
+    // lines and labels. The source and the edited paths keep their look, and a member linked to another style keeps
+    // its look and its link.
+    let mut follow_marks = super::graph::series_group_marks(d, &follow);
+    let edited: HashSet<NodeId> = edited.into_iter().collect();
+    let takes_style = |nid: NodeId| d.node(nid).is_some_and(|n| n.extras().graphic_style.is_none_or(|g| g == id));
+    follow_marks.retain(|nid| Some(*nid) != src && !edited.contains(nid) && takes_style(*nid));
+    super::appearance::clear_stood_for(d, &super::appearance::stood_for(&follow, &follow_marks));
+    let g = d.graphic_styles[i].clone();
+    let mut shared = None;
+    for nid in &follow_marks {
+        apply_style(d, *nid, &g, &mut shared, chars);
+    }
+    super::appearance::capture_series_writes(before, d, &follow_marks, (true, true), (true, true), false, true);
+    super::graph::capture_label_rows(d, &follow_marks);
+    if let Some(src) = src {
+        let link = (!super::graph::is_design_art(d, src)).then_some(id);
+        set_link(d, &[src], link);
+    }
 }
 
 fn style_break_link(s: &mut Session, p: &Value) -> Result<Value> {

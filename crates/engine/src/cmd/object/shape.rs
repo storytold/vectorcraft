@@ -99,6 +99,12 @@ fn corners_param(p: &Value) -> Result<Option<BTreeSet<usize>>> {
     list.iter().map(|k| k.as_u64().and_then(|k| usize::try_from(k).ok()).ok_or_else(err)).collect::<Result<_>>().map(Some)
 }
 
+/// Whether `relativeRadii` applies to a path with live shape `live`: a live rectangle, a live
+/// polygon or a path with Live Corners. A plain path, an ellipse and a line stay as they are.
+fn takes_rounding(live: Option<&LiveShape>) -> bool {
+    matches!(live, Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. } | LiveShape::Path { .. }))
+}
+
 /// Live line `l` with Line Length `len` (its first end stays) and then Line Angle `angle` (about
 /// its midpoint; a line whose ends meet has none to turn), or None when neither changes it.
 fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<LiveShape> {
@@ -124,7 +130,7 @@ fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<Live
 }
 
 pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
-    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "relativeRadii"], "object.setLiveShape")?;
+    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "rectanglesOnly", "relativeRadii"], "object.setLiveShape")?;
     check_numbers(p, &["radius", "sides"], "object.setLiveShape")?;
     // `items`: objects each with its own `corners`; else `ids` (or the selection) sharing them.
     let items = match p.get("items").filter(|v| !v.is_null()) {
@@ -235,6 +241,13 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     // When every value given is the current one, the document and its undo history stay as they
     // are.
     let st = s.doc()?;
+    // `rectanglesOnly`: the live rectangles among the targets; the other objects stay as they are.
+    let ids: Vec<NodeId> = if p.get("rectanglesOnly").and_then(Value::as_bool) == Some(true) {
+        let rectangle = |id: &NodeId| matches!(st.doc.node(*id).map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if matches!(**l, LiveShape::Rectangle { .. }));
+        ids.into_iter().filter(rectangle).collect()
+    } else {
+        ids
+    };
     // The lines that Line Length or Line Angle changes, as they become. A line that would reach
     // past the document's coordinate limit is an error before anything changes.
     let mut lines = std::collections::BTreeMap::new();
@@ -270,7 +283,7 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             Some(l @ LiveShape::Rectangle { .. }) if rectangle_angle.is_some_and(|a| !at_angle(l.shape_angle(), a)) => return false,
             _ => {}
         }
-        if relative_radii.is_some_and(|on| live.as_deref().map(|l| l.radii_relative()) != Some(on)) {
+        if relative_radii.is_some_and(|on| takes_rounding(live.as_deref()) && live.as_deref().is_some_and(LiveShape::radii_relative) != on) {
             return false;
         }
         if radius.is_none() && kind.is_none() {
@@ -278,16 +291,30 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let Some(c) = LiveCorners::new(path, live.as_deref()) else { return true };
         let picked = corners_of(*id).unwrap_or_else(|| c.picked(st.selection.anchors.get(id)));
-        // Setting corners folds a scale left in a rectangle's transform into its size, which
-        // changes it.
-        live.as_deref().is_none_or(|l| l.folded() == *l)
+        // Setting a radius folds a scale left in a rectangle's transform into its size, which
+        // changes it. A kind the corners already have leaves the rectangle as it is.
+        (radius.is_none() || live.as_deref().is_none_or(|l| l.folded() == *l))
             && picked.iter().all(|k| {
                 *k < c.base.anchor_count()
-                    && radius.is_none_or(|r| (c.drawn_radius(*k) - r.max(0.0)).abs() < 1e-9)
+                    // A radius stored in document units can be larger than it draws; a relative
+                    // one is compared as the fraction `set_corners` would store for it, to a
+                    // precision of 1e-9 pt on a corner whose maximum is 1 pt or more.
+                    && radius.is_none_or(|r| {
+                        let r = r.max(0.0);
+                        if c.radii_relative() {
+                            let max = c.corner(*k).map_or(0.0, |c| c.max_radius());
+                            let fraction = if max > 1e-12 { (r / max).clamp(0.0, 1.0) } else { 0.0 };
+                            (c.radius(*k) - fraction).abs() * max.max(1.0) < 1e-9
+                        } else {
+                            (c.radius(*k) - r).abs() < 1e-9
+                        }
+                    })
                     && kind.is_none_or(|kd| c.kind(*k) == kd)
             })
     };
-    if ids.iter().all(has_values) {
+    // The objects every value given already matches stay as they are, beside others that change.
+    let ids: Vec<NodeId> = ids.into_iter().filter(|id| !has_values(id)).collect();
+    if ids.is_empty() {
         return ok();
     }
     s.edit("Live Shape", |d, sel| {

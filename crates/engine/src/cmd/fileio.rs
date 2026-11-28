@@ -19,6 +19,7 @@
 //! - `metafile`: EMF and WMF export, open and place; PICT open and place.
 //! - `cdr`: `.cdr` drawings of versions 1 to 27 and `.cdt` templates, and `.cmx` files with
 //!   32-bit coordinates, open and place.
+//! - `cmx`: `.cmx` export (a page for each chosen artboard, a layer for each layer with art on it).
 //! - `hpgl`: HP-GL export options and plots.
 //! - `importer`: files that importer plug-ins open (`document.open {importer}`, and extensions no
 //!   built-in format reads).
@@ -31,18 +32,19 @@ mod action_batch;
 mod affinity;
 mod batch;
 mod cdr;
+mod cmx;
 pub mod dxf;
 pub mod dxfimport;
 mod encode;
 pub mod eps;
 mod export;
 pub(crate) mod imagemap;
-mod importer;
+pub(crate) mod importer;
 pub mod jxlread;
 mod legacy_ai;
 mod load;
 mod mesh3d;
-pub(crate) use load::{MAX_RASTER_ALLOC, file_clipped, image_clip, size_note};
+pub(crate) use load::{MAX_RASTER_ALLOC, file_clipped, image_clip, preview_with_clip, size_note};
 mod heifread;
 pub mod hpgl;
 mod jp2read;
@@ -79,10 +81,10 @@ pub(crate) use encode::{anti_alias, background, with_single_artboard};
 pub(crate) use export::with_artboard_fills;
 pub(crate) use export::{EXPORT_PARAMS, export_crop, isolated};
 pub use export::{export_doc, export_source, selection_doc, unused_option_notes};
+pub(crate) use load::decode_native_file;
 use load::err;
 pub(crate) use load::import_svg;
 pub(crate) use load::is_placeholder;
-pub(crate) use load::native_file;
 pub(crate) use load::page_or_editing_data;
 pub(crate) use load::source;
 pub use load::{
@@ -167,8 +169,8 @@ use formats::{ARTBOARD, ARTBOARDS, RANGE, USE_ARTBOARDS, import_name, writable};
 pub use formats::{
     DOC_EXTS, DOCX_EXTS, FORMATS, Format, FormatOption, OPEN_EXTS, PLACE_EXTS, RTF_EXTS, TEXT_EXTS, UNASSOCIATED_EXTS, builtin_open_filters,
     export_extensions, extension, file_stem, format, format_for_name, has_own_title, importer_formats, library_open_filters, open_extensions,
-    open_filters, opens_as_other, opens_with_importer, place_filters, plugin_formats, read_extensions, readable_format, readable_format_for_name,
-    titled_for_export, writable_format,
+    open_filters, opens_as_other, opens_with_importer, place_dialog_filters, place_filters, places_with_importer, plugin_formats, read_extensions,
+    readable_format, readable_format_for_name, titled_for_export, writable_format,
 };
 
 #[cfg(test)]

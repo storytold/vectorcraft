@@ -45,14 +45,14 @@
 
 use std::sync::{Arc, OnceLock};
 
-use craft_pdf::write::backend as krilla;
+use craft::pdf::write::backend as krilla;
 use krilla::image::ImageColorspace;
 use vectorcraft_color::Color;
 use vectorcraft_color::cms::{self, Cms, CmykLut, Intent, Model, ProfileKind, ProofLut};
 use vectorcraft_doc::{ColorMode, Document};
 
 use crate::patch::{Patch, Xref};
-use crate::{ColorConversion, PdfError, PdfSettings, ProfileInclusion, Standard};
+use crate::{ColorConversion, PdfError, PdfSettings, ProfileCatalog, ProfileInclusion, Standard};
 
 /// Most characters of an output intent's text entries written.
 const MAX_TEXT: usize = 255;
@@ -221,35 +221,33 @@ fn destination(set: &PdfSettings, mode: ColorMode, source: &Cms) -> Result<Optio
     Ok(Some((info.name, model)))
 }
 
-/// Refuse a destination profile that isn't there (when converting).
-pub(crate) fn check(set: &PdfSettings) -> Result<(), PdfError> {
-    // A blank destination is the document's own profile, which is always there.
-    if !set.output.destination.trim().is_empty() {
-        destination(set, ColorMode::Rgb, &cms::active())?;
+/// The colour profiles the settings checks ask about: the app's colour settings in effect and the
+/// profiles it knows by name.
+pub struct ActiveProfiles(Arc<Cms>);
+
+impl Default for ActiveProfiles {
+    fn default() -> Self {
+        Self(cms::active())
     }
-    Ok(())
 }
 
-/// What `set`'s Output section leaves out, one warning each.
-pub(crate) fn warnings(set: &PdfSettings) -> Vec<String> {
-    let o = &set.output;
-    let asks = !o.output_intent.trim().is_empty() || !o.output_condition_id.trim().is_empty();
-    let mut out = vec![];
-    if set.standard == Standard::PdfA2b {
-        if asks || o.trapped {
-            out.push("PDF/A files carry their own output intent: the output intent and Trapped entries are left out".into());
-        }
-        return out;
+impl ProfileCatalog for ActiveProfiles {
+    fn kind(&self, name: &str) -> Option<craft::pdf::settings::ProfileKind> {
+        use craft::pdf::settings::ProfileKind as Kind;
+        cms::profile(name).map(|p| match p.kind {
+            ProfileKind::Rgb => Kind::Rgb,
+            ProfileKind::Cmyk => Kind::Cmyk,
+            ProfileKind::Gray => Kind::Gray,
+        })
     }
-    let name = o.output_intent.trim();
-    if !name.is_empty() && cms::profile(name).is_none() {
-        out.push(format!("no profile is called “{name}”: the output intent names it without embedding it"));
+
+    fn rgb(&self) -> &str {
+        &self.0.settings().rgb
     }
-    // PDF/X files always have an output intent.
-    if !asks && !set.standard.is_pdfx() && (!o.output_condition.trim().is_empty() || !o.registry.trim().is_empty()) {
-        out.push("an output intent needs a profile or a condition identifier: the output condition and registry are left out".into());
+
+    fn cmyk(&self) -> &str {
+        &self.0.settings().cmyk
     }
-    out
 }
 
 impl ColorOut {
@@ -615,8 +613,12 @@ impl Dest {
     }
 }
 
-/// The catalog entries `set` asks for (none in PDF/A files, see [`warnings`]); a PDF/X file's
+/// The catalog entries `set` asks for (none in PDF/A files, which carry their own); a PDF/X file's
 /// output intent profile is `cmyk_profile` (the CMYK profile in effect) unless `set` names one.
+/// When the settings leave the condition identifier blank, a profile computed for a registered
+/// printing condition ([`cms::characterization`]) gives the condition's name as the identifier,
+/// and its registry when the settings leave the registry blank too. An identifier set in the
+/// settings is written as given, with the settings' registry.
 fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
     let o = &set.output;
     if set.standard == Standard::PdfA2b {
@@ -633,13 +635,13 @@ fn catalog(set: &PdfSettings, cmyk_profile: &str) -> Option<Catalog> {
             ProfileKind::Gray => None,
         });
         let text = |s: &str| s.trim().chars().take(MAX_TEXT).collect::<String>();
-        OutputIntent {
-            id: text(if id.is_empty() { name } else { id }),
-            condition: text(&o.output_condition),
-            registry: text(&o.registry),
-            info: text(name),
-            profile,
-        }
+        // Without a condition identifier, a profile computed for a registered printing condition
+        // names that condition and, unless the settings name one, the registry it belongs to.
+        let (id, registry) = match cms::characterization(name) {
+            Some((reference, registry)) if id.is_empty() => (reference, if o.registry.trim().is_empty() { registry } else { o.registry.as_str() }),
+            _ => (if id.is_empty() { name } else { id }, o.registry.as_str()),
+        };
+        OutputIntent { id: text(id), condition: text(&o.output_condition), registry: text(registry), info: text(name), profile }
     });
     let trapped = (o.trapped || intent.is_some()).then_some(o.trapped);
     (intent.is_some() || trapped.is_some()).then_some(Catalog { intent, trapped })

@@ -1,30 +1,72 @@
 //! Window › 3D and Materials: edits the selection's 3D effect in place. The object types (Plane,
 //! Extrude, Revolve, Inflate) apply a 3D effect to a selection without one (`effect.apply`) or
 //! change the applied one (`effect.setParams` with `threeDType`). Below them are the 3D effect
-//! dialogs' own Object, Rotation and Lighting controls and the panel's Materials tab
-//! ([`materials`]); each change runs `effect.setParams` as one undo step, and a drag previews and
-//! commits once, when the pointer is released. While the Materials tab is open, the artboard shows
-//! a handle on each mapped graphic, which drags it over its face. At the bottom, Export 3D Object
-//! adds the selected objects that have a 3D effect to Asset Export as 3D assets (`assets.add3D`)
-//! and shows that panel with their assets selected.
+//! dialogs' own Object, Rotation and Lighting rows ([`crate::dialogs::revolve::params`]) and the
+//! panel's Materials page ([`materials`]); each change runs `effect.setParams` as one undo step,
+//! and a drag previews and commits once, when the gesture ends. While the Materials page is open,
+//! the artboard shows a handle on each mapped graphic ([`handles`]), which drags it over its face.
+//! At the bottom, Export 3D Object adds the selected objects that have a 3D effect to Asset Export
+//! as 3D assets (`assets.add3D`) and shows that panel with their assets selected.
 
+use std::borrow::Cow;
+use std::sync::{Arc, RwLock};
+
+use craft::behavior::EditEvents;
+use craft::behavior::{CancelReason, EditEvent, GestureId, SelectionChange, keyed};
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Bind, CollectionEvent, Entry, Props as _, Show as _, ShowCollection as _, Trigger, clicked};
+use craft::ui::display::{Shade, Text};
+use craft::ui::menu::Menu;
+use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamRows};
+use craft::ui::tabs::{Tab, TabKind, TabStrip};
 use egui::Ui;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Effect, Node, NodeId, NodeKind};
-use vectorcraft_effects::{CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
+use vectorcraft_effects::{BEVEL_NAME, BEVEL_PROFILE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE, EXTRUDE, INFLATE, THREE_D_TYPES, is_three_d};
 
-use super::{live_run, pstate, set_pstate};
+use super::{Live, live_run};
 use crate::VectorcraftApp;
+use crate::dialogs::form;
+use crate::dialogs::revolve::{self, Place};
+use crate::dialogs::three_d as host;
 use crate::dialogs::three_d_materials as materials;
-use crate::state::Dialog;
-use crate::theme::Tokens;
-use crate::widgets::{self, Live, dim_label};
+
+pub(crate) mod handles;
+pub(crate) use handles::FrameKey;
 
 /// The panel's id (`window.panel`).
 pub const ID: &str = "threeD";
 
 /// The name of the undo step a change makes, as the effect dialogs' commits name it.
 const LABEL: &str = "Effect Options";
+
+/// The field that holds the page the panel shows.
+const PAGE: &str = "__page";
+/// The field that holds the selected light.
+const LIGHT: &str = "__light";
+/// The field that holds Bevel Shape's Edit Bevels… request.
+const EDIT_BEVELS: &str = "__editBevels";
+
+/// The panel's view state and the edit in progress, kept on the app between passes.
+#[derive(Default)]
+pub(crate) struct Model {
+    /// The page the rows show (`rotation`, `materials`, `lighting`); empty until one is picked.
+    page: String,
+    /// The selected light of the Lighting page.
+    light: usize,
+    /// What the gesture in progress goes to, taken when it began.
+    plan: Option<Plan>,
+    /// The gesture whose preview is open.
+    gesture: Option<GestureId>,
+    /// The settings changed during the gesture, sent again with each preview.
+    pending: Map<String, Value>,
+    /// The graphics frame the handles last built, with what it was built for.
+    frames: Option<(FrameKey, Arc<Option<vectorcraft_effects::GraphicFrame>>)>,
+    /// The mapped graphic the Materials page edits.
+    graphic: usize,
+    /// The settings as they were when the gesture began.
+    before: Value,
+}
 
 /// The selection's 3D effect: the appearance item whose effects hold it (`None`: the object's
 /// own effects), its index there, and its id and parameters.
@@ -92,14 +134,32 @@ pub(crate) fn set_type(app: &mut VectorcraftApp, kind: &str) -> Result<(), Strin
     }
 }
 
-/// Commits the drag in progress, when the panel has one.
-fn finish(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    if !pstate::<Map<String, Value>>(ctx, PENDING).is_empty() {
+/// Commits the gesture in progress, when the panel has one.
+fn finish(app: &mut VectorcraftApp) {
+    let m = &mut app.three_d;
+    let previewed = !m.pending.is_empty();
+    m.pending.clear();
+    m.plan = None;
+    m.gesture = None;
+    m.before = Value::Null;
+    if previewed {
         app.session.commit_interaction().ok();
         app.sync_views();
     }
-    set_pstate(ctx, PENDING, Map::<String, Value>::new());
-    set_pstate(ctx, PLAN, None::<Plan>);
+}
+
+/// Rolls back what the gesture in progress previewed.
+fn rollback(app: &mut VectorcraftApp) {
+    let m = &mut app.three_d;
+    let previewed = !m.pending.is_empty();
+    m.pending.clear();
+    m.plan = None;
+    m.gesture = None;
+    m.before = Value::Null;
+    if previewed {
+        app.session.cancel_interaction().ok();
+        app.sync_views();
+    }
 }
 
 /// What a change goes to, taken when it starts (before any preview): the selected objects' ids,
@@ -129,162 +189,208 @@ fn plan(app: &VectorcraftApp) -> Plan {
 
 /// Sends the settings `changed` to the 3D effect of each selected object (only the settings its
 /// effect takes; objects without a 3D effect are left as they are): previews them while the
-/// pointer is down (`dragging`) and commits them as one undo step when it is released. Settings
-/// changed earlier in the same drag are sent again with them, to the objects the drag started
-/// with, since each preview starts again from the document as it was before the drag. A drag
-/// whose selection changes is committed first, and the change starts a new one.
-pub(crate) fn send(app: &mut VectorcraftApp, ctx: &egui::Context, changed: Map<String, Value>, dragging: bool) {
+/// gesture runs (`Live::Dragging`) and commits them as one undo step when it ends. Settings
+/// changed earlier in the same gesture are sent again with them, to the objects the gesture
+/// started with, since each preview starts again from the document as it was before the gesture.
+/// A gesture whose selection changes is committed first, and the change starts a new one.
+pub(crate) fn send(app: &mut VectorcraftApp, changed: Map<String, Value>, phase: Live) {
+    let dragging = matches!(phase, Live::Dragging);
     if changed.is_empty() {
-        // A drag that ended without a change in its last frame is committed now.
+        // A gesture that ended without a change in its last pass is committed now.
         if !dragging {
-            finish(app, ctx);
+            finish(app);
         }
         return;
     }
     let selection: Vec<u64> = app.session.active().map(|st| st.selection.objects.iter().map(|id| id.0).collect()).unwrap_or_default();
-    let mut held: Option<Plan> = pstate(ctx, PLAN);
-    if held.as_ref().is_some_and(|p| p.selection != selection) {
-        finish(app, ctx);
-        held = None;
+    if app.three_d.plan.as_ref().is_some_and(|p| p.selection != selection) {
+        finish(app);
     }
-    let plan = held.unwrap_or_else(|| plan(app));
-    let mut pending: Map<String, Value> = pstate(ctx, PENDING);
+    let held = app.three_d.plan.take().unwrap_or_else(|| plan(app));
+    let mut pending = std::mem::take(&mut app.three_d.pending);
     pending.extend(changed);
-    let steps: Vec<Value> = plan
+    let steps: Vec<Value> = held
         .targets
         .iter()
         .filter_map(|(id, t, same_lights)| {
             let takes = vectorcraft_effects::default_params(&t.effect).unwrap_or(Value::Null);
+            // A custom bevel's name and points go with `bevel` to the effects that take one.
+            let custom_bevel = |k: &str| (k == BEVEL_NAME || k == BEVEL_PROFILE) && takes.get("bevel").is_some();
             let params: Map<String, Value> = pending
                 .iter()
-                .filter(|(k, _)| takes.get(k.as_str()).is_some() && (k.as_str() != "lights" || *same_lights))
+                .filter(|(k, _)| (takes.get(k.as_str()).is_some() || custom_bevel(k)) && (k.as_str() != "lights" || *same_lights))
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             (!params.is_empty())
                 .then(|| json!({"command": "effect.setParams", "params": {"ids": [id], "index": t.index, "item": t.item, "params": params}}))
         })
         .collect();
-    let phase = if dragging { Live::Dragging } else { Live::Released };
     match steps.as_slice() {
         [] => {}
         [step] => live_run(app, LABEL, "effect.setParams", step["params"].clone(), phase),
         _ => live_run(app, LABEL, "command.batch", json!({"label": LABEL, "commands": steps}), phase),
     }
     if dragging {
-        set_pstate(ctx, PENDING, pending);
-        set_pstate(ctx, PLAN, Some(plan));
-    } else {
-        set_pstate(ctx, PENDING, Map::<String, Value>::new());
-        set_pstate(ctx, PLAN, None::<Plan>);
+        app.three_d.pending = pending;
+        app.three_d.plan = Some(held);
     }
 }
 
-/// Panel state key of the [`Plan`] of the drag in progress.
-const PLAN: &str = "three-d-plan";
-/// Panel state key of the pass the panel was last drawn in.
-const DRAWN: &str = "three-d-drawn";
-
-/// Commits the panel's drag in progress when the panel was not drawn in this pass (it was closed
-/// or hidden during the drag), so the drag is one undo step and no preview stays open into a later
-/// pass. The app runs this at the end of every pass, after the panels.
-pub(crate) fn end_stale_drag(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let drawn: Option<u64> = pstate(ctx, DRAWN);
-    if drawn.is_some_and(|pass| pass != root_pass(ctx)) {
-        finish(app, ctx);
-        set_pstate(ctx, DRAWN, None::<u64>);
+/// Applies the edits of one pass of the panel's rows: `Begin` takes the plan and the settings as
+/// they were (`input`, the values the rows were shown with), `Update` previews, `Commit` and a
+/// one-step `Set` commit. A cancel rolls back, except the ones that keep what was previewed: the
+/// document moved under the gesture, or the panel was removed (the gesture commits as one step).
+pub(crate) fn apply(app: &mut VectorcraftApp, params: &[Param], input: &DialogFields, events: &EditEvents<DialogFields>) {
+    let settings = |fields: &DialogFields| Value::Object(form::json_of(params, fields));
+    // The one-step changes of a pass (several key presses in one frame) are one undo step, to where the last left them.
+    let mut set = None;
+    for event in events {
+        match event {
+            EditEvent::Begin { id, .. } => {
+                // A gesture still running (its selection changed under it) ends with what it previewed.
+                finish(app);
+                app.three_d.gesture = Some(*id);
+                app.three_d.before = settings(input);
+                app.three_d.plan = Some(plan(app));
+            }
+            EditEvent::Update { value, .. } => {
+                let changed = changed_settings(&app.three_d.before, &settings(value));
+                send(app, changed, Live::Dragging);
+            }
+            EditEvent::Commit { after, .. } => {
+                let changed = changed_settings(&app.three_d.before, &settings(after));
+                send(app, changed, Live::Released);
+            }
+            EditEvent::Set { after, .. } => set = Some(after),
+            EditEvent::Cancel { reason, .. } => {
+                if matches!(reason, CancelReason::Removed) || reason.document_moved() {
+                    send(app, Map::new(), Live::Released);
+                } else {
+                    rollback(app);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(after) = set {
+        send(app, changed_settings(&settings(input), &settings(after)), Live::Released);
     }
 }
-
-/// The main window's pass in progress. A floating window draws inside it and counts its own
-/// passes, so the panel's mark uses this one wherever the panel draws.
-fn root_pass(ctx: &egui::Context) -> u64 {
-    ctx.cumulative_pass_nr_for(egui::ViewportId::ROOT)
-}
-
-/// Panel state key of the settings changed during the drag in progress.
-const PENDING: &str = "three-d-pending";
-/// Panel state key of the controls' own state (the open tab, the selected light).
-const UI_STATE: &str = "three-d-ui";
 
 /// The 3D and Materials panel.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let ctx = ui.ctx().clone();
-    set_pstate(&ctx, DRAWN, Some(root_pass(&ctx)));
     let target = target(app);
     let selected = app.session.active().is_some_and(|st| !st.selection.objects.is_empty());
     let current = target.as_ref().and_then(|t| type_of(&t.effect));
     let labels = [tl!("Plane"), tl!("Extrude"), tl!("Revolve"), tl!("Inflate")];
-    let at = current.and_then(|kind| THREE_D_TYPES.iter().position(|(k, _)| *k == kind)).unwrap_or(usize::MAX);
-    let picked = ui.add_enabled_ui(selected, |ui| widgets::tab_bar(ui, &labels, at)).inner;
-    if let Some((kind, _)) = picked.and_then(|i| THREE_D_TYPES.get(i))
-        && let Err(e) = set_type(app, kind)
-    {
-        app.ui.status = e;
+    let tabs: Vec<(&'static str, &'static str)> = THREE_D_TYPES.iter().map(|(kind, _)| *kind).zip(labels).collect();
+    let source = keyed(&tabs[..], |tab: &(&'static str, &'static str)| tab.0).with_text(|tab| Cow::Borrowed(tab.1));
+    let mut strip = TabStrip::new(tl!("Object type")).kind(TabKind::Text).enabled(selected);
+    if let Some(kind) = current {
+        strip = strip.shown(kind);
     }
-    ui.add_space(8.0);
-    let Some(t) = target else {
-        // The selection changed during a drag: the drag ends with what it previewed.
-        finish(app, &ctx);
-        dim_label(ui, tl!("Select objects, then pick an object type to give them a 3D effect."));
-        // The Graphics stay at hand, so art can be added before the 3D object is picked.
-        ui.add_space(10.0);
-        if let Some(action) = materials::library(app, ui, false) {
-            run_action(app, &ctx, action);
+    let out = strip.show_items(ui, &source, &mut |key, _| Tab::new(tabs.iter().find(|tab| tab.0 == *key).map_or("", |tab| tab.1)));
+    for event in out.response.events {
+        if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
+            && let Some(kind) = keys.last()
+            && let Err(e) = set_type(app, kind)
+        {
+            app.ui.status = e;
         }
-        export_button(app, ui, &ctx);
+    }
+    let Some(t) = target else {
+        // The selection changed during a gesture: it ends with what it previewed.
+        finish(app);
+        Text::new(tl!("Select objects, then pick an object type to give them a 3D effect.")).shade(Shade::Faint).show(ui);
+        // The Graphics stay at hand, so art can be added before the 3D object is picked.
+        let data = Arc::new(RwLock::new(host::data(app, None, &Map::new())));
+        let params = [materials::row(data)];
+        let out = ParamRows::new(tl!("Graphics"), &params, Bind::given(DialogFields::new())).show(ui);
+        if let Some(action) = out.values.as_ref().and_then(action_of) {
+            run_action(app, action);
+        }
+        export_button(app, ui);
         return;
     };
     if takes_render(&t.effect) {
-        render_settings(app, ui, &ctx, &t);
-        ui.add_space(6.0);
+        render_settings(app, ui, &t);
     }
-    // The applied effect's settings in the dialog's form, with the controls' own state.
-    let mut fields = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap_or_default();
-    mark_mixed(app, &mut fields);
-    fields.extend(pstate::<Map<String, Value>>(&ctx, UI_STATE));
-    fields.insert("__effect".into(), json!(t.effect));
-    fields.insert("__panel".into(), json!(true));
-    let mut d = Dialog { kind: ID.into(), fields };
-    let before = crate::dialogs::form::params(&d);
-    crate::dialogs::revolve::controls(app, ui, &mut d);
-    let action = d.fields.remove(materials::ACTION).and_then(|v| materials::Action::from_value(&v));
-    let state: Map<String, Value> = d
-        .fields
-        .iter()
-        .filter(|(k, _)| k.starts_with("__") && !matches!(k.as_str(), "__effect" | "__panel"))
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
-    set_pstate(&ctx, UI_STATE, state);
-    let after = crate::dialogs::form::params(&d);
-    let changed = changed_settings(&before, &after);
-    let dragging = ctx.input(|i| i.pointer.any_down());
-    send(app, &ctx, changed, dragging);
-    if quick_actions_shown(&d) {
-        ui.add_space(10.0);
-        let t = Tokens::get(ui.ctx());
-        ui.label(egui::RichText::new(tl!("Quick Actions")).font(crate::theme::semibold(13.0)).color(t.text));
+    let (params, fields) = rows(app, &t);
+    let out = ParamRows::new(tl!("3D and Materials"), &params, Bind::given(fields.clone())).show(ui);
+    apply(app, &params, &fields, &out.events);
+    let mut edit_bevels = false;
+    let mut action = None;
+    if let Some(values) = &out.values {
+        if let Some(page) = values.text(PAGE) {
+            app.three_d.page = page.to_string();
+        }
+        if let Some(light) = values.int(LIGHT) {
+            app.three_d.light = usize::try_from(light).unwrap_or(0);
+        }
+        if let Some(graphic) = values.int(materials::SELECTED) {
+            app.three_d.graphic = usize::try_from(graphic).unwrap_or(0);
+        }
+        edit_bevels = values.contains(EDIT_BEVELS);
+        action = action_of(values);
+    }
+    // Bevel Shape's Edit Bevels…: the bevels file opens as a document of its own.
+    if edit_bevels {
+        finish(app);
+        if let Err(e) = app.run("threeD.bevels.edit", json!({})) {
+            app.ui.status = e;
+        }
+        return;
+    }
+    if quick_actions_shown(&t.effect, &app.three_d.page) {
+        Text::new(tl!("Quick Actions")).show(ui);
         let tip = tl!("Replace the selected 3D objects with the edges of their faces, as stroked paths.");
-        if ui.button(tl!("Expand as Wireframes")).on_hover_text(tip).clicked() {
-            finish(app, &ctx);
+        if clicked(&Button::new(tl!("Expand as Wireframes")).tooltip(tip).show(ui)) {
+            finish(app);
             if let Err(e) = expand_as_wireframes(app) {
                 app.ui.status = e;
             }
         }
     }
     if let Some(action) = action {
-        run_action(app, &ctx, action);
+        run_action(app, action);
     }
-    export_button(app, ui, &ctx);
+    export_button(app, ui);
+}
+
+/// The panel's rows for the applied effect `t` and the values they show: the effect's settings over the panel's view
+/// state, the settings another selected effect has with another value marked mixed.
+fn rows(app: &VectorcraftApp, t: &Target) -> (Vec<Param>, DialogFields) {
+    let merged = vectorcraft_effects::merged_params(&t.effect, &t.params).as_object().cloned().unwrap_or_default();
+    let data = host::data(app, Some(&t.effect), &merged);
+    let mut json = merged;
+    json.insert(PAGE.into(), json!(app.three_d.page));
+    json.insert(LIGHT.into(), json!(app.three_d.light));
+    json.insert(materials::SELECTED.into(), json!(app.three_d.graphic));
+    // The rows depend on the values (the page, which settings the selected effects disagree on) and the values' types
+    // on the rows, so the first pass over the bare values only fixes the rows.
+    let mut bare = form::fields_of(&[], &json);
+    mark_mixed(app, &mut bare);
+    let params = revolve::params(&data, &bare, Place::Panel);
+    let mut fields = form::fields_of(&params, &json);
+    mark_mixed(app, &mut fields);
+    (params, fields)
+}
+
+/// What the Materials row asked for in `fields`, if anything.
+fn action_of(fields: &DialogFields) -> Option<materials::Action> {
+    match fields.get(materials::ACTION)? {
+        FieldValue::Json(v) => materials::Action::from_value(v),
+        _ => None,
+    }
 }
 
 /// The Export 3D Object button, available while a selected object has a 3D effect that
 /// `assets.add3D` exports ([`can_export_3d_shown`]). An error goes to the status bar.
-fn export_button(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context) {
+fn export_button(app: &mut VectorcraftApp, ui: &mut Ui) {
     let any = can_export_3d_shown(app);
-    ui.add_space(10.0);
-    if ui.add_enabled(any, egui::Button::new(tl!("Export 3D Object"))).clicked() {
-        finish(app, ctx);
-        if let Err(e) = export_3d_object(app, ctx) {
+    if clicked(&Button::new(tl!("Export 3D Object")).enabled(any).show(ui)) {
+        finish(app);
+        if let Err(e) = export_3d_object(app) {
             app.ui.status = e;
         }
     }
@@ -319,10 +425,10 @@ pub(crate) fn can_export_3d_shown(app: &mut VectorcraftApp) -> bool {
 /// (`assets.add3D` on the selection, one undo step, none when each is an asset already), selects
 /// their assets there and shows the Asset Export panel. The command leaves out the selected
 /// objects without a 3D effect and those inside another selected 3D object.
-pub(crate) fn export_3d_object(app: &mut VectorcraftApp, ctx: &egui::Context) -> Result<(), String> {
+pub(crate) fn export_3d_object(app: &mut VectorcraftApp) -> Result<(), String> {
     use super::asset_export;
-    asset_export::add_3d(app, ctx, None)?;
-    if !crate::panel_docking::visible(&app.ui, asset_export::ID) {
+    asset_export::add_3d(app, None)?;
+    if !crate::panel_docking::visible(app, asset_export::ID) {
         app.run("window.panel", json!({"panel": asset_export::ID}))?;
     }
     Ok(())
@@ -343,34 +449,29 @@ pub(crate) fn wireframe_on(t: &Target) -> bool {
 /// The Render Settings menu at the top of the panel: Wireframe, checked while the first selected
 /// object's 3D effect draws the edges of its faces. Choosing it turns wireframe on or off for every
 /// selected object's 3D effect ([`set_wireframe`]).
-fn render_settings(app: &mut VectorcraftApp, ui: &mut Ui, ctx: &egui::Context, t: &Target) {
+fn render_settings(app: &mut VectorcraftApp, ui: &mut Ui, t: &Target) {
     let on = wireframe_on(t);
-    let mut picked = false;
-    ui.menu_button(tl!("Render Settings"), |ui| {
-        if widgets::menu_item(ui, tl!("Wireframe"), true, on) {
-            picked = true;
-            ui.close();
-        }
-    });
-    if picked {
-        set_wireframe(app, ctx, !on);
+    let opener = Button::new(tl!("Render Settings")).show(ui);
+    let entries = [Entry::new((), tl!("Wireframe")).checked(on)];
+    if Menu::new(tl!("Render Settings")).values().opened_by(&opener, Trigger::Press).pick(ui, &entries).picked.is_some() {
+        set_wireframe(app, !on);
     }
 }
 
 /// Render Settings › Wireframe: sets `render.mode` of each selected object's 3D effect to
 /// `wireframe` (`on`) or `shaded`, as one undo step (`effect.setParams`). Objects whose effect does
 /// not take render settings are left as they are.
-pub(crate) fn set_wireframe(app: &mut VectorcraftApp, ctx: &egui::Context, on: bool) {
-    finish(app, ctx);
+pub(crate) fn set_wireframe(app: &mut VectorcraftApp, on: bool) {
+    finish(app);
     let mut changed = Map::new();
     changed.insert(vectorcraft_effects::RENDER.into(), json!({"mode": if on { "wireframe" } else { "shaded" }}));
-    send(app, ctx, changed, false);
+    send(app, changed, Live::Released);
 }
 
-/// Runs what a click in the Materials tab's Graphics asked for: maps the graphic onto the selected
+/// Runs what a click in the Materials page's Graphics asked for: maps the graphic onto the selected
 /// objects, its row then selected, or keeps art as a new graphic. An error goes to the status bar.
-fn run_action(app: &mut VectorcraftApp, ctx: &egui::Context, action: materials::Action) {
-    finish(app, ctx);
+fn run_action(app: &mut VectorcraftApp, action: materials::Action) {
+    finish(app);
     let result = match &action {
         materials::Action::Map(name) => app.run("threeD.mapGraphic", json!({"symbol": name})),
         materials::Action::Add(Some(ids)) => app.run("threeD.addGraphic", json!({"ids": ids})),
@@ -382,180 +483,23 @@ fn run_action(app: &mut VectorcraftApp, ctx: &egui::Context, action: materials::
                 && let Some(t) = target(app)
             {
                 let count = vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params)).len();
-                set_selected_graphic(ctx, count.saturating_sub(1));
+                set_selected_graphic(app, count.saturating_sub(1));
             }
         }
         Err(e) => app.ui.status = e,
     }
 }
 
-/// Makes the mapped graphic at `index` the one the Materials tab edits.
-fn set_selected_graphic(ctx: &egui::Context, index: usize) {
-    let mut state: Map<String, Value> = pstate(ctx, UI_STATE);
-    state.insert(materials::SELECTED.into(), json!(index));
-    set_pstate(ctx, UI_STATE, state);
+/// Makes the mapped graphic at `index` the one the Materials page edits.
+fn set_selected_graphic(app: &mut VectorcraftApp, index: usize) {
+    app.three_d.graphic = index;
 }
 
-/// Is the panel showing its Materials tab? It was drawn in this pass or the last one, so a canvas
-/// drawn before the panel in the same pass still sees it.
-fn materials_open(ctx: &egui::Context) -> bool {
-    let drawn: Option<u64> = pstate(ctx, DRAWN);
-    let state: Map<String, Value> = pstate(ctx, UI_STATE);
-    drawn.is_some_and(|pass| pass + 1 >= root_pass(ctx))
-        && state.get("__tab").and_then(Value::as_str) == Some("materials")
-        && state.get("__gizmo").and_then(Value::as_str) != Some("light")
-}
-
-/// What [`graphic_handles`] gives: the object's frame, its graphics, and each seen graphic's index
-/// and page point.
-type Handles = (vectorcraft_effects::GraphicFrame, Vec<vectorcraft_effects::MappedGraphic>, Vec<(usize, vectorcraft_geom::Point)>);
-
-/// The handles of the graphics mapped onto the first selected object, while the Materials tab is
-/// open: each graphic's index, its face and where its center lands on the page, for the graphics
-/// whose face the viewer sees, and none while a geometry effect follows a selected object's 3D effect.
-/// With them, the object's [`vectorcraft_effects::GraphicFrame`] and the
-/// graphics.
-fn graphic_handles(app: &VectorcraftApp, ctx: &egui::Context) -> Option<Handles> {
-    if !materials_open(ctx) {
-        return None;
-    }
-    let st = app.session.active()?;
-    let n = st.selection.objects.first().and_then(|id| st.doc.node(*id))?;
-    let t = find(n)?;
-    // A hidden fill or stroke draws no solid and no graphics, so its graphics get no handles.
-    if t.item.is_some_and(|k| n.appearance.items.get(k).is_none_or(|it| !it.visible())) {
-        return None;
-    }
-    // The frame of the effect whose graphics are listed: none while that effect is hidden.
-    let frame = vectorcraft_effects::graphic_frame_at(Some(&st.doc), n, t.item, t.index)?;
-    // A geometry effect after the 3D effect of any selected object moves or bends its drawn
-    // graphics away from their places in the frame: no handles, so a drag does not put a graphic
-    // away from the pointer.
-    let reshaped = |n: &Node| find(n).is_some_and(|t| vectorcraft_effects::graphics_reshaped_after(n, t.item, t.index));
-    if st.selection.objects.iter().filter_map(|id| st.doc.node(*id)).any(reshaped) {
-        return None;
-    }
-    let list = vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params));
-    // Selected objects with different graphics show no handles: a drag sends the whole list.
-    let graphics_of = |t: Target| vectorcraft_effects::mapped_graphics(&vectorcraft_effects::merged_params(&t.effect, &t.params));
-    if st.selection.objects.iter().skip(1).filter_map(|id| find(st.doc.node(*id)?)).any(|o| graphics_of(o) != list) {
-        return None;
-    }
-    let handles = list.iter().enumerate().filter_map(|(i, g)| frame.handle(g).filter(|(_, seen)| *seen).map(|(p, _)| (i, p))).collect();
-    Some((frame, list, handles))
-}
-
-/// Temp-memory key of a drag of a graphic's handle on the artboard.
-fn handle_drag_id() -> egui::Id {
-    egui::Id::unique("three-d-graphic-handle-drag")
-}
-
-/// A drag of graphic `index`'s handle: its face, the page offset from the handle to the point
-/// where it was grabbed, and the document and selected objects it was grabbed for.
-#[derive(Clone, Debug)]
-struct HandleDrag {
-    index: usize,
-    face: vectorcraft_effects::PlanarFace,
-    grab: vectorcraft_geom::Vec2,
-    owner: (u64, Vec<u64>),
-}
-
-/// The active document's uid and its selected objects' ids: what a handle drag moves graphics for.
-fn drag_owner(app: &VectorcraftApp) -> (u64, Vec<u64>) {
-    app.session.active().map(|st| (st.uid, st.selection.objects.iter().map(|id| id.0).collect())).unwrap_or_default()
-}
-
-/// The offset, rounded to 0.1 pt, that a handle drag to offset (`x`, `y`) gives graphic `g`. `None`
-/// when the graphic stays where it is: the pointer is where the handle was grabbed, or the rounded
-/// offset is the graphic's own, so a click on a handle records no undo step.
-fn moved_to(g: &vectorcraft_effects::MappedGraphic, x: f64, y: f64) -> Option<(f64, f64)> {
-    let rounded = ((x * 10.0).round() / 10.0, (y * 10.0).round() / 10.0);
-    let still = (x - g.x).abs() < 1e-6 && (y - g.y).abs() < 1e-6;
-    (!still && rounded != (g.x, g.y)).then_some(rounded)
-}
-
-/// How near a press must be to a graphic's handle to grab it, in screen points.
-const HANDLE_REACH: f32 = 8.0;
-
-/// The artboard's handles of the mapped graphics while the Materials tab is open: a press on one
-/// grabs it, and dragging moves that graphic over its face, previewed while the pointer is down and
-/// committed as one undo step when it is released. Returns whether the handles took the pointer.
-pub(crate) fn graphic_handles_input(app: &mut VectorcraftApp, ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect) -> bool {
-    let ctx = ui.ctx().clone();
-    let xf = &crate::canvas::Xf::at(rect, app.view().unwrap_or(&crate::state::View::default()), app.canvas_ui_zoom);
-    let pointer = ui.input(|i| i.pointer.interact_pos());
-    if let Some(drag) = ctx.data(|m| m.get_temp::<HandleDrag>(handle_drag_id())) {
-        if drag_owner(app) != drag.owner {
-            // The selection or the document changed during the drag: commit the preview and end
-            // the drag, so its grab offset does not move another object's graphic.
-            send(app, &ctx, Map::new(), false);
-            ctx.data_mut(|m| m.remove::<HandleDrag>(handle_drag_id()));
-            return true;
-        }
-        let down = ui.input(|i| i.pointer.primary_down());
-        if let (Some(p), Some((frame, mut list, _))) = (pointer, graphic_handles(app, &ctx))
-            && let Some((x, y)) = frame.offset_at(drag.face, xf.to_doc(p) - drag.grab)
-            && let Some(g) = list.get_mut(drag.index)
-            && let Some((x, y)) = moved_to(g, x, y)
-        {
-            (g.x, g.y) = (x, y);
-            let graphics = Value::Array(list.iter().map(vectorcraft_effects::MappedGraphic::to_value).collect());
-            let mut changed = Map::new();
-            changed.insert(vectorcraft_effects::GRAPHICS.into(), graphics);
-            send(app, &ctx, changed, down);
-        } else if !down {
-            send(app, &ctx, Map::new(), false);
-        }
-        if !down {
-            ctx.data_mut(|m| m.remove::<HandleDrag>(handle_drag_id()));
-        }
-        return true;
-    }
-    if !(resp.hovered() && ui.input(|i| i.pointer.primary_pressed())) {
-        return false;
-    }
-    // A press with Space held, or with the Hand, Zoom or Rotate View tool, pans, zooms or turns the
-    // view, as on any other part of the canvas.
-    let space = ui.input(|i| i.key_down(egui::Key::Space));
-    if space || matches!(app.session.tool_id(), "hand" | "zoom" | "rotateView") {
-        return false;
-    }
-    let (Some(p), Some((_, list, handles))) = (pointer, graphic_handles(app, &ctx)) else { return false };
-    let nearest = handles
-        .iter()
-        .map(|(i, at)| (*i, *at, xf.to_screen(*at).distance(p)))
-        .filter(|(.., d)| *d <= HANDLE_REACH)
-        .min_by(|a, b| a.2.total_cmp(&b.2));
-    let Some((index, at, _)) = nearest else { return false };
-    let Some(face) = list.get(index).map(|g| g.face) else { return false };
-    let owner = drag_owner(app);
-    ctx.data_mut(|m| m.insert_temp(handle_drag_id(), HandleDrag { index, face, grab: xf.to_doc(p) - at, owner }));
-    set_selected_graphic(&ctx, index);
-    true
-}
-
-/// Draws the mapped graphics' handles on the artboard while the Materials tab is open: a blue dot
-/// at each graphic's center, larger for the one the tab edits.
-pub(crate) fn paint_graphic_handles(app: &VectorcraftApp, painter: &egui::Painter, xf: &crate::canvas::Xf) {
-    let ctx = painter.ctx();
-    let Some((_, _, handles)) = graphic_handles(app, ctx) else { return };
-    let state: Map<String, Value> = pstate(ctx, UI_STATE);
-    let selected = state.get(materials::SELECTED).and_then(Value::as_u64).map(|i| i as usize);
-    let t = crate::theme::Tokens::get(ctx);
-    for (i, at) in handles {
-        let r = if Some(i) == selected { 6.0 } else { 4.5 };
-        let c = xf.to_screen(at);
-        painter.circle_filled(c, r, t.accent);
-        painter.circle_stroke(c, r, egui::Stroke::new(1.5, egui::Color32::WHITE));
-    }
-}
-
-/// Does the panel show its Quick Actions? On the Object tab of the effects that have one, and on
-/// the first tab of the others (Revolve, Rotate), never on Lighting.
-fn quick_actions_shown(d: &Dialog) -> bool {
-    let effect = d.str("__effect");
-    let object_tab = [EXTRUDE, INFLATE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE].contains(&effect.as_str());
-    !crate::dialogs::revolve_gizmo::lighting(d) && (!object_tab || d.str("__tab") != "rotation")
+/// Does the panel show its Quick Actions? On the Object page of the effects that have one, and on
+/// the first page of the others (Revolve, Rotate), never on Lighting.
+fn quick_actions_shown(effect: &str, page: &str) -> bool {
+    let object_tab = [EXTRUDE, INFLATE, CLASSIC_EXTRUDE, CLASSIC_REVOLVE].contains(&effect);
+    page != "lighting" && (!object_tab || page != "rotation")
 }
 
 /// Quick Actions › Expand as Wireframes: each selected object with a 3D effect becomes a group of
@@ -564,27 +508,45 @@ pub(crate) fn expand_as_wireframes(app: &mut VectorcraftApp) -> Result<(), Strin
     app.run("effect.expandAsWireframes", json!({})).map(|_| ())
 }
 
-/// Sets to null each setting in `fields` (the first selected object's 3D effect) that the 3D effect
-/// of another selected object has with another value. The controls then show it at its default
-/// (a checkbox shows a dash) with its reset dot filled, and its reset dot, a menu choice, a checkbox click, or a number other
-/// than the default shown is a change sent to every effect. The light list (`lights`, where null
+/// Marks in `fields` (the first selected object's 3D effect) each setting that the 3D effect of
+/// another selected object has with another value. The rows then show it blank (a checkbox shows a
+/// dash), and an edit of it is a change sent to every effect. The light list (`lights`, where null
 /// is the single light) is left as it is.
-pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut Map<String, Value>) {
+pub(crate) fn mark_mixed(app: &VectorcraftApp, fields: &mut DialogFields) {
     let Some(st) = app.session.active() else { return };
-    for other in st.selection.objects.iter().skip(1).filter_map(|id| find(st.doc.node(*id)?)) {
-        let other = vectorcraft_effects::merged_params(&other.effect, &other.params);
-        for (key, value) in fields.iter_mut().filter(|(k, _)| k.as_str() != "lights") {
-            if other.get(key.as_str()).is_some_and(|v| v != value) {
-                *value = Value::Null;
-            }
+    let mut effects =
+        st.selection.objects.iter().filter_map(|id| find(st.doc.node(*id)?)).map(|t| vectorcraft_effects::merged_params(&t.effect, &t.params));
+    let Some(first) = effects.next() else { return };
+    for other in effects {
+        let differing: Vec<&String> = other
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter(|(key, value)| key.as_str() != "lights" && first.get(key.as_str()).is_some_and(|v| v != *value))
+            .map(|(key, _)| key)
+            .collect();
+        for key in differing {
+            fields.set_mixed(key.as_str());
         }
     }
 }
 
 /// The settings whose values differ between `before` and `after`, with their values in `after`.
+/// A change to a custom bevel (`bevel` `"custom"`, its name or its points) sends all three, so an
+/// effect of a mixed selection that had none takes the whole bevel.
 pub(crate) fn changed_settings(before: &Value, after: &Value) -> Map<String, Value> {
     let Some(after) = after.as_object() else { return Map::new() };
-    after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect()
+    let mut changed: Map<String, Value> =
+        after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(*v)).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let custom = ["bevel", BEVEL_NAME, BEVEL_PROFILE];
+    if after.get("bevel").and_then(Value::as_str) == Some("custom") && custom.iter().any(|k| changed.contains_key(*k)) {
+        for k in custom {
+            if let Some(v) = after.get(k) {
+                changed.insert(k.into(), v.clone());
+            }
+        }
+    }
+    changed
 }
 
 #[cfg(test)]

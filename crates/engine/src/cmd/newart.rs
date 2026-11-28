@@ -13,14 +13,29 @@
 //! resets new art when it opens such a document.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::{Appearance, AppearanceItem, ColorMode, DEFAULT_GRAPHIC_STYLE, Document, FillLayer, GraphicStyle, Node, NodeKind, StrokeLayer};
 use vectorcraft_tools::PaintDefaults;
 
+/// The object new art takes its appearance from, with that appearance
+/// ([`Session::new_art_source`]).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct NewArtSource {
+    doc: u64,
+    id: vectorcraft_doc::NodeId,
+    appearance: Appearance,
+    opacity: f32,
+    blend: BlendMode,
+    style: Option<String>,
+}
+
 use super::gradient::unplaced;
+use super::paint::SelectionPaints;
 use super::{CommandSpec, Result, Session, always, cmd, switch_or};
+use crate::doc_state::{SelectionRecord, objects_only};
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
@@ -207,16 +222,50 @@ impl Session {
 
     /// After each command: with New Art Has Basic Appearance off, new art takes the appearance of
     /// the first selected object (so the last selection's once nothing is selected). Not while the
-    /// Live Paint Bucket is the active tool: the fill and stroke are the colors it paints with.
+    /// Live Paint Bucket is the active tool: the fill and stroke are the colors it paints with. Nor
+    /// after a command that changed only them (`defaultsOnly`), unless a later step of a batch
+    /// changed what new art would take ([`Session::new_art_source`]). While the Shape Builder is
+    /// active, the fill it paints with stays ([`Session::tool_paints`]).
     pub(crate) fn inherit_new_art(&mut self) {
-        if self.prefs.new_art_basic || self.tool_id() == super::paint::LIVE_PAINT_BUCKET {
+        let (fill, stroke) = (self.tool_paints(false), self.tool_paints(true));
+        if self.prefs.new_art_basic || (fill && stroke) {
             return;
         }
-        let Some(st) = self.active() else { return };
-        let Some(n) = st.selection.subjects().first().and_then(|id| st.doc.node(*id)) else { return };
-        let style = super::style::linked_style(&st.doc, n).map(|g| g.name.clone());
-        let (ap, opacity, blend) = (super::style::captured(n), n.opacity, n.blend);
-        self.take_new_art(ap, opacity, blend, style, true);
+        let Some(source) = self.new_art_source() else { return };
+        if matches!(&self.defaults_only_ran, Some(Some(ran)) if *ran == source) {
+            return;
+        }
+        let NewArtSource { appearance, opacity, blend, style, .. } = source;
+        let kept_fill = fill.then(|| self.paint.fill.clone());
+        let kept_stroke = stroke.then(|| (self.paint.stroke.clone(), self.paint.stroke_width));
+        self.take_new_art(appearance, opacity, blend, style, true);
+        let p = &mut self.paint;
+        // New art whose kept paint differs from the selection's is not linked to its graphic style.
+        if kept_fill.as_ref().is_some_and(|f| *f != p.fill) || kept_stroke.as_ref().is_some_and(|(s, w)| *s != p.stroke || *w != p.stroke_width) {
+            p.style = None;
+        }
+        if let Some(f) = kept_fill {
+            p.fill = f;
+        }
+        if let Some((s, w)) = kept_stroke {
+            (p.stroke, p.stroke_width) = (s, w);
+        }
+    }
+
+    /// What [`Session::inherit_new_art`] gives new art: the appearance of the active document's
+    /// first selected object, if any.
+    pub(crate) fn new_art_source(&self) -> Option<NewArtSource> {
+        let st = self.active()?;
+        let id = *st.selection.subjects().first()?;
+        let n = st.doc.node(id)?;
+        Some(NewArtSource {
+            doc: st.uid,
+            id,
+            appearance: super::style::captured(n),
+            opacity: n.opacity,
+            blend: n.blend,
+            style: super::style::linked_style(&st.doc, n).map(|g| g.name.clone()),
+        })
     }
 
     /// After a command changed the selection, with New Art Has Basic Appearance on: the fill and
@@ -236,19 +285,45 @@ impl Session {
         if !has_paint {
             return;
         }
-        let (fill_mixed, stroke_mixed) = self.proxy_mixed();
+        let read = self.read_selection_paints();
+        let (fill_mixed, stroke_mixed) = read.as_ref().map_or_else(|| self.proxy_mixed(), |p| (p.fill_mixed(), p.stroke_mixed()));
         let (fill, stroke) = self.proxy_paints();
-        let weight_mixed = self.active().is_some_and(|st| st.stroke_mixed().weight);
+        let weight_mixed = read.as_ref().map_or_else(|| self.active().is_some_and(|st| st.stroke_mixed().weight), |p| p.weight_mixed());
         let weight = self.shown_stroke().filter(|st| st.paint != Paint::None && !weight_mixed).map(|st| st.width);
-        if !fill_mixed {
+        // A proxy that shows the color the active tool paints with (the Shape Builder's fill) keeps it.
+        if !fill_mixed && !self.tool_paints(false) {
             self.paint.fill = unplaced(&fill);
         }
-        if !stroke_mixed {
+        if !stroke_mixed && !self.tool_paints(true) {
             self.paint.stroke = unplaced(&stroke);
         }
-        if let Some(width) = weight {
+        if let Some(width) = weight.filter(|_| !self.tool_paints(true)) {
             self.paint.stroke_width = width;
         }
+    }
+
+    /// The [`SelectionPaints`] of the active document's selection, read now and kept in its
+    /// [`SelectionRecord`] when the record holds none. `None` when anything besides whole objects
+    /// is selected ([`objects_only`]), with an active Appearance item, when a selected object is in
+    /// a Live Paint group, and with gradient mesh points picked: the proxies then read the
+    /// selection with [`Session::proxy_mixed`] and [`crate::DocState::stroke_mixed`]. While the
+    /// Live Paint Bucket paints, [`Session::load_selection_paints`] returns before reading them.
+    fn read_selection_paints(&mut self) -> Option<SelectionPaints> {
+        if self.appearance_item().is_some() {
+            return None;
+        }
+        let st = self.active_mut()?;
+        if !objects_only(&st.selection) {
+            return None;
+        }
+        if st.selection_paints().is_none() {
+            let paints = SelectionPaints::of(&st.doc, &st.selection.objects);
+            let settled = st.selection_record().and_then(|r| r.settled);
+            st.selection_record =
+                Some(SelectionRecord { doc: Arc::downgrade(&st.doc), objects: st.selection.objects.clone(), settled, paints: Some(paints) });
+        }
+        let paints = st.selection_paints()?.clone();
+        (!paints.in_live_paint() && self.fill_mesh_points().is_empty()).then_some(paints)
     }
 }
 

@@ -154,3 +154,184 @@ fn scissors_cuts_after_a_command_settles_a_deferred_move() {
         assert_eq!(session.doc().unwrap().history.undo.len(), undo_before + 1);
     }
 }
+
+/// Real Session composition: the hovered feedback must be the endpoint the actual split creates,
+/// while the selected crossing owner, history and Undo/Redo contracts remain intact.
+#[test]
+fn review_8655_scissors_session_feedback_is_the_committed_cut_endpoint() {
+    let mut observed = Vec::new();
+    for pixel_preview in [true, false] {
+        let mut session = Session::new();
+        session.execute("file.new", &json!({"width":800,"height":600})).unwrap();
+        let rectangle =
+            NodeId(session.execute("shape.rectangle", &json!({"x":100,"y":100,"width":100,"height":100})).unwrap()["id"].as_u64().unwrap());
+        let crossing = NodeId(session.execute("shape.line", &json!({"x1":145,"y1":90,"x2":165,"y2":130})).unwrap()["id"].as_u64().unwrap());
+        session.execute("select.set", &json!({"ids":[rectangle.0]})).unwrap();
+        let view = ViewInfo { pixel_preview, ..ViewInfo::default() };
+        session.select_tool("scissors", view).unwrap();
+        let original = path(&session, rectangle);
+        let other = path(&session, crossing);
+        let selection_before = session.doc().unwrap().selection.clone();
+        let undo_before = session.doc().unwrap().history.undo.len();
+        let raw = Point::new(152.0, 101.5);
+        session.pointer(&PointerEvent::new(PointerKind::Move, raw.x, raw.y), view).unwrap();
+        let overlays = session.overlays(view);
+        let markers: Vec<_> = overlays
+            .iter()
+            .filter_map(|o| match o {
+                Overlay::Anchor { p, color, filled: false, size } if *color == vectorcraft_tools::draw2::FEEDBACK && *size == 7.0 => Some(*p),
+                _ => None,
+            })
+            .collect();
+        let intersection = overlays.iter().any(|o| matches!(o, Overlay::Label { text, .. } if text == "intersect"));
+        assert_eq!(intersection, !pixel_preview, "CONTROL: native view boundary retains Smart Guides policy");
+        for kind in [PointerKind::Down, PointerKind::Up] {
+            session.pointer(&PointerEvent::new(kind, raw.x, raw.y), view).unwrap();
+        }
+        let opened = path(&session, rectangle);
+        assert!(!opened.is_closed());
+        let anchors = &opened.subpaths[0].anchors;
+        assert_eq!(anchors.len(), 6);
+        let cut = anchors[0].p;
+        assert_eq!(anchors.last().unwrap().p, cut);
+        let expected = Point::new(if pixel_preview { 152.0 } else { 150.0 }, 100.0);
+        assert!(cut.distance(expected) < 1e-6, "CONTROL: actual cut geometry respects view snapping");
+        assert!(cut.distance(raw) > 1.0, "CONTROL: feedback is projected to the path, not raw input");
+        let selection_after = session.doc().unwrap().selection.clone();
+        assert_eq!(selection_after.objects, [rectangle]);
+        assert_eq!(selection_after.partial(rectangle).unwrap().iter().copied().collect::<Vec<_>>(), [(0, 0)]);
+        assert!(selection_after.segments.is_empty());
+        assert_eq!(path(&session, crossing), other);
+        assert_eq!(session.doc().unwrap().history.undo.len(), undo_before + 1);
+        assert!(
+            session.overlays(view).iter().all(|o| !matches!(o, Overlay::Anchor { color, filled:false, size, .. }
+            if *color == vectorcraft_tools::draw2::FEEDBACK && *size == 7.0)),
+            "CONTROL: Up clears cut feedback"
+        );
+        session.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(path(&session, rectangle), original);
+        assert_eq!(path(&session, crossing), other);
+        assert_eq!(session.doc().unwrap().selection, selection_before);
+        assert_eq!(session.doc().unwrap().history.undo.len(), undo_before);
+        session.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(path(&session, rectangle), opened);
+        assert_eq!(path(&session, crossing), other);
+        assert_eq!(session.doc().unwrap().selection, selection_after);
+        assert_eq!(session.doc().unwrap().history.undo.len(), undo_before + 1);
+        observed.push((pixel_preview, markers, cut));
+    }
+    let endpoint_controls = review_8655_session_endpoint_controls();
+    for (pixel_preview, markers, cut) in observed {
+        assert_eq!(markers.len(), 1, "REGRESSION: Pixel Preview{pixel_preview} needs one hollow7px FEEDBACK anchor");
+        assert!(markers[0].distance(cut) < 1e-6, "REGRESSION: preview{markers:?} must mark the actual committed endpoint{cut:?}");
+    }
+    for (markers, cut) in endpoint_controls {
+        assert_eq!(markers.len(), 1, "a successful interior/canonicalized cut has one marker");
+        assert!(markers[0].distance(cut) < 1e-6, "marker{markers:?} must equal the actual Engine cut{cut:?}");
+    }
+}
+
+fn review_8655_session_markers(overlays: &[Overlay]) -> Vec<Point> {
+    overlays
+        .iter()
+        .filter_map(|o| match o {
+            Overlay::Anchor { p, color, filled: false, size } if *color == vectorcraft_tools::draw2::FEEDBACK && *size == 7.0 => Some(*p),
+            _ => None,
+        })
+        .collect()
+}
+
+fn review_8655_session_endpoint_controls() -> Vec<(Vec<Point>, Point)> {
+    let mut session = Session::new();
+    session.execute("file.new", &json!({"width":800,"height":600})).unwrap();
+    let line = NodeId(session.execute("shape.line", &json!({"x1":100,"y1":300,"x2":200,"y2":300})).unwrap()["id"].as_u64().unwrap());
+    session.execute("select.set", &json!({"ids":[line.0]})).unwrap();
+    let view = ViewInfo { smart_guides: false, snap_to_point: false, snap_to_grid: false, snap_to_pixel: false, ..ViewInfo::default() };
+    session.select_tool("scissors", view).unwrap();
+    let original = path(&session, line);
+    let document = json!(session.doc().unwrap().doc.as_ref());
+    let selection = session.doc().unwrap().selection.clone();
+    let undo = session.doc().unwrap().history.undo.len();
+    let redo = session.doc().unwrap().history.redo.len();
+    assert!(!original.is_closed());
+    assert_eq!(original.subpaths[0].anchors.len(), 2, "CONTROL: ordinary minimal drawable open line");
+    for endpoint in [Point::new(100.0, 300.0), Point::new(200.0, 300.0)] {
+        session.pointer(&PointerEvent::new(PointerKind::Move, endpoint.x, endpoint.y), view).unwrap();
+        let endpoint_markers = review_8655_session_markers(&session.overlays(view));
+        let error = session.pointer(&PointerEvent::new(PointerKind::Down, endpoint.x, endpoint.y), view).unwrap_err();
+        assert!(error.to_string().contains("cannot split an open path at its end point"), "CONTROL: preserve baseline endpoint error: {error}");
+        assert_eq!(json!(session.doc().unwrap().doc.as_ref()), document, "a failed endpoint cut changes no document data");
+        assert_eq!(session.doc().unwrap().selection, selection);
+        assert_eq!(session.doc().unwrap().history.undo.len(), undo);
+        assert_eq!(session.doc().unwrap().history.redo.len(), redo);
+        assert!(endpoint_markers.is_empty(), "an endpoint that Engine rejects has no successful-cut feedback");
+        session.pointer(&PointerEvent::new(PointerKind::Up, endpoint.x, endpoint.y), view).unwrap();
+    }
+    let interior = Point::new(150.0, 300.0);
+    session.pointer(&PointerEvent::new(PointerKind::Move, interior.x, interior.y), view).unwrap();
+    let interior_markers = review_8655_session_markers(&session.overlays(view));
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        session.pointer(&PointerEvent::new(kind, interior.x, interior.y), view).unwrap();
+    }
+    let right_id = session.doc().unwrap().selection.objects[0];
+    assert_ne!(right_id, line);
+    let right = path(&session, right_id);
+    let left = path(&session, line);
+    let actual_interior = right.subpaths[0].anchors[0].p;
+    assert!(actual_interior.distance(interior) < 1e-6);
+    assert_eq!(left.subpaths[0].anchors.last().unwrap().p, actual_interior);
+    assert_eq!(session.doc().unwrap().history.undo.len(), undo + 1);
+    session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&session, line), original);
+    assert!(session.doc().unwrap().doc.node(right_id).is_none());
+    assert_eq!(session.doc().unwrap().selection, selection);
+
+    let (canonical_markers, canonical) = review_8655_session_canonical_control(session, view);
+    vec![(interior_markers, actual_interior), (canonical_markers, canonical)]
+}
+
+fn review_8655_session_canonical_control(mut session: Session, view: ViewInfo) -> (Vec<Point>, Point) {
+    let closed = NodeId(
+        session
+            .execute(
+                "path.create",
+                &json!({"d":"M99.99995 100 C133.33328333333333 100 166.66661666666666 100 199.99995 100 L199.99995 200 L99.99995 200 Z"}),
+            )
+            .unwrap()["id"]
+            .as_u64()
+            .unwrap(),
+    );
+    let mut prefs = session.prefs.clone();
+    prefs.gridline_every = 10.0;
+    prefs.grid_subdivisions = 1;
+    session.apply_prefs(prefs);
+    assert_eq!(session.doc().unwrap().doc.grid.spacing, 10.0);
+    assert_eq!(session.doc().unwrap().doc.grid.subdivisions, 1);
+    session.execute("select.set", &json!({"ids":[closed.0]})).unwrap();
+    let grid = ViewInfo { snap_to_grid: true, ..view };
+    let original_closed = path(&session, closed);
+    assert!(original_closed.is_closed());
+    let canonical = original_closed.subpaths[0].anchors[0].p;
+    let (_, segment, t, projected, _) = original_closed.nearest(Point::new(100.0, 100.0)).unwrap();
+    assert_eq!(segment, 0);
+    assert!(t > 0.0 && t <= 1e-6, "CONTROL: stored native cubic reaches actual canonicalization threshold: {t}");
+    assert!(projected.distance(canonical) > 1e-5, "CONTROL: projected point differs from canonical stored anchor");
+    let raw = Point::new(100.1, 100.2);
+    session.pointer(&PointerEvent::new(PointerKind::Move, raw.x, raw.y), grid).unwrap();
+    let canonical_markers = review_8655_session_markers(&session.overlays(grid));
+    let before = session.doc().unwrap().history.undo.len();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        session.pointer(&PointerEvent::new(kind, raw.x, raw.y), grid).unwrap();
+    }
+    let opened = path(&session, closed);
+    assert!(!opened.is_closed());
+    let anchors = &opened.subpaths[0].anchors;
+    assert_eq!(anchors.first().unwrap().p, canonical, "Engine commits the original anchor rather than curve.eval(t)");
+    assert_eq!(anchors.last().unwrap().p, canonical);
+    assert_eq!(session.doc().unwrap().history.undo.len(), before + 1);
+    session.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(path(&session, closed), original_closed);
+    session.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(path(&session, closed), opened);
+    (canonical_markers, canonical)
+}

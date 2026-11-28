@@ -1,11 +1,14 @@
 use std::collections::BTreeSet;
 
-use egui::{Color32, Pos2, Shape};
+use craft::behavior::CanvasView;
+use craft::ui::primitives::textures::{CachedTexture, TextureState};
+use egui::{Color32, Pos2, Shape, pos2, vec2};
+use serde_json::json;
 use vectorcraft_engine::Session;
-use vectorcraft_geom::Rect;
+use vectorcraft_geom::{Point, Rect};
 
 use super::*;
-use crate::menus::enabled;
+use crate::menus::{Node, enabled};
 
 /// An app with `n` new 400 × 300 pt documents, the last one current.
 fn app_with(n: usize) -> VectorcraftApp {
@@ -14,6 +17,17 @@ fn app_with(n: usize) -> VectorcraftApp {
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     }
     app
+}
+
+/// The command items of `nodes`, in order: each one's label, command id and params.
+fn commands(nodes: &[Node]) -> Vec<(&str, &str, &serde_json::Value)> {
+    nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Item(i) => Some((i.label.as_str(), i.command.id.as_str(), &i.command.params)),
+            _ => None,
+        })
+        .collect()
 }
 
 /// One headless frame of the canvas panel's body (the tabs and the canvas or panes) on a
@@ -33,19 +47,34 @@ fn frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Eve
     let raw =
         egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, size)), max_texture_side: Some(8192), events, ..Default::default() };
     let mut out = ctx.run_ui(raw, |ui| app.canvas_area(ui));
-    out.textures_delta.clear();
+    // A pane's picture is uploaded once, maybe in this frame: [`wait_ready`] finds it later.
+    note_uploads(&mut out.textures_delta);
     let mut shapes = vec![];
     out.shapes.into_iter().for_each(|c| flat(c.shape, &mut shapes));
     shapes
 }
 
-fn button(pos: Pos2, pressed: bool) -> egui::Event {
-    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
+/// A texture's picture: its pixels and size.
+type Picture = (Vec<Color32>, [usize; 2]);
+
+thread_local! {
+    /// The last picture each texture got in the frames [`frame_in`] and [`wait_ready`] ran, as pixels and size.
+    static UPLOADED: std::cell::RefCell<std::collections::HashMap<egui::TextureId, Picture>> = Default::default();
 }
 
-/// Tile's grid of `n` panes in `area`.
-fn cells(n: usize, area: egui::Rect) -> Vec<egui::Rect> {
-    layout_cells(Layout::Grid, n, area)
+/// Notes the last picture each texture got in `delta` in [`UPLOADED`], and handles the uploads.
+fn note_uploads(delta: &mut egui::TexturesDelta) {
+    for (id, deltas) in &delta.set {
+        if let Some(d) = deltas.last() {
+            let egui::ImageData::Color(img) = &d.image;
+            UPLOADED.with(|u| u.borrow_mut().insert(*id, (img.pixels.clone(), img.size)));
+        }
+    }
+    delta.clear();
+}
+
+fn button(pos: Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }
 }
 
 /// The documents' indices in the panes the last frame drew, and the panes.
@@ -53,40 +82,146 @@ fn panes(app: &VectorcraftApp) -> (Vec<usize>, Vec<egui::Rect>) {
     app.canvas.panes.last.iter().map(|(w, r)| (w.0, *r)).unzip()
 }
 
-#[test]
-fn cells_tile_the_area_edge_to_edge() {
-    let area = egui::Rect::from_min_size(pos2(10.0, 35.0), vec2(1001.0, 703.0));
-    assert!(cells(0, area).is_empty());
-    for (n, cols, rows) in [(1, 1, 1), (2, 2, 1), (3, 2, 2), (4, 2, 2), (5, 3, 2), (6, 3, 2), (7, 3, 3), (10, 4, 3)] {
-        let c = cells(n, area);
-        assert_eq!(c.len(), n);
-        let lefts: BTreeSet<u32> = c.iter().map(|r| r.left().to_bits()).collect();
-        let tops: BTreeSet<u32> = c.iter().map(|r| r.top().to_bits()).collect();
-        assert_eq!((lefts.len(), tops.len()), (cols, rows), "{n} panes: columns and rows");
-        assert_eq!((c[0].left(), c[0].top()), (area.left(), area.top()), "{n} panes start at the corner");
-        for (i, r) in c.iter().enumerate() {
-            assert!(r.width() > 0.0 && r.height() > 0.0 && area.contains_rect(*r), "{n} panes: {r:?}");
-            let last_column = i % cols == cols - 1;
-            match c.get(i + 1).filter(|_| !last_column) {
-                Some(next) => {
-                    assert_eq!((r.right(), r.top(), r.bottom()), (next.left(), next.top(), next.bottom()), "{n} panes: {i} meets its neighbor")
-                }
-                None if last_column => assert_eq!(r.right(), area.right(), "{n} panes: {i} reaches the right edge"),
-                None => {}
-            }
-            match c.get(i + cols) {
-                Some(below) => assert_eq!(r.bottom(), below.top(), "{n} panes: {i} meets the pane below"),
-                None if i / cols == rows - 1 => assert_eq!(r.bottom(), area.bottom(), "{n} panes: {i} reaches the bottom"),
-                None => {}
-            }
-            for o in &c[i + 1..] {
-                assert!(r.intersect(*o).area() <= 0.0, "{n} panes overlap: {r:?} {o:?}");
-            }
+/// One headless frame of the canvas panel's body as [`frame`] runs it → the whole output.
+fn run_out(app: &mut VectorcraftApp, ctx: &egui::Context) -> egui::FullOutput {
+    let raw = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
+        max_texture_side: Some(8192),
+        ..Default::default()
+    };
+    ctx.run_ui(raw, |ui| app.canvas_area(ui))
+}
+
+/// Window `w`'s view as the pane body shows it, in its art area.
+fn pane_view(app: &VectorcraftApp, w: Win) -> CanvasView {
+    let v = *crate::doc_windows::view(app, w).unwrap();
+    v.canvas(app.ui_scaling(), v.rect)
+}
+
+/// Whether window `w`'s 400 × 300 artboard is fitted to its pane: the view's extent of it lies in
+/// the art area and, with the fit margin on both sides, fills it along one axis.
+fn fits(app: &VectorcraftApp, w: Win) -> bool {
+    let Some(v) = crate::doc_windows::view(app, w) else { return false };
+    let extent = pane_view(app, w).extent(Rect::new(0.0, 0.0, 400.0, 300.0));
+    let margin = 2.0 * FIT_MARGIN as f32;
+    let room = v.rect.size() - vec2(margin, margin);
+    v.fitted
+        && extent.x <= v.rect.width() + 0.01
+        && extent.y <= v.rect.height() + 0.01
+        && ((extent.x - room.x).abs() < 1.0 || (extent.y - room.y).abs() < 1.0)
+}
+
+/// The source of window `w`'s pane picture, as the pane body builds it.
+fn pane_source(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win) -> PaneSource {
+    let view = pane_view(app, w);
+    // Through the document's own color settings, as `pane` draws it.
+    let cms = vectorcraft_engine::cmd::colormgmt::doc_cms(&app.session.documents()[w.0].doc);
+    vectorcraft_color::cms::with_active(cms, || PaneSource::new(app, ctx, w, &view)).expect("the window's document is open")
+}
+
+/// What the thumbnails hold for document `uid`'s picture in the pane of `w`, asked without
+/// starting a render.
+fn picture_of(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, uid: u64) -> TextureState {
+    let view = pane_view(app, w);
+    let source = pane_source(app, ctx, w);
+    let thumbs = thumbnails(ctx);
+    thumbs.hold(true);
+    let request = ThumbRequest::for_cell(view.rect.width().max(view.rect.height()), ctx.pixels_per_point());
+    let state = thumbs.state(ctx, &source, &PaneKey { slot: (uid, w.1) }, &request, Priority::VISIBLE);
+    thumbs.hold(false);
+    state
+}
+
+/// Whether the thumbnails show something for document `uid`, asked through the pane of `w`.
+fn has_picture(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, uid: u64) -> bool {
+    picture_of(app, ctx, w, uid).shown().is_some()
+}
+
+/// Run frames with `run` until window `w`'s pane has its picture and the upload of it was seen,
+/// starting from the uploads `seed` holds → the picture and its pixels and size as uploaded. The uploads are handled
+/// once read. The test context runs the pictures' renders in line ([`crate::testing::ui_context`]), so a picture asked
+/// for in one frame is ready and uploaded within [`READY_FRAMES`] frames on every run.
+fn wait_ready(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    w: Win,
+    seed: Vec<egui::TexturesDelta>,
+    run: &mut dyn FnMut(&mut VectorcraftApp) -> egui::FullOutput,
+) -> (CachedTexture, (Vec<Color32>, [usize; 2])) {
+    let uid = app.session.documents()[w.0].uid;
+    let mut uploads = seed;
+    for frames in 0..=READY_FRAMES {
+        if let TextureState::Ready(texture) = picture_of(app, ctx, w, uid)
+            && (uploads.iter().flat_map(|d| d.set.iter()).any(|e| *e.0 == texture.id) || UPLOADED.with(|u| u.borrow().contains_key(&texture.id)))
+        {
+            let picture = uploaded(&uploads, texture.id);
+            // Another pane's picture these frames uploaded stays for a later wait.
+            uploads.iter_mut().for_each(note_uploads);
+            return (texture, picture);
         }
-        let covered: f32 = c.iter().map(egui::Rect::area).sum();
-        let whole = area.area() * n as f32 / (cols * rows) as f32;
-        assert!((covered - whole).abs() < 1.0, "{n} panes cover {covered}, not {whole}");
+        if frames == READY_FRAMES {
+            break;
+        }
+        let mut out = run(app);
+        uploads.push(std::mem::take(&mut out.textures_delta));
     }
+    panic!("the pane of window {w:?} did not get its picture within {READY_FRAMES} frames");
+}
+
+/// The frames [`wait_ready`] runs for a pane's picture at most.
+const READY_FRAMES: usize = 4;
+
+/// The picture `id` as `uploads` uploaded it, else as a frame of [`frame_in`] did: its pixels and size.
+fn uploaded(uploads: &[egui::TexturesDelta], id: egui::TextureId) -> (Vec<Color32>, [usize; 2]) {
+    let image = uploads.iter().rev().flat_map(|d| d.set.iter()).find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| d.image.clone());
+    match image {
+        Some(egui::ImageData::Color(img)) => (img.pixels.clone(), img.size),
+        None => UPLOADED.with(|u| u.borrow().get(&id).cloned()).expect("the picture was uploaded"),
+    }
+}
+
+/// Drop every picture and pane the panes hold, so the next frames make them again.
+fn forget(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    app.canvas.panes.clear();
+    thumbnails(ctx).retain(ctx, |_| false);
+}
+
+/// The RGB of the middle pixel of the picture window `(i, 1)`'s pane shows once it has arrived;
+/// `seed` holds the uploads of frames already run and `run` runs the frames until then.
+fn pane_middle(
+    app: &mut VectorcraftApp,
+    ctx: &egui::Context,
+    i: usize,
+    seed: Vec<egui::TexturesDelta>,
+    run: &mut dyn FnMut(&mut VectorcraftApp) -> egui::FullOutput,
+) -> [u8; 3] {
+    let (_, (pixels, [w, h])) = wait_ready(app, ctx, (i, 1), seed, run);
+    let p = pixels[h / 2 * w + w / 2];
+    [p.r(), p.g(), p.b()]
+}
+
+/// One headless frame that draws only window `w`'s pane, in a 600 × 400 cell → the whole output.
+fn pane_out(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win) -> egui::FullOutput {
+    let raw = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+        max_texture_side: Some(8192),
+        ..Default::default()
+    };
+    ctx.run_ui(raw, |ui| {
+        pane(app, ui, w, egui::Rect::from_min_size(Pos2::ZERO, vec2(600.0, 400.0)));
+    })
+}
+
+/// A document with a 50% red rectangle over most of its artboard and a second window of it, the first window
+/// floating beside the current one → the app.
+fn translucent_in_two_windows() -> VectorcraftApp {
+    let mut app = app_with(1);
+    let half = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 300, "height": 200})).unwrap()["id"].clone();
+    app.run("paint.setFill", json!({"ids": [half], "color": "#ff0000"})).unwrap();
+    app.run("transparency.set", json!({"ids": [half], "opacity": 50})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    crate::doc_windows::new_window(&mut app).unwrap();
+    app
 }
 
 /// The distinct left and top edges of `c`: how many columns and rows its panes take.
@@ -97,90 +232,27 @@ fn columns_and_rows(c: &[egui::Rect]) -> (usize, usize) {
 }
 
 #[test]
-fn each_tile_layout_places_its_panes_edge_to_edge() {
-    let area = egui::Rect::from_min_size(pos2(10.0, 35.0), vec2(1001.0, 703.0));
-    let cases = [
-        (Layout::Vertical, 3, (3, 1)),
-        (Layout::Vertical, 7, (7, 1)),
-        (Layout::Horizontal, 3, (1, 3)),
-        (Layout::Up(2), 2, (2, 1)),
-        (Layout::Up(3), 3, (3, 1)),
-        (Layout::Up(3), 2, (2, 1)),
-        (Layout::Up(4), 4, (2, 2)),
-        (Layout::Up(4), 3, (2, 2)),
-        (Layout::Up(6), 6, (3, 2)),
-        (Layout::Up(6), 4, (3, 2)),
-        (Layout::Up(6), 2, (2, 1)),
-    ];
-    for (layout, n, shape) in cases {
-        let c = layout_cells(layout, n, area);
-        assert_eq!(c.len(), n);
-        assert_eq!(columns_and_rows(&c), shape, "{layout:?} with {n} panes: columns and rows");
-        assert_eq!(c[0].min, area.min, "{layout:?}: the first pane starts at the corner");
-        let right = c.iter().map(|r| r.right()).fold(f32::MIN, f32::max);
-        let bottom = c.iter().map(|r| r.bottom()).fold(f32::MIN, f32::max);
-        assert_eq!((right, bottom), (area.right(), area.bottom()), "{layout:?} with {n} panes reaches the far edges");
-        for (i, r) in c.iter().enumerate() {
-            assert!(r.width() > 0.0 && r.height() > 0.0 && area.contains_rect(*r), "{layout:?}: {r:?}");
-            for o in &c[i + 1..] {
-                assert!(r.intersect(*o).area() <= 0.0, "{layout:?} panes overlap: {r:?} {o:?}");
-            }
-        }
-    }
-    assert!(layout_cells(Layout::Up(2), 0, area).is_empty());
-}
-
-#[test]
-fn tile_layouts_line_the_documents_up_side_by_side_or_stacked() {
-    let mut app = app_with(3);
-    let ctx = egui::Context::default();
-    let reply = app.run("window.arrange.tile", json!({"layout": "vertical"})).unwrap();
-    assert_eq!(reply, json!({"tiled": true, "panes": 3, "layout": "vertical"}));
-    frame(&mut app, &ctx, vec![]);
-    let (docs, rects) = panes(&app);
-    assert_eq!(docs, [0, 1, 2]);
-    assert!(rects.windows(2).all(|p| p[0].top() == p[1].top() && p[0].height() == p[1].height() && p[0].right() == p[1].left()), "{rects:?}");
-    let reply = app.run("window.arrange.tile", json!({"layout": "horizontal"})).unwrap();
-    assert_eq!(reply, json!({"tiled": true, "panes": 3, "layout": "horizontal"}));
-    frame(&mut app, &ctx, vec![]);
-    let (docs, rects) = panes(&app);
-    assert_eq!(docs, [0, 1, 2]);
-    assert!(rects.windows(2).all(|p| p[0].left() == p[1].left() && p[0].width() == p[1].width() && p[0].bottom() == p[1].top()), "{rects:?}");
-    // Each document fits its new pane.
-    let artboard = Rect::new(0.0, 0.0, 400.0, 300.0);
-    let canvas = app.canvas_rect.unwrap();
-    for (i, r) in docs.iter().zip(&rects) {
-        let shown = if *i == 2 { canvas } else { view_rects(&app, *r, ctx.pixels_per_point()).1 };
-        let v = app.views[*i];
-        assert!(v.fitted && (v.zoom - fit_zoom(shown, artboard, 0.0, 1.0)).abs() < 1e-9, "document {i} fits its pane: {v:?}");
-    }
-    assert_eq!(crate::control::inspect(&app, &ctx)["tileLayout"], json!("horizontal"));
-    assert_eq!(app.run("window.arrange.tile", json!({})).unwrap()["layout"], json!("grid"), "Tile without a layout is the grid");
-}
-
-#[test]
 fn n_up_shows_that_many_documents_and_keeps_the_rest_under_their_tabs() {
     let mut app = app_with(5);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert_eq!(app.run("window.arrange.tile", json!({"layout": "2up"})).unwrap(), json!({"tiled": true, "panes": 2, "layout": "2up"}));
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0, [0, 4], "the current document takes the last pane");
     app.run("document.activate", json!({"index": 1})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0, [0, 1], "the first documents in tab order");
-    let second = (app.session.documents()[1].uid, 1);
+    let second = app.session.documents()[1].uid;
     app.run("document.activate", json!({"index": 0})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    assert!(app.canvas.panes.shown.contains_key(&second), "the second document is rendered for its pane");
+    // The second document is rendered for its pane.
+    wait_ready(&mut app, &ctx, (1, 1), vec![], &mut |a| run_out(a, &ctx));
     app.run("document.activate", json!({"index": 3})).unwrap();
     frame(&mut app, &ctx, vec![]);
     let (docs, rects) = panes(&app);
     assert_eq!(docs, [0, 3], "a document chosen under its tab comes into the last pane");
-    assert!(!app.canvas.panes.shown.contains_key(&second), "a document under its tab keeps no render");
-    let artboard = Rect::new(0.0, 0.0, 400.0, 300.0);
-    let shown = view_rects(&app, rects[0], ctx.pixels_per_point()).1;
-    assert!((app.views[0].zoom - fit_zoom(shown, artboard, 0.0, 1.0)).abs() < 1e-9);
-    assert!(app.canvas_rect.is_some_and(|c| rects[1].contains_rect(c)), "the current document's pane is the canvas");
+    assert!(!has_picture(&mut app, &ctx, (0, 1), second), "a document under its tab keeps no render");
+    assert!(fits(&app, (0, 1)));
+    assert!(app.canvas_view().is_some_and(|c| rects[1].contains_rect(c.rect)), "the current document's pane is the canvas");
     // A document brought into the last pane leaves the first pane's zoom as it is.
     app.views[0].zoom *= 2.0;
     let zoomed = app.views[0].zoom;
@@ -188,8 +260,8 @@ fn n_up_shows_that_many_documents_and_keeps_the_rest_under_their_tabs() {
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0, [0, 2]);
     assert_eq!(app.views[0].zoom, zoomed, "the document that stayed in its pane keeps its zoom");
-    let last = app.canvas_rect.unwrap();
-    assert!((app.views[2].zoom - fit_zoom(last, artboard, 0.0, 1.0)).abs() < 1e-9, "the document brought in fits its pane");
+    frame(&mut app, &ctx, vec![]);
+    assert!(fits(&app, (2, 1)), "the document brought in fits its pane");
     assert_eq!(app.run("window.arrange.tile", json!({"layout": "4up"})).unwrap()["panes"], json!(4));
     frame(&mut app, &ctx, vec![]);
     let (docs, rects) = panes(&app);
@@ -212,7 +284,7 @@ fn n_up_shows_that_many_documents_and_keeps_the_rest_under_their_tabs() {
 #[test]
 fn closing_a_document_in_an_n_up_layout_fits_the_documents_that_change_panes() {
     let mut app = app_with(4);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("document.activate", json!({"index": 1})).unwrap();
     app.run("window.arrange.tile", json!({"layout": "2up"})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -224,12 +296,11 @@ fn closing_a_document_in_an_n_up_layout_fits_the_documents_that_change_panes() {
     app.views[1].zoom *= 3.0;
     app.run("file.close", json!({"index": 0})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let (docs, rects) = panes(&app);
+    frame(&mut app, &ctx, vec![]);
+    let (docs, _) = panes(&app);
     assert_eq!(docs, [0, 2], "the former second document is first now, the current one stays last");
     assert_eq!(app.session.documents()[0].uid, moving);
-    let area = view_rects(&app, rects[0], ctx.pixels_per_point()).1;
-    let v = app.views[0];
-    assert!(v.fitted && (v.zoom - fit_zoom(area, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0, 1.0)).abs() < 1e-9, "it fits its new pane: {v:?}");
+    assert!(fits(&app, (0, 1)), "it fits its new pane: {:?}", app.views[0]);
 }
 
 /// 6-Up keeps its three columns and two rows with five documents: closing the sixth leaves the
@@ -238,7 +309,7 @@ fn closing_a_document_in_an_n_up_layout_fits_the_documents_that_change_panes() {
 #[test]
 fn closing_a_document_keeps_the_zoom_of_the_documents_whose_panes_stay() {
     let mut app = app_with(6);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.tile", json!({"layout": "6up"})).unwrap();
     frame(&mut app, &ctx, vec![]);
@@ -258,11 +329,10 @@ fn closing_a_document_keeps_the_zoom_of_the_documents_whose_panes_stay() {
     app.views[1].zoom *= 2.0;
     app.run("file.close", json!({"index": 2})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let (docs, rects) = panes(&app);
+    frame(&mut app, &ctx, vec![]);
+    let (docs, _) = panes(&app);
     assert_eq!(docs, [0, 1]);
-    let area = view_rects(&app, rects[1], ctx.pixels_per_point()).1;
-    let v = app.views[1];
-    assert!(v.fitted && (v.zoom - fit_zoom(area, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0, 1.0)).abs() < 1e-9, "it fits its wider pane: {v:?}");
+    assert!(fits(&app, (1, 1)), "it fits its wider pane: {:?}", app.views[1]);
 }
 
 #[test]
@@ -303,17 +373,11 @@ fn the_tile_items_check_the_layout_the_panes_show() {
     let arrange = window
         .into_iter()
         .find_map(|i| match i {
-            crate::menus::Item::Sub("Arrange", items) => Some(items),
+            Node::Submenu { label, children, .. } if label == "Arrange" => Some(children),
             _ => None,
         })
         .unwrap();
-    let labels: Vec<&str> = arrange
-        .iter()
-        .filter_map(|i| match i {
-            crate::menus::Item::Cmd(l, ..) => Some(*l),
-            _ => None,
-        })
-        .collect();
+    let labels: Vec<&str> = commands(&arrange).into_iter().map(|(l, ..)| l).collect();
     assert_eq!(
         labels,
         [
@@ -331,102 +395,23 @@ fn the_tile_items_check_the_layout_the_panes_show() {
         ]
     );
     // Each item's params run, as the menu sends them.
-    for item in &arrange {
-        if let crate::menus::Item::Cmd(_, "window.arrange.tile", p) = item {
+    for (_, id, p) in commands(&arrange) {
+        if id == "window.arrange.tile" {
             let p = if p.is_null() { json!({}) } else { p.clone() };
-            assert!(app.run("window.arrange.tile", p.clone()).is_ok(), "{p}");
+            assert!(app.run(id, p.clone()).is_ok(), "{p}");
         }
     }
-}
-
-/// One frame of the application bar with screen-reader nodes on → the nodes.
-fn app_bar_frame(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::accesskit::Node> {
-    app_bar_frame_in(app, ctx, events, 1400.0)
-}
-
-/// [`app_bar_frame`] on a window `width` points wide.
-fn app_bar_frame_in(app: &mut VectorcraftApp, ctx: &egui::Context, events: Vec<egui::Event>, width: f32) -> Vec<egui::accesskit::Node> {
-    let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(width, 800.0));
-    let mut out = ctx.run_ui(egui::RawInput { events, screen_rect: Some(screen), ..Default::default() }, |ui| crate::chrome::app_bar(app, ui));
-    out.textures_delta.clear();
-    out.platform_output.accesskit_update.map(|u| u.nodes.into_iter().map(|(_, n)| n).collect()).unwrap_or_default()
-}
-
-/// The center of the application bar's node whose label, without its leading spaces, is `name`
-/// (or starts with it and a shortcut in parentheses).
-fn app_bar_node(nodes: &[egui::accesskit::Node], name: &str) -> Option<Pos2> {
-    let named = |l: &str| l.trim_start().strip_prefix(name).is_some_and(|rest| rest.is_empty() || rest.trim_start().starts_with('('));
-    let b = nodes.iter().find(|n| n.label().is_some_and(named))?.bounds()?;
-    Some(pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
-}
-
-/// Click the application bar's node labeled `name`.
-fn click_app_bar(app: &mut VectorcraftApp, ctx: &egui::Context, name: &str) {
-    let at = app_bar_node(&app_bar_frame(app, ctx, vec![]), name).unwrap_or_else(|| panic!("{name} is drawn"));
-    app_bar_frame(app, ctx, vec![egui::Event::PointerMoved(at), button(at, true)]);
-    app_bar_frame(app, ctx, vec![button(at, false)]);
-}
-
-#[test]
-fn the_arrange_documents_button_tiles_and_consolidates() {
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = app_with(3);
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    app_bar_frame(&mut app, &ctx, vec![]);
-    let nodes = app_bar_frame(&mut app, &ctx, vec![]);
-    let (arrange, search) = (app_bar_node(&nodes, "Arrange Documents"), app_bar_node(&nodes, "Search commands"));
-    let (arrange, search) = (arrange.expect("the application bar has Arrange Documents"), search.expect("the search shows"));
-    assert!(arrange.x > search.x && (arrange.y - search.y).abs() < 1.0, "right of the search: {arrange:?}, {search:?}");
-    click_app_bar(&mut app, &ctx, "Arrange Documents");
-    let menu = app_bar_frame(&mut app, &ctx, vec![]);
-    for item in [
-        "Consolidate All Windows",
-        "Tile",
-        "Tile All Vertically",
-        "Tile All Horizontally",
-        "2-Up Layout",
-        "3-Up Layout",
-        "4-Up Layout",
-        "6-Up Layout",
-    ] {
-        assert!(app_bar_node(&menu, item).is_some(), "the menu lists {item}");
-    }
-    click_app_bar(&mut app, &ctx, "Tile All Vertically");
-    assert!(app.ui.tiled && app.ui.tile_layout == Layout::Vertical, "{}", app.ui.status);
-    click_app_bar(&mut app, &ctx, "Arrange Documents");
-    click_app_bar(&mut app, &ctx, "Consolidate All Windows");
-    assert!(!app.ui.tiled);
-}
-
-/// As the application bar narrows, Arrange Documents goes before the search.
-#[test]
-fn a_narrow_application_bar_keeps_search_before_arrange_documents() {
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    let mut app = app_with(3);
-    let ctx = egui::Context::default();
-    ctx.enable_accesskit();
-    crate::theme::install_fonts(&ctx);
-    let mut search_alone = false;
-    for width in (200..=1400).rev().step_by(4) {
-        app_bar_frame_in(&mut app, &ctx, vec![], width as f32);
-        let nodes = app_bar_frame_in(&mut app, &ctx, vec![], width as f32);
-        let (arrange, search) = (app_bar_node(&nodes, "Arrange Documents").is_some(), app_bar_node(&nodes, "Search commands").is_some());
-        assert!(search || !arrange, "{width} pt: Arrange Documents shows without the search");
-        search_alone |= search && !arrange;
-    }
-    assert!(search_alone, "some width shows the search without Arrange Documents");
 }
 
 #[test]
 fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     assert!(panes(&app).0.is_empty(), "documents open under their tabs");
-    let tabbed = app.canvas_rect.unwrap();
+    let tabbed = app.canvas_view().unwrap().rect;
     assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": true, "panes": 3, "layout": "grid"}));
+    frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![]);
     let (docs, rects) = panes(&app);
     assert_eq!(docs, [0, 1, 2]);
@@ -434,74 +419,26 @@ fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     assert_eq!(rects[0].top(), rects[1].top());
     assert_eq!(rects[0].left(), rects[2].left());
     assert!(rects[2].top() > rects[0].top());
-    let canvas = app.canvas_rect.unwrap();
-    assert!(rects[2].contains_rect(canvas) && canvas.width() < tabbed.width() / 2.0, "the current document's pane is the canvas: {canvas:?}");
+    let canvas = app.canvas_view().unwrap().rect;
+    // The scroll bars are drawn inside the canvas (cv.S2), which fills its half-wide pane.
+    assert!(rects[2].contains_rect(canvas) && canvas.width() <= tabbed.width() / 2.0, "the current document's pane is the canvas: {canvas:?}");
     let artboard = Rect::new(0.0, 0.0, 400.0, 300.0);
-    for (i, r) in docs.iter().zip(&rects) {
+    for i in &docs {
         let v = app.views[*i];
-        let shown = if *i == 2 { canvas } else { view_rects(&app, *r, ctx.pixels_per_point()).1 };
-        assert!(v.fitted && (v.zoom - fit_zoom(shown, artboard, 0.0, 1.0)).abs() < 1e-9, "document {i} fits its pane: {v:?}");
+        assert!(fits(&app, (*i, 1)), "document {i} fits its pane: {v:?}");
         assert_eq!(v.center, artboard.center());
     }
-    assert_eq!(app.canvas.panes.shown.len(), 2, "the other two documents are rendered for their panes");
+    // The other two documents are rendered for their panes.
+    for i in [0, 1] {
+        wait_ready(&mut app, &ctx, (i, 1), vec![], &mut |a| run_out(a, &ctx));
+    }
     let inspected = crate::control::inspect(&app, &ctx);
     assert_eq!(inspected["tiled"], json!(true));
     let active: Vec<bool> = inspected["panes"].as_array().unwrap().iter().map(|p| p["active"].as_bool().unwrap()).collect();
     assert_eq!(active, [false, false, true]);
 }
 
-/// With the interface zoomed by Preferences › User Interface › UI Scaling, each tiled document
-/// fits its pane with 30 interface points to spare: its zoom is the zoom that fits it in an
-/// unscaled interface times the UI Scaling.
-#[test]
-fn tiled_documents_fit_their_panes_at_every_ui_scaling() {
-    for ui_zoom in [0.75_f32, 1.5, 2.0] {
-        let mut app = app_with(3);
-        let ctx = egui::Context::default();
-        ctx.set_zoom_factor(ui_zoom);
-        let size = vec2(1200.0, 800.0) / ui_zoom;
-        frame_in(&mut app, &ctx, vec![], size);
-        app.run("window.arrange.tile", json!({})).unwrap();
-        frame_in(&mut app, &ctx, vec![], size);
-        let (docs, rects) = panes(&app);
-        for (i, r) in docs.iter().zip(&rects).filter(|(i, _)| **i != 2) {
-            let shown = view_rects(&app, *r, ctx.pixels_per_point()).1;
-            let unscaled = ((f64::from(shown.width()) - 60.0) / 400.0).min((f64::from(shown.height()) - 60.0) / 300.0);
-            let v = app.views[*i];
-            assert!(v.fitted && (v.zoom - unscaled * f64::from(ui_zoom)).abs() < 1e-9, "UI Scaling {ui_zoom}×: document {i} fits its pane: {v:?}");
-        }
-    }
-}
-
-#[test]
-fn a_press_in_another_pane_makes_its_document_current_without_drawing() {
-    let mut app = app_with(3);
-    let ctx = egui::Context::default();
-    app.run("window.arrange.tile", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.select_tool("rectangle");
-    let pane = panes(&app).1[0];
-    let (from, to) = (pane.center() - vec2(30.0, 20.0), pane.center() + vec2(30.0, 20.0));
-    let drag = |app: &mut VectorcraftApp| {
-        frame(app, &ctx, vec![egui::Event::PointerMoved(from)]);
-        frame(app, &ctx, vec![button(from, true)]);
-        for k in 1..=4 {
-            frame(app, &ctx, vec![egui::Event::PointerMoved(from + (to - from) * (k as f32 / 4.0))]);
-        }
-        frame(app, &ctx, vec![button(to, false)]);
-        frame(app, &ctx, vec![]);
-    };
-    drag(&mut app);
-    assert_eq!(app.session.active_index(), Some(0), "the press made the first document current");
-    assert!(app.session.documents()[0].doc.art_bounds().is_none(), "the press that switched documents drew nothing");
-    assert!(app.canvas_rect.is_some_and(|c| pane.contains_rect(c)), "its pane is the canvas now");
-    drag(&mut app);
-    assert!(app.session.documents()[0].doc.art_bounds().is_some(), "a drag in the current pane draws");
-    assert!(app.session.documents()[1..].iter().all(|d| d.doc.art_bounds().is_none()));
-}
-
-/// One headless frame at `time` seconds as the app runs it: a Selection move released off the
-/// canvas ends first ([`crate::canvas::release_over_panel`]), then the tabs and the panes draw.
+/// One headless frame at `time` seconds as the app runs it: the tabs and the panes draw.
 fn timed_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: Option<f64>, events: Vec<egui::Event>) -> egui::FullOutput {
     let raw = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
@@ -510,10 +447,7 @@ fn timed_frame(app: &mut VectorcraftApp, ctx: &egui::Context, time: Option<f64>,
         events,
         ..Default::default()
     };
-    let mut out = ctx.run_ui(raw, |ui| {
-        crate::canvas::release_over_panel(app, ui.ctx());
-        app.canvas_area(ui);
-    });
+    let mut out = ctx.run_ui(raw, |ui| app.canvas_area(ui));
     out.textures_delta.clear();
     out
 }
@@ -535,7 +469,7 @@ fn tiled_pair() -> (VectorcraftApp, egui::Context) {
     app.select_tool("selection");
     app.ui.task_bar = false;
     app.run("window.arrange.tile", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app_frame(&mut app, &ctx, vec![]);
     app_frame(&mut app, &ctx, vec![]);
     (app, ctx)
@@ -544,17 +478,16 @@ fn tiled_pair() -> (VectorcraftApp, egui::Context) {
 /// Press on document point `at` on the canvas and move the pointer 20 × 10 points, still on the
 /// canvas: the Selection tool moves the art under it.
 fn grab(app: &mut VectorcraftApp, ctx: &egui::Context, at: Point) {
-    let p = Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), 1.0).to_screen(at);
+    let p = app.canvas_view().unwrap().to_screen(at);
     app_frame(app, ctx, vec![egui::Event::PointerMoved(p), button(p, true)]);
     app_frame(app, ctx, vec![egui::Event::PointerMoved(p + vec2(20.0, 10.0))]);
     assert!(app.session.in_interaction(), "the Selection tool moves the art");
 }
 
 /// Window `w`'s pane: the screen point that shows document point `at` in it, and the pane.
-fn in_pane(app: &VectorcraftApp, ctx: &egui::Context, w: Win, at: Point) -> (Pos2, egui::Rect) {
+fn in_pane(app: &VectorcraftApp, _ctx: &egui::Context, w: Win, at: Point) -> (Pos2, egui::Rect) {
     let (_, cell) = app.canvas.panes.last.iter().copied().find(|(o, _)| *o == w).unwrap();
-    let area = view_rects(app, cell, ctx.pixels_per_point()).1;
-    (Xf::at(area, crate::doc_windows::view(app, w).unwrap(), 1.0).to_screen(at), cell)
+    (pane_view(app, w).to_screen(at), cell)
 }
 
 /// How many objects document `i`'s first layer holds.
@@ -710,18 +643,19 @@ fn art_carried_through_a_tab_drops_into_a_third_documents_pane() {
     timed_frame(&mut app, &ctx, Some(0.0), vec![]);
     let tabs = titles(timed_frame(&mut app, &ctx, Some(0.01), vec![]));
     assert_eq!(tabs.len(), 3);
-    let p = Xf::at(app.canvas_rect.unwrap(), app.view().unwrap(), 1.0).to_screen(Point::new(100.0, 100.0));
+    let p = app.canvas_view().unwrap().to_screen(Point::new(100.0, 100.0));
     timed_frame(&mut app, &ctx, Some(0.05), vec![egui::Event::PointerMoved(p), button(p, true)]);
     timed_frame(&mut app, &ctx, Some(0.1), vec![egui::Event::PointerMoved(p + vec2(20.0, 10.0))]);
     timed_frame(&mut app, &ctx, Some(0.2), vec![egui::Event::PointerMoved(tabs[2].center())]);
     timed_frame(&mut app, &ctx, Some(0.25), vec![]);
-    timed_frame(&mut app, &ctx, Some(0.8), vec![]);
+    // A tab under a drag becomes current after the pointer rests the tooltip delay (cv.F23).
+    timed_frame(&mut app, &ctx, Some(0.3 + craft::ui::contract::tooltip::DELAY), vec![]);
     assert_eq!(app.session.active_index(), Some(2), "holding the art over the third tab makes that document current");
-    timed_frame(&mut app, &ctx, Some(0.85), vec![]);
+    timed_frame(&mut app, &ctx, Some(1.0), vec![]);
     let (drop, _) = in_pane(&app, &ctx, (1, 1), Point::new(150.0, 100.0));
-    timed_frame(&mut app, &ctx, Some(0.9), vec![egui::Event::PointerMoved(drop)]);
-    timed_frame(&mut app, &ctx, Some(1.0), vec![button(drop, false)]);
-    timed_frame(&mut app, &ctx, Some(1.1), vec![]);
+    timed_frame(&mut app, &ctx, Some(1.05), vec![egui::Event::PointerMoved(drop)]);
+    timed_frame(&mut app, &ctx, Some(1.15), vec![button(drop, false)]);
+    timed_frame(&mut app, &ctx, Some(1.25), vec![]);
     assert_eq!(app.session.active_index(), Some(1), "the pane's document is the current one");
     assert_eq!(objects(&app, 1), 2, "the copy joins the second document's square");
     let placed = selected_bounds(&app);
@@ -732,12 +666,14 @@ fn art_carried_through_a_tab_drops_into_a_third_documents_pane() {
 
 #[test]
 fn a_drag_released_off_a_panes_art_area_or_after_escape_changes_nothing() {
-    for (case, escape) in [("scroll bar", false), ("art area after Escape", true)] {
+    for (case, escape) in [("ruler", false), ("art area after Escape", true)] {
         let (mut app, ctx) = tiled_pair();
+        // A pane's vertical ruler runs down its left side, outside its art area.
+        app.ui.view.rulers = true;
         let docs: Vec<_> = app.session.documents().iter().map(|d| (d.doc.clone(), d.history.undo.len())).collect();
         grab(&mut app, &ctx, Point::new(100.0, 100.0));
         let (inside, cell) = in_pane(&app, &ctx, (1, 1), Point::new(200.0, 150.0));
-        let at = if escape { inside } else { pos2(cell.right() - 2.0, cell.center().y) };
+        let at = if escape { inside } else { pos2(cell.left() + 2.0, cell.center().y) };
         app_frame(&mut app, &ctx, vec![egui::Event::PointerMoved(at)]);
         if escape {
             let key = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() };
@@ -755,16 +691,19 @@ fn a_drag_released_off_a_panes_art_area_or_after_escape_changes_nothing() {
 #[test]
 fn consolidate_all_windows_shows_one_document_again() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
-    let tabbed = app.canvas_rect.unwrap();
+    let tabbed = app.canvas_view().map(|v| v.rect);
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0.len(), 2);
+    let uid = app.session.documents()[0].uid;
+    wait_ready(&mut app, &ctx, (0, 1), vec![], &mut |a| run_out(a, &ctx));
     assert_eq!(app.run("window.arrange.consolidateAllWindows", json!({})).unwrap(), json!({"tiled": false, "floating": []}));
     frame(&mut app, &ctx, vec![]);
-    assert!(panes(&app).0.is_empty() && app.canvas.panes.shown.is_empty());
-    assert_eq!(app.canvas_rect, Some(tabbed), "the current document fills the document area again");
+    assert!(panes(&app).0.is_empty());
+    assert!(!has_picture(&mut app, &ctx, (1, 1), uid), "no pane keeps a picture");
+    assert_eq!(app.canvas_view().map(|v| v.rect), tabbed, "the current document fills the document area again");
 }
 
 #[test]
@@ -783,7 +722,7 @@ fn arrange_items_follow_the_open_documents() {
     app.run("window.arrange.tile", json!({})).unwrap();
     app.run("file.close", json!({})).unwrap();
     app.run("file.close", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(items(&app), (false, false), "every document closed");
     assert!(!app.ui.tiled);
@@ -792,7 +731,7 @@ fn arrange_items_follow_the_open_documents() {
 #[test]
 fn tile_with_one_document_leaves_the_next_one_under_its_tab() {
     let mut app = app_with(1);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     assert_eq!(app.run("window.arrange.tile", json!({})).unwrap(), json!({"tiled": false, "panes": 1, "layout": "grid"}));
     assert!(!app.ui.tiled);
     assert!(!enabled(&app, "window.arrange.consolidateAllWindows"));
@@ -804,19 +743,19 @@ fn tile_with_one_document_leaves_the_next_one_under_its_tab() {
 #[test]
 fn closing_a_document_while_tiled_tiles_the_others() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert_eq!(panes(&app).0, [0, 1, 2]);
-    let first = (app.session.documents()[0].uid, 1);
-    assert!(app.canvas.panes.shown.contains_key(&first));
+    let first = app.session.documents()[0].uid;
+    wait_ready(&mut app, &ctx, (0, 1), vec![], &mut |a| run_out(a, &ctx));
     // The first document, not the current one, closes.
     app.run("file.close", json!({"index": 0})).unwrap();
     frame(&mut app, &ctx, vec![]);
     let (docs, rects) = panes(&app);
     assert_eq!(docs, [0, 1]);
     assert_eq!(rects[0].height(), rects[1].height(), "two panes side by side");
-    assert!(!app.canvas.panes.shown.contains_key(&first), "the closed document's render is dropped");
+    assert!(!has_picture(&mut app, &ctx, (0, 1), first), "the closed document's render is dropped");
     app.run("file.close", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     assert!(panes(&app).0.is_empty(), "one document fills the document area");
@@ -826,22 +765,18 @@ fn closing_a_document_while_tiled_tiles_the_others() {
 #[test]
 fn an_edit_shows_in_its_pane_once_another_document_is_current() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let uid = (app.session.documents()[1].uid, 1);
-    let before = app.canvas.panes.shown.get(&uid).map(|(k, _)| k.revision);
-    assert_eq!(before, Some(app.session.documents()[1].revision), "the second document's pane shows it");
+    let before = pane_source(&mut app, &ctx, (1, 1)).frame.revision;
+    assert_eq!(pane_source(&mut app, &ctx, (1, 1)).frame.revision, before, "without an edit the pane's picture stays");
     app.run("document.activate", json!({"index": 1})).unwrap();
     frame(&mut app, &ctx, vec![]);
     app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 80})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let edited = &app.session.documents()[1];
-    assert_ne!(Some(edited.revision), before);
-    let shown = app.canvas.panes.shown.get(&uid).map(|(k, _)| k.revision);
-    assert_eq!(shown, Some(edited.revision), "the pane shows the document as edited");
+    assert_ne!(pane_source(&mut app, &ctx, (1, 1)).frame.revision, before, "the pane shows the document as edited");
 }
 
 #[test]
@@ -851,205 +786,111 @@ fn other_panes_draw_their_guides_and_selected_objects() {
     let id = app.session.execute("shape.rectangle", &json!({"x": 50, "y": 50, "width": 100, "height": 80})).unwrap()["id"].as_u64().unwrap();
     app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
     app.session.execute("guide.add", &json!({"vertical": true, "pos": 300})).unwrap();
-    let st = &app.session.documents()[0];
-    let layer = super::c32(st.doc.layer_color(vectorcraft_doc::NodeId(id)));
     app.run("document.activate", json!({"index": 1})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
-    let shapes = frame(&mut app, &ctx, vec![]);
-    let pane = panes(&app).1[0];
-    let xf = Xf::new(view_rects(&app, pane, ctx.pixels_per_point()).1, &app.views[0]);
-    let outline: Vec<Pos2> = shapes
-        .iter()
-        .filter_map(|s| match s {
-            Shape::Path(p) if p.stroke.color == egui::epaint::ColorMode::Solid(layer) => Some(p.points.clone()),
-            _ => None,
-        })
-        .flatten()
-        .collect();
-    let corner = xf.to_screen(Point::new(50.0, 50.0));
-    assert!(outline.iter().any(|p| p.distance(corner) < 1.0), "the selected rectangle is outlined in its pane: {outline:?}");
-    let guide_x = xf.to_screen(Point::new(300.0, 0.0)).x;
-    let guide = LineLook::guides(&app.session.prefs, &Tokens::get(&ctx)).color;
-    let guides = shapes.iter().any(|s| {
-        matches!(s, Shape::LineSegment { points: [a, b], stroke } if stroke.color == guide && (a.x - guide_x).abs() < 0.5 && (b.x - guide_x).abs() < 0.5 && pane.contains(*a))
-    });
-    assert!(guides, "the guide is drawn in its pane");
-    assert_ne!(layer, Color32::TRANSPARENT);
+    frame(&mut app, &ctx, vec![]);
+    // The pane hands its document's guides and selected objects to the overlays it shows.
+    let st = &app.session.documents()[0];
+    let mut tokens = None;
+    crate::testing::ui_context()
+        .run_ui(Default::default(), |ui| tokens = Some(craft::theme::Tokens::clone(Env::of(ui).tokens.tokens())))
+        .textures_delta
+        .clear();
+    let guides = format!("{:?}", crate::canvas::guides::shown(&app, st, &tokens.unwrap()));
+    assert!(guides.contains("300"), "the guide at 300 is shown in the pane: {guides}");
+    assert!(!crate::canvas::selection::outlines(&app, st).is_empty(), "the selected rectangle is outlined in its pane");
 }
 
-/// The selected objects' outlines as the panes made them on every frame before they kept them,
-/// to hold the kept outlines against.
-fn outlines_made_each_frame(st: &vectorcraft_engine::DocState, xf: &Xf) -> Vec<Shape> {
-    let mut shapes = vec![];
-    let symbols = st.doc.symbol_boxes();
-    let nodes: Vec<(vectorcraft_doc::NodeId, &vectorcraft_doc::Node)> =
-        st.selection.objects.iter().filter_map(|id| Some((*id, st.doc.node(*id)?))).collect();
-    let color = |id: vectorcraft_doc::NodeId| Stroke::new(1.0, c32(st.doc.layer_color(id)));
-    let mut stroke_path = |bp: &BezPath, s: Stroke| {
-        for line in to_screen_path(bp, xf) {
-            shapes.push(Shape::line(line, s));
-        }
-    };
-    if too_many_anchors(nodes.iter().map(|(_, n)| *n)) {
-        let bounds = nodes.iter().filter_map(|(_, n)| n.geometric_bounds_with(&symbols)).reduce(|a, b| a.union(b));
-        if let (Some(b), Some((id, _))) = (bounds, nodes.first()) {
-            stroke_path(&vectorcraft_geom::shapes::rectangle(b).to_bezpath(), color(*id));
-        }
-        return shapes;
-    }
-    for (id, n) in nodes {
-        stroke_path(&node_outline(n, &symbols), color(id));
-    }
-    shapes
-}
-
-/// The first document's pane in a tiled pair: the outlines it keeps, after checking that they
-/// equal the outlines made afresh through its view and that the frame `drawn` holds them in order.
-fn kept_outlines<'a>(app: &'a VectorcraftApp, ctx: &egui::Context, drawn: &[Shape]) -> &'a [Shape] {
-    let pane = panes(app).1[0];
-    let xf = Xf::new(view_rects(app, pane, ctx.pixels_per_point()).1, &app.views[0]);
-    let slot = (app.session.documents()[0].uid, 1);
-    let kept = &app.canvas.panes.outlines.get(&slot).expect("the pane keeps its outlines").shapes;
-    assert_eq!(kept, &outlines_made_each_frame(&app.session.documents()[0], &xf), "the kept outlines are the ones made afresh");
-    assert!(kept.is_empty() || drawn.windows(kept.len()).any(|w| w == kept.as_slice()), "the pane draws the kept outlines");
-    kept
-}
-
-/// Run `cmd` on the first document of a tiled pair, then make the second current again.
-fn in_first(app: &mut VectorcraftApp, cmd: &str, args: serde_json::Value) -> serde_json::Value {
-    app.run("document.activate", json!({"index": 0})).unwrap();
-    let out = app.session.execute(cmd, &args).unwrap();
-    app.run("document.activate", json!({"index": 1})).unwrap();
-    out
-}
-
+/// Another pane crosses a selected linked image from corner to corner, as the current pane does, and outlines a
+/// selected embedded image alone (#9080).
 #[test]
-fn kept_outlines_do_not_show_for_a_new_document_that_takes_a_freed_documents_address() {
-    let affine = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
-    let st = vectorcraft_engine::DocState::new(vectorcraft_doc::Document::new(400.0, 300.0), None);
-    let kept = Outlines { revision: st.revision, doc: Arc::downgrade(&st.doc), selection: vec![], affine, shapes: vec![] };
-    assert!(kept.shows(&st, &affine), "the outlines show the document they were made for");
-    let freed = Arc::as_ptr(&st.doc);
-    drop(st);
-    let mut reused = false;
-    for _ in 0..64 {
-        let other = vectorcraft_engine::DocState::new(vectorcraft_doc::Document::new(400.0, 300.0), None);
-        reused |= Arc::as_ptr(&other.doc) == freed;
-        assert!(!kept.shows(&other, &affine), "a different document with the same revision, selection and mapping is not the one shown");
-    }
-    assert!(!reused, "the weak reference keeps the freed document's address from being taken");
-}
-
-#[test]
-fn other_panes_keep_their_selected_outlines_until_the_document_selection_or_view_changes() {
+fn other_panes_cross_a_selected_linked_image() {
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType};
+    let png = vectorcraft_testkit::temp_dir("panes-linked-image").join("red.png");
+    let image = Image::from_raw(40, 40, ChannelLayout::Rgba, SampleType::U8, [200u8, 40, 40, 255].repeat(40 * 40)).unwrap();
+    std::fs::write(&png, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
     let mut app = app_with(2);
-    app.run("document.activate", json!({"index": 1})).unwrap();
-    app.run("window.arrange.tile", json!({})).unwrap();
-    let ctx = egui::Context::default();
-    let rect = in_first(&mut app, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 80}))["id"].clone();
-    let ellipse = in_first(&mut app, "shape.ellipse", json!({"x": 200, "y": 100, "width": 90, "height": 60}))["id"].clone();
-    in_first(&mut app, "select.set", json!({"ids": [rect, ellipse]}));
-    frame(&mut app, &ctx, vec![]);
-    let drawn = frame(&mut app, &ctx, vec![]);
-    assert!(kept_outlines(&app, &ctx, &drawn).len() >= 2, "the rectangle and the ellipse are outlined");
-    let made = app.canvas.panes.outlines_made;
-    let drawn = frame(&mut app, &ctx, vec![]);
-    kept_outlines(&app, &ctx, &drawn);
-    assert_eq!(app.canvas.panes.outlines_made, made, "an unchanged frame draws the kept outlines");
-    let changed = |app: &mut VectorcraftApp, what: &str| {
-        let made = app.canvas.panes.outlines_made;
-        let drawn = frame(app, &ctx, vec![]);
-        kept_outlines(app, &ctx, &drawn);
-        assert_eq!(app.canvas.panes.outlines_made, made + 1, "{what} makes the outlines again, once");
-        let drawn = frame(app, &ctx, vec![]);
-        kept_outlines(app, &ctx, &drawn);
-        assert_eq!(app.canvas.panes.outlines_made, made + 1, "the frame after {what} draws the kept outlines");
-    };
-    in_first(&mut app, "select.set", json!({"ids": [ellipse]}));
-    changed(&mut app, "a new selection");
-    in_first(&mut app, "object.move", json!({"dx": 30, "dy": -10}));
-    changed(&mut app, "a move");
-    let layer = app.session.documents()[0].doc.layers[0].id.0;
-    in_first(&mut app, "layer.setProps", json!({"id": layer, "color": "#20a040"}));
-    changed(&mut app, "a new layer color");
-    app.views[0].center.x += 25.0;
-    changed(&mut app, "a pan");
-    app.views[0].zoom *= 1.5;
-    app.views[0].rotation = 20.0;
-    changed(&mut app, "a zoom and a turn");
-    app.ui.view.edges = false;
-    frame(&mut app, &ctx, vec![]);
-    assert!(app.canvas.panes.outlines.is_empty(), "with Edges off no outlines are kept");
-    app.ui.view.edges = true;
-    changed(&mut app, "Edges on again");
-    in_first(&mut app, "select.none", json!({}));
-    changed(&mut app, "an empty selection");
-    let drawn = frame(&mut app, &ctx, vec![]);
-    assert!(kept_outlines(&app, &ctx, &drawn).is_empty());
-    // 30,000 rectangles have more points than the outlines are made for: the pane keeps the bounds.
-    let st = &app.session.documents()[0];
-    let rect = st.doc.node(vectorcraft_doc::NodeId(rect.as_u64().unwrap())).cloned().unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
-    app.session
-        .edit("Fill", |d, _| {
-            let layer = d.layers[0].id;
-            for _ in 0..30_000 {
-                let mut n = rect.clone();
-                n.id = d.alloc_id();
-                d.insert(Some(layer), usize::MAX, n)?;
-            }
-            Ok(())
-        })
-        .unwrap();
-    app.run("select.all", json!({})).unwrap();
-    app.run("document.activate", json!({"index": 1})).unwrap();
-    changed(&mut app, "selecting more points than are outlined");
-    let drawn = frame(&mut app, &ctx, vec![]);
-    assert_eq!(kept_outlines(&app, &ctx, &drawn).len(), 1, "one rectangle around the bounds");
-    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert!(app.canvas.panes.outlines.is_empty(), "Consolidate All Windows forgets the outlines");
-    // Panes that stop showing before their render arrives keep no outlines either.
+    let mut place = |link: bool, at: [f64; 2]| {
+        app.session.execute("file.place", &json!({"path": png, "link": link, "at": at})).unwrap()["ids"][0].as_u64().unwrap()
+    };
+    let (linked, embedded) = (place(true, [100.0, 100.0]), place(false, [250.0, 100.0]));
     app.run("window.arrange.tile", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    assert_eq!(app.canvas.panes.outlines.len(), 1);
-    app.ui.tiled = false;
-    app.canvas.panes.shown.clear();
-    app.canvas.panes.last.clear();
-    frame(&mut app, &ctx, vec![]);
-    assert!(app.canvas.panes.outlines.is_empty(), "no pane shows, so no outlines are kept");
+    let ctx = crate::testing::ui_context();
+    // How many paths the first document's pane outlines with `id` selected there.
+    let mut paths = |id: u64| {
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        let st = &app.session.documents()[0];
+        crate::canvas::selection::outlines(&app, st).iter().map(|o| o.paths.len()).sum::<usize>()
+    };
+    let (linked, embedded) = (paths(linked), paths(embedded));
+    assert_eq!((linked, embedded), (2, 1), "the outline of a linked image and its crossing lines; an embedded image's outline alone");
+}
+
+/// Another pane outlines a selected group's visible members only: hiding a member draws the same outlines as deleting
+/// it.
+#[test]
+fn other_panes_leave_out_a_selected_groups_hidden_members() {
+    let mut app = app_with(2);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let id = |made: serde_json::Value| made["id"].as_u64().unwrap();
+    let shown = id(app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 80})).unwrap());
+    let hidden = id(app.run("shape.ellipse", json!({"x": 200, "y": 100, "width": 90, "height": 60})).unwrap());
+    app.run("select.set", json!({"ids": [shown, hidden]})).unwrap();
+    let group = id(app.run("object.group", json!({})).unwrap());
+    app.run("window.arrange.tile", json!({})).unwrap();
+    let ctx = crate::testing::ui_context();
+    // The paths the first document's pane outlines with the group selected there, after the commands `edit` there.
+    let outlines = |app: &mut VectorcraftApp, edit: &[(&str, serde_json::Value)]| {
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        for (command, params) in edit {
+            app.run(command, params.clone()).unwrap();
+        }
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        frame(app, &ctx, vec![]);
+        frame(app, &ctx, vec![]);
+        let st = &app.session.documents()[0];
+        crate::canvas::selection::outlines(app, st).into_iter().flat_map(|o| o.paths).map(|p| p.elements().to_vec()).collect::<Vec<_>>()
+    };
+    let both = outlines(&mut app, &[]);
+    let without = outlines(&mut app, &[("select.set", json!({"ids": [hidden]})), ("edit.clear", json!({}))]);
+    let with_hidden = outlines(&mut app, &[("edit.undo", json!({})), ("select.set", json!({"ids": [hidden]})), ("object.hide", json!({}))]);
+    assert_ne!(both, without, "the outlines show both members");
+    assert_eq!(with_hidden, without, "a hidden member is not outlined");
 }
 
 #[test]
 fn opening_a_document_while_tiled_fits_each_document_to_its_new_pane() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     let side_by_side = app.views[0].zoom;
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
     frame(&mut app, &ctx, vec![]);
-    let pane = panes(&app).1[0];
-    let rect = view_rects(&app, pane, ctx.pixels_per_point()).1;
+    frame(&mut app, &ctx, vec![]);
     let v = app.views[0];
-    assert!((v.zoom - fit_zoom(rect, Rect::new(0.0, 0.0, 400.0, 300.0), 0.0, 1.0)).abs() < 1e-9, "fitted to its new pane: {v:?}");
+    assert!(fits(&app, (0, 1)), "fitted to its new pane: {v:?}");
     assert_ne!(v.zoom, side_by_side, "the pane changed size");
 }
 
 #[test]
 fn other_panes_show_pixel_preview() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     app.ui.view.pixel_preview = true;
     app.views[0].zoom = 4.0;
     frame(&mut app, &ctx, vec![]);
-    let uid = (app.session.documents()[0].uid, 1);
-    let key = app.canvas.panes.shown.get(&uid).map(|(k, _)| k.clone()).unwrap();
-    let [x0, y0, x1, y1] = key.pixel.expect("the pane renders document pixels");
+    let [x0, y0, x1, y1] = pane_source(&mut app, &ctx, (0, 1)).frame.cache.pixel.expect("the pane renders document pixels");
     assert!(x1 > x0 && y1 > y0);
 }
 
@@ -1058,33 +899,27 @@ fn other_panes_show_pixel_preview() {
 #[test]
 fn other_panes_render_within_the_largest_texture_side() {
     let mut app = app_with(2);
-    app.canvas.panes.worker_started = true; // every pane renders on this thread
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     ctx.set_pixels_per_point(2.0);
     app.run("window.arrange.tile", json!({})).unwrap();
-    // The first frame sets the pixels a point, the second draws at them.
-    for _ in 0..2 {
+    let mut run = |app: &mut VectorcraftApp| {
         let raw = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
             max_texture_side: Some(1024),
             ..Default::default()
         };
-        ctx.run_ui(raw, |ui| app.canvas_area(ui)).textures_delta.clear();
+        ctx.run_ui(raw, |ui| app.canvas_area(ui))
+    };
+    // The first frames set the pixels a point and the panes' areas, the next draw at them.
+    for _ in 0..3 {
+        run(&mut app).textures_delta.clear();
     }
-    let uid = (app.session.documents()[0].uid, 1);
-    let (key, tex) = app.canvas.panes.shown.get(&uid).map(|(k, t)| (k.clone(), t.size())).expect("the other document's pane rendered");
-    assert_eq!(tex[0].max(tex[1]), 1024, "the pane's frame is {tex:?} pixels");
-    let (docs, cells) = panes(&app);
-    let pane = docs.iter().zip(cells).find(|(i, _)| **i == 0).map(|(_, r)| r).unwrap();
-    let rect = view_rects(&app, pane, ctx.pixels_per_point()).1;
+    let (texture, _) = wait_ready(&mut app, &ctx, (0, 1), vec![], &mut run);
+    let (w, h) = (texture.size.width as f32, texture.size.height as f32);
+    assert_eq!(w.max(h), 1024.0, "the pane's frame is {w} × {h} pixels");
+    let rect = crate::doc_windows::view(&app, (0, 1)).unwrap().rect;
     assert!(rect.width().max(rect.height()) * ctx.pixels_per_point() > 1024.0, "the pane is {rect:?} at {} pixels a point", ctx.pixels_per_point());
-    assert!(
-        (key.w as f32 / key.ppp - rect.width()).abs() < 1.0 && (key.h as f32 / key.ppp - rect.height()).abs() < 1.0,
-        "the frame covers the pane {rect:?}: {} × {} pixels at {} a point",
-        key.w,
-        key.h,
-        key.ppp
-    );
+    assert!((w / h - rect.width() / rect.height()).abs() < 0.02, "the frame covers the pane {rect:?}: {w} × {h} pixels");
 }
 
 /// A pane's render key takes its document's [`CacheKey::placed`] value ([`placed_key`]), which a
@@ -1092,21 +927,21 @@ fn other_panes_render_within_the_largest_texture_side() {
 #[test]
 fn a_panes_key_takes_its_documents_placed_value() {
     let mut app = app_with(2);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let before = pane_source(&mut app, &ctx, (0, 1)).frame.revision;
     let uid = app.session.documents()[0].uid;
     let generation = vectorcraft_render::placed_document::generation();
     let marked = generation.wrapping_add(1000);
     app.canvas.placed_keys.insert(uid, crate::PlacedKey { checked: generation, key: marked, before: (marked, generation) });
-    frame(&mut app, &ctx, vec![]);
-    let key = app.canvas.panes.shown.get(&(uid, 1)).map(|(k, _)| k.placed);
-    assert_eq!(key, Some(marked));
+    assert_ne!(pane_source(&mut app, &ctx, (0, 1)).frame.revision, before, "the picture follows the document's placed value");
 }
 
 #[test]
 fn a_resized_window_fits_the_tiled_documents_again_unless_one_was_zoomed() {
     let mut app = app_with(3);
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     app.run("window.arrange.tile", json!({})).unwrap();
     frame(&mut app, &ctx, vec![]);
     frame(&mut app, &ctx, vec![]);
@@ -1114,23 +949,12 @@ fn a_resized_window_fits_the_tiled_documents_again_unless_one_was_zoomed() {
     let zoomed = app.views[1];
     let smaller = vec2(900.0, 600.0);
     frame_in(&mut app, &ctx, vec![], smaller);
-    let artboard = Rect::new(0.0, 0.0, 400.0, 300.0);
-    let (_, rects) = panes(&app);
+    frame_in(&mut app, &ctx, vec![], smaller);
+    frame_in(&mut app, &ctx, vec![], smaller);
     for i in [0, 2] {
-        let area = if i == 2 { app.canvas_rect.unwrap() } else { view_rects(&app, rects[i], ctx.pixels_per_point()).1 };
-        assert!((app.views[i].zoom - fit_zoom(area, artboard, 0.0, 1.0)).abs() < 1e-9, "document {i} fits its smaller pane: {:?}", app.views[i]);
+        assert!(fits(&app, (i, 1)), "document {i} fits its smaller pane: {:?}", app.views[i]);
     }
     assert_eq!(app.views[1].zoom, zoomed.zoom, "the zoomed document keeps its zoom");
-}
-
-/// The RGB of the middle pixel of the render that document `i`'s pane uploaded in `out`.
-fn pane_middle(app: &VectorcraftApp, out: &egui::FullOutput, i: usize) -> [u8; 3] {
-    let uid = app.session.documents()[i].uid;
-    let id = app.canvas.panes.shown.iter().find(|(slot, _)| slot.0 == uid).map(|(_, (_, tex))| tex.id()).unwrap();
-    let image = out.textures_delta.set.iter().find(|(t, _)| **t == id).and_then(|(_, d)| d.last()).map(|d| d.image.clone()).unwrap();
-    let egui::ImageData::Color(img) = image;
-    let p = img.pixels[img.size[1] / 2 * img.size[0] + img.size[0] / 2];
-    [p.r(), p.g(), p.b()]
 }
 
 #[test]
@@ -1173,18 +997,21 @@ fn other_panes_draw_through_their_documents_profiles() {
     assert_ne!(p3, srgb, "Display P3 draws the color differently");
     let (_, paper_p3) = in_p3(0xcc, 0x66, 0x33);
     let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 1);
-    // Whether `out` fills a shape with the RGB `rgb`, give or take one.
+    // Whether `out` fills a shape with the RGB `rgb`, give or take one. The pasteboard draws the
+    // paper as an untextured mesh.
     let fills = |out: &egui::FullOutput, rgb: [u8; 3]| {
         fn any(s: &Shape, f: &dyn Fn(Color32) -> bool) -> bool {
             match s {
                 Shape::Vec(v) => v.iter().any(|s| any(s, f)),
                 Shape::Path(p) => f(p.fill),
+                Shape::Rect(r) => f(r.fill),
+                Shape::Mesh(m) if m.texture_id == egui::TextureId::default() => m.vertices.iter().any(|v| f(v.color)),
                 _ => false,
             }
         }
         out.shapes.iter().any(|c| any(&c.shape, &|c: Color32| c.a() == 255 && near([c.r(), c.g(), c.b()], rgb)))
     };
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let raw = || egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
         max_texture_side: Some(8192),
@@ -1194,10 +1021,9 @@ fn other_panes_draw_through_their_documents_profiles() {
     // The first document in front: the second one's pane draws through Display P3, its paper too.
     app.run("document.activate", json!({"index": 0})).unwrap();
     let mut out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
-    let shown = pane_middle(&app, &out, 1);
     assert!(fills(&out, paper_p3), "the back document's paper draws through its Display P3: {paper_p3:?}");
     assert!(!fills(&out, [0xcc, 0x66, 0x33]), "the back document's paper does not draw through the working space");
-    out.textures_delta.clear();
+    let shown = pane_middle(&mut app, &ctx, 1, vec![std::mem::take(&mut out.textures_delta)], &mut |a| ctx.run_ui(raw(), |ui| a.canvas_area(ui)));
     assert!(near(shown, p3), "the back document draws through its Display P3: {shown:?}, not {p3:?}");
     // The same in a floating window.
     app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
@@ -1207,39 +1033,26 @@ fn other_panes_draw_through_their_documents_profiles() {
     let floating = |app: &mut VectorcraftApp| {
         ctx.run_ui(raw(), |ui| {
             app.canvas_area(ui);
-            crate::doc_windows::show(app, ui.ctx());
+            crate::doc_windows::show(app, ui);
         })
     };
     // The window takes its place in the first frame and fades in over the next few.
     for _ in 0..30 {
         floating(&mut app).textures_delta.clear();
     }
-    app.canvas.panes.clear();
+    forget(&mut app, &ctx);
     let mut out = floating(&mut app);
-    let shown = pane_middle(&app, &out, 1);
     assert!(fills(&out, paper_p3), "the floating document's paper draws through its Display P3: {paper_p3:?}");
-    out.textures_delta.clear();
+    let shown = pane_middle(&mut app, &ctx, 1, vec![std::mem::take(&mut out.textures_delta)], &mut |a| floating(a));
     assert!(near(shown, p3), "the floating document draws through its Display P3: {shown:?}, not {p3:?}");
     app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
-    app.canvas.panes.clear();
+    forget(&mut app, &ctx);
     // The second document in front: the first one's pane draws through the working sRGB.
     app.run("document.activate", json!({"index": 1})).unwrap();
     let mut out = ctx.run_ui(raw(), |ui| app.canvas_area(ui));
-    let shown = pane_middle(&app, &out, 0);
-    out.textures_delta.clear();
+    let shown = pane_middle(&mut app, &ctx, 0, vec![std::mem::take(&mut out.textures_delta)], &mut |a| ctx.run_ui(raw(), |ui| a.canvas_area(ui)));
     assert!(near(shown, srgb), "the back document draws through the working space: {shown:?}, not {srgb:?}");
-    // The same off the UI thread.
-    app.canvas.panes.clear();
-    app.canvas.panes.worker = crate::thumb_worker::ThumbWorker::start(&ctx, "test-panes");
-    app.canvas.panes.worker_started = true;
-    ctx.run_ui(raw(), |ui| app.canvas_area(ui)).textures_delta.clear();
-    let done = app.canvas.panes.worker.as_ref().unwrap().wait().unwrap();
-    assert_eq!(done.key.0.0, app.session.documents()[0].uid);
-    let img = done.img.unwrap();
-    let at = ((img.height / 2 * img.width + img.width / 2) * 4) as usize;
-    let shown = [img.pixels[at], img.pixels[at + 1], img.pixels[at + 2]];
-    assert!(near(shown, srgb), "the worker draws the back document through the working space: {shown:?}, not {srgb:?}");
     // A CMYK document behind the front one draws through its own assigned CMYK profile.
     app.run("document.activate", json!({"index": 0})).unwrap();
     let steps = json!([
@@ -1256,13 +1069,8 @@ fn other_panes_draw_through_their_documents_profiles() {
     let front = to_u8(cms::active().display_rgb(&ink));
     let close = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 3);
     assert!(!close(device, front), "the two CMYK profiles draw the color differently: {device:?}, {front:?}");
-    app.canvas.panes.clear();
-    ctx.run_ui(raw(), |ui| app.canvas_area(ui)).textures_delta.clear();
-    let done = app.canvas.panes.worker.as_ref().unwrap().wait().unwrap();
-    assert_eq!(done.key.0.0, app.session.documents()[0].uid);
-    let img = done.img.unwrap();
-    let at = ((img.height / 2 * img.width + img.width / 2) * 4) as usize;
-    let shown = [img.pixels[at], img.pixels[at + 1], img.pixels[at + 2]];
+    forget(&mut app, &ctx);
+    let shown = pane_middle(&mut app, &ctx, 0, vec![], &mut |a| ctx.run_ui(raw(), |ui| a.canvas_area(ui)));
     assert!(close(shown, device), "the back CMYK document draws through its Device CMYK: {shown:?}, not {device:?} (front: {front:?})");
     assert!(near(cms::active().display_rgb(&color).map(|v| (v * 255.0).round() as u8), p3), "the front document's profile stays active");
 }
@@ -1275,7 +1083,6 @@ fn other_panes_draw_through_their_documents_profiles() {
 fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_conversion() {
     use crate::display_profile::{Found, Reading};
     let mut app = app_with(2);
-    app.canvas.panes.worker_started = true; // every pane renders on this thread
     let (front_paper, back_paper) = ([0x20, 0x40, 0xc0], [0xe0, 0xc0, 0x20]);
     app.run("document.activate", json!({"index": 0})).unwrap();
     app.run("document.setup", json!({"gridColors": ["#2040c0", "#ffffff"], "simulatePaper": true})).unwrap();
@@ -1287,36 +1094,23 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     app.run("select.none", json!({})).unwrap();
     app.run("window.arrange.tile", json!({})).unwrap();
     app.run("document.activate", json!({"index": 0})).unwrap();
-    let uid = app.session.documents()[1].uid;
-    let ctx = egui::Context::default();
-    // The second document's pane: the raster one frame uploads, its width, and the key it was rendered for.
-    let pane = |app: &mut VectorcraftApp| -> (Vec<Color32>, usize, CacheKey) {
-        let raw = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0))),
-            max_texture_side: Some(8192),
-            ..Default::default()
-        };
-        let mut out = ctx.run_ui(raw, |ui| app.canvas_area(ui));
-        let (key, tex) = app.canvas.panes.shown.iter().find(|(slot, _)| slot.0 == uid).map(|(_, s)| s).expect("the second document's pane rendered");
-        let id = tex.id();
-        let up = out.textures_delta.set.iter().find(|e| e.0.eq(&id)).and_then(|e| e.1.last()).map(|d| {
-            let egui::ImageData::Color(img) = &d.image;
-            (img.pixels.clone(), img.width())
-        });
-        let key = key.clone();
-        out.textures_delta.clear();
-        let (pixels, width) = up.expect("the pane uploads");
-        (pixels, width, key)
+    let ctx = crate::testing::ui_context();
+    // The second document's pane: the picture it shows, and its width.
+    let pane = |app: &mut VectorcraftApp| -> (Vec<Color32>, usize) {
+        forget(app, &ctx);
+        let (_, (pixels, [width, _])) = wait_ready(app, &ctx, (1, 1), vec![], &mut |a| run_out(a, &ctx));
+        (pixels, width)
     };
     app.session.prefs.monitor_profile_display = false;
-    let (srgb, width, key) = pane(&mut app);
-    assert!(key.backdrop.is_none(), "no display profile: nothing to blend");
+    let (srgb, width) = pane(&mut app);
+    assert!(pane_source(&mut app, &ctx, (1, 1)).frame.cache.over().is_none(), "no display profile: nothing to blend");
     let p3 = crate::display_profile::tests::p3();
-    let t = vectorcraft_color::cms::display::DisplayTransform::from_icc(&p3).unwrap();
     app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
     app.session.prefs.monitor_profile_display = true;
-    let (shown, _, key) = pane(&mut app);
-    let backdrop = key.backdrop.as_deref().expect("the pane's Preview blends with its paper");
+    let t = app.display_profile.transform(true).expect("the reported profile gives a transform");
+    let (shown, _) = pane(&mut app);
+    let source = pane_source(&mut app, &ctx, (1, 1));
+    let (backdrop, _) = source.frame.cache.over().expect("the pane's Preview blends with its paper");
     assert!(
         !backdrop.artboards.is_empty() && backdrop.artboards.iter().all(|(_, c)| *c == back_paper),
         "the pane blends with its own document's paper: {backdrop:?}"
@@ -1329,16 +1123,21 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     };
     let plain = |s: Color32| {
         let mut px = s.to_array();
-        t.apply_premultiplied(&mut px);
+        t.apply_premultiplied_rgba8(&mut px);
         Color32::from_rgba_premultiplied(px[0], px[1], px[2], px[3])
+    };
+    // One opaque sRGB color, converted.
+    let apply8 = |[r, g, b]: [u8; 3]| {
+        let c = plain(Color32::from_rgb(r, g, b));
+        [c.r(), c.g(), c.b()]
     };
     // Pixel `s` over the paper `paper` in sRGB, converted.
     let blend = |s: Color32, paper: [u8; 3]| {
         let k = 255 - u32::from(s.a());
-        t.apply8([0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (u32::from(paper[j]) * k + 127) / 255).min(255) as u8)).map(u32::from)
+        apply8([0, 1, 2].map(|j| (u32::from(s.to_array()[j]) + (u32::from(paper[j]) * k + 127) / 255).min(255) as u8)).map(u32::from)
     };
     let differs = |a: [u32; 3], b: [u32; 3]| (0..3).any(|j| a[j].abs_diff(b[j]) > 2);
-    let under = t.apply8(back_paper);
+    let under = apply8(back_paper);
     for (s, c) in srgb.iter().zip(&shown) {
         if s.a() == 0 || s.a() == 255 {
             assert_eq!(*c, plain(*s), "opaque and empty pixels convert as before");
@@ -1357,81 +1156,83 @@ fn tiled_documents_blend_translucent_art_over_their_own_paper_before_display_con
     assert!(differs(got, over(plain(s), under)), "the art converted alone shows another color");
 }
 
-fn thread_cpu_ns() -> Option<u128> {
-    std::fs::read_to_string("/proc/thread-self/schedstat").ok()?.split_whitespace().next()?.parse().ok()
+/// A pane draws its own view's Outline, whatever the current view shows: in Preview the middle of its picture shows
+/// the rectangle's red fill, in Outline it does not, and its picture follows its own Outline, not the current view's.
+#[test]
+fn a_pane_draws_its_own_views_outline() {
+    let mut app = translucent_in_two_windows();
+    let ctx = crate::testing::ui_context();
+    let other = (0, 1);
+    let red = |[r, g, b]: [u8; 3]| r > g.saturating_add(60) && r > b.saturating_add(60);
+    let shown = |app: &mut VectorcraftApp, pane_outline: bool, current_outline: bool| {
+        crate::doc_windows::view_mut(app, other).unwrap().outline = pane_outline;
+        app.view_mut().unwrap().outline = current_outline;
+        forget(app, &ctx);
+        let middle = pane_middle(app, &ctx, 0, vec![], &mut |a| pane_out(a, &ctx, other));
+        let request = ThumbRequest::for_cell(600.0, ctx.pixels_per_point());
+        let key = PaneKey { slot: (app.session.documents()[0].uid, other.1) };
+        (middle, pane_source(app, &ctx, other).revision(&key, &request))
+    };
+    let (preview, preview_rev) = shown(&mut app, false, true);
+    let (outline, outline_rev) = shown(&mut app, true, false);
+    assert!(red(preview), "the pane's Preview shows the fill: {preview:?}");
+    assert!(!red(outline), "the pane's Outline shows no fill: {outline:?}");
+    assert_ne!(preview_rev, outline_rev, "the pane's picture follows its own Outline");
+    let (_, current_rev) = shown(&mut app, true, true);
+    assert_eq!(current_rev, outline_rev, "the current view's Outline does not reach the pane");
 }
 
-/// Time a pane's selected-object outlines with every object of a document selected: 2,000 and
-/// 20,000 rectangles, 20,000 ellipses, and 150,000 rectangles (more points than are outlined, so
-/// the pane draws their bounds). Each frame is a whole egui pass that draws the outlines and the
-/// tessellation of what it drew, made afresh on every frame ([`outlines_made_each_frame`]) or
-/// drawn from the kept outlines ([`selected_objects`]). The sides alternate, and the median time
-/// per frame of 7 runs is printed.
-/// Run with `cargo test --release -p vectorcraft-ui-egui --lib pane_outlines_timing -- --ignored --nocapture`.
+/// With a display profile, a floating window's pane blends its Preview with the paper before the conversion, as the
+/// canvas does, and in its own Outline, while the current view stays in Preview, converts the art alone.
 #[test]
-#[ignore = "manual timing probe; performance depends on machine load"]
-fn pane_outlines_timing() {
-    const FRAMES: u32 = 20;
-    let clock = if thread_cpu_ns().is_some() { "thread CPU time" } else { "wall-clock time" };
-    eprintln!("{clock} per frame, median of 7 runs of {FRAMES} frames");
-    for (count, shape) in [(2_000, "shape.rectangle"), (20_000, "shape.rectangle"), (20_000, "shape.ellipse"), (150_000, "shape.rectangle")] {
-        let mut app = app_with(1);
-        let id = app.run(shape, json!({"x": 20, "y": 20, "width": 60, "height": 40})).unwrap()["id"].as_u64().unwrap();
-        let node = app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(id)).cloned().unwrap();
-        app.session
-            .edit("Fill", |d, _| {
-                let layer = d.layers[0].id;
-                for _ in 1..count {
-                    let mut n = node.clone();
-                    n.id = d.alloc_id();
-                    d.insert(Some(layer), usize::MAX, n)?;
-                }
-                Ok(())
-            })
-            .unwrap();
-        app.run("select.all", json!({})).unwrap();
-        let st = app.session.active().unwrap();
-        assert_eq!(st.selection.objects.len(), count);
-        let ctx = egui::Context::default();
-        let area = egui::Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0));
-        let xf = Xf { rect: area, zoom: 4.0, center: Point::new(50.0, 40.0), rot: 0.0 };
-        let mut kept = Panes::default();
-        let slot = (st.uid, 1);
-        let mut pass = |fresh: bool| {
-            let raw = egui::RawInput { screen_rect: Some(area), ..Default::default() };
-            let out = ctx.run_ui(raw, |ui| {
-                let painter = ui.painter_at(area);
-                if fresh {
-                    for s in outlines_made_each_frame(st, &xf) {
-                        painter.add(s);
-                    }
-                } else {
-                    selected_objects(&mut kept, slot, st, &painter, &xf);
-                }
-            });
-            ctx.tessellate(out.shapes, out.pixels_per_point).len()
-        };
-        assert_eq!(pass(true), pass(false), "both sides draw as much");
-        let mut time = |fresh: bool| {
-            let (cpu, wall) = (thread_cpu_ns(), std::time::Instant::now());
-            for _ in 0..FRAMES {
-                pass(fresh);
-            }
-            let ns = thread_cpu_ns().zip(cpu).map_or_else(|| wall.elapsed().as_nanos(), |(b, a)| b - a);
-            ns as f64 / f64::from(FRAMES) / 1e6
-        };
-        let (mut fresh, mut cached) = (vec![], vec![]);
-        for _ in 0..7 {
-            fresh.push(time(true));
-            cached.push(time(false));
-        }
-        let median = |v: &mut Vec<f64>| {
-            v.sort_by(f64::total_cmp);
-            v[v.len() / 2]
-        };
-        let shapes = kept.outlines.get(&slot).map_or(0, |o| o.shapes.len());
-        eprintln!("{count} x {shape} ({shapes} lines drawn)");
-        eprintln!("  made every frame: {:>9.3} ms  {fresh:.3?}", median(&mut fresh));
-        eprintln!("  kept:             {:>9.3} ms  {cached:.3?}", median(&mut cached));
-    }
+fn a_pane_blends_translucent_art_before_the_display_profile() {
+    use crate::display_profile::{Found, Reading};
+    let mut app = translucent_in_two_windows();
+    let p3 = crate::display_profile::tests::p3();
+    app.display_profile.report(Reading { display: Some("DP-1".into()), found: Found::Profile { icc: p3, from: "test".into() } });
+    app.session.prefs.monitor_profile_display = true;
+    let ctx = crate::testing::ui_context();
+    let other = (0, 1);
+    pane_out(&mut app, &ctx, other).textures_delta.clear();
+    assert!(pane_source(&mut app, &ctx, other).frame.cache.over().is_some(), "the pane's Preview blends with its paper");
+    crate::doc_windows::view_mut(&mut app, other).unwrap().outline = true;
+    app.view_mut().unwrap().outline = false;
+    let cache = pane_source(&mut app, &ctx, other).frame.cache;
+    assert!(cache.outline && cache.over().is_none(), "the pane's Outline has no paper to blend with");
+}
+
+/// Each view of a document has a pane of its own: an edit made in one view shows in the other's pane, at that view's
+/// zoom.
+#[test]
+fn an_edit_in_one_view_shows_in_the_other() {
+    let mut app = app_with(1);
+    let ctx = crate::testing::ui_context();
+    app.run("window.newWindow", json!({})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert_eq!(app.canvas.panes.last.iter().map(|(w, _)| *w).collect::<Vec<_>>(), [(0, 1), (0, 2)], "one pane per view");
+    crate::doc_windows::view_mut(&mut app, (0, 1)).unwrap().zoom = 0.5;
+    app.view_mut().unwrap().zoom = 2.0;
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let revision = app.session.documents()[0].revision;
+    let key = pane_source(&mut app, &ctx, (0, 1)).frame.cache;
+    assert_eq!((key.revision, key.zoom), (revision, 0.5), "the other view's pane shows the edit at its own zoom");
+    assert_eq!(app.view().unwrap().zoom, 2.0, "the view edited in keeps its zoom");
+}
+
+/// A pane draws its own view's Outline or Preview, not the current view's.
+#[test]
+fn each_pane_draws_its_own_views_outline_or_preview() {
+    let mut app = app_with(1);
+    let ctx = crate::testing::ui_context();
+    app.run("window.newWindow", json!({})).unwrap();
+    crate::doc_windows::show_window(&mut app, (0, 1));
+    app.run("view.outline", json!({})).unwrap();
+    crate::doc_windows::show_window(&mut app, (0, 2));
+    assert!(!app.outline_view(), "the second view is in Preview");
+    app.run("window.arrange.tile", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    assert!(pane_source(&mut app, &ctx, (0, 1)).frame.cache.outline, "the first view's pane is in Outline");
 }

@@ -51,6 +51,8 @@ pub(crate) struct LiveCache {
     expanded: FrameCache<usize, (Arc<Node>, Expanded, Found)>,
     meshes: FrameCache<(usize, usize), MeshEntry>,
     walks: FrameCache<usize, Walk>,
+    /// A distorted image's art by node and scale step ([`Renderer::distorted_art`]).
+    distorted: FrameCache<(usize, usize), (Arc<Node>, Arc<Node>)>,
     /// How many live objects [`Renderer::live_expanded`] evaluated and how many meshes
     /// [`Renderer::mesh_quads`] tessellated.
     #[cfg(test)]
@@ -66,6 +68,7 @@ impl Default for LiveCache {
             expanded: FrameCache::new(lru::LIVE_BUDGET, 256),
             meshes: FrameCache::new(lru::MESH_BUDGET, 256),
             walks: FrameCache::new(lru::WALK_BUDGET, 256),
+            distorted: FrameCache::new(lru::LIVE_BUDGET, 256),
             #[cfg(test)]
             evaluated: 0,
             #[cfg(test)]
@@ -80,6 +83,7 @@ impl LiveCache {
         self.expanded.sweep(stamp);
         self.meshes.sweep(stamp);
         self.walks.sweep(stamp);
+        self.distorted.sweep(stamp);
     }
 
     /// A cache whose evaluations take at most `budget` bytes.
@@ -172,7 +176,8 @@ struct Shown {
 /// tilings ([`crate::pattern::hash_tiling`]) of the patterns in the fills and strokes of its
 /// objects and of type's characters, the address of each symbol instance's art, and the address of
 /// the read of each placed file that [`vectorcraft_doc::PlacedDocument::art`] shows (none before
-/// the file is read), and the address of the document's pixels for each image whose
+/// the file is read) with whether that art is the crossed box
+/// ([`vectorcraft_doc::placed_document::Crossed`]), and the address of the document's pixels for each image whose
 /// own fills or strokes follow them ([`crate::effects::follows_image_pixels`]). It walks `n` and
 /// then, one at a time from a list, the opacity-mask, pattern and symbol art it finds, each pattern
 /// and each symbol's art once ([`first_seen`]). `shown` records the type, placed files, reads,
@@ -210,6 +215,8 @@ fn hash_resources<'a>(symbols: &SymbolBoxes<'a>, n: &'a Node, shown: &mut Shown,
                 NodeKind::PlacedDocument(p) => {
                     let read = vectorcraft_doc::placed_document::read_cached(p);
                     read.as_ref().map(|r| Arc::as_ptr(r) as usize).hash(h);
+                    // The art is the crossed box instead in some Outline frames.
+                    vectorcraft_doc::placed_document::crossed().hash(h);
                     shown.reads.extend(read.as_ref().map(Arc::downgrade));
                     shown.text = true;
                     shown.placed = true;
@@ -522,6 +529,28 @@ impl Renderer {
         v
     }
 
+    /// Distorted image `a`'s art for drawing through `view`
+    /// ([`vectorcraft_doc::image_quad::distorted_art_at`] at the view's largest stretch, rounded to
+    /// a quarter of an octave), kept with `cache` while the node stays the same. `None` when `a` is
+    /// not a distorted image.
+    pub(crate) fn distorted_art(&mut self, a: &Arc<Node>, view: Affine, cache: bool) -> Option<Arc<Node>> {
+        let scale = vectorcraft_doc::image_quad::max_stretch(view);
+        let step = if scale.is_finite() && scale > 0.0 { (scale.log2() * 4.0).round().clamp(-256.0, 256.0) } else { 0.0 };
+        let key = (Arc::as_ptr(a) as usize, (step + 256.0) as usize);
+        if cache
+            && let Some(e) = self.live.distorted.get(&key, self.stamp)
+            && Arc::ptr_eq(&e.0, a)
+        {
+            return Some(e.1.clone());
+        }
+        let density = vectorcraft_doc::image_quad::Density::at_scale((step / 4.0).exp2());
+        let art = Arc::new(vectorcraft_doc::image_quad::distorted_art_at(a, density)?);
+        if cache {
+            self.live.distorted.insert(key, (a.clone(), art.clone()), lru::node_bytes(&art), self.stamp);
+        }
+        Some(art)
+    }
+
     /// The quads of mesh `a` (`m`) at subdivision `level`, kept while the node and the color
     /// settings that colored them ([`GradientMesh::color_at`]) stay the same.
     fn mesh_quads(&mut self, doc: &Document, a: &Arc<Node>, m: &GradientMesh, level: usize, cache: bool) -> Arc<Vec<MeshQuad>> {
@@ -557,7 +586,7 @@ impl Renderer {
         let enclosing = std::mem::replace(&mut self.knockout, knockout);
         if !f.opts.outline && (opacity < 1.0 || a.blend != vectorcraft_color::BlendMode::Normal || a.isolate || knockout) {
             let blends = self.blends_through(a);
-            let bounds = if blends { self.bounds_of(f.symbols, a) } else { None };
+            let bounds = if blends { self.frame_bounds_of(f, a) } else { None };
             let comp = crate::group::Composite { blend: a.blend, opacity, isolated: a.isolate, blends, bounds, ..Default::default() };
             self.group(ctx, f, comp, &mut |r, c, fr| r.draw_live_body(c, fr, a, true));
         } else {
@@ -572,6 +601,15 @@ impl Renderer {
         match &a.kind {
             NodeKind::PlacedDocument(p) => self.draw_placed(ctx, f, p),
             NodeKind::Mesh(m) => self.draw_mesh(ctx, f, a, m, cache),
+            // Outline mode draws a distorted image's frame through its corners, not the pieces it
+            // is drawn with.
+            NodeKind::Image(_) if f.opts.outline => self.draw_distorted_frame(ctx, f, a, cache),
+            // A distorted image's mesh is cut for the view's scale.
+            NodeKind::Image(_) => {
+                if let Some(art) = self.distorted_art(a, f.view, cache) {
+                    self.draw_arc(ctx, f, &art);
+                }
+            }
             NodeKind::Blend { .. }
             | NodeKind::Envelope { .. }
             | NodeKind::Repeat(_)
@@ -599,6 +637,10 @@ impl Renderer {
 
     fn draw_mesh(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>, m: &GradientMesh, cache: bool) {
         if !m.is_valid() {
+            return;
+        }
+        // A cropped mesh may lose a covered neighbor that supplied a color at its fringe.
+        if f.reject_patch() {
             return;
         }
         if f.opts.outline {

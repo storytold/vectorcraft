@@ -187,7 +187,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Rearrange All Artboards…",
             ["Object", "Artboards"],
             None,
-            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with lockedAndHidden), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard), byColumn?: bool (an older way to ask for layout gridByColumn)} lay the artboards out in their order, the grid's top-left at the first artboard's; a locked artboard stays where it is → {artboards, rows, columns}",
+            "{layout?: gridByRow|gridByColumn|row|column (gridByRow; byColumn?: true is gridByColumn), order?: leftToRight|rightToLeft (leftToRight: right-to-left mirrors the order along the rows), columns?: n (2; the rows for gridByColumn; row and column ignore it), spacing?: pt (20), moveArtwork?: true (each object of a layer or sublayer moves with the artboard its center is on; locked and hidden art, and art on a locked artboard, only with lockedAndHidden), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the art; default: prefs transformPatternTiles), lockedAndHidden?: bool (default: prefs moveLockedWithArtboard), byColumn?: bool (an older way to ask for layout gridByColumn), indices?: [n] (lay out only these artboards, in document order; the others and their art and guides stay where they are), at?: [x, y] (the grid's top-left)} lay the artboards out in their order, the grid's top-left at `at`, else at the first artboard's laid out; a locked artboard stays where it is and keeps its place in the grid → {artboards, rows, columns; with indices also indices and moved, the count of artboards that moved}",
             has_doc,
             rearrange_artboards
         ),
@@ -675,6 +675,9 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
                 // Five draws whatever the scales are, so a seed gives the moves and the rotation
                 // the same values whether a side is scaled or not.
                 let [r_sh, r_sv, r_mh, r_mv, r_rot] = [rng.next(), rng.next(), rng.next(), rng.next(), rng.next()];
+                // The same horizontal and vertical scale take one share, so the object scales
+                // evenly (#9320).
+                let r_sv = if sh == sv { r_sh } else { r_sv };
                 k_sh = k_sh.map(|v| 1.0 + (v - 1.0) * r_sh);
                 k_sv = k_sv.map(|v| 1.0 + (v - 1.0) * r_sv);
                 k_mh = mh * (r_mh * 2.0 - 1.0);
@@ -998,6 +1001,9 @@ fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
+    if node.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
     if !st.doc.images.get(&im.key).is_some_and(|b| !b.bytes.is_empty()) {
         return Err(bad(C, "the image has no embedded pixels"));
     }
@@ -1285,6 +1291,9 @@ fn crop_image(s: &mut Session, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).cloned().ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
+    if node.is_distorted_image() {
+        return Err(super::xform::distorted_image_error(C, id));
+    }
     if switch_or(p, "trim", false, C)? {
         if p.get("ppi").is_some_and(|v| !v.is_null()) {
             return Err(bad(C, "trim keeps the image's pixels as they are: leave out ppi"));
@@ -1495,11 +1504,16 @@ fn mask_image(s: &mut Session, _: &Value) -> Result<Value> {
         .selection
         .objects
         .iter()
-        .find_map(|id| match st.doc.node(*id).map(|n| &n.kind) {
-            Some(NodeKind::Image(im)) => {
-                Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+        .find_map(|id| {
+            let n = st.doc.node(*id)?;
+            match &n.kind {
+                // A distorted image's outline joins its corners.
+                NodeKind::Image(_) if n.is_distorted_image() => Some((*id, PathData::from_bezpath(&n.image_frame()?))),
+                NodeKind::Image(im) => {
+                    Some((*id, vectorcraft_geom::shapes::rectangle(Rect::new(0.0, 0.0, im.width as f64, im.height as f64)).transformed(im.xf)))
+                }
+                _ => None,
             }
-            _ => None,
         })
         .ok_or_else(|| bad("object.maskImage", "select an image"))?;
     let (gid, pid) = s.edit("Mask", |d, sel| {
@@ -1707,32 +1721,48 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         Some(_) => return Err(bad(CMD, "order must be leftToRight or rightToLeft")),
     };
     let count = s.doc()?.doc.artboards.len();
-    let n_ab = count.max(1);
-    // Columns of a grid by row, rows of a grid by column.
-    let lines = whole_or(p, "columns", 2, CMD)?.clamp(1, n_ab as u64) as usize;
-    let (rows, cols) = match layout {
-        L::GridByRow => (n_ab.div_ceil(lines), lines),
-        L::GridByColumn => (lines, n_ab.div_ceil(lines)),
-        L::Row => (1, n_ab),
-        L::Column => (n_ab, 1),
+    // `indices` lays out only those artboards, in document order; left out, every artboard.
+    let picked: Option<Vec<usize>> = match p.get("indices") {
+        Some(v) => Some(super::panelcmds::listed_artboards(&s.doc()?.doc, v, "indices", CMD)?),
+        None => None,
     };
+    let at = match p.get("at") {
+        Some(v) => Some(super::finite_numbers::<2>(v).map(|[x, y]| Point::new(x, y)).ok_or_else(|| bad(CMD, "`at` must be [x, y]"))?),
+        None => None,
+    };
+    // Columns of a grid by row, rows of a grid by column.
+    let lines = whole_or(p, "columns", 2, CMD)?;
     check_numbers(p, &["spacing"], CMD)?;
     let spacing = f64_or(p, "spacing", 20.0).clamp(-1.0e5, 1.0e5);
     let move_art = switch_or(p, "moveArtwork", true, CMD)?;
     check_switches(p, &["patterns"], CMD)?;
     let locked_and_hidden = super::panelcmds::locked_and_hidden(s, p, move_art, CMD)?;
     let d = &s.doc()?.doc;
-    let rects: Vec<Rect> = d.artboards.iter().map(|a| a.rect).collect();
+    let laid: Vec<usize> = picked.clone().unwrap_or_else(|| (0..count).collect());
+    let rects: Vec<Rect> = laid.iter().filter_map(|i| d.artboards.get(*i)).map(|a| a.rect).collect();
     let sizes: Vec<(f64, f64)> = rects.iter().map(|r| (r.width(), r.height())).collect();
-    let first = rects.first().map_or(Point::ZERO, |r| r.origin());
-    let origins = super::newdoc::grid_origins_rc(&sizes, first, (rows, cols), spacing, layout == L::GridByColumn, rtl);
-    // A locked artboard stays where it is, and keeps its place in the grid.
-    let deltas: Vec<Vec2> =
-        rects.iter().zip(origins).zip(&d.artboards).map(|((r, o), a)| if a.locked { Vec2::ZERO } else { o - r.origin() }).collect();
+    // The grid's top-left: `at`, else the first artboard laid out's.
+    let origin = at.unwrap_or_else(|| rects.first().map_or(Point::ZERO, |r| r.origin()));
+    let (origins, rows, cols) = super::newdoc::rearrange_grid(&sizes, origin, layout, lines, spacing, rtl);
+    // A locked artboard stays where it is, and keeps its place in the grid; an artboard not laid
+    // out stays where it is.
+    let mut deltas = vec![Vec2::ZERO; count];
+    for ((i, r), o) in laid.iter().zip(&rects).zip(origins) {
+        if let Some(dl) = deltas.get_mut(*i)
+            && !d.artboards.get(*i).is_some_and(|a| a.locked)
+        {
+            *dl = o - r.origin();
+        }
+    }
+    let moved = deltas.iter().filter(|dl| dl.x.abs() > 1e-9 || dl.y.abs() > 1e-9).count();
+    let result = match &picked {
+        Some(indices) => json!({ "artboards": count, "indices": indices, "moved": moved, "rows": rows, "columns": cols }),
+        None => json!({ "artboards": count, "rows": rows, "columns": cols }),
+    };
     // When no artboard moves more than 1e-9 pt on either axis, or there is none, the document and
     // its undo history stay as they are.
-    if deltas.iter().all(|dl| dl.x.abs() <= 1e-9 && dl.y.abs() <= 1e-9) {
-        return Ok(json!({ "artboards": count, "rows": rows, "columns": cols }));
+    if moved == 0 {
+        return Ok(result);
     }
     // With moveArtwork, each top-level object (a child of a layer or sublayer) moves with the
     // artboard its center is on, with symbol instances measured by their art as
@@ -1780,5 +1810,5 @@ fn rearrange_artboards(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(json!({ "artboards": count, "rows": rows, "columns": cols }))
+    Ok(result)
 }

@@ -309,6 +309,7 @@
 	Anti-aliased Artwork	Art amb antialiàsing
 	Anti-aliasing:	Antialiàsing:
 	Anti-aliasing Method	Mètode d'antialiàsing
+@id	language.name	Català
 antiAlias	Sharp	Nítid
 	Crisp	Definit
 	Strong	Intens
@@ -734,6 +735,10 @@ arrowhead	Target	Diana
 	Cusp	Punta
 	Straight segment	Segment recte
 	Circle too large	El cercle és massa gran
+	Show Radii	Mostra els radis
+	Show Diameter	Mostra el diàmetre
+	Anchors at Standard Positions	Punts d’ancoratge en posicions estàndard
+	Third Point by Dragging	Tercer punt arrossegant
 	Circle (open)	Cercle (obert)
 	Classic	Clàssic
 	Classic Defaults	Valors predeterminats clàssics
@@ -887,9 +892,14 @@ arrowhead	Target	Diana
 	{name1} {value1}, {name2} {value2}	{name1} {value1}, {name2} {value2}
 	Wheel View	Visualització de roda
 	Box View	Visualització de quadre
+	Show Out-of-Gamut Colors	Mostra els colors fora de gama
 	Box Channel	Canal del quadre
 	Color box	Quadre de color
 	Color Wheel Options	Opcions de la roda de colors
+	Show Document Colors	Mostra els colors del document
+	Document Colors	Colors del document
+	Selection Colors	Colors de la selecció
+@plural	Used {n} time|Used {n} times	Utilitzat {n} vegada|Utilitzat {n} vegades
 	Show Harmony	Mostra l’harmonia
 	Harmony Rule	Regla d’harmonia
 	Harmony color	Color de l’harmonia
@@ -1221,6 +1231,10 @@ arrowhead	Target	Diana
 	Delete Guide	Suprimeix la guia
 	Delete Guides	Suprimeix les guies
 	Delete Image Trace Preset	Suprimeix el preajust de traçat d’imatge
+	Tracing Presets…	Preajustos de traçat…
+	Import Image Trace Presets	Importa preajustos de traçat d’imatge
+	Export Image Trace Presets	Exporta els preajustos de traçat d’imatge
+	Replace the saved presets that have these names?	Voleu substituir els preajustos desats que tenen aquests noms?
 	Delete Layer	Suprimeix la capa
 	Delete Library	Suprimeix la biblioteca
 	Delete Library Group	Suprimeix el grup de biblioteca
@@ -1317,6 +1331,7 @@ arrowhead	Target	Diana
 	Direction:	Direcció:
 	Directives	Directrius
 	Disable Auto Add/Delete	Desactiva l’addició i la supressió automàtiques
+	Delete Removes Anchor Points and Keeps Paths Joined	Suprimir elimina els punts d’ancoratge i manté els camins units
 	Interpolate Control Points When Moving Anchors	Interpola les manetes de direcció en moure punts d’ancoratge
 	Disable Opacity Mask	Desactiva la màscara d’opacitat
 	Discard	Descarta
@@ -2129,6 +2144,17 @@ digits	Malayalam	Malaiàlam
 	Graphic Styles (4)	Estils gràfics (4)
 	Graphic Styles Options	Opcions d’estils gràfics
 	Graphics	Gràfics
+	Show Contrast	Mostra el contrast
+	Contrast For	Contrast per a
+	Normal Text	Text normal
+	Large Text	Text gran
+	Contrast Background	Fons del contrast
+	Behind Selection	Darrere la selecció
+	Current Color	Color actual
+	Pass	Supera
+	Fail	No supera
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Contrast mínim de les WCAG 2.2: text normal AA 4.5:1 (1.4.3) i AAA 7:1 (1.4.6), text gran AA 3:1 i AAA 4.5:1, gràfics i controls AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	El fons es llegeix al centre de la selecció.
 	Graphics Processor	Processador gràfic
 	Graphics: {adapter}	Gràfics: {adapter}
 	Gravity	Gravetat
@@ -2499,6 +2525,11 @@ digits	Malayalam	Malaiàlam
 	Knife	Ganivet
 	Knockout Group	Grup knockout
 	Lab	Lab
+	OKLCH Sliders	Controls lliscants OKLCH
+	HSL Sliders	Controls lliscants HSL
+	Chroma	Croma
+	The largest chroma sRGB holds at this lightness and hue	El croma més gran que sRGB admet amb aquesta lluminositat i aquest to
+	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
 	Lab Spot Colors	Colors directes Lab
 	Lab Spot Colors:	Colors directes Lab:
 	Lab Values	Valors Lab
@@ -2671,6 +2702,8 @@ digits	Malayalam	Malaiàlam
 	Live curve fitting	Ajustament de corbes en directe
 	Live Paint	Pintura interactiva
 	Live Paint Bucket	Galleda de pintura interactiva
+	Fill Area	Emplena l'àrea
+	Fill Area Tool	Eina Emplena l'àrea
 	Live Paint Bucket (Stroke)	Galleda de pintura interactiva (traç)
 	Live Paint Info	Informació de pintura interactiva
 	Live Paint Selection Tool	Eina de selecció de pintura interactiva
@@ -3178,6 +3211,7 @@ digits	Malayalam	Malaiàlam
 	One Point Perspective Preset 5	Preajust 5 de perspectiva d’un punt
 	Only Web Colors	Només colors web
 	Opacity	Opacitat
+	Show Opacity	Mostra l’opacitat
 	Opacity & Mask Define Knockout Shape	L’opacitat i la màscara defineixen la forma d’exclusió
 	Opacity Mask	Màscara d’opacitat
 	Opacity Mask Info	Informació de la màscara d’opacitat
@@ -3414,6 +3448,12 @@ digits	Malayalam	Malaiàlam
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppp
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppp
+	resolution unavailable	resolució no disponible
+	estimated memory {memory}	memòria estimada {memory}
+	memory unavailable	memòria no disponible
+	Unknown format	Format desconegut
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -3452,6 +3492,13 @@ digits	Malayalam	Malaiàlam
 	Pen Tool	Eina de ploma
 	Quick Pen Tool	Eina de ploma ràpida
 	Quick Pen	Ploma ràpida
+	Quick Pen Toolbar	Barra d’eines de la ploma ràpida
+	Continuous Arc	Arc continu
+	Sharp Corner Arc	Arc de cantonada aguda
+	Flip Arc	Inverteix l’arc
+	Hide Toolbar	Amaga la barra d’eines
+	Pin Toolbar Position	Fixa la posició de la barra d’eines
+	Reset Toolbar Position	Restableix la posició de la barra d’eines
 	Pencil	Llapis
 	Pencil Tool	Eina de llapis
 	Pentagram	Pentagrama
@@ -3764,6 +3811,9 @@ digits	Malayalam	Malaiàlam
 	Rearrange All	Reorganitza-ho tot
 	Rearrange All Artboards	Reorganitza tots els taulers
 	Rearrange All Artboards…	Reorganitza tots els taulers…
+	Rearrange…	Reorganitza…
+	Selected Artboards: {n}	Taulers seleccionats: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	Fes clic al llenç per col·locar els taulers (Esc cancel·la)
 	Rearrange Artboards	Reorganitza els taulers
 	Recall Selection	Recupera la selecció
 	RECENT	RECENTS
@@ -3949,6 +3999,8 @@ digits	Malayalam	Malaiàlam
 	Reset all Revolve settings to their defaults.	Restableix tots els paràmetres de revolució als valors predeterminats.
 	Reset Automation	Restableix Automation
 	Reset Bar Position	Restableix la posició de la barra
+	Bar Actions	Accions de la barra
+	Reset Bar Actions	Restableix les accions de la barra
 	Reset Bounding Box	Restableix el quadre delimitador
 	Rotate Bounding Box	Gira el quadre delimitador
 	Rotate Bounding Box…	Gira el quadre delimitador…
@@ -3977,6 +4029,11 @@ digits	Malayalam	Malaiàlam
 	Edit Arrowheads	Edita les puntes de fletxa
 	Edit Arrowheads…	Edita les puntes de fletxa…
 	Reload Arrowheads	Torna a carregar les puntes de fletxa
+	Bevels	Bisells
+	Edit Bevels	Edita els bisells
+	Edit Bevels…	Edita els bisells…
+	{name} (document)	{name} (document)
+	Reload Bevels	Torna a carregar els bisells
 	Reset Rotate View	Restableix la rotació de la vista
 	Reset Ruler Origin	Restableix l’origen de les regles
 	Reset the rows to the artwork's colors	Restableix les files als colors de l’obra
@@ -4033,7 +4090,7 @@ digits	Malayalam	Malaiàlam
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Selecció › Igual › Color de farciment, Color del traç i Farciment i traç només coincideixen amb el mateix matís d’una mostra global o de tinta plana, no amb qualsevol matís seu.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Mostra la pantalla d’inici quan no hi ha cap document obert; desactivada, la finestra queda buida fins que feu clic a Inici.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mesura els objectes amb els traços i els efectes que en canvien la forma per a la mida, la posició i l’alineació; les ombres, les lluïsors i els desenfocaments no es mesuren.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	Amb un zoom del 100 %, una polzada del document ocupa 96 punts de pantalla en lloc de 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	Amb un zoom del 100 %, una polzada del document omple una polzada de la pantalla, o 96 punts de pantalla quan el sistema no n’indica una mida utilitzable.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Fer doble clic en un grup, traçat o imatge amb l’eina Selecció l’obre en mode d’aïllament.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Els farciments i traços de motiu es transformen amb la il·lustració, tret que una transformació o el menú del panell Transforma triï una altra cosa.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Els radis de cantonada dinàmics s’escalen amb la il·lustració, tret que l’escalat triï una altra cosa.
@@ -4044,6 +4101,7 @@ digits	Malayalam	Malaiàlam
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	Un gest de rotació amb dos dits al trackpad gira la vista del llenç.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	Mantenir premuda una tecla executa l’eina o l’ordre de la seva columna Mantén a Dreceres de teclat; una pulsació breu executa la seva drecera habitual.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	Quants segons cal mantenir premuda una tecla perquè s’executi la seva drecera de pulsació llarga en lloc de la drecera habitual.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Suprimir elimina els punts d’ancoratge seleccionats i reajusta la corba al voltant de cadascun, en lloc d’obrir-hi el camí.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	Quan moveu punts d’ancoratge, cada corba amb un extrem desplaçat conserva la forma respecte dels seus extrems.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	Mantenir premuda la drecera d’una eina la tria fins que la deixeu anar, i després es torna a triar l’eina anterior.
 	Shows the bounding box while you move the selection or draw a shape.	Mostra el quadre delimitador mentre moveu la selecció o dibuixeu una forma.
@@ -4129,9 +4187,14 @@ digits	Malayalam	Malaiàlam
 	Edit type set in fonts that aren't available?	Voleu editar el text en tipus de lletra que no estan disponibles?
 	Shows each slice's number in a box at its top left on the canvas; off, the slice outlines still show.	Mostra al llenç el número de cada tall en un requadre a la seva cantonada superior esquerra; si està desactivat, els contorns dels talls continuen visibles.
 	The color of user and object slice outlines and their number boxes; auto slices use a dimmer shade of it.	El color dels contorns dels talls d’usuari i d’objecte i dels requadres amb el seu número; els talls automàtics fan servir un to més apagat d’aquest color.
+	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	El text nou pren aquest idioma mentre l’idioma de Configuració del document sigui Anglès: EUA i [Estil de caràcter normal] no en defineixi cap; el text que ja és en un document conserva el seu idioma.
+	In paragraphs with Hyphenate on, a listed word is hyphenated only at the hyphens typed in it, or never when it has none, whatever its language or case.	En els paràgrafs amb Particiona activat, una paraula de la llista només rep guionet de partició als guionets que s’hi han escrit, o mai si no en té, sigui quin sigui el seu idioma o l’ús de majúscules.
+	On the desktop, this folder's .wasm plug-ins load at startup and when OK sets a new folder, except in Safe Mode; one that asks for permissions loads only after you grant them. The web version loads none.	A la versió d’escriptori, els complements .wasm d’aquesta carpeta es carreguen en iniciar i quan D’acord estableix una carpeta nova, excepte en Mode segur; un que demana permisos només es carrega després que els concediu. La versió web no en carrega cap.
+	Large gives each filter or command plug-in run at least 250 million instructions, with the same time limit; Normal keeps the plug-in's own budget. Live effects, exporters and importers keep theirs.	Gran dona a cada execució d’un complement de filtre o d’ordre almenys 250 milions d’instruccions, amb el mateix límit de temps; Normal manté el pressupost propi del complement. Els efectes en viu, els exportadors i els importadors mantenen el seu.
 	New type takes this language while Document Setup's language is English: USA; type already in a document keeps its own language.	El text nou pren aquest idioma mentre l’idioma de Configuració del document sigui Anglès: EUA; el text que ja és en un document conserva el seu idioma.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its language or case.	En els paràgrafs amb Particiona activat, una paraula de la llista es parteix només als guionets que s’hi han escrit, o enlloc si no en té, sigui quin sigui el seu idioma o l’ús de majúscules.
 	On the desktop, the .wasm plug-ins in this folder load at startup and when you click OK with a new folder here, except in Safe Mode; the web version does not load them.	A la versió d’escriptori, els complements .wasm d’aquesta carpeta es carreguen en iniciar i quan feu clic a D’acord amb una carpeta nova aquí, excepte en Mode segur; la versió web no els carrega.
+	Normal keeps each plug-in's own limits; with Large, a plug-in filter or command may run at least 250 million instructions besides those for its input. The time limit stays the same.	Normal manté els límits propis de cada complement; amb Gran, un filtre o una ordre d’un complement pot executar com a mínim 250 milions d’instruccions a més de les de la seva entrada. El límit de temps no canvia.
 	How many instructions each run of a plug-in object filter may use; Large allows more than Normal with the same 60-second limit. Heavy filters keep their own budget.	Quantes instruccions pot fer servir cada execució d’un filtre d’objectes d’un complement; Gran en permet més que Normal amb el mateix límit de 60 segons. Els filtres pesants conserven el seu pressupost.
 	The first scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La primera opció de disc d’intercanvi: Startup, None o el camí d’una carpeta; VectorCraft la desa, però encara no fa servir discs d’intercanvi.
 	The second scratch disk choice: Startup, None or a folder path; VectorCraft stores it but does not use scratch disks yet.	La segona opció de disc d’intercanvi: Startup, None o el camí d’una carpeta; VectorCraft la desa, però encara no fa servir discs d’intercanvi.
@@ -4143,13 +4206,15 @@ digits	Malayalam	Malaiàlam
 	Shows each tool group's name above its tools in the toolbar; off, the groups follow one another with nothing between them.	Mostra el nom de cada grup d’eines damunt de les seves eines a la barra d’eines; desactivat, els grups se succeeixen sense res entre ells.
 	From now on, documents you open or create open as tabs; off, each opens in a floating window. Documents already open stay where they are.	A partir d’ara, els documents que obriu o creeu s’obren com a pestanyes; desactivat, cadascun s’obre en una finestra flotant. Els documents ja oberts es queden on són.
 	Makes the document tabs taller and their names larger.	Fa les pestanyes dels documents més altes i els seus noms més grans.
-	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own.	A partir del pròxim inici, el sistema dibuixa la barra de títol de la finestra on VectorCraft, si no, dibuixaria la seva.
-	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on.	A partir del pròxim inici, VectorCraft dibuixa la barra de títol de la finestra fins i tot on l’escriptori la dibuixaria, tret que Barra de títol del sistema estigui activada.
+	From the next start, the system draws the window's title bar where VectorCraft would otherwise draw its own; on Linux and the BSDs, the VECTORCRAFT_TITLEBAR variable takes precedence.	A partir del pròxim inici, el sistema dibuixa la barra de títol de la finestra on VectorCraft, si no, dibuixaria la seva; a Linux i als BSD, la variable VECTORCRAFT_TITLEBAR té prioritat.
+	From the next start, VectorCraft draws the window's title bar even where the desktop would draw it, unless System Title Bar is on or the VECTORCRAFT_TITLEBAR variable chooses it.	A partir del pròxim inici, VectorCraft dibuixa la barra de títol de la finestra fins i tot on l’escriptori la dibuixaria, tret que Barra de títol del sistema estigui activada o la variable VECTORCRAFT_TITLEBAR la triï.
 	Makes the interface larger or smaller; art on the canvas keeps its size at the same zoom.	Fa la interfície més gran o més petita; l’art del llenç conserva la mida amb el mateix zoom.
 	The tool pointers VectorCraft draws grow and shrink with UI Scaling; off, they keep their size.	Els punters d’eina que dibuixa VectorCraft creixen i s’encongeixen amb l’Escalat de la interfície; desactivat, conserven la mida.
 	The language of the interface; Auto uses the system's language. The dialog switches language as soon as you choose one.	La llengua de la interfície; Automàtic fa servir la llengua del sistema. El diàleg canvia de llengua tan bon punt en trieu una.
 	Animated Zoom works only while this is on; off, Animated Zoom is dimmed and zooming does not animate.	El Zoom animat només funciona mentre això està activat; desactivat, el Zoom animat apareix atenuat i el zoom no s’anima.
 	The wheel's zoom glides in, and the Zoom tool zooms as you drag sideways or hold it down; off, the Zoom tool zooms to the area you drag across.	El zoom amb la roda llisca suaument, i l’Eina de zoom fa zoom mentre arrossegueu de costat o la manteniu premuda; desactivat, l’Eina de zoom fa zoom a l’àrea que arrossegueu.
+	From the next start, the desktop version shows the canvas through this kind of graphics processor; the artwork is drawn on the CPU either way. Automatic prefers the integrated one on Windows and macOS. The web version does not use it.	A partir del pròxim inici, la versió d’escriptori mostra el llenç a través d’aquest tipus de processador gràfic; la il·lustració sempre es dibuixa a la CPU. Automàtic prefereix l’integrat a Windows i macOS. La versió web no l’utilitza.
+	From the next start, the window shows each frame without waiting for the display's refresh where the graphics driver allows, at most 240 frames a second.	A partir del pròxim inici, la finestra mostra cada fotograma sense esperar el refresc de la pantalla quan el controlador gràfic ho permet, com a màxim 240 fotogrames per segon.
 	From the next start, the desktop version draws with this kind of graphics processor; Automatic prefers the one that drives the display. The web version does not use it.	A partir del pròxim inici, la versió d’escriptori dibuixa amb aquest tipus de processador gràfic; Automàtic prefereix el que controla la pantalla. La versió web no l’utilitza.
 	From the next start, the window shows frames without waiting for the display to refresh, at most 240 a second; off, the display paces them. A present mode set at launch overrides it.	A partir del pròxim inici, la finestra mostra els fotogrames sense esperar que la pantalla es refresqui, com a màxim 240 per segon; desactivat, la pantalla marca el ritme. Un mode de presentació definit en iniciar té prioritat.
 	The most undo steps each document keeps; lowering it drops the oldest steps when you click OK. Steps can also go sooner when they use too much memory.	El màxim de passos de desfer que conserva cada document; un nombre més baix elimina els passos més antics quan feu clic a D’acord. Els passos també poden desaparèixer abans si ocupen massa memòria.
@@ -4168,6 +4233,9 @@ digits	Malayalam	Malaiàlam
 	Open Recent Files and the Home screen list at most this many recent files; 0 lists none, and VectorCraft still remembers up to 30.	Obre fitxers recents i la pantalla d’Inici mostren com a màxim aquest nombre de fitxers recents; 0 no en mostra cap, i VectorCraft continua recordant-ne fins a 30.
 	When a document opens, a linked EPS image that shows its saved preview keeps it instead of reading the EPS file again; changed files still follow Update Links.	En obrir un document, una imatge EPS enllaçada que mostra la seva previsualització desada la conserva en lloc de tornar a llegir el fitxer EPS; els fitxers modificats segueixen Actualitza els enllaços.
 	In Pixel Preview, images are drawn smoothed; off, their pixels show with hard edges. Outside Pixel Preview, images are always smoothed.	A Previsualització de píxels, les imatges es dibuixen suavitzades; desactivat, els seus píxels mostren vores dures. Fora de Previsualització de píxels, les imatges sempre se suavitzen.
+	PDF Text	Text del PDF
+	The text of a PDF you open or embed comes in as editable type, or as outlines that look the same on a computer without its fonts.	El text d’un PDF que obriu o incrusteu entra com a text editable o com a contorns que es veuen igual en un ordinador sense les seves fonts.
+	Linked pages show the file's own text.	Les pàgines enllaçades mostren el text propi del fitxer.
 	When a linked file changes, Automatically reads it again, Ask When Modified asks you first, and Manually leaves it and shows a note in the status bar.	Quan un fitxer enllaçat canvia, Automàticament el torna a llegir, Pregunta quan es modifiqui us ho pregunta abans, i Manualment el deixa com està i mostra un avís a la barra d’estat.
 	On the desktop, the folder New from Template… and Save as Template… start in; leave it blank for VectorCraft Templates in your documents folder.	A la versió d’escriptori, la carpeta on comencen Nou a partir d’una plantilla… i Desa com a plantilla…; deixeu-la buida per a VectorCraft Templates a la vostra carpeta de documents.
 	Edit Original opens a linked file in the system's default app for its type; off, a linked raster image opens in PhotoCraft where it is installed.	Edita l’original obre un fitxer enllaçat amb l’aplicació per defecte del sistema per al seu tipus; desactivat, una imatge ràster enllaçada s’obre a PhotoCraft si està instal·lat.
@@ -4182,7 +4250,6 @@ digits	Malayalam	Malaiàlam
 	Output All Blacks as Rich Black draws pure CMYK black as RGB black in RGB and grayscale raster exports and Print as Bitmap; it does not change vector exports, CMYK JPEG, TIFF and PSD, or other printing.	Genera tots els negres com a negre ric dibuixa el negre CMYK pur com a negre RGB a les exportacions ràster RGB i en escala de grisos i amb Imprimeix com a mapa de bits; no canvia les exportacions vectorials, els JPEG, TIFF i PSD CMYK ni la resta d’impressions.
 	On a touch screen, switches to the Touch workspace; turning this off, or losing the touch screen, goes back to the workspace it switched from.	En una pantalla tàctil, canvia a l’espai de treball tàctil; si es desactiva o es perd la pantalla tàctil, torna a l’espai de treball d’abans del canvi.
 	A two-finger tap on the canvas undoes, or switches between selection and drawing tools in the Touch workspace, and a three-finger tap redoes; neither works in Presentation Mode.	Un toc amb dos dits al llenç desfà o, a l’espai de treball tàctil, alterna entre les eines de selecció i de dibuix, i un toc amb tres dits refà; cap dels dos funciona en el mode de presentació.
-	New type takes this language while Document Setup's language is English: USA and [Normal Character Style] sets none; type already in a document keeps its own language.	El text nou pren aquest idioma mentre l’idioma de Configuració del document sigui Anglès: EUA i [Estil de caràcter normal] no en defineixi cap; el text que ja és en un document conserva el seu idioma.
 	In paragraphs with Hyphenate on, a listed word breaks only at the hyphens typed in it, or nowhere when it has none, whatever its case; Korean words take no hyphen, and Indian-language words do not break inside a character cluster.	En els paràgrafs amb Particiona activat, una paraula de la llista es parteix només als guionets que s’hi han escrit, o enlloc si no en té, sigui quin sigui l’ús de majúscules; les paraules coreanes no prenen guionet, i les paraules en llengües índies no es parteixen dins d’un grup de caràcters.
 	Reset all preferences to their defaults?	Voleu restablir totes les preferències als valors predeterminats?
 	The defaults are applied when you click OK in Preferences. Cancel there keeps your current preferences.	Els valors predeterminats s’apliquen quan feu clic a D’acord a Preferències. Cancel·la allà conserva les preferències actuals.
@@ -4770,6 +4837,7 @@ digits	Malayalam	Malaiàlam
 	Recent Commands	Ordres recents
 	No recent commands	No hi ha ordres recents
 	Type to search commands, tools, panels and effects	Escriviu per cercar ordres, eines, panells i efectes
+	Clear Recent Commands	Esborra les ordres recents
 	Search commands	Cerca ordres
 	Search Commands…	Cerca ordres…
 	Search Fonts Folder	Cerca a la carpeta de tipus de lletra
@@ -5902,6 +5970,8 @@ digits	Malayalam	Malaiàlam
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	VectorCraft no es va tancar correctament l’última vegada. Aquests documents tenien canvis no desats:
 	VectorCraft documents: one locked object, updated when the file changes.	Documents de VectorCraft: un objecte bloquejat, actualitzat quan canvia el fitxer.
 	VectorCraft Generic CMYK (SWOP-like)	CMYK genèric de VectorCraft (similar a SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK estucat de VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK no estucat de VectorCraft (FOGRA52)
 	VectorCraft Help…	Ajuda de VectorCraft…
 	VectorCraft on getartcraft.com	VectorCraft a getartcraft.com
 	VectorCraft on GitHub	VectorCraft al GitHub
@@ -6144,6 +6214,8 @@ digits	Malayalam	Malaiàlam
 @msg	`mode` must be grayscale, rgb, hsb, cmyk or websafe	`mode` ha de ser grayscale, rgb, hsb, cmyk o websafe
 @msg	`view` must be wheel or box	`view` ha de ser wheel o box
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` ha de ser hue, saturation, brightness, red, green o blue
+@msg	`sliders` must be none, oklch or hsl	`sliders` ha de ser none, oklch o hsl
+@msg	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte
@@ -6376,6 +6448,14 @@ digits	Malayalam	Malaiàlam
 	The script asks to read and write a folder you choose, with everything in it.	L’script demana llegir i escriure una carpeta que trieu, amb tot el que conté.
 	Allow Once	Permet un cop
 	Always Allow This Script	Permet sempre aquest script
+	No script has kept file access.	Cap script no ha conservat accés als fitxers.
+	Read file	Lectura del fitxer
+	Read and write file	Lectura i escriptura del fitxer
+	Read and write folder	Lectura i escriptura de la carpeta
+	Revoke	Revoca
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revoca elimina l’accés conservat per a cada versió de l’script. L’accés a una carpeta inclou tot el que conté.
+@msg	Script file access revoked	S’ha revocat l’accés de l’script als fitxers
+@msg	The script file access was already revoked	L’accés de l’script als fitxers ja s’havia revocat
 	Deny	Denega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Un script pot canviar els documents oberts i escriure fitxers mitjançant les ordres que executa. Executeu només scripts de confiança.
 	Do not show this warning again	No tornis a mostrar aquest avís
@@ -6573,6 +6653,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` per al diàleg de fitxers d’un script ha de ser un d’aquests: once, always, deny, stop
 @msg	choose a file or folder first, or deny	trieu primer un fitxer o una carpeta, o denegueu
 @msg	the script file permissions could not be saved: {e}	no s’han pogut desar els permisos de fitxers dels scripts: {e}
+@msg	the script file permissions could not be read: {e}	no s’han pogut llegir els permisos de fitxers dels scripts: {e}
 @msg	this script's file access can be allowed only once	l’accés als fitxers d’aquest script només es pot permetre una vegada
 @msg	Only the person at the keyboard can allow a script's file access	Només la persona al teclat pot permetre l’accés als fitxers d’un script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Un script rep com a màxim 2.048 fitxers: els fitxers triats després d’aquests s’han deixat fora
@@ -6980,6 +7061,12 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	nothing in data set {name} was applied: no object is bound to a variable it has a value for	no s’ha aplicat res del conjunt de dades {name}: cap objecte està vinculat a una variable per a la qual tingui un valor
 @msg	no bound object reports a value (locked objects and embedded images report none)	cap objecte vinculat no informa d’un valor (els objectes bloquejats i les imatges incrustades no n’informen cap)
 @msg	nothing selected	no hi ha res seleccionat
+@msg	`{key}` must be a color or {_1}	`{key}` ha de ser un color o {_1}
+@msg	the selected objects' colors differ: give `color`	els colors dels objectes seleccionats són diferents: indiqueu `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	els colors dels objectes seleccionats són diferents: indiqueu `opacity` o `color`
+@msg	the active fill or stroke has no color: give `color`	l’emplenament o el traç actiu no té color: indiqueu `color`
+@msg	the active fill or stroke is hidden: give `color`	l’emplenament o el traç actiu està ocult: indiqueu `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	l’emplenament o el traç actiu es dibuixa a través d’una màscara d’opacitat: indiqueu `color`
 @msg	nothing to align	no hi ha res per alinear
 @msg	nothing to distort	no hi ha res per distorsionar
 @msg	nothing to export: the document has no visible art (or turn on Use Artboards)	no hi ha res per exportar: el document no té art visible (o activeu Utilitza els taulers)
@@ -7095,6 +7182,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msgplural	Restored {n} recovered document: save it to keep it|Restored {n} recovered documents: save them to keep them	S’ha restaurat {n} document recuperat: desa’l per conservar-lo|S’han restaurat {n} documents recuperats: desa’ls per conservar-los
 @msg	result would exceed the canvas (coordinates out of range)	el resultat excediria el llenç (coordenades fora de rang)
 @msg	Running “{name}”…	S’està executant «{name}»…
+@msg	Plug-in “{name}”: {notice}	Complement «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` ha de ser una cadena amb text visible
 @msg	Save for Web: the image is empty	Desa per a la web: la imatge és buida
 @msg	Save writes {_1}, not {_2}: use document.export for other formats	Desa escriu {_1}, no {_2}: fes servir document.export per a altres formats
 @msg	Save writes {_1}, not {_2}: use file.saveAsTemplate to write it	Desa escriu {_1}, no {_2}: fes servir file.saveAsTemplate per escriure’l
@@ -7133,6 +7222,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	exit isolation mode first	surt primer del mode d’aïllament
 @msg	select an envelope	selecciona un embolcall
 @msg	select an image	selecciona una imatge
+@msg	object {_1} is an image changed by Perspective Distort or Free Distort, which this command does not work on	l'objecte {_1} és una imatge modificada amb Distorsió de perspectiva o Distorsió lliure, amb la qual aquesta ordre no funciona
+@msg	image {_1} cannot be distorted this way: its corners would not make a convex shape	la imatge {_1} no es pot distorsionar així: les seves cantonades no formarien una forma convexa
+@msg	image {_1} cannot be distorted this way: its corners would cross the warp's horizon	la imatge {_1} no es pot distorsionar així: les seves cantonades creuarien l'horitzó de la distorsió
+@msg	image {_1} cannot be distorted this way: its corners would be too close together for a perspective map	la imatge {_1} no es pot distorsionar així: les seves cantonades estarien massa juntes per a una projecció en perspectiva
 @msg	`background` must be edges, corners or colors	`background` ha de ser edges, corners o colors
 @msg	`match` must be distance or channels	`match` ha de ser distance o channels
 @msg	`{key}` must be from 0 to 100	`{key}` ha d’estar entre 0 i 100
@@ -7180,6 +7273,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	shadings of more than 4096 patches or triangles were left out	els ombrejats de més de 4096 pedaços o triangles s’han omès
 @msg	shadings whose functions are of an unknown type are filled with their middle colour	els ombrejats les funcions dels quals són d’un tipus desconegut s’omplen amb el seu color central
 @msg	Shape Builder: no region under the pointer	Constructor de formes: no hi ha cap regió sota el punter
+@msg	Fill Area: no enclosed area under the pointer	Emplena l'àrea: no hi ha cap àrea tancada sota el punter
 @msg	Shape Builder: select all paths you want to merge	Constructor de formes: selecciona tots els traçats que vulguis combinar
 @msg	Shape Builder: select paths or compound paths	Constructor de formes: selecciona traçats o traçats compostos
 @msg	shortcut for `{k}` must be a string	la drecera de `{k}` ha de ser una cadena
@@ -7218,6 +7312,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	a 3D effect on a group's fill or stroke draws nothing	un efecte 3D al farciment o al traç d’un grup no dibuixa res
 @msg	a 3D effect on a group's fill or stroke draws nothing to export	un efecte 3D al farciment o al traç d’un grup no dibuixa res per exportar
 @msg	The 3D object is too complex to export	L’objecte 3D és massa complex per exportar-lo
+@msg	The 3D object's mesh is incomplete or holds a value that is not a number	La malla de l’objecte 3D és incompleta o conté un valor que no és un nombre
 @msg	give one <filter> element	indica un element <filter>
 @msg	the <filter> element needs an id, the filter's name	l’element <filter> necessita un id, el nom del filtre
 @msg	an SVG filter's id is at most {MAX_NAME} characters	l’id d’un filtre SVG té com a màxim {MAX_NAME} caràcters
@@ -7240,7 +7335,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	the object has no 3D effect (Extrude & Bevel, Revolve, Inflate or Rotate)	l’objecte no té cap efecte 3D (Extrudeix i bisella, Revoluciona, Infla o Gira)
 @msg	`render` must be an object holding only `mode`, set to shaded or wireframe	`render` ha de ser un objecte que només contingui `mode`, amb el valor shaded o wireframe
 @msg	its 3D effect builds no solid	el seu efecte 3D no construeix cap sòlid
-@msg	bevel must be none or one of {_1}	bevel ha de ser none o un de {_1}
+@msg	bevel must be none or one of {_1}, or custom with {BEVEL_PROFILE}	bevel ha de ser none, un de {_1}, o custom amb {BEVEL_PROFILE}
+@msg	bevel custom needs {BEVEL_PROFILE}, the bevel's points	bevel custom necessita {BEVEL_PROFILE}, els punts del bisell
+@msg	{BEVEL_NAME} must be a string	{BEVEL_NAME} ha de ser una cadena
+@msg	{BEVEL_PROFILE} must be 2 to {most} [x, y] points, each share between 0 and 1, from [0, 0] (the cap's edge) to [1, 1] (the side wall)	{BEVEL_PROFILE} ha de tenir de 2 a {most} punts [x, y], cada proporció entre 0 i 1, des de [0, 0] (la vora de la tapa) fins a [1, 1] (la paret lateral)
 @msg	{_1} can't build solids from this art: its symbol instances, blends and clipping groups hold too many objects	{_1} no pot construir sòlids a partir d’aquesta il·lustració: les seves instàncies de símbol, fusions i grups de retall contenen massa objectes
 @msg	{label} can't build a solid from the instance of symbol "{symbol}": the symbol's art isn't available	{label} no pot construir un sòlid a partir de la instància del símbol «{symbol}»: la il·lustració del símbol no està disponible
 @msg	{_1}: the clipping path is too complex to cut the art with	{_1}: el traçat de retall és massa complex per retallar-hi la il·lustració
@@ -7266,8 +7364,10 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`{GRAPHICS}` face must be front, back or side	face de `{GRAPHICS}` ha de ser front, back o side
 @msg	`{GRAPHICS}` {key} must be a number from {lo} to {hi}	{key} de `{GRAPHICS}` ha de ser un nombre de {lo} a {hi}
 @msg	`{GRAPHICS}` must be an array	`{GRAPHICS}` ha de ser una matriu
-@msg	Graphics map onto the Plane, Extrude and Revolve object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió i Revolució
+@msg	Graphics map onto the Plane, Extrude, Revolve and Inflate object types	Els gràfics s’apliquen als tipus d’objecte Pla, Extrusió, Revolució i Infla
 @msg	Revolve maps graphics onto its side: map them onto the front	Revoluciona aplica els gràfics al seu lateral: aplica’ls a la cara davantera
+@msg	Inflate maps graphics onto its front and back, not onto a side	Infla aplica els gràfics a la cara davantera i a la posterior, no a un lateral
+@msg	object {_1}: Inflate's back takes graphics with Both sides and Cap on	l’objecte {_1}: la cara posterior d’Infla només admet gràfics amb Tots dos costats i Tapa activats
 @msg	The graphics are too complex for this surface: simplify the symbols' art or reduce Segments	Els gràfics són massa complexos per a aquesta superfície: simplifica la il·lustració dels símbols o redueix Segments
 @msg	`{GRAPHICS}` takes at most {MAX_GRAPHICS} graphics	`{GRAPHICS}` admet com a màxim {MAX_GRAPHICS} gràfics
 @msg	A plane has one face: map its graphics onto the front	Un pla té una sola cara: aplica’n els gràfics a la cara davantera
@@ -7655,11 +7755,19 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	module is {_1} bytes (limit {_2})	el mòdul té {_1} bytes (límit {_2})
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	cal aprovació: demana {0}, que l’usuari concedeix en instal·lar-lo per separat
 @msg	not JSON: {e}	no és JSON: {e}
-@msg	not a WebAssembly binary (missing \0asm header)	no és un binari WebAssembly (falta la capçalera \0asm)
+@msg	not a WebAssembly binary (missing \\0asm header)	no és un binari WebAssembly (falta la capçalera \\0asm)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} paràmetres
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	un tipus de funció supera el límit de {MAX_FUNC_TYPE_VALUES} resultats
 @msg	parameter `{k}`: {what}	paràmetre `{k}`: {what}
 @msg	parameter `{name}`: {what}	paràmetre `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	els paràmetres del complement han de ser un objecte JSON
 @msg	the module must export its linear memory as `memory`	el mòdul ha d’exportar la seva memòria lineal com a `memory`
+@msg	the module must export `{name}` with the type {signature}	el mòdul ha d’exportar `{name}` amb el tipus {signature}
+@msg	the module has more than one `{MANIFEST_SECTION}` custom section	el mòdul té més d’una secció personalitzada `{MANIFEST_SECTION}`
+@msg	memory budget (the module's initial memory is {initial} bytes, limit {max_memory_bytes})	pressupost de memòria (la memòria inicial del mòdul és de {initial} bytes, límit {max_memory_bytes})
+@msg	the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements	el manifest de la secció personalitzada `{MANIFEST_SECTION}` ha de donar `abi` com a {ABI_VERSION}, la versió de l’ABI que implementa aquest amfitrió
+@msg	table budget (the module defines {count} tables, the largest with {largest} elements; limit {MAX_TABLES} tables of {MAX_TABLE_ELEMENTS} elements)	pressupost de taules (el mòdul defineix {count} taules, la més gran amb {largest} elements; límit {MAX_TABLES} taules de {MAX_TABLE_ELEMENTS} elements)
+@msg	the module's table section could not be read	no s’ha pogut llegir la secció de taules del mòdul
 @msg	the objects to change are no longer in the document	els objectes que calia canviar ja no són al document
 @msg	the runtime panicked	l’entorn d’execució ha fallat
 @msg	unexpected host trap	aturada inesperada (trap) de l’amfitrió
@@ -7667,6 +7775,10 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc ha retornat 0 (sense memòria)
 @msg	vc_alloc returned a block outside memory	vc_alloc ha retornat un bloc fora de la memòria
 @msg	vc_run returned error code {packed}	vc_run ha retornat el codi d’error {packed}
+@msg	did not finish loading within {secs} s	no ha acabat de carregar-se en {secs} s
+@msg	no thread was left to load it	no ha quedat cap fil per carregar-lo
+@msg	panicked while loading	ha fallat inesperadament en carregar-se
+@msg	panicked while loading: {what}	ha fallat inesperadament en carregar-se: {what}
 @msg	{_1} is not a file	{_1} no és un fitxer
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} té {_2} bytes (límit {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objectes (límit {MAX_OBJECTS})
@@ -7687,6 +7799,11 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`minItems` and `maxItems` must be 0-{MAX_LIST}, `maxItems` at least 1, and the default that many	`minItems` i `maxItems` han de ser 0-{MAX_LIST}, `maxItems` com a mínim 1, i el valor predeterminat ha de tenir aquesta quantitat
 @msg	`name` must be a string	`name` ha de ser una cadena
 @msg	`opacity` must be a number	`opacity` ha de ser un nombre
+@msg	`opacity` must be a number from 0 to 100	`opacity` ha de ser un nombre del 0 al 100
+@msg	`opacity` must be true or false	`opacity` ha de ser true o false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	els caràcters de text no tenen opacitat pròpia: afegiu un farciment o un traç amb Afegeix un farciment nou o Afegeix un traç nou del tauler Aparença
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	un objecte seleccionat en una instància de símbol no té opacitat pròpia de farciment ni de traç
+@msg	no target has that fill or stroke to take the opacity	cap objectiu no té aquest farciment o traç per rebre l'opacitat
 @msg	`type` must be "path" or "compound"	`type` ha de ser "path" o "compound"
 @msg	`unit` must be 1-{MAX_UNIT} printable characters	`unit` ha de tenir 1-{MAX_UNIT} caràcters imprimibles
 @msg	`visibleWhen` lists 1 to {MAX_CONDITION_VALUES} values for `{other}`	`visibleWhen` ha d’indicar d’1 a {MAX_CONDITION_VALUES} valors per a `{other}`
@@ -7705,12 +7822,21 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	a list of {min_items} to {max_items} numbers	una llista de {min_items} a {max_items} nombres
 @msg	a new object needs a `path`	un objecte nou necessita un `path`
 @msg	a number	un nombre
-@msg	a painted live effect returns only `objects`	un efecte dinàmic de pintura només retorna `objects`
+@msg	a painted live effect returns only `objects` and `notice`	un efecte dinàmic de pintura només retorna `objects` i `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills` i `strokes`
 @msg	a read-only object was left out	s’ha omès un objecte de només lectura
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {{"id": …}} sol o tal com s’ha rebut
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un traç només té `paint`, `width`, `join`, `cap` i `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` i `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	un traç només té `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` i `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` només pot ser true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` només és per a un efecte dinàmic que declara `paintOutput`, amb `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` ha de ser un nombre de 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	mode de fusió desconegut; `blend` és un de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` ha de ser una llista d’un màxim de {MAX_LOOK_EFFECTS} registres
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	un resultat porta com a màxim {MAX_RESULT_EFFECTS} registres d’efecte
+@msg	this host takes no effects here	aquest amfitrió no accepta efectes aquí
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un traç ha de ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	un efecte ha de ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecte en un farciment només retorna `fills`
@@ -7730,6 +7856,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`plates` requires a stop linked to a spot swatch	`plates` requereix una parada vinculada a una mostra de color directe
 @msg	the output	la sortida
 @msg	the path has no anchor points	el traçat no té punts d’ancoratge
+@msg	compound path {id} has a hidden, locked or guide member, so its members can't be replaced	el traçat compost {id} té un membre ocult, bloquejat o guia, per tant no se’n poden substituir els membres
+@msg	compound path {id} has a member that isn't a path, so its members can't be replaced	el traçat compost {id} té un membre que no és un traçat, per tant no se’n poden substituir els membres
 @msg	too many anchor points (limit {MAX_ANCHORS})	massa punts d’ancoratge (límit {MAX_ANCHORS})
 @msg	true or false	true o false
 @msg	a number >= {_1}	un nombre >= {_1}
@@ -7808,6 +7936,8 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` és {_1}; aquest amfitrió admet els nivells d’API de complements de l’1 al {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` només pot ser true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` només és per a un efecte dinàmic (`kind` "effect") amb `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` només és per a un importador (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	«{shown}» obre fitxers però no els col·loca: el seu manifest no defineix `place`
 @msg	`grant` must be a list of permission names	`grant` ha de ser una llista de noms de permisos
 @msg	`grant` names an unknown permission `{shown}`	`grant` esmenta un permís desconegut `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	un complement del tipus `{_1}` necessita el permís `{_2}`
@@ -7819,12 +7949,60 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	`inputs` lists `{shown}` twice	`inputs` inclou `{shown}` dues vegades
 @msg	`inputs` needs `api` 2 or later	`inputs` requereix `api` 2 o posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` requereix el permís `doc.read`
+@msg	only a filter declares `writes`	només un filtre declara `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` anomena un tipus d’objecte desconegut `{shown}`: feu servir type, image o symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` inclou `{shown}` dues vegades
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` inclou `{shown}`, que `inputs` no inclou
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` requereix `api` {WRITES_API} o posterior
+@msg	`writes` needs the permission `doc.write`	`writes` requereix el permís `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} no és text, ni una imatge ni una instància de símbol
+@msg	the text of type given as `truncated` can't be changed	no es pot canviar el text d’un text donat com a `truncated`
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	ha de ser una llista d’un màxim de {MAX_INPUT_RUNS} entrades
+@msg	type needs at least one run	el text necessita almenys un tram
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes de text (límit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} paràgrafs (límit {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	més de {MAX_INPUT_TEXT_TOTAL} bytes de text en tota la sortida
+@msg	unknown key '{k}'	clau desconeguda '{k}'
+@msg	must be a list of 6 numbers	ha de ser una llista de 6 nombres
+@msg	a number is out of range (limit ±{MAX_COORD})	un nombre és fora de l’interval (límit ±{MAX_COORD})
+@msg	flattens the object to a line or a point	redueix l’objecte a una línia o un punt
+@msg	an object flattened to a line or a point can't be placed again	un objecte reduït a una línia o un punt no es pot tornar a col·locar
+@msg	must be a number from 0 to 1	ha de ser un nombre de 0 a 1
+@msg	must be the name of a symbol	ha de ser el nom d’un símbol
+@msg	'{shown}' is not a symbol in this document	'{shown}' no és un símbol d’aquest document
+@msg	a run must be {{"text", "style", "inline"?}}	un tram ha de ser {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` conté el caràcter d’un gràfic en línia
+@msg	inline graphics can't be added, removed, reordered or changed	els gràfics en línia no es poden afegir, eliminar, reordenar ni canviar
+@msg	the characters of threaded type can't be changed	els caràcters del text enllaçat no es poden canviar
+@msg	the characters of type with ruby can't be changed	els caràcters del text amb rubí no es poden canviar
+@msg	expected {count} paragraph styles, one per paragraph	s’esperaven {count} estils de paràgraf, un per paràgraf
+@msg	the document has no Kinsoku set named '{shown}'	el document no té cap conjunt Kinsoku anomenat '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	ha de tenir 1-{MAX_FAMILY} caràcters imprimibles
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Llegir els objectes que rep, i la configuració, els taulers, les capes i les mostres del document
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` ha de llistar seccions diferents: settings, artboards, layers o swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` és per a un filtre, o un efecte dinàmic amb `commands`, amb `api` 3 o posterior i el permís `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	la informació del document que demana el complement és massa gran per passar-la: com a màxim {MAX_CONTEXT_ITEMS} taulers, capes i mostres en {MAX_CONTEXT_BYTES} bytes
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	pressupost de memòria (l’objecte {_1} necessita {size} bytes d’entrada, en queden {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	pressupost d’objectes (més de {MAX_OBJECTS} objectes de només lectura)
 @msg	instruction budget	pressupost d’instruccions
 @msg	time budget	pressupost de temps
 @msg	memory budget (the selection is too large to hand over)	pressupost de memòria (la selecció és massa gran per passar-la)
 @msg	output size ({what} is {len} bytes, limit {max})	mida de la sortida ({what} fa {len} bytes, límit {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} línia {line}, columna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	pressupost de memòria
+@msg	call depth	profunditat de crides
+@msg	run(input, params) returned no output object	run(input, params) no ha retornat cap objecte de sortida
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" necessita `script`: el nom del fitxer .js del complement, al costat del manifest
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` ha de ser el nom d’un fitxer .js a la carpeta del manifest: 1-128 bytes, sense carpeta, sense `:`, sense començar per `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` és el text de l’script i només es dona en el JSON que pren el dataBase64 de plugin.install: un fitxer .vcplugin anomena el seu script a `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	el manifest d’un complement de JavaScript indica `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" és per a un filtre d’objectes (`kind` "filter"), no per a `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	un complement de JavaScript no pot incloure el permís `{name}`: dels permisos de l’amfitrió pot incloure `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	el manifest d’un mòdul WebAssembly omet `runtime`: "js" és per a un complement de JavaScript
+@msg	a JavaScript plug-in makes no command calls	un complement de JavaScript no crida ordres
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) pren dos nombres
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) pren un nivell, 0 (error), 1 (avís), 2 (informació) o 3 (depuració), i una cadena
 @msg	the plug-in's grant can't be removed from the plug-in store	el permís del complement no es pot treure del magatzem de complements
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	el permís `{shown}` està reservat per a una API de complements posterior; aquest amfitrió no el concedeix
 @msg	unknown permission `{shown}`	permís desconegut `{shown}`
@@ -7866,6 +8044,9 @@ file-filter	Flattener presets	Preajustos de l’aplanador
 file-filter	PDF presets	Preajustos de PDF
 file-filter	PDF-compatible .ai	.ai compatible amb PDF
 file-filter	Print presets	Preajustos d’impressió
+file-filter	Tracing presets	Preajustos de traçat
+file-filter	Action sets	Conjunts d’accions
+file-filter	Composite fonts	Tipus de lletra compostos
 file-filter	Preferences	Preferències
 file-filter	Export presets	Preajustos d’exportació
 file-filter	SVG Compressed	SVG comprimit
@@ -8343,6 +8524,7 @@ breakText	Glyphs	Glifs
 	Place Brush Art	Col·loca l’art del pinzell
 	Replace Brush Art	Substitueix l’art del pinzell
 	Replace Pattern Art	Substitueix l’art del motiu
+	Place Pattern Art	Col·loca l’art del motiu
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
 	Apply to Strokes	Aplica als traços
 	Leave Strokes	Deixa els traços
@@ -8412,6 +8594,8 @@ breakText	Glyphs	Glifs
 	Tangent Circle	Cercle tangent
 	Tangent Circle Tool	Eina de cercle tangent
 	No tangent circle here	Aquí no hi ha cap cercle tangent
+	Ask For Circle Radius	Demana el radi del cercle
+	Auto-Update Default	Actualitza automàticament el valor predeterminat
 	Circle:	Cercle:
 @msg	`ids` names an object twice	`ids` indica un objecte dues vegades
 @msg	select two or three paths or compound paths	seleccioneu dos o tres camins o camins compostos
@@ -8748,6 +8932,18 @@ breakText	Glyphs	Glifs
 	Margin	Marge
 	Box	Caixa
 	Swatch	Mostra
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing` ha de ser més gran que 0 i com a màxim {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}` ha d’estar entre 0 i {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}` ha d’estar entre 0,01 i 1000 pt
+@msg	select the banner, or mark every artboard	seleccioneu la pancarta o marqueu tots els taulers
+@msg	the banner has no width or height	la pancarta no té amplada ni alçada
+@msg	the grommet inset is too large for the banner	la distància dels ullets a la vora és massa gran per a la pancarta
+@msg	the hem is too deep for the banner	la vora és massa profunda per a la pancarta
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	l’espaiat genera més de {MAX_GROMMETS} ullets
+@msg	there is no banner to mark	no hi ha cap pancarta per marcar
+@msg	turn on at least one side	activeu almenys un costat
+@msg	with no hem and no grommets there is nothing to mark	sense vora ni ullets no hi ha res per marcar
+@msg	{saving} failed: {e}	{saving} ha fallat: {e}
 	Banner Hems and Grommets…	Vores i ullets de pancarta…
 	Banner Hems and Grommets	Vores i ullets de pancarta
 	Hem	Vora
@@ -8891,6 +9087,11 @@ breakText	Glyphs	Glifs
 	No objects are selected.	No hi ha cap objecte seleccionat.
 	Open a document to mark its fold lines.	Obre un document per marcar-ne les línies de plegat.
 	Remove Fold Line Role	Elimina el tipus de línia
+	Fold Angle	Angle de plegat
+	Set Fold Angle…	Defineix l’angle de plegat…
+	Set Fold Angle	Defineix l’angle de plegat
+	Reset Fold Angle	Restableix l’angle de plegat
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	seleccioneu una línia d’hendit, de tall parcial o de perforació que no estigui bloquejada ni amagada
 	Check	Comprova
 	Check Fold Lines	Comprova les línies de plegat
 @msg	No cut lines are in the selection.	No hi ha cap línia de tall a la selecció.
@@ -8922,6 +9123,34 @@ breakText	Glyphs	Glifs
 @msg	A joint does not close by {gap} pt.	Una unió no es tanca per {gap} pt.
 @msg	Two panels pass through each other.	Dos panells es travessen l’un a l’altre.
 @msg	composer must be "singleLine", "everyLine", "standardSingleLine" or "standardEveryLine"	composer ha de ser "singleLine", "everyLine", "standardSingleLine" o "standardEveryLine"
+	Nature Icons	Icones de natura
+	Flower	Flor
+	Tree	Arbre
+	Mountain	Muntanya
+	Ornamental	Ornamental
+	Scrollwork	Voluta
+	Filigree Arrow	Fletxa de filigrana
+	Petal Sweep	Traç de pètals
+	Twin Curl	Voluta doble
+	Vector Packs	Paquets vectorials
+	Compass Rose	Rosa dels vents
+	Botanical Sprig	Branqueta botànica
+	Facet Diamond	Diamant facetat
+	Tide Crest	Cresta de l'onada
+	Leaf Vine	Enfiladissa de fulles
+	Blossom Chain	Cadena de flors
+	Pennant Garland	Garlanda de banderins
+	Lantern String	Filera de fanalets
+	Orbit Lines	Línies orbitals
+	Petal Garland	Garlanda de pètals
+	Lattice Braid	Trena reticular
+	Facet Sweep	Traç facetat
+	Artistic Brushes	Pinzells artístics
+	Paint	Pintura
+	Flat Sweep	Traç pla
+	Dry Drag	Arrossegament sec
+	Loaded Stroke	Traç carregat
+	Fan Sweep	Traç en ventall
 	Engraving	Gravat
 	Fine Hatching	Ratllat fi
 	Dense Hatching	Ratllat dens

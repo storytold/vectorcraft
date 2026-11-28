@@ -15,6 +15,7 @@ mod assets;
 mod assets_3d;
 mod attributes;
 mod bboxrotate;
+mod bevels;
 mod blendfidelity;
 mod blendopts;
 mod blendspine;
@@ -31,6 +32,7 @@ mod clipflavours;
 mod clippaint;
 mod cmdsplit;
 mod cmykflatten;
+mod colorcontrast;
 mod colorguide;
 mod colorguidelib;
 mod colorize;
@@ -48,10 +50,12 @@ mod curvature_circle;
 mod cut;
 mod dashalign;
 mod dcs;
+mod delete_keeps_joined;
 mod distort;
 mod docsetup;
 mod document_close;
 mod document_move;
+mod double_click_adds_anchor;
 mod draw2;
 mod dynamic_symbols;
 mod dynamic_text;
@@ -66,6 +70,7 @@ mod expand_symbols;
 mod eyedropper;
 mod file;
 mod fileinfo;
+mod fill_area;
 mod flatpresets;
 mod flatpreview;
 mod flatten;
@@ -85,9 +90,11 @@ mod history_document;
 mod history_mem;
 mod ids_without_selection;
 mod inline;
+mod interaction_commands;
 mod interactivity;
 mod interpolate_handles;
 mod intertwine;
+mod isolation_removed;
 mod journal;
 mod keyanchor;
 mod keyguide;
@@ -110,6 +117,7 @@ mod live;
 mod livecorners;
 mod maskview;
 pub(super) mod menucmds;
+mod mesh_picks;
 mod nativefile;
 mod newart;
 mod newdoc;
@@ -120,6 +128,7 @@ mod outlineobject;
 pub(super) mod outlinestroke;
 mod overprint;
 mod package;
+mod paintopacity;
 mod paintproxy;
 mod panelcmds;
 mod paragraphs;
@@ -169,12 +178,17 @@ mod scalestrokes;
 mod script_console;
 mod script_dialogs;
 mod script_dollar;
+mod script_dom;
 mod script_engines;
 mod script_folder;
 mod script_include;
 mod script_io;
 mod script_run;
+mod script_tags;
+mod script_variables;
+mod script_xmp;
 mod scripts;
+mod segment_nudge;
 mod select_effects;
 mod select_ids_first;
 mod shaper;
@@ -202,6 +216,7 @@ mod symbol_nine_slice;
 mod symbolbounds;
 mod symboledit;
 mod symbolism_options;
+mod symbolism_shift;
 mod symbollib;
 mod tangent_line;
 mod targeting;
@@ -361,15 +376,23 @@ fn unknown_command_names_the_nearest_id() {
     assert!(e.to_string().contains("did you mean `select.all`?"), "{e}");
 }
 
+/// An unknown command id or parameter key of 200,000 characters is answered without measuring
+/// its distance to every id and key: it takes no more character comparisons than one of 20.
 #[test]
 fn a_long_unknown_command_id_is_answered_at_once() {
+    use crate::cmd::params::DISTANCE_CELLS;
     let mut s = session();
-    let long = "x".repeat(200_000);
-    let start = std::time::Instant::now();
-    assert!(matches!(s.execute(&long, &json!({})), Err(EngineError::UnknownCommand(_))));
-    let e = crate::check_params("file.new", &json!({ long.as_str(): 1 })).unwrap_err();
-    assert!(e.to_string().contains("the command takes:"), "{e}");
-    assert!(start.elapsed() < std::time::Duration::from_secs(2), "{:?}", start.elapsed());
+    let mut compared = |id: &str| {
+        DISTANCE_CELLS.set(0);
+        assert!(matches!(s.execute(id, &json!({})), Err(EngineError::UnknownCommand(_))), "{}", id.len());
+        let e = crate::check_params("file.new", &json!({ id: 1 })).unwrap_err();
+        assert!(e.to_string().contains("the command takes:"), "{e}");
+        DISTANCE_CELLS.get()
+    };
+    let short = compared(&"x".repeat(20));
+    let long = compared(&"x".repeat(200_000));
+    assert!(short > 0, "a 20-character id is measured against the ids near its length");
+    assert!(long <= short, "200,000 characters: {long} comparisons, 20 characters: {short}");
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -3486,6 +3509,65 @@ fn flare_counts_are_whole_numbers() {
     let rays = g.children().unwrap().iter().find(|c| c.name.as_deref() == Some("Rays")).unwrap();
     assert_eq!(rays.path_data().unwrap().subpaths.len(), 4);
     assert!(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rays": 2.5})).is_err());
+}
+
+/// `shape.flare` given only one of `x2` and `y2`, the other left out or null, refuses the call
+/// naming the missing one, draws nothing and adds no undo step.
+#[test]
+fn flare_requires_both_endpoint_coordinates() {
+    let mut s = session();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.node_count(), st.history.undo.len(), st.history.redo.len())
+    };
+    let before = state(&s);
+    for (p, key) in [
+        (json!({"cx": 100, "cy": 100, "x2": 300}), "y2"),
+        (json!({"cx": 100, "cy": 100, "x2": 300, "y2": null}), "y2"),
+        (json!({"cx": 100, "cy": 100, "y2": 300}), "x2"),
+        (json!({"cx": 100, "cy": 100, "x2": null, "y2": 300}), "x2"),
+    ] {
+        let err = s.execute("shape.flare", &p).expect_err(&p.to_string()).to_string();
+        assert_eq!(err, format!("invalid parameters for `shape.flare`: missing number `{key}`"), "{p}");
+        assert_eq!(state(&s), before, "{p}");
+    }
+}
+
+/// `shape.flare` with neither `x2` nor `y2` (left out or null) places the rings' end point from
+/// `pathLength` and `direction`; with both it uses them.
+#[test]
+fn flare_omitted_or_null_endpoint_coordinates_use_path_fallback() {
+    let mut s = session();
+    let mut end = |p: serde_json::Value| {
+        let id = NodeId(s.execute("shape.flare", &p).unwrap()["id"].as_u64().unwrap());
+        let spec = flare_settings(&s.doc().unwrap().doc, id).expect("a flare");
+        Point::new(spec.params["x2"].as_f64().unwrap(), spec.params["y2"].as_f64().unwrap())
+    };
+    for p in [
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": null}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "y2": null}),
+        json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": null, "y2": null}),
+    ] {
+        let e = end(p.clone());
+        assert!((e.x - 300.0).abs() < 1e-9 && (e.y - 100.0).abs() < 1e-9, "{p}: {e:?}");
+    }
+    assert_eq!(end(json!({"cx": 100, "cy": 100, "pathLength": 200, "direction": 0, "x2": 40, "y2": 70})), Point::new(40.0, 70.0));
+}
+
+/// Settings a file holds with only one of `x2` and `y2` are not a flare's: the group stays as art,
+/// but is not a flare that can be edited.
+#[test]
+fn flare_settings_with_a_lone_endpoint_coordinate_are_not_a_flare() {
+    let mut s = session();
+    let id = NodeId(s.execute("shape.flare", &json!({"cx": 100, "cy": 100, "rings": 2})).unwrap()["id"].as_u64().unwrap());
+    let mut d = (*s.doc().unwrap().doc).clone();
+    assert!(flare_settings(&d, id).is_some());
+    let mut extras = d.node_mut(id).unwrap().extras_mut();
+    let spec = extras.flare.as_deref_mut().expect("flare settings");
+    spec.params.as_object_mut().unwrap().remove("y2");
+    drop(extras);
+    assert!(flare_settings(&d, id).is_none());
 }
 
 /// `shape.editFlare` on a flare scaled far down: a `pathLength`, an end point or a center that,

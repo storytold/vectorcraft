@@ -30,6 +30,7 @@ mod meshwarp;
 mod movedstroke;
 mod objectfx;
 mod paintedbrush;
+mod paintedlook;
 mod placed_document;
 mod rasterize;
 mod setup;
@@ -603,6 +604,35 @@ fn outline_mode_no_fill() {
         Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { outline: true, background: Some([255; 4]), ..Default::default() });
     assert_eq!(r.pixel(50, 50), [255, 255, 255, 255]);
     assert!(r.pixel(10, 50)[0] < 200);
+}
+
+/// Outline view draws a distorted image's frame through its corners: a slanted side, and nothing
+/// inside or along the rectangle it was placed in.
+#[test]
+fn outline_mode_draws_a_distorted_images_frame_through_its_corners() {
+    let mut d = Document::new(100.0, 100.0);
+    let id = d.alloc_id();
+    let im = vectorcraft_doc::ImageObject {
+        key: "k".into(),
+        width: 10,
+        height: 10,
+        xf: Affine::scale(10.0),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let mut n = Node::new(id, NodeKind::Image(Box::new(im)));
+    let q = [(40.0, 0.0), (60.0, 0.0), (100.0, 100.0), (0.0, 100.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
+    n.set_image_corners(q).unwrap();
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, n).unwrap();
+    let r =
+        Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &RenderOptions { outline: true, background: Some([255; 4]), ..Default::default() });
+    // On the left side, halfway down: from (40, 0) to (0, 100).
+    assert!(r.pixel(20, 50)[0] < 200, "the slanted side");
+    // The old rectangle's left edge and the inside of the quad stay blank.
+    assert_eq!(r.pixel(1, 30), [255; 4]);
+    assert_eq!(r.pixel(50, 50), [255; 4]);
 }
 
 /// A 100 × 100 document with each kind of path Outline view draws, and the ids of its objects by

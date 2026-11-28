@@ -182,6 +182,33 @@ fn a_placed_document_is_vectors_in_every_output() {
 }
 
 #[test]
+fn a_placed_documents_spot_color_stays_a_spot_color_in_a_cmx_file() {
+    let dir = Folder::new("placed-cmx-spot");
+    let src = dir.file("logo.vectorcraft");
+    let mut d = Document::new(100.0, 50.0);
+    let gold = Color::cmyk(0.0, 0.2, 0.8, 0.1);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Gold".into(), paint: Paint::solid(gold), global: true, spot: true });
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let paint = Paint::Solid { color: gold, swatch: Some("Gold".into()), tint: 1.0 };
+    let look = Appearance::basic(paint, Paint::None, 0.0);
+    d.insert(Some(layer), 0, Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look)).unwrap();
+    write(&src, &vectorcraft_format::save_file(&d));
+    let mut s = session();
+    place(&mut s, &src);
+    assert!(s.doc().unwrap().doc.swatch("Gold").is_none(), "the placing document has no swatch of that name");
+    let bytes = decode(&s.execute("document.serialize", &json!({"format": "cmx"})).unwrap());
+    let drawing = craft_cdr::read_cmx(&bytes, craft_cdr::Limits::default()).unwrap();
+    let mut fills = Vec::new();
+    for o in drawing.pages.iter().flat_map(|p| &p.layers).flat_map(|l| &l.objects) {
+        if let craft_cdr::model::Object::Shape(shape) = o {
+            fills.extend(shape.fill.clone());
+        }
+    }
+    assert!(fills.iter().any(|c| matches!(c, craft_cdr::model::Color::Spot { name, .. } if name == "Gold")), "{fills:?}");
+}
+
+#[test]
 fn the_preview_is_saved_so_the_document_shows_it_without_its_file() {
     let dir = Folder::new("placed-saved");
     let src = dir.file("logo.vectorcraft");
@@ -905,6 +932,127 @@ fn an_ai_file_that_places_itself_opens() {
     let mut found = vec![];
     s.doc().unwrap().doc.visit_placed(|_, p| found.push(p.link.path.replace('\\', "/")));
     assert_eq!(found, [at], "{r}");
+}
+
+/// A placed EPS file whose bytes a `.ai` file's editing data includes (between `%%BeginDocument:`
+/// and `%%EndDocument`) opens as a placed document of those bytes: it draws its art with its file
+/// missing, and its file found unchanged is neither missing nor modified. A native save keeps the
+/// bytes, so the copy reopens and draws without the file.
+#[test]
+fn a_placed_eps_file_included_in_an_ai_files_editing_data_draws_without_its_file() {
+    use vectorcraft_testkit::ai;
+    let dir = Folder::new("placed-eps-in-ai");
+    // The file draws red and the page blue, so each check shows which one drew.
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n1 0 0 setrgbcolor\n0 0 60 60 rectfill\n%%EOF\n";
+    let (red, blue) = ([255, 0, 0], [0, 0, 255]);
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 0\n[1 0 0 1 20 20] 0 0 60 60 4 4 0\n(/no/such/folder/src/shape.eps)`\n\
+         %%BeginDocument: /no/such/folder/src/shape.eps\n{eps}\n%%EndDocument\n%AI17_Begin_Content_if_version_gt:24 12\n\
+         %AI28_BeginPlacedRelativePath\n(src/)\n%AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n"
+    );
+    let doc_path = dir.file("poster.ai");
+    let data = ai::editing_data(200.0, 100.0, &ai::layer("Art", &place));
+    write(&doc_path, &ai::ai(data.as_bytes(), "0 0 1 rg 20 20 60 60 re f"));
+    let shown = |s: &Session| {
+        let img = vectorcraft_render::Renderer::new().render_region(&s.doc().unwrap().doc, Rect::new(0.0, 0.0, 100.0, 100.0), 1.0, true);
+        let [r, g, b, _] = img.pixel(50, 50);
+        [r, g, b]
+    };
+    let one = |s: &Session| {
+        let d = &s.doc().unwrap().doc;
+        let mut found = vec![];
+        d.visit_placed(|n, p| found.push((n.id, p.clone())));
+        let [(id, p)] = &found[..] else { panic!("one placed document: {found:?}") };
+        (*id, p.clone(), d.images[&p.key].clone())
+    };
+    let mut s = session();
+
+    let r = open(&mut s, &doc_path);
+    assert_eq!(r["missingLinks"][0]["name"].as_str(), Some("shape.eps"), "{r}");
+    let (id, p, blob) = one(&s);
+    assert_eq!((blob.bytes.as_slice(), blob.mime.as_str()), (eps.as_bytes(), "application/postscript"));
+    assert_eq!(p.link.relative.as_deref(), Some("src/shape.eps"));
+    let at = bounds(&s, id);
+    assert!((at.x0 - 20.0).abs() < 0.01 && (at.y0 - 20.0).abs() < 0.01 && (at.width() - 60.0).abs() < 0.01, "{at:?}");
+    assert!(near(shown(&s), red), "its art draws: {:?}", shown(&s));
+
+    write(&dir.file("src/shape.eps"), eps.as_bytes());
+    let r = open(&mut s, &doc_path);
+    assert_eq!((r["missingLinks"].clone(), r["modifiedLinks"].clone()), (json!([]), json!([])), "{r}");
+    assert!(near(shown(&s), red));
+
+    let copy = dir.file("copy.vectorcraft");
+    save(&mut s, &copy);
+    std::fs::remove_file(dir.file("src/shape.eps")).unwrap();
+    open(&mut s, &copy);
+    let (_, _, blob) = one(&s);
+    assert_eq!(blob.bytes.as_slice(), eps.as_bytes(), "the bytes are saved");
+    assert!(near(shown(&s), red), "and draw: {:?}", shown(&s));
+
+    // A file named as PostScript of another kind, or with a name that doesn't say, draws the same.
+    for name in ["shape.ps", "shape", "shape.dat"] {
+        let named = place.replace("shape.eps", name);
+        write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &named)).as_bytes(), "0 0 1 rg 20 20 60 60 re f"));
+        open(&mut s, &doc_path);
+        let (_, p, blob) = one(&s);
+        assert_eq!((p.link.name(), blob.mime.as_str()), (name, "application/postscript"));
+        assert!(near(shown(&s), red), "{name} draws: {:?}", shown(&s));
+    }
+
+    // Bytes that can't be read leave the placed file unread: the file is read from its PDF part,
+    // and the object comes in as what the page draws there.
+    let broken = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n0 0 60 60 nosuchoperator\n%%EOF\n";
+    write(&doc_path, &ai::ai(ai::editing_data(200.0, 100.0, &ai::layer("Art", &place.replace(eps, broken))).as_bytes(), "0 0 1 rg 20 20 60 60 re f"));
+    let r = open(&mut s, &doc_path);
+    assert!(near(shown(&s), blue), "the page's art: {:?} {r}", shown(&s));
+}
+
+/// A synthetic EPS file that includes another placed EPS file, `depth` levels deep.
+fn nested_included_eps(depth: usize) -> String {
+    let prolog = "/Lb {10 {pop} repeat} def /Ln {pop} def /LB {} def /A {pop} def /` {gsave 5 {pop} repeat concat} def /~ {grestore} def";
+    let mut eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n1 0 0 setrgbcolor\n10 20 40 30 rectfill\n%%EOF\n".to_string();
+    for _ in 0..depth {
+        eps = format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%Creator: VectorCraft\n%AI5_FileFormat 4.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n\
+             %%BeginProlog\n{prolog}\n%%EndProlog\n%AI5_BeginLayer\n1 1 1 1 0 0 0 79 128 255 Lb\n(Back) Ln\n0 A\n\
+             [1 0 0 1 0 0] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\nLB\n%AI5_EndLayer--\nshowpage\n%%EOF\n"
+        );
+    }
+    eps
+}
+
+/// Open checks and drawing must not recursively multiply each other's work.
+#[test]
+fn placed_eps_files_included_open_work_is_bounded() {
+    let dir = Folder::new("placed-eps-open-work");
+    let path = dir.file("deep.eps");
+    write(&path, nested_included_eps(12).as_bytes());
+    let mut s = session();
+    let drawings = crate::cmd::place::document::DOCUMENT_READS.with(std::cell::Cell::get);
+    let checks = vectorcraft_eps::included_eps_reads();
+    open(&mut s, &path);
+    let drawings = crate::cmd::place::document::DOCUMENT_READS.with(std::cell::Cell::get) - drawings;
+    let checks = vectorcraft_eps::included_eps_reads() - checks;
+    eprintln!("included EPS work: {drawings} drawing reads, {checks} open checks");
+    // At most 8 drawing loads, each with at most 8 parses for checks, plus the outer import's 8.
+    // Repeated structural reads share completed checks within each chain.
+    assert!(drawings <= 8, "{drawings} drawing reads, {checks} open checks");
+    assert!(checks <= 8 * 8 + 8, "{drawings} drawing reads, {checks} open checks");
+    assert!(drawings > 0 && checks > 0, "both read paths were exercised");
+}
+
+/// A legacy-format file (version 7 specification §16) placing an EPS file whose bytes it includes,
+/// which is such a file in turn, 300 deep: it opens, reading a bounded number of them.
+#[test]
+fn placed_eps_files_included_300_deep_open() {
+    let dir = Folder::new("placed-eps-300-deep");
+    let path = dir.file("deep.eps");
+    write(&path, nested_included_eps(300).as_bytes());
+    let mut s = session();
+    open(&mut s, &path);
+    let mut placed = 0;
+    s.doc().unwrap().doc.visit_placed(|_, _| placed += 1);
+    assert_eq!(placed, 1);
 }
 
 #[test]

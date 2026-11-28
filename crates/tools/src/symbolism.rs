@@ -48,6 +48,8 @@ pub struct SymbolismTool {
     active: bool,
     hover: Option<Point>,
     alt: bool,
+    /// Shift was held when the drag began (the Shifter, Sizer, Stainer and Styler have a Shift form).
+    shift: bool,
     /// Brush diameter in points.
     pub diameter: f64,
     /// 1..10.
@@ -113,6 +115,7 @@ impl SymbolismTool {
             active: false,
             hover: None,
             alt: false,
+            shift: false,
             diameter: 80.0,
             intensity: 5.0,
             density: 5.0,
@@ -196,6 +199,9 @@ impl SymbolismTool {
             v["proportional"] = json!(self.proportional);
             v["affectsDensity"] = json!(self.affects_density);
         }
+        if self.shift && matches!(tool, "shift" | "size" | "stain" | "style") {
+            v["shift"] = json!(true);
+        }
         ("symbol.adjust".into(), v)
     }
 }
@@ -230,6 +236,7 @@ impl Tool for SymbolismTool {
                 self.previewed = 1;
                 self.active = true;
                 self.alt = ev.mods.alt;
+                self.shift = ev.mods.shift;
                 let (c, v) = self.command(cx);
                 vec![Action::Begin(self.label().into()), Action::Preview(c, v)]
             }
@@ -431,6 +438,20 @@ impl Tool for BrushPaintTool {
     fn wants_samples(&self) -> bool {
         self.inner.wants_samples()
     }
+    /// The brush it paints with varies with the wheel: a Calligraphic brush with a value on Stylus
+    /// Wheel and a variation other than 0, a Scatter brush with a value on it whose two values
+    /// differ, or an Art brush whose width is on it with two different widths.
+    fn reads_wheel(&self, cx: &ToolContext) -> bool {
+        use vectorcraft_brush::{BrushKind, Variation};
+        let wheel = |mode: Variation| mode == Variation::StylusWheel;
+        let Some(brush) = self.brush_name(cx).and_then(|n| vectorcraft_brush::find(cx.doc, &n)) else { return false };
+        match brush.kind {
+            BrushKind::Calligraphic(c) => c.modes().into_iter().zip(c.variation).any(|(m, v)| wheel(m) && v != 0.0),
+            BrushKind::Scatter(s) => s.modes().into_iter().zip(s.values()).any(|(m, (a, b))| wheel(m) && a != b),
+            BrushKind::Art(a) => a.width_mode.is_some_and(wheel) && a.width_range().0 != a.width_range().1,
+            BrushKind::Pattern(_) | BrushKind::Bristle(_) => false,
+        }
+    }
     fn busy(&self) -> bool {
         self.inner.busy()
     }
@@ -577,6 +598,39 @@ mod tests {
         assert!(v["method"] == "random" && v.get("proportional").is_none(), "{v}");
     }
 
+    /// A drag begun with Shift sends `shift` with the Shifter, Sizer, Stainer and Styler, and only
+    /// with them; one begun without it sends none.
+    #[test]
+    fn shift_reaches_the_tools_that_have_a_shift_form() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Selection::default(), paint());
+        let cx = cx(&d, &s, &p);
+        let shifted = Mods { shift: true, ..Default::default() };
+        for (id, sends) in [
+            ("symbolShifter", true),
+            ("symbolSizer", true),
+            ("symbolStainer", true),
+            ("symbolStyler", true),
+            ("symbolScruncher", false),
+            ("symbolSpinner", false),
+            ("symbolScreener", false),
+            ("symbolSprayer", false),
+        ] {
+            let mut t = SymbolismTool::new(id);
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0).with_mods(shifted));
+            let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+            assert_eq!(v.get("shift"), sends.then_some(&json!(true)), "{id}");
+            // The drag keeps the Shift it began with.
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Drag, 60.0, 5.0));
+            let Action::Preview(_, v) = &a[0] else { panic!("{a:?}") };
+            assert_eq!(v.get("shift"), sends.then_some(&json!(true)), "{id} drag");
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Up, 60.0, 5.0));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 5.0, 5.0));
+            let Action::Preview(_, v) = &a[1] else { panic!("{a:?}") };
+            assert!(v.get("shift").is_none(), "{id} without Shift: {v}");
+        }
+    }
+
     /// With Use Pressure Pen a drag sample where the pen stays is kept when the pressure changes;
     /// without it, or with the same pressure, the drag keeps thinning the samples by distance.
     #[test]
@@ -717,5 +771,53 @@ mod tests {
         d.unknown.insert("currentBrush".into(), json!("Also deleted"));
         let a = drag(&d, &mut BrushPaintTool::default());
         assert!(matches!(&a, Action::Preview(c, v) if c == "path.freehand" && v.get("brush").is_none()), "no brush: {a:?}");
+    }
+
+    #[test]
+    fn the_paintbrush_reads_the_wheel_only_with_a_stylus_wheel_brush() {
+        use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Calligraphic, Scatter, Variation};
+        let wheel = Variation::StylusWheel;
+        let calligraphic =
+            |modes, size| BrushKind::Calligraphic(Calligraphic { variation: [0.0, 0.0, size], modes: Some(modes), ..Calligraphic::default() });
+        let scatter = |size| {
+            BrushKind::Scatter(Scatter { size, modes: Some([wheel, Variation::Fixed, Variation::Fixed, Variation::Fixed]), ..Scatter::default() })
+        };
+        let art = |width_mode, width_max| BrushKind::Art(ArtBrush { width_mode, width_max: Some(width_max), ..ArtBrush::default() });
+        let library = [
+            Brush { name: "Plain".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, Variation::Pressure], 2.0) },
+            Brush { name: "Nib".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, wheel], 2.0) },
+            Brush { name: "Still nib".into(), kind: calligraphic([Variation::Fixed, Variation::Fixed, wheel], 0.0) },
+            Brush { name: "Dots".into(), kind: scatter((50.0, 150.0)) },
+            Brush { name: "Even dots".into(), kind: scatter((100.0, 100.0)) },
+            Brush { name: "Taper".into(), kind: art(Some(wheel), 200.0) },
+            Brush { name: "Even taper".into(), kind: art(Some(wheel), 100.0) },
+            Brush { name: "Flat".into(), kind: art(None, 200.0) },
+        ];
+        let (mut d, _) = doc_with_rect();
+        d.unknown.insert(vectorcraft_brush::DOC_KEY.into(), serde_json::to_value(library).unwrap());
+        let (s, p) = (Selection::default(), paint());
+        let reads = |d: &vectorcraft_doc::Document, t: &BrushPaintTool| t.reads_wheel(&cx(d, &s, &p));
+        let mut t = BrushPaintTool::default();
+        assert!(!reads(&d, &t), "no brush");
+        let brushes = [
+            ("Plain", false),
+            ("Nib", true),
+            ("Still nib", false),
+            ("Dots", true),
+            ("Even dots", false),
+            ("Taper", true),
+            ("Even taper", false),
+            ("Flat", false),
+            ("Deleted", false),
+        ];
+        for (name, varies) in brushes {
+            d.unknown.insert(vectorcraft_brush::CURRENT_KEY.into(), json!(name));
+            assert_eq!(reads(&d, &t), varies, "the current brush {name}");
+        }
+        t.set_option("brush", &json!("Plain"));
+        assert!(!reads(&d, &t), "the tool's own brush comes first");
+        t.set_option("brush", &json!("Nib"));
+        d.unknown.remove(vectorcraft_brush::CURRENT_KEY);
+        assert!(reads(&d, &t), "and reads the wheel");
     }
 }

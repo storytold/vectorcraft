@@ -34,7 +34,8 @@
 //! plays. A key a schema doesn't name passes there too, and the values of the parameters it names
 //! are still checked. Even there, an effect's `color` that the effect can't read and a Levels or Curves
 //! `channel` that the effect doesn't have are refused by `effect.apply` and `effect.setParams`
-//! themselves ([`check_effect_color`], [`check_effect_channel`]).
+//! themselves ([`check_effect_color`], [`check_effect_channel`]). A saved step may keep an unknown
+//! shadow or glow blend mode, which the effect draws as Normal.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -259,6 +260,8 @@ thread_local! {
     pub(crate) static PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Whether [`known`] is skipped on this thread ([`uncached`]).
     static UNCACHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The cells [`distance`] worked out on this thread: one for each pair of characters it compared.
+    pub(crate) static DISTANCE_CELLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Whether [`read_descriptions`] keeps what `doc` says.
@@ -329,6 +332,8 @@ fn no_required_id_beside_ids(doc: &str) -> bool {
 /// The edits (insert, delete, replace, swap of neighbours) that turn `a` into `b`, ignoring case.
 fn distance(a: &str, b: &str) -> usize {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().map(|c| c.to_ascii_lowercase()).collect(), b.chars().map(|c| c.to_ascii_lowercase()).collect());
+    #[cfg(test)]
+    DISTANCE_CELLS.with(|n| n.set(n.get().saturating_add(a.len().saturating_mul(b.len()))));
     let (mut before, mut prev): (Vec<usize>, Vec<usize>) = (Vec::new(), (0..=b.len()).collect());
     for (i, ca) in a.iter().enumerate() {
         let mut row = vec![i + 1];
@@ -456,7 +461,8 @@ fn check_member_keys(id: &str, params: &Value) -> Result<()> {
 /// `params` of built-in effect `effect`, as command `id` was given them (#1592): only keys the
 /// effect takes (those of its dialog defaults and of its params description), each of the type
 /// the effect reads ([`check_effect_types`]), a `color` the effect can draw ([`check_effect_color`])
-/// and a Levels or Curves `channel` the effect has ([`check_effect_channel`]). Numbers out of range
+/// a Levels or Curves `channel` the effect has ([`check_effect_channel`]) and a Drop Shadow's or
+/// glow's `mode` that names a blend mode ([`check_effect_blend`]). Numbers out of range
 /// pass: the effect clamps them when it draws. An installed effect plug-in's are checked against its
 /// manifest, and an unknown effect is the command's to report.
 pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()> {
@@ -476,6 +482,7 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     if let Some(key) = given.keys().find(|k| !keys.contains(&k.as_str())) {
         return Err(unknown(id, key, &keys));
     }
+    check_effect_blend(id, effect, params)?;
     check_effect_types(id, effect, params)?;
     // An SVG filter's XML is one drawable <filter> element.
     if effect == vectorcraft_render::effects::SVG_FILTER
@@ -516,7 +523,30 @@ pub fn check_effect_params(id: &str, effect: &str, params: &Value) -> Result<()>
     }
     check_effect_color(id, effect, params)?;
     check_effect_channel(id, effect, params)?;
-    check_effect_center(id, effect, params)
+    check_effect_center(id, effect, params)?;
+    check_effect_pathfinder(id, effect, params)
+}
+
+/// The Pathfinder Options in `params` of a Pathfinder effect (`effect`), as command `id` was given
+/// them: `precision` a number of points from 0.001 to 10, and `removeRedundantPoints` and
+/// `removeUnpainted` true or false. `effect.apply` and `effect.setParams` run this themselves
+/// before they edit, as they run [`check_effect_color`].
+pub(crate) fn check_effect_pathfinder(id: &str, effect: &str, params: &Value) -> Result<()> {
+    use vectorcraft_render::effects;
+    if !effects::takes_pathfinder_options(effect) {
+        return Ok(());
+    }
+    if let Some(v) = params.get("precision")
+        && !v.as_f64().is_some_and(|p| effects::PATHFINDER_EFFECT_PRECISION.contains(&p))
+    {
+        return Err(bad(id, "precision must be from 0.001 to 10 pt"));
+    }
+    for key in ["removeRedundantPoints", "removeUnpainted"] {
+        if params.get(key).is_some_and(|v| !v.is_boolean()) {
+            return Err(bad(id, format!("`{key}` must be true or false")));
+        }
+    }
+    Ok(())
 }
 
 /// The type of the values in `params` of effect `effect`, as command `id` was given them: a key
@@ -557,9 +587,11 @@ fn check_effect_types(id: &str, effect: &str, params: &Value) -> Result<()> {
 /// A value of the type effect `effect` reads for `key`, a parameter its params description names
 /// without a dialog default: the earlier 3D Perspective and light (`perspective`, `lightAzimuth`,
 /// `lightElevation`) and Scribble `variation` are numbers, an Outline Stroke's `width` is a number
-/// and a Gaussian Blur's `linear` is true or false. A Glass, Texturizer or Rough Pastels
-/// `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version` and the `style` of Crop
-/// Marks have checks of their own; they aren't listed.
+/// and a Gaussian Blur's `linear` is true or false. A Pathfinder effect's `precision` is a number and
+/// its `removeRedundantPoints` and `removeUnpainted` are true or false. A Glass, Texturizer or Rough
+/// Pastels `textureImage`, an SVG filter's `name` and `xml`, a Warp's `version`, the `style` of Crop
+/// Marks and an Extrude & Bevel's custom `bevelName` and `bevelProfile` have checks of their own;
+/// they aren't listed.
 pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
     use vectorcraft_render::effects;
     let number = || Some(Value::from(0.0));
@@ -568,6 +600,8 @@ pub(crate) fn undefaulted_type(effect: &str, key: &str) -> Option<Value> {
         "variation" if effect == "stylize.scribble" => number(),
         "width" if effect == "path.outlineStroke" => number(),
         "linear" if effect == "blur.gaussian" => Some(Value::Bool(false)),
+        "precision" if effects::takes_pathfinder_options(effect) => number(),
+        "removeRedundantPoints" | "removeUnpainted" if effects::takes_pathfinder_options(effect) => Some(Value::Bool(false)),
         _ => None,
     }
 }
@@ -634,6 +668,20 @@ pub(crate) fn check_effect_channel(id: &str, effect: &str, params: &Value) -> Re
     Err(bad(id, format!("`{key}` must be one of {}", vectorcraft_render::effects::CHANNELS.join(", "))))
 }
 
+/// The `mode` in `params` of Drop Shadow, Inner Glow or Outer Glow (`effect`), as command `id` was
+/// given it: a parameter error naming the blend modes unless the effect reads it as one
+/// ([`vectorcraft_render::effects::parse_blend_mode`]); an older step with another value still replays in Normal.
+fn check_effect_blend(id: &str, effect: &str, params: &Value) -> Result<()> {
+    use vectorcraft_render::effects;
+    let key = "mode";
+    let Some(v) = params.get(key) else { return Ok(()) };
+    if !effects::takes_blend_mode(effect, key) || v.as_str().and_then(effects::parse_blend_mode).is_some() {
+        return Ok(());
+    }
+    let modes: Vec<String> = vectorcraft_color::BlendMode::ALL.into_iter().map(effects::blend_mode_id).collect();
+    Err(bad(id, format!("`{key}` must be one of {}", modes.join(", "))))
+}
+
 /// The Blur Center (`centerX`, `centerY`) in `params` of Radial Blur (`effect`), as command `id`
 /// was given it: a parameter error unless each is a number from 0 to 1 (a share of the object's
 /// bounds). `effect.apply` and `effect.setParams` run this themselves before they edit, as they
@@ -671,6 +719,7 @@ pub const UNCHECKED: &[&str] = &[
     "document.exportForScreens",
     "document.exportForWeb",
     "document.exportForWeb.preview",
+    "document.exportForWeb.saveColorTable",
     "document.exportPdf",
     "document.find",
     "document.inspect",
@@ -776,6 +825,7 @@ pub const UNCHECKED: &[&str] = &[
     "transparency.setOpacityMask",
     "transparency.unlinkOpacityMask",
     "type.pathOptions",
+    "webExport.loadColorTable",
     "webExport.optimizeToFileSize",
     "webExport.presets.save",
     "webExport.settings",
@@ -1040,7 +1090,7 @@ pub fn check_params(id: &str, params: &Value) -> Result<()> {
 fn check_params_in(id: &str, params: &Value, in_batch: bool) -> Result<()> {
     let Some(spec) = find_command(id) else { return Ok(()) };
     if let ("effect.apply" | "appearance.addEffect", Some(effect), Some(given)) =
-        (id, params.get("effect").or_else(|| params.get("id")).and_then(Value::as_str), params.get("params"))
+        (id, super::effectcmd::requested_effect(params), params.get("params"))
     {
         check_effect_params(id, effect, given)?;
     }

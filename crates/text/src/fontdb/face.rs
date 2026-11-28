@@ -4,7 +4,20 @@ use super::traits::{FaceKeys, FontTraits};
 use super::{Arc, GlyphId, HashMap, Location, LocationRef, MetadataProvider, Size, StringId};
 
 /// The most glyphs one [`outline_points`] lookup reads, composite components included.
-const MAX_OUTLINE_VISITS: usize = 65_536;
+pub(crate) const MAX_OUTLINE_VISITS: usize = 65_536;
+
+#[cfg(test)]
+thread_local! {
+    /// How many glyphs [`outline_points`] read on this thread ([`outline_glyphs_read`]).
+    static OUTLINE_GLYPHS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many glyphs [`outline_points`] lookups have read on this thread, composite components
+/// included.
+#[cfg(test)]
+pub(crate) fn outline_glyphs_read() -> usize {
+    OUTLINE_GLYPHS_READ.get()
+}
 
 /// Unhinted TrueType contour points in glyph order, including transformed composite components.
 /// A point cap, a depth bound and `visits`, the number of glyphs the whole lookup may still read,
@@ -20,6 +33,8 @@ fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize, visits
         return None;
     }
     *visits = visits.checked_sub(1)?;
+    #[cfg(test)]
+    OUTLINE_GLYPHS_READ.set(OUTLINE_GLYPHS_READ.get() + 1);
     let glyph = font.loca(None).ok()?.get(gid, &font.glyf().ok()?)?.into_glyph()?;
     match glyph {
         Glyph::Simple(simple) => {
@@ -210,6 +225,18 @@ pub struct FontFace {
     pub(super) char_list: std::sync::OnceLock<Arc<[(char, u32)]>>,
     /// [`Self::name_owner`]'s glyph names to characters, read once.
     pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
+    /// [`Self::glyph_name`]'s names by glyph id, read once.
+    pub(super) glyph_names: std::sync::OnceLock<Vec<Option<Box<str>>>>,
+}
+
+impl vectorcraft_doc::FileFontFace for FontFace {
+    fn id(&self) -> u32 {
+        self.id
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.data()
+    }
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance
@@ -372,6 +399,12 @@ impl FontFace {
     /// `usWinDescent`, at the face's location in a variable font), in font units; `None` when the
     /// font has no OS/2 table or the sum isn't positive.
     pub fn win_cell_height(&self) -> Option<f64> {
+        self.win_ascent_descent().map(|(a, d)| a + d)
+    }
+    /// The face's character cell on Windows above and below the baseline (the OS/2 table's
+    /// `usWinAscent` and `usWinDescent`, at the face's location in a variable font), in font
+    /// units; `None` when the font has no OS/2 table or the sum isn't positive.
+    pub fn win_ascent_descent(&self) -> Option<(f64, f64)> {
         use skrifa::raw::TableProvider;
         let f = self.skrifa()?;
         let o = f.os2().ok()?;
@@ -380,8 +413,8 @@ impl FontFace {
         let varied = |tag: &[u8; 4]| {
             f.mvar().ok().and_then(|m| m.metric_delta(skrifa::Tag::new(tag), self.location().coords()).ok()).map_or(0.0, |d| d.to_f64())
         };
-        let h = f64::from(o.us_win_ascent()) + varied(b"hcla") + f64::from(o.us_win_descent()) + varied(b"hcld");
-        (h > 0.0 && h.is_finite()).then_some(h)
+        let (a, d) = (f64::from(o.us_win_ascent()) + varied(b"hcla"), f64::from(o.us_win_descent()) + varied(b"hcld"));
+        (a + d > 0.0 && (a + d).is_finite()).then_some((a, d))
     }
     /// The average width of the face's characters (the OS/2 table's `xAvgCharWidth`), in font
     /// units; `None` when the font has no OS/2 table or gives no positive width.

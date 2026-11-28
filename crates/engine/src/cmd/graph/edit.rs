@@ -109,6 +109,33 @@ pub(crate) fn edit_graph_art(n: &mut Node, edit: impl FnOnce(&mut Node)) {
 /// generation, which is recorded in the spec's `placed_art` bounds, or `placed` in graphs saved without them).
 pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> Result<()> {
     let n = d.node(id).ok_or(EngineError::NoNode(id))?;
+    carry_moves(n, &mut spec);
+    let children = generate(d, &spec);
+    spec.placed = children_bounds(&children);
+    spec.placed_art = art_bounds(&children);
+    let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
+    if let Some(ch) = n.children_mut() {
+        *ch = children;
+    }
+    n.extras_mut().graph = Some(Box::new(spec));
+    Ok(())
+}
+
+/// [`regenerate`] graph `n` from its own spec, where `n` is outside `d`'s layers (in a symbol's art).
+pub(super) fn regenerate_detached(d: &mut Document, n: &mut Node) {
+    let Some(mut spec) = n.extras().graph.as_deref().cloned() else { return };
+    carry_moves(n, &mut spec);
+    let children = generate(d, &spec);
+    spec.placed = children_bounds(&children);
+    spec.placed_art = art_bounds(&children);
+    if let Some(ch) = n.children_mut() {
+        *ch = children;
+    }
+    n.extras_mut().graph = Some(Box::new(spec));
+}
+
+/// Adjust `spec`'s plot rect for any move or scale of graph `n` since its last generation.
+fn carry_moves(n: &Node, spec: &mut GraphSpec) {
     if let Some((placed, now)) = measured(n)
         && placed.width() > 1e-9
         && placed.height() > 1e-9
@@ -119,15 +146,6 @@ pub(super) fn regenerate(d: &mut Document, id: NodeId, mut spec: GraphSpec) -> R
             * Affine::translate(-placed.origin().to_vec2());
         spec.rect = a.transform_rect_bbox(spec.rect);
     }
-    let children = generate(d, &spec);
-    spec.placed = children_bounds(&children);
-    spec.placed_art = art_bounds(&children);
-    let n = d.node_mut(id).ok_or(EngineError::NoNode(id))?;
-    if let Some(ch) = n.children_mut() {
-        *ch = children;
-    }
-    n.extras_mut().graph = Some(Box::new(spec));
-    Ok(())
 }
 
 pub(super) fn create(s: &mut Session, p: &Value) -> Result<Value> {

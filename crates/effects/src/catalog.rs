@@ -58,10 +58,61 @@ pub fn raster_px_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f
     documented_range(id, key, "px")
 }
 
+/// The range parameter `key` of effect `id` is documented with, after any number of unit words
+/// (`key: lo..hi`, `key: unit lo..hi`, `key: screen angle deg lo..hi`) or as the first word of its
+/// description in parentheses (`key: unit (lo..hi, default)`), and before the rest of that
+/// description or the next parameter; `None` when its documentation gives none.
+pub(crate) fn any_documented_range(id: &str, key: &str) -> Option<std::ops::RangeInclusive<f64>> {
+    let doc = catalog_index().get(id)?.params;
+    let starts = |at: usize| starts_key(doc, at);
+    doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
+        let rest = doc.get(at + key.len()..)?;
+        let rest = rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?;
+        for word in rest.split_whitespace() {
+            let opens = word.starts_with('(');
+            if let Some((lo, hi)) = word.trim_start_matches('(').split_once("..") {
+                let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches([',', ';', ')', '}']).parse::<f64>().ok()?);
+                return (lo.is_finite() && hi.is_finite() && lo <= hi).then_some(lo..=hi);
+            }
+            if opens {
+                return None;
+            }
+            if word.ends_with([',', '}']) {
+                return None;
+            }
+        }
+        None
+    })
+}
+
+/// The choices parameter `key` of effect `id` is documented with (`key: "a"|"b"`, a note in
+/// parentheses allowed after a choice: `key: "a" (note)|"b"`); `None` when its documentation gives
+/// fewer than two.
+pub(crate) fn documented_choices(id: &str, key: &str) -> Option<Vec<&'static str>> {
+    let doc = catalog_index().get(id)?.params;
+    doc.match_indices(key).map(|(at, _)| at).filter(|at| starts_key(doc, *at)).find_map(|at| {
+        let rest = doc.get(at + key.len()..)?;
+        let mut rest = rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?;
+        let mut choices = vec![];
+        while let Some((choice, after)) = rest.strip_prefix('"').and_then(|r| r.split_once('"')) {
+            choices.push(choice);
+            let after = match after.strip_prefix(" (") {
+                Some(note) => note.get(note.find(')')? + 1..)?,
+                None => after,
+            };
+            match after.strip_prefix('|') {
+                Some(next) => rest = next,
+                None => break,
+            }
+        }
+        (choices.len() >= 2).then_some(choices)
+    })
+}
+
 /// The range parameter `key` of effect `id` is documented with in `unit` (`key: unit lo..hi`).
 fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeInclusive<f64>> {
     let doc = catalog_index().get(id)?.params;
-    let starts = |at: usize| doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| c == '{' || c == ' ');
+    let starts = |at: usize| starts_key(doc, at);
     let rest = doc.match_indices(key).map(|(at, _)| at).filter(|at| starts(*at)).find_map(|at| {
         let rest = doc.get(at + key.len()..)?;
         rest.strip_prefix(": ").or_else(|| rest.strip_prefix("?: "))?.strip_prefix(unit)?.strip_prefix(' ')
@@ -69,6 +120,12 @@ fn documented_range(id: &str, key: &str, unit: &str) -> Option<std::ops::RangeIn
     let (lo, hi) = rest.split_whitespace().next()?.split_once("..")?;
     let (lo, hi) = (lo.parse::<f64>().ok()?, hi.trim_end_matches(',').parse::<f64>().ok()?);
     (lo.is_finite() && hi.is_finite() && lo <= hi).then_some(lo..=hi)
+}
+
+/// Can a parameter name start at byte `at` of parameter documentation `doc`: after `{`, a space or
+/// a comma?
+fn starts_key(doc: &str, at: usize) -> bool {
+    doc.get(..at).and_then(|s| s.chars().last()).is_some_and(|c| matches!(c, '{' | ' ' | ','))
 }
 
 /// The distance parameters of effect `id` (none for unknown effects).
@@ -111,6 +168,8 @@ fn lengths_of(id: &str) -> Lengths {
         "sketch.tornEdges" => always(&["smoothness"]),
         "sketch.waterPaper" => always(&["fiberLength"]),
         TRAP => always(&["thickness", "precision"]),
+        // The Pathfinder Options' refit tolerance.
+        id if crate::takes_pathfinder_options(id) => always(&["precision"]),
         RASTERIZE => always(&["addAround"]),
         // The points one unit of the filter measures.
         crate::SVG_FILTER => always(&["scale"]),
@@ -189,15 +248,15 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             EXTRUDE,
             "Extrude & Bevel…",
             &["Effect", "3D and Materials"],
-            "{depth: pt (0..2000, 50), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none), bevelWidth: pt (0..1000, 4), bevelHeight: pt (0..1000, 4), bevelRepeat: integer (1..32, 1), bevelSpace: % (0..90, 0; flat between repeats), bevelInside: bool (false: added around the shape; true: carved into it), bevelBothSides: bool (false), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches, and how much it blurs the shadow), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), shadow: bool (false; the first light casts a shadow, black at 50% times the art's opacity, hard-edged at the first light's softness 0 and blurred above it), shadowPosition: behind|below (behind; behind: on a plane square to the view, below: on the floor under the object, turned with it), shadowDistance: % (0..100, 0; how far the plane is from the object, as a share of its largest size), shadowBounds: % (10..400, 100; how far the plane reaches: at 100 it is four times the object's largest size across), graphics: array of 0..64 objects ([]; the 3D and Materials panel's Graphics on the caps and the side, see threeD.mapGraphic: symbol: name of a document symbol, face: front|back|side (front; the back reads left to right as seen from behind; side is the walls and bevels), x: pt (0; the offset of the graphic's center from the center of the object's bounds, in the face's own plane; on the side from the middle of the side unrolled flat, along the outline, clockwise from its top), y: pt (0; on the side from the front toward the back), scale: % (1..10000, 100; of the symbol's own size), rotation: degrees (-360..360, 0; counterclockwise); drawn turned, foreshortened and shaded with the face and clipped to it: on a cap of a solid object only, and on the side of a solid or hollow object wrapped around it and drawn only where its outside faces the viewer), render: object ({mode: shaded}; mode: shaded|wireframe, as Revolve's)}. The front face is the art, extruded backwards about the centre of its bounds; painted with the top fill (else the top stroke).",
+            "{depth: pt (0..2000, 50), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none; or custom, a bevel of the user's own drawn by bevelProfile), bevelWidth: pt (0..1000, 4), bevelHeight: pt (0..1000, 4), bevelRepeat: integer (1..32, 1), bevelSpace: % (0..90, 0; flat between repeats), bevelInside: bool (false: added around the shape; true: carved into it), bevelBothSides: bool (false), bevelName: string (a custom bevel's name), bevelProfile: [[x, y], …] (a custom bevel's 2 to 64 points, shares 0..1 of the width and height from [0, 0] at the cap's edge to [1, 1] at the side wall, joined by straight lines; effect.apply and effect.setParams also take bevel {custom: name}, a bevel of the bevels file (threeD.bevels.list), and store it as bevel custom with its bevelName and bevelProfile), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches, and how much it blurs the shadow), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), shadow: bool (false; the first light casts a shadow, black at 50% times the art's opacity, hard-edged at the first light's softness 0 and blurred above it), shadowPosition: behind|below (behind; behind: on a plane square to the view, below: on the floor under the object, turned with it), shadowDistance: % (0..100, 0; how far the plane is from the object, as a share of its largest size), shadowBounds: % (10..400, 100; how far the plane reaches: at 100 it is four times the object's largest size across), graphics: array of 0..64 objects ([]; the 3D and Materials panel's Graphics on the caps and the side, see threeD.mapGraphic: symbol: name of a document symbol, face: front|back|side (front; the back reads left to right as seen from behind; side is the walls and bevels), x: pt (0; the offset of the graphic's center from the center of the object's bounds, in the face's own plane; on the side from the middle of the side unrolled flat, along the outline, clockwise from its top), y: pt (0; on the side from the front toward the back), scale: % (1..10000, 100; of the symbol's own size), rotation: degrees (-360..360, 0; counterclockwise); drawn turned, foreshortened and shaded with the face and clipped to it: on a cap of a solid object only, and on the side of a solid or hollow object wrapped around it and drawn only where its outside faces the viewer), render: object ({mode: shaded}; mode: shaded|wireframe, as Revolve's)}. The front face is the art, extruded backwards about the centre of its bounds; painted with the top fill (else the top stroke).",
             json!({"depth":50.0,"twist":0.0,"taper":100.0,"cap":true,"bevel":"none","bevelWidth":4.0,"bevelHeight":4.0,"bevelRepeat":1,"bevelSpace":0.0,"bevelInside":false,"bevelBothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0,"shadow":false,"shadowPosition":"behind","shadowDistance":0.0,"shadowBounds":100.0,"graphics":[],"render":{"mode":"shaded"}}),
         ),
         g(
             INFLATE,
             "Inflate…",
             &["Effect", "3D and Materials"],
-            "{depth: pt (0..2000, 0; flat depth between front and back), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: no back, a shell open behind), volume: % (0..100, 50; 50 rounds the edge like a half sphere), bothSides: bool (false: flat back), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches, and how much it blurs the shadow), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), shadow: bool (false; the first light casts a shadow, black at 50% times the art's opacity, hard-edged at the first light's softness 0 and blurred above it), shadowPosition: behind|below (behind; behind: on a plane square to the view, below: on the floor under the object, turned with it), shadowDistance: % (0..100, 0; how far the plane is from the object, as a share of its largest size), shadowBounds: % (10..400, 100; how far the plane reaches: at 100 it is four times the object's largest size across), render: object ({mode: shaded}; mode: shaded|wireframe, as Revolve's)}. Painted with the top fill (else the top stroke).",
-            json!({"depth":0.0,"twist":0.0,"taper":100.0,"cap":true,"volume":50.0,"bothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0,"shadow":false,"shadowPosition":"behind","shadowDistance":0.0,"shadowBounds":100.0,"render":{"mode":"shaded"}}),
+            "{depth: pt (0..2000, 0; flat depth between front and back), twist: degrees (0..360, 0; the back turned against the front), taper: % (1..100, 100; the back's size), cap: bool (true: solid; false: no back, a shell open behind), volume: % (0..100, 50; 50 rounds the edge like a half sphere), bothSides: bool (false: flat back), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), perspective: % (0..100; the earlier form, read as the perspectiveAngle that shows the same view), shade: bool (true), lightColor: #rrggbb (white, #ffffff; legacy directional light color), lights: null or array of 1..10 objects (color: #rrggbb, intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, softness: % 0..100, behind: bool; overrides the single-light fields; ambient is shared), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 80), lightSoftness: % (0..100, 0; how far round the object the light reaches, and how much it blurs the shadow), ambient: % (0..200, 25; Ambient Light), lightAzimuth: degrees (the earlier form: with lightElevation, read as the lightRotation, lightHeight and lightBehind of the same light), lightElevation: degrees (the earlier form, with lightAzimuth), shadow: bool (false; the first light casts a shadow, black at 50% times the art's opacity, hard-edged at the first light's softness 0 and blurred above it), shadowPosition: behind|below (behind; behind: on a plane square to the view, below: on the floor under the object, turned with it), shadowDistance: % (0..100, 0; how far the plane is from the object, as a share of its largest size), shadowBounds: % (10..400, 100; how far the plane reaches: at 100 it is four times the object's largest size across), graphics: array of 0..64 objects ([]; the 3D and Materials panel's Graphics on the puffed front and back, see threeD.mapGraphic: symbol: name of a document symbol, face: front|back (front; the back reads left to right as seen from behind and takes graphics with bothSides and cap on), x: pt (0; the offset of the graphic's center from the center of the object's bounds, in the art's plane), y: pt (0), scale: % (1..10000, 100; of the symbol's own size), rotation: degrees (-360..360, 0; counterclockwise); carried straight out from the art's plane onto the puffed face, twist and taper turning and shrinking the back's with it, shaded with the surface and drawn only where its outside faces the viewer), render: object ({mode: shaded}; mode: shaded|wireframe, as Revolve's)}. Painted with the top fill (else the top stroke).",
+            json!({"depth":0.0,"twist":0.0,"taper":100.0,"cap":true,"volume":50.0,"bothSides":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"shade":true,"lightColor":"#ffffff","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":80.0,"lightSoftness":0.0,"ambient":25.0,"shadow":false,"shadowPosition":"behind","shadowDistance":0.0,"shadowBounds":100.0,"graphics":[],"render":{"mode":"shaded"}}),
         ),
         g(
             ROTATE,
@@ -210,7 +269,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             CLASSIC_EXTRUDE,
             "Extrude & Bevel (Classic)…",
             &["Effect", "3D and Materials", "3D (Classic)"],
-            "{depth: pt (0..2000, 50), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none), bevelHeight: pt (1..100, 4; the bevel is as wide as it is tall), bevelInside: bool (false: added around the shape; true: carved into it), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), surface: wireframe|none|diffuse|plastic (plastic; wireframe draws the edges of every face, hidden ones included, and fills none; none keeps the paint unlit; diffuse lights the faces softly; plastic adds a glossy highlight), lights: null or array of 1..10 objects (intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, behind: bool; overrides the single-light fields; the lights add up; color and softness are not used), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 100), ambient: % (0..100, 50; Ambient Light, every face whichever way it faces), highlightIntensity: % (0..100, 60; plastic only), highlightSize: % (0..100, 90; 100 broad, 0 a small spot; plastic only), blendSteps: integer (1..256, 25; how many levels the shading and the highlight are rounded to), shadingColor: black|custom|none|blackOverprint (black; the color the faces darken toward; none keeps the paint and adds only the highlight; blackOverprint keeps the paint and draws the shading over it as overprinting black, on the black plate, with no highlight), shadingCustom: #rrggbb (#000000; the color shadingColor custom darkens toward), preserveSpotColors: bool (false; a color linked to a spot or global swatch stays a tint of that swatch, lighter where the highlight is, with black multiplied and overprinting where the faces darken, so a spot color keeps its plate; it does nothing while shadingColor is custom, and with blackOverprint every face keeps its paint and swatch link whether it is on or off), drawHiddenFaces: bool (false; also draws the faces turned away, behind the others), mapArt: array of 0..64 objects ([]; Map Art, see threeD.mapArt: surface: integer (1..100000; the numbered surface, one map for a surface), symbol: name of a document symbol, x: pt (-1000000..1000000, 0; the offset of the art's center from the center of the surface laid out flat), y: pt (-1000000..1000000, 0), scaleX: % (1..10000, 100; of the symbol's own width), scaleY: % (1..10000, 100), rotation: degrees (-360..360, 0; counterclockwise); the surfaces are numbered through the object's solids in the order they are built: each solid's front cap and back cap (none on a hollow solid, cap false), then each side wall from corner to corner of the outline, then the bevel above each wall; a map past the object's surfaces draws nothing; wireframe draws no mapped art), mapShade: bool (false; Shade Artwork: the mapped art takes the tone and highlight of its face), mapInvisible: bool (false; Invisible Geometry: with at least one map, only the mapped art is drawn)}. The front face is the art, extruded backwards about the center of its bounds; a solid is built for the top fill and for each stroke, each in its own paint. The defaults, the surface numbering and the limits are VectorCraft's own.",
+            "{depth: pt (0..2000, 50), cap: bool (true: solid; false: hollow), bevel: none|classic|rounded|cove|step|ogee (none; or custom, a bevel of the user's own drawn by bevelProfile), bevelHeight: pt (1..100, 4; the bevel is as wide as it is tall), bevelInside: bool (false: added around the shape; true: carved into it), bevelName: string (a custom bevel's name), bevelProfile: [[x, y], …] (a custom bevel's points, as for threeD.extrude; bevel {custom: name} takes a bevel of the bevels file), rotationX: degrees (-180..180, -21.88), rotationY: degrees (-180..180, -23.4), rotationZ: degrees (-180..180, 9.06; the defaults are the Off-Axis Front position), perspectiveAngle: degrees (0..160, 0; 0 is none, wider brings the eye nearer), surface: wireframe|none|diffuse|plastic (plastic; wireframe draws the edges of every face, hidden ones included, and fills none; none keeps the paint unlit; diffuse lights the faces softly; plastic adds a glossy highlight), lights: null or array of 1..10 objects (intensity: % 0..100, rotation: degrees -180..180, height: degrees 0..90, behind: bool; overrides the single-light fields; the lights add up; color and softness are not used), lightRotation: degrees (-180..180, 125.26; round the object on the page, 0 on its right, counterclockwise), lightHeight: degrees (0..90, 30; 0 beside the object, 90 straight in front), lightBehind: bool (false; true lights it from behind), lightIntensity: % (0..100, 100), ambient: % (0..100, 50; Ambient Light, every face whichever way it faces), highlightIntensity: % (0..100, 60; plastic only), highlightSize: % (0..100, 90; 100 broad, 0 a small spot; plastic only), blendSteps: integer (1..256, 25; how many levels the shading and the highlight are rounded to), shadingColor: black|custom|none|blackOverprint (black; the color the faces darken toward; none keeps the paint and adds only the highlight; blackOverprint keeps the paint and draws the shading over it as overprinting black, on the black plate, with no highlight), shadingCustom: #rrggbb (#000000; the color shadingColor custom darkens toward), preserveSpotColors: bool (false; a color linked to a spot or global swatch stays a tint of that swatch, lighter where the highlight is, with black multiplied and overprinting where the faces darken, so a spot color keeps its plate; it does nothing while shadingColor is custom, and with blackOverprint every face keeps its paint and swatch link whether it is on or off), drawHiddenFaces: bool (false; also draws the faces turned away, behind the others), mapArt: array of 0..64 objects ([]; Map Art, see threeD.mapArt: surface: integer (1..100000; the numbered surface, one map for a surface), symbol: name of a document symbol, x: pt (-1000000..1000000, 0; the offset of the art's center from the center of the surface laid out flat), y: pt (-1000000..1000000, 0), scaleX: % (1..10000, 100; of the symbol's own width), scaleY: % (1..10000, 100), rotation: degrees (-360..360, 0; counterclockwise); the surfaces are numbered through the object's solids in the order they are built: each solid's front cap and back cap (none on a hollow solid, cap false), then each side wall from corner to corner of the outline, then the bevel above each wall; a map past the object's surfaces draws nothing; wireframe draws no mapped art), mapShade: bool (false; Shade Artwork: the mapped art takes the tone and highlight of its face), mapInvisible: bool (false; Invisible Geometry: with at least one map, only the mapped art is drawn)}. The front face is the art, extruded backwards about the center of its bounds; a solid is built for the top fill and for each stroke, each in its own paint. The defaults, the surface numbering and the limits are VectorCraft's own.",
             json!({"depth":50.0,"cap":true,"bevel":"none","bevelHeight":4.0,"bevelInside":false,"rotationX":-21.88,"rotationY":-23.4,"rotationZ":9.06,"perspectiveAngle":0.0,"surface":"plastic","lights":null,"lightRotation":125.26438968275465,"lightHeight":30.0,"lightBehind":false,"lightIntensity":100.0,"ambient":50.0,"highlightIntensity":60.0,"highlightSize":90.0,"blendSteps":25,"shadingColor":"black","shadingCustom":"#000000","preserveSpotColors":false,"drawHiddenFaces":false,"mapArt":[],"mapShade":false,"mapInvisible":false}),
         ),
         g(
@@ -255,7 +314,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "{corners: [[x,y]×4] (new positions of the bounding-box corners TL, TR, BR, BL in unit box coordinates; identity [[0,0],[1,0],[1,1],[0,1]]; placed gradients move and scale from the object's bounds to its distorted bounds)}",
             json!({"corners": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]}),
         ),
-        g("distort.puckerBloat", "Pucker & Bloat…", DT, "{amount: % (-200 pucker … 200 bloat, default 0)}", json!({"amount": 0.0})),
+        g("distort.puckerBloat", "Pucker & Bloat…", DT, "{amount: % -200..200 (0; -200 puckers, 200 bloats)}", json!({"amount": 0.0})),
         g(
             "distort.roughen",
             "Roughen…",
@@ -324,21 +383,21 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "stylize.dropShadow",
             "Drop Shadow…",
             STYLIZE,
-            "{mode: blend mode (\"multiply\"), opacity: % (75), x: pt (7), y: pt (7), blur: pt (5), shade: \"color\"|\"darkness\" (\"color\"), color: \"#rrggbb\" (\"#000000\"), darkness: % (100)} (shade \"darkness\": use d = darkness / 100 on the source colors before document color conversion and blur; RGB channels become max(0, channel - d), CMYK keeps C/M/Y and sets K to min(1, K + d), and Gray sets its black component to min(1, K + d). The near-100% endpoint is gray black. Shadow opacity remains separate)",
+            "{mode: blend mode (\"multiply\"; normal, darken, multiply, colorBurn, lighten, screen, colorDodge, overlay, softLight, hardLight, difference, exclusion, hue, saturation, color or luminosity, in any letter case), opacity: % (75), x: pt (7), y: pt (7), blur: pt (5), shade: \"color\"|\"darkness\" (\"color\"), color: \"#rrggbb\" (\"#000000\"), darkness: % (100)} (shade \"darkness\": use d = darkness / 100 on the source colors before document color conversion and blur; RGB channels become max(0, channel - d), CMYK keeps C/M/Y and sets K to min(1, K + d), and Gray sets its black component to min(1, K + d). The near-100% endpoint is gray black. Shadow opacity remains separate)",
             json!({"mode": "multiply", "opacity": 75.0, "x": 7.0, "y": 7.0, "blur": 5.0, "shade": "color", "color": "#000000", "darkness": 100.0}),
         ),
         r(
             "stylize.innerGlow",
             "Inner Glow…",
             STYLIZE,
-            "{mode: blend mode (\"screen\"), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffffff\"), source: \"center\"|\"edge\" (\"edge\")}",
+            "{mode: blend mode (\"screen\"; one of Drop Shadow's modes), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffffff\"), source: \"center\"|\"edge\" (\"edge\")}",
             json!({"mode": "screen", "opacity": 75.0, "blur": 5.0, "color": "#ffffff", "source": "edge"}),
         ),
         r(
             "stylize.outerGlow",
             "Outer Glow…",
             STYLIZE,
-            "{mode: blend mode (\"screen\"), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffff00\")}",
+            "{mode: blend mode (\"screen\"; one of Drop Shadow's modes), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffff00\")}",
             json!({"mode": "screen", "opacity": 75.0, "blur": 5.0, "color": "#ffff00"}),
         ),
         r("stylize.feather", "Feather…", STYLIZE, "{radius: pt (5)}", json!({"radius": 5.0})),
@@ -806,7 +865,7 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "adjust.temperatureTint",
             "Temperature/Tint…",
             ADJUST,
-            "{temperature: -100 (cooler) .. 100 (warmer) (0), tint: -100 (greener) .. 100 (more magenta) (0)} recolours as Brightness/Contrast does",
+            "{temperature: -100..100 (0; -100 cooler, 100 warmer), tint: -100..100 (0; -100 greener, 100 more magenta)} recolours as Brightness/Contrast does",
             json!({"temperature": 0.0, "tint": 0.0}),
         ),
     ]);
@@ -832,15 +891,11 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
     }
     for (id, label, _) in PATHFINDER_EFFECTS {
         if id == "pathfinder.softMix" {
-            v.push(g(
-                id,
-                label,
-                PATHFINDER,
-                "{mixingRate?: 1..100 % (50)} blend overlapping fills in CMYK bottom to top (groups and layers: live Pathfinder over the members)",
-                json!({"mixingRate": 50.0}),
-            ));
+            v.push(g(id, label, PATHFINDER, crate::group::SOFT_MIX_PARAMS_DOC, json!({"mixingRate": 50.0})));
         } else {
-            v.push(g(id, label, PATHFINDER, "{} (groups and layers: live Pathfinder over the members)", json!({})));
+            // No dialog defaults, so the Effect menu applies it directly; effect.apply fills its
+            // Pathfinder Options in.
+            v.push(g(id, label, PATHFINDER, crate::group::PATHFINDER_PARAMS_DOC, json!({})));
         }
     }
     v.extend(crate::addons::color::catalog());
@@ -875,6 +930,12 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
 pub(crate) fn catalog_index() -> &'static std::collections::HashMap<&'static str, EffectInfo> {
     static INDEX: std::sync::OnceLock<std::collections::HashMap<&'static str, EffectInfo>> = std::sync::OnceLock::new();
     INDEX.get_or_init(|| effect_catalog().into_iter().map(|e| (e.id, e)).collect())
+}
+
+/// The id and menu label of built-in effect `id`, as the catalog holds them (no plug-in
+/// effects).
+pub fn built_in_effect(id: &str) -> Option<(&'static str, &'static str)> {
+    catalog_index().get(id).map(|e| (e.id, e.label))
 }
 
 /// Catalogue entry for `id` (built-in, or an installed plug-in effect).

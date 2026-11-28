@@ -10,9 +10,11 @@ pub mod freeform;
 pub mod gradient;
 pub mod harmony;
 pub mod libraries;
+pub mod oklab;
 pub mod palette_io;
 pub mod recolor;
 pub mod swatch;
+pub mod wcag;
 
 pub use blend::BlendMode;
 pub use freeform::{Freeform, FreeformMode, FreeformPoint};
@@ -340,6 +342,49 @@ pub fn hsb_to_rgb([h, s, v]: [f32; 3]) -> [f32; 3] {
     [r + m, g + m, b + m]
 }
 
+/// HSL (hue in degrees 0..360, saturation and lightness 0..1) of RGB numbers 0..1, with no color
+/// conversion, as CSS Color 4 converts sRGB to HSL
+/// (<https://www.w3.org/TR/css-color-4/#rgb-to-hsl>). The hue is 0 while the saturation is
+/// powerless, and a color outside 0..1 that gives a negative saturation turns its hue by 180°. As in
+/// the specification's conversion, a lightness of 0.00001 or less, a lightness less than 0.00001
+/// below 1, or a saturation of 0.00001 or less reads as a gray.
+pub fn rgb_to_hsl([r, g, b]: [f32; 3]) -> [f32; 3] {
+    const EPSILON: f32 = 1e-5;
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let d = max - min;
+    let l = (max + min) / 2.0;
+    if d <= 0.0 {
+        return [0.0, 0.0, l];
+    }
+    let mut s = if l.abs() <= EPSILON || (1.0 - l).abs() < EPSILON { 0.0 } else { (max - l) / l.min(1.0 - l) };
+    let mut h = rgb_to_hsb([r, g, b])[0];
+    if s < 0.0 {
+        h += 180.0;
+        s = -s;
+    }
+    if s <= EPSILON {
+        return [0.0, 0.0, l];
+    }
+    let h = h.rem_euclid(360.0);
+    [if h >= 360.0 { 0.0 } else { h }, s, l]
+}
+
+/// RGB numbers 0..1 of HSL `[h, s, l]` (hue in degrees, saturation and lightness 0..1), as CSS
+/// Color 4 converts HSL to sRGB (<https://www.w3.org/TR/css-color-4/#hsl-to-rgb>): the inverse of
+/// [`rgb_to_hsl`]. A hue outside 0..360 wraps into that range before the conversion, so -120°
+/// gives the color of 240° and a hue of 10,000,000,000° the color of 280°. The specification's
+/// sample code uses JavaScript's remainder operator and gives a different color for a negative hue.
+pub fn hsl_to_rgb([h, s, l]: [f32; 3]) -> [f32; 3] {
+    let h = h.rem_euclid(360.0);
+    let a = s * l.min(1.0 - l);
+    let f = |n: f32| {
+        let k = (n + h / 30.0).rem_euclid(12.0);
+        l - a * (k - 3.0).min(9.0 - k).clamp(-1.0, 1.0)
+    };
+    [f(0.0), f(8.0), f(4.0)]
+}
+
 /// `new` expressed in the colour model of `orig` ([`Color::in_model`]): results of colour operations
 /// (harmonies, blends, inversions, recolouring) keep the model of the colour they came from.
 pub fn keep_model(orig: Color, new: Color) -> Color {
@@ -496,6 +541,59 @@ mod tests {
             let c = Color::from_hex(hex).unwrap();
             let [h, s, v] = c.to_hsb();
             assert_eq!(Color::from_hsb(h, s, v).to_hex(), hex, "{hex}");
+        }
+    }
+
+    /// The HSL examples of CSS Color 4, section 7 (<https://www.w3.org/TR/css-color-4/#the-hsl-notation>),
+    /// the first six rows, and two hues outside 0..360 that wrap into that range.
+    #[test]
+    fn hsl_follows_css_color_4() {
+        for (hsl, hex) in [
+            ([0.0, 1.0, 0.5], "#ff0000"),
+            ([120.0, 1.0, 0.5], "#00ff00"),
+            ([120.0, 1.0, 0.25], "#008000"),
+            ([120.0, 1.0, 0.75], "#80ff80"),
+            ([240.0, 1.0, 0.5], "#0000ff"),
+            ([60.0, 1.0, 0.5], "#ffff00"),
+            ([360.0, 1.0, 0.5], "#ff0000"),
+            ([-120.0, 1.0, 0.5], "#0000ff"),
+        ] {
+            let [r, g, b] = hsl_to_rgb(hsl);
+            assert_eq!(Color::rgb(r, g, b).to_hex(), hex, "{hsl:?}");
+        }
+        let [h, s, l] = rgb_to_hsl([1.0, 0.5, 0.0]);
+        assert!((h - 30.0).abs() < 1e-4 && (s - 1.0).abs() < 1e-6 && (l - 0.5).abs() < 1e-6, "{h} {s} {l}");
+        let [h, s, l] = rgb_to_hsl(Color::rgb8(255, 128, 0).to_rgb_uncalibrated());
+        assert!((h - 30.0).abs() < 0.2 && (s - 1.0).abs() < 1e-6 && (l - 0.5).abs() < 1e-3, "{h} {s} {l}");
+        // A gray has no hue: the hue is 0 and the saturation 0, at any lightness.
+        for v in [0.0, 0.25, 0.5, 1.0] {
+            assert_eq!(rgb_to_hsl([v, v, v]), [0.0, 0.0, v]);
+        }
+        // Black and white keep any hue and saturation they are given.
+        assert_eq!(hsl_to_rgb([200.0, 0.7, 0.0]), [0.0, 0.0, 0.0]);
+        assert_eq!(hsl_to_rgb([200.0, 0.7, 1.0]), [1.0, 1.0, 1.0]);
+        // A color past the gamut that gives a negative saturation turns its hue by 180°.
+        let [h, s, _] = rgb_to_hsl([1.2, 1.5, 1.4]);
+        assert!(s > 0.0 && (h - (160.0 + 180.0)).abs() < 1e-3, "{h} {s}");
+        // A huge hue wraps before the channels are worked out: 10,000,000,000° is 280°.
+        let (huge, wrapped) = (hsl_to_rgb([10_000_000_000.0, 1.0, 0.5]), hsl_to_rgb([280.0, 1.0, 0.5]));
+        assert!((0..3).all(|i| (huge[i] - wrapped[i]).abs() < 1e-6), "{huge:?} {wrapped:?}");
+    }
+
+    /// The 216 web colors go to HSL and back to the same 8-bit color.
+    #[test]
+    fn hsl_roundtrip() {
+        let steps = [0x00, 0x33, 0x66, 0x99, 0xcc, 0xff];
+        for r in steps {
+            for g in steps {
+                for b in steps {
+                    let c = Color::rgb8(r, g, b);
+                    let [h, s, l] = rgb_to_hsl(c.to_rgb_uncalibrated());
+                    assert!((0.0..360.0).contains(&h) && (0.0..=1.0).contains(&s) && (0.0..=1.0).contains(&l), "{}", c.to_hex());
+                    let back = hsl_to_rgb([h, s, l]).map(|v| (v * 255.0).round() as u8);
+                    assert_eq!(back, [r, g, b], "{}", c.to_hex());
+                }
+            }
         }
     }
 

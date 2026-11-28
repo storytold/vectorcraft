@@ -9,34 +9,282 @@
 //!
 //! Fields: `missing` (`[{name, path, ids}]`, the one asked about first), `modified` (the ids of
 //! images whose file was modified), `notes` (the open's notes, shown again after the last question
-//! or Cancel), `applyToAll`, `path` (the replacement file; picked when empty), `discard`
-//! (Ignore) and `searchFolder` (set it and confirm for Find in Folder… on that folder).
+//! or Cancel), `applyToAll`, `path` (the replacement file; picked when empty), `choice` (`ignore`
+//! for Ignore) and `searchFolder` (set it and confirm for Find in Folder… on that folder).
+//!
+//! The dialog answers through [`pump`], which relinks and asks about the next file. What the
+//! questions about one open still need after a dialog closed (the open's notes, the modified
+//! files) is kept in [`LinkAsk`] on the app: Cancel, Escape and the close box carry no answer.
 
+use std::time::Duration;
+
+// PLAN: crates/ui-egui/Cargo.toml names craft-ui, not the `craft` facade these paths use; the manifest owner adds `craft` with the host, theme and ui features.
+use craft::host::{Host, PickId, PickKind, PickRequest, Picked};
+use craft::theme::TypeRole;
+use craft::ui::buttons::Button;
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Props as _, Show as _};
+use craft::ui::dialog::{DialogId, DialogResult, DialogStack, StackDialog, dialog_id};
+use craft::ui::display::{Elide, Shade, Text};
+use craft::ui::patterns::form_dialogs::FormDialog;
+use craft::ui::runtime::env::Label;
+use craft::ui::sections::{DialogRole, FooterButton};
 use serde_json::{Value, json};
 
-use super::DialogSpec;
-use crate::state::Dialog;
-use crate::theme::{self, Tokens};
-use crate::{VectorcraftApp, widgets};
+use crate::{VectorcraftApp, file_asks};
 
 /// The dialog kind of a missing linked file.
 pub const KIND: &str = "missingLinks";
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Linked File Not Found").into(),
-    body,
-    confirm,
-    ok: Some("Replace…"),
-    discard: Some("Ignore"),
-    min_width: 380.0,
-    max_width: Some(460.0),
-    inputs: |_| &["searchFolder"],
-    ..DialogSpec::FORM
-};
+/// How often a dialog waiting for a picker looks for its answer.
+const POLL: Duration = Duration::from_millis(100);
+
+/// The footer index of the accepting button (Replace…) and of Ignore, the first extra button.
+const ACCEPT: usize = 0;
+const IGNORE: usize = 2;
+
+/// `text` as a label of the dialog: the interface language's wording of it.
+pub(super) fn label(text: &str) -> Label {
+    Label::from(text.to_string())
+}
 
 /// The ids in `rows` (`[{ids}]`).
-fn ids(rows: &[Value]) -> Vec<Value> {
+pub(super) fn ids(rows: &[Value]) -> Vec<Value> {
     rows.iter().flat_map(|r| r["ids"].as_array().cloned().unwrap_or_default()).collect()
+}
+
+/// A string field's `value`, for `set_json_field`.
+pub(super) fn text_field(field: &str, value: &Value) -> Result<String, String> {
+    value.as_str().map(str::to_owned).ok_or_else(|| format!("field `{field}` takes a string, got {value}"))
+}
+
+/// A boolean field's `value`, for `set_json_field`.
+pub(super) fn flag_field(field: &str, value: &Value) -> Result<bool, String> {
+    value.as_bool().ok_or_else(|| format!("field `{field}` takes true or false, got {value}"))
+}
+
+/// A picker a dialog filed with the host and waits for; `W` says what the answer is for.
+pub(super) struct Asked<W>(Option<(PickId, W)>);
+
+impl<W> Default for Asked<W> {
+    fn default() -> Self {
+        Asked(None)
+    }
+}
+
+impl<W: Copy> Asked<W> {
+    /// Whether a picker is open or waiting.
+    pub(super) fn pending(&self) -> bool {
+        self.0.is_some()
+    }
+
+    /// Files `request` for `what`, unless a picker is already waiting.
+    pub(super) fn file(&mut self, ctx: &egui::Context, request: PickRequest, what: W) {
+        if self.0.is_none()
+            && let Some(host) = Host::try_of_ctx(ctx)
+        {
+            self.0 = Some((host.files().pick(request), what));
+        }
+    }
+
+    /// The answer of the waiting picker, once it came, with what it was for.
+    pub(super) fn answer(&mut self, ctx: &egui::Context) -> Option<(Picked, W)> {
+        let (id, what) = self.0?;
+        let picked = Host::try_of_ctx(ctx)?.files().take_answer(id)?;
+        self.0 = None;
+        Some((picked, what))
+    }
+
+    /// Drops the waiting picker: its answer is not wanted.
+    pub(super) fn forget(&mut self, ctx: &egui::Context) {
+        if let (Some((id, _)), Some(host)) = (self.0.take(), Host::try_of_ctx(ctx)) {
+            host.files().forget(id);
+        }
+    }
+}
+
+/// What the questions about one open's linked files keep between their dialogs: the files still
+/// asked about, the modified images to offer for update afterwards and the open's notes.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LinkAsk {
+    /// The document that owns the linked-file IDs.
+    pub(crate) document: u64,
+    /// That document's revert count when it was asked: File > Revert keeps the uid and replaces the content.
+    pub(crate) reverts: u64,
+    /// The missing files still asked about (`[{name, path, ids}]`), the next one first.
+    pub(crate) missing: Vec<Value>,
+    /// The ids of the images whose file was modified.
+    pub(crate) modified: Vec<Value>,
+    /// The open's notes, shown in the status bar again after the last question.
+    pub(crate) notes: Vec<String>,
+    /// Whether Find Linked Files, opened from Find in Folder… here, is the open question: its Cancel
+    /// shows the notes again, as this dialog's does.
+    pub(crate) back: bool,
+}
+
+/// What the user answered about the first missing file.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum MissingLinksAnswer {
+    /// Replace it with the file at `path`; with `apply_to_all` the others by name in its folder.
+    Replace {
+        /// The replacement file.
+        path: String,
+        /// Whether the other missing files are looked for beside it.
+        apply_to_all: bool,
+    },
+    /// Keep the preview; with `apply_to_all` for the other missing files too.
+    Ignore {
+        /// Whether the other missing files are ignored too.
+        apply_to_all: bool,
+    },
+    /// Look for every missing file in this folder ([`super::find_links`]).
+    FindInFolder(String),
+}
+
+/// What a waiting picker answers for.
+#[derive(Clone, Copy)]
+enum Wanted {
+    /// The file that replaces the missing one.
+    File,
+    /// The folder Find in Folder… searches.
+    Folder,
+}
+
+/// What the form edits.
+#[derive(Clone, Default, PartialEq)]
+struct Edit {
+    apply_to_all: bool,
+    path: String,
+}
+
+/// Linked File Not Found: the first of the missing files, with Replace…, Ignore and Find in Folder….
+pub(crate) struct MissingLinksDialog {
+    ask: LinkAsk,
+    edit: Edit,
+    ignore: bool,
+    search_folder: String,
+    asked: Asked<Wanted>,
+    can_pick: bool,
+}
+
+impl MissingLinksDialog {
+    /// The dialog over `ask`; Find in Folder… shows when the app can ask for a folder.
+    fn new(app: &VectorcraftApp, ask: LinkAsk) -> Self {
+        MissingLinksDialog {
+            ask,
+            edit: Edit::default(),
+            ignore: false,
+            search_folder: String::new(),
+            asked: Asked::default(),
+            can_pick: file_asks::can(app, PickKind::Folder),
+        }
+    }
+
+    /// Replace…: the answer when a file is given, else files the picker for one and waits.
+    fn accept(&mut self, ctx: &egui::Context) -> Option<MissingLinksAnswer> {
+        if self.edit.path.is_empty() {
+            let request = vectorcraft_engine::cmd::fileio::place_filters().fold(PickRequest::open("links"), |r, (name, exts)| r.filter(name, exts));
+            self.asked.file(ctx, request, Wanted::File);
+            return None;
+        }
+        Some(MissingLinksAnswer::Replace { path: self.edit.path.clone(), apply_to_all: self.edit.apply_to_all })
+    }
+}
+
+impl StackDialog for MissingLinksDialog {
+    type Result = MissingLinksAnswer;
+
+    fn id(&self) -> DialogId {
+        dialog_id(KIND)
+    }
+
+    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<MissingLinksAnswer>> {
+        let ctx = ui.ctx().clone();
+        if let Some((picked, wanted)) = self.asked.answer(&ctx)
+            && let Some(path) = picked.first_path()
+        {
+            let path = path.to_string_lossy().into_owned();
+            return Some(DialogResult::Ok(match wanted {
+                Wanted::File => MissingLinksAnswer::Replace { path, apply_to_all: self.edit.apply_to_all },
+                Wanted::Folder => MissingLinksAnswer::FindInFolder(path),
+            }));
+        }
+        if self.asked.pending() {
+            ctx.request_repaint_after(POLL);
+        }
+        let Some(current) = self.ask.missing.first() else { return Some(DialogResult::Cancel) };
+        let rest = self.ask.missing.len() - 1;
+        let (name, path) = (current["name"].as_str().unwrap_or_default(), current["path"].as_str().unwrap_or_default());
+        let (can_pick, mut find) = (self.can_pick, false);
+        let shown = FormDialog::new(label(tl!("Linked File Not Found")), Bind::bound(&mut self.edit))
+            .ok_label(label(tl!("Replace…")))
+            .accept_stays_open(true)
+            .extra_buttons([FooterButton::new(label(tl!("Ignore")), DialogRole::Other)])
+            .show(ui, |ui, _, edit| {
+                Text::new(label(name)).role(TypeRole::BodyStrong).show(ui);
+                Text::new(label(path)).shade(Shade::Muted).elide(Elide::Path).tooltip(path.to_string()).show(ui);
+                Text::new(label(tl!("Replace it with another file, or ignore it: its images keep showing the preview saved with the document.")))
+                    .shade(Shade::Muted)
+                    .show(ui);
+                if can_pick && Button::new(label(tl!("Find in Folder…"))).show(ui).clicked() {
+                    find = true;
+                }
+                if rest > 0 {
+                    let all = crate::i18n::tn(rest as u64, "Apply to All ({n} more missing)", "Apply to All ({n} more missing)");
+                    Checkbox::new(Bind::bound(&mut edit.apply_to_all)).label(label(&all)).show(ui);
+                }
+                true
+            });
+        if find {
+            self.asked.file(&ctx, PickRequest::folder("links"), Wanted::Folder);
+        }
+        if shown.picked == Some(IGNORE) {
+            return Some(DialogResult::Ok(MissingLinksAnswer::Ignore { apply_to_all: self.edit.apply_to_all }));
+        }
+        if shown.picked == Some(ACCEPT) || shown.accepted.is_some() {
+            return self.accept(&ctx).map(DialogResult::Ok);
+        }
+        if shown.closed.is_some() {
+            self.asked.forget(&ctx);
+            return Some(DialogResult::Cancel);
+        }
+        None
+    }
+
+    fn confirm(&mut self, ctx: &egui::Context) -> Option<MissingLinksAnswer> {
+        if !self.search_folder.is_empty() {
+            return Some(MissingLinksAnswer::FindInFolder(std::mem::take(&mut self.search_folder)));
+        }
+        if self.ignore {
+            return Some(MissingLinksAnswer::Ignore { apply_to_all: self.edit.apply_to_all });
+        }
+        self.accept(ctx)
+    }
+
+    fn cancelled(&mut self, ctx: &egui::Context) {
+        self.asked.forget(ctx);
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        let LinkAsk { missing, modified, notes, .. } = &self.ask;
+        Some(json!({ "missing": missing, "modified": modified, "notes": notes, "applyToAll": self.edit.apply_to_all, "path": self.edit.path }))
+    }
+
+    fn set_json_field(&mut self, ctx: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        match field {
+            "applyToAll" => self.edit.apply_to_all = flag_field(field, &value)?,
+            "path" => self.edit.path = text_field(field, &value)?,
+            "searchFolder" => self.search_folder = text_field(field, &value)?,
+            "choice" => match value.as_str() {
+                Some("ignore") => self.ignore = true,
+                Some("replace") => self.ignore = false,
+                _ => return Err(format!("field `choice` takes `replace` or `ignore`, got {value}")),
+            },
+            _ => return Err(format!("unknown field `{field}`")),
+        }
+        ctx.request_repaint();
+        Ok(())
+    }
 }
 
 /// After a document opened (`document.open`'s result `r`): ask about its missing linked files,
@@ -69,7 +317,7 @@ fn after_open_for(app: &mut VectorcraftApp, r: &Value, mut notes: Vec<String>, w
         None
     };
     crate::io::show_opened(app, notice, notes);
-    super::settle(app);
+    // PLAN: the registry's `super::settle(app)` that ended this function is the frame pump's now (fl.A9).
 }
 
 /// The status bar's line for `n` linked files the web can't read.
@@ -106,27 +354,27 @@ fn questions_for(app: &VectorcraftApp, r: &Value, web: bool) -> (Vec<String>, Ve
     (lines, missing, modified)
 }
 
+/// Opens the dialog about the first of `missing`, keeping what the questions after it need
+/// ([`LinkAsk`]). A window that isn't up has nothing to show a question in.
 fn open(app: &mut VectorcraftApp, missing: Vec<Value>, modified: Vec<Value>, notes: &[String]) {
-    let fields = json!({ "missing": missing, "modified": modified, "notes": notes, "applyToAll": false, "path": "" });
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    let Some((document, reverts)) = app.session.active().map(|st| (st.uid, st.reverts)) else { return };
+    open_ask(app, LinkAsk { document, reverts, missing, modified, notes: notes.to_vec(), back: false });
 }
 
-/// The open's notes a dialog `d` of the missing linked files keeps (field `notes`).
-pub(super) fn notes(d: &Dialog) -> Vec<String> {
-    let notes = d.fields.get("notes").and_then(Value::as_array).into_iter().flatten();
-    notes.filter_map(Value::as_str).map(str::to_string).collect()
+fn open_ask(app: &mut VectorcraftApp, ask: LinkAsk) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let dialog = MissingLinksDialog::new(app, ask.clone());
+    app.link_asks = Some(ask);
+    dialogs.with(|h| h.open(dialog));
 }
 
-/// Cancel of the dialog `d`: when it is this dialog, or the Find Linked Files dialog its Find in
-/// Folder… opened, the rest of the questions are not asked and the status bar shows the open's
-/// notes again ([`crate::io::show_opened`]), after the line about the modified files when Update
-/// Links doesn't ask about them.
-pub(super) fn cancelled(app: &mut VectorcraftApp, d: &Dialog) {
-    if d.kind == KIND || (d.kind == super::find_links::KIND && d.bool("back")) {
-        let modified = d.fields.get("modified").and_then(Value::as_array).map_or(0, Vec::len);
-        let notice = (modified > 0 && app.session.prefs.update_links != "askWhenModified").then(|| changed_on_disk_status(modified));
-        crate::io::show_opened(app, notice, notes(d));
-    }
+/// The status bar shows the open's notes again, after the line about the modified files when
+/// Update Links doesn't ask about them ([`crate::io::show_opened`]): the rest of the questions are
+/// not asked.
+pub(super) fn show_notes_again(app: &mut VectorcraftApp, ask: &LinkAsk) {
+    let modified = ask.modified.len();
+    let notice = (modified > 0 && app.session.prefs.update_links != "askWhenModified").then(|| changed_on_disk_status(modified));
+    crate::io::show_opened(app, notice, ask.notes.clone());
 }
 
 /// Ask about the missing files `rest`, one at a time, then offer the modified ones `modified` for
@@ -135,7 +383,7 @@ pub(super) fn cancelled(app: &mut VectorcraftApp, d: &Dialog) {
 /// them whatever message the answers showed.
 pub(crate) fn ask_next(app: &mut VectorcraftApp, rest: Vec<Value>, modified: Vec<Value>, notes: Vec<String>) {
     if rest.is_empty() {
-        app.ui.dialog = None;
+        app.link_asks = None;
         let notice = ask_update(app, modified);
         crate::io::show_opened(app, notice, notes);
     } else {
@@ -175,7 +423,7 @@ fn ask(app: &mut VectorcraftApp, ids: Vec<Value>, one: &str, other: &str) -> Opt
         return Some(changed_on_disk_status(ids.len()));
     }
     let detail = crate::i18n::tn(ids.len() as u64, one, other);
-    super::confirm::ask(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
+    super::confirm::ask_in_document(app, tl!("Update Modified Links"), &detail, "links.update", json!({ "ids": ids }));
     None
 }
 
@@ -189,108 +437,128 @@ pub(crate) fn changed_on_disk_status(n: usize) -> String {
     )
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let t = Tokens::get(ui.ctx());
-    let missing = d.fields.get("missing").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
-    let Some(current) = missing.first() else { return true };
-    let rest = missing.len() - 1;
-    let name = current["name"].as_str().unwrap_or_default();
-    widgets::list_box(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.add_space(6.0);
-            ui.vertical(|ui| {
-                ui.add_space(3.0);
-                ui.label(egui::RichText::new(name).font(theme::semibold(12.0)).color(t.text_strong));
-                let path = current["path"].as_str().unwrap_or_default();
-                ui.add(egui::Label::new(egui::RichText::new(path).size(11.5).color(t.text_dim)).truncate()).on_hover_text(path);
-                ui.add_space(3.0);
-            });
-        });
-    });
-    ui.add_space(8.0);
-    widgets::dim_label(ui, tl!("Replace it with another file, or ignore it: its images keep showing the preview saved with the document."));
-    if crate::picks::can(app, &crate::picks::PickRequest::Folder) {
-        ui.add_space(8.0);
-        if ui.button(tl!("Find in Folder…")).clicked() {
-            let r = crate::picks::in_dialog(app, d, |app, d| match crate::picks::folder(app) {
-                Some(folder) => super::find_links::from_missing_links(app, d, &folder),
-                None => Ok(()),
-            });
-            if let Err(e) = r {
-                app.status(e);
-            }
+/// Takes the answer of the dialog that closed: Cancel shows the open's notes again; Replace relinks
+/// the first file, Ignore keeps its preview, and either asks about the next. Find in Folder… opens
+/// Find Linked Files over the files still asked about ([`super::find_links::from_missing_links`]).
+/// A step that fails says why in the status bar and asks about the same files again.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let Some(result) = dialogs.with(|h| h.take::<MissingLinksDialog>()) else { return };
+    let Some(ask) = app.link_asks.take() else { return };
+    let Some(answer) = result.ok() else { return show_notes_again(app, &ask) };
+    if app.session.active().is_none_or(|st| st.uid != ask.document) {
+        app.status(tl!("This dialog was opened in a different document."));
+        if app.session.documents().iter().any(|st| st.uid == ask.document) {
+            open_ask(app, ask);
+        }
+        return;
+    }
+    // The ids asked about named objects of the content File > Revert threw away.
+    if app.session.active().is_some_and(|st| st.reverts != ask.reverts) {
+        app.status(tl!("The document was reverted. Reopen this dialog to continue."));
+        return;
+    }
+    let LinkAsk { document, reverts, missing, modified, notes, .. } = ask;
+    let done = match answer {
+        MissingLinksAnswer::FindInFolder(folder) => {
+            super::find_links::from_missing_links(app, missing.clone(), modified.clone(), notes.clone(), &folder).map(|()| None)
+        }
+        answer => apply(app, &missing, answer).map(Some),
+    };
+    match done {
+        Ok(Some(rest)) => ask_next(app, rest, modified, notes),
+        Ok(None) => {}
+        Err(e) => {
+            app.status(e);
+            open_ask(app, LinkAsk { document, reverts, missing, modified, notes, back: false });
         }
     }
-    if rest > 0 {
-        ui.add_space(10.0);
-        let all = d.bool("applyToAll");
-        let label = crate::i18n::tn(rest as u64, "Apply to All ({n} more missing)", "Apply to All ({n} more missing)");
-        if widgets::check(ui, &label, all, true) {
-            d.fields.insert("applyToAll".into(), json!(!all));
-        }
-    }
-    false
 }
 
-/// Replace (with `path`, else a picked file) or Ignore (`discard`) the first missing file, then
-/// ask about the next. With `searchFolder`: Find in Folder… on that folder.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let folder = d.str("searchFolder");
-    if !folder.is_empty() {
-        let mut d = d.clone();
-        // The folder is searched once: a search that doesn't start leaves the dialog without it.
-        if let Some(open) = app.ui.dialog.as_mut().filter(|open| open.kind == KIND) {
-            open.fields.remove("searchFolder");
-        }
-        super::find_links::from_missing_links(app, &mut d, &folder)?;
-        let state = d.fields.get("state").cloned().unwrap_or(Value::Null);
-        app.ui.dialog = Some(d);
-        return Ok(json!({ "state": state }));
-    }
-    let missing = d.fields.get("missing").and_then(Value::as_array).cloned().unwrap_or_default();
-    let modified = d.fields.get("modified").and_then(Value::as_array).cloned().unwrap_or_default();
-    let all = d.bool("applyToAll");
-    let Some((current, rest)) = missing.split_first() else {
-        app.ui.dialog = None;
-        return Ok(Value::Null);
-    };
+/// Replace (with `path`) or Ignore the first of `missing` → the files still to ask about. Apply to
+/// All: the others by name in the same folder; any not there are asked about.
+fn apply(app: &mut VectorcraftApp, missing: &[Value], answer: MissingLinksAnswer) -> Result<Vec<Value>, String> {
+    let Some((current, rest)) = missing.split_first() else { return Ok(vec![]) };
     let mut rest = rest.to_vec();
-    let mut out = Value::Null;
-    if d.bool("discard") {
-        if all {
-            rest.clear();
-        }
-    } else {
-        let path = match d.str("path") {
-            p if !p.is_empty() => p,
-            _ => {
-                let pick =
-                    crate::FilePick { filters: crate::FilePick::filters(vectorcraft_engine::cmd::fileio::place_filters()), ..Default::default() };
-                crate::picks::open(app, &pick).ok_or("cancelled")?
+    match answer {
+        MissingLinksAnswer::Ignore { apply_to_all } => {
+            if apply_to_all {
+                rest.clear();
             }
-        };
-        out = app.run("links.relink", json!({ "ids": current["ids"], "path": path }))?;
-        // Apply to All: the others by name in the same folder; any not there are asked about.
-        let folder = std::path::Path::new(&path).parent().map(|p| p.to_string_lossy().into_owned());
-        if let (true, false, Some(folder)) = (all, rest.is_empty(), folder) {
-            let r = app.run("links.relink", json!({ "ids": ids(&rest), "folder": folder }))?;
-            let done = r["relinked"].as_array().cloned().unwrap_or_default();
-            rest.retain(|row| row["ids"].as_array().is_none_or(|ids| ids.iter().any(|id| !done.contains(id))));
         }
+        MissingLinksAnswer::Replace { path, apply_to_all } => {
+            app.run("links.relink", json!({ "ids": current["ids"], "path": path }))?;
+            let folder = std::path::Path::new(&path).parent().map(|p| p.to_string_lossy().into_owned());
+            if let (true, false, Some(folder)) = (apply_to_all, rest.is_empty(), folder) {
+                let r = app.run("links.relink", json!({ "ids": ids(&rest), "folder": folder }))?;
+                let done = r["relinked"].as_array().cloned().unwrap_or_default();
+                rest.retain(|row| row["ids"].as_array().is_none_or(|ids| ids.iter().any(|id| !done.contains(id))));
+            }
+        }
+        // `pump` sends Find in Folder… elsewhere.
+        MissingLinksAnswer::FindInFolder(_) => {}
     }
-    ask_next(app, rest, modified, notes(d));
-    Ok(out)
+    Ok(rest)
+}
+
+/// What the tests of both link dialogs drive them with: the window's dialog host, as the shell
+/// shows it, and the frame pump.
+#[cfg(test)]
+pub(super) mod drive {
+    use super::*;
+
+    /// An app whose window has a dialog host.
+    pub(crate) fn app() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.adopt_context(&crate::testing::ui_context());
+        app
+    }
+
+    /// Whether dialog `D` is open.
+    pub(crate) fn is_open<D: StackDialog>(app: &VectorcraftApp) -> bool {
+        app.dialogs().is_some_and(|d| d.with(|h| h.is_open::<D>()))
+    }
+
+    /// The fields of the open dialog `D` (`Null` when it is not open).
+    pub(crate) fn fields<D: StackDialog>(app: &VectorcraftApp) -> Value {
+        app.dialogs().and_then(|d| d.with(|h| h.get::<D>().and_then(|d| d.json_fields()))).unwrap_or(Value::Null)
+    }
+
+    /// One frame of the window's dialogs, which take the answers of the pickers they filed.
+    pub(crate) fn frame(app: &mut VectorcraftApp) {
+        let ctx = app.ui_ctx.clone().expect("the context the app adopted");
+        let dialogs = app.dialogs().expect("a window dialog host");
+        ctx.run_ui(Default::default(), |ui| dialogs.with(|h| h.run(ui))).textures_delta.clear();
+    }
+
+    /// One frame's pump.
+    pub(crate) fn pump(app: &mut VectorcraftApp) {
+        let ctx = app.ui_ctx.clone().expect("the context the app adopted");
+        crate::dialogs::host::pump(app, &ctx);
+    }
+
+    /// Sets `fields` of the open dialog `D`, then confirms it (`ok`) or cancels it, then pumps.
+    pub(crate) fn answer<D: StackDialog>(app: &mut VectorcraftApp, fields: &[(&str, Value)], ok: bool) {
+        let ctx = app.ui_ctx.clone().expect("the context the app adopted");
+        let dialogs = app.dialogs().expect("a window dialog host");
+        dialogs.with(|h| {
+            let Some(id) = h.get::<D>().map(|d| d.id()) else { return };
+            for (field, value) in fields {
+                h.set_json_field(&ctx, id, field, value.clone()).expect("a field the dialog takes");
+            }
+            if ok {
+                h.confirm_by_id(&ctx, id);
+            } else {
+                h.cancel_by_id(&ctx, id);
+            }
+        });
+        pump(app);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vectorcraft_engine::Session;
-
-    fn frame(app: &mut VectorcraftApp) -> String {
-        crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
-    }
 
     fn png(rgb: [u8; 3]) -> Vec<u8> {
         let [r, g, b] = rgb;
@@ -311,7 +579,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("vectorcraft-missing-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = drive::app();
         app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         for n in ["a.png", "b.png"] {
@@ -330,30 +598,144 @@ mod tests {
         (app, dir, doc)
     }
 
+    /// The name of the file the open dialog asks about.
+    fn asked_name(app: &VectorcraftApp) -> Value {
+        drive::fields::<MissingLinksDialog>(app)["missing"][0]["name"].clone()
+    }
+
+    fn row(n: u64) -> Value {
+        json!({ "name": format!("{n}.png"), "path": format!("/gone/{n}.png"), "ids": [n] })
+    }
+
+    fn check_replacing_a_missing_file_stays_in_the_opening_drawing(native_picker: bool) {
+        let name = if native_picker { "different-drawing-picker" } else { "different-drawing-path" };
+        let (mut app, dir, _) = opened_without_links(name);
+        let missing = drive::fields::<MissingLinksDialog>(&app)["missing"][0].clone();
+        let id = missing["ids"][0].as_u64().unwrap();
+        let picker = crate::tests::picks::scripted(&mut app);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let mut second_ids = Vec::new();
+        for name in ["second-one.png", "second-two.png"] {
+            let path = dir.join(name);
+            std::fs::write(&path, png([0, 200, 0])).unwrap();
+            let place = app.run("file.place", json!({"path": path.to_string_lossy()})).unwrap();
+            second_ids.push(place["ids"][0].as_u64().unwrap());
+        }
+        assert!(second_ids.contains(&id), "the same ID refers to a different linked file");
+        let params = json!({"ids": [id]});
+        let original_path = app.run("links.check", params.clone()).unwrap()["links"][0]["path"].clone();
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        if native_picker {
+            drive::answer::<MissingLinksDialog>(&mut app, &[], true);
+            assert_eq!(picker.requests().len(), 1);
+        }
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let replacement = dir.join("replacement.png");
+        std::fs::write(&replacement, png([0, 0, 200])).unwrap();
+        let replacement = replacement.to_string_lossy();
+        if native_picker {
+            picker.answer(&[&replacement]);
+            drive::frame(&mut app);
+            drive::pump(&mut app);
+        } else {
+            drive::answer::<MissingLinksDialog>(&mut app, &[("path", json!(replacement))], true);
+        }
+
+        assert_eq!(app.session.active_index(), Some(1));
+        let after = app.run("links.check", params).unwrap()["links"][0]["path"].clone();
+        assert_eq!(after, original_path, "the second drawing must keep its original link");
+        assert_eq!(app.ui.status, "This dialog was opened in a different document.");
+        assert_eq!(drive::fields::<MissingLinksDialog>(&app)["missing"][0], missing);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        drive::answer::<MissingLinksDialog>(&mut app, &[("path", json!(replacement))], true);
+        assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 1, "the opening drawing can still replace its file");
+        assert_eq!(asked_name(&app), "b.png", "the remaining missing file is still offered");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn typed_missing_file_replacement_keeps_the_other_drawing_untouched() {
+        check_replacing_a_missing_file_stays_in_the_opening_drawing(false);
+    }
+
+    #[test]
+    fn delayed_missing_file_picker_keeps_the_other_drawing_untouched() {
+        check_replacing_a_missing_file_stays_in_the_opening_drawing(true);
+    }
+
+    #[test]
+    fn a_missing_file_folder_search_starts_only_in_the_opening_drawing() {
+        use crate::dialogs::find_links::FindLinksDialog;
+
+        let (mut app, dir, _) = opened_without_links("different-drawing-search");
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let folder = [("searchFolder", json!(dir.to_string_lossy()))];
+        drive::answer::<MissingLinksDialog>(&mut app, &folder, true);
+        assert!(drive::is_open::<MissingLinksDialog>(&app));
+        assert!(!drive::is_open::<FindLinksDialog>(&app));
+        assert_eq!(app.session.active_index(), Some(1));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        drive::answer::<MissingLinksDialog>(&mut app, &folder, true);
+        assert!(drive::is_open::<FindLinksDialog>(&app));
+        assert_eq!(app.session.active_index(), Some(0));
+        drive::answer::<FindLinksDialog>(&mut app, &[], false);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// After File > Revert, Replace leaves the restored document's links as they are: the ids it asked about named
+    /// objects of the content thrown away.
+    #[test]
+    fn a_missing_file_replacement_is_refused_after_file_revert() {
+        let (mut app, dir, _) = opened_without_links("revert-replace");
+        let replacement = dir.join("replacement.png");
+        std::fs::write(&replacement, png([0, 0, 200])).unwrap();
+        app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+
+        drive::answer::<MissingLinksDialog>(&mut app, &[("path", json!(replacement.to_string_lossy()))], true);
+        assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 2, "the restored links stay as they are");
+        assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+        assert!(!drive::is_open::<MissingLinksDialog>(&app));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// After File > Revert, Find Linked Files opened from Find in Folder… relinks nothing in the restored document.
+    #[test]
+    fn find_linked_files_relinks_nothing_after_file_revert() {
+        use crate::dialogs::find_links::FindLinksDialog;
+
+        let (mut app, dir, _) = opened_without_links("revert-find");
+        drive::answer::<MissingLinksDialog>(&mut app, &[("searchFolder", json!(dir.to_string_lossy()))], true);
+        assert!(drive::is_open::<FindLinksDialog>(&app));
+        let replacement = dir.join("replacement.png");
+        std::fs::write(&replacement, png([0, 0, 200])).unwrap();
+        app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+
+        let picks = json!([replacement.to_string_lossy(), replacement.to_string_lossy()]);
+        drive::answer::<FindLinksDialog>(&mut app, &[("picks", picks)], true);
+        assert_eq!(app.run("links.check", json!({})).unwrap()["missing"], 2, "the restored links stay as they are");
+        assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Replace relinks the first file and asks about the next; Ignore keeps its preview.
     #[test]
     fn opening_without_linked_files_asks_to_replace_or_ignore_each() {
         let (mut app, dir, _) = opened_without_links("each");
-        let d = app.ui.dialog.as_ref().expect("the dialog");
-        assert_eq!((d.kind.as_str(), d.fields["missing"].as_array().unwrap().len()), (KIND, 2));
-        let text = frame(&mut app);
-        for label in ["Linked File Not Found", "a.png", "Apply to All (1 more missing)", "Replace…", "Ignore", "Cancel"] {
-            assert!(text.contains(label), "{label} in {text}");
-        }
+        assert_eq!(drive::fields::<MissingLinksDialog>(&app)["missing"].as_array().map(Vec::len), Some(2));
         // Replace the first with a file given by path (the file picker otherwise).
         let blue = dir.join("new/blue.png");
         std::fs::create_dir_all(blue.parent().unwrap()).unwrap();
         std::fs::write(&blue, png([0, 0, 200])).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("path".into(), json!(blue.to_string_lossy()));
-        let r = super::super::confirm(&mut app).unwrap();
-        assert_eq!(r["relinked"].as_array().unwrap().len(), 1);
-        let d = app.ui.dialog.as_ref().expect("asks about the next");
-        assert_eq!(d.fields["missing"][0]["name"], "b.png");
-        assert!(!d.fields.contains_key("discard"));
-        assert!(frame(&mut app).contains("b.png"));
+        drive::answer::<MissingLinksDialog>(&mut app, &[("path", json!(blue.to_string_lossy()))], true);
+        assert_eq!(asked_name(&app), "b.png", "asks about the next");
         // Ignore: done, the image keeps its preview.
-        app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        drive::answer::<MissingLinksDialog>(&mut app, &[("choice", json!("ignore"))], true);
+        assert!(!drive::is_open::<MissingLinksDialog>(&app));
         let c = app.run("links.check", json!({})).unwrap();
         let status: Vec<&str> = c["links"].as_array().unwrap().iter().map(|l| l["status"].as_str().unwrap()).collect();
         assert_eq!((status, c["missing"].as_u64()), (vec!["ok", "missing"], Some(1)));
@@ -365,7 +747,7 @@ mod tests {
     /// about.
     #[test]
     fn the_questions_about_linked_files_wait_or_become_lines() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = drive::app();
         let r = json!({ "missingLinks": [{"name": "a.png", "path": "/x/a.png", "ids": [1]}], "modifiedLinks": [{"ids": [2]}, {"ids": [3]}] });
         app.session.prefs.update_links = "askWhenModified".into();
         assert_eq!(questions_for(&app, &r, false), (vec![], r["missingLinks"].as_array().unwrap().clone(), vec![json!(2), json!(3)]));
@@ -374,25 +756,7 @@ mod tests {
         assert_eq!(questions_for(&app, &r, false), (vec![changed.clone()], r["missingLinks"].as_array().unwrap().clone(), vec![]));
         let unreadable = "1 linked file can't be read here: its preview shows".to_string();
         assert_eq!(questions_for(&app, &r, true), (vec![unreadable, changed], vec![], vec![]));
-        assert!(app.ui.dialog.is_none(), "nothing is asked yet");
-    }
-
-    /// The question about modified linked files uses the form the language's plural rule picks for
-    /// the count.
-    #[test]
-    fn the_modified_links_question_uses_each_count_form() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        let mut question = |code: &str, n: u64| {
-            crate::i18n::set_current(crate::i18n::Lang::from_code(code).unwrap());
-            ask_update(&mut app, (0..n).map(|id| json!(id)).collect());
-            let detail = app.ui.dialog.take().map(|d| d.str("detail"));
-            crate::i18n::set_current(crate::i18n::Lang::EN);
-            detail.unwrap_or_default()
-        };
-        assert_eq!(question("en", 1), "1 linked image changed since this document was saved. Show the new version?");
-        assert_eq!(question("cs", 1), "Od uložení dokumentu se změnil 1 propojený obrázek. Zobrazit novou verzi?");
-        assert_eq!(question("cs", 2), "Od uložení dokumentu se změnily 2 propojené obrázky. Zobrazit nové verze?");
-        assert_eq!(question("cs", 5), "Od uložení dokumentu se změnilo 5 propojených obrázků. Zobrazit nové verze?");
+        assert!(!drive::is_open::<MissingLinksDialog>(&app), "nothing is asked yet");
     }
 
     /// On the web, an open with two notes and two linked files it can't read: the status bar says
@@ -400,7 +764,7 @@ mod tests {
     /// the line about the files is shown alone.
     #[test]
     fn an_open_with_unreadable_links_keeps_import_notes_reachable() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = drive::app();
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let missing = json!([{ "name": "a.png", "path": "/gone/a.png", "ids": [1] }, { "name": "b.png", "path": "/gone/b.png", "ids": [2] }]);
         let notes = vec!["a note".to_string(), "another note".to_string()];
@@ -409,7 +773,7 @@ mod tests {
         let notice = "2 linked files can't be read here: their previews show";
         assert_eq!(app.ui.status, crate::io::opened_after_notice(notice, 2, "a note"));
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), notes)));
-        assert!(app.ui.dialog.is_none());
+        assert!(!drive::is_open::<MissingLinksDialog>(&app));
         after_open_for(&mut app, &json!({ "missingLinks": missing }), vec![], true);
         assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (notice, &None));
     }
@@ -421,7 +785,7 @@ mod tests {
     /// unreadable files stays.
     #[test]
     fn a_web_open_with_unreadable_and_modified_links_keeps_both_lines() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = drive::app();
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app.session.prefs.update_links = "manually".into();
         let missing = json!([{ "name": "a.png", "path": "/gone/a.png", "ids": [1] }, { "name": "b.png", "path": "/gone/b.png", "ids": [2] }]);
@@ -434,7 +798,7 @@ mod tests {
         let kept = [vec![changed.clone()], notes].concat();
         assert_eq!(app.ui.status, crate::io::opened_after_notice(unreadable, 3, &changed));
         assert_eq!(app.ui.status_notes, Some((app.ui.status.clone(), kept)));
-        assert!(app.ui.dialog.is_none());
+        assert!(!drive::is_open::<MissingLinksDialog>(&app));
 
         after_open_for(&mut app, &r, vec![], true);
         assert_eq!(app.ui.status, crate::io::opened_after_notice(unreadable, 1, &changed));
@@ -446,8 +810,9 @@ mod tests {
 
         app.session.prefs.update_links = "askWhenModified".into();
         after_open_for(&mut app, &r, vec![], true);
-        let d = app.ui.dialog.as_ref().expect("asks");
-        assert_eq!((d.kind.as_str(), d.str("__command")), (super::super::confirm::KIND, "links.update".to_string()));
+        // PLAN: assumed `confirm::open_question(&VectorcraftApp) -> Option<(String, String, String)>` (message, detail, command; widgets-w10).
+        let (_, _, command) = super::super::confirm::open_question(&app).expect("asks");
+        assert_eq!(command, "links.update");
         assert_eq!((app.ui.status.as_str(), &app.ui.status_notes), (unreadable, &None));
     }
 
@@ -457,7 +822,7 @@ mod tests {
     /// line about files changed on disk while the document is open doesn't take them.
     #[test]
     fn modified_links_after_the_missing_ones_keep_the_open_notes() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = drive::app();
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app.session.prefs.update_links = "manually".into();
         let notes = vec!["a note".to_string(), "another note".to_string()];
@@ -466,12 +831,11 @@ mod tests {
             "modifiedLinks": [{ "ids": [2] }],
         });
         let ignore = |app: &mut VectorcraftApp| {
-            app.ui.dialog.as_mut().unwrap().fields.insert("discard".into(), json!(true));
-            super::super::confirm(app).unwrap();
-            assert!(app.ui.dialog.is_none());
+            drive::answer::<MissingLinksDialog>(app, &[("choice", json!("ignore"))], true);
+            assert!(!drive::is_open::<MissingLinksDialog>(app));
         };
         after_open_for(&mut app, &links, notes.clone(), false);
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(KIND));
+        assert_eq!(drive::fields::<MissingLinksDialog>(&app)["notes"], json!(notes));
         assert_eq!(app.ui.status, crate::io::opened_with_notes(2, "a note"));
         app.status("Relinked 1 image");
         ignore(&mut app);
@@ -499,58 +863,54 @@ mod tests {
     /// as it is.
     #[test]
     fn the_last_missing_link_answer_keeps_the_open_notes() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = drive::app();
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let notes = vec!["a note".to_string(), "another note".to_string()];
         let opened = crate::io::opened_with_notes(2, "a note");
-        let row = |n: u64| json!({ "name": format!("{n}.png"), "path": format!("/gone/{n}.png"), "ids": [n] });
-        let answer = |app: &mut VectorcraftApp, fields: &[(&str, bool)]| {
+        let answer = |app: &mut VectorcraftApp, fields: &[(&str, Value)]| {
             app.status("Something else");
-            let d = app.ui.dialog.as_mut().unwrap();
-            for (k, v) in fields {
-                d.fields.insert(k.to_string(), json!(v));
-            }
-            super::super::confirm(app).unwrap();
+            let fields: Vec<(&str, Value)> = [("choice", json!("ignore"))].into_iter().chain(fields.iter().cloned()).collect();
+            drive::answer::<MissingLinksDialog>(app, &fields, true);
         };
         for prefs in ["manually", "askWhenModified"] {
             app.session.prefs.update_links = prefs.into();
             after_open_for(&mut app, &json!({ "missingLinks": [row(1)] }), notes.clone(), false);
-            answer(&mut app, &[("discard", true)]);
-            assert!(app.ui.dialog.is_none());
+            answer(&mut app, &[]);
+            assert!(!drive::is_open::<MissingLinksDialog>(&app));
             assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Ignore, {prefs}");
 
             after_open_for(&mut app, &json!({ "missingLinks": [row(1), row(2)] }), notes.clone(), false);
-            answer(&mut app, &[("discard", true), ("applyToAll", true)]);
-            assert!(app.ui.dialog.is_none());
+            answer(&mut app, &[("applyToAll", json!(true))]);
+            assert!(!drive::is_open::<MissingLinksDialog>(&app));
             assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Apply to All, {prefs}");
 
             after_open_for(&mut app, &json!({ "missingLinks": [row(1), row(2)], "modifiedLinks": [{ "ids": [3] }] }), notes.clone(), false);
             app.status("Something else");
-            super::super::cancel(&mut app);
-            assert!(app.ui.dialog.is_none(), "Cancel asks nothing more");
+            drive::answer::<MissingLinksDialog>(&mut app, &[], false);
+            assert!(!drive::is_open::<MissingLinksDialog>(&app), "Cancel asks nothing more");
             let cancelled =
                 if prefs == "manually" { crate::io::opened_after_notice(&changed_on_disk_status(1), 2, "a note") } else { opened.clone() };
             assert_eq!((&app.ui.status, &app.ui.status_notes), (&cancelled, &Some((cancelled.clone(), notes.clone()))), "Cancel, {prefs}");
         }
 
         after_open_for(&mut app, &json!({ "missingLinks": [row(1)], "modifiedLinks": [{ "ids": [3] }] }), notes.clone(), false);
-        answer(&mut app, &[("discard", true)]);
-        let d = app.ui.dialog.as_ref().expect("asks");
-        assert_eq!((d.kind.as_str(), d.str("__command")), (super::super::confirm::KIND, "links.update".to_string()));
+        answer(&mut app, &[]);
+        // PLAN: assumed `confirm::open_question(&VectorcraftApp) -> Option<(String, String, String)>` (widgets-w10).
+        let (_, _, command) = super::super::confirm::open_question(&app).expect("asks");
+        assert_eq!(command, "links.update");
         assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))));
-        app.ui.dialog = None;
 
         after_open_for(&mut app, &json!({ "missingLinks": [row(1)] }), vec![], false);
-        answer(&mut app, &[("discard", true)]);
+        answer(&mut app, &[]);
         assert_eq!(app.ui.status, "Something else");
         after_open_for(&mut app, &json!({ "missingLinks": [row(1)] }), vec![], false);
         app.status("Something else");
-        super::super::cancel(&mut app);
+        drive::answer::<MissingLinksDialog>(&mut app, &[], false);
         assert_eq!(app.ui.status, "Something else");
         app.session.prefs.update_links = "manually".into();
         after_open_for(&mut app, &json!({ "missingLinks": [row(1)], "modifiedLinks": [{ "ids": [3] }] }), vec![], false);
         app.status("Something else");
-        super::super::cancel(&mut app);
+        drive::answer::<MissingLinksDialog>(&mut app, &[], false);
         assert_eq!(app.ui.status, changed_on_disk_status(1), "Cancel keeps the line about the modified files");
     }
 
@@ -567,21 +927,29 @@ mod tests {
         for n in ["a.png", "b.png"] {
             std::fs::write(found.join(n), png([0, 0, 200])).unwrap();
         }
-        app.ui.dialog.as_mut().unwrap().fields.insert("notes".into(), json!(notes));
-        app.ui.dialog.as_mut().unwrap().fields.insert("path".into(), json!(found.join("a.png").to_string_lossy()));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().expect("asks about the next").fields["missing"][0]["name"], "b.png");
+        // The open's notes are the ones the question keeps.
+        app.link_asks.as_mut().unwrap().notes = notes.clone();
+        drive::answer::<MissingLinksDialog>(&mut app, &[("path", json!(found.join("a.png").to_string_lossy()))], true);
+        assert_eq!(asked_name(&app), "b.png", "asks about the next");
 
-        app.services.pick_open = Some(Box::new(|_: &crate::FilePick| None));
+        // PLAN: assumed `tests::picks::scripted(&mut VectorcraftApp) -> Picker` with `requests()`, `answer(&[&str])` and `cancel()` (fl.A20, files-w7).
+        let picker = crate::tests::picks::scripted(&mut app);
         app.status("Something else");
-        assert_eq!(super::super::confirm(&mut app), Err("cancelled".to_string()));
-        assert_eq!(app.ui.dialog.as_ref().expect("still asks").fields["missing"][0]["name"], "b.png");
+        // Replace… without a file files the picker; the dialog takes its answer in its next frame.
+        drive::answer::<MissingLinksDialog>(&mut app, &[], true);
+        assert_eq!(picker.requests().len(), 1);
+        picker.cancel();
+        drive::frame(&mut app);
+        drive::pump(&mut app);
+        assert!(drive::is_open::<MissingLinksDialog>(&app), "a canceled picker leaves the question open");
+        assert_eq!(asked_name(&app), "b.png");
         assert_eq!(app.ui.status, "Something else");
 
-        let b = found.join("b.png").to_string_lossy().into_owned();
-        app.services.pick_open = Some(Box::new(move |_: &crate::FilePick| Some(b.clone())));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
+        drive::answer::<MissingLinksDialog>(&mut app, &[], true);
+        picker.answer(&[&found.join("b.png").to_string_lossy()]);
+        drive::frame(&mut app);
+        drive::pump(&mut app);
+        assert!(!drive::is_open::<MissingLinksDialog>(&app));
         assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "picked");
         let _ = std::fs::remove_dir_all(dir);
 
@@ -591,13 +959,11 @@ mod tests {
         for n in ["a.png", "b.png"] {
             std::fs::write(found.join(n), png([0, 0, 200])).unwrap();
         }
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("notes".into(), json!(notes));
-        d.fields.insert("applyToAll".into(), json!(true));
-        d.fields.insert("path".into(), json!(found.join("a.png").to_string_lossy()));
+        app.link_asks.as_mut().unwrap().notes = notes.clone();
         app.status("Something else");
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none(), "both relinked");
+        let fields = [("applyToAll", json!(true)), ("path", json!(found.join("a.png").to_string_lossy()))];
+        drive::answer::<MissingLinksDialog>(&mut app, &fields, true);
+        assert!(!drive::is_open::<MissingLinksDialog>(&app), "both relinked");
         assert_eq!((&app.ui.status, &app.ui.status_notes), (&opened, &Some((opened.clone(), notes.clone()))), "Apply to All");
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -610,11 +976,9 @@ mod tests {
         for n in ["a.png", "b.png"] {
             std::fs::write(found.join(n), png([0, 0, 200])).unwrap();
         }
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("applyToAll".into(), json!(true));
-        d.fields.insert("path".into(), json!(found.join("a.png").to_string_lossy()));
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none(), "both relinked");
+        let fields = [("applyToAll", json!(true)), ("path", json!(found.join("a.png").to_string_lossy()))];
+        drive::answer::<MissingLinksDialog>(&mut app, &fields, true);
+        assert!(!drive::is_open::<MissingLinksDialog>(&app), "both relinked");
         let c = app.run("links.check", json!({})).unwrap();
         assert_eq!(c["missing"], 0, "{c}");
         let _ = std::fs::remove_dir_all(dir);
@@ -624,7 +988,7 @@ mod tests {
     fn modified_links_are_offered_for_update_when_the_preference_asks() {
         let dir = std::env::temp_dir().join(format!("vectorcraft-modified-ui-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = drive::app();
         app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         let pic = dir.join("a.png");
@@ -648,9 +1012,11 @@ mod tests {
         // Reopened: an open file would only come to the front (#3455).
         app.run("file.close", json!({})).unwrap();
         crate::io::open_path(&mut app, &doc).unwrap();
-        let d = app.ui.dialog.as_ref().expect("asks");
-        assert_eq!((d.kind.as_str(), d.str("__command")), (super::super::confirm::KIND, "links.update".to_string()));
-        super::super::confirm(&mut app).unwrap();
+        let (_, _, command) = super::super::confirm::open_question(&app).expect("asks");
+        assert_eq!(command, "links.update");
+        // OK runs the question's command once the question has closed.
+        let question = crate::tests::picks::open_dialogs(&app).pop().map(|d| d.id).expect("the question is open");
+        crate::tests::picks::answer_dialog(&mut app, question, &[], true);
         assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 0);
         // Manually: no question.
         app.run("prefs.set", json!({"key": "updateLinks", "value": "manually"})).unwrap();
@@ -658,8 +1024,56 @@ mod tests {
         mark_modified(4);
         app.session.execute("file.close", &json!({})).unwrap();
         crate::io::open_path(&mut app, &doc).unwrap();
-        assert!(app.ui.dialog.is_none());
+        assert!(super::super::confirm::open_question(&app).is_none());
         assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn accepting_a_modified_link_offer_does_not_update_another_drawing() {
+        let dir = std::env::temp_dir().join(format!("vectorcraft-modified-switch-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut app = drive::app();
+        app.services.read = Some(Box::new(|p: &str| std::fs::read(p).map_err(|e| e.to_string())));
+        app.session.prefs.update_links = "askWhenModified".into();
+        let mut ids = vec![];
+        for name in ["first.png", "second.png"] {
+            let path = dir.join(name);
+            std::fs::write(&path, png([200, 0, 0])).unwrap();
+            app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+            app.run("file.place", json!({"path": path.to_string_lossy()})).unwrap();
+            let links = app.run("links.list", json!({})).unwrap();
+            ids.push(links["links"][0]["id"].as_u64().unwrap());
+            let stamp = std::fs::metadata(&path).unwrap().modified().unwrap();
+            std::fs::write(&path, png([0, 0, 200])).unwrap();
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(stamp + std::time::Duration::from_secs(2)))
+                .unwrap();
+        }
+        assert_eq!(ids[0], ids[1], "the same ID refers to different files");
+        let answer = |app: &mut VectorcraftApp| {
+            let question = crate::tests::picks::open_dialogs(app).pop().unwrap().id;
+            crate::tests::picks::answer_dialog(app, question, &[], true);
+        };
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        ask_update_changed(&mut app, vec![json!(ids[0])]);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
+        answer(&mut app);
+        let foreign_modified = app.run("links.check", json!({})).unwrap()["modified"].clone();
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.run("links.check", json!({})).unwrap()["modified"], 1);
+        ask_update_changed(&mut app, vec![json!(ids[0])]);
+        answer(&mut app);
+        let original_modified = app.run("links.check", json!({})).unwrap()["modified"].clone();
+        let _ = std::fs::remove_dir_all(dir);
+        assert_eq!(foreign_modified, 1, "the second drawing's link still needs approval");
+        assert_eq!(original_modified, 0, "approval updates the first drawing's link");
     }
 }

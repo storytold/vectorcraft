@@ -7,6 +7,7 @@ use vectorcraft_color::{Color, GradientKind, Paint};
 use vectorcraft_doc::{AppearanceItem, ColorMode, Document, LineCap, LineJoin, Node, NodeKind};
 use vectorcraft_geom::{Point, Rect};
 
+use crate::import::data::measured;
 use crate::import::graphics::{GState, Out, tilings_compared};
 use crate::import::interp::Interp;
 use crate::import::obj::Obj;
@@ -766,6 +767,8 @@ fn the_bounding_box_comes_from_the_header_or_the_trailer() {
     assert_eq!(d.bbox, Some([1.5, 2.5, 29.5, 39.5]));
     let d = Dsc::read(b"%!PS-Adobe-3.0\n%%BoundingBox: (atend)\n%%Pages: 3\n%%EndComments\nshowpage\n%%Trailer\n%%BoundingBox: 0 0 10 20\n");
     assert_eq!((d.bbox, d.pages), (Some([0.0, 0.0, 10.0, 20.0]), Some(3)));
+    let d = Dsc::read(b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200000 200000\n%%BoundingBox: 0 0 40 50\n%%EndComments\n");
+    assert_eq!(d.bbox, Some([0.0, 0.0, 40.0, 50.0]));
     let r = import(b"%!PS-Adobe-3.0\n%%Pages: 2\n0 0 5 5 rectfill showpage 0 0 9 9 rectfill showpage\n").unwrap();
     // No bounding box: a letter page; only the first page.
     assert_eq!(r.document.artboards[0].rect, Rect::new(0.0, 0.0, 612.0, 792.0));
@@ -934,7 +937,7 @@ fn device_settings_are_accepted_and_change_nothing() {
 /// `warnings` without the note naming fonts that aren't available: which those are depends on the
 /// fonts installed where the tests run, not on the program.
 pub(super) fn program_warnings(warnings: &[String]) -> Vec<&String> {
-    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE)).collect()
+    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE) && !w.starts_with(super::CARRIED_FONTS_NOTE)).collect()
 }
 
 fn blue(body: &str) {
@@ -1228,16 +1231,19 @@ fn read_within(body: &str, secs: u64) -> crate::Imported {
 
 /// [`read_soon`], with how many patterns the tiling pattern lookups compared while reading.
 fn read_counting_tilings(body: &str) -> (crate::Imported, u64) {
-    read_counting(body, NEVER_ENDS)
+    let (read, compared, _) = read_counting(body, NEVER_ENDS);
+    (read, compared)
 }
 
-/// [`read_within`], with how many patterns the tiling pattern lookups compared while reading.
-fn read_counting(body: &str, secs: u64) -> (crate::Imported, u64) {
+/// [`read_within`], with how many patterns the tiling pattern lookups compared while reading, and
+/// how many decoded bytes the measuring of images' data left out decoded.
+fn read_counting(body: &str, secs: u64) -> (crate::Imported, u64, u64) {
     let (tx, rx) = std::sync::mpsc::channel();
     let ps = eps(body);
-    std::thread::spawn(move || tx.send((import(&ps), tilings_compared())).ok());
-    let (read, compared) = rx.recv_timeout(std::time::Duration::from_secs(secs)).unwrap_or_else(|_| panic!("reading {body} did not finish"));
-    (read.unwrap(), compared)
+    std::thread::spawn(move || tx.send((import(&ps), tilings_compared(), measured())).ok());
+    let (read, compared, measured) =
+        rx.recv_timeout(std::time::Duration::from_secs(secs)).unwrap_or_else(|_| panic!("reading {body} did not finish"));
+    (read.unwrap(), compared, measured)
 }
 
 /// Runs the program of `body` in an interpreter of its own on the 100 × 100 page of [`eps`]'s
@@ -1262,9 +1268,15 @@ fn run_looking<T>(body: &str, look: fn(&Interp) -> T) -> T {
 /// (`search_in_a_loop_runs_out_of_the_budget` searches about 3 GB, 14 s on a fast desktop), so the
 /// limit here only catches a program that never stops.
 pub(super) fn runs_out_of_budget(body: &str) {
-    let r = read_within(&format!("0 0 10 10 rectfill {body}"), NEVER_ENDS);
+    runs_out_of_budget_measuring(body);
+}
+
+/// [`runs_out_of_budget`] → how many decoded bytes the measuring of images' data left out decoded.
+pub(super) fn runs_out_of_budget_measuring(body: &str) -> u64 {
+    let (r, _, measured) = read_counting(&format!("0 0 10 10 rectfill {body}"), NEVER_ENDS);
     assert_eq!(objects(&r.document).len(), 1, "{body}: {:?}", r.warnings);
     assert!(r.warnings.iter().any(|w| w.contains("the program runs too long")), "{body}: {:?}", r.warnings);
+    measured
 }
 
 /// A large file that runs far more operations than a small one may, but only a few hundred for

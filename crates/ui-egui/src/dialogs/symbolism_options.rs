@@ -7,20 +7,23 @@
 //! `intensity` and `density` (Symbol Set Density), 1–10; `usePressure`; `method` (`userDefined`,
 //! `average` or `random`); `showBrush`; `sprayScrunch`, `spraySize`, `spraySpin`, `sprayScreen`,
 //! `sprayStain` and `sprayStyle` (Symbol Sprayer, each `average` or `userDefined`); `proportional`
-//! and `affectsDensity` (Symbol Sizer); `densityWas` (the density the dialog opened with).
+//! and `affectsDensity` (Symbol Sizer).
 
-use serde_json::{Map, Value, json};
+use std::sync::{Arc, Weak};
+
+use craft::ui::contract::Bind;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::{Label, LengthUnits};
+use craft::ui::value_drag::SliderScale;
+use serde_json::{Value, json};
+use vectorcraft_doc::{Node, NodeId};
 use vectorcraft_tools::settings::SYMBOLISM;
 
-use super::{DialogResult, DialogSpec, form, set_tool_options_and_close};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::{form, host, tool_options};
+use crate::VectorcraftApp;
 
 /// The dialog kind of the Symbolism Tools Options.
 pub const KIND: &str = "symbolismOptions";
-
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Symbolism Tools Options").into(), body, confirm, min_width: 340.0, ..DialogSpec::FORM };
 
 /// The numbers the dialog edits.
 const NUMBERS: [&str; 3] = ["diameter", "intensity", "density"];
@@ -31,306 +34,270 @@ const SWITCHES: [&str; 4] = ["usePressure", "showBrush", "proportional", "affect
 /// The Symbol Sprayer options.
 const SPRAY: [&str; 6] = ["sprayScrunch", "spraySize", "spraySpin", "sprayScreen", "sprayStain", "sprayStyle"];
 
-/// The density the dialog opened with: OK spaces the selected symbol sets from it to the new one.
-const DENSITY_WAS: &str = "densityWas";
+/// The tools other than the ones in `without`.
+fn tools_but(without: &[&str]) -> Vec<&'static str> {
+    SYMBOLISM.iter().copied().filter(|t| !without.contains(t)).collect()
+}
 
-/// Width of the label column.
-const LABEL_W: f32 = 130.0;
-
-/// Width of the dropdowns.
-const CHOICE_W: f32 = 170.0;
+/// The rows of the dialog. The Symbol Sprayer uses neither Intensity nor pen pressure, and it and
+/// the Symbol Shifter have no Method.
+fn params(lengths: LengthUnits) -> Vec<Param> {
+    let tools = SYMBOLISM.iter().filter_map(|id| Some((id.to_string(), Label::from(tl!(vectorcraft_tools::tool_info(id)?.label))))).collect();
+    let modes = || vec![("average".to_string(), Label::from(tl!("Average"))), ("userDefined".to_string(), Label::from(tl!("User Defined")))];
+    let methods = vec![
+        ("userDefined".to_string(), Label::from(tl!("User Defined"))),
+        ("average".to_string(), Label::from(tl!("Average"))),
+        ("random".to_string(), Label::from(tl!("Random"))),
+    ];
+    let not_sprayer = tools_but(&["symbolSprayer"]);
+    let range = |key: &str, label: &'static str| Param::new(key, label, ParamKind::range(1.0, 10.0, 5.0, SliderScale::Linear));
+    let mut rows = vec![
+        Param::new("tool", tl!("Tool:"), ParamKind::choice(tools, None)),
+        Param::number("diameter", tl!("Diameter:"), 80.0, 1.0, 0).length(lengths),
+        range("intensity", tl!("Intensity:")).enabled_when_in("tool", not_sprayer.clone()),
+        Param::new("usePressure", tl!("Use Pressure Pen"), ParamKind::bool(false)).enabled_when_in("tool", not_sprayer),
+        range("density", tl!("Symbol Set Density:")),
+        Param::new("method", tl!("Method:"), ParamKind::choice(methods, Some("userDefined".into())))
+            .enabled_when_in("tool", tools_but(&["symbolSprayer", "symbolShifter"])),
+        Param::section(tl!("Symbol Sprayer Options")).visible_when("tool", "symbolSprayer"),
+    ];
+    let labels = [tl!("Scrunch:"), tl!("Size:"), tl!("Spin:"), tl!("Screen:"), tl!("Stain:"), tl!("Style:")];
+    rows.extend(
+        SPRAY
+            .iter()
+            .zip(labels)
+            .map(|(key, label)| Param::new(*key, label, ParamKind::choice(modes(), Some("average".into()))).visible_when("tool", "symbolSprayer")),
+    );
+    rows.extend([
+        Param::section(tl!("Symbol Sizer Options")).visible_when("tool", "symbolSizer"),
+        Param::new("proportional", tl!("Proportional Resizing"), ParamKind::bool(true)).visible_when("tool", "symbolSizer"),
+        Param::new("affectsDensity", tl!("Resizing Affects Density"), ParamKind::bool(false)).visible_when("tool", "symbolSizer"),
+        Param::new("showBrush", tl!("Show Brush Size and Intensity"), ParamKind::bool(true)),
+    ]);
+    rows
+}
 
 /// Open the options of Symbolism tool `tool` (one of `vectorcraft_tools::settings::SYMBOLISM`)
 /// with their current values.
 pub fn open(app: &mut VectorcraftApp, tool: &str) -> Value {
+    let params = params(crate::canvas::general_lengths(app)); // PLAN: assumed path of cv.B5b
     let o = app.session.tool_options_of(tool);
-    let keys = NUMBERS.iter().chain(&SWITCHES).chain(&SPRAY).chain(&["method"]);
-    let mut fields: Map<String, Value> = keys.filter_map(|key| Some((key.to_string(), o.get(*key)?.clone()))).collect();
-    if let Some(density) = fields.get("density").cloned() {
-        fields.insert(DENSITY_WAS.into(), density);
+    let mut values: serde_json::Map<String, Value> =
+        NUMBERS.iter().chain(&SWITCHES).chain(&SPRAY).chain(&["method"]).filter_map(|key| Some((key.to_string(), o.get(*key)?.clone()))).collect();
+    values.insert("tool".into(), json!(tool));
+    let density_was = values.get("density").and_then(Value::as_f64).map(|d| d.clamp(1.0, 10.0));
+    let density = DensityTarget { value: density_was, document: app.session.active().map(|doc| (doc.uid, doc.reverts)), sets: selected_sets(app) };
+    let fields = form::fields_of(&params, &values);
+    let shown = params.clone();
+    let ok = move |app: &mut VectorcraftApp, result: &ParamResult| {
+        let mut values = form::json_of(&params, &result.fields);
+        // A tool or a value `tool.setOption` refuses changes no density either: the values go through
+        // both of its checks, the kinds and then each option's range, before the density changes.
+        let tool = result.fields.text("tool").unwrap_or_default().to_string();
+        values.remove("tool");
+        if !SYMBOLISM.contains(&tool.as_str()) {
+            return Err(format!("unknown tool `{tool}`"));
+        }
+        vectorcraft_tools::symbolism::check_options(&tool, &values)?;
+        vectorcraft_tools::option_check::check_values(&vectorcraft_tools::symbolism::SymbolismTool::new(&tool), &values)?;
+        if let Some(density) = app.ui_ctx.as_ref().and_then(|ctx| ctx.data(|d| d.get_temp::<DensityTarget>(density_id()))) {
+            density.apply(app, &result.fields)?;
+        }
+        tool_options::set_options(app, &tool, values)
+    };
+    let opened = app.ui_ctx.clone().and_then(|ctx| {
+        let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |f| {
+            ParamDialog::new(KIND, tl!("Symbolism Tools Options"), shown.clone()).values(Bind::bound(f))
+        });
+        let id = host::open_held(app, dialog, ok)?;
+        ctx.data_mut(|d| d.insert_temp(density_id(), density));
+        Some(id)
+    });
+    if opened.is_none() {
+        app.status(tl!("No window to show the dialog in.").to_string());
     }
-    fields.insert("tool".into(), json!(tool));
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
     json!({ "dialog": KIND })
 }
 
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let unit = app.session.general_unit();
-    // The tool whose options show below (the eight tools share one toolbar icon, so they are listed
-    // by name).
-    let tools: Vec<(&str, &str)> = SYMBOLISM.iter().filter_map(|id| Some((*id, vectorcraft_tools::tool_info(id)?.label))).collect();
-    form::choice(ui, d, "tool", tl!("Tool:"), (LABEL_W, CHOICE_W), &tools);
-    let tool = d.str("tool");
-    ui.add_space(6.0);
-    widgets::label_row(ui, tl!("Diameter:"), LABEL_W, |ui| {
-        form::length(ui, d, "diameter", unit, 100.0);
-    });
-    // The Symbol Sprayer uses neither Intensity nor pen pressure.
-    let sprayer = tool == "symbolSprayer";
-    let pressure = d.bool("usePressure");
-    widgets::label_row(ui, tl!("Intensity:"), LABEL_W, |ui| {
-        ui.add_enabled_ui(!pressure && !sprayer, |ui| {
-            if let Some(v) = widgets::range_field(ui, ("symbolism", "intensity"), d.f64("intensity", 5.0), 1.0..=10.0, "", 0, 100.0) {
-                d.fields.insert("intensity".into(), json!(v));
-            }
-        });
-    });
-    widgets::label_row(ui, "", LABEL_W, |ui| {
-        ui.add_enabled_ui(!sprayer, |ui| form::check(ui, d, "usePressure", tl!("Use Pressure Pen")));
-    });
-    widgets::label_row(ui, tl!("Symbol Set Density:"), LABEL_W, |ui| {
-        if let Some(v) = widgets::range_field(ui, ("symbolism", "density"), d.f64("density", 5.0), 1.0..=10.0, "", 0, 100.0) {
-            d.fields.insert("density".into(), json!(v));
-        }
-    });
-    // The Symbol Sprayer and the Symbol Shifter have no Method.
-    ui.add_enabled_ui(!["symbolSprayer", "symbolShifter"].contains(&tool.as_str()), |ui| {
-        let methods = [("userDefined", tl!("User Defined")), ("average", tl!("Average")), ("random", tl!("Random"))];
-        form::choice(ui, d, "method", tl!("Method:"), (LABEL_W, CHOICE_W), &methods);
-    });
-    if tool == "symbolSprayer" {
-        ui.add_space(10.0);
-        widgets::subheader(ui, tl!("Symbol Sprayer Options"));
-        ui.add_space(4.0);
-        let modes = [("average", tl!("Average")), ("userDefined", tl!("User Defined"))];
-        let labels = [tl!("Scrunch:"), tl!("Size:"), tl!("Spin:"), tl!("Screen:"), tl!("Stain:"), tl!("Style:")];
-        for (key, label) in SPRAY.iter().zip(labels) {
-            form::choice(ui, d, key, label, (LABEL_W, CHOICE_W), &modes);
-        }
-    }
-    if tool == "symbolSizer" {
-        ui.add_space(10.0);
-        widgets::subheader(ui, tl!("Symbol Sizer Options"));
-        ui.add_space(4.0);
-        form::check(ui, d, "proportional", tl!("Proportional Resizing"));
-        form::check(ui, d, "affectsDensity", tl!("Resizing Affects Density"));
-    }
-    ui.add_space(10.0);
-    form::check(ui, d, "showBrush", tl!("Show Brush Size and Intensity"));
-    false
+#[derive(Clone)]
+struct DensityTarget {
+    value: Option<f64>,
+    document: Option<(u64, u64)>,
+    sets: Vec<(NodeId, Weak<Node>)>,
 }
 
-/// The selected symbol sets that can be edited (not locked or hidden).
-fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
+fn density_id() -> egui::Id {
+    egui::Id::unique((KIND, "density-target"))
+}
+
+impl DensityTarget {
+    fn apply(&self, app: &mut VectorcraftApp, fields: &DialogFields) -> Result<(), String> {
+        let Some(from) = self.value else { return Ok(()) };
+        let to = fields.number("density").unwrap_or(from).clamp(1.0, 10.0);
+        if from == to || self.sets.is_empty() {
+            return Ok(());
+        }
+        let Some(doc) = app.session.active().filter(|doc| self.document.is_some_and(|(uid, _)| uid == doc.uid)) else {
+            return Err(tl!("Return to the original drawing to change its symbol set density").into());
+        };
+        if self.document.is_none_or(|(_, reverts)| reverts != doc.reverts) {
+            return Err(tl!("Reopen Symbolism Tools Options after reverting the drawing").into());
+        }
+        let sets: Vec<_> = {
+            let editable = doc.doc.editable();
+            self.sets
+                .iter()
+                .filter_map(|(id, original)| {
+                    let same = doc.doc.node_arc(*id).is_some_and(|node| Arc::as_ptr(node) == original.as_ptr());
+                    (same && editable(*id)).then_some(id.0)
+                })
+                .collect()
+        };
+        if !sets.is_empty() {
+            app.run("symbol.setDensity", json!({ "from": from, "to": to, "ids": sets }))?;
+        }
+        Ok(())
+    }
+}
+
+/// The selected editable sets as they exist now. Undo may reuse their IDs for newly created art.
+fn selected_sets(app: &VectorcraftApp) -> Vec<(NodeId, Weak<Node>)> {
     let Some(st) = app.session.active() else { return vec![] };
     let editable = st.doc.editable();
     st.selection
         .objects
         .iter()
-        .filter(|id| st.doc.node(**id).is_some_and(vectorcraft_engine::cmd::is_symbol_set) && editable(**id))
-        .map(|id| id.0)
+        .filter(|id| editable(**id))
+        .filter_map(|id| {
+            let node = st.doc.node_arc(*id)?;
+            vectorcraft_engine::cmd::is_symbol_set(node).then(|| (*id, Arc::downgrade(node)))
+        })
         .collect()
-}
-
-/// OK: set the brush the Symbolism tools share, after giving a new Symbol Set Density to the
-/// selected symbol sets. Every option is checked first, so a value the tools refuse (a number out
-/// of its range included) leaves the symbol sets and the options as they are.
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> DialogResult {
-    let mut values: Map<String, Value> =
-        NUMBERS.iter().filter(|k| d.fields.contains_key(**k)).map(|k| (k.to_string(), json!(d.f64(k, 0.0)))).collect();
-    // The checkboxes and choices as the fields hold them, so a value the tools do not have is refused.
-    values.extend(SWITCHES.iter().chain(&SPRAY).chain(&["method"]).filter_map(|k| Some((k.to_string(), d.fields.get(*k)?.clone()))));
-    // An option `tool.setOption` refuses leaves the symbol sets as they are too.
-    let tool = d.str("tool");
-    if !SYMBOLISM.contains(&tool.as_str()) {
-        return Err(format!("unknown tool `{tool}`"));
-    }
-    // A number, or text that reads as one (a length with its unit for the diameter).
-    let readable = |v: &Value| match v {
-        Value::Number(_) => true,
-        Value::String(s) => vectorcraft_doc::Unit::Points.parse(s).is_some(),
-        _ => false,
-    };
-    if let Some(k) = NUMBERS.iter().chain(&[DENSITY_WAS]).find(|k| d.fields.get(**k).is_some_and(|v| !readable(v))) {
-        return Err(format!("`{k}` must be a number"));
-    }
-    vectorcraft_tools::symbolism::check_options(&tool, &values)?;
-    let (from, to) = (d.f64(DENSITY_WAS, 0.0).clamp(1.0, 10.0), d.f64("density", 0.0).clamp(1.0, 10.0));
-    let sets = selected_sets(app);
-    if d.fields.contains_key(DENSITY_WAS) && from != to && !sets.is_empty() {
-        app.run("symbol.setDensity", json!({ "from": from, "to": to, "ids": sets }))?;
-    }
-    set_tool_options_and_close(app, json!({ "tool": d.str("tool"), "values": values }))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::tests_rectangular_grid::{set_of, try_confirm};
     use super::*;
     use vectorcraft_engine::Session;
 
     fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app
     }
 
-    fn painted(app: &mut VectorcraftApp) -> String {
-        crate::tests_labels::painted_text(app, |app, ui| super::super::show(app, ui.ctx()))
-    }
-
-    #[test]
-    fn the_symbolism_tools_share_the_options_ok_sets() {
-        let mut app = app();
-        app.run("tool.options", json!({"tool": "symbolSizer"})).unwrap();
-        let text = painted(&mut app);
-        for label in ["Symbolism Tools Options", "Diameter:", "Intensity:", "Symbol Set Density:"] {
-            assert!(text.contains(label), "{label} in {text}");
-        }
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!((d.str("tool"), d.f64("diameter", 0.0), d.f64("intensity", 0.0)), ("symbolSizer".to_string(), 80.0, 5.0));
-        for (k, v) in [("diameter", json!(120)), ("intensity", json!(9)), ("density", json!(2))] {
-            d.fields.insert(k.into(), v);
-        }
-        super::super::confirm(&mut app).unwrap();
-        assert!(app.ui.dialog.is_none());
-        // The Sprayer has them too: one brush for the eight tools.
-        let o = app.session.tool_options_of("symbolSprayer");
-        assert_eq!((o["diameter"].as_f64(), o["intensity"].as_f64(), o["density"].as_f64()), (Some(120.0), Some(9.0), Some(2.0)));
-    }
-
-    /// Every tool shows the general options; the Symbol Sprayer and the Symbol Sizer show their own
-    /// sections, and the Tool row's choice decides which.
-    #[test]
-    fn the_sprayer_and_the_sizer_show_their_sections() {
-        let mut app = app();
-        let general = ["Tool:", "Use Pressure Pen", "Method:", "User Defined", "Show Brush Size and Intensity"];
-        let sprayer = ["Symbol Sprayer Options", "Scrunch:", "Size:", "Spin:", "Screen:", "Stain:", "Style:"];
-        let sizer = ["Symbol Sizer Options", "Proportional Resizing", "Resizing Affects Density"];
-        for (tool, own, others) in
-            [("symbolSprayer", &sprayer[..], &sizer[..]), ("symbolSizer", &sizer[..], &sprayer[..]), ("symbolStainer", &[][..], &sprayer[..])]
-        {
-            app.run("tool.options", json!({"tool": tool})).unwrap();
-            let text = painted(&mut app);
-            for label in general.iter().chain(own) {
-                assert!(text.contains(label), "{tool}: {label} in {text}");
-            }
-            for label in others {
-                assert!(!text.contains(label), "{tool}: no {label} in {text}");
-            }
-        }
-        // The Stainer's dialog, switched to the Sizer with the Tool row.
-        app.ui.dialog.as_mut().unwrap().fields.insert("tool".into(), json!("symbolSizer"));
-        let text = painted(&mut app);
-        assert!(text.contains("Proportional Resizing") && !text.contains("Scrunch:"), "{text}");
-    }
-
-    /// The Symbol Sprayer uses neither Intensity nor pen pressure: its Use Pressure Pen is disabled,
-    /// and the other tools' is not.
-    #[test]
-    fn the_sprayer_disables_use_pressure_pen() {
-        let mut app = app();
-        for (tool, off) in [("symbolSprayer", true), ("symbolSizer", false), ("symbolShifter", false)] {
-            app.run("tool.options", json!({"tool": tool})).unwrap();
-            let tree = crate::widgets::accessibility_tests::tree(|ui| super::super::show(&mut app, ui.ctx()));
-            let pen = crate::widgets::accessibility_tests::named(&tree, "Use Pressure Pen");
-            assert_eq!(pen.is_disabled(), off, "{tool}");
-        }
-    }
-
-    /// OK sets Method, Use Pressure Pen, Show Brush Size and Intensity and the Sprayer's and the
-    /// Sizer's options for the eight tools, and the dialog opens with them again.
-    #[test]
-    fn ok_sets_the_method_the_pen_and_the_tool_sections() {
-        let mut app = app();
-        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        assert_eq!((d.str("method"), d.bool("usePressure"), d.bool("showBrush")), ("userDefined".to_string(), false, true));
-        assert_eq!((d.str("sprayStain"), d.bool("proportional"), d.bool("affectsDensity")), ("average".to_string(), true, false));
-        for (k, v) in [
-            ("method", json!("random")),
-            ("usePressure", json!(true)),
-            ("showBrush", json!(false)),
-            ("sprayStain", json!("userDefined")),
-            ("spraySpin", json!("userDefined")),
-            ("proportional", json!(false)),
-            ("affectsDensity", json!(true)),
-        ] {
-            d.fields.insert(k.into(), v);
-        }
-        super::super::confirm(&mut app).unwrap();
-        let o = app.session.tool_options_of("symbolScreener");
-        assert_eq!((o["method"].as_str(), o["usePressure"].as_bool(), o["showBrush"].as_bool()), (Some("random"), Some(true), Some(false)));
-        assert_eq!(
-            (o["sprayStain"].as_str(), o["spraySpin"].as_str(), o["sprayScrunch"].as_str()),
-            (Some("userDefined"), Some("userDefined"), Some("average"))
-        );
-        assert_eq!((o["proportional"].as_bool(), o["affectsDensity"].as_bool()), (Some(false), Some(true)));
-        app.run("tool.options", json!({"tool": "symbolSizer"})).unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.str("method"), d.bool("usePressure"), d.bool("affectsDensity")), ("random".to_string(), true, true));
-    }
-
-    /// A new Symbol Set Density spaces the instances of the selected symbol set, as one undo step;
-    /// the same density, or no set selected, adds none.
-    #[test]
-    fn ok_gives_a_new_density_to_the_selected_symbol_set() {
-        let mut app = app();
+    /// A symbol set of eight instances in a row, and its geometric width.
+    fn sprayed(app: &mut VectorcraftApp) -> u64 {
         app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap();
         app.run("symbol.new", json!({"name": "Dot"})).unwrap();
         app.run("select.set", json!({"ids": []})).unwrap();
         let points: Vec<Value> = (0..8).map(|i| json!([40.0 + 40.0 * f64::from(i), 150.0])).collect();
-        let set = app.run("symbol.spray", json!({"name": "Dot", "points": points, "radius": 4})).unwrap()["id"].as_u64().unwrap();
-        let width = |app: &VectorcraftApp| {
-            let st = app.session.active().unwrap();
-            st.doc.node(vectorcraft_doc::NodeId(set)).and_then(|n| n.geometric_bounds()).map(|b| b.width()).unwrap()
-        };
-        let undo = |app: &VectorcraftApp| app.session.active().unwrap().history.undo.len();
-        let (was, steps) = (width(&app), undo(&app));
+        app.run("symbol.spray", json!({"name": "Dot", "points": points, "radius": 4})).unwrap()["id"].as_u64().unwrap()
+    }
+
+    fn width(app: &VectorcraftApp, set: u64) -> f64 {
+        let st = app.session.active().unwrap();
+        st.doc.node(vectorcraft_doc::NodeId(set)).and_then(|n| n.geometric_bounds()).map(|b| b.width()).unwrap()
+    }
+
+    fn undo(app: &VectorcraftApp) -> usize {
+        app.session.active().unwrap().history.undo.len()
+    }
+
+    /// A new Symbol Set Density spaces the instances of the selected symbol set, as one undo step;
+    /// the same density adds none, and a value `tool.setOption` refuses changes no density.
+    #[test]
+    fn ok_gives_a_new_density_to_the_selected_symbol_set() {
+        let mut app = app();
+        let set = sprayed(&mut app);
+        let (was, steps) = (width(&app, set), undo(&app));
         // The same density: the set stays as it is.
-        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!((width(&app), undo(&app)), (was, steps));
+        open(&mut app, "symbolSprayer");
+        try_confirm(&mut app, KIND).unwrap();
+        assert_eq!((width(&app, set), undo(&app)), (was, steps));
+        // A value the options refuse keeps the dialog open and changes neither the set nor the options.
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        set_of(&mut app, KIND, "diameter", json!(1)).unwrap();
+        assert!(try_confirm(&mut app, KIND).is_err());
+        assert_eq!((width(&app, set), undo(&app)), (was, steps));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(5.0));
+        // A row refuses a value of the wrong kind at the row.
+        assert!(set_of(&mut app, KIND, "method", json!("smooth")).is_err());
         // A higher density packs the set closer, as one undo step.
-        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(9));
-        super::super::confirm(&mut app).unwrap();
-        assert!(width(&app) < was * 0.8, "{} of {was}", width(&app));
+        set_of(&mut app, KIND, "diameter", json!(80)).unwrap();
+        try_confirm(&mut app, KIND).unwrap();
+        assert!(width(&app, set) < was * 0.8, "{} of {was}", width(&app, set));
         assert_eq!(undo(&app), steps + 1);
         assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(9.0));
-        // An option the tools do not have: neither the set nor the options change.
-        let (was, steps) = (width(&app), undo(&app));
-        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("density".into(), json!(3));
-        d.fields.insert("method".into(), json!("smooth"));
-        assert!(super::super::confirm(&mut app).is_err());
-        assert_eq!((width(&app), undo(&app)), (was, steps));
-        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("density".into(), json!(3));
-        d.fields.insert("usePressure".into(), json!(1));
-        assert!(super::super::confirm(&mut app).is_err());
-        assert_eq!((width(&app), undo(&app)), (was, steps));
-        // A tool that is not a Symbolism tool, a density that is not a number, or a number out of
-        // its range.
-        for (k, v) in
-            [("tool", json!("pen")), ("density", json!("three")), ("densityWas", json!(null)), ("diameter", json!(1)), ("intensity", json!(11))]
-        {
-            app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("density".into(), json!(3));
-            d.fields.insert(k.into(), v);
-            assert!(super::super::confirm(&mut app).is_err(), "{k}");
-            assert_eq!((width(&app), undo(&app)), (was, steps), "{k}");
-        }
-        // A length with its unit is a diameter.
-        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("diameter".into(), json!("12 pt"));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(app.session.tool_options_of("symbolSizer")["diameter"].as_f64(), Some(12.0));
-        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(9.0));
-        app.ui.dialog = None;
         // Without a set selected only the option changes.
         app.run("select.set", json!({"ids": []})).unwrap();
-        let (was, steps) = (width(&app), undo(&app));
-        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("density".into(), json!(2));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!((width(&app), undo(&app)), (was, steps));
+        let (was, steps) = (width(&app, set), undo(&app));
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(2)).unwrap();
+        try_confirm(&mut app, KIND).unwrap();
+        assert_eq!((width(&app, set), undo(&app)), (was, steps));
         assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(2.0));
     }
 
     /// A locked symbol set in the selection keeps its spacing, and OK still sets the options.
+    #[test]
+    fn density_draft_waits_for_the_drawing_with_its_selected_symbol_set() {
+        let mut app = app();
+        let first = sprayed(&mut app);
+        let first_width = width(&app, first);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let second = sprayed(&mut app);
+        let (second_width, second_undo) = (width(&app, second), undo(&app));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let error = try_confirm(&mut app, KIND).expect_err("the density draft belongs to the other drawing");
+        assert!(error.contains("original drawing"), "{error}");
+        assert_eq!((width(&app, second), undo(&app)), (second_width, second_undo));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        try_confirm(&mut app, KIND).unwrap();
+        assert!(width(&app, first) < first_width);
+    }
+
+    #[test]
+    fn density_draft_keeps_the_symbol_set_that_was_selected_at_open() {
+        let mut app = app();
+        let first = sprayed(&mut app);
+        let first_width = width(&app, first);
+        app.run("select.set", json!({"ids": []})).unwrap();
+        let second = app.run("symbol.spray", json!({"name": "Dot", "points": [[40, 200], [120, 200]], "radius": 4})).unwrap()["id"].as_u64().unwrap();
+        let second_width = width(&app, second);
+        app.run("select.set", json!({"ids": [first]})).unwrap();
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        try_confirm(&mut app, KIND).unwrap();
+        assert!(width(&app, first) < first_width);
+        assert_eq!(width(&app, second), second_width);
+    }
+
+    #[test]
+    fn density_draft_does_not_change_a_symbol_set_that_reuses_an_undone_id() {
+        let mut app = app();
+        let original = sprayed(&mut app);
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(original)).is_none());
+        let points: Vec<Value> = (0..8).map(|i| json!([50.0 + 35.0 * f64::from(i), 100.0])).collect();
+        let new = app.run("symbol.spray", json!({"name": "Dot", "points": points, "radius": 4})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(new, original, "Undo restored the allocation counter");
+        let (original_width, steps) = (width(&app, new), undo(&app));
+
+        try_confirm(&mut app, KIND).unwrap();
+        assert_eq!((width(&app, new), undo(&app)), (original_width, steps));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(9.0));
+    }
+
     #[test]
     fn ok_sets_the_options_with_a_locked_symbol_set_selected() {
         let mut app = app();
@@ -340,13 +307,12 @@ mod tests {
         let set = app.run("symbol.spray", json!({"name": "Dot", "points": [[40, 150], [120, 150]], "radius": 4})).unwrap()["id"].as_u64().unwrap();
         app.run("object.lock", json!({})).unwrap();
         app.session.select(|_, sel| sel.set([vectorcraft_doc::NodeId(set)])).unwrap();
-        let steps = app.session.active().unwrap().history.undo.len();
-        app.run("tool.options", json!({"tool": "symbolSprayer"})).unwrap();
-        let d = app.ui.dialog.as_mut().unwrap();
-        d.fields.insert("density".into(), json!(9));
-        d.fields.insert("diameter".into(), json!(30));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(app.session.active().unwrap().history.undo.len(), steps);
+        let steps = undo(&app);
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        set_of(&mut app, KIND, "diameter", json!(30)).unwrap();
+        try_confirm(&mut app, KIND).unwrap();
+        assert_eq!(undo(&app), steps);
         let o = app.session.tool_options_of("symbolSizer");
         assert_eq!((o["density"].as_f64(), o["diameter"].as_f64()), (Some(9.0), Some(30.0)));
     }

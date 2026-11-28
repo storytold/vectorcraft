@@ -54,14 +54,14 @@ pub use blend_spec::{BlendDefaults, BlendEase, BlendEaseType, BlendOrientation, 
 use blend_spec::{blend_color_shift, blend_ramp};
 pub use envelope::{
     EnvelopeKind, EnvelopeMap, EnvelopeOptions, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, TypeInk, envelope_bounds, envelope_content_bounds,
-    envelope_content_boxes, envelope_content_boxes_with, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_of,
-    envelope_overlay, envelope_stroke_margin, set_type_ink, smooth_handles, warp_grid,
+    envelope_content_boxes, envelope_content_boxes_with, envelope_expand, envelope_frame, envelope_grid, envelope_mapper, envelope_margin_lengths,
+    envelope_of, envelope_overlay, envelope_stroke_margin, set_type_ink, smooth_handles, warp_grid,
 };
-pub(crate) use expand::max_outset;
 pub use expand::{
     Hooks, MAX_GENERATED, Outliner, PatternTiles, affine_near, expand_deep, expand_deep_hooks, expand_live, expand_live_hooks, expand_live_with,
-    expanded_group, expanded_group_hooks, is_live, mesh_quad_nodes, mesh_warp_cost, mesh_warp_image, subtree_has_live,
+    expanded_group, expanded_group_hooks, is_drawn_live, is_live, mesh_quad_nodes, mesh_warp_cost, mesh_warp_image, subtree_has_live,
 };
+pub(crate) use expand::{max_outset, mesh_warp_image_with};
 #[cfg(test)]
 use mesh::grid_eval;
 pub use mesh::{Coons, GradientMesh, MeshAppearance, MeshPiece, MeshPoint, MeshQuad, default_fidelity, grid_points, nodes_bounds};
@@ -975,6 +975,17 @@ mod tests {
         assert_eq!(margin(&turned, frame).map(|m| (m * 1000.0).round()), before.map(|m| (m * 1000.0).round()));
         // Margins an `f32` can't hold are none.
         assert_eq!(envelope_stroke_margin(Rect::new(-5e41, 0.0, 100.0, 100.0), Rect::new(0.0, 0.0, 100.0, 100.0)), None);
+        // A straight line along an axis has margins across it, as shares of its length, and maps
+        // from its box with them; a point has none.
+        let line =
+            Node::path(NodeId(4), vectorcraft_geom::shapes::line(Point::new(10.0, 20.0), Point::new(110.0, 20.0)), crate::Appearance::default_art());
+        let line = [Arc::new(line)];
+        let stroked_line = Rect::new(10.0, 15.0, 110.0, 25.0);
+        let across = envelope_stroke_margin(stroked_line, Rect::new(10.0, 20.0, 110.0, 20.0)).unwrap();
+        assert!(across[0] > 0.0 && across[1] > 0.0 && across[2] == 0.0 && across[3] == 0.0, "{across:?}");
+        let from = src(&line, Affine::IDENTITY, EnvelopeOptions { bounds_margin: across, ..on });
+        assert!((from.y0 - 15.0).abs() + (from.y1 - 25.0).abs() + (from.x0 - 10.0).abs() + (from.x1 - 110.0).abs() < 1e-4, "{from:?}");
+        assert_eq!(envelope_stroke_margin(stroked_line, Rect::new(60.0, 20.0, 60.0, 20.0)), None);
 
         assert!(serde_json::to_value(EnvelopeOptions::default()).unwrap().get("boundsMargin").is_none());
         let saved = serde_json::to_value(on).unwrap();
@@ -1338,6 +1349,33 @@ mod tests {
         let piece = Arc::make_mut(&mut children[0]);
         piece.extras_mut().warp_piece = false;
         assert!(piece.knockout_outline().is_none());
+    }
+
+    /// Each piece of a mesh-warped colorized image keeps its color and whether it overprints.
+    #[test]
+    fn mesh_warp_image_pieces_keep_an_overprinting_color() {
+        let im = crate::ImageObject {
+            key: "pic".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(10.0),
+            link: None,
+            placement: Default::default(),
+            pixels: None,
+        };
+        let mut n = Node::new(NodeId(3), NodeKind::Image(Box::new(im.clone())));
+        n.extras_mut().colorize = Some(Box::new(Paint::solid(Color::BLACK)));
+        n.extras_mut().colorize_overprint = true;
+        for masked in [false, true] {
+            let g = mesh_warp_image(&n, &im, &|p| p, 2, false, masked);
+            let mut pieces = vec![];
+            g.walk(&mut |c| {
+                if matches!(c.kind, NodeKind::Image(_)) {
+                    pieces.push(c.colorize_overprints());
+                }
+            });
+            assert_eq!(pieces, [true; 8], "masked {masked}");
+        }
     }
 
     /// More cells than the objects live art may make cut no pieces (the count overflowed).

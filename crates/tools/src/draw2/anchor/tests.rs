@@ -520,7 +520,7 @@ fn scissors_shows_paths_alignment_and_configured_anchor_snaps() {
 }
 
 /// A cached snap is for the same raw position, document state and drawing options only. A press
-/// gathers fresh targets, even when a previous hover's document state is reused by a caller.
+/// gathers fresh targets when the document's revision moved since the hover.
 #[test]
 fn scissors_cursor_and_press_use_current_snaps() {
     let (d, rect) = doc_with_rect();
@@ -564,7 +564,7 @@ fn scissors_cursor_and_press_use_current_snaps() {
     let before = cx(&crossing, &selected, &paint);
     let mut tool = AnchorTool::new("scissors");
     tool.pointer(&before, &PointerEvent::new(PointerKind::Move, 152.0, 101.5));
-    let after = cx(&d, &selected, &paint);
+    let after = ToolContext { revision: (0, 1), ..cx(&d, &selected, &paint) };
     let actions = tool.pointer(&after, &PointerEvent::new(PointerKind::Down, 152.0, 101.5));
     assert!(scissors_cut_at(&d, rect, &actions).distance(Point::new(152.0, 100.0)) < 1e-6, "{actions:?}");
 }
@@ -1048,4 +1048,240 @@ fn anchor_point_alt_drag_links_a_blend_spine_handle() {
         ))
     );
     assert_eq!(tool.pointer(&c, &PointerEvent::new(PointerKind::Up, 190.0, 350.0).with_mods(alt)), vec![Action::Commit]);
+}
+
+fn review_8655_markers(tool: &AnchorTool, context: &ToolContext) -> Vec<Point> {
+    tool.overlays(context)
+        .into_iter()
+        .filter_map(|overlay| match overlay {
+            Overlay::Anchor { p, color, filled: false, size } if color == crate::draw2::FEEDBACK && size == 7.0 => Some(p),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Compare the public overlay to geometry reconstructed from the real path.split action,
+/// including points projected off the raw pointer and a rejected outside-art snap.
+#[test]
+fn review_8655_scissors_marker_matches_the_fresh_split_geometry() {
+    let paint = paint();
+    let mut observed = Vec::new();
+    for scenario in 0..5 {
+        let (mut d, mut target, mut selected) = if scenario == 1 {
+            scissors_crossing()
+        } else {
+            let (d, id) = doc_with_rect();
+            (d, id, Selection::default())
+        };
+        if scenario == 3 {
+            let outside = d.alloc_id();
+            d.insert(
+                Some(d.layers[0].id),
+                1,
+                vectorcraft_doc::Node::path(
+                    outside,
+                    vectorcraft_geom::shapes::line(Point::new(150.0, 103.5), Point::new(350.0, 350.0)),
+                    vectorcraft_doc::Appearance::default_art(),
+                ),
+            )
+            .unwrap();
+        } else if scenario == 4 {
+            let mut curve = vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 300.0), Point::new(200.0, 300.0)], false);
+            curve.anchors[0].h_out = Point::new(120.0, 340.0);
+            curve.anchors[1].h_in = Point::new(180.0, 340.0);
+            target = d.alloc_id();
+            d.insert(
+                Some(d.layers[0].id),
+                1,
+                vectorcraft_doc::Node::path(target, vectorcraft_geom::PathData::single(curve), vectorcraft_doc::Appearance::default_art()),
+            )
+            .unwrap();
+        }
+        selected.set([target]);
+        let (at, expected) = match scenario {
+            0 => (Point::new(152.0, 101.5), Point::new(152.0, 100.0)),
+            1 => (Point::new(152.0, 101.5), Point::new(150.0, 100.0)),
+            2 => (Point::new(200.0, 104.25), Point::new(200.0, 100.0)),
+            3 => (Point::new(150.0, 100.0), Point::new(150.0, 100.0)),
+            _ => (Point::new(150.0, 331.5), Point::new(150.0, 330.0)),
+        };
+        let snapping = scenario == 1 || scenario == 3;
+        let context = ToolContext {
+            smart_guides: snapping,
+            snap_to_point: snapping,
+            snap_to_pixel: false,
+            snap_to_grid: false,
+            isolation: (scenario == 3).then_some(target),
+            ..cx(&d, &selected, &paint)
+        };
+        let mut tool = AnchorTool::new("scissors");
+        assert!(tool.pointer(&context, &PointerEvent::new(PointerKind::Move, at.x, at.y)).is_empty());
+        let markers = review_8655_markers(&tool, &context);
+        let labels = scissors_labels(&tool, &context);
+        if scenario == 1 {
+            assert_eq!(labels, [("intersect".to_string(), expected)], "CONTROL: existing intersection guides remain");
+        } else {
+            assert!(labels.is_empty(), "CONTROL: off/rejected snapping adds no guide: {labels:?}");
+        }
+        assert_eq!(tool.cursor(&context, at, Mods::default()), Cursor::Scissors);
+        let actions = tool.pointer(&context, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+        let cut = scissors_cut_at(&d, target, &actions);
+        assert!(cut.distance(expected) < 1e-5, "CONTROL: scenario{scenario} actual split {cut:?}, expected{expected:?}");
+        if scenario == 2 {
+            assert!(matches!(&actions[..], [Action::Exec(_, args)] if args["anchor"] == 1), "CONTROL: the actual stored anchor wins");
+        }
+        if scenario == 0 || scenario == 4 {
+            assert!(cut.distance(at) > 1.0, "CONTROL: preview must show the path projection, not the raw point");
+        }
+        observed.push((scenario, markers, cut));
+    }
+    observed.extend(review_8655_endpoint_action_controls());
+    // Every split/guide control above executes before the missing-feedback oracle on old code.
+    for (scenario, markers, cut) in observed {
+        assert_eq!(markers.len(), 1, "REGRESSION: scenario{scenario} needs exactly one hollow7px FEEDBACK anchor: {markers:?}");
+        assert!(markers[0].distance(cut) < 1e-6, "REGRESSION: marker and actual fresh split disagree: {markers:?} versus{cut:?}");
+    }
+}
+
+#[test]
+fn review_8655_scissors_selection_change_cannot_reuse_the_wrong_marker() {
+    let (mut d, rectangle) = doc_with_rect();
+    let line = d.alloc_id();
+    d.insert(
+        Some(d.layers[0].id),
+        1,
+        vectorcraft_doc::Node::path(
+            line,
+            vectorcraft_geom::shapes::line(Point::new(120.0, 102.0), Point::new(240.0, 102.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ),
+    )
+    .unwrap();
+    let mut rectangle_selected = Selection::default();
+    rectangle_selected.set([rectangle]);
+    let mut line_selected = Selection::default();
+    line_selected.set([line]);
+    let paint = paint();
+    // Only the selection changes: these contexts have the same document and DrawSnap key inputs.
+    let before = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &rectangle_selected, &paint) };
+    let after = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &line_selected, &paint) };
+    assert_eq!(before.revision, after.revision);
+    assert!(std::ptr::eq(before.doc, after.doc));
+    let at = Point::new(150.0, 101.6);
+    let mut tool = AnchorTool::new("scissors");
+    tool.pointer(&before, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let old_markers = review_8655_markers(&tool, &before);
+    let mut fresh = AnchorTool::new("scissors");
+    let old_cut = scissors_cut_at(&d, rectangle, &fresh.pointer(&before, &PointerEvent::new(PointerKind::Down, at.x, at.y)));
+    let new_cut = scissors_cut_at(&d, line, &fresh.pointer(&after, &PointerEvent::new(PointerKind::Down, at.x, at.y)));
+    assert!(old_cut.distance(Point::new(150.0, 100.0)) < 1e-6, "CONTROL: selected rectangle beats nearer unselected line");
+    assert!(new_cut.distance(Point::new(150.0, 102.0)) < 1e-6, "CONTROL: fresh selection changes the actual split owner");
+    assert!(old_cut.distance(new_cut) > 1.0);
+    let stale = review_8655_markers(&tool, &after);
+    assert!(stale.iter().all(|p| p.distance(new_cut) < 1e-6), "no unchanged-key selection switch may show the old cut point: {stale:?}");
+    tool.pointer(&after, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let new_markers = review_8655_markers(&tool, &after);
+    let actions = tool.pointer(&after, &PointerEvent::new(PointerKind::Down, at.x, at.y));
+    assert!(scissors_cut_at(&d, line, &actions).distance(new_cut) < 1e-6);
+    assert_eq!(old_markers.len(), 1, "REGRESSION: valid first selection has feedback");
+    assert!(old_markers[0].distance(old_cut) < 1e-6);
+    assert_eq!(new_markers.len(), 1, "REGRESSION: a fresh hover uses the fresh selected owner");
+    assert!(new_markers[0].distance(new_cut) < 1e-6);
+}
+
+#[test]
+fn review_8655_scissors_feedback_clears_on_miss_alt_stale_and_leave() {
+    let (d, _) = doc_with_rect();
+    let selected = Selection::default();
+    let paint = paint();
+    let context = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&d, &selected, &paint) };
+    let at = Point::new(170.0, 201.0);
+    let mut tool = AnchorTool::new("scissors");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let valid = review_8655_markers(&tool, &context);
+    // A context change must not keep a geometrically obsolete point visible before rehover.
+    let stale = ToolContext { zoom: 2.0, smart_guides: false, snap_to_point: false, ..cx(&d, &selected, &paint) };
+    assert!(tool.overlays(&stale).is_empty(), "CONTROL: stale zoom shows neither guides nor marker");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, 20.0, 20.0));
+    assert!(tool.pointer(&context, &PointerEvent::new(PointerKind::Down, 20.0, 20.0)).is_empty());
+    assert!(tool.overlays(&context).is_empty(), "CONTROL: a true miss has no cut feedback");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    let alt = Mods { alt: true, ..Mods::default() };
+    let event = PointerEvent::new(PointerKind::Down, at.x, at.y);
+    let mut add = AnchorTool::new("addAnchor");
+    assert_eq!(tool.pointer(&context, &event.with_mods(alt)), add.pointer(&context, &event), "CONTROL: Alt remains Add Anchor Point");
+    assert!(tool.overlays(&context).is_empty(), "CONTROL: Alt has no Scissors marker");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, at.x, at.y));
+    tool.hover_ended(&context);
+    assert!(tool.overlays(&context).is_empty(), "CONTROL: leaving clears the marker and guides");
+    assert_eq!(valid.len(), 1, "REGRESSION: the initial valid cut needs visible feedback");
+    assert!(valid[0].distance(Point::new(170.0, 200.0)) < 1e-6);
+}
+
+/// The successful point is owned by path.split's consumer, including endpoint rejection and
+/// its canonical anchor threshold. Keep the emitted Down action itself unchanged.
+fn review_8655_endpoint_action_controls() -> Vec<(usize, Vec<Point>, Point)> {
+    let paint = paint();
+    let (open_doc, rectangle, selected) = scissors_crossing();
+    let open_cx = ToolContext { smart_guides: false, snap_to_point: false, ..cx(&open_doc, &selected, &paint) };
+    let mut tool = AnchorTool::new("scissors");
+    for (anchor, endpoint) in [(0, Point::new(145.0, 90.0)), (1, Point::new(165.0, 130.0))] {
+        tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Move, endpoint.x, endpoint.y));
+        let endpoint_markers = review_8655_markers(&tool, &open_cx);
+        let actions = tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Down, endpoint.x, endpoint.y));
+        let [Action::Exec(command, args)] = &actions[..] else { panic!("CONTROL: preserve the original endpoint Down action: {actions:?}") };
+        assert_eq!(command, "path.split");
+        assert_eq!(args["anchor"], anchor);
+        let owner = NodeId(args["id"].as_u64().unwrap());
+        assert_ne!(owner, rectangle);
+        assert!(!open_doc.node(owner).unwrap().path_data().unwrap().subpaths[0].closed);
+        assert_eq!(scissors_cut_at(&open_doc, owner, &actions), endpoint);
+        assert!(endpoint_markers.is_empty(), "an open path's end point has no successful-cut marker");
+        tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Up, endpoint.x, endpoint.y));
+    }
+    let interior = Point::new(155.0, 110.0);
+    tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Move, interior.x, interior.y));
+    let interior_markers = review_8655_markers(&tool, &open_cx);
+    let actions = tool.pointer(&open_cx, &PointerEvent::new(PointerKind::Down, interior.x, interior.y));
+    let [Action::Exec(_, args)] = &actions[..] else { panic!("CONTROL: interior open path emits split: {actions:?}") };
+    assert!(args.get("segment").is_some());
+    let owner = NodeId(args["id"].as_u64().unwrap());
+    assert!(scissors_cut_at(&open_doc, owner, &actions).distance(interior) < 1e-6);
+
+    let (mut d, other_rectangle) = doc_with_rect();
+    // Keep the unrelated fixture rectangle away: its exact(100,100) anchor must not steal
+    // the grid contact from the selected near-endpoint cubic.
+    d.node_mut(other_rectangle).unwrap().transform(vectorcraft_geom::Affine::translate((0.0, 250.0)), true);
+    d.grid = vectorcraft_doc::GridPrefs { spacing: 10.0, subdivisions: 1 };
+    let start = Point::new(99.99995, 100.0);
+    // Explicit collinear cubic handles make t linear; a handle-free rectangle's cubic t
+    // would be about0.000408 here and would not exercise the consumer's1e-6 threshold.
+    let path = vectorcraft_geom::PathData::from_bezpath(&vectorcraft_geom::BezPath::from_vec(vec![
+        vectorcraft_geom::PathEl::MoveTo(start),
+        vectorcraft_geom::PathEl::CurveTo(Point::new(133.33328333333333, 100.0), Point::new(166.66661666666666, 100.0), Point::new(199.99995, 100.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(199.99995, 200.0)),
+        vectorcraft_geom::PathEl::LineTo(Point::new(99.99995, 200.0)),
+        vectorcraft_geom::PathEl::ClosePath,
+    ]));
+    let id = d.alloc_id();
+    d.insert(Some(d.layers[0].id), 1, vectorcraft_doc::Node::path(id, path, vectorcraft_doc::Appearance::default_art())).unwrap();
+    let mut selected = Selection::default();
+    selected.set([id]);
+    let context = ToolContext { snap_to_grid: true, smart_guides: false, snap_to_point: false, ..cx(&d, &selected, &paint) };
+    let raw = Point::new(100.1, 100.2);
+    let mut tool = AnchorTool::new("scissors");
+    tool.pointer(&context, &PointerEvent::new(PointerKind::Move, raw.x, raw.y));
+    let markers = review_8655_markers(&tool, &context);
+    let actions = tool.pointer(&context, &PointerEvent::new(PointerKind::Down, raw.x, raw.y));
+    let [Action::Exec(command, args)] = &actions[..] else { panic!("CONTROL: near-end grid contact emits split: {actions:?}") };
+    assert_eq!(command, "path.split");
+    assert_eq!(args["id"], id.0);
+    assert_eq!(args["segment"], 0);
+    let t = args["t"].as_f64().unwrap();
+    assert!(t > 0.0 && t <= 1e-6, "CONTROL: actual emitted t reaches the consumer's anchor canonicalization: {t}");
+    let projected = scissors_cut_at(&d, id, &actions);
+    assert!(projected.distance(Point::new(100.0, 100.0)) < 1e-6);
+    assert!(projected.distance(start) > 1e-5, "CONTROL: raw curve evaluation differs from the committed canonical anchor");
+    assert!(scissors_labels(&tool, &context).is_empty(), "grid contact adds no Smart Guide label");
+    vec![(5, interior_markers, interior), (6, markers, start)]
 }

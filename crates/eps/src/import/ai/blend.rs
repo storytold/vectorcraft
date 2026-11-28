@@ -52,6 +52,20 @@ const COLOR_TOLERANCE: f32 = 0.02;
 /// The note for a blend that keeps its drawn steps.
 pub(super) const DRAWN: &str = "a blend VectorCraft couldn't read as a live blend comes in as its drawn steps";
 
+#[cfg(any(test, feature = "work-count"))]
+thread_local! {
+    /// The work blends took on this thread (tests): the objects laid out to be checked, and the laid
+    /// objects the check measured against a drawn step.
+    static BLEND_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+/// The objects blends laid out to be checked and made live on this thread, and the laid objects
+/// the check measured against a drawn step (tests).
+#[cfg(any(test, feature = "work-count"))]
+pub fn blend_work() -> (usize, usize) {
+    BLEND_WORK.get()
+}
+
 /// A blend part an object's dictionary names: its type (`K`, `S`) and its id.
 pub(super) type Roles = HashMap<NodeId, (String, Option<String>)>;
 
@@ -214,6 +228,8 @@ pub(super) fn live_blend(edit: &Node, drawn: &Node, record: &Record, roles: &Rol
         .filter_map(|orientation| {
             let spec = BlendSpec { orientation, ..spec.clone() };
             let laid = blend_expand(&keys, &spec);
+            #[cfg(any(test, feature = "work-count"))]
+            BLEND_WORK.with(|w| w.set((w.get().0.saturating_add(laid.len()), w.get().1)));
             let off = how_far(&laid, &drawn, false)?;
             Some((off, spec, laid))
         })
@@ -505,7 +521,11 @@ fn how_far(laid: &[Node], drawn: &[Drawn], turned: bool) -> Option<f64> {
             .flatten()
             .filter(|&&i| !used.get(i).copied().unwrap_or(true))
             .filter_map(|&i| laid.get(i).map(|l| (i, l)))
-            .filter(|(_, l)| (l.centre - c).hypot() <= PLACE_TOLERANCE && same_fill(l.fill, f));
+            .filter(|(_, l)| {
+                #[cfg(any(test, feature = "work-count"))]
+                BLEND_WORK.with(|w| w.set((w.get().0, w.get().1.saturating_add(1))));
+                (l.centre - c).hypot() <= PLACE_TOLERANCE && same_fill(l.fill, f)
+            });
         let (i, near) = if turned && compare {
             // Outlines are tried nearest first, so that steps crowded in one place don't spend the
             // outline comparisons on candidates farther off.
