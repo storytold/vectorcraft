@@ -25,8 +25,8 @@ pub(crate) const CMD: &str = "object.vectorHalftone";
 pub(crate) struct Open {
     /// The dialog's id on the host.
     pub id: DialogId,
-    /// The drawing whose art the dialog previews and changes.
-    document: u64,
+    /// The drawing whose art the dialog previews and changes: its uid and revert count.
+    document: (u64, u64),
     /// The temporary dots the dialog shows while it previews.
     pub preview: LivePreview,
 }
@@ -72,7 +72,7 @@ pub(crate) fn screen_params(live: bool, fields: &DialogFields) -> Vec<Param> {
 /// Opens Object › Vector Halftone, previewing from its first frame.
 pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    let document = app.session.active().ok_or("no document")?.uid;
+    let document = app.session.active().map(|doc| (doc.uid, doc.reverts)).ok_or("no document")?;
     let defaults = fields();
     let rows = screen_params(false, &DialogFields::new());
     let initial = fields_of(&rows, defaults.as_object().unwrap_or(&Default::default()));
@@ -83,7 +83,12 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ok = |app: &mut VectorcraftApp, result: &ParamResult| {
         let open = app.effect_dialogs.halftone.as_ref().ok_or("the dialog is closed")?;
         if !open.in_source(app) {
-            return Err(tl!("Return to the original drawing to apply Vector Halftone").into());
+            let why = if open.reverted(app) {
+                tl!("The document was reverted. Reopen this dialog to continue.")
+            } else {
+                tl!("Return to the original drawing to apply Vector Halftone")
+            };
+            return Err(why.into());
         }
         let params = Value::Object(json_of(&screen_params(false, &result.fields), &result.fields));
         let mut open = app.effect_dialogs.halftone.take().ok_or("the dialog is closed")?;
@@ -139,10 +144,148 @@ pub(crate) fn previewing(app: &VectorcraftApp) -> bool {
 
 impl Open {
     fn in_source(&self, app: &VectorcraftApp) -> bool {
-        app.session.active().is_some_and(|doc| doc.uid == self.document)
+        app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == self.document)
+    }
+
+    /// Whether the active drawing is the opening one, reverted since the dialog opened.
+    fn reverted(&self, app: &VectorcraftApp) -> bool {
+        let (uid, reverts) = self.document;
+        app.session.active().is_some_and(|doc| doc.uid == uid && doc.reverts != reverts)
     }
 }
 
 fn owns_preview(app: &VectorcraftApp) -> bool {
     app.session.active().and_then(|st| st.interaction.as_ref()?.preview.as_ref()).is_some_and(|(cmd, _)| cmd == CMD)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use vectorcraft_engine::Session;
+
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+
+    const REVERTED: &str = "The document was reverted. Reopen this dialog to continue.";
+
+    /// A panel over a saved drawing of one black ellipse, with Vector Halftone open on it. The
+    /// directory holds the saved file.
+    fn open_on_a_saved_drawing(tag: &str) -> (Panel, vectorcraft_testkit::TempDir) {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        app.run("shape.ellipse", json!({"x": 50, "y": 50, "width": 120, "height": 100})).unwrap();
+        app.run("paint.setFill", json!({"color": "#000000"})).unwrap();
+        let dir = vectorcraft_testkit::TempDir::new(tag);
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        open_dialog(&mut panel);
+        (panel, dir)
+    }
+
+    fn open_dialog(panel: &mut Panel) {
+        crate::menus::invoke(&mut panel.app(), CMD, json!({}));
+        panel.frame();
+        panel.frame();
+        assert!(panel.app().effect_dialogs.halftone.is_some(), "Vector Halftone is open");
+    }
+
+    fn id(panel: &Panel) -> DialogId {
+        panel.app().effect_dialogs.halftone.as_ref().map(|o| o.id).expect("Vector Halftone is open")
+    }
+
+    /// Sets a field as a control client would, then runs two frames.
+    fn set(panel: &mut Panel, field: &str, value: Value) {
+        let (id, ctx) = (id(panel), panel.ctx().clone());
+        let host = panel.app().dialogs().unwrap();
+        host.with(|h| h.set_json_field(&ctx, id, field, value)).unwrap();
+        panel.frame();
+        panel.frame();
+    }
+
+    /// Reverts the drawing to its saved copy and selects the restored ellipse again; returns the
+    /// restored document and its undo depth.
+    fn revert_and_reselect(panel: &mut Panel) -> (std::sync::Arc<vectorcraft_doc::Document>, usize) {
+        let mut app = panel.app();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let st = app.session.doc().unwrap();
+        (st.doc.clone(), st.history.undo.len())
+    }
+
+    fn doc(panel: &Panel) -> std::sync::Arc<vectorcraft_doc::Document> {
+        panel.app().session.doc().unwrap().doc.clone()
+    }
+
+    fn undo_steps(panel: &Panel) -> usize {
+        panel.app().session.doc().unwrap().history.undo.len()
+    }
+
+    /// Asserts that the held OK was refused for the revert and the dialog is still open.
+    fn assert_refused_for_the_revert(panel: &Panel) {
+        let id = id(panel);
+        let held = panel.app().dialogs().unwrap().with(|h| h.held_state(id));
+        assert!(
+            matches!(&held, Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str() == REVERTED),
+            "OK is refused for the revert, the held state is {held:?}"
+        );
+        assert!(panel.app().any_dialog_open(), "the dialog stays open with the refusal");
+    }
+
+    /// After File > Revert the draft does not preview on the restored drawing, OK is refused and
+    /// changes nothing, and Cancel changes nothing; reopened, the dialog applies again.
+    #[test]
+    fn vector_halftone_refuses_its_draft_after_file_revert() {
+        let (mut panel, _dir) = open_on_a_saved_drawing("halftone-revert");
+        set(&mut panel, "frequency", json!(25));
+        assert!(previewing(&panel.app()), "the draft previews before the revert");
+
+        let (restored, undo) = revert_and_reselect(&mut panel);
+        panel.frame();
+        panel.frame();
+        assert_eq!(doc(&panel), restored, "Preview must leave the restored drawing unchanged");
+        set(&mut panel, "frequency", json!(30));
+        assert_eq!(doc(&panel), restored, "Preview must leave the restored drawing unchanged after an edit");
+        assert!(!panel.app().session.in_interaction(), "no preview runs on the restored drawing");
+
+        panel.click("OK");
+        panel.frame();
+        assert_eq!(doc(&panel), restored, "OK must leave the restored drawing unchanged");
+        assert_eq!(undo_steps(&panel), undo, "OK must record no undo step");
+        assert!(panel.app().effect_dialogs.halftone.is_some(), "the dialog stays open");
+        assert_refused_for_the_revert(&panel);
+
+        panel.click("Cancel");
+        panel.frame();
+        assert!(panel.app().effect_dialogs.halftone.is_none(), "Cancel closes the dialog");
+        assert_eq!(doc(&panel), restored, "Cancel must leave the restored drawing unchanged");
+
+        open_dialog(&mut panel);
+        assert!(previewing(&panel.app()), "the reopened dialog previews on the restored drawing");
+        panel.click("OK");
+        panel.frame();
+        assert!(panel.app().effect_dialogs.halftone.is_none(), "the reopened dialog applies");
+        assert_ne!(doc(&panel), restored, "the reopened dialog changes the restored drawing");
+        assert_eq!(undo_steps(&panel), undo + 1, "the reopened dialog's OK is one undo step");
+    }
+
+    /// With Preview off, OK after File > Revert is refused and leaves the restored drawing as it is.
+    #[test]
+    fn vector_halftone_without_preview_refuses_ok_after_file_revert() {
+        let (mut panel, _dir) = open_on_a_saved_drawing("halftone-revert-no-preview");
+        set(&mut panel, "preview", json!(false));
+        set(&mut panel, "frequency", json!(25));
+        assert!(!panel.app().session.in_interaction(), "nothing previews with Preview off");
+        // With Preview off the drawing has no unsaved change to revert yet.
+        panel.app().run("object.move", json!({"dx": 5, "dy": 0})).unwrap();
+
+        let (restored, undo) = revert_and_reselect(&mut panel);
+        panel.frame();
+        panel.click("OK");
+        panel.frame();
+        assert_eq!(doc(&panel), restored, "OK must leave the restored drawing unchanged");
+        assert_eq!(undo_steps(&panel), undo, "OK must record no undo step");
+        assert_refused_for_the_revert(&panel);
+    }
 }
