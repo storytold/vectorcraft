@@ -48,6 +48,7 @@
 //! that holds the run's host only while the run goes on. An error, a limit or a stop puts the
 //! documents back and keeps the engine's globals; an internal error drops the engine.
 
+pub mod actions;
 pub mod console;
 pub mod dialogs;
 pub mod dollar;
@@ -204,6 +205,8 @@ pub(crate) struct Request {
     pub locale: String,
     /// The answers to the dialogs of a run with nobody to ask, in order.
     pub answers: Vec<DialogAnswer>,
+    /// The actions `app.doScript` can play.
+    pub actions: Vec<actions::Playable>,
 }
 
 thread_local! {
@@ -804,6 +807,15 @@ struct Host {
     args: RefCell<(Data, u64)>,
     /// The run's state of the script object model (`app`).
     dom: dom::State,
+    /// The actions `app.doScript` can play.
+    actions: Vec<actions::Playable>,
+    /// The index of each open document's active artboard as the run starts, by document uid. The
+    /// view keeps that index while the run goes on, so the steps `app.doScript` plays act on it.
+    active_artboards: Vec<(u64, usize)>,
+    /// The artboards the Artboard tool had selected in the active document as the run starts (two or
+    /// more), with that document's uid. The run gives the tool fresh state, which drops them, so the
+    /// steps `app.doScript` plays read them here.
+    artboard_picks: Option<(u64, Vec<usize>)>,
     /// The documents open when the run began as the person last left them, each with its own file
     /// and the file it was read from ([`crate::DocState::as_person_left`],
     /// [`crate::cmd::links::LinkBase::of_files`]), until the run's first command takes the files
@@ -2035,6 +2047,9 @@ impl Session {
         if self.script_copy_first && self.docs.iter().any(DocState::is_dirty) && cmd::recovery::save_copies(self).is_err() {
             return Err(EngineError::Other(NO_RECOVERY_COPY.to_string()));
         }
+        // The Artboard tool's selection, which the fresh tool state below drops.
+        let picks = cmd::artboard_tool_picks(self);
+        let artboard_picks = self.active().filter(|_| !picks.is_empty()).map(|d| (d.uid, picks));
         self.reset_tool();
         let open: Vec<u64> = self.docs.iter().map(|d| d.uid).collect();
         self.script_high_water.retain(|uid, _| open.contains(uid));
@@ -2154,6 +2169,9 @@ impl Session {
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
             dom: dom::State::new(heap_bytes),
+            actions: request.actions,
+            active_artboards: self.docs.iter().map(|d| (d.uid, dom::active_artboard(d))).collect(),
+            artboard_picks,
             run_docs: RefCell::new(
                 self.docs
                     .iter()

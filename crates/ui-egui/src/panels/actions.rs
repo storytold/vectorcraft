@@ -58,7 +58,7 @@ pub use playback::{
     deserialize_playback, play, play_action, play_at, playback_drawn, playback_held, playback_options, playback_shown, tick_playback,
     waiting_at_stop,
 };
-pub(crate) use playback::{KnownCommands, has_stop, is_ui_step, shown_text, step_place, stop_params, unknown_commands};
+pub(crate) use playback::{KnownCommands, add_script_actions, has_stop, is_ui_step, shown_text, step_place, stop_params, unknown_commands};
 pub use recording::{START_RECORDING, STOP_RECORDING, record, stop};
 pub(crate) use recording::{after_journaled_edit, after_recorded_command, before_recorded_command};
 

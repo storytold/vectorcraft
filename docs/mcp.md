@@ -2929,6 +2929,29 @@ other files through `$`:
   `importVariables` and `exportVariables` take a `File`, not a path, which must be a file the script may read, or
   write, through its `File` objects; the files of the open documents do not count. A value that changes nothing runs
   no command.
+- `app.doScript(action, set, dialogs?)` plays an action of the Actions panel inside the run, as the `DoScript` method
+  of the scripting reference
+  https://web.archive.org/web/20170621180804/https://wwwimages.adobe.com/content/dam/Adobe/en/devnet/illustrator/sdk/CC2015_3/Illustrator%20VBScript%20Reference.pdf
+  describes it, and returns `undefined` once every step has run. The actions come from `script.run`'s `actions`; the
+  app passes the Actions panel's actions with their included steps, and a recorded `command.batch` step gives its own
+  steps. A step that acts on the active artboard (Paste in Place, in Front and in Back, Align, Distribute Objects and
+  Distribute Spacing to the artboard, Select › All on Active Artboard, Edit Symbol, Fit to Artwork Bounds and Fit to
+  Selected Art) and does not name one acts on the active document's active artboard, by the index it had as the run
+  started, which the view keeps: after the script deletes artboards, the artboard now at that index, or the last one
+  past the end. While the Artboard tool has several artboards selected as the run starts, a paste step and a Fit to
+  Artwork Bounds step act on those instead, as in the panel's playback. A step of a recorded `command.batch` step that
+  names its `artboard` acts on that artboard, or the last one past the end, as `command.batch` gives it. VectorCraft's
+  own rules: the action and its set are matched by their exact names, and a name that matches no action or more than
+  one throws an error before any step runs, as does an action with no included step. A stop, and a step whose command a script may not run or the engine does not have
+  (a View menu step, or a step that plays an action or runs a script), throw an error that names the step before any
+  step runs, as does such a command among the commands a Batch step (`action.batch`) plays on each file, so an
+  action cannot play itself.
+  Each step then runs as `vc.run` runs a command: it joins the run's one undo step for each changed document, counts
+  as a host call, and reads and writes files only where the script may. A step that fails is put back and throws an
+  error that gives the step's place, the action's name and the step's command, and the steps before it stay done; an
+  uncaught error later puts them back with the rest of the run. `dialogs` must be `true` or `false` (default
+  `false`); no step opens a dialog, so it changes nothing. `app.loadAction` and `app.unloadAction` throw an error
+  that says they are not available yet when they are read or assigned.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
   with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
   `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page

@@ -637,6 +637,79 @@ fn an_error_counts_excluded_steps() {
     assert_eq!(x(&app), 0.0, "the failing batch changes nothing");
 }
 
+/// A script's `app.doScript` plays the panel's actions with their included steps; an action whose
+/// step `script.run`'s `actions` cannot hold is left out, and a caller's own list is kept.
+#[test]
+fn a_script_plays_the_panels_actions() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let rect = |x: i64| ("shape.rectangle", json!({"x": x, "y": 10, "width": 10, "height": 10}));
+    let bad = json!({"command": "object.move", "params": {"ids": [999_999], "dx": 1, "dy": 1}});
+    let batch = json!({"commands": [{"command": "select.none"}, bad]});
+    let actions = vec![
+        action("Draw", &[rect(0), rect(20), rect(40)]),
+        action("Odd", &[rect(0), ("select.none", json!(5))]),
+        action("Batched", &[("select.none", json!({})), ("command.batch", batch)]),
+    ];
+    push_set(&mut app, "Mine", actions);
+    let draw = model::members(&app.ui.actions, "Mine")[0];
+    app.ui.actions.set_step(draw, 1, false).unwrap();
+    let objects =
+        |app: &VectorcraftApp| app.session.active().map_or(0, |d| d.doc.layers.iter().map(|l| l.children().map_or(0, Vec::len)).sum::<usize>());
+    let undo = app.session.active().map_or(0, |d| d.history.undo.len());
+    app.session.script_frames = false;
+    let source = "app.doScript('Draw', 'Mine'); try { app.doScript('Odd', 'Mine'); } catch (e) { vc.log(e.message); }";
+    let r = app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+    assert_eq!(r["log"], json!(["the set “Mine” has no action “Odd”"]));
+    assert_eq!(objects(&app), 2, "the excluded step does not run");
+    assert_eq!(app.session.active().map_or(0, |d| d.history.undo.len()), undo + 1);
+    // A failing command of a recorded batch is named by the batch's place and its own.
+    let source = "try { app.doScript('Batched', 'Mine'); } catch (e) { vc.log(e.message); }";
+    let r = app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+    let m = r["log"][0].as_str().unwrap_or_default();
+    assert!(m.starts_with("action step 2.2 of “Batched” (`object.move`) failed:"), "{m}");
+    let r =
+        app.run("script.run", json!({"source": "try { app.doScript('Draw', 'Mine'); } catch (e) { vc.log(e.message); }", "actions": []})).unwrap();
+    assert_eq!(r["log"], json!(["there is no action set “Mine”"]));
+    assert_eq!(objects(&app), 2);
+}
+
+/// The script that `script.startup.run` runs after the startup scripts (its `then`) plays the
+/// panel's actions too, as File › Scripts runs a script with Run Startup Scripts on.
+#[test]
+fn the_script_after_the_startup_scripts_plays_the_panels_actions() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    push_set(&mut app, "Mine", vec![action("Draw", &[("shape.rectangle", json!({"x": 0, "y": 10, "width": 10, "height": 10}))])]);
+    app.session.script_frames = false;
+    let then = json!({"source": "try { app.doScript('Draw', 'Mine'); vc.log('ok'); } catch (e) { vc.log(e.message); }", "name": "t.js"});
+    let r = app.run("script.startup.run", json!({"reason": "menu", "then": then})).unwrap();
+    assert_eq!(r["then"]["log"], json!(["ok"]), "{r}");
+}
+
+/// The steps a script's `app.doScript` plays act on the view's active artboard, as the panel's
+/// playback does: Align to Artboard in a recorded batch, and Fit to Selected Art.
+#[test]
+fn a_script_plays_the_actions_on_the_active_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100, "units": "Points", "artboards": 2})).unwrap();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    app.run("paint.setStroke", json!({"none": true})).unwrap();
+    app.run("select.set", json!({"ids": [id]})).unwrap();
+    let align = json!({"command": "object.align", "params": {"horizontal": "left", "to": "artboard"}});
+    let batch = json!({"commands": [align]});
+    push_set(&mut app, "Mine", vec![action("Align", &[("command.batch", batch)]), action("Fit", &[("artboard.fitToSelection", json!({}))])]);
+    let boards = |app: &VectorcraftApp| app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect::<Vec<_>>();
+    let was = boards(&app);
+    app.view_mut().unwrap().artboard = 1;
+    app.session.script_frames = false;
+    let source = "app.doScript('Align', 'Mine'); app.doScript('Fit', 'Mine');";
+    app.run("script.run", json!({"source": source, "name": "t.js"})).unwrap();
+    let art = app.session.active().unwrap().doc.bounds_of(&[vectorcraft_doc::NodeId(id)], false).unwrap();
+    assert_eq!(art.x0, was[1].x0, "aligned to artboard 2, the active one");
+    assert_eq!(boards(&app), [was[0], art], "Fit to Selected Art resizes artboard 2 and leaves artboard 1");
+}
+
 /// A step of a recorded `command.batch` that fails is named by the batch's place in the action
 /// and its own command.
 #[test]

@@ -853,7 +853,7 @@ pub use addons::{FoldAngles, fold_source, print_hidden, selection_fold_angles, s
 /// write a resolution and a number of bytes.
 pub use docinfo::{CATEGORIES, OBJECT_LABELS, byte_size, ppi_number};
 pub use docmenu::guide_indexes;
-pub(crate) use edit::{Unrecorded, settle_interaction, typing_in_progress};
+pub(crate) use edit::{Unrecorded, artboard_tool_picks, settle_interaction, typing_in_progress};
 pub(crate) use object::bounds_rewrite;
 pub(crate) use object::{keep_aligned_in, refresh_pixel_aligned};
 /// The rules `object.scale`, `object.reflect` and `object.shear` check their params with.

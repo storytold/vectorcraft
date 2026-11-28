@@ -276,7 +276,7 @@ fn method(link: &Link, f: Member) -> HostMember {
 }
 
 /// A member of a class with what `reflect` tells of it.
-type Described = (String, HostMember, MemberInfo);
+pub(super) type Described = (String, HostMember, MemberInfo);
 
 /// A property's or a method's result's type for `reflect`.
 fn typed(data_type: &str) -> MemberInfo {
@@ -284,7 +284,7 @@ fn typed(data_type: &str) -> MemberInfo {
 }
 
 /// A method's result's type and its arguments' names and types, for `reflect`.
-fn returns(data_type: &str, arguments: &[(&str, &str)]) -> MemberInfo {
+pub(super) fn returns(data_type: &str, arguments: &[(&str, &str)]) -> MemberInfo {
     let arguments = arguments.iter().map(|(n, t)| ArgInfo { name: (*n).into(), data_type: (*t).into(), ..ArgInfo::default() }).collect();
     MemberInfo { arguments, ..typed(data_type) }
 }
@@ -292,7 +292,7 @@ fn returns(data_type: &str, arguments: &[(&str, &str)]) -> MemberInfo {
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
 /// the check that a document or page item `this` is still there. `hasOwnProperty` is false for it,
 /// so a script that checks for the member first skips it, and `reflect` leaves it out.
-fn later(link: &Link, class: &'static str, name: &'static str) -> Described {
+pub(super) fn later(link: &Link, class: &'static str, name: &'static str) -> Described {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
     let f: HostFunction = Rc::new(move |a: Vec<Data>| {
@@ -551,7 +551,7 @@ struct Frame {
 }
 
 /// The index of the active artboard of `st`, as the view keeps it.
-fn active_artboard(st: &DocState) -> usize {
+pub(super) fn active_artboard(st: &DocState) -> usize {
     let index_of = |id: u32| st.doc.artboards.iter().position(|a| a.id == id);
     st.active_artboard.and_then(index_of).or_else(|| st.doc.opened_artboard.and_then(index_of)).unwrap_or(0)
 }
@@ -2382,6 +2382,7 @@ fn classes(link: &Link) -> Vec<HostClass> {
         ("toString", class_text("Application"), returns("string", &[])),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(super::actions::app_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |_: Vec<Data>| {

@@ -166,6 +166,8 @@ impl VectorcraftApp {
         }
         let mut params = params;
         self.add_active_artboard(id, &mut params);
+        // A script's `app.doScript` plays the Actions panel's actions.
+        panels::actions::add_script_actions(self, id, &mut params);
         // Edit Symbol from the Symbols panel in a document without artboards centers the symbol's
         // art in the view, whose center the app passes as `viewCenter`, to a batch's symbol.edit
         // steps too.

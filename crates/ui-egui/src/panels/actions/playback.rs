@@ -39,6 +39,72 @@ fn playback_steps(action: &Action) -> Vec<PlayStep> {
         .collect()
 }
 
+/// For command `id` `script.run`, or the script of `script.startup.run`'s `then`: gives its
+/// `params` the panel's actions as `actions`, which the script's `app.doScript` plays, unless the
+/// caller gave them: every action of every set, in panel order, with its steps as playback runs
+/// them ([`playback_steps`]) and each step's place in the action. An action that `actions` cannot
+/// hold (a step that is not a command, a name that is too long, or one past the limits of
+/// [`vectorcraft_engine::script::actions`]) is left out.
+pub(crate) fn add_script_actions(app: &VectorcraftApp, id: &str, params: &mut Value) {
+    use vectorcraft_engine::script::actions::{MAX_ACTIONS, MAX_ACTIONS_BYTES, MAX_ALL_STEPS, Playable, parse};
+    let target = match id {
+        "script.run" => Some(params),
+        "script.startup.run" => params.get_mut("then"),
+        _ => None,
+    };
+    let Some(p) = target.and_then(Value::as_object_mut) else { return };
+    if p.contains_key("actions") {
+        return;
+    }
+    let list = &app.ui.actions;
+    let (mut held, mut steps, mut bytes) = (Vec::new(), 0usize, 2usize);
+    for set in list.sets() {
+        for a in model::members(list, set).into_iter().filter_map(|i| list.action(i)) {
+            if held.len() >= MAX_ACTIONS {
+                break;
+            }
+            // The commands of a recorded `command.batch` step go back into one batch step, so that an
+            // error names a failing command by the batch's place and its own (`3.2`).
+            let mut played: Vec<Value> = Vec::new();
+            for s in playback_steps(a) {
+                let params = match s.command.get("params") {
+                    None | Some(Value::Null) => json!({}),
+                    Some(p) => p.clone(),
+                };
+                let one = json!({"command": s.command.get("command").cloned().unwrap_or(Value::Null), "params": params});
+                let place = s.row + 1;
+                if a.steps.get(s.row).is_none_or(|step| step.command != "command.batch") {
+                    let mut one = one;
+                    one["step"] = json!(place);
+                    played.push(one);
+                    continue;
+                }
+                match played.last_mut() {
+                    Some(last) if last["command"] == "command.batch" && last["step"] == place => {
+                        if let Some(Value::Array(inner)) = last.pointer_mut("/params/commands") {
+                            inner.push(one);
+                        }
+                    }
+                    _ => played.push(json!({"command": "command.batch", "params": {"commands": [one]}, "step": place})),
+                }
+            }
+            let one = Value::Array(vec![json!({"set": set, "name": a.name, "steps": played})]);
+            let Ok(parsed) = parse(Some(&one)) else { continue };
+            let count = parsed.first().map_or(0, Playable::len);
+            let size = serde_json::to_vec(&one).map_or(usize::MAX, |b| b.len());
+            if steps + count > MAX_ALL_STEPS || bytes.saturating_add(size) > MAX_ACTIONS_BYTES {
+                continue;
+            }
+            steps += count;
+            bytes += size;
+            if let Value::Array(mut one) = one {
+                held.append(&mut one);
+            }
+        }
+    }
+    p.insert("actions".into(), Value::Array(held));
+}
+
 /// The steps of `action` whose command `known` does not hold, in order, as (step index, the index
 /// of the command in a `command.batch` step, command id). A `command.batch` step's own commands are
 /// checked one by one, as playback runs them ([`included_commands`]); a command of one with no
