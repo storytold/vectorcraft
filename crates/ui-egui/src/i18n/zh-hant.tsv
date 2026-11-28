@@ -4192,6 +4192,8 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Continuous Arc	連續弧線
 	Sharp Corner Arc	尖角弧線
 	Flip Arc	翻轉弧線
+	Increase Arc Size	增大弧線尺寸
+	Decrease Arc Size	減小弧線尺寸
 	Hide Toolbar	隱藏工具列
 	Pin Toolbar Position	釘選工具列位置
 	Reset Toolbar Position	重設工具列位置

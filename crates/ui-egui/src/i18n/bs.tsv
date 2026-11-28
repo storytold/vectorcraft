@@ -4250,6 +4250,8 @@ theme	Appearance	Izgled
 	Continuous Arc	Neprekidni luk
 	Sharp Corner Arc	Luk s oštrim uglom
 	Flip Arc	Preokreni luk
+	Increase Arc Size	Povećaj veličinu luka
+	Decrease Arc Size	Smanji veličinu luka
 	Hide Toolbar	Sakrij traku s alatima
 	Pin Toolbar Position	Prikvači položaj trake s alatima
 	Reset Toolbar Position	Vrati položaj trake s alatima na početno

@@ -2872,6 +2872,8 @@ file-filter	Templates	Шаблоны
 	Continuous Arc	Непрерывная дуга
 	Sharp Corner Arc	Дуга с острым углом
 	Flip Arc	Отразить дугу
+	Increase Arc Size	Увеличить размер дуги
+	Decrease Arc Size	Уменьшить размер дуги
 	Hide Toolbar	Скрыть панель инструментов
 	Pin Toolbar Position	Закрепить положение панели инструментов
 	Reset Toolbar Position	Сбросить положение панели инструментов

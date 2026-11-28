@@ -3496,6 +3496,8 @@ digits	Malayalam	Malaiàlam
 	Continuous Arc	Arc continu
 	Sharp Corner Arc	Arc de cantonada aguda
 	Flip Arc	Inverteix l’arc
+	Increase Arc Size	Augmenta la mida de l’arc
+	Decrease Arc Size	Redueix la mida de l’arc
 	Hide Toolbar	Amaga la barra d’eines
 	Pin Toolbar Position	Fixa la posició de la barra d’eines
 	Reset Toolbar Position	Restableix la posició de la barra d’eines

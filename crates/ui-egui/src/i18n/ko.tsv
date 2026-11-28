@@ -2959,6 +2959,8 @@ antiAlias	Sharp	날카롭게
 	Continuous Arc	연속 호
 	Sharp Corner Arc	뾰족한 모서리 호
 	Flip Arc	호 뒤집기
+	Increase Arc Size	호 크기 늘리기
+	Decrease Arc Size	호 크기 줄이기
 	Hide Toolbar	도구 모음 숨기기
 	Pin Toolbar Position	도구 모음 위치 고정
 	Reset Toolbar Position	도구 모음 위치 재설정

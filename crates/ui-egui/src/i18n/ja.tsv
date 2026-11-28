@@ -2969,6 +2969,8 @@ antiAlias	Sharp	シャープ
 	Continuous Arc	連続円弧
 	Sharp Corner Arc	鋭角円弧
 	Flip Arc	円弧を反転
+	Increase Arc Size	円弧のサイズを大きく
+	Decrease Arc Size	円弧のサイズを小さく
 	Hide Toolbar	ツールバーを隠す
 	Pin Toolbar Position	ツールバーの位置を固定
 	Reset Toolbar Position	ツールバーの位置をリセット

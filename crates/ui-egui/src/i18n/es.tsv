@@ -2843,6 +2843,8 @@ font-technology	Variable	Variables
 	Continuous Arc	Arco continuo
 	Sharp Corner Arc	Arco de esquina aguda
 	Flip Arc	Voltear arco
+	Increase Arc Size	Aumentar tamaño del arco
+	Decrease Arc Size	Reducir tamaño del arco
 	Hide Toolbar	Ocultar barra de herramientas
 	Pin Toolbar Position	Fijar posición de la barra de herramientas
 	Reset Toolbar Position	Restablecer posición de la barra de herramientas

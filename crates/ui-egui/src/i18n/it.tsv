@@ -2890,6 +2890,8 @@ file-filter	Templates	Modelli
 	Continuous Arc	Arco continuo
 	Sharp Corner Arc	Arco ad angolo vivo
 	Flip Arc	Capovolgi arco
+	Increase Arc Size	Aumenta dimensione arco
+	Decrease Arc Size	Riduci dimensione arco
 	Hide Toolbar	Nascondi barra degli strumenti
 	Pin Toolbar Position	Fissa posizione barra degli strumenti
 	Reset Toolbar Position	Ripristina posizione barra degli strumenti

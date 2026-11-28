@@ -2607,6 +2607,8 @@ shape	Open	Açık
 	Continuous Arc	Sürekli Yay
 	Sharp Corner Arc	Keskin Köşeli Yay
 	Flip Arc	Yayı Çevir
+	Increase Arc Size	Yay Boyutunu Artır
+	Decrease Arc Size	Yay Boyutunu Azalt
 	Hide Toolbar	Araç Çubuğunu Gizle
 	Pin Toolbar Position	Araç Çubuğu Konumunu Sabitle
 	Reset Toolbar Position	Araç Çubuğu Konumunu Sıfırla

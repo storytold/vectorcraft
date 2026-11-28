@@ -4765,6 +4765,8 @@ theme	Appearance	Tampilan
 	Continuous Arc	Busur bersambung
 	Sharp Corner Arc	Busur sudut tajam
 	Flip Arc	Balik busur
+	Increase Arc Size	Perbesar ukuran busur
+	Decrease Arc Size	Perkecil ukuran busur
 	Hide Toolbar	Sembunyikan bilah alat
 	Pin Toolbar Position	Sematkan posisi bilah alat
 	Reset Toolbar Position	Atur ulang posisi bilah alat

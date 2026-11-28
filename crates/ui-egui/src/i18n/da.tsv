@@ -6900,6 +6900,8 @@ theme	Appearance	Udseende
 	Continuous Arc	Fortløbende bue
 	Sharp Corner Arc	Bue med skarpt hjørne
 	Flip Arc	Vend bue
+	Increase Arc Size	Øg buestørrelse
+	Decrease Arc Size	Formindsk buestørrelse
 	Hide Toolbar	Skjul værktøjslinjen
 	Pin Toolbar Position	Fastgør værktøjslinjens placering
 	Reset Toolbar Position	Nulstil værktøjslinjens placering

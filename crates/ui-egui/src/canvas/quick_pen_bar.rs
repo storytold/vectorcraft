@@ -26,20 +26,20 @@ use super::{Ui, VectorcraftApp, json};
 
 /// The Quick Pen toolbar, while the Quick Pen tool is active, Window › Quick Pen Toolbar is on and
 /// no gesture is under way on the canvas. Selecting the tool turns Window › Quick Pen Toolbar on
-/// ([`VectorcraftApp::try_select_tool`]).
-pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) {
+/// ([`VectorcraftApp::try_select_tool`]). Returns the toolbar's rect when it showed.
+pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) -> Option<egui::Rect> {
     if !app.ui.quick_pen_bar || app.session.tool_id() != quickpen::ID {
-        return;
+        return None;
     }
     // PLAN: assumed `super::tool_adapter::in_gesture(app: &VectorcraftApp, ctx: &egui::Context) -> bool` (cv.S3)
     if super::tool_adapter::in_gesture(app, ui.ctx()) {
-        return;
+        return None;
     }
     // A middle-button drag pans the canvas, which hides the toolbar as a tool's drag does.
     if ui.input(|i| i.pointer.middle_down() && i.pointer.press_origin().is_some_and(|p| space.view.rect.contains(p))) {
-        return;
+        return None;
     }
-    let Some(uid) = app.session.active().map(|st| st.uid) else { return };
+    let uid = app.session.active().map(|st| st.uid)?;
     let view = app.view_info();
     let end = app.session.tool_drawing_end(view);
     let flip = app.session.tool_claims_key(vectorcraft_tools::ToolKey::Letter('c'), view);
@@ -112,4 +112,5 @@ pub(super) fn quick_pen_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &Canva
     {
         app.ui.status = e;
     }
+    shown.output.rect.is_positive().then_some(shown.output.rect)
 }

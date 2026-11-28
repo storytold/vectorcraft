@@ -2733,6 +2733,8 @@ file-filter	Templates	模板
 	Continuous Arc	连续弧线
 	Sharp Corner Arc	尖角弧线
 	Flip Arc	翻转弧线
+	Increase Arc Size	增大弧线尺寸
+	Decrease Arc Size	减小弧线尺寸
 	Hide Toolbar	隐藏工具栏
 	Pin Toolbar Position	固定工具栏位置
 	Reset Toolbar Position	重置工具栏位置

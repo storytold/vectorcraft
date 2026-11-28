@@ -3375,6 +3375,8 @@ file-filter	Templates	Sablonok
 	Continuous Arc	Folytonos ív
 	Sharp Corner Arc	Éles sarkú ív
 	Flip Arc	Ív tükrözése
+	Increase Arc Size	Ívméret növelése
+	Decrease Arc Size	Ívméret csökkentése
 	Hide Toolbar	Eszköztár elrejtése
 	Pin Toolbar Position	Eszköztár helyének rögzítése
 	Reset Toolbar Position	Eszköztár helyének visszaállítása

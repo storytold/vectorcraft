@@ -2204,6 +2204,8 @@ font-technology	Variable	Μεταβλητές
 	Continuous Arc	Συνεχές τόξο
 	Sharp Corner Arc	Τόξο με αιχμηρή γωνία
 	Flip Arc	Αναστροφή τόξου
+	Increase Arc Size	Αύξηση μεγέθους τόξου
+	Decrease Arc Size	Μείωση μεγέθους τόξου
 	Hide Toolbar	Απόκρυψη γραμμής εργαλείων
 	Pin Toolbar Position	Σταθεροποίηση θέσης γραμμής εργαλείων
 	Reset Toolbar Position	Επαναφορά θέσης γραμμής εργαλείων

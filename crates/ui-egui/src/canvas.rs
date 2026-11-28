@@ -37,6 +37,7 @@ mod outline;
 mod overlays;
 pub(crate) mod panes;
 mod quick_pen_bar;
+mod quick_pen_wheel;
 mod raster;
 pub(crate) mod rulers;
 mod selection;
@@ -143,6 +144,8 @@ struct Body {
     context_key: bool,
     /// A view a compass or scroll bar edit made this pass.
     edited: Option<CanvasView>,
+    /// The Quick Pen tool took this pass's wheel for its arc size ([`quick_pen_wheel::arc_size`]).
+    arc_turn: bool,
 }
 
 /// Window `win`'s document in the framework canvas, filling the rest of `ui`. True when the canvas
@@ -243,16 +246,22 @@ pub(crate) fn show_document(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kin
         rulers::apply(app, ui, out);
     }
     let pressed = matches!(output.press.phase, PressPhase::Down { .. });
-    let Body { reply, context_at, context_key, edited } = body;
+    let Body { reply, context_at, context_key, edited, arc_turn } = body;
     let request = reply
         .as_ref()
         .and_then(|r| r.context.as_ref())
         .map(|c| context_menu::Request { at: c.at, key: c.source == ContextSource::Key })
         .or(context_at.map(|at| context_menu::Request { at, key: context_key }));
     let jumped = edited.is_some();
-    // Presentation Mode keeps its view through a drag of the middle button, which the canvas pans on its own.
-    let view_now =
-        if presenting && ui.input(|i| i.pointer.middle_down()) { given } else { edited.or(reply.and_then(|r| r.view)).or(output.view).unwrap_or(cv) };
+    // Presentation Mode keeps its view through a drag of the middle button, which the canvas pans on its own, and a
+    // wheel turn the Quick Pen tool takes for its arc size keeps the view the pass began with.
+    let view_now = if presenting && ui.input(|i| i.pointer.middle_down()) {
+        given
+    } else if arc_turn {
+        edited.unwrap_or(given)
+    } else {
+        edited.or(reply.and_then(|r| r.view)).or(output.view).unwrap_or(cv)
+    };
     if let Some(view) = doc_windows::view_mut(app, win) {
         view.set_canvas(&view_now, scaling);
         // Fitted once, the view stays where it is moved.
@@ -317,7 +326,9 @@ fn show_body(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpace, pass: O
             // The bars give way to a drag, not to a click.
             let dragging = in_gesture(app, ui.ctx()) && ui.input(|i| i.pointer.is_decidedly_dragging());
             let task_bar = (app.ui.task_bar && !revolve_editing(app) && !strip && !dragging).then(|| task_bar::task_bar(app, ui, space)).flatten();
-            quick_pen_bar::quick_pen_bar(app, ui, space);
+            let bar = quick_pen_bar::quick_pen_bar(app, ui, space);
+            // A Ctrl-wheel turn with the Quick Pen tool changes its arc size; the view stays as it was before the pass.
+            out.arc_turn = quick_pen_wheel::arc_size(app, ui, space.wheel(), bar);
             contour_bar::contour_bar(app, ui, space);
             // After the task bar, which the row of character alternates keeps clear of.
             alternates_bar::alternates_bar(app, ui, space, task_bar);

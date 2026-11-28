@@ -2805,6 +2805,8 @@ file-filter	Templates	Vorlagen
 	Continuous Arc	Fortlaufender Bogen
 	Sharp Corner Arc	Bogen mit scharfer Ecke
 	Flip Arc	Bogen spiegeln
+	Increase Arc Size	Bogengröße erhöhen
+	Decrease Arc Size	Bogengröße verringern
 	Hide Toolbar	Werkzeugleiste ausblenden
 	Pin Toolbar Position	Position der Werkzeugleiste fixieren
 	Reset Toolbar Position	Position der Werkzeugleiste zurücksetzen

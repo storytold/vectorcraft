@@ -2764,6 +2764,8 @@ font-technology	Variable	Variabla
 	Continuous Arc	Kontinuerlig båge
 	Sharp Corner Arc	Båge med skarpt hörn
 	Flip Arc	Vänd båge
+	Increase Arc Size	Öka bågstorlek
+	Decrease Arc Size	Minska bågstorlek
 	Hide Toolbar	Dölj verktygsfältet
 	Pin Toolbar Position	Fäst verktygsfältets position
 	Reset Toolbar Position	Återställ verktygsfältets position

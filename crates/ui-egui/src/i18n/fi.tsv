@@ -4274,6 +4274,8 @@ theme	Appearance	Ulkoasu
 	Continuous Arc	Jatkuva kaari
 	Sharp Corner Arc	Terävän kulman kaari
 	Flip Arc	Käännä kaari
+	Increase Arc Size	Suurenna kaaren kokoa
+	Decrease Arc Size	Pienennä kaaren kokoa
 	Hide Toolbar	Piilota työkalurivi
 	Pin Toolbar Position	Kiinnitä työkalurivin sijainti
 	Reset Toolbar Position	Palauta työkalurivin sijainti

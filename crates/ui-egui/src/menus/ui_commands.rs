@@ -731,6 +731,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{} flip the last sharp-corner arc of the path the Quick Pen tool is drawing to the other side of its chord, as C and the toolbar's Flip Arc button do, as one undo step; first finishes any pending tool edit (which can change the document), then returns false, changing nothing more, when the Quick Pen tool is not active, no path is being drawn or the last piece is not a sharp-corner arc",
     ),
     (
+        "tool.quickPen.arcLarger",
+        "Increase Arc Size",
+        "",
+        "{} make the Quick Pen tool's arc size 15° larger, for the last sharp-corner arc of the path being drawn and the arcs after it, as ] and Ctrl+wheel up over the canvas do; first finishes any pending tool edit (which can change the document), then returns false, changing nothing more, when the Quick Pen tool is not active or a step would take the arc size above 359°",
+    ),
+    (
+        "tool.quickPen.arcSmaller",
+        "Decrease Arc Size",
+        "",
+        "{} make the Quick Pen tool's arc size 15° smaller, for the last sharp-corner arc of the path being drawn and the arcs after it, as [ and Ctrl+wheel down over the canvas do; first finishes any pending tool edit (which can change the document), then returns false, changing nothing more, when the Quick Pen tool is not active or a step would take the arc size below 1°",
+    ),
+    (
         "window.dock",
         "Panels",
         "Tab",

@@ -734,6 +734,39 @@ fn run_ui_part6(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result<
                 Err(e) => Err(e.to_string()),
             }
         }
+        "tool.quickPen.arcLarger" | "tool.quickPen.arcSmaller" => {
+            // `]` or `[`, for Ctrl+wheel over the canvas: the arc size 15° larger or smaller. Input
+            // held for an edit is finished first, as for Flip Arc. False, with nothing changed beyond
+            // that, while the Quick Pen tool is not active or the step would leave 1° to 359°.
+            match app.session.finish_tool_edit() {
+                Ok(reqs) => crate::canvas::apply_requests(app, Ok(reqs)),
+                Err(e) => return Some(Err(e.to_string())),
+            }
+            if app.session.tool_id() != vectorcraft_tools::quickpen::ID {
+                return Some(Ok(json!(false)));
+            }
+            let key =
+                if id == "tool.quickPen.arcLarger" { vectorcraft_tools::ToolKey::BracketRight } else { vectorcraft_tools::ToolKey::BracketLeft };
+            // A step changes the tool's size, or draws the arc again: as an edit between presses, or
+            // as the preview of a drag (applied, or kept for the release with Real-time Drawing off).
+            let state = |app: &VectorcraftApp| {
+                let d = app.session.active();
+                (
+                    app.session.tool_options()["turn"].clone(),
+                    d.map(|d| d.revision),
+                    d.and_then(|d| d.interaction.as_ref()).and_then(|it| it.preview.clone()),
+                )
+            };
+            let before = state(app);
+            let view = app.view_info();
+            match app.session.tool_key(key, vectorcraft_tools::Mods::default(), view) {
+                Ok(reqs) => {
+                    crate::canvas::apply_requests(app, Ok(reqs));
+                    Ok(json!(state(app) != before))
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        }
         "window.dock" => match app.ui_ctx.clone() {
             // Tab: hide the panels, the toolbars and the Control bar, or show what the last Tab
             // hid; the window's shell applies it in its next pass.

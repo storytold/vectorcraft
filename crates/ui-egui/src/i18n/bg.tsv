@@ -2881,6 +2881,8 @@ font-technology	Variable	Променливи
 	Continuous Arc	Непрекъсната дъга
 	Sharp Corner Arc	Дъга с остър ъгъл
 	Flip Arc	Обръщане на дъгата
+	Increase Arc Size	Увеличаване на размера на дъгата
+	Decrease Arc Size	Намаляване на размера на дъгата
 	Hide Toolbar	Скриване на лентата с инструменти
 	Pin Toolbar Position	Закачане на позицията на лентата с инструменти
 	Reset Toolbar Position	Нулиране на позицията на лентата с инструменти

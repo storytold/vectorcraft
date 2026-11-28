@@ -8166,16 +8166,25 @@ path's last point, drawn with the tool's `action` option:
 Alt (Option on macOS) pressed and let go with no other key, click or wheel turn in between switches to the next action:
 Line, Continuous Arc, Sharp Corner Arc, and back to Line. C flips the last piece, while it is a sharp-corner arc, to
 the other side of its chord. `[` and `]` make the arc size 15° smaller or larger, for the last sharp-corner arc and the
-arcs after it. During a drag, C and `[` `]` change the sharp-corner arc being dragged, and Alt switches its action. A
-dragged piece ends where the press is let go. A click on the first point closes the path, and a click on an end of an
-open path goes on drawing from that end. Escape or Enter ends the path, and so does an edit made to it by another
-command. An edit made by another command during a drag, to the path or to other art, also ends the path: the edit
+arcs after it, as `tool.quickPen.arcSmaller {}` and `tool.quickPen.arcLarger {}` do (each first finishes any pending
+tool edit, then returns false, changing nothing more, when the Quick Pen tool is not active or the step would leave 1° to
+359°). `tool.quickPen.arcSmaller` and `tool.quickPen.arcLarger` run in the desktop app (`--connect`). Ctrl with a
+scroll on a touchpad over the canvas (the Control key on macOS too) changes the arc size as well, as
+[Quick Pen tool keyboard shortcuts](https://helpx.adobe.com/illustrator/web/add-and-edit-artwork/draw-and-edit-paths/quick-pen-tool-keyboard-shortcuts.html)
+lists: the touchpad makes one step for each wheel line of its motion, and motion that goes on after the fingers lift
+makes none. A mouse wheel turned with Ctrl over the canvas does the same, one step for each wheel event (one per
+notch). Up makes the arc size larger and down smaller, sideways motion makes no step, and the view does not zoom or
+scroll for the rest of that wheel turn. During a drag, C, `[` `]` and the wheel change the sharp-corner arc being
+dragged, and Alt switches its action. A dragged piece ends where the press is let go. A click on the first point
+closes the path, and a click on an end of an open path goes on drawing from that end. Escape or Enter ends the path,
+and so does an edit made to it by another command. An edit made by another command during a drag, to the path or to other art, also ends the path: the edit
 stays, and the piece stays as last shown. With the `realTimeDrawing` preference off, a press during which another
 command edits the document adds no piece, and the edit stays. The path's points show as circles without handles, and a
 preview shows the piece the next click adds. Points snap to Smart Guides. Each piece is one undo step, together with the
 flips and size changes made during its drag, and each flip or size change made between presses is one undo step. The
-arc size of 180°, its 15° steps, the side an arc bulges to, what C and `[` `]` do during a drag and Enter ending the
-path are VectorCraft's own rules. The tool keeps `action` and `turn` with the preferences
+arc size of 180°, its 15° steps, the side an arc bulges to, what C, `[` `]` and the wheel do during a drag, Enter
+ending the path, the mouse wheel changing the arc size, and the wheel's step per event or wheel line and its direction are
+VectorCraft's own rules. The tool keeps `action` and `turn` with the preferences
 (`tool.setOption {tool: "quickPen", key, value}`).
 
 While an arc is drawn, by a drag or as the piece the next click adds, the tool shows a protractor around the arc's

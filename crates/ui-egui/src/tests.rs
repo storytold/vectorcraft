@@ -32,6 +32,7 @@ mod plugins;
 mod printps;
 mod printtiling;
 mod quickpenbar;
+mod quickpenwheel;
 mod recolor;
 mod recovery;
 pub(super) mod removeanchors;

@@ -4763,6 +4763,8 @@ theme	Appearance	Vormgeving
 	Continuous Arc	Doorlopende boog
 	Sharp Corner Arc	Boog met scherpe hoek
 	Flip Arc	Boog spiegelen
+	Increase Arc Size	Boog groter maken
+	Decrease Arc Size	Boog kleiner maken
 	Hide Toolbar	Werkbalk verbergen
 	Pin Toolbar Position	Werkbalkpositie vastzetten
 	Reset Toolbar Position	Werkbalkpositie herstellen

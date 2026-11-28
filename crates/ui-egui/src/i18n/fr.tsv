@@ -2831,6 +2831,8 @@ font-technology	Variable	Variables
 	Continuous Arc	Arc continu
 	Sharp Corner Arc	Arc à angle vif
 	Flip Arc	Retourner l’arc
+	Increase Arc Size	Augmenter la taille de l’arc
+	Decrease Arc Size	Réduire la taille de l’arc
 	Hide Toolbar	Masquer la barre d’outils
 	Pin Toolbar Position	Épingler la position de la barre d’outils
 	Reset Toolbar Position	Réinitialiser la position de la barre d’outils
