@@ -14248,7 +14248,11 @@ name and the Type tool's selection as it was when the dialog opened (else the se
 has, or an empty one, keeps the dialog open, and Cancel adds no style. A plain click on New still makes the style at
 once.
 
-`ui.charStyleOptions {name}` opens Character Style Options for an existing named style.
+`ui.charStyleOptions {name}` opens Character Style Options for an existing named style, [Normal Character Style]
+included (double-clicking a row of the Character Styles panel, or Style Options… in its menu, does the same). For a Normal style the Style Name field is disabled, and `charStyle.edit` and `paraStyle.edit` refuse a `to`
+other than its name; the first edit of a Normal style that was never redefined gives it its definition, and the type
+set in it takes the new attributes. The help page on the default font for new documents changes it this way
+(https://helpx.adobe.com/illustrator/desktop/design-with-text/fonts-and-scripts/change-the-default-font-in-illustrator.html).
 The dialog previews and saves changes only in the document where it opened. If another edit is active in
 that document, preview pauses and OK reports an error until that edit ends. Cancel rolls back only the dialog's own preview.
 Character Style Options uses `charStyle.edit {name, to, attrs}` to replace the name and complete sparse
@@ -14307,7 +14311,8 @@ Panel in Character Color removes its five attributes and Reset Panel in OpenType
 `ui.charStyleOptions.resetPanel {}` performs that reset for the section selected in either character-style
 dialog; it is disabled on General.
 
-`ui.paraStyleOptions {name}` opens Paragraph Style Options for an existing named style (double-clicking a row of
+`ui.paraStyleOptions {name}` opens Paragraph Style Options for an existing named style, [Normal Paragraph Style]
+included, with Style Name disabled for it as for [Normal Character Style] (double-clicking a row of
 the Paragraph Styles panel, or Paragraph Style Options… in its menu, does the same). OK runs
 `paraStyle.edit {name, to, attrs}`, which takes the same arguments as `charStyle.edit` and replaces the style's
 name and attributes in one undo step; the paragraphs that use the style keep their local overrides. OK with no field

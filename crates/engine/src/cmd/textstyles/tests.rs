@@ -37,6 +37,48 @@ fn character_style_attributes_refuse_a_glyph_choice() {
     assert!(err.to_string().contains("glyphAlternate"), "{err}");
 }
 
+/// `charStyle.edit` and `paraStyle.edit` give a Normal style that was never redefined its first definition, in one
+/// undo step: the type set in it takes the new attributes and keeps its overrides. The Normal style keeps its name,
+/// and an edit that changes nothing records no undo step.
+#[test]
+fn style_options_edit_defines_a_normal_style_in_one_undo_step() {
+    let (mut s, id) = session_with_text("One\nTwo");
+    s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "size": 30.0})).unwrap();
+    s.execute("text.setFormat", &json!({"id": id, "start": 4, "end": 4, "leftIndent": 20.0})).unwrap();
+    for (command, normal, attrs) in [
+        ("charStyle.edit", NORMAL_CHAR, json!({"size": 18.0, "tracking": 40.0})),
+        ("paraStyle.edit", NORMAL_PARA, json!({"left_indent": 12.0, "space_before": 6.0})),
+    ] {
+        assert!(Kind::Char.defs(&s.doc().unwrap().doc).iter().chain(Kind::Para.defs(&s.doc().unwrap().doc)).all(|d| d.name != normal));
+        let before = s.doc().unwrap().doc.clone();
+        let undo = s.doc().unwrap().history.undo.len();
+        s.execute(command, &json!({"name": normal, "to": normal, "attrs": attrs})).unwrap();
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{command}: one undo step");
+        let d = &s.doc().unwrap().doc;
+        let defs = if command == "charStyle.edit" { &d.char_styles } else { &d.para_styles };
+        assert_eq!(defs.iter().find(|def| def.name == normal).map(|def| json!(def.attrs)), Some(attrs.clone()), "{command}: the definition");
+        let changed = s.doc().unwrap().doc.clone();
+        s.execute(command, &json!({"name": normal, "to": normal, "attrs": attrs})).unwrap();
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{command}: the same attributes record nothing");
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, before, "{command}: undo");
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(s.doc().unwrap().doc, changed, "{command}: redo");
+    }
+    let r = runs(&s, id);
+    assert_eq!(
+        r.iter().map(|r| (r.style.style_name.as_deref(), r.style.size, r.style.tracking)).collect::<Vec<_>>(),
+        [(None, 18.0, 40.0), (None, 30.0, 40.0)],
+        "the type in Normal takes the new size and tracking and keeps its own size"
+    );
+    let p = paras(&s, id);
+    assert_eq!(
+        p.iter().map(|p| (p.style_name.as_deref(), p.left_indent, p.space_before)).collect::<Vec<_>>(),
+        [(None, 12.0, 6.0), (None, 20.0, 6.0)],
+        "the paragraphs in Normal take the new indent and space and keep their own indent"
+    );
+}
+
 fn session_with_text(text: &str) -> (Session, u64) {
     let mut s = Session::new();
     s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
@@ -557,7 +599,7 @@ fn character_style_options_edit_validates_names_and_allows_case_changes() {
     s.execute("charStyle.new", &json!({"name":"Body","attrs":{"size":24.0}})).unwrap();
     s.execute("charStyle.new", &json!({"name":"Other","attrs":{}})).unwrap();
     for (name, to, message) in
-        [(super::NORMAL_CHAR, "New", "can't be edited this way"), ("Body", "  ", "give the style a name"), ("Body", "Other", "already exists")]
+        [(super::NORMAL_CHAR, "New", "can't be renamed"), ("Body", "  ", "give the style a name"), ("Body", "Other", "already exists")]
     {
         let error = s.execute("charStyle.edit", &json!({"name":name,"to":to,"attrs":{}})).unwrap_err().to_string();
         assert!(error.contains(message), "{error}");
@@ -1672,13 +1714,13 @@ fn paragraph_style_options_edit_applies_to_users_and_is_one_saved_undo_step() {
     assert_eq!(s.doc().unwrap().doc, before);
     s.execute("edit.redo", &json!({})).unwrap();
     assert_eq!(s.doc().unwrap().doc, changed);
-    // The Normal style, an empty or a taken name and an unknown style are errors.
+    // Renaming the Normal style, an empty or a taken name and an unknown style are errors.
     s.execute("paraStyle.new", &json!({"name": "Other"})).unwrap();
     for (params, why) in [
         (json!({"name": "Text", "to": " ", "attrs": {}}), "give the style a name"),
         (json!({"name": "Text", "to": "Other", "attrs": {}}), "already exists"),
         (json!({"name": "Missing", "to": "Missing", "attrs": {}}), "no style `Missing`"),
-        (json!({"name": NORMAL_PARA, "to": NORMAL_PARA, "attrs": {}}), "can't be edited"),
+        (json!({"name": NORMAL_PARA, "to": "Basic", "attrs": {}}), "can't be renamed"),
     ] {
         let error = s.execute("paraStyle.edit", &params).unwrap_err().to_string();
         assert!(error.contains(why), "{params}: {error}");

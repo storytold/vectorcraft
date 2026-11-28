@@ -1145,7 +1145,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.charStyleOptions",
         "Character Style Options",
         "",
-        "{name} open Character Style Options (dialog `charStyleOptions`); OK runs charStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
+        "{name} open Character Style Options (dialog `charStyleOptions`), [Normal Character Style] included with Style Name disabled; OK runs charStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
     ),
     (
         "ui.charStyleOptions.resetPanel",
@@ -1157,7 +1157,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.paraStyleOptions",
         "Paragraph Style Options",
         "",
-        "{name} open Paragraph Style Options (dialog `paraStyleOptions`, sections General, Basic Paragraph Formats, Composition, Hyphenation and Justification); OK runs paraStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
+        "{name} open Paragraph Style Options (dialog `paraStyleOptions`, sections General, Basic Paragraph Formats, Composition, Hyphenation and Justification), [Normal Paragraph Style] included with Style Name disabled; OK runs paraStyle.edit with name, to and sparse attrs in one undo step; Cancel restores a live preview",
     ),
     (
         "ui.paraStyleOptions.resetPanel",
