@@ -10,6 +10,7 @@
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
 //! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
 //! nor `.cmx` files (mutated, cut short and garbage after the header, opened and placed),
+//! nor layered raster `.pcraft` documents (mutated and cut short archives and manifests, opened and placed),
 //! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -477,6 +478,93 @@ proptest! {
             let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
+    }
+}
+
+// ---------- layered raster .pcraft documents ----------
+
+/// A `.pcraft` manifest of a 40 × 30 canvas with two visible raster layers, one under a layer mask,
+/// that can be combined, and a hidden one.
+fn pcraft_manifest() -> String {
+    let surface = |mode: &str, pixel: &str| {
+        let alpha = mode == "Rgb";
+        format!(r#"{{"format":{{"mode":"{mode}","sample":"U8","alpha":{alpha}}},"default":"{pixel}","tiles":[]}}"#)
+    };
+    let layer = |visible: bool, pixel: &str, mask: &str| {
+        format!(
+            r#"{{"id":1,"name":"L","visible":{visible},"locks":{{}},"blend":"Normal","opacity":0.5,"fill_opacity":1.0,"clipped":false,"mask":{mask},
+                "effects":{{"enabled":false,"items":[],"psd_raw":null}},"label":"None","content":{{"kind":"raster","surface":{}}},
+                "psd_blocks":[],"psd_id":null,"fill_cache":null}}"#,
+            surface("Rgb", pixel)
+        )
+    };
+    let mask = format!(r#"{{"surface":{},"enabled":true,"linked":true,"density":0.75,"feather":0.0}}"#, surface("Grayscale", "40"));
+    format!(
+        r#"{{"format_version":1,"generator":"test 0.1.0","document":{{"id":1,"name":"U","size":{{"width":40,"height":30}},"resolution_dpi":72.0,
+            "mode":"Rgb","depth":"U8","icc_profile":null,"layers":[{},{},{}],"channels":[],"guides":{{}},"selection":null,"metadata":{{}},
+            "global_light":{{}}}},"thumbnail":null,"composite":"composite/preview.png"}}"#,
+        layer(true, "ff000080", "null"),
+        layer(true, "0000ffff", &mask),
+        layer(false, "00ff00ff", "null"),
+    )
+}
+
+/// A `.pcraft` bundle of `manifest` with a 4 × 3 preview.
+fn pcraft_bundle(manifest: &[u8]) -> Vec<u8> {
+    let mut preview = vec![];
+    image::RgbaImage::new(4, 3).write_to(&mut std::io::Cursor::new(&mut preview), image::ImageFormat::Png).unwrap();
+    vectorcraft_engine::cmd::fileio::zip::store(&[("manifest.json", manifest), ("composite/preview.png", &preview)]).unwrap()
+}
+
+/// Open and place `.pcraft` file `bytes`: neither may panic.
+fn pcraft_survives(what: &str, bytes: &[u8]) -> Result<(), TestCaseError> {
+    survive(what, || vectorcraft_engine::cmd::fileio::load("x.pcraft", bytes).ok().map(|l| l.doc))?;
+    let r = catch_quiet(|| {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+        let p = json!({"name":"x.pcraft", "dataBase64":vectorcraft_format::base64_encode(bytes)});
+        let _ = no_panic(s.execute("file.place", &p));
+    });
+    prop_assert!(r.is_ok(), "{what}: placement panicked: {:?}", r.err());
+    Ok(())
+}
+
+#[test]
+fn the_pcraft_sample_combines_its_layers() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.pcraft", &pcraft_bundle(pcraft_manifest().as_bytes())).unwrap();
+    assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+    assert_eq!(l.doc.artboards[0].rect.width(), 40.0, "the canvas, not the preview");
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn pcraft_mutated_bundles_open_and_place(
+        cut in prop::option::of(4usize..4096),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = pcraft_bundle(pcraft_manifest().as_bytes());
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        pcraft_survives(".pcraft bundle", &bytes)?;
+    }
+
+    #[test]
+    fn pcraft_mutated_manifests_open_and_place(
+        cut in prop::option::of(1usize..2048),
+        edits in prop::collection::vec((0usize..4096, any::<u8>()), 1..16),
+    ) {
+        let mut manifest = pcraft_manifest().into_bytes();
+        let n = manifest.len();
+        for (at, b) in edits { manifest[at % n] = b; }
+        if let Some(cut) = cut {
+            manifest.truncate(cut);
+        }
+        pcraft_survives(".pcraft manifest", &pcraft_bundle(&manifest))?;
     }
 }
 

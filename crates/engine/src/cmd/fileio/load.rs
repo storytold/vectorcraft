@@ -74,6 +74,9 @@ pub struct RasterImage {
     /// a DCS file's (nonzero, [`crate::cmd::place::dcs`]), or a PSD or PSB file's (even-odd,
     /// [`psdread::clipping_path`]).
     pub clip: Option<(vectorcraft_geom::PathData, vectorcraft_geom::FillRule)>,
+    /// What the image leaves out of its file, for Open, Place and the Links commands to warn of: a
+    /// `.pcraft` document read as its reduced preview ([`super::pcraftread`]).
+    pub note: Option<String>,
 }
 
 pub(super) fn err(e: impl std::fmt::Display) -> EngineError {
@@ -91,6 +94,9 @@ pub fn detect(name: &str, bytes: &[u8]) -> Option<&'static Format> {
     let by_name = readable_format_for_name(name);
     if vectorcraft_affinity::is_affinity(bytes) {
         return format("affinity");
+    }
+    if super::pcraftread::is_pcraft(bytes) {
+        return format("pcraft");
     }
     if super::cdr::is_cdr(bytes) {
         // A template keeps its meaning from the extension.
@@ -566,6 +572,14 @@ pub fn load_with(name: &str, bytes: &[u8], opts: &LoadOptions) -> Result<Loaded>
             Ok(None) => (raster_doc(&title, bytes)?, vec![], false),
             Err(e) => (raster_doc(&title, bytes)?, vec![format!("the layers can't be read ({e}): the file opened as its merged image")], false),
         },
+        // A `.pcraft` document opens as its full-size image, its layers combined, or its preview
+        // with a note that says so.
+        "pcraft" => {
+            let mut img = raster_image(bytes)?;
+            img.blob = crate::cmd::links::readable_and_kept(img.blob, true, false)?;
+            let note = img.note.take();
+            (image_doc(&title, img)?, note.into_iter().collect(), false)
+        }
         _ if format.raster => (raster_doc(&title, bytes)?, vec![], false),
         _ => return Err(err(format!("{} files can't be opened yet", format.label))),
     };
@@ -1136,8 +1150,11 @@ pub(crate) fn size_note(bytes: &[u8]) -> Option<String> {
 /// PNG keeps its gray or RGB samples at 8 or 16 bits, and the gray or RGB ICC profile they are in;
 /// other samples become 8-bit RGBA. A PSD/PSB composite's stored image keeps its imported
 /// clipping path ([`image_clip`]), and a PNG or TIFF that keeps such a path (as Unembed writes
-/// it) is read with that path.
+/// it) is read with that path. A `.pcraft` document is read by [`super::pcraftread::image`].
 pub fn raster_image(bytes: &[u8]) -> Result<RasterImage> {
+    if super::pcraftread::is_pcraft(bytes) {
+        return super::pcraftread::image(bytes);
+    }
     let ppi = super::ppi::resolution(bytes);
     if let Some((w, h)) = vectorcraft_doc::cmyk::oversized_tiff(bytes) {
         return Err(err(format!("an image of {w} × {h} pixels is too large to draw")));
@@ -1321,7 +1338,7 @@ fn stored(bytes: Vec<u8>, mime: &'static str, (width, height): (u32, u32), ppi: 
     }
     let blob = ImageBlob::new(mime, bytes);
     let clip = image_clip(&blob).map(|path| (path, vectorcraft_geom::FillRule::EvenOdd));
-    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip })
+    Ok(RasterImage { key: blob.content_key(), blob, width, height, ppi, clip, note: None })
 }
 
 /// The keyword of the PNG text chunk holding the clipping path of the file a PNG was made from
@@ -1404,7 +1421,12 @@ pub(crate) fn preview_with_clip(mut blob: ImageBlob) -> ImageBlob {
 /// An image as a document of its physical size at the resolution it declares (as Place sizes it;
 /// 72 ppi, 1 px = 1 pt, when it declares none), the image named after the file.
 pub(super) fn raster_doc(name: &str, bytes: &[u8]) -> Result<Document> {
-    let RasterImage { key, blob, width, height, ppi, clip } = raster_image(bytes)?;
+    image_doc(name, raster_image(bytes)?)
+}
+
+/// [`raster_doc`] of an image already read.
+fn image_doc(name: &str, img: RasterImage) -> Result<Document> {
+    let RasterImage { key, blob, width, height, ppi, clip, note: _ } = img;
     let (sx, sy) = crate::cmd::place::pt_per_px(ppi);
     let mut d = Document::new(width as f64 * sx, height as f64 * sy);
     let layer = d.layers[0].id;

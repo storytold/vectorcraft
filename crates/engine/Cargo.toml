@@ -43,6 +43,8 @@ vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
 craft-cdr = { workspace = true }
+# `.pcraft` documents opened and placed as images (cmd/fileio/pcraftread.rs).
+craft-doc = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
 vectorcraft-js = { workspace = true }
 # The commands' parameter schemas (schemas.rs).
