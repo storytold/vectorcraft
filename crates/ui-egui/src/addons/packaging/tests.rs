@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use egui::{Key, Modifiers};
 use serde_json::json;
 use vectorcraft_engine::Session;
 
@@ -206,4 +207,46 @@ fn the_panel_shows_the_selected_lines_fold_angle_and_what_reset_takes_away() {
     assert!(!read_rows(&mut app).selection);
     let text = crate::tests_labels::painted_text(&mut app, show);
     assert!(!text.contains("Fold Angle"), "{text}");
+}
+
+fn undo_len(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+#[test]
+fn canceling_a_fold_angle_edit_restores_the_angle_and_enter_is_one_undo_step() {
+    // (the angle the second line folds at first, the text typed, the angle the lines then fold at): one angle, angles
+    // that differ, and a typed angle the field holds to its range.
+    for (second, text, typed) in [(None, "135", 135.0), (Some(-45.0), "135", 135.0), (None, "200", 180.0)] {
+        for cancel in [false, true] {
+            let (mut app, a, b) = app();
+            app.run(SET_ROLE, json!({"role": "crease", "ids": [a, b]})).unwrap();
+            if let Some(angle) = second {
+                app.run(SET_FOLD_ANGLE, json!({"angle": angle, "ids": [b]})).unwrap();
+            }
+            app.run("select.set", json!({"ids": [a, b]})).unwrap();
+            let mut panel = Panel::new(app, show);
+            let doc = panel.app().session.active().unwrap().doc.clone();
+            let angle = read_rows(&mut panel.app()).angle;
+            let undo = undo_len(&panel.app());
+            // The role list fills the panel's height, so the field below it takes the focus as a screen reader gives it.
+            panel.focus("Fold Angle");
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(text);
+            panel.frame();
+            assert_eq!(read_rows(&mut panel.app()).angle, Some(typed), "{second:?} {text}: the lines fold at the angle while it is typed");
+            panel.key(if cancel { Key::Escape } else { Key::Enter }, Modifiers::NONE);
+            panel.frame();
+            assert!(panel.shows("Fold Angle"), "{text}: the field stays");
+            let mut app = panel.app();
+            if cancel {
+                assert_eq!(app.session.active().unwrap().doc, doc, "{second:?} {text}: Escape restores the lines");
+                assert_eq!(read_rows(&mut app).angle, angle, "{second:?} {text}: Escape restores the angle");
+                assert_eq!(undo_len(&app), undo, "{second:?} {text}: Escape leaves no undo step");
+            } else {
+                assert_eq!(read_rows(&mut app).angle, Some(typed), "{second:?} {text}: Enter keeps the angle");
+                assert_eq!(undo_len(&app), undo + 1, "{second:?} {text}: the edit is one undo step");
+            }
+        }
+    }
 }
