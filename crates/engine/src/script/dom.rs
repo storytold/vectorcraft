@@ -79,6 +79,7 @@ use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
 mod tags;
+mod text;
 mod variables;
 
 pub use variables::{MAX_HANDLES, STALE_DATASET, STALE_VARIABLE};
@@ -152,6 +153,7 @@ pub(super) struct State {
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
+    text: text::TextState,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
     preset_bytes: Cell<u64>,
     preset_limit: u64,
@@ -290,7 +292,7 @@ fn returns(data_type: &str, arguments: &[(&str, &str)]) -> MemberInfo {
 }
 
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
-/// the check that a document or page item `this` is still there. `hasOwnProperty` is false for it,
+/// the check that a document, page item or text range `this` is still there. `hasOwnProperty` is false for it,
 /// so a script that checks for the member first skips it, and `reflect` leaves it out.
 fn later(link: &Link, class: &'static str, name: &'static str) -> Described {
     let message = format!("{class}.{name} is not available yet");
@@ -302,8 +304,11 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> Described {
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "PageItem" | "TextFrame" => {
                 item_of(&h, arg(&a, 0))?;
+            }
+            "TextRange" => {
+                text::check_range(&h, arg(&a, 0))?;
             }
             _ => {}
         }
@@ -2352,6 +2357,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
+    text::install_enums(realm)?;
     for (name, members) in ENUMS {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
@@ -2381,6 +2387,7 @@ fn classes(link: &Link) -> Vec<HostClass> {
         ("executeMenuCommand", method(l, app_menu_command), returns("undefined", &[("menuCommandString", "string")])),
         ("toString", class_text("Application"), returns("string", &[])),
     ]);
+    application.push(("textFonts".into(), text::app_text_fonts(l), MemberInfo { collection: true, ..typed("TextFonts") }));
     application.push(later(l, "Application", "beep"));
     let preset = {
         let l = link.clone();
@@ -2449,11 +2456,13 @@ fn classes(link: &Link) -> Vec<HostClass> {
             returns("Array", &[("point", "Array"), ("source", "CoordinateSystem"), ("destination", "CoordinateSystem")]),
         ),
         ("pageItems", get(l, doc_page_items), MemberInfo { collection: true, ..typed("PageItems") }),
+        ("textFrames", text::doc_text_frames(l), MemberInfo { collection: true, ..typed("TextFrames") }),
+        ("stories", text::threads::doc_stories(l), MemberInfo { collection: true, ..typed("Stories") }),
         ("selection", property(l, doc_selection, doc_set_selection), typed("*")),
         ("toString", method(l, doc_to_string), returns("string", &[])),
     ]);
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
+        ["layers", "artboards", "pathItems", "groupItems", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
@@ -2530,7 +2539,8 @@ fn classes(link: &Link) -> Vec<HostClass> {
     );
     page_item.extend(variables::page_item_members(l));
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), variables::item_members(l, c), None)));
+    classes.extend(ITEM_CLASSES.iter().filter(|c| **c != "TextFrame").map(|c| class(c, Some("PageItem"), variables::item_members(l, c), None)));
+    classes.extend(text::classes(l));
     classes.extend(variables::classes(l));
     classes.push(class(
         "Layer",

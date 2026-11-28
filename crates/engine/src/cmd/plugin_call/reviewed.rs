@@ -679,6 +679,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "text.thread.info",
     "text.thread.releaseSelection",
     "text.thread.remove",
+    "text.thread.setNeighbor",
     "text.touchType",
     "threeD.addGraphic",
     "threeD.mapArt",

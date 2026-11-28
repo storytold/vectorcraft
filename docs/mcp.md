@@ -2906,6 +2906,94 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `Document.textFrames` (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/) lists the document's type
+  objects in paint order, those inside groups included, with `length`, `[i]`, `index(key)`, `getByName(name)` and
+  `removeAll()`. `add()` makes empty point type at the origin and `pointText(anchor, orientation?)` at `anchor`, both
+  with `text.create`; `areaText(path, orientation?)` and `pathText(path, startTValue?, endTValue?, orientation?)` turn
+  a `PathItem` into area type or type on a path with `text.createInPath`, the orientation being a `TextOrientation`
+  value; a `startTValue` or `endTValue` that is given throws an error that says it is not available yet, and
+  `baseFrame` and `postFix` thread the new frame as the threaded-type paragraph below describes. A `TextFrame`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
+  `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
+  `createOutline()` (Type › Create Outlines, giving the group of outlines, or `null` when the type has nothing to
+  outline and the command removes it), `convertPointObjectToAreaObject()` and
+  `convertAreaObjectToPointObject()`. A `TextRange` (https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/) has
+  `contents`, `start`, `end`, `characterOffset` (the same as `start`), `length`, `parent` (its frame), `characters`,
+  `words`, `paragraphs`, `characterAttributes`, `paragraphAttributes`, `getParagraphLength()`, `getTextRunLength()` and
+  `remove()`, and the character and paragraph attributes themselves. `contents` takes a string, or a number as
+  `String(number)` writes it. Setting `length` to a whole number from 0 to the units left in the frame moves the range's
+  end and leaves the text as it is. The `characters`, `words` and `paragraphs` collections
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Words/) have `length`, `parent`, `[i]`,
+  `add(contents, relativeObject?, insertionLocation?)` and `addBefore(contents)`, which insert the text and give its
+  range, as one `text.editRange`. Character attributes are `size` (0.1 to 1296 pt), `leading` (0.1 to
+  5000 pt), `autoLeading`, `tracking` (-1000 to 10000), `baselineShift` (-1296 to 1296 pt), `horizontalScale` and
+  `verticalScale` (1 to 10000 percent), `rotation` (-360 to 360 degrees), `underline`, `strikeThrough` and `textFont`,
+  set with `text.setRangeStyle`; sizes are document points, as the Character panel shows them. Paragraph attributes are
+  `justification` (a `Justification` value, set with `text.setStyle`; the Auto alignment new type has reads as `LEFT`,
+  or `RIGHT` in a right-to-left paragraph, and setting a value replaces it), `firstLineIndent`, `leftIndent`, `rightIndent`,
+  `spaceBefore` and `spaceAfter` (-1296 to 1296 pt, set with `text.setFormat`). `app.textFonts`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextFonts/) lists every style of every family in the font menu, with
+  `length`, `[i]`, `index(key)` and `getByName(name)`, which takes the PostScript name of a bundled or installed font, or
+  the family and style joined by a space; a `TextFont` has `name` (its PostScript name), `family` and `style`. The enumerations `TextType`,
+  `TextOrientation` and `Justification` hold strings such as `"Justification.CENTER"`.
+  VectorCraft's own rules: offsets and lengths count UTF-16 code units, as a JavaScript string does, and an offset
+  inside a surrogate pair takes in its whole character; one item of `characters` is one code point. `contents` gives a
+  paragraph break as `\r` and a forced line break as `\u0003`, and takes `\r`, `\n` or `\r\n` for a paragraph break. A
+  word is a run of characters that are not white space; a range's `words` and `paragraphs` are the whole words and
+  paragraphs it touches, a paragraph's break belonging to it; the empty paragraph after a break at the end of the text
+  belongs only to an empty range there. A range keeps its place while the script edits the frame
+  through these objects: an edit before it moves it, an edit over one of its ends takes that end to the edge of the
+  edit's new text, so a range the edit covers holds the new text, and an insertion at one of its ends joins it. When a
+  member finds the frame's text different from the text these objects last saw, because `vc.run` or an undo changed
+  it, a range made before throws `Stale text range`, and so does its `typename`; a change that was reversed before
+  that read leaves the text as the range knew it, and the range keeps working. After `file.revert`, a range made
+  before throws `Stale text range` even when the file read back holds the same text. These objects keep a record of the
+  frame's last 100,000 edits, and a range made before an edit that is no longer in that record throws
+  `Stale text range` too. A character attribute
+  read on characters that differ gives the first one's value, and set on an empty range it changes nothing. Setting
+  `autoLeading` to false gives each character with auto leading the leading it is set with at that moment, from its
+  own size and its paragraph's auto leading percentage, with one `text.setRangeStyle` for each stretch of characters
+  that take the same leading; when one of those values is outside 0.1 to 5000 pt, it throws
+  and changes nothing. A paragraph attribute reads the first paragraph the range touches and sets every one of them. A value a range already
+  has runs no command; a `leading` set on characters with auto leading turns their auto leading off even when it equals
+  the auto leading. A bad value throws an error and changes nothing. Setting `textFont` sets the font, then throws
+  when `text.setRangeStyle` warns that the font is not available, or when Missing Glyph Protection keeps characters the
+  font has no glyph for in their font, giving how many. A `TextFont` from an earlier run throws
+  `Stale text font`. Each read of a member that gives a range gives a new object, so setting one range's `length`
+  leaves the others as they are. `add` without a relative object inserts after the collection's last item, and
+  `addBefore` before its first; with one, a text range or the text frame of the same frame, `PLACEBEFORE` and
+  `PLACEATBEGINNING` insert at its start and `PLACEAFTER`, `PLACEATEND` or no location at its end. An added word is
+  kept apart from the characters next to it by a space, and an added paragraph by a paragraph break; adding an empty
+  string runs no command. Members the help pages list that are not here, such as `TextFrame.lines`,
+  `TextFrame.textPath` and `TextRange.changeCaseTo`, throw an error that says they are not available yet, and `start`,
+  `end`, `characterOffset` and `orientation` cannot be set yet.
+- Threaded type (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/Story/, https://ai-scripting.docsforadobe.dev/jsobjref/Stories/): a
+  `TextFrame` has `nextFrame` and `previousFrame`, the frames after and before it in its story (`null` at either end),
+  and `story`; a `TextRange` has `story` too. Assigning `nextFrame` or `previousFrame` runs `text.thread.setNeighbor`:
+  a frame links the last frame of one story to the first frame of another, whose text flows on after the first story's
+  text, and `null` breaks that link, no text moving across it. `areaText(path, orientation?, baseFrame?,
+  postFix?)` and `pathText(path, startTValue?, endTValue?, orientation?, baseFrame?, postFix?)` thread the new frame
+  after `baseFrame`, or before it when `postFix` is false, with `text.thread.add`; `startTValue` and `endTValue` are
+  not available yet. `Document.stories` lists the stories with `length`, `[i]` and `index(key)`. A `Story` has
+  `parent` (its document), `length`, `textFrames` (an array of its frames in thread order), `textRange`, `characters`,
+  `words` and `paragraphs`; `lines`, `insertionPoints`, `textRanges` and `textSelection` are not available yet.
+  VectorCraft's own rules: point type, a frame of another document, the frame itself, a frame inside a story, a link
+  that would make a loop and a story with a hidden or locked frame are refused with nothing changed, and assigning the
+  link that is already there, or `null` where there is none, runs no command. `postFix` is true when it is left out,
+  and a `baseFrame` given with a path inside a compound path is refused before the path is turned into type.
+  `Document.stories` lists one story for each type object in no thread and one for each thread, in the order of
+  their first frames in `Document.textFrames`, topmost first, and `index` with a string finds the first story whose first frame has that name. A frame that
+  a stored thread lists twice is in its story once. A `Story` is
+  the story of the frame it was read from, as that frame is threaded now, and throws `Stale story` once that frame is
+  deleted. The text of a story of one frame is that frame's text, with its ranges. The text of a longer story is its
+  frames' text in thread order, counted in UTF-16 units: its `textRange` reads and writes across the frames, and
+  writing it edits the frames from the last one it reaches back to the first, inside the run's one undo step, and the
+  story then flows through its frames again. Such a range has `contents`, `start`, `end`, `characterOffset`,
+  `length`, `parent` and `story` (its story), `characters`, `words`, `paragraphs`, `getParagraphLength()` and
+  `remove()`; its character and paragraph attributes and the other members are not available yet. It keeps its place
+  through edits made through the story's ranges and throws `Stale text range` after any other change to the story's
+  text and after `file.revert`.
 - A `Document` also has `variables`, `dataSets`, `activeDataset`, `variablesLocked`, `importVariables(file)` and
   `exportVariables(file)` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/). `variables`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Variables/) and `dataSets`
@@ -12613,6 +12701,18 @@ A double-click on a port where the frame is threaded breaks the thread there (on
 after it (`out`). The whole story flows into the frames before the break; the frames after it are left empty, still
 threaded with each other when two or more remain, and the first of them starts a paragraph. It refuses an `id` that
 doesn't exist, a `port` other than `in` or `out`, and a side where no frame of a thread comes before or after `id`.
+
+`text.thread.setNeighbor {id, side: "next" | "previous", neighbor: id | null}` is what a script's `nextFrame` and
+`previousFrame` assignments run, and needs no selection. With an id it links area type or type on a path `id` to
+`neighbor` after it (`next`) or before it (`previous`): `id` must be the last frame of its story for `next` (the first
+for `previous`) and `neighbor` the first (the last) frame of another story, and the second story's text flows on after
+the first's (one undo step, Thread Text). With `null` it breaks the link on that side, and the frames on each side
+form a story of their own (one undo step, Break Thread): no text moves across the break, and the frames after it flow
+their own text again from their first frame, which now starts a paragraph. It refuses point type and
+other art, a frame linked to itself, a link that would make a loop or go to a frame inside a story, and a story with a
+hidden or locked frame, with nothing changed. A link that is already there, or a break where there is no link, changes
+nothing and records no undo step. The selection is kept. It returns `{changed, threads}`, `threads` listing the
+stories of the frames involved after the change, a story of one frame as `[id]`.
 
 `select.same.linkBlockSeries` (Select › Same › Link Block Series) selects every frame of the threads that the selected
 type objects, and the type inside selected groups, are in, in thread order, and returns `{count}`. Type in no thread
