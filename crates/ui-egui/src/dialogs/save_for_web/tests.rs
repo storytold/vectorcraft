@@ -312,6 +312,85 @@ fn save_remembers_and_writes_and_done_only_remembers() {
     assert!(!dir.join("Untitled-1.png").exists());
 }
 
+#[test]
+fn save_for_web_download_waits_for_the_original_drawing() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-original-download");
+    let (mut app, downloads) = app(&dir, true);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    app.run("file.new", json!({"width": 26, "height": 20, "name": "Other drawing"})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 26, "height": 20})).unwrap();
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    confirm(&mut app);
+
+    assert!(downloads.borrow().is_empty(), "the other drawing is never downloaded");
+    assert!(is_open(&app));
+    assert_eq!(fields(&app)["format"], "png24");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    save(&mut app);
+    assert_eq!(downloads.borrow().len(), 1);
+}
+
+#[test]
+fn save_for_web_does_not_write_another_drawing_when_the_picker_returns() {
+    let dir = vectorcraft_testkit::temp_dir("sfw-original-picker");
+    let (mut app, _) = app(&dir, false);
+    app.run("file.new", json!({"width": 26, "height": 20, "name": "Other drawing"})).unwrap();
+    app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 26, "height": 20})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialog = id(&app);
+    host(&app).with(|h| h.confirm_by_id(&ctx, dialog));
+    settle(&mut app);
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    answer_saves(&mut app);
+    settle(&mut app);
+
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    assert!(is_open(&app));
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    save(&mut app);
+    assert!(dir.join("Untitled-1.png").exists());
+}
+
+#[test]
+fn save_for_web_requires_a_fresh_approval_after_file_revert() {
+    let dir = vectorcraft_testkit::TempDir::new("sfw-revert-output");
+    let source = vectorcraft_testkit::TempDir::new("sfw-revert-drawing");
+    let (mut app, _) = app(dir.as_ref(), false);
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    let path = source.join("Source.vectorcraft");
+    app.run("file.saveAs", json!({"path": path})).unwrap();
+    app.run("shape.rectangle", json!({"x": 5, "y": 5, "width": 10, "height": 10})).unwrap();
+    let original = app.session.active().unwrap();
+    let (uid, reverts) = (original.uid, original.reverts);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    let ctx = app.ui_ctx.clone().unwrap();
+    let dialog = id(&app);
+    host(&app).with(|h| h.confirm_by_id(&ctx, dialog));
+    settle(&mut app);
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let current = app.session.active().unwrap();
+    assert_eq!((current.uid, current.reverts), (uid, reverts + 1));
+    answer_saves(&mut app);
+    settle(&mut app);
+    assert_eq!(std::fs::read_dir(dir.as_ref()).unwrap().count(), 0);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+
+    close(&mut app);
+    settle(&mut app);
+    app.run("file.saveForWeb", json!({})).unwrap();
+    set(&mut app, "format", json!("png24"));
+    save(&mut app);
+    let outputs: Vec<_> = std::fs::read_dir(dir.as_ref()).unwrap().map(|entry| entry.unwrap().path()).collect();
+    assert_eq!(outputs.len(), 1);
+    assert!(std::fs::read(&outputs[0]).unwrap().starts_with(b"\x89PNG"));
+}
+
 /// The remembered Transparency Dither, which the dialog does not show, reaches the file Save writes
 /// and stays remembered after Done.
 #[test]

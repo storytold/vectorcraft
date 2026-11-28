@@ -229,6 +229,8 @@ pub(crate) fn compose_with<M: Measure>(
         let mut best: Vec<(M::State, u8, usize, f64, usize)> = vec![]; // (state, fitness, hyphens, demerits, from)
         let mut keep = Vec::with_capacity(active.len());
         for &ai in &active {
+            #[cfg(test)]
+            crate::layout::count_layout_work(1);
             let Some(a) = nodes.get(ai) else { continue };
             let t = trim(bp.end, a.pos);
             let credit = if a.pos > 0 { start_credit(a.pos) } else { 0.0 };

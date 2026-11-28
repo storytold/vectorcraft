@@ -221,6 +221,33 @@ mod tests {
     }
 
     #[test]
+    fn a_late_preset_import_keeps_the_reopened_managers_selection() {
+        let mut app = app();
+        let picker = crate::tests_picks::scripted(&mut app);
+        app.run("pdf.preset.save", json!({"name": "Mine", "thumbnails": true})).unwrap();
+        let exported = app.run("pdf.preset.export", json!({"names": ["Mine"]})).unwrap();
+        let bytes = exported["data"].as_str().unwrap().as_bytes();
+
+        open(&mut app, Some("PDF/X-4:2010"));
+        press(&mut app, ManagerAction::Import);
+        assert_eq!(picker.requests().len(), 1, "Import requested a file");
+        host(&app, |h| h.cancel_by_id(&ctx(&app), dialog_id(KEY)));
+        open(&mut app, Some("Press Quality"));
+        let ctx = ctx(&app);
+        picker.answer_contents(&[("mine.vcpdfpresets", bytes)]);
+        crate::tests_picks::poll(&mut app, &ctx);
+        frame(&mut app);
+        assert!(app.session.prefs.pdf_presets.iter().any(|preset| preset.name == "Mine 2"), "the late reply still imports: {}", app.ui.status);
+        assert_eq!(manager_fields(&mut app)["selected"], "Press Quality");
+
+        press(&mut app, ManagerAction::Import);
+        picker.answer_contents(&[("mine.vcpdfpresets", bytes)]);
+        crate::tests_picks::poll(&mut app, &ctx);
+        frame(&mut app);
+        assert_eq!(manager_fields(&mut app)["selected"], "Mine 3", "the original manager selects its own import");
+    }
+
+    #[test]
     fn import_and_export_go_through_files() {
         let dir = std::env::temp_dir().join(format!("vc-pdfpresets-ui-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();

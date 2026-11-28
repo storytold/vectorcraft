@@ -32,7 +32,7 @@ pub(crate) fn write(ops: Vec<scene::Op>, region: Rect, kind: Kind, title: &str, 
 
 fn convert(op: scene::Op, kind: Kind) -> Op {
     match op {
-        scene::Op::Fill { path, rule, rgb } => Op::Fill { path, even_odd: rule == FillRule::EvenOdd, rgb },
+        scene::Op::Fill { path, rule, rgb, .. } => Op::Fill { path, even_odd: rule == FillRule::EvenOdd, rgb },
         scene::Op::Stroke { mut path, pen } => {
             let dash = pen.dash.and_then(|dash| {
                 let native = Dash { pattern: dash.pattern.clone(), offset: dash.offset };
@@ -78,7 +78,7 @@ mod tests {
         path.line_to((7.0, 45.0));
         path.close_path();
         let dash = vectorcraft_doc::Dash { pattern: vec![5.0, 3.0], offset: 1.25, align_corners: true };
-        let plain = scene::Pen { rgb: [30, 60, 90], width: 1.0, cap: LineCap::Round, join: LineJoin::Round, miter: 4.0, dash: None };
+        let plain = scene::Pen { rgb: [30, 60, 90], paint: None, width: 1.0, cap: LineCap::Round, join: LineJoin::Round, miter: 4.0, dash: None };
         let with_dash = scene::Pen { dash: Some(dash.clone()), ..plain.clone() };
         let segments = vectorcraft_effects::stroke::dash(&path, &dash).unwrap().path;
         let region = Rect::new(0.0, 0.0, 50.0, 50.0);

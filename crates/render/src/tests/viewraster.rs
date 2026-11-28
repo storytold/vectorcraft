@@ -276,6 +276,10 @@ fn a_frame_counts_the_art_it_draws_by_its_size() {
     let mut r = Renderer::new();
     r.render(&mesh(100.0), 2100, 2100, Affine::IDENTITY, &RenderOptions::default());
     assert_eq!(r.stats.view_sized, 0, "a mesh within the mesh buffer");
+    assert!(
+        r.render_plain_patch(&mesh(100.0), 60, 60, Affine::translate((-50.0, -50.0)), &RenderOptions::default()).is_none(),
+        "a patch through a mesh must fall back even when the full mesh fits"
+    );
     r.render(&mesh(3000.0), 2100, 2100, Affine::IDENTITY, &RenderOptions::default());
     assert!(r.stats.view_sized > 0, "a mesh past the mesh buffer");
 }

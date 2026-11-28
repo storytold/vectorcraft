@@ -96,6 +96,43 @@ fn selected(app: &VectorcraftApp) -> Vec<u64> {
 }
 
 #[test]
+fn canceling_a_keyboard_show_filter_restores_all_rows_before_selecting() {
+    use craft::ui::contract::Role;
+
+    let dir = Folder::new("cancel-show-filter");
+    let (app, river, harbour, stamp) = app(&dir);
+    let mut panel = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+    panel.room(egui::vec2(800.0, 600.0));
+    menus::invoke(&mut panel.app(), COMMAND, Value::Null);
+    panel.frame();
+    panel.click_role("Show", Role::COMBO_BOX);
+    panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<LinkStatusDialog>().unwrap().fields.show.clone()), "linked");
+    panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<LinkStatusDialog>().unwrap().fields.show.clone()), "all");
+    for name in ["river.png", "harbour.png", "stamp.png"] {
+        assert!(panel.shows(name), "canceling the filter restores {name}");
+    }
+    panel.click_role("All", Role::BUTTON);
+    panel.click_role("Zoom to Selection", Role::CHECK_BOX);
+    panel.click("Select");
+    let mut want = vec![river, harbour, stamp];
+    want.sort_unstable();
+    assert_eq!(selected(&panel.app()), want);
+
+    menus::invoke(&mut panel.app(), COMMAND, Value::Null);
+    panel.frame();
+    panel.click_role("Show", Role::COMBO_BOX);
+    panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+    panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<LinkStatusDialog>().unwrap().fields.show.clone()), "linked");
+    assert!(panel.shows("river.png"));
+    assert!(!panel.shows("harbour.png") && !panel.shows("stamp.png"));
+    panel.click("Cancel");
+    assert_eq!(selected(&panel.app()), want);
+}
+
+#[test]
 fn the_message_says_what_was_selected_and_what_was_left_out() {
     assert_eq!(message(&["missing"], 9, &[]), "Selected 9 missing images");
     assert_eq!(message(&["linked"], 1, &[]), "Selected 1 linked image");
