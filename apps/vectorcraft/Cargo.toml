@@ -97,7 +97,7 @@ winit = { version = "0.30", default-features = false, features = ["wayland-csd-a
 # second X connection, x11rb's pure-Rust `RustConnection`. MIT OR Apache-2.0, already in the build
 # through winit with the `xinput` feature.
 # RandR reads a display's `_ICC_PROFILE` for the canvas (src/display_profile.rs).
-x11rb = { version = "0.13", default-features = false, features = ["randr", "xinput"] }
+x11rb = { version = "0.14", default-features = false, features = ["randr", "xinput"] }
 craft = { workspace = true, features = ["wayland"] }
 
 # Asks the Wayland compositor which GPU it draws with (linux-dmabuf feedback, src/compositor_gpu.rs),
@@ -117,7 +117,7 @@ rustix = { workspace = true, features = ["std", "event", "fs"] }
 # The display's color profile over D-Bus (src/display_profile.rs). MIT, already in the build through
 # accesskit. Pinned exactly: review the diff before bumping.
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-zbus = "=5.19.0"
+zbus = "=6.3.0"
 # Tells whether arboard reads through the compositor's data-control protocol or through X11, the
 # same check arboard makes (src/clipboard.rs). MIT OR Apache-2.0, already in the build through
 # arboard.
