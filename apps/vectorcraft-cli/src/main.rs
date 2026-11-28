@@ -7,6 +7,7 @@
 //! vectorcraft-cli commands
 //! vectorcraft-cli convert IN OUT [--scale 2] [--ppi 300] [--artboard 0 | --range 1-3,5] [--outline-text] [--decimals N] [--replace-lossy] [--editing-data] [--legacy-name-encoding ENC] [--preserve-editing] [--ai-version 7|pdf] [--hidden-objects layer|omit|visible] [--transparent-images flatten|omit]
 //! vectorcraft-cli info FILE
+//! vectorcraft-cli thumbnail [--size 256] IN OUT
 //! vectorcraft-cli bench FILE [--size 2880x1800] [--iters 5]
 //! vectorcraft-cli perf [--paths 50000] [--deep]
 //! ```
@@ -145,6 +146,14 @@ USAGE:
       read from its preview and why), title, colour mode, units, artboards, object counts by
       kind, fonts.
 
+  vectorcraft-cli thumbnail [--size N] IN OUT
+      Open IN (any readable format) and write OUT as a PNG of its first artboard (else the art),
+      N pixels on its longer side (1 to 1024, default 256), with a transparent background. Linux
+      file managers run it for .vectorcraft, .drawcraft and .vctemplate files through
+      share/thumbnailers/ai.storyteller.vectorcraft.thumbnailer. It exits with an error and writes
+      nothing when IN is larger than 256 MiB, can't be opened, shows nothing, or takes longer than
+      20 seconds.
+
   vectorcraft-cli bench FILE [--size WxH] [--iters N]
       Render FILE (any readable format) fitted to WxH (default 2880x1800) and print ms per frame
       (warm), multithreaded and single-threaded.
@@ -217,6 +226,7 @@ fn main() -> ExitCode {
         Some("commands") => commands(),
         Some("convert") => convert(&args[1..]),
         Some("info") => info(&args[1..]),
+        Some("thumbnail") => thumbnail(&args[1..]),
         Some("bench") => bench(&args[1..]),
         Some("perf") => perf::run(&args[1..]),
         Some("-h" | "--help" | "help") | None => help(),
@@ -519,6 +529,61 @@ fn info(args: &[String]) -> Result<(), String> {
     let v = json!({"file": file, "warnings": opened["warnings"], "info": base, "artboards": artboards, "kinds": kinds, "fonts": fonts});
     outln!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
     Ok(())
+}
+
+/// Largest file `thumbnail` opens, in bytes on disk.
+const THUMBNAIL_MAX_FILE: u64 = 256 << 20;
+/// Largest `--size` of `thumbnail`: the thumbnail standard's largest size, xx-large.
+const THUMBNAIL_MAX_SIZE: u32 = 1024;
+/// `--size` when it isn't given: the thumbnail standard's large size.
+const THUMBNAIL_DEFAULT_SIZE: u32 = 256;
+/// Longest `thumbnail` runs before it exits without writing OUT.
+const THUMBNAIL_TIME: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// `thumbnail`: the PNG a Linux file manager shows for a document, run through the
+/// `.thumbnailer` entry in `packaging/linux`
+/// (<https://specifications.freedesktop.org/thumbnail-spec/latest/creation.html>).
+fn thumbnail(args: &[String]) -> Result<(), String> {
+    if help_requested(args, &["--size", "-s"]) {
+        return help();
+    }
+    let mut files = vec![];
+    let mut size = THUMBNAIL_DEFAULT_SIZE;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--size" | "-s" => {
+                size = it
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .filter(|n| (1..=THUMBNAIL_MAX_SIZE).contains(n))
+                    .ok_or_else(|| format!("--size needs a number of pixels from 1 to {THUMBNAIL_MAX_SIZE}"))?;
+            }
+            other if other.starts_with('-') => return Err(format!("unknown thumbnail option `{other}`")),
+            f => files.push(f),
+        }
+    }
+    let [input, output] = <[&str; 2]>::try_from(files).map_err(|_| "thumbnail needs IN and OUT")?;
+    // The process ends when the time is up, wherever the work is: OUT is written whole or not at all.
+    std::thread::spawn(|| {
+        std::thread::sleep(THUMBNAIL_TIME);
+        eprintln!("vectorcraft-cli: thumbnail: took longer than {} seconds", THUMBNAIL_TIME.as_secs());
+        std::process::exit(1);
+    });
+    let len = std::fs::metadata(input).map_err(|e| format!("{input}: {e}"))?.len();
+    if len > THUMBNAIL_MAX_FILE {
+        return Err(format!("{input}: larger than {} MiB", THUMBNAIL_MAX_FILE >> 20));
+    }
+    // Opened as the app opens it: the fonts it carries, its type measured, its linked files read.
+    let mut h = Headless::new();
+    h.call("app.open", json!({"path": input})).map_err(|e| format!("{input}: {e}"))?;
+    let doc = &h.session.doc().map_err(|e| e.to_string())?.doc;
+    // A picture without a visible pixel is an error, and the file manager keeps the file's icon.
+    let img = vectorcraft_render::encode::first_artboard(doc, size)
+        .filter(|img| img.pixels.as_chunks::<4>().0.iter().any(|px| px[3] != 0))
+        .ok_or_else(|| format!("{input}: the document shows nothing"))?;
+    let png = img.to_png().map_err(|e| format!("{input}: {e}"))?;
+    vectorcraft_format::write_atomic(Path::new(output), &png).map_err(|e| format!("{output}: {e}"))
 }
 
 enum Step {
