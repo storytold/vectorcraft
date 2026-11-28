@@ -11,13 +11,17 @@
 //! then offers the clipboard to other apps.
 
 use serde_json::json;
-use vectorcraft_js::{Data, HostError, HostMember};
+use vectorcraft_js::{Data, HostError};
 
-use super::{Answer, Host, Link, NO_ACTIVE_DOCUMENT, command, method, named};
+use super::{Answer, Described, Host, Link, NO_ACTIVE_DOCUMENT, command, method, named, returns};
 
 /// The clipboard functions of `Application`.
-pub(super) fn app_members(link: &Link) -> Vec<(String, HostMember)> {
-    named(vec![("copy", method(link, copy)), ("cut", method(link, cut)), ("paste", method(link, paste))])
+pub(super) fn app_members(link: &Link) -> Vec<Described> {
+    named(vec![
+        ("copy", method(link, copy), returns("undefined", &[])),
+        ("cut", method(link, cut), returns("undefined", &[])),
+        ("paste", method(link, paste), returns("undefined", &[])),
+    ])
 }
 
 /// Runs `id` when the active document has something it acts on.

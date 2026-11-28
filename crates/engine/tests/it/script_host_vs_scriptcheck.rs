@@ -54,7 +54,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// clipboard, which the desktop app offers to other apps after the run as Edit › Copy does.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
-    ("Object.prototype.", "toSource"),
+    ("Object.prototype.", "reflect toSource"),
     ("UnitValue.", "baseUnit baseUnit= length prototype"),
     ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),

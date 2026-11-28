@@ -122,6 +122,8 @@ impl Session {
             proof_setup_saves: 0,
             script_data_dir: None,
             plugin_output: None,
+            plugin_checked: Vec::new(),
+            plugin_calling: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
             recent_urls: vec![],

@@ -692,21 +692,28 @@ fn timing_with_hundreds_of_cjk_outlines() {
 #[test]
 fn a_long_tracked_line_is_checked_in_time() {
     // Even tracking is kept on the line; the layout check of a long line must not lay out the rest
-    // of the line again after each window.
-    let text = "abe".repeat(150);
-    let mut s = session();
-    let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 4})).unwrap()["id"].as_u64().unwrap();
-    s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": text.len(), "tracking": 50})).unwrap();
-    s.execute("select.set", &json!({"ids": [id]})).unwrap();
-    let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
-    s.execute("select.set", &json!({"ids": [g]})).unwrap();
-    let t0 = std::time::Instant::now();
-    let r = s.execute("type.retype", &json!({})).unwrap();
-    let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
-    assert_eq!(texts, vec![text], "the whole line is one object: {r}");
-    assert_eq!(r["fonts"][0]["tracking"], json!(50.0), "{r}");
-    assert_eq!(r["unmatched"], json!([]));
-    eprintln!("450 tracked glyphs: {:?}, {} objects", t0.elapsed(), texts.len());
+    // of the line again after each window: a line ten times as long lays out no more than twice as
+    // many glyphs per glyph.
+    let laid_out = |text: &str| {
+        let mut s = session();
+        let id = s.execute("text.create", &json!({"x": 10, "y": 100, "text": text, "size": 4})).unwrap()["id"].as_u64().unwrap();
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 0, "end": text.len(), "tracking": 50})).unwrap();
+        s.execute("select.set", &json!({"ids": [id]})).unwrap();
+        let g = s.execute("type.createOutlines", &json!({})).unwrap()["ids"][0].as_u64().unwrap();
+        s.execute("select.set", &json!({"ids": [g]})).unwrap();
+        super::GLYPHS_LAID_OUT.set(0);
+        let r = s.execute("type.retype", &json!({})).unwrap();
+        let laid = super::GLYPHS_LAID_OUT.get();
+        let texts: Vec<String> = r["texts"].as_array().unwrap().iter().map(|t| t.as_str().unwrap().to_owned()).collect();
+        assert_eq!(texts, vec![text], "the whole line is one object: {r}");
+        assert_eq!(r["fonts"][0]["tracking"], json!(50.0), "{r}");
+        assert_eq!(r["unmatched"], json!([]));
+        laid
+    };
+    let short = laid_out(&"abe".repeat(15));
+    let long = laid_out(&"abe".repeat(150));
+    assert!(short > 0, "the line is laid out to be checked");
+    assert!(long <= 20 * short, "450 glyphs: {long} laid out; 45 glyphs: {short}");
 }
 
 /// Every path in the document flattened into lines `tol` from its curves, each contour started at

@@ -5914,6 +5914,8 @@ arrowhead	Feather	पंख
 	Tangent Circle	स्पर्शी वृत्त
 	Tangent Circle Tool	स्पर्शी वृत्त टूल
 	No tangent circle here	यहाँ कोई स्पर्शी वृत्त नहीं है
+	Ask For Circle Radius	वृत्त की त्रिज्या पूछें
+	Auto-Update Default	डिफ़ॉल्ट स्वचालित रूप से अपडेट करें
 	Tangent Circle…	स्पर्शी वृत्त…
 	Taper	टेपर
 	Target	लक्ष्य
@@ -6593,6 +6595,15 @@ arrowhead	Feather	पंख
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	एक केवल-पढ़ने योग्य ऑब्जेक्ट छोड़ दिया गया: इसे केवल {{"id": …}} के रूप में या जैसा दिया गया था वैसा लौटाएँ
 @msg	a string	एक स्ट्रिंग
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	स्ट्रोक में केवल `paint`, `width`, `join`, `cap` और `miterLimit` होते हैं
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	पेंट करने वाले लाइव इफ़ेक्ट के हिस्से में केवल `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` और `effects` होते हैं
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	स्ट्रोक में केवल `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` और `effects` होते हैं
+@msg	`appearanceOutput` may only be true	`appearanceOutput` केवल true हो सकता है
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` केवल `api` 3 पर ऐसे लाइव इफ़ेक्ट के लिए है जो `paintOutput` घोषित करता है
+@msg	`opacity` must be a number from 0 to 1	`opacity` 0 से 1 तक की संख्या होनी चाहिए
+@msg	unknown blending mode; `blend` is one of {_1}	अज्ञात ब्लेंडिंग मोड; `blend` इनमें से एक है: {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` अधिकतम {MAX_LOOK_EFFECTS} रिकॉर्ड की सूची होनी चाहिए
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	एक परिणाम में अधिकतम {MAX_RESULT_EFFECTS} इफ़ेक्ट रिकॉर्ड होते हैं
+@msg	this host takes no effects here	यह होस्ट यहाँ कोई इफ़ेक्ट नहीं लेता
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	स्ट्रोक {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} होना चाहिए
 @msg	an effect must be {{"id", "params"?, "visible"?}}	इफ़ेक्ट {{"id", "params"?, "visible"?}} होना चाहिए
 @msg	an effect on a fill returns only `fills`	फ़िल पर इफ़ेक्ट केवल `fills` लौटाता है

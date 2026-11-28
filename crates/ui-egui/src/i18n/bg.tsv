@@ -8298,6 +8298,8 @@ breakText	Glyphs	Глифи
 	Tangent Circle	Допирателна окръжност
 	Tangent Circle Tool	Инструмент „Допирателна окръжност“
 	No tangent circle here	Тук няма допирателна окръжност
+	Ask For Circle Radius	Питане за радиуса на окръжността
+	Auto-Update Default	Автоматично обновяване на стойността по подразбиране
 	Circle:	Окръжност:
 @msg	`ids` names an object twice	`ids` посочва обект два пъти
 @msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя

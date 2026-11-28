@@ -7432,6 +7432,15 @@ axis	Y Axis	Άξονας Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
 @msg	a string	συμβολοσειρά
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap` και `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` και `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` και `effects`
+@msg	`appearanceOutput` may only be true	Το `appearanceOutput` μπορεί να είναι μόνο true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	το `appearanceOutput` ισχύει μόνο για ζωντανό εφέ που δηλώνει `paintOutput`, με `api` 3
+@msg	`opacity` must be a number from 0 to 1	το `opacity` πρέπει να είναι αριθμός από 0 έως 1
+@msg	unknown blending mode; `blend` is one of {_1}	άγνωστη λειτουργία ανάμειξης· το `blend` είναι ένα από τα {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	το `effects` πρέπει να είναι πίνακας με το πολύ {MAX_LOOK_EFFECTS} εγγραφές
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	ένα αποτέλεσμα φέρει το πολύ {MAX_RESULT_EFFECTS} εγγραφές εφέ
+@msg	this host takes no effects here	αυτό το κεντρικό σύστημα δεν δέχεται εφέ εδώ
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	ένα περίγραμμα πρέπει να είναι {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	ένα εφέ πρέπει να είναι {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ένα εφέ σε γέμισμα επιστρέφει μόνο `fills`
@@ -8558,6 +8567,8 @@ breakText	Glyphs	Γλύφοι
 	Tangent Circle	Εφαπτόμενος κύκλος
 	Tangent Circle Tool	Εφαπτόμενος κύκλος (Tangent Circle Tool)
 	No tangent circle here	Δεν υπάρχει εφαπτόμενος κύκλος εδώ
+	Ask For Circle Radius	Ερώτηση για την ακτίνα του κύκλου
+	Auto-Update Default	Αυτόματη ενημέρωση προεπιλογής
 	Circle:	Κύκλος:
 @msg	`ids` names an object twice	το `ids` αναφέρει ένα αντικείμενο δύο φορές
 @msg	select two or three paths or compound paths	επιλέξτε δύο ή τρεις διαδρομές ή σύνθετες διαδρομές

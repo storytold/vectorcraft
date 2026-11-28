@@ -297,7 +297,11 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
         })(),
         "toolbar.reset" => (|| {
             if let Some(name) = crate::custom_toolbars::target(&app.ui, p)? {
-                // A toolbar made with New Toolbar goes back to blank, as it was made.
+                // A toolbar made with New Toolbar goes back to blank, as it was made, without its
+                // command buttons too.
+                if let Some(bar) = crate::custom_toolbars::find_mut(&mut app.ui, &name) {
+                    bar.commands.clear();
+                }
                 return edit_custom(app, &name, |cats| {
                     cats.clear();
                     Ok(())

@@ -7418,6 +7418,15 @@ axis	Y Axis	Eje Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	se omitió un objeto de solo lectura: devuélvalo como {{"id": …}} solo o tal como se recibió
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un trazo solo tiene `paint`, `width`, `join`, `cap` y `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	una pieza de un efecto dinámico de pintura solo tiene `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` y `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	un trazo solo tiene `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` y `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` solo puede ser true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` solo es para un efecto dinámico que declara `paintOutput`, con `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` debe ser un número de 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	modo de fusión desconocido; `blend` es uno de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` debe ser una lista de {MAX_LOOK_EFFECTS} registros como máximo
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	un resultado lleva como máximo {MAX_RESULT_EFFECTS} registros de efecto
+@msg	this host takes no effects here	este host no admite efectos aquí
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un trazo debe ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	un efecto debe ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecto en un relleno solo devuelve `fills`
@@ -8544,6 +8553,8 @@ breakText	Glyphs	Glifos
 	Tangent Circle	Círculo tangente
 	Tangent Circle Tool	Herramienta Círculo tangente
 	No tangent circle here	No hay círculo tangente aquí
+	Ask For Circle Radius	Preguntar el radio del círculo
+	Auto-Update Default	Actualizar automáticamente el valor predeterminado
 	Circle:	Círculo:
 @msg	`ids` names an object twice	`ids` indica un objeto dos veces
 @msg	select two or three paths or compound paths	seleccione dos o tres trazados o trazados compuestos

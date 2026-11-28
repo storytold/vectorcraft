@@ -19,9 +19,9 @@
 //! - An argument that is not a finite number, or a matrix with a value that is not one, throws a
 //!   `TypeError`; a result with a value too large for a number throws a `RangeError`.
 
-use vectorcraft_js::{Data, HostError, HostMember};
+use vectorcraft_js::{Data, HostError};
 
-use super::{Answer, Host, Link, arg, method, named, num, text};
+use super::{Answer, Described, Host, Link, arg, method, named, num, returns, text};
 
 /// A matrix's six values: `[a, b, c, d, tx, ty]`.
 type Matrix = [f64; 6];
@@ -31,20 +31,28 @@ const KEYS: [&str; 6] = ["mValueA", "mValueB", "mValueC", "mValueD", "mValueTX",
 const IDENTITY: Matrix = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
 /// The matrix functions of `Application`.
-pub(super) fn app_members(link: &Link) -> Vec<(String, HostMember)> {
+pub(super) fn app_members(link: &Link) -> Vec<Described> {
     let l = link;
     named(vec![
-        ("getIdentityMatrix", method(l, identity)),
-        ("getTranslationMatrix", method(l, translation)),
-        ("getScaleMatrix", method(l, scale)),
-        ("getRotationMatrix", method(l, rotation)),
-        ("concatenateMatrix", method(l, concatenate)),
-        ("concatenateTranslationMatrix", method(l, concatenate_translation)),
-        ("concatenateScaleMatrix", method(l, concatenate_scale)),
-        ("concatenateRotationMatrix", method(l, concatenate_rotation)),
-        ("invertMatrix", method(l, invert)),
-        ("isEqualMatrix", method(l, is_equal)),
-        ("isSingularMatrix", method(l, is_singular)),
+        ("getIdentityMatrix", method(l, identity), returns("Matrix", &[])),
+        ("getTranslationMatrix", method(l, translation), returns("Matrix", &[("deltaX", "number"), ("deltaY", "number")])),
+        ("getScaleMatrix", method(l, scale), returns("Matrix", &[("scaleX", "number"), ("scaleY", "number")])),
+        ("getRotationMatrix", method(l, rotation), returns("Matrix", &[("angle", "number")])),
+        ("concatenateMatrix", method(l, concatenate), returns("Matrix", &[("matrix", "Matrix"), ("secondMatrix", "Matrix")])),
+        (
+            "concatenateTranslationMatrix",
+            method(l, concatenate_translation),
+            returns("Matrix", &[("matrix", "Matrix"), ("deltaX", "number"), ("deltaY", "number")]),
+        ),
+        (
+            "concatenateScaleMatrix",
+            method(l, concatenate_scale),
+            returns("Matrix", &[("matrix", "Matrix"), ("scaleX", "number"), ("scaleY", "number")]),
+        ),
+        ("concatenateRotationMatrix", method(l, concatenate_rotation), returns("Matrix", &[("matrix", "Matrix"), ("angle", "number")])),
+        ("invertMatrix", method(l, invert), returns("Matrix", &[("matrix", "Matrix")])),
+        ("isEqualMatrix", method(l, is_equal), returns("boolean", &[("matrix", "Matrix"), ("secondMatrix", "Matrix")])),
+        ("isSingularMatrix", method(l, is_singular), returns("boolean", &[("matrix", "Matrix")])),
     ])
 }
 

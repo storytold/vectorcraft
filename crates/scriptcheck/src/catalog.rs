@@ -197,7 +197,7 @@ features! {
     Notify "notify" Language,
     OperatorOverloading "operatorOverloading" HostOnly,
     Preferences "preferences" Language,
-    Reflection "reflection" HostOnly,
+    Reflection "reflection" Language,
     ScriptuiDialog "scriptui.dialog" Dialogs,
     ScriptuiDrawing "scriptui.drawing" Dialogs,
     ScriptuiPalette "scriptui.palette" HostOnly,

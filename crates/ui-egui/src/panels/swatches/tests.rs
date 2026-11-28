@@ -170,6 +170,20 @@ fn a_foreign_swatch_row_payload_cannot_move_or_replace_local_swatches() {
     assert_eq!(doc(&app).swatches, before.swatches);
 }
 
+#[test]
+fn the_footer_menu_buttons_report_that_they_open_a_menu() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::PopupKind;
+
+    let panel = Panel::new(app(), show);
+    for name in [SwatchLibraries::MENU, "Show Swatch Kinds"] {
+        assert_eq!(panel.popup_kind(name), Some(PopupKind::Menu), "{name}");
+    }
+    for name in ["Delete Swatch", "New Swatch", "New Color Group"] {
+        assert_eq!(panel.popup_kind(name), None, "{name}");
+    }
+}
+
 /// Art `ids` dragged off the canvas.
 fn art_drag(app: &VectorcraftApp, ids: Vec<vectorcraft_doc::NodeId>) -> PanelDrag {
     let (document, reverts) = app.session.active().map_or((0, 0), |st| (st.uid, st.reverts));

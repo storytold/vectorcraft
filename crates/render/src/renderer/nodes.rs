@@ -7,22 +7,18 @@ use super::{
 use crate::kept_paths::{self, KeptPath};
 use crate::node_checks::{holds_measured_three_d, measures_three_d};
 use crate::placed_document::{InMode, LayerMode, enter_layer};
-use vectorcraft_doc::placed_document::crossed;
 
 /// The key of `a`'s cull bounds in [`Renderer::geom`]: its address, and in its lowest bits what the
-/// bounds depend on besides `a`. For a layer that is the mode its sublayers are measured in
-/// ([`LayerMode`], [`enter_layer`]); for an object other than a path, whether placed documents are
-/// crossed ([`vectorcraft_doc::placed_document::Crossed`]), since the art its effects make from a
-/// placed document in it is the crossed box then. A node's address is aligned to 8 bytes, so no
-/// other node has that key.
+/// bounds depend on besides `a`. For an object other than a path that is the mode it is measured in
+/// ([`LayerMode`]): it sets the mode of the layers in it ([`enter_layer`]), a group's included, and
+/// whether placed documents are crossed ([`vectorcraft_doc::placed_document::Crossed`]), since the
+/// art its effects make from a placed document in it is the crossed box then. Placed documents are
+/// crossed only in a mode. A node's address is aligned to 8 bytes, so no other node has that key.
 fn geom_key(a: &Node) -> usize {
     let at = std::ptr::from_ref(a) as usize;
     match a.kind {
         NodeKind::Path { .. } | NodeKind::Compound { .. } => at,
-        NodeKind::Layer { .. } => {
-            at | LayerMode::now().map_or(0, |m| usize::from(m.options) | usize::from(m.outline) << 1 | usize::from(m.images) << 2)
-        }
-        _ => at | usize::from(crossed()),
+        _ => at | LayerMode::now().map_or(0, |m| usize::from(m.options) | usize::from(m.outline) << 1 | usize::from(m.images) << 2),
     }
 }
 

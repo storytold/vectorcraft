@@ -22,7 +22,7 @@
 
 use vectorcraft_js::{Data, HostClass, HostError, HostMember, host_ref, host_ref_parts};
 
-use super::{Answer, Host, Link, arg, method, named, num, text, typename_of};
+use super::{Answer, Described, Host, Link, arg, method, named, num, returns, text, typed, typename_of};
 use crate::ScriptPreference;
 use crate::script::dialogs::{DialogKind, OnYes, ScriptDialog};
 
@@ -47,31 +47,31 @@ pub const WARNING_OFF_NEEDS_A_PERSON: &str =
 const MAX_INTEGER: f64 = 9_007_199_254_740_992.0;
 
 /// The `app.preferences` member of `Application`.
-pub(super) fn app_members() -> Vec<(String, HostMember)> {
-    named(vec![("preferences", HostMember::Get(std::rc::Rc::new(|_| Ok(host_ref("Preferences", &[])))))])
+pub(super) fn app_members() -> Vec<Described> {
+    named(vec![("preferences", HostMember::Get(std::rc::Rc::new(|_| Ok(host_ref("Preferences", &[])))), typed("Preferences"))])
 }
 
 /// The `Preferences` class.
 pub(super) fn class(link: &Link) -> HostClass {
     let l = link;
-    HostClass {
-        name: "Preferences".into(),
-        parent: None,
-        members: named(vec![
-            ("typename", typename_of("Preferences")),
-            ("getBooleanPreference", method(l, |h, a| get(h, a, Kind::Boolean))),
-            ("getIntegerPreference", method(l, |h, a| get(h, a, Kind::Integer))),
-            ("getRealPreference", method(l, |h, a| get(h, a, Kind::Real))),
-            ("getStringPreference", method(l, |h, a| get(h, a, Kind::String))),
-            ("setBooleanPreference", method(l, |h, a| set(h, a, Kind::Boolean))),
-            ("setIntegerPreference", method(l, |h, a| set(h, a, Kind::Integer))),
-            ("setRealPreference", method(l, |h, a| set(h, a, Kind::Real))),
-            ("setStringPreference", method(l, |h, a| set(h, a, Kind::String))),
-            ("removePreference", method(l, remove)),
+    let key = [("key", "string")];
+    super::class(
+        "Preferences",
+        None,
+        named(vec![
+            ("typename", typename_of("Preferences"), typed("string")),
+            ("getBooleanPreference", method(l, |h, a| get(h, a, Kind::Boolean)), returns("boolean", &key)),
+            ("getIntegerPreference", method(l, |h, a| get(h, a, Kind::Integer)), returns("number", &key)),
+            ("getRealPreference", method(l, |h, a| get(h, a, Kind::Real)), returns("number", &key)),
+            ("getStringPreference", method(l, |h, a| get(h, a, Kind::String)), returns("string", &key)),
+            ("setBooleanPreference", method(l, |h, a| set(h, a, Kind::Boolean)), returns("undefined", &[("key", "string"), ("value", "boolean")])),
+            ("setIntegerPreference", method(l, |h, a| set(h, a, Kind::Integer)), returns("undefined", &[("key", "string"), ("value", "number")])),
+            ("setRealPreference", method(l, |h, a| set(h, a, Kind::Real)), returns("undefined", &[("key", "string"), ("value", "number")])),
+            ("setStringPreference", method(l, |h, a| set(h, a, Kind::String)), returns("undefined", &[("key", "string"), ("value", "string")])),
+            ("removePreference", method(l, remove), returns("undefined", &key)),
         ]),
-        index: None,
-        construct: None,
-    }
+        None,
+    )
 }
 
 #[derive(Clone, Copy)]
