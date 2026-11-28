@@ -848,6 +848,13 @@ fn path_key(p: &str) -> String {
     if windows { p.to_lowercase() } else { p }
 }
 
+/// `app.redraw()`: returns without changing anything. The app draws a frame between the run's
+/// slices on its own, and it draws the documents as they were before the run until the run ends,
+/// so there is nothing for the call to draw. It adds no undo step.
+fn app_redraw(_: &Host, _: &[Data]) -> Answer {
+    Ok(Data::Undefined)
+}
+
 /// `app.getIsFileOpen(path)`: whether a document open in the run has the file `path`. The path is
 /// compared as text with the documents' files and is not resolved; a document whose file the
 /// automation read roots do not allow does not count, and that check can look the file up on disk.
@@ -2565,6 +2572,7 @@ fn classes(link: &Link) -> Vec<HostClass> {
         ("selection", property(l, app_selection, app_set_selection), typed("*")),
         ("coordinateSystem", property(l, app_coords, app_set_coords), typed("CoordinateSystem")),
         ("getIsFileOpen", method(l, app_is_open), returns("boolean", &[("filePath", "string")])),
+        ("redraw", method(l, app_redraw), returns("undefined", &[])),
         ("executeMenuCommand", method(l, app_menu_command), returns("undefined", &[("menuCommandString", "string")])),
         ("toString", class_text("Application"), returns("string", &[])),
     ]);

@@ -2381,6 +2381,297 @@ fn art_brush_width_follows_tilt_bearing_and_rotation() {
     assert_eq!(modes, [Some(Variation::Tilt), Some(Variation::Bearing), Some(Variation::Rotation), None]);
 }
 
+/// A pattern brush with `scale`, `scale_mode` and `scale_max`, its 10 × 4 pt side tile on `fit`.
+fn scaled_pattern(fit: PatternFit, corners: bool, scale: f64, mode: Option<Variation>, max: Option<f64>) -> Brush {
+    let mut b = pattern_brush(fit, corners);
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        (p.scale, p.scale_mode, p.scale_max) = (scale, mode, max);
+    }
+    b
+}
+
+/// The bounds of each piece, left to right.
+fn piece_spans(out: &[Node]) -> Vec<Rect> {
+    let mut spans: Vec<Rect> = out.iter().filter_map(Node::geometric_bounds).collect();
+    spans.sort_by(|a, b| a.x0.total_cmp(&b.x0));
+    spans
+}
+
+/// Pattern Brush Options: with Scale on Pressure the tiles go from Scale at the lightest pen
+/// pressure to the second scale at the heaviest, taller and longer along the stroke where the pen
+/// pressed harder, and each Fit still fits them to the path.
+#[test]
+fn pattern_brush_scale_follows_the_pressure() {
+    let bp = line(0.0, 0.0, 200.0, 0.0);
+    let draw = |b: &Brush, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st);
+    let ramp = pressed(vec![(0.0, 0.0), (1.0, 1.0)]);
+    // 4 pt tall tiles at 50 %: 1 pt either side at the lightest; at 300 %: 6 pt at the heaviest.
+    let out = draw(&scaled_pattern(PatternFit::Stretch, false, 50.0, Some(Variation::Pressure), Some(300.0)), &ramp);
+    assert!(near(half_width(&out, 0.0, 1.0), 1.0, 0.1), "{}", half_width(&out, 0.0, 1.0));
+    assert!(near(half_width(&out, 199.0, 200.0), 6.0, 0.2), "{}", half_width(&out, 199.0, 200.0));
+    assert!(near(half_width(&out, 99.0, 101.0), 3.5, 0.2), "{}", half_width(&out, 99.0, 101.0));
+    // Stretch to Fit fills the path, and the tiles grow longer along it.
+    let spans = piece_spans(&out);
+    assert!(near(bounds(&out).x0, 0.0, 1e-6) && near(bounds(&out).x1, 200.0, 1e-6), "{:?}", bounds(&out));
+    assert!(spans.windows(2).all(|w| w[1].width() > w[0].width()), "{spans:?}");
+    assert!(spans.last().unwrap().width() > 4.0 * spans[0].width(), "{spans:?}");
+    // The stroke weight scales it.
+    let out =
+        draw(&scaled_pattern(PatternFit::Stretch, false, 50.0, Some(Variation::Pressure), Some(300.0)), &StrokeLayer { width: 2.0, ..ramp.clone() });
+    assert!(near(half_width(&out, 199.0, 200.0), 12.0, 0.4), "{}", half_width(&out, 199.0, 200.0));
+    // Without recorded pressure, half way between the two scales.
+    let out = draw(&scaled_pattern(PatternFit::Stretch, false, 50.0, Some(Variation::Pressure), Some(300.0)), &stroke(1.0));
+    assert!(near(bounds(&out).height(), 7.0, 1e-6), "{:?}", bounds(&out));
+    // With an even pressure, Add Space with spacing places as many tiles as the one scale that
+    // pressure gives: the spacing counts when the tiles are counted again.
+    let even = pressed(vec![(0.0, 0.5), (1.0, 0.5)]);
+    let spaced = |mode: Option<Variation>, max: Option<f64>| {
+        let mut b = scaled_pattern(PatternFit::AddSpace, false, if max.is_some() { 50.0 } else { 100.0 }, mode, max);
+        if let BrushKind::Pattern(p) = &mut b.kind {
+            p.spacing = 100.0;
+        }
+        piece_spans(&draw(&b, &even)).len()
+    };
+    assert_eq!(spaced(Some(Variation::Pressure), Some(150.0)), spaced(None, None));
+    // With spacing, Stretch to Fit still fills the path and Approximate Path still centers the
+    // tiles, with the gaps between them counted and none after the last.
+    for fit in [PatternFit::Stretch, PatternFit::Approximate] {
+        let mut b = scaled_pattern(fit, false, 50.0, Some(Variation::Pressure), Some(300.0));
+        if let BrushKind::Pattern(p) = &mut b.kind {
+            p.spacing = 50.0;
+        }
+        let spans = piece_spans(&draw(&b, &ramp));
+        let (first, last) = (spans[0], spans[spans.len() - 1]);
+        assert!(spans.len() > 1 && near((first.x0 + last.x1) / 2.0, 100.0, 0.01), "{fit:?}: {spans:?}");
+        if fit == PatternFit::Stretch {
+            assert!(near(first.x0, 0.0, 1e-6) && near(last.x1, 200.0, 1e-6), "{spans:?}");
+        }
+    }
+    // Add Space to Fit keeps the tiles apart within the path; Approximate Path centers them on it.
+    for fit in [PatternFit::AddSpace, PatternFit::Approximate] {
+        let out = draw(&scaled_pattern(fit, false, 50.0, Some(Variation::Pressure), Some(300.0)), &ramp);
+        let spans = piece_spans(&out);
+        assert!(spans.len() > 1 && spans.windows(2).all(|w| w[1].x0 >= w[0].x1 - 1e-6), "{fit:?}: {spans:?}");
+        assert!(spans.windows(2).all(|w| w[1].width() > w[0].width()), "{fit:?}: {spans:?}");
+        let (first, last) = (spans[0], spans[spans.len() - 1]);
+        if fit == PatternFit::AddSpace {
+            assert!(first.x0 >= -1e-6 && last.x1 <= 200.0 + 1e-6, "{spans:?}");
+        } else {
+            assert!(near((first.x0 + last.x1) / 2.0, 100.0, 0.01), "{spans:?}");
+        }
+    }
+}
+
+/// Pattern Brush Options: Scale on Tilt, Bearing, Rotation or Stylus Wheel reads only its own
+/// input, half way without it; Fixed, a mode without a second scale and equal scales draw as a
+/// brush without the setting does.
+#[test]
+fn pattern_brush_scale_follows_tilt_bearing_rotation_and_the_wheel() {
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    let draw = |b: &Brush, st: &StrokeLayer| stroke_pieces(&Document::new(1.0, 1.0), b, &bp, st);
+    let brush = |mode: Variation| scaled_pattern(PatternFit::Stretch, false, 50.0, Some(mode), Some(300.0));
+    let wheel = |v: f64| StrokeLayer { wheel: Some(vectorcraft_doc::PressureProfile { points: vec![(0.0, v), (1.0, v)] }), ..stroke(1.0) };
+    // 4 pt tiles: 2 pt tall at 50 %, 12 pt at 300 %.
+    for (mode, st, height) in [
+        (Variation::Tilt, posed(Some(0.0), None, None), 12.0),
+        (Variation::Tilt, posed(Some(1.0), None, None), 2.0),
+        (Variation::Bearing, posed(Some(0.5), Some(90.0), None), 9.5),
+        (Variation::Rotation, posed(None, None, Some(-90.0)), 4.5),
+        (Variation::StylusWheel, wheel(1.0), 12.0),
+        (Variation::StylusWheel, wheel(0.0), 2.0),
+        // Without its own input, half way.
+        (Variation::Tilt, posed(None, Some(90.0), Some(90.0)), 7.0),
+        (Variation::Bearing, posed(Some(0.0), None, Some(90.0)), 7.0),
+        (Variation::Rotation, posed(Some(0.0), Some(90.0), None), 7.0),
+        (Variation::StylusWheel, pressed(vec![(0.0, 1.0), (1.0, 1.0)]), 7.0),
+        (Variation::Pressure, posed(Some(0.0), Some(90.0), Some(90.0)), 7.0),
+    ] {
+        let h = bounds(&draw(&brush(mode), &st)).height();
+        assert!(near(h, height, 1e-6), "{mode:?}: {h}");
+    }
+    // Fixed, a mode without a second scale, and a second scale equal to the first draw what the
+    // brush draws without them.
+    let ramp = pressed(vec![(0.0, 0.0), (1.0, 1.0)]);
+    let plain = draw(&scaled_pattern(PatternFit::Stretch, true, 50.0, None, None), &ramp);
+    for (mode, max) in [(None, Some(300.0)), (Some(Variation::Pressure), None), (Some(Variation::Pressure), Some(50.0))] {
+        assert_eq!(draw(&scaled_pattern(PatternFit::Stretch, true, 50.0, mode, max), &ramp), plain, "{mode:?} {max:?}");
+    }
+    let saved = serde_json::to_value(scaled_pattern(PatternFit::Stretch, false, 50.0, None, None)).unwrap();
+    assert!(saved.get("scale_mode").is_none() && saved.get("scale_max").is_none(), "{saved}");
+    // A mode the scale does not take is read as Fixed, and the second scale is kept within range.
+    let lib = parse_library(&serde_json::json!([
+        {"name": "a", "type": "pattern", "side": rect_art(10.0, 4.0), "scale_mode": "random", "scale_max": 1e308},
+        {"name": "b", "type": "pattern", "side": rect_art(10.0, 4.0), "scale_mode": "stylusWheel", "scale_max": 0.0},
+    ]));
+    let [BrushKind::Pattern(a), BrushKind::Pattern(b)] = [&lib[0].kind, &lib[1].kind] else { panic!("{lib:?}") };
+    assert_eq!((a.scale_mode, a.scale_max, b.scale_mode, b.scale_max), (None, Some(10000.0), Some(Variation::StylusWheel), Some(1.0)));
+    // A stroke sets its own mode and second scale.
+    let mut own = serde_json::Map::new();
+    own.insert("scale_mode".into(), serde_json::json!("pressure"));
+    own.insert("scale_max".into(), serde_json::json!(300.0));
+    let edited = scaled_pattern(PatternFit::Stretch, false, 100.0, None, None).with_stroke_options(&own).unwrap();
+    assert!(matches!(&edited.kind, BrushKind::Pattern(p) if p.scale_range() == (100.0, 300.0)), "{edited:?}");
+}
+
+/// A pattern brush whose scale follows the pen keeps its start, end and corner tiles at the scale
+/// where they are, on open and closed paths, and stays finite at the ends of the scale's range.
+#[test]
+fn pattern_brush_scale_from_the_pen_places_start_end_and_corner_tiles() {
+    let ramp = pressed(vec![(0.0, 0.0), (1.0, 1.0)]);
+    let doc = Document::new(1.0, 1.0);
+    // Start and end tiles, 6 × 4 pt: the start tile at the light end is smaller than the end tile.
+    let mut ends = scaled_pattern(PatternFit::Stretch, false, 50.0, Some(Variation::Pressure), Some(300.0));
+    if let BrushKind::Pattern(p) = &mut ends.kind {
+        (p.start, p.end) = (Some(rect_art(6.0, 4.0)), Some(rect_art(6.0, 4.0)));
+    }
+    let out = stroke_pieces(&doc, &ends, &line(0.0, 0.0, 200.0, 0.0), &ramp);
+    let (start, end) = (out[0].geometric_bounds().unwrap(), out[1].geometric_bounds().unwrap());
+    assert!(near(start.x0, 0.0, 1e-6) && near(end.x1, 200.0, 1e-6), "{start:?} {end:?}");
+    assert!(start.width() < 3.5 && end.width() > 17.0 && start.height() < end.height() / 4.0, "{start:?} {end:?}");
+    // A closed rectangle with corner tiles, on each Fit, and the scale's range at its ends.
+    let mut rect = BezPath::new();
+    rect.move_to((0.0, 0.0));
+    rect.line_to((100.0, 0.0));
+    rect.line_to((100.0, 60.0));
+    rect.line_to((0.0, 60.0));
+    rect.close_path();
+    for fit in [PatternFit::Stretch, PatternFit::AddSpace, PatternFit::Approximate] {
+        for (scale, max) in [(50.0, 300.0), (1.0, 10000.0), (10000.0, 1.0)] {
+            for bp in [&rect, &line(0.0, 0.0, 3.0, 0.0)] {
+                let b = scaled_pattern(fit, true, scale, Some(Variation::Pressure), Some(max));
+                let out = stroke_pieces(&doc, &b, bp, &ramp);
+                assert!(!out.is_empty(), "{fit:?} {scale} {max}");
+                let r = bounds(&out);
+                assert!([r.x0, r.y0, r.x1, r.y1].iter().all(|v| v.is_finite()), "{fit:?} {scale} {max}: {r:?}");
+            }
+        }
+    }
+    // On the rectangle the corner tiles grow with the pressure: the first corner's tile is smaller
+    // than the last one's.
+    let b = scaled_pattern(PatternFit::Stretch, true, 50.0, Some(Variation::Pressure), Some(300.0));
+    let out = stroke_pieces(&doc, &b, &rect, &ramp);
+    let fixed = stroke_pieces(&doc, &scaled_pattern(PatternFit::Stretch, true, 50.0, None, None), &rect, &ramp);
+    assert_ne!(out, fixed);
+    let corner = |n: &Node| n.geometric_bounds().map_or(0.0, |r| r.width().max(r.height()));
+    let corners: Vec<f64> = out.iter().take(4).map(corner).collect();
+    assert!(corners[0] < corners[3], "{corners:?}");
+    // The side tiles start half the corner tile beside them away from the corner: 1.5 pt from the
+    // first corner, where the 6 pt corner tile is drawn at 50 %, not half the largest corner tile.
+    let first_side = out.get(4).and_then(Node::geometric_bounds);
+    assert!(first_side.is_some_and(|r| near(r.x0, 1.5, 1e-3)), "{first_side:?}");
+}
+
+/// A start or end tile whose scale follows the pen is placed where it is as long as the scale at
+/// its middle, even when the scale rises again further along and the tile would not fit at the
+/// whole run's length.
+#[test]
+fn pattern_brush_scale_from_the_pen_fits_start_and_end_tiles_where_the_scale_falls_back() {
+    let doc = Document::new(1.0, 1.0);
+    let bp = line(0.0, 0.0, 100.0, 0.0);
+    // From 100 % to 10000 %: 300 % from 5 to 20 pt, 10000 % from 50 pt on; mirrored for the end.
+    let q = 2.0 / 99.0;
+    for (start, points, span) in [
+        (true, vec![(0.0, 0.0), (0.05, q), (0.2, q), (0.5, 1.0), (1.0, 1.0)], (0.0, 18.0)),
+        (false, vec![(0.0, 1.0), (0.5, 1.0), (0.8, q), (0.95, q), (1.0, 0.0)], (82.0, 100.0)),
+    ] {
+        let mut b = scaled_pattern(PatternFit::Stretch, false, 100.0, Some(Variation::Pressure), Some(10000.0));
+        if let BrushKind::Pattern(p) = &mut b.kind {
+            let tile = Some(rect_art(6.0, 4.0));
+            (p.start, p.end) = if start { (tile, None) } else { (None, tile) };
+        }
+        // The 6 pt tile at 300 %: 18 pt long, its middle where the scale is 300 %.
+        let out = stroke_pieces(&doc, &b, &bp, &pressed(points));
+        let r = out.first().and_then(Node::geometric_bounds);
+        assert!(r.is_some_and(|r| near(r.x0, span.0, 1e-6) && near(r.x1, span.1, 1e-6)), "start {start}: {r:?}");
+    }
+    // 400 % at the start, 100 % from 15 to 20 pt, 400 % from 40 pt on, mirrored for the end: a 30 pt
+    // tile at 100 % fits at its middle, although at the scale at its first length's middle it is as
+    // long as that length.
+    for (start, points, span) in [
+        (true, vec![(0.0, 1.0), (0.15, 0.0), (0.2, 0.0), (0.4, 1.0), (1.0, 1.0)], (0.0, 30.0)),
+        (false, vec![(0.0, 1.0), (0.6, 1.0), (0.8, 0.0), (0.85, 0.0), (1.0, 1.0)], (70.0, 100.0)),
+    ] {
+        let mut b = scaled_pattern(PatternFit::Stretch, false, 100.0, Some(Variation::Pressure), Some(400.0));
+        if let BrushKind::Pattern(p) = &mut b.kind {
+            let tile = Some(rect_art(30.0, 4.0));
+            (p.start, p.end) = if start { (tile, None) } else { (None, tile) };
+        }
+        let out = stroke_pieces(&doc, &b, &bp, &pressed(points));
+        let r = out.first().and_then(Node::geometric_bounds);
+        assert!(r.is_some_and(|r| near(r.x0, span.0, 1e-6) && near(r.x1, span.1, 1e-6)), "start {start}: {r:?}");
+    }
+}
+
+/// On a closed path, a tile that Approximate Path starts before the path's start takes the scale
+/// recorded at the end of the stroke there, where the tile is drawn.
+#[test]
+fn pattern_brush_scale_from_the_pen_wraps_before_a_closed_paths_start() {
+    let doc = Document::new(1.0, 1.0);
+    let b = scaled_pattern(PatternFit::Approximate, false, 50.0, Some(Variation::Pressure), Some(300.0));
+    // Light over the first 90 % of the stroke, heavy at its end.
+    let st = pressed(vec![(0.0, 0.0), (0.9, 0.0), (1.0, 1.0)]);
+    let mut before = 0;
+    for r in (100..=120).map(f64::from) {
+        // A circle of radius `r` as 720 sides, from (r, 0) on towards +y.
+        let mut bp = BezPath::new();
+        bp.move_to((r, 0.0));
+        for i in 1..720 {
+            let a = std::f64::consts::TAU * f64::from(i) / 720.0;
+            bp.line_to((r * a.cos(), r * a.sin()));
+        }
+        bp.close_path();
+        let out = stroke_pieces(&doc, &b, &bp, &st);
+        let Some(first) = out.first().and_then(Node::geometric_bounds) else { panic!("{r}: no tiles") };
+        if first.y0 < -0.5 {
+            // The 4 pt tall tile is 2 pt tall at the light 50 % and nearly 12 pt at the heavy end.
+            before += 1;
+            assert!(first.x1 > r + 3.0, "{r}: {first:?}");
+        }
+    }
+    assert!(before > 0, "no first tile starts before the path's start");
+}
+
+/// On a closed path, a tile over the path's start follows the scale on both sides of the start,
+/// even when the scale is the same at the tile's ends, its middle and every pen sample within it.
+#[test]
+fn pattern_brush_scale_from_the_pen_changes_where_a_closed_path_wraps_round() {
+    let doc = Document::new(1.0, 1.0);
+    let mut b = scaled_pattern(PatternFit::Approximate, false, 100.0, Some(Variation::Pressure), Some(300.0));
+    if let BrushKind::Pattern(p) = &mut b.kind {
+        p.side = rect_art(54.0, 4.0);
+    }
+    // A closed path 256 pt long without corners, from (0, 0) along +x: its sides in each quarter
+    // turn, and the same turned three more times.
+    let quarter = [(28.0, 0.0), (12.0, 5.0), (4.0, 3.0), (3.0, 4.0), (5.0, 12.0)];
+    let mut bp = BezPath::new();
+    let mut at = (0.0, 0.0);
+    bp.move_to(at);
+    for turn in 0..4 {
+        for &(x, y) in &quarter {
+            let (dx, dy) = match turn {
+                0 => (x, y),
+                1 => (-y, x),
+                2 => (-x, -y),
+                _ => (y, -x),
+            };
+            at = (at.0 + dx, at.1 + dy);
+            if at != (0.0, 0.0) {
+                bp.line_to(at);
+            }
+        }
+    }
+    bp.close_path();
+    // 100 % up to 4 pt before the end, rising to 300 % at the end. Approximate Path places five
+    // 54 pt tiles, the first from 7 pt before the start: at 100 % at both its ends, its middle and
+    // the samples at 4 pt before the start and at the start, but larger from 4 pt before it.
+    let st = pressed(vec![(0.0, 0.0), (252.0 / 256.0, 0.0), (1.0, 1.0)]);
+    let out = stroke_pieces(&doc, &b, &bp, &st);
+    let Some(first) = out.first().and_then(Node::geometric_bounds) else { panic!("no tiles") };
+    // The 4 pt tall tile is 2 pt either side of the path at 100 %, and 5 pt at 1 pt before the
+    // start, where the scale is 250 %.
+    assert!(first.y0 < -3.5, "{first:?}");
+}
+
 /// Definitions from files and commands are kept within their ranges.
 #[test]
 fn sanitize_keeps_values_within_their_ranges() {

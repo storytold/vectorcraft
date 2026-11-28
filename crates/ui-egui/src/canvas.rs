@@ -395,13 +395,24 @@ fn compass(app: &VectorcraftApp, ui: &mut Ui, space: &CanvasSpace) -> Option<Can
         return None;
     }
     let mut turn = space.view.rotation;
-    let rect = RotateView::compass_rect(ui, space.view.rect);
+    let rect = RotateView::compass_rect(ui, clear_of_scroll_bars(app, ui, space.view.rect));
     RotateView::new(tl!("Rotate View"), Bind::bound(&mut turn), false).show_at(ui, rect);
     (turn != space.view.rotation).then(|| {
         let mut view = space.view;
         view.rotation = turn;
         view
     })
+}
+
+/// `rect` without the strip the vertical scroll bar takes along its right edge (the bar's thickness and its margin,
+/// the sizes `CanvasScrollbars` draws with), in the screen modes that show the scroll bars.
+fn clear_of_scroll_bars(app: &VectorcraftApp, ui: &Ui, rect: egui::Rect) -> egui::Rect {
+    if app.ui.screen_mode >= 2 {
+        return rect;
+    }
+    let env = Env::of(ui);
+    let strip = env.tokens.size.icon.md + env.tokens.space.gap.tight;
+    egui::Rect::from_min_max(rect.min, egui::pos2((rect.right() - strip).max(rect.left()), rect.bottom()))
 }
 
 /// The scroll bars along the right and bottom edges (Normal and Full Screen with Menu Bar): the view

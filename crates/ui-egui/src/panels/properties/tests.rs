@@ -181,6 +181,34 @@ fn global_edit_starting_closes_the_quick_action_options() {
     assert!(!panel.app().ui.properties_panel.global_edit_open && !panel.shows(&results), "the options stay closed once Global Edit stops");
 }
 
+/// The Global Edit Options are two groups, Match and On Artboards, and the Results line: the On Artboards caption is a
+/// stack gap below the Size option, and the Results line a stack gap below Include Objects On Canvas.
+#[test]
+fn global_edit_options_groups_are_a_stack_gap_apart() {
+    use craft::ui::contract::Role;
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let stack = std::rc::Rc::new(std::cell::Cell::new(0.0));
+    let seen = std::rc::Rc::clone(&stack);
+    craft::ui::testing::Fixture::new(move |ui| seen.set(craft::ui::runtime::env::Env::of(ui).tokens.space.gap.stack)).frame(vec![]);
+    let stack = stack.get();
+    assert!(stack > 0.0, "the interface resolved its stack gap");
+    let mut app = new_app();
+    let a = rect(&mut app, 20.0, 20.0, 40.0, 40.0);
+    rect(&mut app, 200.0, 20.0, 40.0, 40.0);
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    let mut panel = Panel::new(app, super::appearance_section::global_edit_row);
+    panel.click("Global Edit Options");
+    let results = global_edit_results(2);
+    assert!(panel.shows(&results), "the options open");
+    let size = panel.rect_role("Size", Role::CHECK_BOX);
+    let caption = panel.rect_role("On Artboards", Role::LABEL);
+    let canvas = panel.rect_role("Include Objects On Canvas", Role::CHECK_BOX);
+    let line = panel.rect(&results);
+    let (above, below) = (caption.top() - size.bottom(), line.top() - canvas.bottom());
+    assert!(above >= stack - 0.5, "On Artboards is {above} below Size, under the stack gap {stack}");
+    assert!(below >= stack - 0.5, "Results is {below} below the last option, under the stack gap {stack}");
+}
+
 /// The options' Results count is found once per document revision, options and selected
 /// object, not every frame; another selected object or other options find it again.
 #[test]

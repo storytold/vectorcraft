@@ -2536,6 +2536,9 @@ file-filter	Templates	模板
 	Only Web Colors	仅 Web 颜色
 	Opacity	不透明度
 	Show Opacity	显示不透明度
+	Show Hex Field	显示十六进制字段
+	Hex or CSS color	十六进制或 CSS 颜色
+	Parse Color	解析颜色
 	Opacity & Mask Define Knockout Shape	不透明度与蒙版定义挖空形状
 	Opacity Mask	不透明度蒙版
 	Opacity Mask Info	不透明度蒙版信息
@@ -5383,6 +5386,7 @@ imageTrace	Outline	轮廓
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必须是 hue、saturation、brightness、red、green 或 blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` 必须是 none、oklch 或 hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要将 sRGB 用作 RGB 工作空间
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` 必须是十六进制颜色 (#rgb、#rgba、#rrggbb 或 #rrggbbaa)，或不超过 48 个字符的 CSS rgb()、hsl() 或 oklch() 颜色
 @msg	`{key}` must be true or false	`{key}` 必须是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同时为 true
 @msg	`select` must be true or false	`select` 必须是 true 或 false

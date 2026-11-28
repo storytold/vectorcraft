@@ -473,6 +473,28 @@ fn the_app_bar_gives_up_its_right_hand_controls_in_order() {
     assert!(widest.zip(narrowest).is_some_and(|(w, n)| n >= w - 0.5), "the search keeps its width until it goes: {search_widths:?}");
 }
 
+/// The app bar's right-hand controls stand at least `space.gap.item` apart, the gap between neighboring controls in a
+/// bar, so a hovered control's highlight does not touch the one beside it.
+#[test]
+fn the_app_bar_keeps_its_right_hand_controls_an_item_gap_apart() {
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let app = crate::VectorcraftApp::new(Session::new(), Default::default());
+    let gap = Rc::new(std::cell::Cell::new(0.0_f32));
+    let read = Rc::clone(&gap);
+    let mut bar = Shown::new(app, egui::vec2(1600.0, 600.0), move |app, ui| {
+        read.set(craft::ui::runtime::env::Env::of(ui).tokens.space.gap.item);
+        app.ui(ui);
+    });
+    bar.frame(Vec::new()).frame(Vec::new());
+    assert!(gap.get() > 0.0, "the item gap is read from the theme");
+    let controls = ["Discord", "Search commands", "Choose a workspace"];
+    let rects: Vec<egui::Rect> = controls.iter().map(|c| bar.starting(c).unwrap_or_else(|| panic!("{c} shows")).rect).collect();
+    for pair in rects.windows(2) {
+        let between = pair[1].left() - pair[0].right();
+        assert!(between >= gap.get() - 0.5, "neighboring controls {pair:?} are {between} apart, under the item gap {}", gap.get());
+    }
+}
+
 /// A text the status bar painted, with where it lies.
 #[derive(Debug)]
 struct StatusText {

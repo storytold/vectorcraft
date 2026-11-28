@@ -3323,6 +3323,9 @@ liquify-list-end	{0}, {1}	{0} og {1}
 	Fill Color	Fyldfarve
 	Opacity	Opacitet
 	Show Opacity	Vis opacitet
+	Show Hex Field	Vis hex-felt
+	Hex or CSS color	Hex- eller CSS-farve
+	Parse Color	Fortolk farve
 	Stroke Color	Stregfarve
 	Fill Gradient	Fyldgradient
 	Stroke Gradient	Streggradient
@@ -9286,6 +9289,7 @@ variable-list-end	{0}, {1}	{0} og {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` skal være hue, saturation, brightness, red, green eller blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` skal være none, oklch eller hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH kræver sRGB som RGB-arbejdsfarverum
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` skal være en hex-farve (#rgb, #rgba, #rrggbb eller #rrggbbaa) eller en CSS-farve rgb(), hsl() eller oklch() på højst 48 tegn
 @msg	the Color Picker is not open	farvevælgeren er ikke åben
 @msg	the screen color sampler is already open	skærmfarvesampleren er allerede åben
 @msg	this system has no screen color sampler	dette system har ingen skærmfarvesampler

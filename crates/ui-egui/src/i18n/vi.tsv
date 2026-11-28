@@ -2948,6 +2948,9 @@ digits	Hindi	Hindi
 	Only Web Colors	Chỉ màu web
 	Opacity	Độ mờ
 	Show Opacity	Hiện độ mờ
+	Show Hex Field	Hiện trường hex
+	Hex or CSS color	Màu hex hoặc CSS
+	Parse Color	Phân tích màu
 	Opacity & Mask Define Knockout Shape	Độ mờ & Mặt nạ xác định hình dạng Knockout
 	Opacity Mask	Mặt nạ độ mờ
 	Opacity Mask Info	Thông tin mặt nạ độ mờ
@@ -5266,6 +5269,7 @@ theme	Appearance	Giao diện
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` phải là hue, saturation, brightness, red, green hoặc blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` phải là none, oklch hoặc hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` phải là màu hex (#rgb, #rgba, #rrggbb hoặc #rrggbbaa) hoặc màu CSS rgb(), hsl() hoặc oklch() dài tối đa 48 ký tự
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
 @msg	`{name}` has no options	`{name}` không có tùy chọn
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` là không gian làm việc tích hợp sẵn; hãy chọn tên khác

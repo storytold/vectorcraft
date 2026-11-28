@@ -2691,6 +2691,9 @@ file-filter	Templates	Modelli
 	Only Web Colors	Solo colori web
 	Opacity	Opacità
 	Show Opacity	Mostra opacità
+	Show Hex Field	Mostra campo hex
+	Hex or CSS color	Colore hex o CSS
+	Parse Color	Analizza colore
 	Opacity & Mask Define Knockout Shape	Opacità e maschera definiscono la forma di foratura
 	Opacity Mask	Maschera di opacità
 	Opacity Mask Info	Informazioni maschera di opacità
@@ -5294,6 +5297,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve essere hue, saturation, brightness, red, green o blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` deve essere none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` deve essere un colore hex (#rgb, #rgba, #rrggbb o #rrggbbaa) o un colore CSS rgb(), hsl() o oklch() di al massimo 48 caratteri
 @msg	`{k}` must be [x, y]	`{k}` deve essere [x, y]
 @msg	`{name}` has no options	`{name}` non ha opzioni
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` è un'area di lavoro integrata; scegli un altro nome

@@ -571,6 +571,15 @@ pub struct PatternBrush {
     pub end_swatch: Option<String>,
     /// Scale in percent.
     pub scale: f64,
+    /// How the scale varies along a stroke: `None` (Fixed) always `scale`; a mode that follows the
+    /// pen goes from `scale` to [`Self::scale_max`] over the ranges [`Variation`] gives, as an Art
+    /// brush's width does ([`ArtBrush::width_mode`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale_mode: Option<Variation>,
+    /// The second scale (%) of a mode that follows the pen: at the heaviest pressure, upright, at
+    /// 180° or at the wheel's far end (`scale` without one).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale_max: Option<f64>,
     /// Space between tiles in percent of the tile width.
     pub spacing: f64,
     pub fit: PatternFit,
@@ -583,6 +592,15 @@ impl PatternBrush {
     /// The ranges of the scale and of the spacing (%).
     pub const SCALE_RANGE: (f64, f64) = (1.0, 10000.0);
     pub const SPACING_RANGE: (f64, f64) = (0.0, 10000.0);
+
+    /// The scales (%) where the pen reads 0 and 1 for the scale's mode (the lightest and the
+    /// heaviest pressure, for Pressure): `scale` for both unless the scale follows the pen.
+    pub fn scale_range(&self) -> (f64, f64) {
+        match self.scale_mode {
+            Some(m) if m.follows_pen() => (self.scale, self.scale_max.unwrap_or(self.scale)),
+            _ => (self.scale, self.scale),
+        }
+    }
 }
 
 impl Default for PatternBrush {
@@ -606,6 +624,8 @@ impl Default for PatternBrush {
             end_frame: None,
             end_swatch: None,
             scale: 100.0,
+            scale_mode: None,
+            scale_max: None,
             spacing: 0.0,
             fit: PatternFit::Stretch,
             flip_along: false,
@@ -791,6 +811,11 @@ impl Brush {
             }
             BrushKind::Pattern(p) => {
                 p.scale = within(p.scale, PatternBrush::SCALE_RANGE, 100.0);
+                // The scale follows the pen (its pressure, tilt, bearing, rotation or wheel) or stays fixed.
+                if !p.scale_mode.is_some_and(Variation::follows_pen) {
+                    p.scale_mode = None;
+                }
+                p.scale_max = p.scale_max.map(|s| within(s, PatternBrush::SCALE_RANGE, p.scale));
                 p.spacing = within(p.spacing, PatternBrush::SPACING_RANGE, 0.0);
                 for frame in [&mut p.side_frame, &mut p.outer_corner_frame, &mut p.inner_corner_frame, &mut p.start_frame, &mut p.end_frame] {
                     if frame.is_some_and(|f| !valid_tile_frame(f)) {
@@ -846,6 +871,8 @@ struct ArtOptions {
 #[derive(Serialize, Deserialize)]
 struct PatternOptions {
     scale: f64,
+    scale_mode: Option<Variation>,
+    scale_max: Option<f64>,
     spacing: f64,
     fit: PatternFit,
     flip_along: bool,
@@ -873,7 +900,7 @@ impl BrushKind {
                 "brightness_jitter",
             ],
             BrushKind::Art(_) => &["width", "width_mode", "width_max", "flip_along", "flip_across", "overlap", "colorization"],
-            BrushKind::Pattern(_) => &["scale", "spacing", "fit", "flip_along", "flip_across", "colorization"],
+            BrushKind::Pattern(_) => &["scale", "scale_mode", "scale_max", "spacing", "fit", "flip_along", "flip_across", "colorization"],
             BrushKind::Bristle(_) => &[],
         }
     }
@@ -911,6 +938,8 @@ impl BrushKind {
             }),
             BrushKind::Pattern(p) => serde_json::to_value(PatternOptions {
                 scale: p.scale,
+                scale_mode: p.scale_mode,
+                scale_max: p.scale_max,
                 spacing: p.spacing,
                 fit: p.fit,
                 flip_along: p.flip_along,
@@ -940,8 +969,8 @@ impl BrushKind {
             }
             BrushKind::Pattern(p) => {
                 let o: PatternOptions = serde_json::from_value(v)?;
-                (p.scale, p.spacing, p.fit, p.flip_along, p.flip_across, p.colorization) =
-                    (o.scale, o.spacing, o.fit, o.flip_along, o.flip_across, o.colorization);
+                (p.scale, p.scale_mode, p.scale_max, p.spacing) = (o.scale, o.scale_mode, o.scale_max, o.spacing);
+                (p.fit, p.flip_along, p.flip_across, p.colorization) = (o.fit, o.flip_along, o.flip_across, o.colorization);
             }
             BrushKind::Bristle(_) => {}
         }
@@ -1165,7 +1194,7 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
         BrushKind::Bristle(b) => calli::bristle(b, bp, w, stroke, &brush.name),
         BrushKind::Art(a) => warp::art(a, bp, w, stroke),
         BrushKind::Scatter(s) => warp::scatter(s, bp, w, stroke, &brush.name),
-        BrushKind::Pattern(p) => warp::pattern(p, bp, w),
+        BrushKind::Pattern(p) => warp::pattern(p, bp, w, stroke),
     };
     let colorization = brush.kind.colorization();
     for n in &mut out {
