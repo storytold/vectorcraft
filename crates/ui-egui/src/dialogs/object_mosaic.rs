@@ -94,6 +94,15 @@ pub struct Mosaic {
     delete_raster: bool,
 }
 
+/// The warnings the dialog gave for being away from its image, one for each place it shows one.
+#[derive(Default)]
+struct Away {
+    /// OK's held refusal.
+    held: Option<Label>,
+    /// Use Ratio's note.
+    note: Option<Label>,
+}
+
 /// Create Object Mosaic on the dialog host.
 pub struct ObjectMosaicDialog {
     id: DialogId,
@@ -108,9 +117,9 @@ pub struct ObjectMosaicDialog {
     note: Option<Label>,
     /// Use Ratio was pressed; [`pump`] works out the counts.
     use_ratio: bool,
-    /// Why OK or Use Ratio last found the dialog away from its image (another drawing, or the image
-    /// not selected). Back on the image, [`sync`] takes that warning away.
-    away: Option<Label>,
+    /// Why OK and why Use Ratio last found the dialog away from its image (another drawing, or the
+    /// image not selected), each warning on its own. Back on the image, [`sync`] takes them away.
+    away: Away,
     /// OK, until [`pump`] has run the command on it.
     held: HeldAnswer<Mosaic>,
 }
@@ -253,7 +262,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
             dialogs.with(|host| {
                 let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() else { return };
                 if away.is_some() {
-                    dialog.away = away;
+                    dialog.away.note = away;
                 }
                 match counts {
                     Ok((cols, rows)) => {
@@ -277,7 +286,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
             dialogs.with(|host| {
                 if let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() {
                     if away.is_some() {
-                        dialog.away = away;
+                        dialog.away.held = away;
                     }
                     dialog.held.answer(answer);
                 }
@@ -297,7 +306,7 @@ impl ObjectMosaicDialog {
             lengths,
             note: None,
             use_ratio: false,
-            away: None,
+            away: Away::default(),
             held: HeldAnswer::new(),
         }
     }
@@ -318,11 +327,14 @@ impl ObjectMosaicDialog {
     /// The dialog is on its image again: the warning that being away gave goes. A refusal of the
     /// values themselves, and one after Revert or Undo (which never comes back), stays.
     fn came_back(&mut self) {
-        let Some(away) = self.away.take() else { return };
-        if self.note.as_ref().is_some_and(|n| n.as_str() == away.as_str()) {
+        if let Some(away) = self.away.note.take()
+            && self.note.as_ref().is_some_and(|n| n.as_str() == away.as_str())
+        {
             self.note = None;
         }
-        if self.held.refusal().is_some_and(|(reason, _)| reason.as_str() == away.as_str()) {
+        if let Some(away) = self.away.held.take()
+            && self.held.refusal().is_some_and(|(reason, _)| reason.as_str() == away.as_str())
+        {
             self.held.clear_refusal();
         }
     }
@@ -1036,5 +1048,25 @@ mod tests {
 
         ok(&mut app);
         assert_eq!(mosaic(&app), Some((100.0, 50.0, 4)));
+    }
+
+    /// OK's warning and Use Ratio's are taken away each on its own: a later, different one from
+    /// Use Ratio leaves OK's to go as well once the dialog is back on its image.
+    #[test]
+    fn both_away_warnings_go_on_return_to_the_original_image() {
+        let mut app = app_with_image();
+        let source = image_id(&app);
+        open(&mut app, &json!({"columns": 2, "rows": 2})).unwrap();
+        add_image(&mut app);
+        ok(&mut app);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("select.set", json!({"ids": []})).unwrap();
+        use_ratio(&mut app);
+        sync(&mut app);
+        assert!(warning(&mut app).is_some(), "with no image selected the dialog is still away");
+        app.run("select.set", json!({"ids": [source]})).unwrap();
+        sync(&mut app);
+        assert_eq!(with_dialog(&mut app, |d| d.held.refusal().is_none() && d.note.is_none()), Some(true), "{:?}", warning(&mut app));
     }
 }
