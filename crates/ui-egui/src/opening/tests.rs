@@ -4,6 +4,75 @@ use super::*;
 use crate::Services;
 use crate::tests::picks::{cancel_dialog, close_shown, draw_dialogs, open_dialogs, show_question};
 
+/// #9286: both real open consumers apply the same preference/explicit-option precedence and bind
+/// the carried program to rendered text, rather than merely storing the requested option.
+#[test]
+fn synchronous_and_background_pdf_open_honor_embedded_font_preferences_and_overrides() {
+    use std::fmt::Write as _;
+    use vectorcraft_doc::{FILE_FONT_MIME, NodeKind};
+    use vectorcraft_testkit::pdf::{PdfPage, first_extra, pdf_with};
+    use vectorcraft_text::{FileFontInfo, FileGlyph, build_file_font};
+
+    let mut glyph = FileGlyph { ch: 'x', outline: Default::default(), advance: 600.0 };
+    glyph.outline.move_to((0.0, 0.0));
+    glyph.outline.line_to((500.0, 0.0));
+    glyph.outline.line_to((500.0, 700.0));
+    glyph.outline.line_to((0.0, 700.0));
+    glyph.outline.close_path();
+    let info = FileFontInfo { family: "VectorCraftUIOpenPreference".into(), style: "Regular".into(), ..Default::default() };
+    let font_bytes = build_file_font(&info, &[glyph]).unwrap();
+    let mut hex = String::with_capacity(font_bytes.len() * 2);
+    for b in font_bytes {
+        write!(hex, "{b:02x}").unwrap();
+    }
+    let n = first_extra(1);
+    let page = PdfPage { resources: format!("/Font << /F1 {n} 0 R >>"), ..PdfPage::new(100.0, 100.0, "BT /F1 24 Tf 10 40 Td (x) Tj ET") };
+    let font = format!(
+        "<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+VectorCraftUIOpenPreference /FirstChar 120 /LastChar 120 /Widths [600] /Encoding /WinAnsiEncoding /FontDescriptor {} 0 R >>",
+        n + 1
+    );
+    let descriptor = format!(
+        "<< /Type /FontDescriptor /FontName /ABCDEF+VectorCraftUIOpenPreference /Flags 34 /FontBBox [0 -200 500 900] /ItalicAngle 0 /Ascent 900 /Descent -200 /CapHeight 700 /StemV 80 /FontFile2 {} 0 R >>",
+        n + 2
+    );
+    let program = format!("<< /Length {} /Filter /ASCIIHexDecode >>\nstream\n{hex}>\nendstream", hex.len() + 1);
+    let bytes = pdf_with(&[page], &[&font, &descriptor, &program], None);
+    for background in [false, true] {
+        for (preference, explicit, expected) in [(false, None, false), (true, None, true), (false, Some(true), true), (true, Some(false), false)] {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
+            app.session.prefs.pdf_import_embedded_fonts = preference;
+            let mut params = json!({"textAs": "text"});
+            if let Some(value) = explicit {
+                params["embeddedFonts"] = json!(value);
+            }
+            if background {
+                start_with(&mut app, "embedded-preference.pdf", bytes.clone(), params);
+                open_ready(&mut app);
+            } else {
+                crate::io::open_document(&mut app, "embedded-preference.pdf", &bytes, None, &params).unwrap();
+            }
+            let doc = &app.session.doc().unwrap().doc;
+            let db = vectorcraft_text::FontDb::global();
+            let mut text_count = 0;
+            let mut carries_font = false;
+            doc.walk(|node| {
+                if let NodeKind::Text(text) = &node.kind {
+                    assert_eq!(text.plain_text(), "x", "imported text content");
+                    text_count += 1;
+                    carries_font |= vectorcraft_text::layout(db, text).glyphs.iter().any(|glyph| db.is_file_font(glyph.font_id));
+                }
+            });
+            assert_eq!(text_count, 1, "text survives: background={background}, preference={preference}, explicit={explicit:?}");
+            assert_eq!(carries_font, expected, "rendered font: background={background}, preference={preference}, explicit={explicit:?}");
+            assert_eq!(
+                doc.images.values().any(|blob| blob.mime == FILE_FONT_MIME),
+                expected,
+                "owned font program: background={background}, preference={preference}, explicit={explicit:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn long_operation_busy_while_a_file_opens_or_a_background_save_runs() {
     let mut app = VectorcraftApp::new(Session::new(), Services::default());

@@ -149,9 +149,10 @@ pub fn opens_as(name: &str) -> Option<OpensAs> {
 /// Open a document through the engine loader with the `document.open` options in `p` →
 /// `document.open`'s result, or `{dialog}` when Edit › Color Settings asks about its profile first
 /// ([`dialogs::profile_mismatch::open_or_ask`]): the document then opens, and goes on the recent
-/// files, once the question is answered. A PDF opens with the `pdfTextAs` preference unless `p`
-/// gives `textAs` ([`dialogs::import_pdf::with_preferred_text_as`]).
+/// files, once the question is answered. PDF font and Text As preferences supply missing options;
+/// explicit `embeddedFonts` and `textAs` choices keep their precedence.
 pub fn open_document(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
+    let p = app.session.prefs.with_pdf_font_choice(p);
     let p = &dialogs::import_pdf::with_preferred_text_as(app, name, bytes, p);
     let update_links = app.session.prefs.update_links == "automatically";
     let low_res_proxy_eps = app.session.prefs.low_res_proxy_eps;
@@ -653,7 +654,7 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
             note_recent(app, path);
             return Ok(Value::Null);
         }
-        let params = crate::dialogs::import_pdf::with_preferred_text_as(app, path, &bytes, &Value::Null);
+        let params = crate::dialogs::import_pdf::with_preferred_text_as(app, path, &bytes, Value::Null);
         return Ok(crate::opening::start_with(app, path, bytes, params));
     }
     let r = open_bytes_with(app, path, &bytes, Some(path.to_string()), p)?;

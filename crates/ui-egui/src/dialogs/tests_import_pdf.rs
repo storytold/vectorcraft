@@ -493,7 +493,7 @@ fn a_pdf_opened_without_the_dialog_takes_the_pdf_text_preference() {
     io::open_document(&mut app, "one.pdf", &one, None, &json!({"textAs": "text"})).unwrap();
     opened(&mut app);
     assert_eq!(type_objects(&app), 1, "an open that gives textAs keeps it");
-    let p = import_pdf::with_preferred_text_as(&app, "one.ai", &one, &serde_json::Value::Null);
+    let p = import_pdf::with_preferred_text_as(&app, "one.ai", &one, serde_json::Value::Null);
     assert!(p.is_null(), "a .ai file opens as it says: {p}");
     // In the dialog too, a .ai file starts from Editable, and its choice is not kept for PDFs.
     assert!(import_pdf::offer(&mut app, "two.ai", &two_pages(false, None), None, None));
