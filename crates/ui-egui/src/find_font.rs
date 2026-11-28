@@ -511,7 +511,7 @@ impl StackDialog for FindFontDialog {
                 .map_or_else(String::new, |f| format!("{} {} ({})", f["family"].as_str().unwrap_or(""), f["style"].as_str().unwrap_or(""), f["runs"]))
         };
         let row_text = |at: usize| shown.get(at).and_then(|&i| rows.get(i)).map_or_else(String::new, |r| row_label(&r.family, &r.style));
-        let out = Dialog::new(tl!("Find Font").to_string()).buttons(buttons).show(ui, |ui, _| {
+        let out = Dialog::new(tl!("Find Font").to_string()).buttons(buttons).close_on_enter(true).show(ui, |ui, _| {
             Stack::new().show(ui, |ui, _| {
                 crate::panels::section(heading.clone()).show(ui, |ui, _| {
                     let docs = Lines { len: count, text: &doc_text };
@@ -1461,6 +1461,28 @@ mod tests {
         let (_, offered) = document_fonts(&mut app, true);
         assert_current(&mut app, true, offered, "the composite font taken out");
         assert_eq!(row(&app)["status"], "missing");
+    }
+
+    /// Enter in the field that has the focus is Done: the dialog closes, and no Find or Change runs.
+    #[test]
+    fn enter_is_done() {
+        let mut app = new_app();
+        app.session.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        app.session.execute("text.create", &json!({"x": 10, "y": 40, "text": "Hi", "font": "Inter"})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let is_open = |app: &VectorcraftApp| app.dialogs().unwrap().with(|host| host.get::<FindFontDialog>().is_some());
+        open(&mut app);
+        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
+        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
+        assert!(is_open(&app));
+        assert!(ctx.memory(|m| m.focused()).is_some(), "a field of the dialog has the focus");
+        let undo = app.session.active().unwrap().history.undo.len();
+        let key = |pressed| egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![key(true)]);
+        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![key(false)]);
+        crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
+        assert!(!is_open(&app), "Enter closes Find Font");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "Enter changes no font");
     }
 
     /// Another document in front, and pattern editing entered and canceled, each give the list of

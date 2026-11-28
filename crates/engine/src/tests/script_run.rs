@@ -166,7 +166,8 @@ fn an_error_names_the_script_its_place_and_kind() {
     let e = run(&mut s, "var = 1;").unwrap_err().to_string();
     assert!(e.starts_with("t.js: line 1,") && e.ends_with("(syntax)"), "{e}");
     assert!(run(&mut s, "new Window('dialog');").unwrap_err().to_string().contains("`vc`"));
-    assert!(run(&mut s, "activeDocument;").unwrap_err().to_string().contains("`app.activeDocument`"));
+    // The application's members need no `app.`, so naming one alone is not an error.
+    assert_eq!(run(&mut s, "activeDocument;").unwrap()["ok"], true);
     assert!(run(&mut s, "#targetengine 9x\n1").unwrap_err().to_string().contains("#targetengine needs a name of letters, digits and _"));
     assert_eq!(s.script_report().unwrap()["line"], 1);
 }
@@ -181,7 +182,7 @@ fn failed_script_report_keeps_message_and_adds_origin() {
         ("throw new Error('invalid array length');", "thrown", "Error: invalid array length", "script"),
         ("throw new RangeError('invalid array length');", "thrown", "RangeError: invalid array length", "script"),
         ("throw 'invalid array length';", "thrown", "invalid array length", "script"),
-        ("throw 'ReferenceError: app is not defined';", "thrown", "ReferenceError: app is not defined", "script"),
+        ("throw 'ReferenceError: Window is not defined';", "thrown", "ReferenceError: Window is not defined", "script"),
         ("try { new Array(-1); } catch (e) { throw new Error(e.message); }", "thrown", "Error: invalid array length", "script"),
         ("new Array(-1);", "thrown", "RangeError: invalid array length", "built-in"),
         ("try { new Array(-1); } catch (e) { throw e; }", "thrown", "RangeError: invalid array length", "built-in"),
@@ -327,8 +328,45 @@ fn a_js_script_reads_ecmascript_2015_and_a_jsx_script_does_not() {
     assert_eq!(modern["log"], json!([2]), "{modern}");
     let legacy = s.execute("script.run", &path(&write("third.jsx", "#targetengine kept\nvc.log(k2);\nconst c = 1;")));
     assert!(legacy.unwrap_err().to_string().contains("SyntaxError"));
-    let legacy = s.execute("script.run", &path(&write("fourth.jsx", "#targetengine kept\nvc.log(k2 + kept);"))).unwrap();
-    assert_eq!(legacy["log"], json!([3]), "{legacy}");
+    let fourth = "#targetengine kept\nvc.log(k2 + kept);\ntry { eval('let x = 1'); } catch (e) { vc.log(e.name); }";
+    let legacy = s.execute("script.run", &path(&write("fourth.jsx", fourth))).unwrap();
+    assert_eq!(legacy["log"], json!([3, "SyntaxError"]), "{legacy}");
+    // `for`-`of` and destructuring, in a new engine and in one a `.jsx` script made.
+    let loops = "var s = 0;\nfor (const [a, { b = 1 }] of [[1, {}], [2, { b: 3 }]]) s += a + b;\nvar { p, q: [r] } = { p: 4, q: [5] };\nvc.log(s);\nvc.log(p + r);\nvc.log(typeof Symbol);";
+    let r = s.execute("script.run", &path(&write("loops.js", loops))).unwrap();
+    assert_eq!(r["log"], json!([7, 9, "function"]), "{r}");
+    let kept = s
+        .execute("script.run", &path(&write("fifth.js", "#targetengine kept\nfor (const [i, ...j] of [[kept, 'x', 'y']]) vc.log(i + j.join(''));")))
+        .unwrap();
+    assert_eq!(kept["log"], json!(["1xy"]), "{kept}");
+    let e = s.execute("script.run", &path(&write("pattern.jsx", "var [a] = [1];"))).unwrap_err().to_string();
+    assert!(e.contains("SyntaxError"), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_js_script_reads_object_literal_extensions_and_function_names_and_a_jsx_script_does_not() {
+    let dir = fresh_folder("es2015-objects");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let modern = "var k = 'b';\nvar a = 1;\nvar o = { a, [k + 1]: 2, m() { return 3; }, f: () => 4 };\n\
+                  vc.log(o.a + o.b1 + o.m() + o.f());\nvc.log(o.m.name + ',' + o.f.name + ',' + o.f.bind().name + ',' + Math.max.name);\n";
+    let r = s.execute("script.run", &path(&write("objects.js", modern))).unwrap();
+    assert_eq!(r["log"], json!([10, "m,f,bound f,max"]), "{r}");
+    for (name, text) in [("short.jsx", "var a = 1; var o = { a };"), ("computed.jsx", "var o = { ['b']: 1 };"), ("method.jsx", "var o = { m() {} };")]
+    {
+        let e = s.execute("script.run", &path(&write(name, text))).unwrap_err().to_string();
+        assert!(e.contains("SyntaxError"), "{name}: {e}");
+    }
+    let legacy = s.execute("script.run", &path(&write("names.jsx", "var f = function () {};\nvc.log(f.hasOwnProperty('name'));"))).unwrap();
+    assert_eq!(legacy["log"], json!([false]), "{legacy}");
+    // Script text given without a file keeps the ExtendScript language.
+    assert!(run(&mut s, "var a = 1; var o = { a };").unwrap_err().to_string().contains("SyntaxError"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -352,6 +390,67 @@ fn a_js_script_reads_optional_chains_and_coalescing_and_a_jsx_script_does_not() 
     }
     // Script text given without a file keeps the ExtendScript language.
     assert!(run(&mut s, "vc.log(null ?? 1);").unwrap_err().to_string().contains("SyntaxError"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_js_script_runs_generators_and_a_jsx_script_does_not_read_them() {
+    let dir = fresh_folder("generators");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    let source = "function* ids(n) { for (let i = 0; i < n; i++) yield `id${i}`; }\n\
+                  function* all() { yield* ids(2); yield* [vc.document ? 'doc' : 'none']; return 'end'; }\n\
+                  const it = all(); let s;\nwhile (!(s = it.next()).done) vc.log(s.value);\nvc.log(s.value);\n";
+    let r = s.execute("script.run", &path(&write("gen.js", source))).unwrap();
+    assert_eq!(r["log"], json!(["id0", "id1", "doc", "end"]), "{r}");
+    let e = s.execute("script.run", &path(&write("gen.jsx", "function* g() {}"))).unwrap_err().to_string();
+    assert!(e.contains("SyntaxError"), "{e}");
+    // `yield` stays a name in a `.jsx` script.
+    let r = s.execute("script.run", &path(&write("name.jsx", "var yield = 4; vc.log(yield);"))).unwrap();
+    assert_eq!(r["log"], json!([4]), "{r}");
+    // An engine a `.jsx` run made has no generator built-ins for a later `.js` run.
+    s.execute("script.run", &path(&write("keep.jsx", "#targetengine genkept\nvar a = 1;"))).unwrap();
+    let e = s.execute("script.run", &path(&write("keep.js", "#targetengine genkept\nfunction* g() {}\ng();"))).unwrap_err().to_string();
+    assert!(e.contains("TypeError"), "{e}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn every_script_reads_e4x_and_has_the_xml_objects() {
+    let dir = fresh_folder("e4x");
+    let write = |name: &str, text: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, text).unwrap();
+        p.to_string_lossy().into_owned()
+    };
+    let mut s = two_docs();
+    let path = |p: &str| json!({"path": p});
+    // Script text: literals, selectors, for each and the four constructors.
+    let text = "var x = <list><item id=\"a\">1</item><item id=\"b\">2</item></list>;\n\
+                vc.log(x.item.length() + ' ' + x.item.(@id == 'b').toString() + ' ' + x..item[0].@id);\n\
+                var sum = 0; for each (var i in x.item) sum += Number(i); vc.log(sum);\n\
+                vc.log(new XML('<a><b/></a>').b.length() + new XMLList('<c/><c/>').length());\n\
+                vc.log(new Namespace('p', 'urn:p').prefix + ' ' + new QName('urn:q', 'n').localName + ' ' + isXMLName('ok'));\n\
+                vc.log(typeof setDefaultXMLNamespace + ' ' + (1 < 2));\n";
+    let r = run(&mut s, text).unwrap();
+    assert_eq!(r["log"], json!(["2 2 a", 3, 3, "p n true", "function true"]), "{r}");
+    // A .js file, a file it includes, eval, Function and $.evalFile read XML as well.
+    write("lib.jsxinc", "var fromLib = <lib n=\"7\"/>.@n.toString();\n");
+    write("more.jsx", "<m>{fromLib}</m>.toString();\n");
+    let modern = "#include \"lib.jsxinc\"\nlet tag = <t>{fromLib}</t>;\nvc.log(tag.toString());\n\
+                  vc.log(eval('<e>5</e>').toString());\nvc.log(new Function('return <f>6</f>.toString()')());\n\
+                  vc.log($.evalFile(File($.fileName).parent + '/more.jsx'));\n";
+    let r = s.execute("script.run", &path(&write("modern.js", modern))).unwrap();
+    assert_eq!(r["log"], json!(["7", "5", "6", "7"]), "{r}");
+    // A named engine first made by a .js run gives a later .jsx run the XML objects too.
+    s.execute("script.run", &path(&write("first.js", "#targetengine xmlkept\nlet k = 1;"))).unwrap();
+    let later = s.execute("script.run", &path(&write("second.jsx", "#targetengine xmlkept\nvc.log(XML('<k>2</k>').toString());"))).unwrap();
+    assert_eq!(later["log"], json!(["2"]), "{later}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -1804,6 +1804,9 @@ file-filter	Swatch libraries	Színminta-könyvtárak
 file-filter	Flattener presets	Lapítási előbeállítások
 file-filter	PDF presets	PDF-előbeállítások
 file-filter	Print presets	Nyomtatási előbeállítások
+file-filter	Tracing presets	Vektorizálási előbeállítások
+file-filter	Action sets	Műveletkészletek
+file-filter	Composite fonts	Összetett betűtípusok
 file-filter	Preferences	Beállítások
 file-filter	Export presets	Exportálási előbeállítások
 file-filter	SVG Compressed	Tömörített SVG
@@ -2068,6 +2071,17 @@ file-filter	Templates	Sablonok
 	Graphic Styles (4)	Grafikai stílusok (4)
 	Graphic Styles Options	Grafikai stílusok beállításai
 	Graphics	Grafikák
+	Show Contrast	Kontraszt megjelenítése
+	Contrast For	Kontraszt ehhez
+	Normal Text	Normál szöveg
+	Large Text	Nagy szöveg
+	Contrast Background	Kontraszt háttere
+	Behind Selection	A kijelölés mögött
+	Current Color	Aktuális szín
+	Pass	Megfelel
+	Fail	Nem felel meg
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 szerinti minimális kontraszt: normál szöveg AA 4.5:1 (1.4.3) és AAA 7:1 (1.4.6), nagy szöveg AA 3:1 és AAA 4.5:1, grafikák és vezérlők AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	A háttér színét a kijelölés közepén olvassa le a program.
 	Graphics Processor	Grafikus processzor
 	Graphics: {adapter}	Grafika: {adapter}
 	Gravity	Gravitáció
@@ -3915,7 +3929,7 @@ mark-style	Japanese	Japán
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	A Kijelölés › Azonos › Kitöltőszín, Körvonalszín és Kitöltés és körvonal csak egy globális vagy direkt színminta azonos árnyalatát találja meg, nem bármely árnyalatát.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Megjeleníti a kezdőképernyőt, ha nincs megnyitott dokumentum; kikapcsolva az ablak üres marad, amíg a Kezdőképernyő gombra nem kattint.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Az objektumokat körvonalaikkal és alakmódosító effektusaikkal együtt méri a mérethez, a pozícióhoz és az igazításhoz; az árnyékokat, ragyogásokat és elmosásokat nem méri.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100%-os nagyításnál a dokumentum egy hüvelyke 72 helyett 96 képernyőpontot foglal el.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100%-os nagyításnál a dokumentum egy hüvelyke a kijelző egy hüvelykét tölti ki, vagy 96 képernyőpontot, ha a rendszer nem ad meg használható kijelzőméretet.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Ha a Kijelölés eszközzel duplán kattint egy csoportra, útvonalra vagy képre, az elkülönítő módban nyílik meg.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	A mintázatos kitöltések és körvonalak a grafikával együtt alakulnak át, hacsak egy átalakítás vagy az Átalakítás panel menüje mást nem választ.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Az élő sarkok sugara a grafikával együtt méreteződik, hacsak a méretezés mást nem választ.
@@ -5330,6 +5344,8 @@ mark-style	Japanese	Japán
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	A VectorCraft legutóbb nem szabályosan lépett ki. Ezekben a dokumentumokban mentetlen módosítások voltak:
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-dokumentumok: egyetlen zárolt objektum, amely a fájl változásakor frissül.
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft általános CMYK (SWOP-szerű)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft mázolt CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft mázolatlan CMYK (FOGRA52)
 	VectorCraft Help…	VectorCraft súgó…
 	VectorCraft on getartcraft.com	A VectorCraft a getartcraft.com oldalon
 	VectorCraft on GitHub	A VectorCraft a GitHubon
@@ -5760,6 +5776,14 @@ imageTrace	Outline	Körvonal
 	The script asks to read and write a folder you choose, with everything in it.	A parancsfájl egy Ön által választott mappa és teljes tartalma olvasását és írását kéri.
 	Allow Once	Engedélyezés egyszer
 	Always Allow This Script	A parancsfájl engedélyezése mindig
+	No script has kept file access.	Egy parancsfájlnak sincs megőrzött fájlhozzáférése.
+	Read file	Fájl olvasása
+	Read and write file	Fájl olvasása és írása
+	Read and write folder	Mappa olvasása és írása
+	Revoke	Engedély visszavonása
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Az Engedély visszavonása a parancsfájl minden verziójához megőrzött hozzáférést eltávolítja. Egy mappához való hozzáférés a teljes tartalmára kiterjed.
+@msg	Script file access revoked	A parancsfájl fájlhozzáférése visszavonva
+@msg	The script file access was already revoked	A parancsfájl fájlhozzáférése már vissza volt vonva
 	Deny	Elutasítás
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
@@ -5937,6 +5961,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	a parancsfájl fájlpárbeszédpaneléhez tartozó `answer` értéke a következők egyike kell legyen: once, always, deny, stop
 @msg	choose a file or folder first, or deny	először válasszon fájlt vagy mappát, vagy utasítsa el
 @msg	the script file permissions could not be saved: {e}	a parancsfájlok fájlengedélyeit nem sikerült menteni: {e}
+@msg	the script file permissions could not be read: {e}	a parancsfájlok fájlengedélyeit nem sikerült beolvasni: {e}
 @msg	this script's file access can be allowed only once	ennek a parancsfájlnak a fájlhozzáférése csak egyszer engedélyezhető
 @msg	Only the person at the keyboard can allow a script's file access	Parancsfájl fájlhozzáférését csak a billentyűzetnél ülő személy engedélyezheti
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Egy parancsfájl legfeljebb 2 048 fájlt kap: az ezek után kiválasztott fájlok kimaradtak
@@ -6276,6 +6301,12 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	finish editing the pattern first	előbb fejezd be a mintázat szerkesztését
 @msg	nothing encoded	nincs kódolt adat
 @msg	nothing selected	nincs kijelölés
+@msg	`{key}` must be a color or {_1}	a(z) `{key}` értéke csak szín vagy {_1} lehet
+@msg	the selected objects' colors differ: give `color`	a kijelölt objektumok színei eltérnek: adja meg a `color` értékét
+@msg	the selected objects' colors differ: give `opacity` or `color`	a kijelölt objektumok színei eltérnek: adja meg az `opacity` vagy a `color` értékét
+@msg	the active fill or stroke has no color: give `color`	az aktív kitöltésnek vagy körvonalnak nincs színe: adja meg a `color` értékét
+@msg	the active fill or stroke is hidden: give `color`	az aktív kitöltés vagy körvonal rejtett: adja meg a `color` értékét
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	az aktív kitöltés vagy körvonal átlátszósági maszkon keresztül rajzolódik: adja meg a `color` értékét
 @msg	nothing selected is in a group	a kijelölésből semmi sincs csoportban
 @msg	nothing to align	nincs mit igazítani
 @msg	nothing to distort	nincs mit torzítani
@@ -7298,6 +7329,8 @@ axis	Y Axis	Y tengely
 	Cancel Plug-in Run	Bővítmény futásának megszakítása
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} lefutott, de közben megváltozott a dokumentum vagy a bővítmény: futtasd újra
 @msg	Running “{name}”…	Futtatás: „{name}”…
+@msg	Plug-in “{name}”: {notice}	„{name}” bővítmény: {notice}
+@msg	`notice` must be a string with visible text	a `notice` látható szöveget tartalmazó karakterlánc legyen
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	az élő effektus a dokumentum rajzolása közben fut, ezért nem lehet `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	az exportáló bővítmény mindig az exportálás keretét kapja: hagyd ki a `budget` kulcsot
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	a(z) „{_1}” nagy számítási keretet kér (futásonként legfeljebb {minutes} perc és a szokásos utasításszám {times}-szorosa): egy személynek jóvá kell hagynia az asztali alkalmazásban, vagy add meg az `allowHeavy: true` értéket egy --allow-plugin-grants kapcsolóval indított munkamenetben
@@ -7343,6 +7376,10 @@ axis	Y Axis	Y tengely
 @msg	vc_alloc returned 0 (out of memory)	a vc_alloc 0-t adott vissza (elfogyott a memória)
 @msg	vc_alloc returned a block outside memory	a vc_alloc a memórián kívüli blokkot adott vissza
 @msg	vc_run returned error code {packed}	a vc_run {packed} hibakódot adott vissza
+@msg	did not finish loading within {secs} s	nem töltődött be {secs} másodpercen belül
+@msg	no thread was left to load it	nem maradt szál a betöltéséhez
+@msg	panicked while loading	összeomlott betöltés közben
+@msg	panicked while loading: {what}	összeomlott betöltés közben: {what}
 @msg	{_1} is not a file	nem fájl: {_1}
 @msg	{_1} is {_2} bytes (limit {_3})	{_1}: {_2} bájt (korlát: {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektum (korlát: {MAX_OBJECTS})
@@ -7385,7 +7422,7 @@ axis	Y Axis	Y tengely
 @msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} számból álló lista
 @msg	a new object needs a `path`	az új objektumhoz `path` kell
 @msg	a number	szám
-@msg	a painted live effect returns only `objects`	a festő élő effektus csak `objects` értéket ad vissza
+@msg	a painted live effect returns only `objects` and `notice`	a festő élő effektus csak `objects` és `notice` értéket ad vissza
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills` és `strokes` kulcsa van
 @msg	a read-only object was left out	kimaradt egy írásvédett objektum
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
@@ -7490,6 +7527,8 @@ axis	Y Axis	Y tengely
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	az `api` értéke {_1}; ez a gazdaprogram az 1 és {API_LEVEL} közötti bővítmény-API-szinteket támogatja
 @msg	`paintOutput` may only be true	A `paintOutput` értéke csak true lehet
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	a `paintOutput` csak élő effektushoz (`kind` "effect") használható, `api` 2 mellett
+@msg	`place` is only for an importer (`kind` "importer")	a `place` csak importálóhoz (`kind` "importer") használható
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	„{shown}” megnyitja a fájlokat, de nem helyezi el őket: a jegyzéke nem állítja be a `place` kulcsot
 @msg	`grant` must be a list of permission names	a `grant` értékének engedélynevek listájának kell lennie
 @msg	`grant` names an unknown permission `{shown}`	a `grant` ismeretlen engedélyt nevez meg: `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	egy `{_1}` fajtájú bővítménynek szüksége van a(z) `{_2}` engedélyre
@@ -7501,12 +7540,60 @@ axis	Y Axis	Y tengely
 @msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
 @msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
 @msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+@msg	only a filter declares `writes`	`writes` kulcsot csak szűrő adhat meg
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	a `writes` ismeretlen objektumfajtát nevez meg: `{shown}`; használja a type, image vagy symbolInstance értéket
+@msg	`writes` lists `{shown}` twice	a `writes` kétszer sorolja fel ezt: `{shown}`
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	a `writes` felsorolja ezt: `{shown}`, de az `inputs` nem sorolja fel
+@msg	`writes` needs `api` {WRITES_API} or later	a `writes` használatához `api` {WRITES_API} vagy újabb szükséges
+@msg	`writes` needs the permission `doc.write`	a `writes` használatához a(z) `doc.write` engedély szükséges
+@msg	{_1} is not type, an image or a symbol instance	{_1} nem szöveg, nem kép és nem szimbólumpéldány
+@msg	the text of type given as `truncated` can't be changed	a `truncated` jelöléssel átadott szövegobjektum szövege nem módosítható
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	legfeljebb {MAX_INPUT_RUNS} elemű lista legyen
+@msg	type needs at least one run	a szövegnek legalább egy szakaszra van szüksége
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bájt szöveg (korlát: {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} bekezdés (korlát: {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	több mint {MAX_INPUT_TEXT_TOTAL} bájt szöveg a teljes kimenetben
+@msg	unknown key '{k}'	ismeretlen kulcs: '{k}'
+@msg	must be a list of 6 numbers	6 számból álló lista legyen
+@msg	a number is out of range (limit ±{MAX_COORD})	egy szám a tartományon kívül esik (korlát: ±{MAX_COORD})
+@msg	flattens the object to a line or a point	vonallá vagy ponttá lapítja az objektumot
+@msg	an object flattened to a line or a point can't be placed again	a vonallá vagy ponttá lapított objektum nem helyezhető el újra
+@msg	must be a number from 0 to 1	0 és 1 közötti szám legyen
+@msg	must be the name of a symbol	egy szimbólum neve legyen
+@msg	'{shown}' is not a symbol in this document	'{shown}' nem szimbólum ebben a dokumentumban
+@msg	a run must be {{"text", "style", "inline"?}}	egy szakasz formája {{"text", "style", "inline"?}} legyen
+@msg	`text` holds the character of an inline graphic	a `text` egy szövegközi grafika karakterét tartalmazza
+@msg	inline graphics can't be added, removed, reordered or changed	szövegközi grafikák nem adhatók hozzá, nem távolíthatók el, nem rendezhetők át és nem módosíthatók
+@msg	the characters of threaded type can't be changed	a láncolt szöveg karakterei nem módosíthatók
+@msg	the characters of type with ruby can't be changed	a rubyt tartalmazó szöveg karakterei nem módosíthatók
+@msg	expected {count} paragraph styles, one per paragraph	{count} bekezdésstílus volt várható, bekezdésenként egy
+@msg	the document has no Kinsoku set named '{shown}'	a dokumentumban nincs '{shown}' nevű Kinsoku-készlet
+@msg	must be 1-{MAX_FAMILY} printable characters	1-{MAX_FAMILY} nyomtatható karakter legyen
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Olvashatja a kapott objektumokat, valamint a dokumentum beállításait, rajztábláit, rétegeit és színmintáit
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	a `context` csak különböző szakaszokat sorolhat fel: settings, artboards, layers vagy swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	a `context` szűrőhöz vagy `commands` kulccsal rendelkező élő effektushoz való, `api` 3 vagy újabb mellett, a(z) `doc.read` engedéllyel
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	a bővítmény által kért dokumentumadatok túl nagyok az átadáshoz: legfeljebb {MAX_CONTEXT_ITEMS} rajztábla, réteg és színminta {MAX_CONTEXT_BYTES} bájtban
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	memóriakeret (a(z) {_1} objektumnak {size} bájt bemenet kell, {left} maradt)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektumkeret (több mint {MAX_OBJECTS} csak olvasható objektum)
 @msg	instruction budget	utasításkeret
 @msg	time budget	időkeret
 @msg	memory budget (the selection is too large to hand over)	memóriakeret (a kijelölés túl nagy az átadáshoz)
 @msg	output size ({what} is {len} bytes, limit {max})	kimenet mérete ({what}: {len} bájt, korlát {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, {line}. sor, {column}. oszlop)
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	memóriakeret
+@msg	call depth	hívási mélység
+@msg	run(input, params) returned no output object	a run(input, params) nem adott vissza kimeneti objektumot
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	a `runtime` "js" értékhez `script` kell: a bővítmény .js fájljának neve a leíró mellett
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	a `script` a leíró mappájában lévő .js fájl neve legyen: 1-128 bájt, mappa nélkül, `:` nélkül, és nem kezdődhet `.` karakterrel
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	a `source` a parancsfájl szövege, és csak abban a JSON-ban adható meg, amelyet a plugin.install dataBase64 paramétere fogad: a .vcplugin fájl a `script` kulcsban nevezi meg a parancsfájlját
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	egy JavaScript-bővítmény leírója `runtime` "js" értéket ad meg
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	a `runtime` "js" objektumszűrőhöz való (`kind` "filter"), nem `kind` "{kind}" értékhez
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	egy JavaScript-bővítmény nem sorolhatja fel a(z) `{name}` engedélyt: a gazdagép engedélyei közül a `progress` engedélyt sorolhatja fel
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	egy WebAssembly-modul leírója elhagyja a `runtime` kulcsot: a "js" JavaScript-bővítményhez való
+@msg	a JavaScript plug-in makes no command calls	egy JavaScript-bővítmény nem hív parancsokat
+@msg	vc.progress(done, total) takes two numbers	a vc.progress(done, total) két számot vár
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	a vc.log(level, text) egy szintet, 0 (hiba), 1 (figyelmeztetés), 2 (információ) vagy 3 (hibakeresés), és egy karakterláncot vár
 @msg	the plug-in's grant can't be removed from the plug-in store	a bővítmény engedélye nem távolítható el a bővítménytárból
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
 @msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
@@ -10761,6 +10848,11 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Fold Angle	Hajtásszög
+	Set Fold Angle…	Hajtásszög beállítása…
+	Set Fold Angle	Hajtásszög beállítása
+	Reset Fold Angle	Hajtásszög visszaállítása
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	jelöljön ki egy bigvonalat, részleges vágóvonalat vagy perforációs vonalat, amely nincs zárolva és nincs elrejtve
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Az elemleírás helyett kártyán mutatja, mit csinál az eszköztár egy eszköze és a billentyűi; ehhez az Elemleírások megjelenítése szükséges.
 	Selects whole objects and groups to move, resize or rotate them.	Teljes objektumokat és csoportokat jelöl ki áthelyezéshez, átméretezéshez vagy forgatáshoz.

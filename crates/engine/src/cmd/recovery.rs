@@ -409,7 +409,7 @@ impl FolderStore {
     /// names that file.
     pub(crate) fn take(file: std::fs::File, path: &std::path::Path) -> std::result::Result<Lock, String> {
         match file.try_lock() {
-            Ok(()) if Self::still_named(&file, path) => Ok(Lock::Held(Box::new(file))),
+            Ok(()) if Self::still_named(&file, path) => Ok(Lock::Held(Box::new(crate::store::LockedFile::new(file)))),
             Ok(()) | Err(std::fs::TryLockError::WouldBlock) => Ok(Lock::Busy),
             // The lock file was removed meanwhile, and locking it failed instead.
             Err(std::fs::TryLockError::Error(_)) if !Self::still_named(&file, path) => Ok(Lock::Busy),
@@ -472,6 +472,11 @@ impl RecoveryStore for FolderStore {
             Self::create_area(dir)?;
             Self::own_area(dir)?;
         }
+        // A read refuses a link (`read`), and a write must too: the atomic writer replaces the
+        // target of a link, which would put the copy over a file outside the store.
+        if std::fs::symlink_metadata(&f).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(format!("{}: not a plain file", f.display()));
+        }
         vectorcraft_format::write_atomic(&f, bytes).map_err(|e| Self::file_error(&f, &e))
     }
     fn remove(&self, name: &str) -> std::result::Result<(), String> {
@@ -493,7 +498,9 @@ impl RecoveryStore for FolderStore {
         Self::lock_area(&dir)
     }
     fn still_held(&self, area: &str, hold: &(dyn std::any::Any + Send + Sync)) -> bool {
-        let (Some(file), Ok(dir)) = (hold.downcast_ref::<std::fs::File>(), self.area(area)) else { return true };
+        let (Some(file), Ok(dir)) = (hold.downcast_ref::<crate::store::LockedFile>().map(crate::store::LockedFile::file), self.area(area)) else {
+            return true;
+        };
         let path = dir.join(LOCK_FILE);
         // Only a lock file or folder that is gone, or another one in its place, ends the hold. One
         // that can't be read now (a network folder that doesn't answer) still counts as held.

@@ -663,6 +663,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraftin yleinen CMYK (SWOP-tyyppinen)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraftin päällystetty CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraftin päällystämätön CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Vanha Macintosh RGB (gamma 1.8)
 	Internet Standard RGB (sRGB)	Internetin standardi-RGB (sRGB)
 	Monitor RGB	Näytön RGB
@@ -2136,6 +2138,17 @@ digits	Malayalam	Malajalam
 	Create New Sublayer	Luo uusi alataso
 	Search All	Hae kaikista
 	Graphics	Grafiikka
+	Show Contrast	Näytä kontrasti
+	Contrast For	Kontrasti kohteelle
+	Normal Text	Tavallinen teksti
+	Large Text	Suuri teksti
+	Contrast Background	Kontrastin tausta
+	Behind Selection	Valinnan takana
+	Current Color	Nykyinen väri
+	Pass	Läpäisee
+	Fail	Ei läpäise
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2:n vähimmäiskontrastit: tavallinen teksti AA 4.5:1 (1.4.3) ja AAA 7:1 (1.4.6), suuri teksti AA 3:1 ja AAA 4.5:1, grafiikka ja säätimet AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Tausta luetaan valinnan keskeltä.
 	Local Libraries	Paikalliset kirjastot
 	Add Content	Lisää sisältöä
 	Click to apply to the selected type	Käytä valittuun tekstiin napsauttamalla
@@ -4727,7 +4740,7 @@ font-technology	Variable	Muuttuvat
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	Valinta › Sama › Täyttöväri, Viivan väri sekä Täyttö ja viiva löytävät vain globaalin tai spottivärimallin saman sävyn, eivät mitä tahansa sen sävyä.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Näyttää aloitusnäytön, kun yhtään asiakirjaa ei ole auki; kun asetus ei ole käytössä, ikkuna pysyy tyhjänä, kunnes napsautat Aloitus.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Mittaa objektit viivoineen ja muotoa muuttavine tehosteineen kokoa, sijaintia ja tasausta varten; varjoja, hehkuja ja sumennuksia ei mitata.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100 %:n zoomauksella asiakirjan tuuma vie 96 näyttöpistettä 72:n sijaan.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100 %:n zoomauksella asiakirjan tuuma täyttää näytön tuuman, tai 96 näyttöpistettä, jos järjestelmä ei ilmoita käyttökelpoista näytön kokoa.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Ryhmän, polun tai kuvan kaksoisnapsautus Valinta-työkalulla avaa sen eristystilaan.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Kuviotäytöt ja -viivat muuntuvat grafiikan mukana, ellei muunnos tai Muunna-paneelin valikko valitse toisin.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Dynaamisten kulmien säteet skaalautuvat grafiikan mukana, ellei skaalaus valitse toisin.
@@ -5148,6 +5161,14 @@ imageTrace	Outline	Ääriviiva
 	The script asks to read and write a folder you choose, with everything in it.	Komentosarja pyytää lupaa lukea ja kirjoittaa valitsemasi kansion ja kaiken sen sisällön.
 	Allow Once	Salli kerran
 	Always Allow This Script	Salli tämä komentosarja aina
+	No script has kept file access.	Millään komentosarjalla ei ole tallennettua tiedostojen käyttöoikeutta.
+	Read file	Tiedoston luku
+	Read and write file	Tiedoston luku ja kirjoitus
+	Read and write folder	Kansion luku ja kirjoitus
+	Revoke	Peruuta oikeus
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Peruuta oikeus poistaa käyttöoikeuden, joka on tallennettu komentosarjan jokaiselle versiolle. Kansion käyttöoikeus kattaa kaiken sen sisällön.
+@msg	Script file access revoked	Komentosarjan tiedostojen käyttöoikeus peruttu
+@msg	The script file access was already revoked	Komentosarjan tiedostojen käyttöoikeus oli jo peruttu
 	Deny	Estä
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Komentosarja voi muuttaa avoimia asiakirjoja ja kirjoittaa tiedostoja suorittamillaan komennoilla. Suorita vain komentosarjoja, joihin luotat.
 	Do not show this warning again	Älä näytä tätä varoitusta uudelleen
@@ -5347,6 +5368,7 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	komentosarjan tiedostovalintaikkunan `answer`-arvon on oltava jokin seuraavista: once, always, deny, stop
 @msg	choose a file or folder first, or deny	valitse ensin tiedosto tai kansio tai estä
 @msg	the script file permissions could not be saved: {e}	komentosarjojen tiedostolupia ei voitu tallentaa: {e}
+@msg	the script file permissions could not be read: {e}	komentosarjojen tiedostolupia ei voitu lukea: {e}
 @msg	this script's file access can be allowed only once	tämän komentosarjan tiedostojen käytön voi sallia vain kerran
 @msg	Only the person at the keyboard can allow a script's file access	Vain näppäimistön ääressä oleva ihminen voi sallia komentosarjan tiedostojen käytön
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Komentosarja saa enintään 2 048 tiedostoa: niiden jälkeen valitut tiedostot jätettiin pois
@@ -5811,6 +5833,12 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	finish editing the pattern first	lopeta ensin kuvion muokkaus
 @msg	nothing encoded	mitään ei koodattu
 @msg	nothing selected	mitään ei ole valittu
+@msg	`{key}` must be a color or {_1}	`{key}` on oltava väri tai {_1}
+@msg	the selected objects' colors differ: give `color`	valittujen objektien värit eroavat: anna `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	valittujen objektien värit eroavat: anna `opacity` tai `color`
+@msg	the active fill or stroke has no color: give `color`	aktiivisella täytöllä tai viivalla ei ole väriä: anna `color`
+@msg	the active fill or stroke is hidden: give `color`	aktiivinen täyttö tai viiva on piilotettu: anna `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	aktiivinen täyttö tai viiva piirretään peittävyysmaskin läpi: anna `color`
 @msg	nothing selected is in a group	mikään valituista ei ole ryhmässä
 @msg	nothing to align	ei tasattavaa
 @msg	nothing to distort	ei vääristettävää
@@ -6691,6 +6719,9 @@ file-filter	Swatch libraries	Värimallikirjastot
 file-filter	Flattener presets	Litistyksen esiasetukset
 file-filter	PDF presets	PDF-esiasetukset
 file-filter	Print presets	Tulostuksen esiasetukset
+file-filter	Tracing presets	Jäljityksen esiasetukset
+file-filter	Action sets	Toimintosarjat
+file-filter	Composite fonts	Yhdistelmäfontit
 file-filter	Preferences	Asetukset
 file-filter	Export presets	Vientiesiasetukset
 file-filter	SVG Compressed	Pakattu SVG
@@ -7379,6 +7410,8 @@ axis	Y Axis	Y-akseli
 	Cancel Plug-in Run	Peruuta laajennuksen ajo
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} valmistui, mutta asiakirja tai laajennus muuttui sillä välin: suorita se uudelleen
 @msg	Running “{name}”…	Suoritetaan ”{name}”…
+@msg	Plug-in “{name}”: {notice}	Laajennus ”{name}”: {notice}
+@msg	`notice` must be a string with visible text	`notice` on oltava merkkijono, jossa on näkyvää tekstiä
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	live-tehoste suoritetaan asiakirjaa piirrettäessä, joten se ei voi olla `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	vientilaajennus saa aina viennin budjetin: jätä `budget` pois
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	”{_1}” pyytää suurta laskentabudjettia (jokainen ajo enintään {minutes} minuuttia ja {times} kertaa tavallinen määrä käskyjä): ihmisen on hyväksyttävä se työpöytäsovelluksessa, tai anna `allowHeavy: true` istunnossa, joka on käynnistetty valitsimella --allow-plugin-grants
@@ -7424,6 +7457,10 @@ axis	Y Axis	Y-akseli
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc palautti 0 (muisti loppui)
 @msg	vc_alloc returned a block outside memory	vc_alloc palautti lohkon muistin ulkopuolelta
 @msg	vc_run returned error code {packed}	vc_run palautti virhekoodin {packed}
+@msg	did not finish loading within {secs} s	ei latautunut loppuun {secs} sekunnissa
+@msg	no thread was left to load it	sen lataamiseen ei jäänyt yhtään säiettä
+@msg	panicked while loading	kaatui latauksen aikana
+@msg	panicked while loading: {what}	kaatui latauksen aikana: {what}
 @msg	{_1} is not a file	{_1} ei ole tiedosto
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} on {_2} tavua (raja {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	{_1} objektia (raja {MAX_OBJECTS})
@@ -7467,7 +7504,7 @@ axis	Y Axis	Y-akseli
 @msg	a list of {min_items} to {max_items} numbers	{min_items}-{max_items} luvun luettelo
 @msg	a new object needs a `path`	uusi objekti tarvitsee kentän `path`
 @msg	a number	luku
-@msg	a painted live effect returns only `objects`	maalaava live-tehoste palauttaa vain kentän `objects`
+@msg	a painted live effect returns only `objects` and `notice`	maalaava live-tehoste palauttaa vain kentät `objects` ja `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	maalaavan live-tehosteen osalla on vain `path`, `fillRule`, `fills` ja `strokes`
 @msg	a read-only object was left out	vain luku -objekti jätettiin pois
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {{"id": …}}-muotona tai sellaisena kuin se annettiin
@@ -7572,6 +7609,8 @@ axis	Y Axis	Y-akseli
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` on {_1}; tämä isäntä tukee laajennus-API:n tasoja 1 ja {API_LEVEL} välillä
 @msg	`paintOutput` may only be true	`paintOutput` voi olla vain true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` on vain reaaliaikaiselle tehosteelle (`kind` "effect") tasolla `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` on vain tuojalle (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	”{shown}” avaa tiedostoja mutta ei sijoita niitä: sen manifesti ei aseta `place`-avainta
 @msg	`grant` must be a list of permission names	`grant` on oltava luettelo käyttöoikeuksien nimistä
 @msg	`grant` names an unknown permission `{shown}`	`grant` nimeää tuntemattoman käyttöoikeuden `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	lajin `{_1}` laajennus tarvitsee käyttöoikeuden `{_2}`
@@ -7583,12 +7622,60 @@ axis	Y Axis	Y-akseli
 @msg	`inputs` lists `{shown}` twice	`inputs` luettelee kohteen `{shown}` kahdesti
 @msg	`inputs` needs `api` 2 or later	`inputs` edellyttää `api`-tasoa 2 tai uudempaa
 @msg	`inputs` needs the permission `doc.read`	`inputs` edellyttää käyttöoikeutta `doc.read`
+@msg	only a filter declares `writes`	vain suodatin voi määrittää `writes`-avaimen
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` nimeää tuntemattoman objektilajin `{shown}`: käytä arvoa type, image tai symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` luettelee kohteen `{shown}` kahdesti
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` luettelee kohteen `{shown}`, jota `inputs` ei luettele
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` edellyttää `api`-tasoa {WRITES_API} tai uudempaa
+@msg	`writes` needs the permission `doc.write`	`writes` edellyttää käyttöoikeutta `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} ei ole teksti, kuva eikä symbolin ilmentymä
+@msg	the text of type given as `truncated` can't be changed	`truncated`-merkinnällä annetun tekstiobjektin tekstiä ei voi muuttaa
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	on oltava luettelo, jossa on enintään {MAX_INPUT_RUNS} kohdetta
+@msg	type needs at least one run	tekstissä on oltava vähintään yksi tekstijakso
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} tavua tekstiä (raja {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} kappaletta (raja {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	yli {MAX_INPUT_TEXT_TOTAL} tavua tekstiä koko tulosteessa
+@msg	unknown key '{k}'	tuntematon avain '{k}'
+@msg	must be a list of 6 numbers	on oltava 6 luvun luettelo
+@msg	a number is out of range (limit ±{MAX_COORD})	luku on alueen ulkopuolella (raja ±{MAX_COORD})
+@msg	flattens the object to a line or a point	litistää objektin viivaksi tai pisteeksi
+@msg	an object flattened to a line or a point can't be placed again	viivaksi tai pisteeksi litistynyttä objektia ei voi sijoittaa uudelleen
+@msg	must be a number from 0 to 1	on oltava luku väliltä 0-1
+@msg	must be the name of a symbol	on oltava symbolin nimi
+@msg	'{shown}' is not a symbol in this document	'{shown}' ei ole symboli tässä dokumentissa
+@msg	a run must be {{"text", "style", "inline"?}}	tekstijakson on oltava {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` sisältää upotetun grafiikan merkin
+@msg	inline graphics can't be added, removed, reordered or changed	upotettuja grafiikoita ei voi lisätä, poistaa, järjestää uudelleen eikä muuttaa
+@msg	the characters of threaded type can't be changed	ketjutetun tekstin merkkejä ei voi muuttaa
+@msg	the characters of type with ruby can't be changed	ruby-merkintöjä sisältävän tekstin merkkejä ei voi muuttaa
+@msg	expected {count} paragraph styles, one per paragraph	odotettiin {count} kappaletyyliä, yksi kutakin kappaletta kohden
+@msg	the document has no Kinsoku set named '{shown}'	dokumentissa ei ole Kinsoku-joukkoa nimeltä '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	siinä on oltava 1-{MAX_FAMILY} tulostettavaa merkkiä
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	Lukea sille annetut objektit sekä asiakirjan asetukset, piirtoalustat, tasot ja värimallit
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context`-avaimen on lueteltava eri osiot: settings, artboards, layers tai swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` on suodattimelle tai reaaliaikaiselle tehosteelle, jolla on `commands`, tasolla `api` 3 tai uudempi ja käyttöoikeudella `doc.read`
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	laajennuksen pyytämät asiakirjan tiedot ovat liian suuret luovutettaviksi: enintään {MAX_CONTEXT_ITEMS} piirtoalustaa, tasoa ja värimallia {MAX_CONTEXT_BYTES} tavussa
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	muistibudjetti (objekti {_1} tarvitsee {size} tavua syötettä, jäljellä {left})
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	objektibudjetti (yli {MAX_OBJECTS} vain luku -objektia)
 @msg	instruction budget	käskybudjetti
 @msg	time budget	aikabudjetti
 @msg	memory budget (the selection is too large to hand over)	muistibudjetti (valinta on liian suuri luovutettavaksi)
 @msg	output size ({what} is {len} bytes, limit {max})	tulosteen koko ({what}: {len} tavua, raja {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} rivi {line}, sarake {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	muistibudjetti
+@msg	call depth	kutsusyvyys
+@msg	run(input, params) returned no output object	run(input, params) ei palauttanut tulosobjektia
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" tarvitsee avaimen `script`: laajennuksen .js-tiedoston nimen manifestin vieressä
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` on oltava manifestin kansiossa olevan .js-tiedoston nimi: 1-128 tavua, ei kansiota, ei merkkiä `:`, ei alussa merkkiä `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` on komentosarjan teksti, ja se annetaan vain JSONissa, jonka plugin.install-komennon dataBase64 ottaa: .vcplugin-tiedosto nimeää komentosarjansa avaimessa `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript-laajennuksen manifesti antaa `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" on objektisuodattimelle (`kind` "filter"), ei arvolle `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript-laajennus ei voi luetella lupaa `{name}`: isännän luvista se voi luetella luvan `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly-moduulin manifesti jättää avaimen `runtime` pois: "js" on JavaScript-laajennukselle
+@msg	a JavaScript plug-in makes no command calls	JavaScript-laajennus ei kutsu komentoja
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) ottaa kaksi lukua
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) ottaa tason, 0 (virhe), 1 (varoitus), 2 (tieto) tai 3 (virheenjäljitys), ja merkkijonon
 @msg	the plug-in's grant can't be removed from the plug-in store	laajennuksen käyttöoikeutta ei voi poistaa laajennusvarastosta
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	käyttöoikeus `{shown}` on varattu myöhemmälle laajennus-API:lle; tämä isäntä ei myönnä sitä
 @msg	unknown permission `{shown}`	tuntematon käyttöoikeus `{shown}`
@@ -8888,6 +8975,18 @@ breakText	Glyphs	Merkit
 	Margin	Marginaali
 	Box	Kehys
 	Swatch	Värimalli
+@msg	`spacing` must be more than 0 and at most {MAX_DISTANCE} pt	`spacing`-arvon on oltava yli 0 ja enintään {MAX_DISTANCE} pt
+@msg	`{key}` must be from 0 to {MAX_DISTANCE} pt	`{key}`-arvon on oltava väliltä 0–{MAX_DISTANCE} pt
+@msg	`{key}` must be from 0.01 to 1000 pt	`{key}`-arvon on oltava väliltä 0,01–1000 pt
+@msg	select the banner, or mark every artboard	valitse banneri tai merkitse kaikki piirtoalustat
+@msg	the banner has no width or height	bannerilla ei ole leveyttä eikä korkeutta
+@msg	the grommet inset is too large for the banner	purjerenkaiden etäisyys reunasta on liian suuri bannerille
+@msg	the hem is too deep for the banner	päärme on liian syvä bannerille
+@msg	the spacing makes more than {MAX_GROMMETS} grommets	välistyksellä tulisi yli {MAX_GROMMETS} purjerengasta
+@msg	there is no banner to mark	merkittävää banneria ei ole
+@msg	turn on at least one side	ota käyttöön vähintään yksi sivu
+@msg	with no hem and no grommets there is nothing to mark	ilman päärmettä ja purjerenkaita ei ole mitään merkittävää
+@msg	{saving} failed: {e}	{saving} epäonnistui: {e}
 	Banner Hems and Grommets…	Bannerin päärmeet ja purjerenkaat…
 	Banner Hems and Grommets	Bannerin päärmeet ja purjerenkaat
 	Hem	Päärme
@@ -9034,6 +9133,11 @@ breakText	Glyphs	Merkit
 	No objects are selected.	Objekteja ei ole valittu.
 	Open a document to mark its fold lines.	Avaa asiakirja, niin voit merkitä sen taittoviivat.
 	Remove Fold Line Role	Poista viivatyyppi
+	Fold Angle	Taittokulma
+	Set Fold Angle…	Aseta taittokulma…
+	Set Fold Angle	Aseta taittokulma
+	Reset Fold Angle	Palauta taittokulma
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	valitse nuuttausviiva, osittainen leikkausviiva tai rei’itysviiva, joka ei ole lukittu eikä piilotettu
 	Check	Tarkista
 	Check Fold Lines	Tarkista taittoviivat
 @msg	No cut lines are in the selection.	Valinnassa ei ole leikkausviivoja.

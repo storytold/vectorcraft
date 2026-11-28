@@ -62,9 +62,10 @@ pub(crate) struct PasteAsk {
     params: Value,
     /// The models whose profiles differ, as `clipboard.profileMismatch` lists them.
     mismatches: Vec<Value>,
-    /// The uid of the document the question was asked in: a paste that runs at once pastes nothing
-    /// once another document is active.
-    doc: Option<u64>,
+    /// The drawing and content generation the question was asked in.
+    drawing: Option<(u64, u64)>,
+    /// For a drop, the source drawing and content generation its node IDs came from.
+    drop_source: Option<(u64, u64)>,
     /// The chain of a deferred paste (one that waits for its clipboard), which placing answers.
     deferred: Option<u64>,
 }
@@ -83,28 +84,24 @@ const PASTE_CHOICES: [(&str, &str); 2] = [("preserveNumbers", "Preserve the colo
 
 /// Open `file`, read for File › Open from `path`, as `document.open` does, unless Edit › Color
 /// Settings asks about its profile ([`ReadFile::ask`]): then the dialog asks first, and the result
-/// is `{dialog}`. A file read while another one's question is open waits for its own question
-/// until that one is answered (`{dialog, queued: true}`). Opened, the views follow and the file
+/// is `{dialog}`. A file read while another one's question, or another dialog, is open waits for
+/// its own question until that one closes (`{dialog, queued: true}`). Opened, the views follow and the file
 /// goes on the recent files ([`crate::io::opened`]). `background`: the file was read off the UI
 /// thread, and the rest of its read after an answer is done there too.
 pub fn open_or_ask(app: &mut VectorcraftApp, file: ReadFile, path: Option<String>, background: bool) -> Result<Value, String> {
     ask_or_open(app, PendingOpen { file, path, scope: ScopeHandle::capture(), background, asked: Value::Null })
 }
 
-/// [`open_or_ask`] for a file that has its scope already.
+/// [`open_or_ask`] for a file that has its scope already. While another dialog is open (a paste
+/// waiting for its Swatch Conflict answer, say), the question waits for it to close too.
 fn ask_or_open(app: &mut VectorcraftApp, mut pending: PendingOpen) -> Result<Value, String> {
     let Some(q) = pending.file.ask() else {
-        let PendingOpen { file, path, scope, .. } = pending;
-        return scope.run(|| {
-            let r = fileio::open_read(&mut app.session, file).map_err(|e| e.to_string())?;
-            crate::io::opened(app, &r);
-            if let Some(p) = &path {
-                crate::io::note_recent(app, p);
-            }
-            Ok(r)
-        });
+        // The question is gone (or there was none): a file read off the UI thread does the rest of
+        // its read there, as an answered one does.
+        let scope = pending.scope.clone();
+        return open_now(app, pending, scope);
     };
-    if app.pending_profile_open.is_some() {
+    if app.pending_profile_open.is_some() || app.any_dialog_open() {
         app.queued_profile_opens.push_back(pending);
         return Ok(json!({ "dialog": OPEN_KIND, "queued": true }));
     }
@@ -220,24 +217,29 @@ fn finish_open(app: &mut VectorcraftApp, mut pending: PendingOpen, choice: Profi
 /// off the UI thread does the rest of its read (its linked files and type) there too
 /// ([`crate::opening::finish_answered`]).
 fn open_pending(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> Result<Value, String> {
+    let name = pending.file.name();
+    let r = open_now(app, pending, scope);
+    if let Err(e) = &r {
+        crate::io::report_open_error(app, &name, e);
+    }
+    r
+}
+
+/// Open `pending` under `scope` without reporting a failure. A file read off the UI thread with part
+/// of its read left ([`ReadFile::read_left`]) does that part on a job of its own
+/// ([`crate::opening::finish_answered`]) → `{background: true, status}`.
+fn open_now(app: &mut VectorcraftApp, pending: PendingOpen, scope: ScopeHandle) -> Result<Value, String> {
     let PendingOpen { file, path, background, .. } = pending;
-    let name = file.name();
-    if let Some(p) = path.as_deref().filter(|_| background && crate::opening::available()) {
+    if let Some(p) = path.as_deref().filter(|_| background && file.read_left() && crate::opening::available()) {
         return Ok(crate::opening::finish_answered(app, p, file, scope));
     }
-    scope.run(|| match fileio::open_read(&mut app.session, file) {
-        Ok(r) => {
-            crate::io::opened(app, &r);
-            if let Some(p) = &path {
-                crate::io::note_recent(app, p);
-            }
-            Ok(r)
+    scope.run(|| {
+        let r = fileio::open_read(&mut app.session, file).map_err(|e| e.to_string())?;
+        crate::io::opened(app, &r);
+        if let Some(p) = &path {
+            crate::io::note_recent(app, p);
         }
-        Err(e) => {
-            let e = e.to_string();
-            crate::io::report_open_error(app, &name, &e);
-            Err(e)
-        }
+        Ok(r)
     })
 }
 
@@ -270,8 +272,14 @@ fn open_paste(app: &mut VectorcraftApp, command: &str, params: &Value, mismatche
         crate::placing::cancel_swatch_paste(app);
     }
     let dialog = paste_dialog(&ctx, &mismatches);
-    let doc = app.session.active().map(|st| st.uid);
-    app.pending_paste = Some(PasteAsk { command: command.to_string(), params: params.clone(), mismatches, doc, deferred: None });
+    let drawing = app.session.active().map(|st| (st.uid, st.reverts));
+    let drop_source = if command == DROP {
+        let source_uid = params["sourceDocument"].as_u64();
+        app.session.documents().iter().find(|st| Some(st.uid) == source_uid).map(|st| (st.uid, st.reverts))
+    } else {
+        None
+    };
+    app.pending_paste = Some(PasteAsk { command: command.to_string(), params: params.clone(), mismatches, drawing, drop_source, deferred: None });
     dialogs.with(|h| h.open(dialog));
     Some(Ok(json!({ "dialog": PASTE_KIND })))
 }
@@ -388,13 +396,17 @@ fn pump_paste(app: &mut VectorcraftApp) {
     }
 }
 
-/// OK: run the paste with the choice; any Swatch Conflict question comes next. When another
-/// document has become the active one since a paste that runs at once asked, it pastes nothing. When
-/// the profiles that paste or drop would bring have changed since it asked (the clipboard, the
-/// dragged objects' document or the destination's profile changed), it asks again about the new ones.
+/// OK: run the paste with the choice; any Swatch Conflict question comes next. An immediate paste
+/// is canceled if its destination is inactive or reverted, or if its drop source was reverted.
+/// When the profiles it would bring have changed since it asked, it asks about the new ones.
 fn paste_confirm(app: &mut VectorcraftApp, ask: PasteAsk, choice: Value) -> Result<Value, String> {
-    if ask.deferred.is_none() && ask.doc != app.session.active().map(|st| st.uid) {
+    if ask.deferred.is_none() && ask.drawing != app.session.active().map(|st| (st.uid, st.reverts)) {
         return Ok(json!({}));
+    }
+    if let Some((uid, reverts)) = ask.drop_source
+        && app.session.documents().iter().any(|st| st.uid == uid && st.reverts != reverts)
+    {
+        return Err(tl!("The drawing dragged from was reverted.").into());
     }
     let params = with_choice(&ask.params, choice);
     // Without the answer, the paste asks again about what it brings now.

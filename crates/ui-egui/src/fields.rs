@@ -44,6 +44,15 @@ pub fn blend_entries() -> Vec<Entry<BlendMode>> {
     framework_blend_entries(&entries, |entry| mode_label(entry.key))
 }
 
+/// The modes of an effect's blend-mode row. The entries use the stored IDs and translated names.
+/// The framework uses each mode's key metadata to separate the existing groups.
+pub fn effect_blend_modes() -> Vec<(BlendKeyEntry<String>, Label)> {
+    blend_table()
+        .into_iter()
+        .map(|(mode, shortcut)| (BlendKeyEntry::new(vectorcraft_effects::blend_mode_id(mode), shortcut), mode_label(mode)))
+        .collect()
+}
+
 /// `mode`'s name in the interface language.
 fn mode_label(mode: BlendMode) -> Label {
     Label::from(crate::i18n::t(mode.label()))

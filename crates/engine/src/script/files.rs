@@ -1069,7 +1069,7 @@ const LOCK_PAUSE: std::time::Duration = std::time::Duration::from_millis(50);
 /// then the result is `Err` with [`std::io::ErrorKind::TimedOut`]. A change is not made when the
 /// lock cannot be taken.
 #[cfg(not(target_arch = "wasm32"))]
-fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
+pub(crate) fn lock_store(store: &Path) -> std::io::Result<crate::store::LockedFile> {
     let lock = store.with_extension("lock");
     let opened = store
         .parent()
@@ -1084,11 +1084,11 @@ fn lock_store(store: &Path) -> std::io::Result<std::fs::File> {
 
 /// `file`, locked within [`lock_store`]'s tries.
 #[cfg(not(target_arch = "wasm32"))]
-fn take_lock(file: std::fs::File) -> std::io::Result<std::fs::File> {
+fn take_lock(file: std::fs::File) -> std::io::Result<crate::store::LockedFile> {
     let mut tries = 1;
     loop {
         match file.try_lock() {
-            Ok(()) => return Ok(file),
+            Ok(()) => return Ok(crate::store::LockedFile::new(file)),
             Err(std::fs::TryLockError::Error(e)) => return Err(e),
             Err(std::fs::TryLockError::WouldBlock) if tries >= LOCK_TRIES => {
                 return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "another process holds the lock"));
@@ -1111,7 +1111,7 @@ thread_local! {
 
 /// The browser has no folders to keep anything in.
 #[cfg(target_arch = "wasm32")]
-fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
+fn lock_store(_: &Path) -> std::io::Result<crate::store::LockedFile> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
@@ -1123,14 +1123,28 @@ pub(crate) fn stored_grants(data_dir: &Path) -> std::io::Result<Vec<serde_json::
 
 /// Removes from the grants file beside `data_dir` the grants of the script `script` and of the path
 /// `path`, of both when both are given and of every grant when neither is (`script.grants.revoke`).
-/// → how many were removed.
-pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&str>, path: Option<&str>) -> std::io::Result<usize> {
+/// The spellings of each are tried in order, the script's first, and the first pair that some grant
+/// holds is the one removed, so a grant kept under the spellings given first is removed without the
+/// grants of later ones. → how many were removed.
+pub(crate) fn revoke_grants(data_dir: &Path, script: Option<&[String]>, path: Option<&[String]>) -> std::io::Result<usize> {
     let store = data_dir.with_file_name(GRANTS_FILE);
     let _lock = lock_store(&store)?;
     let grants = try_read_store(&store)?;
     let before = grants.len();
-    let kept: Vec<serde_json::Value> =
-        grants.into_iter().filter(|g| !(script.is_none_or(|s| g["script"] == *s) && path.is_none_or(|p| g["path"] == *p))).collect();
+    // `None` matches any value; `Some(name)` only that name.
+    fn spellings(names: Option<&[String]>) -> Vec<Option<&str>> {
+        match names {
+            None => vec![None],
+            Some(names) => names.iter().map(|n| Some(n.as_str())).collect(),
+        }
+    }
+    let matches = |g: &serde_json::Value, (script, path): (Option<&str>, Option<&str>)| {
+        script.is_none_or(|s| g["script"] == s) && path.is_none_or(|p| g["path"] == p)
+    };
+    let pairs = spellings(script).into_iter().flat_map(|s| spellings(path).into_iter().map(move |p| (s, p)));
+    let pair = pairs.into_iter().find(|&pair| grants.iter().any(|g| matches(g, pair)));
+    let Some(pair) = pair else { return Ok(0) };
+    let kept: Vec<serde_json::Value> = grants.into_iter().filter(|g| !matches(g, pair)).collect();
     let removed = before - kept.len();
     if removed > 0 {
         write_store(&store, kept)?;
@@ -1713,8 +1727,12 @@ fn millis(t: Option<std::time::SystemTime>) -> Data {
 
 /// One host function of `__vcFiles`, counted and charged as a host call of the run `link` holds.
 fn call(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> HostItem {
+    HostItem::Function(call_function(link, f))
+}
+
+fn call_function(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) -> vectorcraft_js::HostFunction {
     let l = link.clone();
-    HostItem::Function(Rc::new(move |a| {
+    Rc::new(move |a| {
         let h = super::current(&l)?;
         bump(&h.counts.file_calls);
         let r = f(&h, &a);
@@ -1722,7 +1740,7 @@ fn call(link: &super::Link, f: fn(&Host, &[Data]) -> Result<Data, HostError>) ->
         let r = r?;
         h.charge_call(super::data_size(&r).saturating_add(a.iter().map(super::data_size).sum()))?;
         Ok(r)
-    }))
+    })
 }
 
 /// `Ok(true)`, or `{error}` for a failure.
@@ -1901,6 +1919,228 @@ fn copy(host: &Host, a: &[Data]) -> Result<Data, HostError> {
             file.dirty = false;
         }
     }
+    Ok(done(r.map_err(|_| WRITE_FAILED)))
+}
+
+/// Is `path` an XMP sidecar file, by its `.xmp` extension in any case?
+fn is_sidecar(path: &str) -> bool {
+    Path::new(path).extension().is_some_and(|e| e.eq_ignore_ascii_case("xmp"))
+}
+
+/// The text of a sidecar's bytes and its character form as `XMPFile.getPacketInfo` gives it: 0 for
+/// UTF-8, 2 for UTF-16 big-endian and 3 for UTF-16 little-endian, by its byte order mark.
+fn sidecar_text(bytes: &[u8]) -> Option<(String, u32)> {
+    let utf16 = |rest: &[u8], big: bool| {
+        let units = rest.as_chunks::<2>().0.iter().map(|&pair| if big { u16::from_be_bytes(pair) } else { u16::from_le_bytes(pair) });
+        rest.len().is_multiple_of(2).then(|| char::decode_utf16(units).collect::<Result<String, _>>().ok()).flatten()
+    };
+    match bytes {
+        [0xEF, 0xBB, 0xBF, rest @ ..] => std::str::from_utf8(rest).ok().map(|t| (t.to_string(), 0)),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, true).map(|t| (t, 2)),
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, false).map(|t| (t, 3)),
+        _ => std::str::from_utf8(bytes).ok().map(|t| (t.to_string(), 0)),
+    }
+}
+
+/// `xmpOpen(path, update, scan)`: the XMP packet of the file at `path` for `XMPFile`, read under
+/// the rules for reading; with `update`, a file that can take a packet must also be one the run may write. A `.xmp` file
+/// is read whole as its packet unless `scan`; any other file is scanned for its first UTF-8 packet.
+/// → `{packet, offset, length, writeable, sidecar, charForm}`, with `packet` null when the file has
+/// none.
+fn xmp_open(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let path = arg_text(a, 0);
+    let (update, scan) = (matches!(a.get(1), Some(Data::Bool(true))), matches!(a.get(2), Some(Data::Bool(true))));
+    let mut disk = host.disk.borrow_mut();
+    match disk.stat(&path) {
+        Ok(Some(e)) if !e.file => return Ok(error(NOT_REGULAR)),
+        Ok(Some(e)) if e.len > MAX_FILE_BYTES as u64 => return Ok(error(TOO_LARGE)),
+        Ok(Some(_)) => {}
+        Ok(None) => return Ok(error(NOT_FOUND)),
+        Err(m) => return Ok(error(m)),
+    }
+    let (real, bytes) = match disk.scope.read(Path::new(&path), MAX_FILE_BYTES) {
+        Ok(read) => read,
+        Err(ScriptRead::TooLarge) => return Ok(error(TOO_LARGE)),
+        Err(ScriptRead::Missing) => return Ok(error(NOT_FOUND)),
+        Err(ScriptRead::Refused) => return Ok(error(ACCESS_DENIED)),
+        Err(ScriptRead::Failed(_)) => return Ok(error(READ_FAILED)),
+    };
+    disk.charge_read(&real, bytes.len())?;
+    let sidecar = is_sidecar(&path) && is_sidecar(&real.to_string_lossy()) && !scan;
+    // Only a file that can take a packet needs to be one the run may write.
+    if update
+        && sidecar
+        && let Err(m) = disk.target(&path, true)
+    {
+        return Ok(error(m));
+    }
+    let number = |n: usize| Data::Number(n as f64);
+    let (packet, offset, length, writeable, char_form) = if sidecar {
+        let Some((text, form)) = sidecar_text(&bytes) else { return Ok(error(UNDECODABLE)) };
+        (Data::String(text), 0, bytes.len(), true, form)
+    } else {
+        match vectorcraft_js::find_xmp_packet(&bytes) {
+            Some(span) => match bytes.get(span.start..span.end).map(std::str::from_utf8) {
+                Some(Ok(text)) => (Data::String(text.to_string()), span.start, span.end - span.start, span.writeable, 0),
+                _ => return Ok(error(UNDECODABLE)),
+            },
+            None => (Data::Null, 0, 0, false, 0),
+        }
+    };
+    Ok(Data::Object(vec![
+        ("packet".into(), packet),
+        ("offset".into(), number(offset)),
+        ("length".into(), number(length)),
+        ("writeable".into(), Data::Bool(writeable)),
+        ("sidecar".into(), Data::Bool(sidecar)),
+        ("charForm".into(), Data::Number(f64::from(char_form))),
+    ]))
+}
+
+fn xmp_utf8_packet(text: &str) -> Result<Vec<u8>, &'static str> {
+    let body = text.strip_prefix('\u{feff}').unwrap_or(text);
+    if body.starts_with("<?xml") && body.as_bytes().get(5).is_some_and(|byte| matches!(byte, b' ' | b'\t' | b'\r' | b'\n')) {
+        let options = craft_xml::Options { pis: true, comments: true, drop_blank_text: false, ..craft_xml::Options::default() }.strict();
+        let mut events = options.events(body.as_bytes());
+        match events.next() {
+            Ok(Some(_)) => Ok(body.as_bytes()[events.span().start..].to_vec()),
+            _ => Err(UNDECODABLE),
+        }
+    } else {
+        Ok(text.as_bytes().to_vec())
+    }
+}
+
+/// `xmpWrite(path, packet, safely)`: the `.xmp` file at `path` replaced by `packet` in UTF-8, under
+/// the rules for writing. The packet goes to a temporary file in the same folder that then takes the
+/// file's name, when the run may write there; otherwise to the file itself, unless `safely`, which
+/// fails and leaves the file as it is. Open objects of the file hold the new bytes.
+/// The writer omits a leading XML declaration.
+/// On Unix, the destination folder is flushed after writing. A folder flush failure returns an
+/// error after the written path is recorded and open readers receive the replacement packet.
+fn xmp_write(host: &Host, a: &[Data]) -> Result<Data, HostError> {
+    let path = arg_text(a, 0);
+    let packet = match xmp_utf8_packet(&arg_text(a, 1)) {
+        Ok(packet) => packet,
+        Err(message) => return Ok(error(message)),
+    };
+    let safely = matches!(a.get(2), Some(Data::Bool(true)));
+    if !is_sidecar(&path) {
+        return Ok(error(ACCESS_DENIED));
+    }
+    if packet.len() > MAX_FILE_BYTES {
+        return Ok(error(TOO_LARGE));
+    }
+    let mut disk = host.disk.borrow_mut();
+    let target = match disk.target(&path, true) {
+        Ok(t) => t,
+        Err(m) => return Ok(error(m)),
+    };
+    // A `.xmp` link that leads to another kind of file does not make that file a sidecar.
+    if !is_sidecar(&target.to_string_lossy()) {
+        return Ok(error(ACCESS_DENIED));
+    }
+    if std::fs::metadata(&target).is_ok_and(|m| !m.is_file()) {
+        return Ok(error(NOT_REGULAR));
+    }
+    // An open object of the file with changes not yet written keeps them: the packet is not written
+    // over them.
+    if disk.open.values().any(|o| o.dirty && o.holds(&target)) {
+        return Ok(error(WRITE_FAILED));
+    }
+    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let temp_name = |n: u32| target.with_file_name(format!(".{name}.{}.{n}.tmp", std::process::id()));
+    let first = temp_name(0);
+    let temp_allowed = disk.target(&first.to_string_lossy(), false).is_ok_and(|t| t == first);
+    // A safe update writes only through a temporary file.
+    if safely && !temp_allowed {
+        return Ok(error(WRITE_FAILED));
+    }
+    let holders = disk.open.values().filter(|o| o.holds(&target)).count();
+    disk.charge_write(packet.len().saturating_mul(holders.saturating_add(1)))?;
+    // `changed` is whether the file's bytes may differ from before: after a replacement, or once a
+    // direct write has opened (and so emptied) the file.
+    let (r, changed) = if temp_allowed {
+        // The temporary file takes a name no file or link has, so only the sidecar is replaced; when
+        // none of the names is free the sidecar is left as it is.
+        // Each name is checked against the places the run may write before it is made.
+        let allowed = |t: &Path| disk.target(&t.to_string_lossy(), false).is_ok_and(|r| r == t);
+        let new_file = |t: &Path| {
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            // On Unix the file starts readable and writable by its owner alone, until the packet is in
+            // it and the sidecar's permission bits are copied to it.
+            #[cfg(unix)]
+            std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+            allowed(t).then(|| options.open(t).ok()).flatten()
+        };
+        let Some((temp, mut out)) = (0..16).map(temp_name).find_map(|t| new_file(&t).map(|f| (t, f))) else {
+            return Ok(error(WRITE_FAILED));
+        };
+        let mut write_temp = || {
+            #[cfg(test)]
+            if XMP_WRITE_FAILS.with(std::cell::Cell::get) {
+                return Err(std::io::Error::other("write failed"));
+            }
+            #[cfg(all(test, unix))]
+            {
+                let mode = std::os::unix::fs::PermissionsExt::mode(&out.metadata()?.permissions());
+                XMP_TEMP_MODE.with(|m| m.set(Some(mode)));
+            }
+            std::io::Write::write_all(&mut out, &packet)?;
+            // The packet is on the disk before it takes the sidecar's name, as a saved document's is.
+            #[cfg(not(target_arch = "wasm32"))]
+            vectorcraft_format::sync_file(&out)?;
+            Ok(())
+        };
+        let r = write_temp();
+        drop(out);
+        // The replacement keeps the sidecar's permission bits, group and (Linux) access ACL, or is
+        // readable by its owner alone, as a saved document is (`vectorcraft_format::keep_permissions`).
+        // On Windows the only permission is the read-only attribute, and a read-only temporary file
+        // could not be removed after a failed rename. The web build has no such files. Keeping them
+        // is best effort, as for a saved document: a volume without Unix permissions (SMB, FAT) refuses them, and the
+        // update still goes through.
+        #[cfg(not(target_arch = "wasm32"))]
+        if r.is_ok() {
+            let _ = vectorcraft_format::keep_permissions(&target, &temp);
+        }
+        let r = r.and_then(|()| std::fs::rename(&temp, &target)).inspect_err(|_| {
+            let _ = std::fs::remove_file(&temp);
+        });
+        let changed = r.is_ok();
+        (r, changed)
+    } else {
+        match std::fs::File::create(&target) {
+            Ok(mut f) => (std::io::Write::write_all(&mut f, &packet), true),
+            Err(e) => (Err(e), false),
+        }
+    };
+    if changed {
+        disk.wrote(&target);
+    }
+    if r.is_ok() {
+        for file in disk.open.values_mut().filter(|o| o.holds(&target)) {
+            let reset = file.bytes.starts_with(&[0xEF, 0xBB, 0xBF]) || matches!(file.encoding, Encoding::Utf16Le | Encoding::Utf16Be);
+            file.bytes.clone_from(&packet);
+            // `File` readers with a UTF-8 byte order mark or UTF-16 encoding restart in UTF-8.
+            if reset {
+                file.encoding = Encoding::Utf8;
+                file.name = Encoding::Utf8.name().to_string();
+                file.pos = 0;
+            }
+            file.pos = file.pos.min(packet.len());
+            file.dirty = false;
+        }
+    }
+    #[cfg(all(unix, not(target_arch = "wasm32")))]
+    let r = r.and_then(|()| {
+        #[cfg(test)]
+        if XMP_DIRECTORY_SYNC_FAILS.with(std::cell::Cell::get) {
+            return Err(std::io::Error::other("directory flush failed"));
+        }
+        vectorcraft_format::sync_parent(&target)
+    });
     Ok(done(r.map_err(|_| WRITE_FAILED)))
 }
 
@@ -2509,8 +2749,20 @@ pub(super) fn install(realm: &mut Realm, link: &super::Link) -> Result<(), RunEr
         ("setHidden".into(), call(link, set_hidden)),
         ("createAlias".into(), call(link, create_alias)),
         ("pick".into(), call(link, pick)),
+        ("xmpOpen".into(), call(link, xmp_open)),
+        (
+            "xmpWrite".into(),
+            HostItem::FunctionWithLimits {
+                limits: vectorcraft_js::DataLimits {
+                    bytes: 3 * vectorcraft_js::XMP_MAX_BYTES + (128 << 10),
+                    ..vectorcraft_js::DataLimits::default()
+                },
+                function: call_function(link, xmp_write),
+            },
+        ),
     ];
-    realm.define_file_classes(items)
+    realm.define_file_classes(items)?;
+    realm.define_external_object()
 }
 
 /// Tests: what the next `copy` does with its source's path, as given and as its real path, after
@@ -2530,6 +2782,13 @@ thread_local! {
     pub(crate) static BEFORE_ALIAS_LINK: std::cell::RefCell<Option<AliasHook>> = const { std::cell::RefCell::new(None) };
     /// Tests: while set, the bytes `flush` writes fail after the file was opened for them.
     pub(crate) static FLUSH_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: while set, `xmpWrite` fails after its checks and before it writes.
+    pub(crate) static XMP_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    #[cfg(unix)]
+    pub(crate) static XMP_DIRECTORY_SYNC_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: the permission bits of the last temporary file `xmpWrite` made, before it wrote to it.
+    #[cfg(unix)]
+    pub(crate) static XMP_TEMP_MODE: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
 }
 
 #[cfg(test)]

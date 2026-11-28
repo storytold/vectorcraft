@@ -41,7 +41,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee_in_view, objects_at, selected_hidden_at};
+use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, leaves_at, marquee_in_view, selected_hidden_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -520,8 +520,6 @@ struct Measured {
     painted: [Option<Option<Rect>>; 2],
     /// [`selected_part_boxes`].
     part_boxes: Option<std::sync::Arc<[(NodeId, Rect)]>>,
-    /// [`selection_holders`].
-    holders: Option<std::sync::Arc<std::collections::HashSet<NodeId>>>,
     /// [`selects_behind_at`]'s last answer, with the point and settings it was for.
     behind: Option<(BehindKey, bool)>,
 }
@@ -598,7 +596,6 @@ impl PreviewMemo {
             by_object: HashMap::new(),
             painted: [None, None],
             part_boxes: None,
-            holders: None,
             behind: None,
         };
         if !st.entry.as_ref().is_some_and(|m| m.is_for(cx)) {
@@ -817,7 +814,7 @@ pub(crate) fn hold_point(cx: &ToolContext, h: &Hit, p: Point) -> Point {
 }
 
 /// [`hold_point`]'s point of the path hit, None when the press holds no point of it.
-fn held_on_path(cx: &ToolContext, h: &Hit, p: Point) -> Option<Point> {
+pub(crate) fn held_on_path(cx: &ToolContext, h: &Hit, p: Point) -> Option<Point> {
     let reach = if matches!(h.kind, HitKind::Stroke | HitKind::Outline) { f64::INFINITY } else { cx.tol(HOVER_REACH) };
     cx.doc.node(h.leaf).and_then(|n| n.path_data()).and_then(|pd| hold_on_path(pd, p, reach))
 }
@@ -1215,9 +1212,11 @@ impl Tool for SelectionTool {
                     self.state = State::Moving { start: p, press: p, hold: center, grip: Grip::Point, began: false, deselect, key, exclude: None };
                     return vec![];
                 }
-                // 3. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
+                // 3. Objects: once armed, Cmd/Ctrl-click selects the one under the selected one
+                // (cycling).
                 if m.cmd
                     && cx.select_behind
+                    && cx.behind_armed
                     && let Some(behind) = object_behind(cx, p)
                 {
                     self.state =
@@ -1569,13 +1568,14 @@ impl Tool for SelectionTool {
     }
 }
 
-/// Does a Cmd/Ctrl press at `p` with the Selection tool select behind: is Select Behind on and an
-/// object under the pointer selected or holding selected art (a group with a selected member),
+/// Does a Cmd/Ctrl press at `p` with the Selection tool select behind: is Select Behind on and
+/// armed by an earlier Cmd/Ctrl press ([`ToolContext::behind_armed`]), and is an object under the
+/// pointer ([`leaves_at`]) selected or inside a selected object (a member of a selected group),
 /// with another object under the pointer too, away from the anchors, handles, mesh points and
 /// spine Direct Selection edits ([`crate::direct::over_selected_part`])? Elsewhere Cmd lends the
 /// press to Direct Selection or Group Selection.
 pub fn selects_behind_at(cx: &ToolContext, p: Point) -> bool {
-    if !cx.select_behind {
+    if !cx.select_behind || !cx.behind_armed {
         return false;
     }
     let tol = cx.pick_tol();
@@ -1599,8 +1599,8 @@ pub fn selects_behind_at(cx: &ToolContext, p: Point) -> bool {
     let behind = painted_bounds(cx).is_some_and(|b| b.inflate(tol, tol).contains(p))
         && !shown_box(cx).is_some_and(|b| box_hit(cx, &b, p).is_some())
         && {
-            let stack = objects_at(cx.doc, p, cx.selection_hit_options(), cx.isolation);
-            stack.len() > 1 && holds_selection(cx, &stack).is_some()
+            let stack = under_pointer(cx, p);
+            stack.len() > 1 && lowest_selected(&stack).is_some()
         }
         && !crate::direct::over_selected_part(cx, p);
     if let Some(memo) = cx.preview_memo
@@ -1616,25 +1616,25 @@ pub fn selects_behind_at(cx: &ToolContext, p: Point) -> bool {
     behind
 }
 
-/// The index in `stack` (objects under the pointer, topmost first) of the lowest object that is
-/// selected or holds selected art, such as a group with a member picked by Direct Selection or
-/// Group Selection.
-fn holds_selection(cx: &ToolContext, stack: &[NodeId]) -> Option<usize> {
-    let holders = selection_holders(cx);
-    stack.iter().rposition(|id| holders.contains(id))
+/// The objects under `p` that Select Behind steps through, topmost first: for each object a Direct
+/// Selection click picks there ([`leaves_at`]; in a compound path, the path under the pointer), the
+/// object and whether it is selected or inside a selected object.
+fn under_pointer(cx: &ToolContext, p: Point) -> Vec<(NodeId, bool)> {
+    let tol = cx.pick_tol();
+    leaves_at(cx.doc, p, cx.selection_hit_options())
+        .into_iter()
+        .map(|h| {
+            let part = cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol));
+            let picked = h.ancestry.iter().copied().chain(std::iter::once(h.leaf)).chain(part).any(|id| cx.selection.contains(id));
+            (part.unwrap_or(h.leaf), picked)
+        })
+        .collect()
 }
 
-/// The selected objects and every object that holds one (their groups and layers), kept in the
-/// session's [`PreviewMemo`] while the document and the selection stay as they are.
-fn selection_holders(cx: &ToolContext) -> std::sync::Arc<std::collections::HashSet<NodeId>> {
-    remembered(
-        cx,
-        |m| &mut m.holders,
-        || {
-            let set = cx.selection.objects.iter().flat_map(|&id| holder_chain(cx, id)).collect();
-            std::sync::Arc::new(set)
-        },
-    )
+/// The index in `stack` ([`under_pointer`]) of the lowest object that is selected or inside a
+/// selected object.
+fn lowest_selected(stack: &[(NodeId, bool)]) -> Option<usize> {
+    stack.iter().rposition(|(_, picked)| *picked)
 }
 
 /// The selected object `id` and the objects holding it, outermost first, from the object a click
@@ -1660,13 +1660,13 @@ fn top_holder(cx: &ToolContext, id: NodeId) -> NodeId {
     holder_chain(cx, id).first().copied().unwrap_or(id)
 }
 
-/// Select Behind: of the objects under `p` (topmost first), the one below the lowest one that is
-/// selected or holds selected art, back to the topmost after the bottom one; the topmost when
-/// none is.
+/// Select Behind: of the objects under `p` ([`under_pointer`], topmost first, members of groups
+/// one by one), the one below the lowest one that is selected or inside a selected object, back to
+/// the topmost after the bottom one; the topmost when none is.
 fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
-    let stack = objects_at(cx.doc, p, cx.selection_hit_options(), cx.isolation);
-    let next = holds_selection(cx, &stack).map_or(0, |i| i + 1);
-    stack.get(next).or(stack.first()).copied()
+    let stack = under_pointer(cx, p);
+    let next = lowest_selected(&stack).map_or(0, |i| i + 1);
+    stack.get(next).or(stack.first()).map(|(id, _)| *id)
 }
 
 /// The selected object a press on `h` lands on: `top` when it is selected, else the outermost
@@ -1675,15 +1675,22 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
 /// member with only some anchors or segments selected does not count: the press selects `top`.
 /// A member with every anchor selected (as `select.anchors` and `select.key` leave a path) counts.
 fn selected_under(cx: &ToolContext, h: &Hit, top: NodeId) -> Option<NodeId> {
-    if cx.selection.contains(top) {
+    selected_under_in(cx.doc, cx.selection, h, top)
+}
+
+/// [`selected_under`] in `doc` with `selection`: the selected object a Selection tool press on
+/// `h` lands on, where `top` is the object the press would select. The canvas's hover outline
+/// outlines nothing where this finds an object.
+pub fn selected_under_in(doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection, h: &Hit, top: NodeId) -> Option<NodeId> {
+    if selection.contains(top) {
         return Some(top);
     }
     let every_anchor = |id: NodeId| {
-        cx.selection
+        selection
             .partial(id)
-            .is_none_or(|picked| cx.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().all(|(s, i, _)| picked.contains(&(s, i)))))
+            .is_none_or(|picked| doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().all(|(s, i, _)| picked.contains(&(s, i)))))
     };
-    let whole = |id: NodeId| cx.selection.contains(id) && every_anchor(id) && !cx.selection.segments.contains_key(&id);
+    let whole = |id: NodeId| selection.contains(id) && every_anchor(id) && !selection.segments.contains_key(&id);
     let below = h.ancestry.iter().position(|id| *id == top).map_or(&[][..], |i| h.ancestry.get(i..).unwrap_or_default());
     below.iter().copied().chain(std::iter::once(h.leaf)).find(|id| whole(*id))
 }

@@ -63,6 +63,57 @@ fn settings_lists_every_preferences_page() {
     assert_eq!(crate::prefs_dialog::page(&m.app), Some("Units"));
 }
 
+/// The default shortcut of command `id`, as the shortcut editor lists it.
+fn default_chord(id: &str) -> Option<Chord> {
+    crate::shortcut_editor::default_command_shortcut(id).and_then(crate::keymap::stored::parse_vc)
+}
+
+/// The Settings › General… item of `bar`.
+fn general(bar: &MenuBar) -> &Item {
+    let page = PREF_CATEGORIES[0];
+    bar.items().into_iter().find(|it| it.command.id == "edit.preferences" && it.command.params["category"] == page).expect("Settings › General…")
+}
+
+/// The menu bar hands every item its command's shortcut, so Save, Open, Undo and Group show their keys and AppKit
+/// takes them as key equivalents.
+#[test]
+fn native_items_carry_their_commands_shortcuts() {
+    let m = Mac::new(true);
+    let bar = m.fake.last();
+    for id in ["file.save", "file.open", "edit.undo", "object.group"] {
+        let chord = default_chord(id);
+        assert!(chord.is_some(), "{id} has a default shortcut");
+        assert_eq!(find(&bar, id).shortcut, chord, "{id}");
+    }
+}
+
+/// A command bound to another key shows that key in the menu bar, and its old key is no longer the item's.
+#[test]
+fn a_rebound_command_shows_its_new_key_in_the_menu_bar() {
+    let mut m = Mac::new(true);
+    let old = default_chord("object.group");
+    m.app.run("shortcuts.set", json!({"id": "object.group", "shortcut": "Cmd+Alt+Shift+F8"})).unwrap();
+    m.frame(vec![]);
+    m.frame(vec![]);
+    let shown = find(&m.fake.last(), "object.group").shortcut;
+    assert_eq!(shown, Chord::parse("Cmd+Alt+Shift+F8").ok());
+    assert_ne!(shown, old);
+}
+
+/// Settings › General… carries Preferences' shortcut as the user set it, not the default one.
+#[test]
+fn settings_general_follows_a_rebound_preferences() {
+    let mut m = Mac::new(true);
+    let old = default_chord("edit.preferences");
+    assert_eq!(general(&m.fake.last()).shortcut, old);
+    m.app.run("shortcuts.set", json!({"id": "edit.preferences", "shortcut": "Cmd+Alt+Shift+F8"})).unwrap();
+    m.frame(vec![]);
+    m.frame(vec![]);
+    let shown = general(&m.fake.last()).shortcut;
+    assert_eq!(shown, Chord::parse("Cmd+Alt+Shift+F8").ok());
+    assert_ne!(shown, old);
+}
+
 /// A native menu can't turn a plain item into a check item in place: the app's read of the menus
 /// is guarded by a state key, and these tests count the reads through a fake backend.
 ///
@@ -125,10 +176,7 @@ impl Mac {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 850.0))),
             ..Default::default()
         };
-        let app = &mut self.app;
-        craft::ui::shell::embed::before_input(&self.ctx, |out| app.frame_input(out));
-
-        crate::testing::app_frame(app, &self.ctx, raw)
+        crate::testing::app_frame(&mut self.app, &self.ctx, raw)
     }
 
     /// AppKit chose an item by its key equivalent `sc`. A paste the menu asks the host for

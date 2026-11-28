@@ -34,6 +34,8 @@ pub use open::{
 };
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
+#[cfg(test)]
+pub(crate) use save::FILE_TYPES;
 pub(crate) use save::save_current;
 pub use save::{
     SAVE_CANCELED, ask_format_options, ask_pdf_options, cancel_saves, hide_saves, remember_active_artboard, remember_view, save, save_pdf,

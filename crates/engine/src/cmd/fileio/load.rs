@@ -849,6 +849,13 @@ impl ReadFile {
         r
     }
 
+    /// Is part of the read still to do ([`Self::finish_read`]): the policies and the color mode of a
+    /// file that stopped for its profile question, or the linked files and the type of an answered
+    /// one?
+    pub fn read_left(&self) -> bool {
+        self.rest.is_some() || self.links_left.is_some()
+    }
+
     /// The rest of [`read_for_open_asking`], once: the color management policies with the profile
     /// answer (or as the policy says without one), the color mode `colorMode` asks for, the linked
     /// files and the type. The app runs it off the UI thread once the question is answered.
@@ -877,14 +884,16 @@ impl ReadFile {
         if self.rest.is_none() {
             return Ok(());
         }
+        // One snapshot of the working settings serves the reply and the policies.
+        let working = vectorcraft_color::cms::working_settings();
         // The question the answer was given to, for the reply's `profileChoice`.
-        let question = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &vectorcraft_color::cms::working_settings());
+        let question = crate::cmd::colormgmt::ProfileQuestion::of(&self.loaded.doc, &working);
         let answered = match (&self.choice, &question) {
             (Some(c), Some(q)) if c.issue() == q.issue => Some(json!({ "issue": q.issue.id(), "model": q.to_json()["model"], "choice": c.id() })),
             _ => None,
         };
         // A failure leaves the file waiting, unchanged.
-        let (notes, changed) = crate::cmd::colormgmt::apply_open_policies_choosing(&mut self.loaded.doc, self.choice.as_ref())?;
+        let (notes, changed) = crate::cmd::colormgmt::apply_open_policies_choosing(&mut self.loaded.doc, self.choice.as_ref(), &working)?;
         let Some(rest) = self.rest.take() else { return Ok(()) };
         self.answered = answered;
         self.loaded.warnings.extend(notes);

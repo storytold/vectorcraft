@@ -73,7 +73,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     fields["rgbProfile"] = json!(rgb.unwrap_or_else(|| WORKING_RGB.into()));
     fields["cmykProfile"] = json!(cmyk.unwrap_or_else(|| WORKING_CMYK.into()));
     fields["convertColors"] = json!(true);
-    let (mode, setup) = (st.doc.color_mode, st.doc.setup.clone());
+    let (source, mode, setup) = ((st.uid, st.reverts), st.doc.color_mode, st.doc.setup.clone());
     let Value::Object(map) = fields else { return Err("document.setup reported no settings".into()) };
     let presets: Vec<String> = app.session.flattener_presets().into_iter().map(|p| p.name).collect();
     let display = app.display_profile.transform(app.session.prefs.monitor_profile_display);
@@ -82,6 +82,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         PropertiesDialog::new(KIND, tl!("Document Setup"), tabs.clone(), values)
     });
     super::host::open_held(app, dialog, |app, fields| confirm(app, fields).map(|_| ())).ok_or("no window to show the dialog in")?;
+    app.document_setup_source = Some(source);
     Ok(Value::Null)
 }
 
@@ -185,6 +186,13 @@ fn color_commands(app: &VectorcraftApp, fields: &Map<String, Value>) -> Result<V
 }
 
 fn confirm(app: &mut VectorcraftApp, fields: &DialogFields) -> Result<Value, String> {
+    let source = app.document_setup_source.and_then(|(uid, reverts)| app.session.active().filter(|st| st.uid == uid).map(|st| (st, reverts)));
+    let Some((doc, reverts)) = source else {
+        return Err(tl!("Document Setup can only change the document where it was opened.").to_owned());
+    };
+    if doc.reverts != reverts {
+        return Err(tl!("Reopen Document Setup after reverting the drawing.").to_owned());
+    }
     let map = json_map(fields);
     let params = nest(map.iter().filter(|(k, _)| !is_ui_only(k)).map(|(k, v)| (k.clone(), v.clone())).collect());
     let color = color_commands(app, &map)?;
@@ -220,9 +228,12 @@ fn short_of_bleed_note(app: &VectorcraftApp, before: [f64; 4]) -> Option<String>
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let id = dialog_id(KIND);
-    let edit = dialogs.with(|host| {
-        host.get_by_id::<HostedPropertiesDialog>(id).filter(|d| d.fields().bool("editArtboards") == Some(true)).map(|d| d.fields().clone())
-    });
+    let Some(edit) = dialogs.with(|host| {
+        host.get_by_id::<HostedPropertiesDialog>(id).map(|d| (d.fields().bool("editArtboards") == Some(true)).then(|| d.fields().clone()))
+    }) else {
+        app.document_setup_source = None;
+        return;
+    };
     if let Some(fields) = edit {
         match confirm(app, &fields) {
             Ok(_) => {
@@ -389,9 +400,16 @@ fn grid_colors_row(setup: DocSetup) -> Param {
             picked = Select::new(tl!("Grid Colors:"), Bind::given(grid_preset_name(resolved).to_string()), &menu).show(ui).value().cloned();
             Row::new().show(ui, |ui, _| {
                 for (i, color) in resolved.iter().enumerate() {
-                    let name = format!("{} {}", tl!("Grid Colors:"), i + 1);
+                    let number = (i + 1).to_string();
+                    let template = tl!("Grid Colors: {number}");
+                    let name = if template == "Grid Colors: {number}" {
+                        // Keep the translated prefix for catalogs that have yet to add the complete label.
+                        format!("{} {number}", tl!("Grid Colors:"))
+                    } else {
+                        crate::i18n::fmt(template, &[("number", &number)])
+                    };
                     let [r, g, b, _] = color.to_rgba8(1.0);
-                    let srgb = Srgba::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0);
+                    let srgb = box_color(color);
                     wells[i] = Swatch::new(name.clone(), srgb).well().show(ui).clicked.then_some(srgb);
                     edits[i] = HexField::hex(name, Bind::given(Rgba::rgb(r, g, b))).show(ui).value().copied();
                 }
@@ -412,14 +430,27 @@ fn grid_colors_row(setup: DocSetup) -> Param {
     })
 }
 
-/// Takes the colors the Color Picker answered into their entries of the pair.
+/// Takes the colors the Color Picker answered into their entries of the pair. When the dialog holds
+/// two colors and the answer is the color the entry's box showed (the picker's OK left it
+/// unchanged), the entry stays as it is: a Lab or CMYK color keeps its own model, and a hex code
+/// stays that hex code.
 fn fold_picked(fields: &mut DialogFields, setup: &DocSetup) {
     for (i, key) in GRID_KEYS.iter().enumerate() {
         if let Some([r, g, b]) = fields.color(key) {
             fields.remove(key);
-            set_grid_entry(fields, setup, i, &Color::rgb(r, g, b));
+            let map = json_map(fields);
+            let shown = grid_colors(&map, setup).get(i).map(box_color).map(|s| [s.r, s.g, s.b]);
+            if pending_grid_pair(&map).is_none() || shown != Some([r, g, b]) {
+                set_grid_entry(fields, setup, i, &Color::rgb(r, g, b));
+            }
         }
     }
+}
+
+/// The color grid color `c`'s box shows, which the Color Picker it opens starts on.
+fn box_color(c: &Color) -> Srgba {
+    let [r, g, b, _] = c.to_rgba8(1.0);
+    Srgba::rgb(f32::from(r) / 255.0, f32::from(g) / 255.0, f32::from(b) / 255.0)
 }
 
 /// Sets entry `i` of the dialog's `gridColors` to `c`, the other entry staying as it is. A field
@@ -623,6 +654,94 @@ mod tests {
 
     fn undo_steps(app: &VectorcraftApp) -> usize {
         app.session.active().unwrap().history.undo.len()
+    }
+
+    fn check_source_document(edit_artboards: bool) {
+        let (mut app, ctx) = new_app();
+        let source = app.session.active().unwrap().uid;
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let destination = app.session.active().unwrap().uid;
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("file.documentSetup", json!({})).unwrap();
+        set(&app, &ctx, "bleed", json!([9, 9, 9, 9]));
+        set(&app, &ctx, "colorMode", json!("cmyk"));
+
+        let apply = |app: &mut VectorcraftApp| {
+            if edit_artboards {
+                set(app, &ctx, "editArtboards", json!(true));
+                super::pump(app, &ctx);
+                !is_open(app)
+            } else {
+                press_ok(app, &ctx)
+            }
+        };
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = undo_steps(&app);
+        let accepted = apply(&mut app);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.uid, destination);
+        assert_eq!((st.doc.setup.bleed, st.doc.color_mode), ([0.0; 4], ColorMode::Rgb), "the other document keeps its settings");
+        assert_eq!(undo_steps(&app), undo);
+        assert_eq!(app.session.tool_id(), "selection");
+        assert!(!accepted && is_open(&app));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert!(apply(&mut app));
+        let st = app.session.active().unwrap();
+        assert_eq!(st.uid, source);
+        assert_eq!((st.doc.setup.bleed, st.doc.color_mode, undo_steps(&app)), ([9.0; 4], ColorMode::Cmyk, 1));
+        assert_eq!(app.session.tool_id(), if edit_artboards { "artboard" } else { "selection" });
+        assert!(!is_open(&app));
+    }
+
+    #[test]
+    fn source_document_is_required_to_confirm_document_setup() {
+        check_source_document(false);
+    }
+
+    #[test]
+    fn source_document_is_required_to_edit_artboards_from_document_setup() {
+        check_source_document(true);
+    }
+
+    #[test]
+    fn a_revert_refuses_a_stale_document_setup_for_both_confirmation_paths() {
+        for edit_artboards in [false, true] {
+            let (mut app, ctx) = new_app();
+            app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+            app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+            let dir = vectorcraft_testkit::TempDir::new("document-setup-revert");
+            let path = dir.join("setup.vectorcraft");
+            app.run("document.setup", json!({"bleed": [2, 2, 2, 2]})).unwrap();
+            app.run("file.saveAs", json!({"path": path})).unwrap();
+            app.run("document.setup", json!({"bleed": [7, 7, 7, 7]})).unwrap();
+            app.run("file.documentSetup", json!({})).unwrap();
+            set(&app, &ctx, "bleed", json!([9, 9, 9, 9]));
+            let source = app.session.doc().unwrap();
+            let (uid, generation) = (source.uid, source.reverts);
+
+            app.run("file.revert", json!({"confirmed": true})).unwrap();
+            let reverted = app.session.doc().unwrap();
+            assert_eq!(reverted.uid, uid);
+            assert_ne!(reverted.reverts, generation);
+            let undo = reverted.history.undo.len();
+            if edit_artboards {
+                set(&app, &ctx, "editArtboards", json!(true));
+                super::pump(&mut app, &ctx);
+            } else {
+                assert!(!press_ok(&mut app, &ctx));
+            }
+            assert!(is_open(&app));
+            assert_eq!(app.session.tool_id(), "selection");
+            let reverted = app.session.doc().unwrap();
+            assert_eq!(reverted.doc.setup.bleed, [2.0; 4]);
+            assert_eq!(reverted.history.undo.len(), undo);
+
+            app.run("file.documentSetup", json!({})).unwrap();
+            set(&app, &ctx, "bleed", json!([5, 5, 5, 5]));
+            assert!(press_ok(&mut app, &ctx));
+            assert_eq!(app.session.doc().unwrap().doc.setup.bleed, [5.0; 4]);
+        }
     }
 
     #[test]
@@ -997,6 +1116,31 @@ mod tests {
         assert_eq!(super::json_map(&fields(&app))["gridColors"], json!(["lab 55 60 40", "#123456"]));
     }
 
+    /// The Color Picker's OK on a grid color it opened on, unchanged, keeps that color in its own
+    /// model: a Lab or CMYK color stays Lab or CMYK through Document Setup's OK, and a hex color
+    /// stays that hex color. The other color stays as it was.
+    #[test]
+    fn an_unchanged_grid_color_picker_ok_keeps_the_colors_own_model() {
+        for (index, grid) in
+            [(0, json!(["lab 55 60 40", "#cccccc"])), (1, json!(["#ffffff", "cmyk 0 50 100 0"])), (1, json!(["lab 55 60 40", "#123456"]))]
+        {
+            let (mut app, ctx) = new_app();
+            app.run("document.setup", json!({ "gridColors": grid })).unwrap();
+            app.run("file.documentSetup", json!({})).unwrap();
+            set(&app, &ctx, "tab", json!("Transparency"));
+            settle(&app, &ctx);
+            let before = app.session.active().unwrap().doc.setup.grid_colors;
+            let entries = super::json_map(&fields(&app))["gridColors"].clone();
+            // The picker opens on the color the box shows, and an unchanged OK answers that color.
+            let shown = super::box_color(&before[index]);
+            app.dialogs().unwrap().with(|h| h.answer_color(id(), super::GRID_KEYS[index], shown));
+            settle(&app, &ctx);
+            assert_eq!(super::json_map(&fields(&app))["gridColors"], entries, "{grid}");
+            assert!(press_ok(&mut app, &ctx));
+            assert_eq!(app.session.active().unwrap().doc.setup.grid_colors, before, "{grid}");
+        }
+    }
+
     /// The Grid Colors menu names a preset only when the pair is that preset's colors, as
     /// `document.setup` names it: a color that rounds to the preset's hex code makes it Custom.
     #[test]
@@ -1077,5 +1221,77 @@ mod tests {
         assert_eq!(super::preview_grid(&good, &setup), (vectorcraft_doc::GridSize::Small, [hex("#ff0000"), hex("#0000ff")]));
         let preset = fields(json!({"gridColors": "blue"}));
         assert_eq!(super::preview_grid(&preset, &setup), (vectorcraft_doc::GridSize::Large, [hex("#ffffff"), hex("#c4dcff")]));
+    }
+
+    /// The grid preview the open dialog draws in `ctx`, in frames run as the hosts run them
+    /// ([`crate::testing::part_frame_uploads`]): its rect, the span of its texture
+    /// coordinates (two cells per unit) and the four pixels of the texture it draws. `tiles` holds
+    /// the pixels of each 2 × 2 texture uploaded so far in `ctx`, so every frame drawn in `ctx`
+    /// goes through this function. The preview is the largest rect drawn with such a texture.
+    fn drawn_preview(
+        app: &mut VectorcraftApp,
+        ctx: &egui::Context,
+        tiles: &mut std::collections::HashMap<egui::TextureId, Vec<egui::Color32>>,
+    ) -> (Rect, egui::Vec2, Vec<egui::Color32>) {
+        let mut preview = None;
+        for _ in 0..4 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 900.0))), ..Default::default() };
+            let mut out = crate::testing::part_frame_uploads(app, ctx, raw, |app, ui| {
+                if let Some(dialogs) = app.dialogs() {
+                    dialogs.with(|h| h.run(ui));
+                }
+            });
+            for (id, deltas) in &out.textures_delta.set {
+                if let Some(d) = deltas.last() {
+                    let egui::ImageData::Color(img) = &d.image;
+                    if img.size == [2, 2] {
+                        tiles.insert(*id, img.pixels.clone());
+                    }
+                }
+            }
+            out.textures_delta.clear();
+            preview = out
+                .shapes
+                .iter()
+                .filter_map(|c| match &c.shape {
+                    egui::Shape::Rect(r) => {
+                        r.brush.as_ref().filter(|b| tiles.contains_key(&b.fill_texture_id)).map(|b| (r.rect, b.uv, b.fill_texture_id))
+                    }
+                    _ => None,
+                })
+                .max_by(|a, b| a.0.area().total_cmp(&b.0.area()));
+        }
+        let (rect, uv, texture) = preview.unwrap_or_else(|| panic!("no grid preview"));
+        let pixels = tiles.get(&texture).cloned().unwrap_or_else(|| panic!("no tile for {texture:?}"));
+        (rect, uv.size(), pixels)
+    }
+
+    /// The tile's pixels for the grid colors `a` and `b`: `a` in the top-left and bottom-right cells.
+    fn tile(a: &str, b: &str) -> Vec<egui::Color32> {
+        let c = |h| crate::panels::c32(&hex(h));
+        vec![c(a), c(b), c(b), c(a)]
+    }
+
+    /// In an open dialog, the preview follows each edit of Grid Colors and Grid Size: after a
+    /// color edit it draws a tile in the new colors, and after a size edit it draws the new cells.
+    #[test]
+    fn the_grid_preview_follows_edits_in_the_open_dialog() {
+        let (mut app, ctx) = setup_open();
+        let mut tiles = std::collections::HashMap::new();
+        set(&app, &ctx, "tab", json!("Transparency"));
+        let (rect, uv, pixels) = drawn_preview(&mut app, &ctx, &mut tiles);
+        assert_eq!((uv, pixels), (rect.size() / 16.0, tile(LIGHT[0], LIGHT[1])), "Medium, Light");
+        set(&app, &ctx, "gridColors", json!(["#ff0000", "#0000ff"]));
+        let (rect, uv, pixels) = drawn_preview(&mut app, &ctx, &mut tiles);
+        assert_eq!((uv, pixels), (rect.size() / 16.0, tile("#ff0000", "#0000ff")), "color edit");
+        set(&app, &ctx, "gridSize", json!("large"));
+        let (rect, uv, pixels) = drawn_preview(&mut app, &ctx, &mut tiles);
+        assert_eq!((uv, pixels), (rect.size() / 32.0, tile("#ff0000", "#0000ff")), "size edit");
+        set(&app, &ctx, "gridColors", json!("Dark"));
+        let (_, _, pixels) = drawn_preview(&mut app, &ctx, &mut tiles);
+        assert_eq!(pixels, tile("#666666", "#4d4d4d"), "preset edit");
+        let st = app.session.active().unwrap();
+        assert_eq!((st.doc.setup.grid_size, st.doc.setup.grid_colors), (vectorcraft_doc::GridSize::Medium, LIGHT.map(hex)));
+        assert_eq!(undo_steps(&app), 0);
     }
 }

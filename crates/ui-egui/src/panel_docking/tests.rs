@@ -62,6 +62,15 @@ impl Harness {
             .map(|b| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))
     }
 
+    /// The centre of the text field named `label` in the last frame.
+    fn text_field(&self, label: &str) -> Option<Pos2> {
+        self.nodes
+            .iter()
+            .filter(|(_, n)| n.role() == egui::accesskit::Role::TextInput && n.label() == Some(label))
+            .find_map(|(_, n)| n.bounds())
+            .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
+    }
+
     fn tab(&self, panel: &str) -> Option<Rect> {
         self.named(panel, egui::accesskit::Role::Tab)
     }
@@ -679,6 +688,9 @@ fn ui_docking_reports_the_layout_and_the_dock_state() {
     h.frame(vec![]);
     let tab = h.tab("layers").unwrap();
     h.click(tab.center());
+    // A press on a tab leaves the keys where they were (the dock's TabStrip::keeps_focus); a click in the panel's
+    // search field gives the panel the keys.
+    h.click(h.text_field("Search layers").expect("the Layers panel's search field"));
     let report = inspect(&h.app, &h.ctx);
     assert_eq!(report["layout"], serde_json::to_value(h.layout()).unwrap());
     assert_eq!(report["focused"], json!("layers"));
@@ -709,6 +721,30 @@ fn window_menu_panels_without_a_place_open_in_their_icon_group_or_float() {
     assert!(floating_window(&h.layout(), "openType").is_some());
     h.frame(vec![]);
     assert!(h.tab("openType").is_some());
+}
+
+/// The tab in front of the docked group that holds `panel`.
+fn front_of_group(layout: &Layout<String>, panel: &str) -> Option<String> {
+    dock_columns(layout).into_iter().flat_map(|c| &c.groups).find(|g| g.panels.iter().any(|p| p == panel)).and_then(|g| g.active_panel()).cloned()
+}
+
+#[test]
+fn a_panel_that_opens_floating_leaves_the_docked_tabs_as_they_were() {
+    let mut h = Harness::new();
+    assert_eq!(front_of_group(&h.layout(), "properties").as_deref(), Some("properties"));
+    for panel in ["openType", "docInfo", "attributes", "imageTrace"] {
+        h.app.run("window.panel", json!({"panel": panel})).unwrap();
+        h.frame(vec![]);
+        let layout = h.layout();
+        assert!(floating_window(&layout, panel).is_some(), "{panel} floats");
+        assert_eq!(main_panels(&layout), ["properties", "layers", "libraries"], "after {panel}");
+        assert_eq!(front_of_group(&layout, "properties").as_deref(), Some("properties"), "Properties stays in front after {panel}");
+    }
+    // A panel placed in a window of its own at a point leaves them as well.
+    place_floating(&mut h.app, "magicWand", pos2(200.0, 200.0), 0.0).unwrap();
+    let layout = h.layout();
+    assert!(floating_window(&layout, "magicWand").is_some());
+    assert_eq!(front_of_group(&layout, "properties").as_deref(), Some("properties"), "Properties stays in front after a placed panel");
 }
 
 #[test]
@@ -814,13 +850,7 @@ fn other_function_keys_and_keyboard_guards_keep_their_routes() {
     // The Layers panel's search field, clicked once the dialog has gone: it has the keys until a click on the canvas
     // takes them.
     h.frames(2);
-    let field = h
-        .nodes
-        .iter()
-        .filter(|(_, n)| n.role() == egui::accesskit::Role::TextInput && n.label() == Some("Search layers"))
-        .find_map(|(_, n)| n.bounds())
-        .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
-        .expect("the Layers panel's search field");
+    let field = h.text_field("Search layers").expect("the Layers panel's search field");
     h.click(field);
     h.f7();
     assert!(showing(&h.app.ui, "layers"), "F7 does nothing while a text field has focus");
@@ -881,6 +911,61 @@ fn cycle_options_steps_through_the_sizes_and_returns_to_the_largest() {
     assert!(!crate::panels::part_hidden(&h.app, "tr-hide-thumbs"), "the largest size shows the thumbnails");
 }
 
+/// The tab strip's Cycle Display Sizes button is named by its label, and no button of a panel's tab
+/// strip is named by a command id.
+#[test]
+fn tab_strip_buttons_are_named_by_their_labels() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.activate", json!({"panel": "stroke"})).unwrap();
+    h.frames(3);
+    let buttons: Vec<&str> = h.nodes.iter().filter(|(_, n)| n.role() == egui::accesskit::Role::Button).filter_map(|(_, n)| n.label()).collect();
+    assert!(buttons.contains(&"Cycle Display Sizes"), "{buttons:?}");
+    let ids: Vec<&&str> = buttons.iter().filter(|l| !l.contains(' ') && l.contains('.') && l.starts_with(|c: char| c.is_ascii_lowercase())).collect();
+    assert!(ids.is_empty(), "buttons named by a command id: {ids:?}");
+}
+
+/// A panel the Window menu floats opens tall enough for its content: every control of Asset Export,
+/// and every Image Trace control down to the top of its Advanced section, lies between the body's
+/// top and bottom, none scrolled or clipped away.
+#[test]
+fn window_menu_floats_open_tall_enough_for_their_content() {
+    for (panel, title, until) in [("assetExport", "Asset Export", None), ("imageTrace", "Image Trace", Some("Advanced"))] {
+        let mut h = Harness::new();
+        h.app.run("window.panel", json!({"panel": panel})).unwrap();
+        assert!(floating_window(&h.layout(), panel).is_some(), "{panel} floats");
+        h.frames(3);
+        let nodes: HashMap<_, _> = h.nodes.iter().map(|(id, node)| (*id, node)).collect();
+        let rect =
+            |node: &egui::accesskit::Node| node.bounds().map(|b| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)));
+        let (body_id, body) = h
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == egui::accesskit::Role::TabPanel && node.label() == Some(title))
+            .and_then(|(id, node)| Some((*id, rect(node)?)))
+            .unwrap_or_else(|| panic!("{panel}'s body is drawn"));
+        // Every node drawn under the panel's body; its controls are the ones without children.
+        let mut drawn = Vec::new();
+        let mut stack = vec![body_id];
+        while let Some(id) = stack.pop() {
+            let Some(node) = nodes.get(&id) else { continue };
+            stack.extend(node.children().iter().copied());
+            if let Some(r) = rect(node).filter(|r| r.is_positive()) {
+                drawn.push((node, r));
+            }
+        }
+        let limit = until.map_or(f32::INFINITY, |section| {
+            let found = drawn.iter().find(|(node, _)| node.role() == egui::accesskit::Role::Group && node.label() == Some(section));
+            found.unwrap_or_else(|| panic!("{panel} draws its {section} section")).1.top()
+        });
+        let outside: Vec<_> = drawn
+            .iter()
+            .filter(|(node, r)| node.children().is_empty() && r.top() <= limit && (r.top() < body.top() - 0.5 || r.bottom() > body.bottom() + 0.5))
+            .map(|(node, r)| (node.role(), node.label().map(str::to_owned), *r))
+            .collect();
+        assert!(outside.is_empty(), "{panel}: controls outside its body {body:?}: {outside:?}");
+    }
+}
+
 /// An unknown panel, a panel without display sizes or a missing `panel` is an error, and the
 /// panels keep their sizes.
 #[test]
@@ -897,4 +982,45 @@ fn cycle_options_rejects_panels_without_sizes() {
         assert_eq!(h.app.run("window.panel.cycleOptions", params.clone()).unwrap_err(), error, "{params}");
     }
     assert_eq!(h.layout(), before, "a refusal changes nothing");
+}
+
+/// The width of the body of the panel titled `title` as the last frame drew it.
+fn body_width(h: &Harness, title: &str) -> f32 {
+    h.nodes
+        .iter()
+        .find(|(_, node)| node.role() == egui::accesskit::Role::TabPanel && node.label() == Some(title))
+        .and_then(|(_, node)| node.bounds())
+        .map(|b| (b.x1 - b.x0) as f32)
+        .unwrap_or_else(|| panic!("{title}'s body is drawn"))
+}
+
+/// A floating panel's side dragged in past `PANEL_MIN_WIDTH` stops at the minimum.
+#[test]
+fn a_floating_panel_resized_past_the_panel_minimum_stops_at_it() {
+    let mut h = Harness::new();
+    h.app.run("window.panel.float", json!({"panel": "stroke", "x": 300, "y": 200, "width": 400, "height": 300})).unwrap();
+    h.frames(3);
+    let before = body_width(&h, "Stroke");
+    assert!((before - 400.0).abs() < 1.0, "a float wider than the minimum keeps its width: {before}");
+    let rect = floating_window(&h.layout(), "stroke").expect("Stroke floats").rect;
+    // The window's right side is its resize grip; the drag goes 300 pt in, well past the minimum.
+    let grip = pos2(rect.right() - 1.0, rect.center().y);
+    h.drag(grip, grip - vec2(300.0, 0.0));
+    let after = body_width(&h, "Stroke");
+    assert!(after < before - 1.0, "the drag narrowed the window: {before} to {after}");
+    assert!(after >= PANEL_MIN_WIDTH - 0.5, "dragged in past the minimum: {after}");
+}
+
+/// A docked column saved narrower than `PANEL_MIN_WIDTH` is drawn at the minimum.
+#[test]
+fn a_docked_column_is_never_narrower_than_the_panel_minimum() {
+    let mut h = Harness::new();
+    let mut layout = h.layout();
+    let columns = end_dock_mut(&mut layout).expect("the default layout has an end dock");
+    for column in columns.iter_mut().filter(|column| !column.iconic) {
+        column.width = Some(100.0);
+    }
+    h.set_layout(layout);
+    h.frames(3);
+    assert!(body_width(&h, "Properties") >= PANEL_MIN_WIDTH - 0.5, "saved 100 pt wide: {}", body_width(&h, "Properties"));
 }

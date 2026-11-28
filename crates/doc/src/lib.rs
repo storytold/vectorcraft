@@ -116,7 +116,7 @@ pub use metadata::{CopyrightStatus, DocMetadata};
 pub use node::Knockout;
 pub use node::Scaling;
 pub use node::{Extras, ExtrasMut, ImageObject, LAYER_COLORS, LayerColor, LiveShape, Node, NodeExtras, NodeId, NodeKind, OpacityMask};
-pub use node::{ForeignAttribute, ImageMap, MAX_SVG_SCRIPTS, ObjectAttributes, SVG_EVENTS};
+pub use node::{ForeignAttribute, ImageMap, MAX_SVG_SCRIPTS, MAX_TAG_TEXT, MAX_TAGS, ObjectAttributes, ObjectTag, SVG_EVENTS};
 pub use orient::OrientedBox;
 pub use pattern::{Overlap, PatternDef, PatternEdit, RepeatKind, RepeatSpec, TileType};
 pub use perspective::PerspectiveAttachment;
@@ -168,6 +168,7 @@ pub use artboard::{ARTBOARD_GAP, Artboard, ArtboardSide, LockedArtboards, Retire
 pub use canvas_range::BeyondCanvas;
 #[cfg(test)]
 use document_ext::free_id;
+pub use document_guides::GuideTransform;
 pub use graphic_style::{DEFAULT_GRAPHIC_STYLE, GraphicStyle};
 pub use guides::{GridPrefs, Guide, RulerMode};
 #[cfg(test)]

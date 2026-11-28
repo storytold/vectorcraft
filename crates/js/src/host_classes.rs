@@ -16,12 +16,24 @@
 //! Every member function gets the object it is called on (`this`) as its first argument, or
 //! `undefined` when `this` is not an object of a host class, followed by the call's arguments; a
 //! setter gets `this` and the value assigned. A class with an indexer answers `object[i]` for each
-//! array index `i` with it, called with `this` and the index, and `i in object` is true when it
-//! gives a value other than `undefined`; other names are looked up as usual.
+//! array index `i` with it, called with `this` and the index as a number. Other names are looked up
+//! as usual, and a name that the object and its prototypes lack goes to the indexer as a string (as
+//! a number when it is the text of one, such as `-1`), so the indexer may throw for a name nothing
+//! has. Names the engine looks up itself, such as `toJSON` in `JSON.stringify`, do not go to the
+//! indexer. Assigning to such a name reads it with the indexer first, so the assignment throws what
+//! the read throws; otherwise the value is not kept. `k in object` calls the indexer with `true` as
+//! a third argument, and is true when it gives a value other than `undefined`.
+//!
+//! `hasOwnProperty` and `propertyIsEnumerable` are true on an object of a host class for each
+//! member of its class and of the classes it descends from, apart from the members that are not
+//! available yet ([`HostMember::Unavailable`]). `for`-`in` lists the properties among those members,
+//! and not the methods. `Object.keys`, `Object.getOwnPropertyNames` and
+//! `Object.getOwnPropertyDescriptor` do not report the members.
 
+use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::heap::{Class, Func, ObjId, Object, Prop, key};
+use crate::heap::{CONFIGURABLE, Class, ENUMERABLE, Func, Key, ObjId, Object, Prop, key};
 use crate::host::ArgRead;
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
 use crate::value::Value;
@@ -39,6 +51,9 @@ pub enum HostMember {
     Property { get: HostFunction, set: HostFunction },
     /// A method.
     Method(HostFunction),
+    /// A property the class lists that is not available yet: the function answers both a read and
+    /// an assignment, with an error. It is not reported as the object's own, and `for`-`in` skips it.
+    Unavailable(HostFunction),
 }
 
 /// A class [`crate::Realm::define_host_classes`] adds.
@@ -73,8 +88,12 @@ pub(crate) struct Entry {
     /// The class without a parent this class descends from (itself for such a class), as an index
     /// into the realm's classes.
     family: u32,
-    /// The class's parent, as an index into the realm's classes.
+    /// The class this class's prototype inherits from, as an index into the realm's classes.
     parent: Option<u32>,
+    /// The names of the members `hasOwnProperty` reports: every member but the unavailable ones.
+    own: Rc<HashSet<Key>>,
+    /// The names of the members this class declares as unavailable.
+    unavailable: Rc<HashSet<Key>>,
 }
 
 /// Whether class `a` is class `b` or descends from it, both indexes into `classes`.
@@ -142,12 +161,38 @@ pub fn host_ref_parts(d: &Data) -> Option<(&str, Vec<f64>)> {
 }
 
 impl Interp {
+    /// Whether `k` is a member that `hasOwnProperty` reports on `id`: `id` is an object of a host
+    /// class, and `k` names an available member of that class or of a class it descends from. The
+    /// nearest class that declares `k` decides, so a member a class declares unavailable is not
+    /// reported even when a class it descends from has it.
+    pub(crate) fn is_host_member(&self, id: ObjId, k: &[u16]) -> JsResult<bool> {
+        let Class::Host(h) = &self.object(id)?.class else { return Ok(false) };
+        let mut class = Some(h.class);
+        while let Some(c) = class {
+            let Some(e) = self.host_classes.get(c as usize) else { return Err(Abrupt::Internal("host class out of range".into())) };
+            if e.own.contains(k) {
+                return Ok(true);
+            }
+            if e.unavailable.contains(k) {
+                return Ok(false);
+            }
+            class = e.parent;
+        }
+        Ok(false)
+    }
+
     /// The [`Data`] for the object of a host class `id`, or `None` when it is not one.
     pub(crate) fn host_ref_of(&self, id: ObjId) -> JsResult<Option<Data>> {
         let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
         let name =
             self.host_classes.get(h.class as usize).map(|e| e.name.clone()).ok_or_else(|| Abrupt::Internal("host class out of range".into()))?;
         Ok(Some(host_ref(&name, &h.handle)))
+    }
+
+    pub(crate) fn host_ref_size(&self, id: ObjId) -> JsResult<Option<(usize, usize)>> {
+        let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
+        let name = self.host_classes.get(h.class as usize).map(|e| e.name.len()).ok_or_else(|| Abrupt::Internal("host class out of range".into()))?;
+        Ok(Some((name, h.handle.len())))
     }
 
     /// The object of a host class that `d`, which a host function gave, stands for.
@@ -213,24 +258,44 @@ impl Interp {
         Ok(self.host_classes.get(h.class as usize).and_then(|e| e.index.clone()))
     }
 
-    /// `object[index]` of an object of a host class, which its class's indexer `f` answers.
-    pub(crate) fn host_index(&mut self, f: &HostFunction, id: ObjId, index: u32) -> JsResult<Value> {
+    /// `object[k]` of an object of a host class, which its class's indexer `f` answers: `k` is an
+    /// array index as a number, or a name as a string. With `probe`, for `k in object`, the indexer
+    /// gets `true` as a third argument.
+    pub(crate) fn host_index(&mut self, f: &HostFunction, id: ObjId, k: Data, probe: bool) -> JsResult<Value> {
         self.use_fuel()?;
-        let Some(this) = self.host_ref_of(id)? else { return Ok(Value::Undefined) };
-        match f(vec![this, Data::Number(f64::from(index))]) {
+        if self.host_ref_size(id)?.is_none() {
+            return Ok(Value::Undefined);
+        }
+        let args = self.read_index_args(id, k, probe)?;
+        match f(args) {
             Ok(d) => self.write_hosted(d),
             Err(HostError::Wait) => Err(Abrupt::Internal("a host class's indexer waited for its result".into())),
             Err(e) => Err(self.host_error(e)?),
         }
     }
 
-    /// [[HasProperty]] of `k` on `id`: for an array index of an object of a host class with an
-    /// indexer, whether the indexer gives a value other than `undefined` for it.
+    /// The key an indexer gets for `k`: a number for an array index and for any other key that is
+    /// the text of a number (`-1`, `1.5`, `NaN`), otherwise the name.
+    pub(crate) fn indexer_key(k: &[u16]) -> Data {
+        if let Some(i) = crate::value::array_index(k) {
+            return Data::Number(f64::from(i));
+        }
+        let name = String::from_utf16_lossy(k);
+        match name.parse::<f64>() {
+            Ok(n) if crate::number_to_string(n) == name => Data::Number(n),
+            _ => Data::String(name),
+        }
+    }
+
+    /// [[HasProperty]] of `k` on `id`: for an object of a host class with an indexer, an array index,
+    /// or a name that the object and its prototypes lack, is there when the indexer gives a value other
+    /// than `undefined` for it.
     pub(crate) fn has_property_indexed(&mut self, id: ObjId, k: &[u16]) -> JsResult<bool> {
-        if let Some(i) = crate::value::array_index(k)
+        let index = crate::value::array_index(k).is_some();
+        if (index || !self.has_property(id, k)?)
             && let Some(f) = self.host_indexer(id)?
         {
-            return Ok(!matches!(self.host_index(&f, id, i)?, Value::Undefined));
+            return Ok(!matches!(self.host_index(&f, id, Self::indexer_key(k), true)?, Value::Undefined));
         }
         self.has_property(id, k)
     }
@@ -257,6 +322,22 @@ pub(crate) fn install(i: &mut Interp, classes: Vec<HostClass>, instances: Vec<(S
     Ok(())
 }
 
+/// Adds the global properties `globals`, each read with its getter and assigned with its setter as
+/// a member of a host class is. Assigning one without a setter keeps its value, and throws in strict
+/// mode code.
+pub(crate) fn install_globals(i: &mut Interp, globals: Vec<(String, HostFunction, Option<HostFunction>)>) -> JsResult<()> {
+    let global = i.global;
+    for (name, get, set) in globals {
+        let mark = i.temp_roots.len();
+        let get = hosted_function(i, get, &name);
+        i.temp_roots.push(Value::Object(get));
+        let set = set.map(|f| hosted_function(i, f, &name));
+        i.temp_roots.truncate(mark);
+        i.define(global, key(&name), Prop::Accessor { get: Some(get), set, flags: CONFIGURABLE })?;
+    }
+    Ok(())
+}
+
 fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     if i.host_classes.iter().any(|e| *e.name == *class.name) {
         return Err(i.throw(ErrorType::Type, &format!("the host class {} is defined twice", class.name)));
@@ -265,7 +346,7 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     let (parent, family, parent_class) = match &class.parent {
         None => (i.intrinsics.object_proto, own, None),
         Some(p) => match i.host_classes.iter().enumerate().find(|(_, e)| *e.name == **p) {
-            Some((at, e)) => (e.proto, e.family, u32::try_from(at).ok()),
+            Some((n, e)) => (e.proto, e.family, u32::try_from(n).ok()),
             None => return Err(i.throw(ErrorType::Type, &format!("the host class {p} is not defined"))),
         },
     };
@@ -275,7 +356,18 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
     let r = fill_class(i, proto, &class);
     i.temp_roots.truncate(mark);
     let ctor = r?;
-    i.host_classes.push(Entry { name: class.name.as_str().into(), proto, ctor, index: class.index, family, parent: parent_class });
+    let (unavailable, members): (Vec<_>, Vec<_>) = class.members.iter().partition(|(_, m)| matches!(m, HostMember::Unavailable(_)));
+    let names = |list: Vec<&(String, HostMember)>| list.into_iter().map(|(name, _)| key(name)).collect::<HashSet<Key>>();
+    i.host_classes.push(Entry {
+        name: class.name.as_str().into(),
+        proto,
+        ctor,
+        index: class.index,
+        family,
+        parent: parent_class,
+        own: Rc::new(names(members)),
+        unavailable: Rc::new(names(unavailable)),
+    });
     let global = i.global;
     i.define(global, key(&class.name), Prop::Data { value: Value::Object(ctor), flags: crate::heap::HIDDEN })
 }
@@ -286,13 +378,17 @@ fn fill_class(i: &mut Interp, proto: ObjId, class: &HostClass) -> JsResult<ObjId
     for (name, member) in &class.members {
         let full = format!("{path}.{name}");
         let prop = match member {
-            HostMember::Get(f) => Prop::Accessor { get: Some(hosted_function(i, f.clone(), &full)), set: None, flags: 0 },
+            HostMember::Get(f) => Prop::Accessor { get: Some(hosted_function(i, f.clone(), &full)), set: None, flags: ENUMERABLE },
             HostMember::Property { get, set } => {
                 let get = hosted_function(i, get.clone(), &full);
                 i.temp_roots.push(Value::Object(get));
-                Prop::Accessor { get: Some(get), set: Some(hosted_function(i, set.clone(), &full)), flags: 0 }
+                Prop::Accessor { get: Some(get), set: Some(hosted_function(i, set.clone(), &full)), flags: ENUMERABLE }
             }
             HostMember::Method(f) => Prop::Data { value: Value::Object(hosted_function(i, f.clone(), &full)), flags: 0 },
+            HostMember::Unavailable(f) => {
+                let f = hosted_function(i, f.clone(), &full);
+                Prop::Accessor { get: Some(f), set: Some(f), flags: 0 }
+            }
         };
         i.define(proto, key(name), prop)?;
     }

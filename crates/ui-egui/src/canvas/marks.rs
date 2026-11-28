@@ -108,6 +108,17 @@ pub struct SpellingMarks {
     pub(super) lines: HashMap<NodeId, (Arc<Node>, Underlines)>,
 }
 
+/// The visible text objects of a document, depth first in paint order ([`TextNodes`]).
+pub(super) type TextList = Arc<Vec<Arc<Node>>>;
+
+/// The visible text objects of the active document, for (document uid, revision): Show Hidden
+/// Characters and Auto Spell Check draw over them every pass ([`crate::CanvasCache::text_nodes`]).
+/// A pass that draws neither drops them ([`marks_of`]).
+#[derive(Default)]
+pub struct TextNodes {
+    pub(super) list: Option<((u64, u64), TextList)>,
+}
+
 /// One print tile on the screen: its paper edge and its number.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Tile {
@@ -149,6 +160,13 @@ pub(crate) struct Marks {
     artboard_marks: Vec<BezPath>,
 }
 
+/// Drops the hidden-character and spelling memos and the text nodes they hold.
+pub(crate) fn release_text_marks(app: &mut VectorcraftApp) {
+    app.canvas.hidden_chars.marks.clear();
+    app.canvas.spelling = SpellingMarks::default();
+    app.canvas.text_nodes = TextNodes::default();
+}
+
 /// The marks of one canvas pass over `view`. The memos of [`crate::CanvasCache`] are kept while their
 /// gate is on and dropped, with the text nodes they hold, when it is off.
 pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
@@ -166,11 +184,13 @@ pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
     if !spelling_gate {
         app.canvas.spelling = SpellingMarks::default();
     }
+    if !hidden_gate && !spelling_gate {
+        app.canvas.text_nodes = TextNodes::default();
+    }
     let fades = artboards::fades_outside_artboards(app);
     let shows_artboards = artboards::shows_artboards(app);
     let Some(st) = app.session.active() else {
-        app.canvas.hidden_chars.marks.clear();
-        app.canvas.spelling = SpellingMarks::default();
+        release_text_marks(app);
         return m;
     };
     let key = (st.uid, st.revision);
@@ -181,11 +201,16 @@ pub(crate) fn marks_of(app: &mut VectorcraftApp, view: &CanvasView) -> Marks {
         m.bleed = artboards::bleed_paths(st);
         m.artboard_marks = artboards::mark_paths(st, view.zoom);
     }
-    if hidden_gate {
-        collect_hidden(st, view, &mut app.canvas.hidden_chars, &mut m.hidden);
-    }
-    if spelling_gate {
-        collect_spelling(st, view, &mut app.canvas.spelling, &mut m.spelling);
+    if hidden_gate || spelling_gate {
+        // Both draw over the same text objects, found among the document's other objects once
+        // for each revision.
+        let texts = cached(&mut app.canvas.text_nodes.list, key, || text_nodes(&st.doc.layers));
+        if hidden_gate {
+            collect_hidden(&texts, view, &mut app.canvas.hidden_chars, &mut m.hidden);
+        }
+        if spelling_gate {
+            collect_spelling(st, &texts, view, &mut app.canvas.spelling, &mut m.spelling);
+        }
     }
     if inside_gate
         && let Some(id) = app.session.draw_inside
@@ -267,14 +292,22 @@ fn cached<T>(slot: &mut Option<((u64, u64), Arc<T>)>, key: (u64, u64), make: imp
     v
 }
 
-/// Depth first in paint order, leaving out hidden objects and what is inside them.
-fn walk(nodes: &[Arc<Node>], f: &mut impl FnMut(&Arc<Node>)) {
-    for n in nodes.iter().filter(|n| n.visible) {
-        f(n);
-        if let Some(children) = n.children() {
-            walk(children, f);
+/// The text objects in `layers`, depth first in paint order, leaving out hidden objects and what
+/// is inside them.
+fn text_nodes(layers: &[Arc<Node>]) -> Vec<Arc<Node>> {
+    fn walk(nodes: &[Arc<Node>], out: &mut Vec<Arc<Node>>) {
+        for n in nodes.iter().filter(|n| n.visible) {
+            if matches!(n.kind, NodeKind::Text(_)) {
+                out.push(n.clone());
+            }
+            if let Some(children) = n.children() {
+                walk(children, out);
+            }
         }
     }
+    let mut out = Vec::new();
+    walk(layers, &mut out);
+    out
 }
 
 /// Whether `n`'s box meets the part of the document the view shows (the box round the view's
@@ -286,7 +319,7 @@ fn in_view(n: &Node, view: &CanvasView) -> bool {
 
 /// The marks of the visible text objects in view, laid out again only for the objects the memo
 /// doesn't hold as they are now. The objects not shown this pass are dropped from the memo.
-fn collect_hidden(st: &DocState, view: &CanvasView, kept: &mut HiddenChars, out: &mut Vec<PlacedMark>) {
+fn collect_hidden(texts: &[Arc<Node>], view: &CanvasView, kept: &mut HiddenChars, out: &mut Vec<PlacedMark>) {
     let mut last = std::mem::take(&mut kept.marks);
     // The inputs are read before any layout: when fonts load during this pass, the next pass lays
     // all type out again.
@@ -295,10 +328,10 @@ fn collect_hidden(st: &DocState, view: &CanvasView, kept: &mut HiddenChars, out:
         last.clear();
         kept.inputs = inputs;
     }
-    walk(&st.doc.layers, &mut |n| {
-        let NodeKind::Text(tx) = &n.kind else { return };
+    for n in texts {
+        let NodeKind::Text(tx) = &n.kind else { continue };
         if !in_view(n, view) {
-            return;
+            continue;
         }
         let marks = match last.remove(&n.id) {
             Some((was, marks)) if Arc::ptr_eq(&was, n) => marks,
@@ -306,12 +339,12 @@ fn collect_hidden(st: &DocState, view: &CanvasView, kept: &mut HiddenChars, out:
         };
         out.extend_from_slice(&marks);
         kept.marks.insert(n.id, (n.clone(), marks));
-    });
+    }
 }
 
 /// The Auto Spell Check segments of the visible text objects in view, checked again only for the
 /// objects the memo doesn't hold as they are now.
-fn collect_spelling(st: &DocState, view: &CanvasView, kept: &mut SpellingMarks, out: &mut Vec<(Point, Point)>) {
+fn collect_spelling(st: &DocState, texts: &[Arc<Node>], view: &CanvasView, kept: &mut SpellingMarks, out: &mut Vec<(Point, Point)>) {
     let mut last = std::mem::take(&mut kept.lines);
     let inputs = SpellingInputs {
         fonts: vectorcraft_text::FontDb::global().generation(),
@@ -325,10 +358,10 @@ fn collect_spelling(st: &DocState, view: &CanvasView, kept: &mut SpellingMarks, 
         last.clear();
         kept.inputs = Some(inputs);
     }
-    walk(&st.doc.layers, &mut |n| {
-        let NodeKind::Text(tx) = &n.kind else { return };
+    for n in texts {
+        let NodeKind::Text(tx) = &n.kind else { continue };
         if !auto_spell_checks(n) || !in_view(n, view) {
-            return;
+            continue;
         }
         let lines = match last.remove(&n.id) {
             Some((was, lines)) if Arc::ptr_eq(&was, n) => lines,
@@ -336,7 +369,7 @@ fn collect_spelling(st: &DocState, view: &CanvasView, kept: &mut SpellingMarks, 
         };
         out.extend_from_slice(&lines);
         kept.lines.insert(n.id, (n.clone(), lines));
-    });
+    }
 }
 
 /// Draw Inside's arms on the screen: round the corners of `bounds` (a few pixels outside the

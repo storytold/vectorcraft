@@ -158,6 +158,28 @@ fn a_rectangle_shows_linked_and_unlinked_corner_types() {
     assert!(!p.shows("Corner") && p.shows("Top Left Corner") && p.shows("Bottom Left Corner"));
 }
 
+/// The four corner labels of an unlinked Corner Radius, in the Transform panel and in the
+/// Properties panel, start at one edge of their column whatever their widths, and the radius
+/// fields after them line up.
+#[test]
+fn unlinked_corner_labels_start_in_one_column() {
+    use craft::ui::contract::Role;
+    let corners = ["Top Left", "Top Right", "Bottom Right", "Bottom Left"];
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = new_app();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 120, "height": 80, "radius": 10})).unwrap();
+        set_pref(&mut app, "singleCornerRadius", false);
+        let p = Panel::new(app, draw);
+        let labels = corners.map(|name| p.rect_role(name, Role::LABEL));
+        let fields = corners.map(|name| p.rect_role(name, Role::SPIN_BUTTON));
+        assert!(labels[2].width() > labels[0].width() + 1.0, "Bottom Right {:?} is wider than Top Left {:?}", labels[2], labels[0]);
+        for (name, (label, field)) in corners.iter().zip(labels.iter().zip(&fields)) {
+            assert!((label.left() - labels[0].left()).abs() < 0.5, "{name} starts at {}, Top Left at {}", label.left(), labels[0].left());
+            assert!((field.left() - fields[0].left()).abs() < 0.5, "{name}'s field starts at {}, Top Left's at {}", field.left(), fields[0].left());
+        }
+    }
+}
+
 /// A corner kind set with no live rectangle selected leaves the selected polygon, the document and
 /// its undo history as they are.
 #[test]
@@ -962,4 +984,94 @@ fn a_frame_after_a_shape_shows_the_transform_panel() {
         crate::tests::synthetic::key_frame(&mut app, &ctx, vec![]);
         assert_eq!(crate::panel_docking::visible(&app, "transform"), on, "on: {on}");
     }
+}
+
+/// The selected live polygon's side count.
+fn polygon_sides(app: &VectorcraftApp) -> u32 {
+    match &first_selected(app).unwrap().kind {
+        NodeKind::Path { live: Some(l), .. } => match **l {
+            LiveShape::Polygon { sides, .. } => sides,
+            ref k => panic!("{k:?}"),
+        },
+        k => panic!("{k:?}"),
+    }
+}
+
+/// An app with a live polygon of `sides` sides selected.
+fn polygon_app(sides: u32) -> VectorcraftApp {
+    let mut app = new_app();
+    app.run("shape.polygon", json!({"cx": 150, "cy": 150, "radius": 50, "sides": 6})).unwrap();
+    if sides != 6 {
+        app.run("object.setLiveShape", json!({ "sides": sides })).unwrap();
+    }
+    app
+}
+
+fn undo_depth(app: &VectorcraftApp) -> usize {
+    app.session.doc().unwrap().history.undo.len()
+}
+
+/// Polygon Properties' Sides row has a slider after its field, in the Transform panel and the Properties panel's
+/// Transform section; screen readers read the side count from it.
+#[test]
+fn polygon_sides_slider_is_shared_by_transform_and_properties() {
+    use craft::ui::contract::Role;
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let p = Panel::new(polygon_app(6), draw);
+        assert_eq!(p.value_role("Sides", Role::SLIDER).as_deref(), Some("6"));
+        assert!(p.rect_role("Sides", Role::SLIDER).left() >= p.rect_role("Sides", Role::SPIN_BUTTON).right(), "the slider follows the field");
+    }
+}
+
+/// A count past the slider's 20 stays as it is while the panel is drawn, and the field and screen readers show it.
+/// A click on the rail then sets a count from 3 to 20 in one undo step, and an arrow key steps it by one in one
+/// undo step.
+#[test]
+fn polygon_sides_above_slider_range_remain_editable() {
+    use craft::ui::contract::Role;
+    let mut p = Panel::new(polygon_app(50), show);
+    let depth = undo_depth(&p.app());
+    let revision = p.app().session.active().unwrap().revision;
+    p.frame();
+    assert_eq!(polygon_sides(&p.app()), 50);
+    assert_eq!(p.app().session.active().unwrap().revision, revision, "drawing the slider leaves the document as it is");
+    assert_eq!(p.value_role("Sides", Role::SLIDER).as_deref(), Some("50"));
+    assert_eq!(p.value_role("Sides", Role::SPIN_BUTTON).as_deref(), Some("50"));
+    p.click_role("Sides", Role::SLIDER);
+    let clicked = polygon_sides(&p.app());
+    assert!((3..=20).contains(&clicked), "{clicked}");
+    assert_eq!(undo_depth(&p.app()), depth + 1, "a click on the rail is one undo step");
+    p.key(egui::Key::ArrowRight, egui::Modifiers::NONE);
+    assert_eq!(polygon_sides(&p.app()), clicked + 1);
+    assert_eq!(undo_depth(&p.app()), depth + 2, "a key step is one undo step");
+    p.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(polygon_sides(&p.app()), clicked);
+}
+
+/// A drag on the Sides slider previews the side count and its release records one undo step, which Undo takes
+/// back. Escape during a drag puts the polygon back, and its release then records nothing.
+#[test]
+fn polygon_sides_slider_drag_is_one_undo_step() {
+    use craft::ui::contract::Role;
+    let mut p = Panel::new(polygon_app(6), show);
+    let depth = undo_depth(&p.app());
+    p.drag_hold_role("Sides", Role::SLIDER, egui::vec2(40.0, 0.0));
+    assert!(p.app().session.in_interaction(), "the drag is in progress");
+    let dragged = polygon_sides(&p.app());
+    assert!(dragged > 6, "the drag previews the count: {dragged}");
+    assert_eq!(undo_depth(&p.app()), depth);
+    p.release();
+    assert!(!p.app().session.in_interaction(), "the release ends the drag");
+    assert_eq!(polygon_sides(&p.app()), dragged);
+    assert_eq!(undo_depth(&p.app()), depth + 1, "the whole drag is one undo step");
+    p.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(polygon_sides(&p.app()), 6);
+    p.drag_hold_role("Sides", Role::SLIDER, egui::vec2(40.0, 0.0));
+    assert!(polygon_sides(&p.app()) > 6);
+    p.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(!p.app().session.in_interaction(), "Escape ends the drag");
+    assert_eq!(polygon_sides(&p.app()), 6, "Escape puts the count back");
+    p.release();
+    assert_eq!(polygon_sides(&p.app()), 6);
+    assert_eq!(undo_depth(&p.app()), depth, "a canceled drag records no undo step");
 }

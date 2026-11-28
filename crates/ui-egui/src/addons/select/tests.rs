@@ -39,6 +39,41 @@ fn names(v: &[&str]) -> Vec<String> {
     v.iter().map(|s| s.to_string()).collect()
 }
 
+#[test]
+fn canceling_a_keyboard_relation_choice_restores_the_original_selection_rule() {
+    use craft::ui::contract::Role;
+
+    let mut app = new_app();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let inside = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    let edge = app.run("shape.rectangle", json!({"x": 90, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let mut panel = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+    panel.room(egui::vec2(800.0, 600.0));
+    menus::invoke(&mut panel.app(), COMMAND, Value::Null);
+    panel.frame();
+    panel.click_role("Select", Role::COMBO_BOX);
+    panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<ArtboardsDialog>().unwrap().fields.relation.clone()), "inside");
+    panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<ArtboardsDialog>().unwrap().fields.relation.clone()), "overlap");
+    panel.click("OK");
+    let mut actual = panel.app().session.active().unwrap().selection.objects.clone();
+    let mut expected = vec![vectorcraft_doc::NodeId(inside), vectorcraft_doc::NodeId(edge)];
+    actual.sort_unstable();
+    expected.sort_unstable();
+    assert_eq!(actual, expected);
+
+    menus::invoke(&mut panel.app(), COMMAND, Value::Null);
+    panel.frame();
+    panel.click_role("Select", Role::COMBO_BOX);
+    panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+    panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert_eq!(host(&panel.app(), |host| host.get::<ArtboardsDialog>().unwrap().fields.relation.clone()), "inside");
+    panel.click("OK");
+    assert_eq!(panel.app().session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(inside)]);
+}
+
 /// A 100 × 100 document with a Banner artboard at x 150, an object in each artboard, and nothing selected.
 fn banner() -> (VectorcraftApp, u64) {
     let mut app = new_app();
@@ -85,6 +120,17 @@ fn select_by_artboards_opens_on_the_active_artboard_and_selects_on_ok() {
     assert!(confirm(&mut app, id));
     assert!(host(&app, |h| !h.is_open::<ArtboardsDialog>()));
     assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(inside)]);
+}
+
+#[test]
+fn select_by_artboards_draws_its_artboards_and_buttons() {
+    let (app, _) = banner();
+    let mut p = crate::tests::panel_harness::Panel::new(app, crate::tests::picks::dialogs);
+    menus::invoke(&mut p.app(), COMMAND, Value::Null);
+    p.frame();
+    for name in ["Banner", "Select All", "OK", "Cancel"] {
+        assert!(p.shows(name), "{name} is drawn");
+    }
 }
 
 #[test]
