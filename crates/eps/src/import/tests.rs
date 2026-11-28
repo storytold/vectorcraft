@@ -766,6 +766,8 @@ fn the_bounding_box_comes_from_the_header_or_the_trailer() {
     assert_eq!(d.bbox, Some([1.5, 2.5, 29.5, 39.5]));
     let d = Dsc::read(b"%!PS-Adobe-3.0\n%%BoundingBox: (atend)\n%%Pages: 3\n%%EndComments\nshowpage\n%%Trailer\n%%BoundingBox: 0 0 10 20\n");
     assert_eq!((d.bbox, d.pages), (Some([0.0, 0.0, 10.0, 20.0]), Some(3)));
+    let d = Dsc::read(b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 200000 200000\n%%BoundingBox: 0 0 40 50\n%%EndComments\n");
+    assert_eq!(d.bbox, Some([0.0, 0.0, 40.0, 50.0]));
     let r = import(b"%!PS-Adobe-3.0\n%%Pages: 2\n0 0 5 5 rectfill showpage 0 0 9 9 rectfill showpage\n").unwrap();
     // No bounding box: a letter page; only the first page.
     assert_eq!(r.document.artboards[0].rect, Rect::new(0.0, 0.0, 612.0, 792.0));
@@ -934,7 +936,7 @@ fn device_settings_are_accepted_and_change_nothing() {
 /// `warnings` without the note naming fonts that aren't available: which those are depends on the
 /// fonts installed where the tests run, not on the program.
 pub(super) fn program_warnings(warnings: &[String]) -> Vec<&String> {
-    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE)).collect()
+    warnings.iter().filter(|w| !w.starts_with(super::MISSING_FONTS_NOTE) && !w.starts_with(super::CARRIED_FONTS_NOTE)).collect()
 }
 
 fn blue(body: &str) {

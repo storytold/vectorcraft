@@ -4,31 +4,153 @@
 //!
 //! Fields: `reduction`, `colors`, `dither`, `ditherAmount` and `preview`.
 
+use std::sync::Arc;
+
+use craft::ui::dialog::dialog_id;
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::runtime::env::UnitKind;
 use serde_json::{Value, json};
 use vectorcraft_render::encode::quantize::{Dither, Reduction};
 
-use super::{DialogSpec, form};
-use crate::state::Dialog;
-use crate::{VectorcraftApp, widgets};
+use super::host::{HeldOptions, open_held_with};
+use crate::VectorcraftApp;
+use crate::dialogs::preview::LivePreview;
 
 /// The dialog kind of Convert to Indexed Color.
 pub const KIND: &str = "indexedColor";
 
 const CMD: &str = "edit.colors.toIndexed";
+/// The undo step a preview and OK make.
+const PREVIEW_LABEL: &str = "Convert to Indexed Color";
+
+pub(crate) struct Open {
+    document: u64,
+    opening: Arc<()>,
+    preview: LivePreview,
+}
+
+impl Open {
+    fn on_original_drawing(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().is_some_and(|st| st.uid == self.document)
+    }
+
+    fn cancel_preview(self, app: &mut VectorcraftApp) {
+        if self.on_original_drawing(app) && !other_preview(app) {
+            self.preview.cancel(app);
+        }
+    }
+}
+
+fn other_preview(app: &VectorcraftApp) -> bool {
+    app.session.active().and_then(|st| st.interaction.as_ref()).is_some_and(|p| p.label != PREVIEW_LABEL)
+}
 
 /// The reductions besides those of a PNG-8 export, as (value, label).
 const MORE_REDUCTIONS: [(&str, &str); 2] = [("uniform", "Uniform"), ("document", "Document Swatches")];
 
-/// Label column and dropdown widths.
-const WIDTHS: (f32, f32) = (110.0, 160.0);
+/// The dialog's rows: colors only for a reduction that takes them, the amount only while dithering.
+fn rows() -> Vec<Param> {
+    let reductions = Reduction::ALL.iter().map(|r| (r.id(), r.label())).chain(MORE_REDUCTIONS).collect::<Vec<_>>();
+    let with_colors: Vec<String> = reductions.iter().filter(|(id, _)| takes_colors(id)).map(|(id, _)| id.to_string()).collect();
+    let dithers = Dither::ALL.iter().filter(|d| **d != Dither::None).map(|d| d.id().to_string()).collect::<Vec<_>>();
+    vec![
+        Param::new(
+            "reduction",
+            tl!("Reduction"),
+            ParamKind::choice(reductions.iter().map(|(id, l)| (id.to_string(), (*l).into())).collect(), Some("selective".into())),
+        ),
+        Param::new("colors", tl!("Colors"), ParamKind::int(Some(least_colors("") as i64), Some(256), 256)).visible_when_in("reduction", with_colors),
+        Param::new(
+            "dither",
+            tl!("Dither"),
+            ParamKind::choice(Dither::ALL.iter().map(|d| (d.id().to_string(), d.label().into())).collect(), Some("diffusion".into())),
+        ),
+        Param::new("ditherAmount", tl!("Amount"), ParamKind::int(Some(0), Some(100), 100)).unit(UnitKind::Percent).visible_when_in("dither", dithers),
+    ]
+}
 
-pub(super) const SPEC: DialogSpec =
-    DialogSpec { heading: |_| tl!("Convert to Indexed Color").into(), body, confirm, preview: true, min_width: 320.0, ..DialogSpec::FORM };
+/// The dialog over its values; the colors show what the command gets: at least the reduction's fewest.
+fn build(fields: &mut DialogFields) -> ParamDialog<'_> {
+    if let (Some(reduction), Some(n)) = (fields.text("reduction"), fields.int("colors")) {
+        let clamped = n.clamp(least_colors(reduction) as i64, 256);
+        if clamped != n {
+            fields.set("colors", clamped);
+        }
+    }
+    ParamDialog::new(KIND, tl!("Convert to Indexed Color"), rows()).previews(true)
+}
 
 /// Open the dialog with the defaults of `edit.colors.toIndexed`.
 pub fn open(app: &mut VectorcraftApp) {
-    let fields = json!({"reduction": "selective", "colors": 256, "dither": "diffusion", "ditherAmount": 100, "preview": true});
-    app.ui.dialog = Some(Dialog::new(KIND, fields));
+    let Some(ctx) = app.ui_ctx.clone() else {
+        app.status("no window".to_string());
+        return;
+    };
+    let Some(document) = app.session.active().map(|st| st.uid) else {
+        app.status(tl!("Open a drawing to convert its images"));
+        return;
+    };
+    if let Some(old) = app.object_dialogs.indexed.take() {
+        old.cancel_preview(app);
+    }
+    let dialog = HostedParamDialog::new(&ctx, KIND, DialogFields::new(), build);
+    let opening = Arc::new(());
+    let cancelled = Arc::clone(&opening);
+    let ok = |app: &mut VectorcraftApp, r: &ParamResult| {
+        let open = app.object_dialogs.indexed.as_ref().ok_or("the Indexed Color dialog is gone")?;
+        if !open.on_original_drawing(app) {
+            return Err(tl!("Return to the original drawing to convert its images").into());
+        }
+        if other_preview(app) {
+            app.keep_typing()?;
+            if other_preview(app) {
+                return Err(tl!("Finish the current edit before converting its images").into());
+            }
+        }
+        let open = app.object_dialogs.indexed.take().ok_or("the Indexed Color dialog is gone")?;
+        let done = open.preview.commit(app, CMD, params(&r.fields)).map(|_| ());
+        if done.is_err() {
+            // The dialog stays open and previews again.
+            app.object_dialogs.indexed = Some(Open { preview: LivePreview::default(), ..open });
+        }
+        done
+    };
+    let cancel = Box::new(move |app: &mut VectorcraftApp| {
+        if app.object_dialogs.indexed.as_ref().is_some_and(|open| Arc::ptr_eq(&open.opening, &cancelled))
+            && let Some(open) = app.object_dialogs.indexed.take()
+        {
+            open.cancel_preview(app);
+        }
+    });
+    if open_held_with(app, dialog, ok, HeldOptions { parent: None, cancel: Some(cancel) }).is_some() {
+        app.object_dialogs.indexed = Some(Open { document, opening, preview: LivePreview::default() });
+    } else {
+        app.status("no window".to_string());
+    }
+}
+
+/// Each frame: show the dialog's values on the canvas while its Preview box is on.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let Some(mut open) = app.object_dialogs.indexed.take() else { return };
+    if !open.on_original_drawing(app) {
+        app.object_dialogs.indexed = Some(open);
+        return;
+    }
+    let shown = app
+        .dialogs()
+        .and_then(|h| h.with(|host| host.get_by_id::<HostedParamDialog>(dialog_id(KIND)).map(|d| (d.is_previewing(), params(d.fields())))));
+    if let Some((on, p)) = &shown {
+        if *on
+            && other_preview(app)
+            && let Err(e) = app.keep_typing()
+        {
+            app.status(e);
+        }
+        if !other_preview(app) {
+            let _ = open.preview.run(app, *on, PREVIEW_LABEL, CMD, p);
+        }
+    }
+    app.object_dialogs.indexed = Some(open);
 }
 
 /// Whether reduction `r` takes a number of colors.
@@ -42,50 +164,17 @@ fn least_colors(r: &str) -> f64 {
 }
 
 /// `edit.colors.toIndexed` parameters: the reduction, its colors when it takes them, and the dither.
-fn params(d: &Dialog) -> Value {
-    let reduction = d.str("reduction");
-    let dither = d.str("dither");
+fn params(fields: &DialogFields) -> Value {
+    let reduction = fields.text("reduction").unwrap_or("selective");
+    let dither = fields.text("dither").unwrap_or("diffusion");
     let mut p = json!({"reduction": reduction, "dither": dither});
-    if takes_colors(&reduction) {
-        p["colors"] = json!(d.f64("colors", 256.0).round().clamp(least_colors(&reduction), 256.0) as u16);
+    if takes_colors(reduction) {
+        p["colors"] = json!(fields.number("colors").unwrap_or(256.0).round().clamp(least_colors(reduction), 256.0) as u16);
     }
     if dither != Dither::None.id() {
-        p["ditherAmount"] = json!(d.f64("ditherAmount", 100.0).round().clamp(0.0, 100.0));
+        p["ditherAmount"] = json!(fields.number("ditherAmount").unwrap_or(100.0).round().clamp(0.0, 100.0));
     }
     p
-}
-
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    let reductions: Vec<(&str, &str)> = Reduction::ALL.iter().map(|r| (r.id(), r.label())).chain(MORE_REDUCTIONS).collect();
-    form::choice(ui, d, "reduction", tl!("Reduction:"), WIDTHS, &reductions);
-    let reduction = d.str("reduction");
-    if takes_colors(&reduction) {
-        // The field shows the number the command gets: at least the reduction's fewest.
-        let least = least_colors(&reduction);
-        let n = d.f64("colors", 256.0).round().clamp(least, 256.0);
-        d.fields.insert("colors".into(), json!(n as u16));
-        widgets::label_row(ui, tl!("Colors:"), WIDTHS.0, |ui| {
-            if let Some(n) = widgets::range_field(ui, "indexed-colors", n, least..=256.0, "", 0, 60.0) {
-                d.fields.insert("colors".into(), json!(n.round() as u16));
-            }
-        });
-    }
-    let dithers: Vec<(&str, &str)> = Dither::ALL.iter().map(|x| (x.id(), x.label())).collect();
-    form::choice(ui, d, "dither", tl!("Dither:"), WIDTHS, &dithers);
-    if d.str("dither") != Dither::None.id() {
-        widgets::label_row(ui, tl!("Amount:"), WIDTHS.0, |ui| {
-            if let Some(n) = widgets::range_field(ui, "indexed-dither-amount", d.f64("ditherAmount", 100.0), 0.0..=100.0, "%", 0, 60.0) {
-                d.fields.insert("ditherAmount".into(), json!(n.round()));
-            }
-        });
-    }
-    let p = params(d);
-    form::preview(app, ui, d, "Convert to Indexed Color", CMD, p);
-    false
-}
-
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    form::commit_preview(app, CMD, params(d))
 }
 
 #[cfg(test)]
@@ -93,9 +182,7 @@ mod tests {
     use super::*;
     use vectorcraft_engine::Session;
 
-    #[test]
-    fn commits_the_chosen_palette_as_one_step() {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    fn add_raster(app: &mut VectorcraftApp) -> vectorcraft_doc::NodeId {
         app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
         let img = craft_image_codecs::Image::from_raw(
             2,
@@ -106,8 +193,7 @@ mod tests {
         )
         .unwrap();
         let png = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
-        let id = app
-            .session
+        app.session
             .edit("Place", |d, sel| {
                 d.images.insert("pic".into(), vectorcraft_doc::ImageBlob::png(png));
                 let id = d.alloc_id();
@@ -124,18 +210,59 @@ mod tests {
                 sel.set([id]);
                 Ok(id)
             })
-            .unwrap();
+            .unwrap()
+    }
+
+    fn palette(app: &VectorcraftApp, id: vectorcraft_doc::NodeId) -> &vectorcraft_doc::ImageBlob {
+        let st = app.session.doc().unwrap();
+        let vectorcraft_doc::NodeKind::Image(im) = &st.doc.node(id).unwrap().kind else { panic!("not an image") };
+        &st.doc.images[&im.key]
+    }
+
+    #[test]
+    fn commits_the_chosen_palette_as_one_step() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        let id = add_raster(&mut app);
         let undo = app.session.doc().unwrap().history.undo.len();
         app.run("ui.indexedColorDialog", json!({})).unwrap();
-        let fields = &mut app.ui.dialog.as_mut().unwrap().fields;
-        fields.insert("reduction".into(), json!("blackWhite"));
-        fields.insert("dither".into(), json!("none"));
-        super::super::confirm(&mut app).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let dialog = host.with(|h| h.open_dialogs().into_iter().next()).expect("the dialog is open").id;
+        for (field, value) in [("reduction", "blackWhite"), ("dither", "none")] {
+            host.with(|h| h.set_json_field(&ctx, dialog, field, json!(value))).unwrap();
+        }
+        // OK files the held answer, which the pump applies.
+        host.with(|h| h.confirm_by_id(&ctx, dialog));
+        crate::dialogs::host::pump(&mut app, &ctx);
         let st = app.session.doc().unwrap();
         assert_eq!(st.history.undo.len(), undo + 1);
-        let vectorcraft_doc::NodeKind::Image(im) = &st.doc.node(id).unwrap().kind else { panic!("not an image") };
-        let blob = &st.doc.images[&im.key];
+        let blob = palette(&app, id);
         assert!(blob.indexed_png());
         assert_eq!(blob.rgba().unwrap().2, [0, 0, 0, 255, 0, 0, 0, 255], "black and white only");
+    }
+
+    #[test]
+    fn indexed_color_preview_and_ok_leave_the_other_drawings_pixels_unchanged() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        let source = add_raster(&mut app);
+        open(&mut app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        let id = dialog_id(KIND);
+        host.with(|h| h.set_json_field(&ctx, id, "reduction", json!("blackWhite"))).unwrap();
+        let other = add_raster(&mut app);
+        host.with(|h| h.set_json_field(&ctx, id, "dither", json!("none"))).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(!palette(&app, other).indexed_png(), "the other drawing does not show the preview");
+        host.with(|h| h.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(!palette(&app, other).indexed_png(), "the other drawing does not keep the preview");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        host.with(|h| h.confirm_by_id(&ctx, id));
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert!(palette(&app, source).indexed_png());
     }
 }

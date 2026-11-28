@@ -198,6 +198,27 @@ fn the_next_click_passes_over_the_circle_just_drawn() {
     assert_eq!(params(&click(&mut t, &cx, (302.0, 200.0), Mods::default()))["id"], json!(drawn.0));
 }
 
+/// Once the selection holds none of the circles the tool drew (after Deselect, or a pick of another
+/// object), the pointer reaches them again.
+#[test]
+fn a_selection_without_the_drawn_circles_makes_them_reachable() {
+    let line = PathData::from_bezpath(&vectorcraft_geom::BezPath::from_svg("M0 450 L400 450").unwrap());
+    let d = doc_with(&[circle(), circle(), line]);
+    let ids: Vec<NodeId> = d.layers[0].children().unwrap().iter().rev().map(|n| n.id).collect();
+    let (drawn, under, other) = (ids[0], ids[1], ids[2]);
+    let p = paint();
+    let holding = Selection { objects: vec![drawn], ..Selection::default() };
+    let both = Selection { objects: vec![drawn, other], ..Selection::default() };
+    let none = Selection::default();
+    let picked = Selection { objects: vec![other], ..Selection::default() };
+    for (after, want) in [(&holding, under), (&both, under), (&none, drawn), (&picked, drawn)] {
+        let mut t = CurvatureCircleTool::default();
+        t.notify(&ToolContext { smart_guides: false, ..cx(&d, &holding, &p) }, "created");
+        let cx = ToolContext { smart_guides: false, ..cx(&d, after, &p) };
+        assert_eq!(params(&click(&mut t, &cx, (302.0, 200.0), Mods::default()))["id"], json!(want.0), "{:?}", after.objects);
+    }
+}
+
 /// A press that a second finger or a canceled touch drops draws nothing on the release, and an
 /// edit made outside the tool drops what the pointer was over.
 #[test]
@@ -283,4 +304,99 @@ fn the_curvature_circle_tool_follows_the_circle_tool() {
     let ids: Vec<&str> = crate::TOOL_GROUPS[group].iter().map(|t| t.id).collect();
     let circle = ids.iter().position(|id| *id == crate::circle::ID).unwrap();
     assert_eq!(ids.get(circle + 1), Some(&ID));
+}
+
+/// `snapTolerance` sets how far the pointer reaches, and with `snapWithoutGuides` off and Smart
+/// Guides off the pointer reaches no further than the selection tolerance, and never further than
+/// with the switch on; with Smart Guides on it reaches as far as before.
+#[test]
+fn the_snap_options_set_how_far_the_pointer_reaches() {
+    let d = doc_with(&[circle()]);
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, snapping_tolerance: 0.0, selection_tolerance: 2.0, ..cx(&d, &s, &p) };
+    let mut t = CurvatureCircleTool::default();
+    assert_eq!(click(&mut t, &cx, (308.0, 200.0), Mods::default()), vec![]);
+    t.set_option("snapTolerance", &json!(10));
+    assert_eq!(click(&mut t, &cx, (308.0, 200.0), Mods::default()).len(), 2);
+    t.set_option("snapTolerance", &json!(5));
+    t.set_option("snapWithoutGuides", &json!(false));
+    assert_eq!(click(&mut t, &cx, (304.0, 200.0), Mods::default()), vec![]);
+    assert_eq!(click(&mut t, &cx, (301.0, 200.0), Mods::default()).len(), 2);
+    let guides = ToolContext { smart_guides: true, ..cx };
+    assert_eq!(click(&mut t, &guides, (304.0, 200.0), Mods::default()).len(), 2);
+    let wide = ToolContext { selection_tolerance: 8.0, ..cx };
+    assert_eq!(click(&mut t, &wide, (304.0, 200.0), Mods::default()).len(), 2);
+    assert_eq!(click(&mut t, &wide, (307.0, 200.0), Mods::default()), vec![]);
+}
+
+/// `annotateRadius` off hides the radius label; `constantRadius` off shows the cubic's own radius
+/// without the asterisk and sends `constantRadius: false`; `standardAnchors` off sends
+/// `anchors: "touch"`.
+#[test]
+fn the_label_and_circle_options_change_what_is_shown_and_drawn() {
+    let d = doc_with(&[circle()]);
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let measure = |t: &CurvatureCircleTool| {
+        t.overlays(&cx).iter().find_map(|o| match o {
+            Overlay::Measure { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+    };
+    let mut t = CurvatureCircleTool::default();
+    let v = params(&click(&mut t, &cx, (300.0, 200.0), Mods::default()));
+    assert_eq!((&v["constantRadius"], &v["anchors"]), (&json!(true), &json!("standard")));
+    t.pointer(&cx, &ev(PointerKind::Move, (300.0, 200.0), Mods::default()));
+    assert!(measure(&t).is_some_and(|m| m.ends_with('*')));
+    t.set_option("annotateRadius", &json!(false));
+    assert_eq!(measure(&t), None);
+    t.set_option("annotateRadius", &json!(true));
+    let arc = preview(&t.overlays(&cx)).unwrap();
+    t.set_option("constantRadius", &json!(false));
+    assert!(measure(&t).is_some_and(|m| !m.ends_with('*')), "{:?}", measure(&t));
+    assert!(preview(&t.overlays(&cx)).unwrap().width() > arc.width());
+    t.set_option("standardAnchors", &json!(false));
+    let v = params(&click(&mut t, &cx, (300.0, 200.0), Mods::default()));
+    assert_eq!((&v["constantRadius"], &v["anchors"]), (&json!(false), &json!("touch")));
+}
+
+/// The preview's outline is the path the click draws: starting at 0° whatever the Constrain Angle,
+/// or with `standardAnchors` off starting where the circle touches the path.
+#[test]
+fn the_preview_follows_the_anchor_options() {
+    let d = doc_with(&[circle()]);
+    let (s, p) = (Selection::default(), paint());
+    let cx = ToolContext { smart_guides: false, ..cx(&d, &s, &p) };
+    let start = |t: &CurvatureCircleTool, cx: &ToolContext| {
+        t.overlays(cx).iter().find_map(|o| match o {
+            Overlay::Path { path, .. } => path.elements().first().and_then(|e| e.end_point()),
+            _ => None,
+        })
+    };
+    let mut t = CurvatureCircleTool::default();
+    t.pointer(&cx, &ev(PointerKind::Move, (200.0, 98.0), Mods::default()));
+    let upright = start(&t, &cx).unwrap();
+    let turned = ToolContext { constrain_angle: 30.0, ..cx };
+    assert_eq!(start(&t, &turned), Some(upright));
+    assert!(upright.distance(Point::new(200.0, 100.0)) > 1.0, "{upright:?}");
+    t.set_option("standardAnchors", &json!(false));
+    let at = start(&t, &cx).unwrap();
+    assert!(at.distance(Point::new(200.0, 100.0)) < 1e-6, "{at:?}");
+}
+
+/// An option the tool lacks, a tolerance out of range and a switch that is not true or false are
+/// errors, and `set_option` leaves the option as it was for them.
+#[test]
+fn invalid_options_are_refused() {
+    let mut t = CurvatureCircleTool::default();
+    assert!(t.check_option("snapTolerance", &json!(0)).is_err());
+    assert!(t.check_option("snapTolerance", &json!(41)).is_err());
+    assert!(t.check_option("snapTolerance", &json!("5")).is_err());
+    assert!(t.check_option("annotateRadius", &json!(1)).is_err());
+    assert!(t.check_option("size", &json!(1)).is_err());
+    assert!(t.check_option("snapTolerance", &json!(12.5)).is_ok());
+    let before = t.options();
+    t.set_option("snapTolerance", &json!(0));
+    t.set_option("annotateRadius", &json!("no"));
+    assert_eq!(t.options(), before);
 }

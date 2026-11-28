@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-11-24 · **Change:** Fonts: the interface font stack is the framework's, set up by `ui_fonts()` and installed by `embed::install`; `theme::install_fonts` is gone and the `interface-fonts` feature changes nothing.
 > **Last updated:** 2026-11-12 · **Change:** Tests canonicalize temporary roots and normalize Windows verbatim prefixes before comparing preset refusal paths or probing a case-variant script folder (#6860); production access checks unchanged.
 > **Last updated:** 2026-11-12 · **Change:** minor (clipboard failure helper follows its Linux/BSD and test callers; previously: Hindi catalog and zero/one plural rule; desktop Devanagari fallback and optional craft-fonts UI face; native review pending).
 > **Last updated:** 2026-11-01 · **Change:** Linux: Automatic Linux Display Server opens the window through XWayland when a pen is attached on a Wayland session, so the pen draws (#4967); `VECTORCRAFT_NATIVE_WAYLAND=1` keeps Wayland.
@@ -170,10 +171,13 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
   All other supplied faces follow those existing document fallbacks in manifest order, so they
   can also be selected by family name. This does not change which faces the web build embeds
   or fetches, and no craft-fonts faces are registered when the optional input is absent.
-- UI: `theme::install_fonts` adds them at the end of every egui family (BIZ UDPGothic first, then
-  Noto Sans Georgian for the Georgian interface), after the UI fonts and before the installed fonts
-  `ui_fonts.rs` discovers for other scripts. On the web, Noto Sans Georgian is fetched at startup
-  and reaches the UI through `ui_fonts.rs`.
+- UI: `ui_fonts()` (`crates/ui-egui/src/ui_fonts.rs`) hands them to the framework's interface font
+  stack, which puts the UI language's faces after the interface face (ahead of it for a script
+  that face lacks and that doesn't fit a Latin row, such as Georgian), then the other scripts'
+  faces, then the installed fonts it finds for other scripts on the desktop. On the web the
+  `startup` and `demand` faces of `crates/text/web-fonts.txt` are served under `fonts/ui/`
+  instead: the stack fetches the UI language's at once and the others the first time text needs
+  them.
 - Tests that need Japanese or Georgian glyphs skip with a message when built without craft-fonts. The FreeBSD
   CI job and every release job (`release.yml`) check craft-fonts out at a pinned commit; release
   packages carry each embedded font's `OFL-<family>.txt`.
@@ -191,18 +195,18 @@ and text has no glyphs until a font is added.
 
 An embedder that also hosts the egui panels depends on `vectorcraft-ui-egui` with
 `default-features = false` as well: its own `bundled-fonts` feature, on by default, turns the
-engine's on; `vectorcraft-mcp` has the same feature. The panels' interface faces (Source Sans 3
-Regular and Semibold, Inter Regular and SemiBold, JetBrains Mono, about 2 MB: `theme.rs`) are
-`vectorcraft-ui-egui`'s `interface-fonts` feature, also on by default; without it the panels draw in
-egui's built-in fonts, which lack some symbols they show (→ ▾ ● ✓), so such an embedder adds a
-font that has them to each of the families below (`ctx.add_font` with an `InsertFontFamily` per
-family).
+engine's on; `vectorcraft-mcp` has the same feature. The panels' interface faces come from the
+framework, with or without these features: Inter Regular and SemiBold (cut to Latin, Greek and
+Cyrillic) and egui's Hack for monospace, which craft-fonts' monospace face leads when the build
+embeds it. `vectorcraft-ui-egui`'s `interface-fonts` feature is still declared but changes nothing.
 
-The panels and dialogs draw in their own egui families (`theme::FONT_UI`, `FONT_UI_SEMIBOLD`,
-`FONT_MONO`), and egui panics drawing text in a family no font is bound to. `VectorcraftApp::logic`
-binds them on its first frame; an embedder that draws the panels or dialogs without it calls
-`theme::install_fonts` once on its context, with or without `interface-fonts`. It replaces the
-context's font definitions, so the embedder's own fonts are added after it.
+The panels and dialogs draw in egui's proportional and monospace families and the framework's
+semibold family (`craft::ui::fonts::SEMIBOLD`), and egui panics drawing text in a family no font is
+bound to. `embed::install(ctx, spec, &vectorcraft_ui_egui::ui_fonts())` binds them; the desktop and
+web apps call it once when they create the app (the web app adds `.fetcher(BrowserFetcher)` so the
+served faces are fetched), and an embedder that draws the panels or dialogs calls it once on its
+context. It replaces the context's font definitions, so an embedder's own faces go into the stack
+(`ui_fonts().app_face(…)`) before it is installed.
 
 - The workspace declares `vectorcraft-text` and `vectorcraft-engine` without default features, so
   each crate that wants the fonts asks for them (the apps, and `vectorcraft-testkit` for tests);
@@ -215,9 +219,9 @@ context's font definitions, so the embedder's own fonts are added after it.
   see that configuration, since their dev-dependencies turn the fonts on.
 - `cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts` checks the
   configuration without them, and `cargo test -p vectorcraft-ui-egui --no-default-features --test
-  install_fonts` that the panels without their interface faces still bind every family; the same
-  step lints `vectorcraft-ui-egui` without its default features. Of the crate's other tests, those
-  about the interface faces need them.
+  install_fonts` that the fonts `embed::install` sets up bind the proportional, monospace and
+  semibold families, so an effect dialog draws; the same step lints `vectorcraft-ui-egui` without
+  its default features.
 
 ### Arabic fonts and the web build
 
@@ -308,7 +312,7 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   ``[{j}] `{_1}`: {why}``, so its reason is translated while a JSON array stays as it is. A literal brace in a
   row is written `{{` or `}}`, in the English and in the translation: a message made with `format!` keeps the
   doubled braces of its format string, and a plain string literal has each of its braces doubled, so the row for
-  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch, Danish and Indonesian
+  `"expected {\"objects\": [...]}"` is `expected {{"objects": [...]}}`. Czech, German, Greek, Spanish, French, Georgian, Hindi, Hungarian, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, Simplified Chinese, Traditional Chinese, Swedish, Ukrainian, Vietnamese, Finnish, Turkish, Catalan, Dutch, Danish, Indonesian and Bulgarian
   translate status and error messages (`COMPLETE_MESSAGES` in `i18n::tests`); the untranslated report lists the
   message literals the scan finds, and the phrases a parameter schema's error builds at run time
   (`SCHEMA_PHRASES`), that one of them has no row for. The scan covers the crates in `MESSAGE_CRATES`, the
@@ -330,7 +334,11 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
 
 ## Cursors
 
-`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+`crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (see Adding a cursor below). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
+
+### Adding a cursor
+
+The app decides which cursors exist; whoever draws them works from the list. For a new tool state with a cursor of its own: add the `Cursor` variant (`crates/tools/src/lib.rs`, with a doc comment), return it from the tool's `cursor()` with a tool test, map it in `cursors::tool_cursor` (`crates/ui-egui/src/cursors.rs`), using a catalog icon or an SVG in `assets/cursors/` (with its `ASSETS.md` row and `CURSOR_ICONS` entry), or give it a stand-in in `Cursor::stand_in()` until it is drawn, and add its `[[cursor]]` entry to `crates/tools/src/cursors.toml` (when it shows, in plain behaviour terms, and its hotspot). A missing entry only warns (`cargo xtask cursors`): the cursor still works.
 
 ## Vendor names gate
 
@@ -560,6 +568,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-24 | minor | Fonts: the interface font stack is the framework's, set up by `ui_fonts()` and installed by `embed::install` (craft-fonts faces, the web's served faces, embedders); `theme::install_fonts` is gone and `interface-fonts` changes nothing. |
 | 2026-11-12 | minor | Tests (#6860): compare preset refusal roots after canonicalization and Windows display normalization; canonicalize the script fixture base before constructing `MAIN`. This keeps macOS `/var` → `/private/var` aliases from masking the case-sensitivity checks; no production-code change. |
 | 2026-11-12 | minor | Compile the clipboard failure helper only for Linux/BSD worker callers and unit tests; keep production macOS free of the unused helper without suppressing workspace dead-code warnings. |
 | 2026-11-06 | minor | Localisation: Hindi catalog, zero/one plurals, desktop and web font requirements; AI/MT draft, native review pending. |
