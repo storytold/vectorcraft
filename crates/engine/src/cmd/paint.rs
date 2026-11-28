@@ -394,6 +394,64 @@ pub(crate) fn painted<'a>(n: &'a Node, top: bool, stroke: bool, out: &mut Vec<&'
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests: how many fills [`SelectionPaints`] read or took out on this thread.
+    pub(crate) static PAINTS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The objects that reading objects `ids` meets, one item each ([`SelectionPaints::reads_no_more_than`]):
+/// each id, and the contents of a group, a layer, a Live Paint group or a container inside a group,
+/// as [`painted`] expands them. An id with no object and a ruler guide count once each.
+struct Reads<'a> {
+    doc: &'a Document,
+    ids: std::slice::Iter<'a, NodeId>,
+    /// The contents not counted yet of the objects met, innermost last.
+    left: Vec<std::slice::Iter<'a, std::sync::Arc<Node>>>,
+}
+
+impl<'a> Reads<'a> {
+    fn new(doc: &'a Document, ids: &'a [NodeId]) -> Self {
+        Self { doc, ids: ids.iter(), left: vec![] }
+    }
+}
+
+impl Iterator for Reads<'_> {
+    type Item = ();
+
+    fn next(&mut self) -> Option<()> {
+        loop {
+            let (n, top) = match self.left.last_mut() {
+                Some(contents) => match contents.next() {
+                    Some(c) => (&**c, false),
+                    None => {
+                        self.left.pop();
+                        continue;
+                    }
+                },
+                None => match self.doc.node(*self.ids.next()?) {
+                    Some(n) => (n, true),
+                    None => return Some(()),
+                },
+            };
+            // A ruler guide has no paints, but reading meets it, so it counts once.
+            if n.is_ruler_guide() {
+                return Some(());
+            }
+            // A Live Paint group is a group too, so it expands without looking for its parts.
+            let expand = match n.kind {
+                NodeKind::Group { .. } | NodeKind::Layer { .. } => true,
+                NodeKind::Compound { .. } => false,
+                _ => !top && n.is_container(),
+            };
+            if let Some(contents) = n.children().filter(|_| expand) {
+                self.left.push(contents.iter());
+            }
+            return Some(());
+        }
+    }
+}
+
 /// What the proxies read from selected objects: the first fill, stroke and stroke weight met, and
 /// whether another one differs ([`DocState::proxy_mixed`] without an active Appearance item or
 /// picked mesh points, and [`super::stroke::StrokeMixed::weight`]), and whether an object lies in a
@@ -489,6 +547,23 @@ impl SelectionPaints {
         self.may_hold_mesh > 0
     }
 
+    /// Does reading objects `ids` of `doc` meet no more objects than reading objects `others`?
+    /// Each id counts once, and a group, a layer, a Live Paint group or a container inside a group
+    /// also counts its contents, as [`painted`] expands them. The two counts go up one object at a
+    /// time in turn and stop when either side runs out, so the check meets at most twice as many
+    /// objects as the smaller side holds.
+    pub(crate) fn reads_no_more_than(doc: &Document, ids: &[NodeId], others: &[NodeId]) -> bool {
+        let (mut these, mut those) = (Reads::new(doc, ids), Reads::new(doc, others));
+        loop {
+            if these.next().is_none() {
+                return true;
+            }
+            if those.next().is_none() {
+                return false;
+            }
+        }
+    }
+
     /// Read objects `ids` of `doc` too: ids that are not read yet, each named once.
     pub(crate) fn add(&mut self, doc: &Document, ids: &[NodeId]) {
         self.each(doc, ids, true);
@@ -517,6 +592,8 @@ impl SelectionPaints {
             painted(n, true, false, &mut fills);
             painted(n, true, true, &mut strokes);
         }
+        #[cfg(test)]
+        PAINTS_READ.with(|c| c.set(c.get() + fills.len()));
         for n in fills {
             meet(&mut self.fill, proxy_paint(n, false, None));
         }

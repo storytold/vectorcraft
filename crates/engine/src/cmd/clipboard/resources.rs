@@ -758,14 +758,21 @@ impl Relink {
             }
         }
     }
-    /// Relink a node tree (the mirror of [`node_refs`]).
+    /// Relink a node tree (the mirror of [`node_refs`]). A pie's legend labels in wedges that now show a color of the
+    /// other darkness take the contrast a redraw sets there.
     fn node(&self, n: &mut Node) {
+        let shades = crate::cmd::graph::wedge_shades(n);
+        self.links(n);
+        crate::cmd::graph::follow_wedge_shades(n, &shades);
+    }
+    /// [`Self::node`] without the legend labels' contrast.
+    fn links(&self, n: &mut Node) {
         self.appearance(&mut n.appearance);
         if !self.keep_styles {
             n.extras_mut().graphic_style = n.extras().graphic_style.and_then(|id| self.styles.get(&id).copied());
         }
         if let Some(m) = n.extras_if_any().and_then(|e| e.mask.as_mut()) {
-            self.node(Arc::make_mut(&mut m.art));
+            self.links(Arc::make_mut(&mut m.art));
         }
         if let Some(cm) = n.extras_if_any().and_then(|e| e.color_mask.as_deref_mut()) {
             self.name(Res::Image, &mut cm.key);
@@ -831,7 +838,7 @@ impl Relink {
             _ => {}
         }
         for c in n.children_mut().into_iter().flatten() {
-            self.node(Arc::make_mut(c));
+            self.links(Arc::make_mut(c));
         }
     }
 }
@@ -1183,9 +1190,7 @@ impl Imported {
     /// other darkness take the contrast a redraw sets there. Fonts the copy carries are bound to the faces `d` holds.
     pub(crate) fn apply(&mut self, n: &mut Node, d: &Document) {
         if self.relinks {
-            let shades = super::super::graph::wedge_shades(n);
             self.relink.node(n);
-            super::super::graph::follow_wedge_shades(n, &shades);
         }
         for note in vectorcraft_text::FontDb::global().bind_node_file_fonts(n, &|key| d.images.get(key)) {
             if !self.warnings.contains(&note) {

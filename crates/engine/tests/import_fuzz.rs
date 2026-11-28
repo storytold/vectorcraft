@@ -10,6 +10,7 @@
 //! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
 //! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
 //! nor `.cmx` files (mutated, cut short and garbage after the header, opened and placed),
+//! nor layered raster `.pcraft` documents (mutated and cut short archives and manifests, opened and placed),
 //! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
@@ -477,6 +478,93 @@ proptest! {
             let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
+    }
+}
+
+// ---------- layered raster .pcraft documents ----------
+
+/// A `.pcraft` manifest of a 40 × 30 canvas with two visible raster layers, one under a layer mask,
+/// that can be combined, and a hidden one.
+fn pcraft_manifest() -> String {
+    let surface = |mode: &str, pixel: &str| {
+        let alpha = mode == "Rgb";
+        format!(r#"{{"format":{{"mode":"{mode}","sample":"U8","alpha":{alpha}}},"default":"{pixel}","tiles":[]}}"#)
+    };
+    let layer = |visible: bool, pixel: &str, mask: &str| {
+        format!(
+            r#"{{"id":1,"name":"L","visible":{visible},"locks":{{}},"blend":"Normal","opacity":0.5,"fill_opacity":1.0,"clipped":false,"mask":{mask},
+                "effects":{{"enabled":false,"items":[],"psd_raw":null}},"label":"None","content":{{"kind":"raster","surface":{}}},
+                "psd_blocks":[],"psd_id":null,"fill_cache":null}}"#,
+            surface("Rgb", pixel)
+        )
+    };
+    let mask = format!(r#"{{"surface":{},"enabled":true,"linked":true,"density":0.75,"feather":0.0}}"#, surface("Grayscale", "40"));
+    format!(
+        r#"{{"format_version":1,"generator":"test 0.1.0","document":{{"id":1,"name":"U","size":{{"width":40,"height":30}},"resolution_dpi":72.0,
+            "mode":"Rgb","depth":"U8","icc_profile":null,"layers":[{},{},{}],"channels":[],"guides":{{}},"selection":null,"metadata":{{}},
+            "global_light":{{}}}},"thumbnail":null,"composite":"composite/preview.png"}}"#,
+        layer(true, "ff000080", "null"),
+        layer(true, "0000ffff", &mask),
+        layer(false, "00ff00ff", "null"),
+    )
+}
+
+/// A `.pcraft` bundle of `manifest` with a 4 × 3 preview.
+fn pcraft_bundle(manifest: &[u8]) -> Vec<u8> {
+    let mut preview = vec![];
+    image::RgbaImage::new(4, 3).write_to(&mut std::io::Cursor::new(&mut preview), image::ImageFormat::Png).unwrap();
+    vectorcraft_engine::cmd::fileio::zip::store(&[("manifest.json", manifest), ("composite/preview.png", &preview)]).unwrap()
+}
+
+/// Open and place `.pcraft` file `bytes`: neither may panic.
+fn pcraft_survives(what: &str, bytes: &[u8]) -> Result<(), TestCaseError> {
+    survive(what, || vectorcraft_engine::cmd::fileio::load("x.pcraft", bytes).ok().map(|l| l.doc))?;
+    let r = catch_quiet(|| {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+        let p = json!({"name":"x.pcraft", "dataBase64":vectorcraft_format::base64_encode(bytes)});
+        let _ = no_panic(s.execute("file.place", &p));
+    });
+    prop_assert!(r.is_ok(), "{what}: placement panicked: {:?}", r.err());
+    Ok(())
+}
+
+#[test]
+fn the_pcraft_sample_combines_its_layers() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.pcraft", &pcraft_bundle(pcraft_manifest().as_bytes())).unwrap();
+    assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+    assert_eq!(l.doc.artboards[0].rect.width(), 40.0, "the canvas, not the preview");
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn pcraft_mutated_bundles_open_and_place(
+        cut in prop::option::of(4usize..4096),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = pcraft_bundle(pcraft_manifest().as_bytes());
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        pcraft_survives(".pcraft bundle", &bytes)?;
+    }
+
+    #[test]
+    fn pcraft_mutated_manifests_open_and_place(
+        cut in prop::option::of(1usize..2048),
+        edits in prop::collection::vec((0usize..4096, any::<u8>()), 1..16),
+    ) {
+        let mut manifest = pcraft_manifest().into_bytes();
+        let n = manifest.len();
+        for (at, b) in edits { manifest[at % n] = b; }
+        if let Some(cut) = cut {
+            manifest.truncate(cut);
+        }
+        pcraft_survives(".pcraft manifest", &pcraft_bundle(&manifest))?;
     }
 }
 
@@ -2970,6 +3058,95 @@ proptest! {
     }
 }
 
+// ---------- generated art objects' saved fields ----------
+
+/// A native document holding one generated art object (a square drawn by plug-in
+/// `org.example.gen`), as pretty JSON text.
+fn generated_sample() -> Value {
+    use std::sync::Arc;
+    use vectorcraft_doc::generated::GeneratedArt;
+    use vectorcraft_doc::{Node, NodeId};
+    let mut d = Document::new(200.0, 200.0);
+    let layer = d.layers.first().map(|l| l.id);
+    let square =
+        Node::path(d.alloc_id(), vectorcraft_geom::shapes::rectangle(vectorcraft_geom::Rect::new(10.0, 10.0, 60.0, 60.0)), Default::default());
+    let mut g = Node::group(NodeId(0), vec![Arc::new(square)]);
+    g.id = d.alloc_id();
+    let mut params = serde_json::Map::new();
+    params.insert("size".into(), json!(50));
+    g.extras_mut().generated = Some(Box::new(GeneratedArt::new("org.example.gen", "Squares", params)));
+    d.insert(layer, usize::MAX, g).unwrap();
+    serde_json::from_slice(&vectorcraft_format::save(&d, true)).unwrap()
+}
+
+/// The object of `v` (a native file's JSON) that holds a `generated` field.
+fn generated_node(v: &mut Value) -> Option<&mut Value> {
+    match v {
+        Value::Object(o) if o.contains_key("generated") => Some(v),
+        Value::Object(o) => o.values_mut().find_map(generated_node),
+        Value::Array(a) => a.iter_mut().find_map(generated_node),
+        _ => None,
+    }
+}
+
+/// Any JSON a damaged or hand-made file may hold in a saved field: strings (empty, long, with NUL,
+/// control, bidi and path characters), numbers, booleans, null, lists and objects.
+fn arb_saved_value() -> impl Strategy<Value = Value> {
+    let leaf = prop_oneof![
+        Just(Value::Null),
+        any::<bool>().prop_map(Value::from),
+        any::<i64>().prop_map(Value::from),
+        any::<f64>().prop_map(|f| serde_json::Number::from_f64(f).map_or(Value::Null, Value::Number)),
+        ".{0,80}".prop_map(Value::from),
+        prop::sample::select(vec!["org.example.gen", "org.example.gen ", "../x", "a\u{0}b", "\u{202e}gen", "", "x.y-z_1"]).prop_map(Value::from),
+        (0usize..200_000).prop_map(|n| Value::from("p".repeat(n))),
+    ];
+    leaf.prop_recursive(3, 24, 6, |inner| {
+        prop_oneof![
+            prop::collection::vec(inner.clone(), 0..6).prop_map(Value::from),
+            prop::collection::btree_map("[a-z_]{0,8}", inner, 0..6).prop_map(|m| Value::Object(m.into_iter().collect())),
+        ]
+    })
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A generated art object's saved plug-in id, name, parameters, transforms, scales and hash
+    /// replaced by anything, and the whole field too: the file opens without running a plug-in and
+    /// keeps the art, or is refused; an id is kept only when it is a plug-in id. It then renders,
+    /// exports and saves.
+    #[test]
+    fn generated_art_saved_fields_never_panic_and_keep_the_art(field in 0usize..9, value in arb_saved_value()) {
+        let mut v = generated_sample();
+        let node = generated_node(&mut v).unwrap();
+        let art = node["kind"].clone();
+        let id = vectorcraft_doc::NodeId(node["id"].as_u64().unwrap());
+        match ["plugin", "name", "params", "transform", "strokeScale", "effectScale", "patternTransform", "hash"].get(field) {
+            Some(key) => node["generated"][*key] = value,
+            None => node["generated"] = value,
+        }
+        let bytes = serde_json::to_vec(&v).unwrap();
+        let loaded = vectorcraft_engine::cmd::fileio::load("x.vectorcraft", &bytes);
+        if let Ok(l) = &loaded {
+            // The group keeps its art whatever was read of its generated art fields.
+            let group = l.doc.node(id);
+            prop_assert!(group.is_some(), "the group is gone");
+            prop_assert_eq!(group.map(|n| serde_json::to_value(&n.kind).unwrap()), Some(art));
+            let mut plugins = vec![];
+            l.doc.walk(|n| {
+                if let Some(g) = n.extras().generated.as_deref() {
+                    plugins.push(g.plugin.clone());
+                }
+            });
+            for plugin in &plugins {
+                prop_assert!(plugin.is_empty() || vectorcraft_doc::generated::valid_id(plugin), "{plugin:?}");
+            }
+        }
+        survive("generated art fields", || loaded.ok().map(|l| l.doc))?;
+    }
+}
+
 /// A native file whose area type has 2^60 rows, 2^60 columns, or 2^32 of each (their product
 /// overflows) opens with 100 in place of each count over 100, and renders and exports.
 #[test]
@@ -4823,6 +5000,53 @@ proptest! {
         prop_assert!(read.is_none());
         let opened = catch_quiet(|| vectorcraft_engine::cmd::fileio::load("x.ai", &bytes).is_ok()).expect("the open panicked");
         prop_assert!(!opened);
+    }
+
+    /// A `.ai` whose private data is cut into streams anywhere, each deflated or not and some
+    /// damaged, opens or is refused without a panic, and its streams read one after the other give
+    /// what joining them gives.
+    #[test]
+    fn ai_private_data_cut_into_streams_anywhere_never_panics(
+        sizes in prop::collection::vec(1usize..400, 1..6),
+        damage in prop::collection::vec((0usize..4_000, any::<u8>()), 0..4),
+        deflate in any::<bool>(),
+    ) {
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing_text())].concat();
+        let mut parts: Vec<Vec<u8>> = vec![];
+        let mut rest = private.as_slice();
+        for size in sizes.iter().cycle() {
+            if rest.is_empty() {
+                break;
+            }
+            let (part, after) = rest.split_at((*size).min(rest.len()));
+            parts.push(if deflate { deflated(part) } else { part.to_vec() });
+            rest = after;
+        }
+        let total: usize = parts.iter().map(Vec::len).sum();
+        for (at, b) in damage {
+            let mut at = at % total.max(1);
+            for part in &mut parts {
+                if let Some(x) = part.get_mut(at) {
+                    *x = b;
+                    break;
+                }
+                at -= part.len();
+            }
+        }
+        let parts: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+        let filter = if deflate { "/Filter /FlateDecode " } else { "" };
+        let bytes = vectorcraft_testkit::ai::ai_with_parts(&parts, vectorcraft_testkit::ai::page_pdf(), "", filter);
+        let read_all = |r: &mut dyn std::io::Read| {
+            let mut data = vec![];
+            r.read_to_end(&mut data).map(|_| data).map_err(|e| e.to_string())
+        };
+        let (joined, streamed) = catch_quiet(|| {
+            let opened = vectorcraft_pdf::open_pdf(&bytes, None).ok();
+            (opened.as_ref().and_then(|o| o.illustrator_data()), opened.as_ref().and_then(|o| o.read_illustrator_data(read_all)))
+        })
+        .expect("the private data read panicked");
+        prop_assert_eq!(streamed, joined.map(Ok));
+        survive("a .ai whose private data is cut into streams", || vectorcraft_engine::cmd::fileio::load("x.ai", &bytes).ok().map(|l| l.doc))?;
     }
 
     /// A `.ai` whose strokes have any width (0, which draws a hairline, negative, huge, not a number) on a
