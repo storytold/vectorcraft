@@ -180,8 +180,9 @@ pub struct DocSettings {
     pub layout: ArtboardLayout,
     /// Columns of a grid layout.
     pub columns: u32,
-    /// Rows of a grid by column, in place of `columns` when more than 0.
-    #[serde(skip_serializing_if = "is_zero")]
+    /// Rows of a grid by column, in place of `columns` when more than 0, up to `MAX_ARTBOARDS` (a
+    /// saved or Recent preset's value past it is read as `MAX_ARTBOARDS`).
+    #[serde(skip_serializing_if = "is_zero", deserialize_with = "de_rows")]
     pub rows: u32,
     /// Space between artboards, points: 0 to `MAX_SPACING` (a saved or Recent preset's value
     /// outside that range is read as the nearer end).
@@ -380,12 +381,24 @@ impl DocSettings {
             return Ok(());
         }
         let o = l.as_object().ok_or_else(|| bad(cmd, "artboardLayout must be {layout?, columns?, spacing?, rightToLeft?}"))?;
-        let count = |v: &Value| v.as_f64().filter(|c| c.is_finite() && *c >= 1.0).map(|c| c.round().min(MAX_ARTBOARDS as f64) as u32);
         for (k, v) in o {
             match k.as_str() {
                 "layout" => self.layout = v.as_str().and_then(ArtboardLayout::parse).ok_or_else(bad_layout)?,
-                "columns" => self.columns = count(v).ok_or_else(|| bad(cmd, "artboardLayout.columns must be 1 or more"))?,
-                "rows" => self.rows = count(v).ok_or_else(|| bad(cmd, "artboardLayout.rows must be 1 or more"))?,
+                "columns" => {
+                    self.columns = v
+                        .as_f64()
+                        .filter(|c| c.is_finite() && *c >= 1.0)
+                        .ok_or_else(|| bad(cmd, "artboardLayout.columns must be 1 or more"))?
+                        .round()
+                        .min(MAX_ARTBOARDS as f64) as u32
+                }
+                "rows" => {
+                    self.rows = v
+                        .as_f64()
+                        .filter(|r| r.fract() == 0.0 && (1.0..=MAX_ARTBOARDS as f64).contains(r))
+                        .map(|r| r as u32)
+                        .ok_or_else(|| bad(cmd, format!("artboardLayout.rows must be a whole number from 1 to {MAX_ARTBOARDS}")))?
+                }
                 "spacing" => {
                     self.spacing = v
                         .as_f64()
@@ -589,6 +602,11 @@ fn de_side<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<f64, D
 /// `file.new` reads its `artboards` param.
 fn de_artboards<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<u32, D::Error> {
     Ok(f64::deserialize(d)?.round().clamp(1.0, MAX_ARTBOARDS as f64) as u32)
+}
+
+/// A saved or Recent preset's rows, kept to 0 to [`MAX_ARTBOARDS`].
+fn de_rows<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<u32, D::Error> {
+    Ok(f64::deserialize(d)?.round().clamp(0.0, MAX_ARTBOARDS as f64) as u32)
 }
 
 /// A saved or Recent preset's artboard spacing, kept to 0 to [`MAX_SPACING`] points.

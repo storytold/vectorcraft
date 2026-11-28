@@ -337,6 +337,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.mesh.movePoints",
     "object.mesh.setPointColor",
     "object.move",
+    "object.newGroup",
     "object.nudge",
     "object.objectsOnPath.attach",
     "object.objectsOnPath.detach",

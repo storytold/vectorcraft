@@ -2815,14 +2815,14 @@ other files through `$`:
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
+  visible bounds grown to take in the paths' direction handles), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
   or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
-  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
-  group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
-  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's, a
+  group's or a compound path's contents, `PLACEATEND` under them (a compound path takes only paths), `PLACEBEFORE`
+  directly above the relative object and `PLACEAFTER` directly below it. An object of another document throws `Cross-document placement is not available`, and when
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
@@ -2837,7 +2837,8 @@ other files through `$`:
   including guide paths while Lock Guides is on, throw `Cannot select`. `move` with the object itself
   as the relative object and `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move`
   or `remove()` takes the last path out of a compound path, the compound path stays, empty, so a script that holds
-  it can still read it (`remove()` runs `edit.clear` with `keepEmpty: true`). An object with nothing in it, such
+  it can still read it (`remove()` runs `edit.clear` with `keepEmpty: true`). The compound path's
+  `pathItems.removeAll()` also leaves it, empty. An object with nothing in it, such
   as an empty group or that compound path, reads its bounds, `position`, `width` and `height` as zeros, and
   assigning them does nothing (VectorCraft's own rule). `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
@@ -2862,7 +2863,8 @@ other files through `$`:
   `documents[0]` is always the active document, as the same page says. VectorCraft's own rules: the other
   documents follow from the one active most recently to the one active longest ago, and a change a script
   makes to a document in the back does not move it in the list; page items are listed with the objects inside groups and compound paths after their group and without layers and ruler guides. A document's
-  `selection`, and `app.selection` while a document is open, is an empty list when nothing is selected. Script coordinates
+  `selection`, and `app.selection` while a document is open, is an empty list when nothing is selected. The layers
+  paragraph below gives the order of a layer's, a group's and a compound path's lists. Script coordinates
   are points with Y up from the bottom-left corner of the first artboard, or, with
   `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`
   is `TextFrame` for type, and `BlendItem`, `EnvelopeItem`, `RepeatItem`, `PlacedDocumentItem` and `IntertwineItem`
@@ -2880,11 +2882,13 @@ other files through `$`:
   `app.activeDocument` with no document open throws `No active document`. `Document.selection` takes one page item,
   a list of at most 10,000, `null` or `[]`. Any other value, `undefined` included, throws a `TypeError`, and an
   object that cannot be selected throws `Cannot select`, each with nothing changed. While View › Guides › Lock
-  Guides is on, a path made into a guide cannot be selected this way or with `selected`. `getIsFileOpen` compares the path with the open documents' files as text (in a Windows path,
-  letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
+  Guides is on, a path made into a guide cannot be selected this way or with `selected`. Assigning a page item's
+  `selected` leaves the direct-selected anchors and segments of the other selected objects selected. `getIsFileOpen`
+  compares the path with the open documents' files as text (on Windows, letter case is ignored and `\` matches `/`;
+  on macOS and Linux, `\` is part of a file name) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  Document and PageItem pages list, such as `Document.views`, `PageItem.blendingMode`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned.
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the
@@ -2893,7 +2897,152 @@ other files through `$`:
   layer, a document or the application does not have does not keep the value; it does not throw, except in
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
-  themselves, such as a path's fill, are not defined yet and read as `undefined`.
+  themselves, such as a text frame's `contents`, are not defined yet and read as `undefined`.
+- A document also has `layers`, `activeLayer`, `groupItems`, `compoundPathItems` and `artboards`.
+  `layers` (https://ai-scripting.docsforadobe.dev/jsobjref/Layers/) and a layer's own `layers` have `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add()` and `removeAll()`. On the document, `add()` runs `layer.new` and makes a
+  layer above every top-level layer; on a layer it runs `layer.newSublayer` and makes a sublayer on top of that
+  layer's contents. The new layer becomes the current one. `removeAll()` runs `layer.delete`; on the document's
+  layers it throws, since a document keeps at least one layer. Assigning a layer to `activeLayer` runs
+  `layer.setCurrent`. A `Layer` (https://ai-scripting.docsforadobe.dev/jsobjref/Layer/) has `typename`, `name`,
+  `visible`, `locked`, `printable`, `preview`, `dimPlacedImages`, `opacity` (0 to 100), `color`, `parent`,
+  `layers`, `pageItems`, `groupItems`, `compoundPathItems`, `pathItems`, `zOrderPosition`, `hasSelectedArtwork`,
+  `isIsolated`, `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`. Its properties run
+  `layer.setProps`, and `opacity` runs `object.setProps`. `move` and `zOrder` run `node.move`; a layer goes into
+  another layer, to the top level of the document, or directly above or below another layer. Every page item has
+  `layer`, the layer it is in. A `GroupItem` (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/) also has
+  `clipped`, `pageItems`, `groupItems`, `compoundPathItems` and `pathItems`, and a `CompoundPathItem`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItem/) has `pathItems`. `groupItems`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItems/) and `compoundPathItems` have `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add()` and `removeAll()`. `groupItems.add()` runs `object.newGroup`.
+  `clipped` runs `layer.clippingMask.toggle`. `artboards` (https://ai-scripting.docsforadobe.dev/jsobjref/Artboards/)
+  has `length`, `[i]`, `index(key)`, `getByName(name)`, `add(artboardRect)` (runs `artboard.new`),
+  `insert(artboardRect, index)` (runs `artboard.new` and `artboard.reorder`), `remove(index)` (runs
+  `artboard.delete`), `getActiveArtboardIndex()` and `setActiveArtboardIndex(index)`. An `Artboard`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Artboard/) has `typename`, `parent`, `artboardRect`, `name`,
+  `rulerOrigin`, `rulerPAR` (0.1 to 10), `showCenter`, `showCrossHairs`, `showSafeAreas` and `remove()`; its
+  properties run `artboard.setProps`, and `rulerOrigin` runs `document.setRulerOrigin`. One document always keeps
+  one artboard.
+  VectorCraft's own rules: `layers` lists layers top first, as the Layers panel shows them. A layer's or group's
+  `pageItems`, `groupItems` and `compoundPathItems`, and a compound path's `pathItems`, list the objects directly in
+  it, topmost first. The document's `groupItems` and `compoundPathItems` hold every group or compound path at any
+  depth, in the order of the document's `pageItems`. A layer's `pageItems` leave out its sublayers. A compound
+  path's `pathItems` are a `PathItems` collection: `add()` and its shape methods make the new path inside the
+  compound path. A layer's or artboard's `name` takes a number or a boolean as
+  `String()` writes it. `locked` true means the layer is locked. `color` is an object `{red, green, blue}` of whole
+  numbers from 0 to 255. A layer's name is from 1 to 512 characters. A layer's `zOrderPosition` counts the layers
+  beside it from 1 at the bottom, leaving out art, and `zOrder` with `BRINGFORWARD` or `SENDBACKWARD` moves it past
+  the next layer beside it and any art between them.
+  `hasSelectedArtwork = true` adds the layer's shown, unlocked art to the selection (`select.add`), and `false`
+  deselects only the layer's art (`select.toggle`); the rest of the selection, ruler guides included, stays. A layer
+  with nothing to add or deselect runs no command.
+  `clipped = true` makes the group's topmost object, which must be a path, a compound path or type, its clipping
+  path; `false` releases the mask; the group keeps its id. `groupItems.add()` makes an empty group on top of the
+  layer's or group's contents, or of the current layer's for the document's collection, and `compoundPathItems.add()`
+  makes an empty compound path in the same place
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItems/). A path that `move` or `duplicate` puts into a
+  compound path becomes one of its paths and gives up its own paint, as Make Compound Path leaves its paths. The
+  compound path becomes pixel-aligned when the path was, or when the compound path it leaves was. An empty
+  compound path takes the paint the first path that goes in was drawn with: the path's own, or the paint of the
+  compound path it leaves. Other objects are refused. A path that `move` takes out of a compound path into a layer or
+  a group takes the compound path's paint and pixel alignment, as Release Compound Path gives them to its paths.
+  `artboards.add` and `insert` stop at 100 artboards in a document, the limit `Documents.add` uses. An artboard's rectangle is
+  `[left, top, right, bottom]` in script coordinates, with its right side right of its left side, its bottom below
+  its top, each side from 1 to 3,999,856 points and every edge at most 4,000,000 points from the document origin.
+  Artboard names are trimmed, an empty name gives the artboard its default name (`Artboard N` for the Nth artboard),
+  and two artboards may have the same name. `add` and `insert` name the new artboard `Artboard N`, with N the first number from one past the artboard count that no other artboard's
+  name uses. `rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down.
+  `setActiveArtboardIndex` changes the view's active artboard with no undo step, and `script.run`'s report lists the
+  change in `activeArtboards` (`[{document, artboard}]`, both indexes, with each document's active artboard as the
+  run leaves it). The report also lists a document whose active artboard has another index when the run ends because
+  artboards were inserted, removed or reordered before it. `insert`, `remove` and `setActiveArtboardIndex` throw a
+  `RangeError` for an index outside the list. Reading an index past the last artboard gives `undefined` from
+  `artboards[i]` and throws `Not found` from `artboards.index(i)`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
+  `Stale artboard`. `Layer.blendingMode`, `artworkKnockout` and `sliced` and `GroupItems.createFromFile` throw an
+  error that says they are not available yet.
+- `object.newGroup {parent?, index?, compound?}` adds an empty group to a shown, unlocked layer or group (`parent`;
+  default: the current layer), on top of its contents or at `index` (0 is the bottom; in a clipping layer or group,
+  index 0 puts it directly above the clipping path), as one undo step named Group, and
+  gives `{id}`. With `compound: true` it adds an empty compound path instead, as one undo step named Compound Path.
+  The selection stays as it is. `node.move` also puts a path into a shown, unlocked compound path (its layer and
+  groups shown and unlocked too, and not on a locked artboard), where the path
+  gives up its own paint, and an empty compound path takes the paint the first path that goes in was drawn with. A
+  path that `node.move` takes out of a compound path into a layer or a group takes the compound path's paint and pixel
+  alignment.
+- `Document.pathItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/) lists the document's paths in the
+  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `index(key)`,
+  `getByName(name)`, `removeAll()`, `add()` (a path with no points, from `path.create`, painted as new art; when new
+  art has no fill and no stroke, the path has neither), and the shape creators
+  `rectangle(top, left, width, height, reversed?)`, `roundedRectangle(top, left, width, height, horizontalRadius = 15,
+  verticalRadius = 20, reversed?)`, `ellipse(top = 100, left = 100, width = 50, height = 100, reversed?, inscribed?)`,
+  `polygon(centerX = 200, centerY = 300, radius = 50, sides = 8, reversed?)` and `star(centerX = 200, centerY = 300,
+  radius = 50, innerRadius = 20, points = 5, reversed?)`, which run `shape.rectangle`, `path.create`,
+  `shape.ellipse`, `shape.polygon` and `shape.star` (and `path.reverse` for `reversed`) and paint the new path as new
+  art is painted. `add()` and the shape creators put the new path on top of the active layer whatever the drawing
+  mode, which stays as it was. A layer's and a group's `pathItems`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Layer/, https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/)
+  have the same members, and their `parent` is that layer or group. Their `add()` and shape creators put the new path
+  on top of that layer's or group's contents, with the current layer left as it was: the path is made with the
+  container's layer as the current one (`layer.setCurrent`) and, for a group, moved into it with `node.move`, in the
+  run's one undo step. VectorCraft's own rules: a layer's or group's `pathItems` list the paths directly in it,
+  topmost first, leaving out paths in its groups, compound paths and sublayers; a layer or group that is hidden or
+  locked, or that is in a hidden or locked layer or group, throws `Cannot add a path to a hidden or locked layer or
+  group` and no path is made. A Live Paint group's `pathItems`, `groupItems` and `compoundPathItems` throw
+  `Cannot add an object to a Live Paint group` from their `add()` and the shape methods, and nothing is made. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
+  `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
+  `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,
+  `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)` (counterclockwise for a
+  positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The geometry changes through
+  `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the stroke options through
+  `stroke.set`, the fill rule through `path.setFillRule`, overprint through `object.setOverprint` and the transforms
+  through `object.move`, `object.rotate` and `object.scale`. Changes to the points of a path (`closed`,
+  `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one `path.setAnchors` before the
+  script uses any other member or command, or the points of another path, and when the script ends; a path aligned
+  to the pixel grid, or in an object that is, is written at each change, so its points read as the grid snaps them.
+  Writing changes that added, removed or replaced points deselects the path's direct-selected anchors, even when the
+  path ends with as many points as before; changes that only move points or handles, change a point's type or set
+  `closed` keep them selected.
+  `pathPoints`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
+  `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
+  `leftDirection` (the handle into the point), `rightDirection` (the handle out of it), `pointType`, `parent` and
+  `remove()`. `new RGBColor()` (0 to 255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100
+  white, as https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/NoColor/) make plain color objects; assigning a `NoColor` removes
+  the fill or stroke. The enumerations `PointType`, `PathPointSelection`, `StrokeCap`, `StrokeJoin`, `PolarityValues`
+  and `Transformation` hold strings such as `"StrokeCap.ROUNDENDCAP"`.
+  VectorCraft's own rules: a point's index counts across the path's subpaths; `closed` is true when every subpath is
+  closed, and assigning it opens or closes them all; `setEntirePath` takes at most 100,000 points and gives corner
+  points with no handles, keeping the path closed when it was; moving `anchor` leaves its handles where they are, and
+  `pointType` changes only the type; `PathPoints.add()` adds a corner point at the last point, or at `[0, 0]`; a point
+  whose index is past the end of its path throws `Stale path point`, and so does a point read before the script removed
+  a point of its path (`remove()`, `removeAll()`) or replaced its points (`setEntirePath`), or before anything other
+  than the object model changed the path's points (a command run with `vc.run`, such as `path.setAnchors`,
+  `object.move` or `edit.undo`); points stay valid through the object model's other changes to the path or to an
+  object that holds it, such as `translate()`. Color components left out
+  count as 0, `new
+  cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
+  range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest
+  decimals, at least 4, that give the stored value back, so assigning a color read from a path leaves the path as it
+  was. Reading `fillColor` or `strokeColor` gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
+  global or spot swatch reads as a `SpotColor` with its `tint`); assigning one of those throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
+  art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
+  stroke; a new-art gradient goes on the bounds of the path, or of the compound path or compound shape whose paint
+  it shows, and a new-art pattern with a placement of its own, or one missing from the document, throws an error.
+  `fillOverprint` and `strokeOverprint` read and change the top fill or stroke only. Sizes and
+  radii are finite and not negative, `sides` is a whole number from 3 to 1000, `points` one from 2 to 1000,
+  `strokeWidth` 0 to 1000 points (a `changeLineWidths` that would scale it past 1000 throws), `strokeDashes` at most
+  64 lengths that are not all 0 (`[]` or `{}` for a solid line), and `rotateAbout` and `scaleAbout` default to
+  `Transformation.CENTER`. A transform that leaves the path where it is, such as `rotate(360)` or
+  `resize(100, 100)`, checks its arguments and runs no command, on a path with no points too. The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
+  `changeStrokePattern` given as different values throw an error, and `changeFillGradients` false and `ellipse` with
+  `inscribed` true throw an error that says they are not available yet. A change to the geometry or paint of a path
+  that is hidden or locked, or that is in a hidden or locked layer or group, throws `Cannot edit` with nothing
+  changed. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
+  shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
+  art, the active Fill or Stroke proxy and Recent Colors as they were. `selectedPathPoints`, `PathPoint.selected`,
+  `transform`, `polarity`, the gradient stops and the document's default paint are not available yet.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
   with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
   `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page
@@ -6952,7 +7101,9 @@ and `layerRows`, the rows highlighted in the panel.
   bottom layer's into the empty space under the list) places them, unless objects are copied with a top-level layer
   that is the target, which would put them inside it (#8237). Dragging the
   selected-art square is `layer.move` with the selected objects. `node.move {id, parent?, index}` is the low-level
-  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group. A row that
+  form with the same nesting rules; unlike `layer.move`, it also moves a row into a locked layer or group, and it puts
+  a path into a shown, unlocked compound path whose layer and groups are also shown and unlocked and that is not on
+  a locked artboard (see `object.newGroup` for the paint the path keeps or takes). A row that
   either command puts into a Live Paint group from elsewhere (inside it, or above or below one of its rows) joins the
   group's paths as `livePaint.merge` adds them, in one "Merge Live Paint" undo step, and the group is selected and
   listed in `layer.move`'s `ids` in its place; paths, compound paths, groups of them and Live Paint groups can join,
@@ -9668,7 +9819,7 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 `file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
-rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
+rows, spacing, rightToLeft}` (`rows`, a whole number from 1 to 1000, gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
 an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are
 fewer artboards, until `columns` without `rows`, or another layout, is given; New Document's Columns shows the columns
 the rows give the current number of artboards, and New Document drops the rows when Columns or the layout changes),

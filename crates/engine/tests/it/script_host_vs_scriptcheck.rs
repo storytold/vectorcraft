@@ -78,9 +78,11 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
-         DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
-         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= Tag Tags ZOrderMethod",
+        "activeDocument activeDocument= app Application Artboard Artboards CompoundPathItem CompoundPathItems CoordinateSystem \
+         Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType DocumentPreviewMode \
+         DocumentRasterResolution DocumentTransparencyGrid documents Documents ElementPlacement GroupItem GroupItems Layer \
+         Layers PageItem PageItems PathItem PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues \
+         RulerUnits selection selection= StrokeCap StrokeJoin Tag Tags Transformation ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -101,24 +103,79 @@ const INSIDE: &[(&str, &str)] = &[
     ("Document.", "prototype"),
     (
         "Document.prototype.",
-        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
+        "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
+         documentColorSpace groupItems height layers name pageItems parent pathItems rulerOrigin rulerOrigin= \
          rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
          typename views views= width",
     ),
     ("Layer.", "prototype"),
-    ("Layer.prototype.", "constructor name toString typename"),
+    (
+        "Layer.prototype.",
+        "artworkKnockout artworkKnockout= blendingMode blendingMode= color color= compoundPathItems constructor \
+         dimPlacedImages dimPlacedImages= groupItems hasSelectedArtwork hasSelectedArtwork= isIsolated layers locked \
+         locked= move name name= opacity opacity= pageItems parent pathItems placedItems placedItems= preview \
+         preview= printable printable= rasterItems rasterItems= remove sliced sliced= symbolItems symbolItems= textFrames \
+         textFrames= toString typename visible visible= zOrder zOrderPosition",
+    ),
+    ("Layers.", "prototype"),
+    ("Layers.prototype.", "add constructor getByName index length parent removeAll toString typename"),
+    ("GroupItem.", "prototype"),
+    (
+        "GroupItem.prototype.",
+        "clipped clipped= compoundPathItems constructor groupItems pageItems pathItems placedItems placedItems= \
+         rasterItems rasterItems= symbolItems symbolItems= textFrames textFrames=",
+    ),
+    ("GroupItems.", "prototype"),
+    ("GroupItems.prototype.", "add constructor createFromFile createFromFile= getByName index length parent removeAll toString typename"),
+    ("CompoundPathItem.", "prototype"),
+    ("CompoundPathItem.prototype.", "constructor pathItems"),
+    ("CompoundPathItems.", "prototype"),
+    ("CompoundPathItems.prototype.", "add constructor getByName index length parent removeAll toString typename"),
+    ("Artboard.", "prototype"),
+    (
+        "Artboard.prototype.",
+        "artboardRect artboardRect= constructor name name= parent remove rulerOrigin rulerOrigin= rulerPAR rulerPAR= \
+         showCenter showCenter= showCrossHairs showCrossHairs= showSafeAreas showSafeAreas= toString typename",
+    ),
+    ("Artboards.", "prototype"),
+    (
+        "Artboards.prototype.",
+        "add constructor getActiveArtboardIndex getByName index insert length parent remove setActiveArtboardIndex \
+         toString typename",
+    ),
     ("PageItems.", "prototype"),
     ("PageItems.prototype.", "constructor getByName index length parent removeAll toString typename"),
     ("PageItem.", "prototype"),
     (
         "PageItem.prototype.",
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
-         controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
-         left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
+         controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer left \
+         left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
          position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
+    ),
+    ("PathItems.", "prototype"),
+    (
+        "PathItems.prototype.",
+        "add constructor ellipse getByName index length parent polygon rectangle removeAll roundedRectangle star toString typename",
+    ),
+    ("PathItem.", "prototype"),
+    (
+        "PathItem.prototype.",
+        "area clipping closed closed= constructor evenodd evenodd= fillColor fillColor= fillOverprint fillOverprint= filled \
+         filled= guides length pathPoints polarity polarity= resize resolution resolution= rotate selectedPathPoints \
+         selectedPathPoints= setEntirePath strokeCap strokeCap= strokeColor strokeColor= strokeDashOffset strokeDashOffset= \
+         strokeDashes strokeDashes= strokeJoin strokeJoin= strokeMiterLimit strokeMiterLimit= strokeOverprint strokeOverprint= \
+         strokeWidth strokeWidth= stroked stroked= translate",
+    ),
+    ("PathPoints.", "prototype"),
+    ("PathPoints.prototype.", "add constructor index length parent removeAll toString typename"),
+    ("PathPoint.", "prototype"),
+    (
+        "PathPoint.prototype.",
+        "anchor anchor= constructor leftDirection leftDirection= parent pointType pointType= remove rightDirection \
+         rightDirection= selected selected= toString typename",
     ),
     ("Tags.", "prototype"),
     ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
@@ -136,13 +193,21 @@ const INSIDE: &[(&str, &str)] = &[
          TransparencyGridNone TransparencyGridOrange TransparencyGridPurple TransparencyGridRed",
     ),
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
+    ("PathPointSelection.", "ANCHORPOINT LEFTDIRECTION LEFTRIGHTPOINT NOSELECTION RIGHTDIRECTION"),
+    ("PointType.", "CORNER SMOOTH"),
+    ("PolarityValues.", "NEGATIVE POSITIVE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("StrokeCap.", "BUTTENDCAP PROJECTINGENDCAP ROUNDENDCAP"),
+    ("StrokeJoin.", "BEVELENDJOIN MITERENDJOIN ROUNDENDJOIN"),
+    ("Transformation.", "BOTTOM BOTTOMLEFT BOTTOMRIGHT CENTER DOCUMENTORIGIN LEFT RIGHT TOP TOPLEFT TOPRIGHT"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: the page item types.
-const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// that have no members of their own, and the color classes.
+const BARE_CLASSES: &str = "BlendItem CMYKColor EnvelopeItem GradientColor GraphItem GrayColor IntertwineItem LabColor \
+     MeshItem NoColor PatternColor PlacedDocumentItem PlacedItem RGBColor RasterItem RepeatItem SpotColor SymbolItem TextFrame \
+     cmykColor";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

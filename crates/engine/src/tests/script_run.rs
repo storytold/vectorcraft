@@ -5,7 +5,7 @@ use std::cell::Cell;
 
 use serde_json::{Value, json};
 
-use crate::script::{PANIC_IN_SLICE, TEST_GROWTH, TEST_RESULT_BYTES};
+use crate::script::{PANIC_IN_SLICE, TEST_GROWTH, TEST_GROWTH_BYTES, TEST_RESULT_BYTES};
 use crate::*;
 
 fn rect(x: i64) -> Value {
@@ -1346,6 +1346,141 @@ fn a_person_can_let_a_growing_run_go_on_or_stop_it() {
     assert!(s.script_pump().unwrap().is_err());
     TEST_GROWTH.with(|g| g.set(None));
     assert_eq!(state(&s), before);
+}
+
+#[test]
+fn point_changes_written_as_the_script_ends_wait_for_the_growth_answer() {
+    // The point change waits in the object model until the script ends.
+    let source = "app.activeDocument.pathItems[0].pathPoints[0].anchor = [3, -4];";
+    let mut s = two_docs();
+    let start = s.documents()[1].doc.clone();
+    assert_eq!(run(&mut s, source).unwrap()["ok"], true);
+    let added = start.retained_bytes_each(&s.documents()[1].doc).1 as u64;
+    assert!(added >= 3, "{added}");
+    // The change goes past this allowance and stays within twice it.
+    TEST_GROWTH_BYTES.with(|g| g.set(Some(added * 2 / 3)));
+    let run_to_the_question = |s: &mut Session| {
+        s.script_frames = true;
+        run(s, source).unwrap();
+        for _ in 0..1_000 {
+            if s.script_waiting() {
+                break;
+            }
+            assert!(s.script_pump().is_none());
+        }
+        assert!(s.script_waiting());
+        assert!(s.script_pump().is_none());
+        assert!(s.script_running());
+    };
+    let mut s = two_docs();
+    let before = state(&s);
+    let undo = s.documents()[1].history.undo.len();
+    run_to_the_question(&mut s);
+    assert_eq!(state(&s), before);
+    s.script_continue();
+    assert!(!s.script_waiting());
+    let done = s.script_pump().expect("the run ends once it may go on");
+    assert_eq!(done.unwrap()["ok"], true);
+    assert_eq!(s.documents()[1].history.undo.len(), undo + 1);
+    assert_ne!(state(&s), before);
+
+    let mut s = two_docs();
+    let before = state(&s);
+    run_to_the_question(&mut s);
+    assert_eq!(s.execute("script.stop", &json!({})).unwrap()["stopped"], true);
+    let ended = s.script_pump().expect("a stopped run ends");
+    TEST_GROWTH_BYTES.with(|g| g.set(None));
+    assert!(ended.is_err());
+    assert_eq!(s.script_report().unwrap()["kind"], "stopped");
+    assert!(!s.script_running());
+    assert_eq!(state(&s), before);
+}
+
+/// A script that ends past the allowance the person's last answer gave is asked again before its
+/// changes are kept.
+#[test]
+fn a_finished_run_past_its_last_allowance_asks_again() {
+    let draw = "vc.run('shape.rectangle', {x:1,y:1,width:1,height:1}); vc.run('shape.rectangle', {x:2,y:1,width:1,height:1});";
+    let point = "var P = app.activeDocument.pathItems, q = P[0];\
+                 for (var k = 1; k < P.length; k++) if (P[k].pathPoints.length > q.pathPoints.length) q = P[k];\
+                 var p = q.pathPoints; for (var i = 0; i < p.length; i++) p[i].anchor = [i * 3, -4 - i];";
+    // The path the script moves has 600 anchors, so its point changes weigh more than the
+    // rectangles do.
+    let two_docs = || {
+        let mut s = two_docs();
+        let id = s.documents()[1].doc.layers[0].children().unwrap()[0].id;
+        let anchors: Vec<Value> = (0..600)
+            .map(|i| json!({"x": f64::from(i), "y": f64::from(i % 7), "in": [f64::from(i), 0.0], "out": [f64::from(i), 0.0], "smooth": false}))
+            .collect();
+        s.execute("path.setAnchors", &json!({"id": id.0, "subpaths": [{"anchors": anchors, "closed": false}]})).unwrap();
+        s
+    };
+    let added = |source: &str| {
+        let mut s = two_docs();
+        let start = s.documents()[1].doc.clone();
+        assert_eq!(run(&mut s, source).unwrap()["ok"], true);
+        start.retained_bytes_each(&s.documents()[1].doc).1 as u64
+    };
+    let whole = format!("{draw} {point}");
+    let (m, p) = (added(draw), added(&whole) - added(draw));
+    // The rectangles go past one object, which asks once, and stay within twice the bytes; the
+    // point changes, written as the script ends, then go past the second allowance and also past
+    // the third.
+    let b = (m + p - 1) / 3;
+    assert!(m <= 2 * b && 3 * b < m + p && m + p <= 4 * b, "m {m}, p {p}, b {b}");
+    TEST_GROWTH.with(|g| g.set(Some(1)));
+    TEST_GROWTH_BYTES.with(|g| g.set(Some(b)));
+    let mut s = two_docs();
+    s.script_frames = true;
+    run(&mut s, &whole).unwrap();
+    let mut questions = 0;
+    let done = loop {
+        assert!(questions < 10);
+        if s.script_waiting() {
+            questions += 1;
+            s.script_continue();
+        }
+        if let Some(r) = s.script_pump() {
+            break r;
+        }
+    };
+    TEST_GROWTH.with(|g| g.set(None));
+    TEST_GROWTH_BYTES.with(|g| g.set(None));
+    assert_eq!(done.unwrap()["ok"], true);
+    assert_eq!(questions, 3, "asked mid-run, as the script ended, and again for the third allowance");
+}
+
+/// A script that ends with nothing left to write, past the allowance the person's last answer
+/// gave, is asked again before its changes are kept.
+#[test]
+fn a_run_that_ends_past_its_last_allowance_with_nothing_to_write_asks_again() {
+    TEST_GROWTH.with(|g| g.set(Some(20)));
+    // 21 rectangles go past the first allowance, and the 45 the document opens go past the
+    // second and stay within twice it, which leaves them past the third.
+    let rects: String = (0..45).map(|i| format!(r#"<rect x="{i}" y="0" width="1" height="1"/>"#)).collect();
+    let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">{rects}</svg>"#);
+    let data = vectorcraft_format::base64_encode(svg.as_bytes());
+    let source = format!(
+        "for (var i = 0; i < 21; i++) vc.run('shape.rectangle', {{x:i,y:1,width:1,height:1}});\
+         vc.run('document.open', {{name: 'a.svg', dataBase64: '{data}'}});"
+    );
+    let mut s = two_docs();
+    s.script_frames = true;
+    run(&mut s, &source).unwrap();
+    let mut questions = 0;
+    let done = loop {
+        assert!(questions < 10);
+        if s.script_waiting() {
+            questions += 1;
+            s.script_continue();
+        }
+        if let Some(r) = s.script_pump() {
+            break r;
+        }
+    };
+    TEST_GROWTH.with(|g| g.set(None));
+    assert_eq!(done.unwrap()["ok"], true);
+    assert_eq!(questions, 3, "asked for the rectangles, for the document, and again as the script ended");
 }
 
 #[test]

@@ -202,10 +202,13 @@ impl Interp {
             }
             return Ok(Value::Object(id));
         }
-        self.reserve_heap(crate::heap::OBJECT_BYTES)?;
+        let handle_bytes = crate::heap::host_handle_bytes(handle.len());
+        self.reserve_heap(crate::heap::OBJECT_BYTES.saturating_add(handle_bytes))?;
         let mut o = Object::new(Class::Host(HostObj { class, handle: handle.into() }), Some(proto));
         o.extensible = false;
         let id = self.heap.alloc_object(o);
+        // The heap counts the object; its handle is counted here, as a collection counts it.
+        self.heap.bytes = self.heap.bytes.saturating_add(handle_bytes);
         self.host_objects.insert(made, id);
         Ok(Value::Object(id))
     }
@@ -282,7 +285,8 @@ pub(crate) fn install(i: &mut Interp, classes: Vec<HostClass>, instances: Vec<(S
         let global = i.global;
         i.define(global, key(&name), Prop::Data { value: v, flags: 0 })?;
     }
-    Ok(())
+    // The prototypes, constructors and members are made without a reservation of their own.
+    i.reserve_heap(0)
 }
 
 /// Adds the global properties `globals`, each read with its getter and assigned with its setter as

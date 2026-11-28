@@ -33,7 +33,8 @@
 //! - After `documents[0]`, documents are listed from the one active most recently to the one
 //!   active longest ago. A change a script makes to a document in the back does not move it.
 //! - `pageItems` lists every object, with the objects inside groups and compound paths after the
-//!   group or compound path, and leaves out layers and ruler guides. An index out of range gives
+//!   group or compound path, and leaves out layers and ruler guides. The `layers` module gives the
+//!   order of a layer's, a group's and a compound path's lists. An index out of range gives
 //!   `undefined`; `index` and `getByName` throw `Not found` when nothing matches.
 //! - Script coordinates are points with Y up from the bottom of the first artboard
 //!   (`DOCUMENTCOORDINATESYSTEM`, the default) or points with Y down from the top-left corner of
@@ -67,7 +68,12 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod colors;
+pub(super) mod layers;
+mod paths;
 mod tags;
+#[cfg(test)]
+pub(crate) use paths::index_builds;
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -117,18 +123,65 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
-/// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
-/// open, and the settings of each `DocumentPreset` the run made.
+/// each kept while its document is unchanged, the point changes of a path not written yet, how
+/// many times each path's points went stale and each path as the run last saw its points, whether
+/// a call's own savepoint ([`atomically`]) is open, and the settings of each `DocumentPreset` the
+/// run made.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
+    /// The last [`paths::PATH_LISTS`] lists of paths a document's, a layer's or a group's
+    /// `pathItems` gave ([`paths`]), least recently used first, each kept while its document is
+    /// unchanged.
+    paths: RefCell<Vec<paths::PathList>>,
+    /// A path and its subpaths with the point changes the run has made to it and not written yet
+    /// ([`flush`]).
+    pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
+    /// How many times [`paths`] changed the waiting point changes, which makes a
+    /// [`paths::PointIndex`] of them stale.
+    pending_changes: Cell<u64>,
+    /// Whether the waiting point changes added, removed or replaced points, so that writing them
+    /// deselects the path's direct-selected anchors even when the counts come out the same.
+    pending_reshaped: Cell<bool>,
+    /// The path [`flush`] is writing reshaped changes to, whose direct-selected anchors and
+    /// segments [`on_doc`] does not select again.
+    reshaping: Cell<Option<Item>>,
+    /// Where the points of the path the run last read points of start, by subpath ([`paths`]).
+    point_index: RefCell<Option<paths::PointIndex>>,
+    /// How many times the points the run read of each path went stale, by document uid and path id
+    /// ([`paths`]).
+    point_cuts: RefCell<std::collections::HashMap<(u64, u64), u64>>,
+    /// Each path whose points the run read, as the run last saw it, by document uid and path id
+    /// ([`paths`]).
+    point_nodes: RefCell<std::collections::HashMap<(u64, u64), Arc<crate::doc::Node>>>,
+    /// Each document, by uid, as it was when the run last looked at all the paths in it whose
+    /// points it read ([`paths`]).
+    point_docs: RefCell<std::collections::HashMap<u64, Arc<Document>>>,
+    /// The item the object model is changing ([`edit_item`]), whose points stay valid through the
+    /// change.
+    editing: Cell<Option<Item>>,
     saving: Cell<bool>,
+    /// The last [`layers::ART_LISTS`] lists of art [`layers`]' collections gave, least recently
+    /// used first, each kept while its document is unchanged.
+    art: RefCell<Vec<layers::ArtList>>,
+    /// The last [`layers::LAYER_LISTS`] lists of layers `layers` gave, least recently used first,
+    /// each kept while its document is unchanged.
+    layer_lists: RefCell<Vec<layers::LayerList>>,
+    /// The uids of the documents whose active artboard `setActiveArtboardIndex` changed.
+    pub(super) active_artboards: RefCell<Vec<u64>>,
+    /// Each open document's uid and the index of its active artboard when the run started.
+    pub(super) boards_at_start: Vec<(u64, usize)>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
 }
 
 impl State {
+    /// The state of a run that starts with the documents `docs` open.
+    pub(super) fn new(docs: &[DocState]) -> Self {
+        Self { boards_at_start: docs.iter().map(|st| (st.uid, active_artboard(st))).collect(), ..Self::default() }
+    }
+
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()
@@ -214,13 +267,38 @@ type Answer = std::result::Result<Data, HostError>;
 /// A member function: the run's host and the call's arguments, `this` first.
 type Member = fn(&Host, &[Data]) -> Answer;
 
+/// A member function that first writes the point changes waiting in [`State`] ([`flush`]).
 fn function(link: &Link, f: Member) -> HostFunction {
+    call(link, f, true)
+}
+
+/// A member function of the points of a path, which reads and adds to the point changes waiting in
+/// [`State`] instead of writing them first.
+fn point_function(link: &Link, f: Member) -> HostFunction {
+    call(link, f, false)
+}
+
+fn call(link: &Link, f: Member, flushing: bool) -> HostFunction {
     let l = link.clone();
     Rc::new(move |a: Vec<Data>| {
         let h = current(&l)?;
         h.charge_call(16 + a.iter().map(data_size).sum::<u64>())?;
+        if flushing {
+            flush(&h)?;
+        }
         f(&h, &a)
     })
+}
+
+/// Writes the point changes of a path that wait in [`State`] with one command ([`paths::flush`]).
+pub(super) fn flush(h: &Host) -> std::result::Result<(), HostError> {
+    paths::flush(h)
+}
+
+/// Notes the changes a command made to the points of the paths the run has read
+/// ([`paths::see_all_points`]).
+pub(super) fn see_points(h: &Host) {
+    paths::see_all_points(h)
 }
 
 fn get(link: &Link, f: Member) -> HostMember {
@@ -235,9 +313,22 @@ fn method(link: &Link, f: Member) -> HostMember {
     HostMember::Method(function(link, f))
 }
 
+/// [`get`], [`property`] and [`method`] for a member of the points of a path ([`point_function`]).
+fn point_get(link: &Link, f: Member) -> HostMember {
+    HostMember::Get(point_function(link, f))
+}
+
+fn point_property(link: &Link, g: Member, s: Member) -> HostMember {
+    HostMember::Property { get: point_function(link, g), set: point_function(link, s) }
+}
+
+fn point_method(link: &Link, f: Member) -> HostMember {
+    HostMember::Method(point_function(link, f))
+}
+
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
-/// the check that a document or page item `this` is still there. `hasOwnProperty` is false for it,
-/// so a script that checks for the member first skips it.
+/// the check that a document, layer, page item or path point `this` is still there. `hasOwnProperty`
+/// is false for it, so a script that checks for the member first skips it.
 fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
@@ -248,8 +339,14 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "Layer" => {
+                layers::layer_of(&h, arg(&a, 0))?;
+            }
+            c if c == "PageItem" || ITEM_CLASSES.contains(&c) => {
                 item_of(&h, arg(&a, 0))?;
+            }
+            "PathPoint" => {
+                paths::this_point(&h, &a)?;
             }
             _ => {}
         }
@@ -566,12 +663,15 @@ fn restore_selection(h: &Host, doc: &Document, before: &crate::doc::Selection) -
         command(h, "select.set", &json!({"ids": kept.iter().map(|i| i.0).collect::<Vec<_>>()}))?;
     } else {
         // One `select.anchorsMany` selects every object in its order: a partly selected path with
-        // its anchors, a whole path with all of them and any other object with none.
+        // its anchors, a whole path with all of them and any other object with none. A path with
+        // only segments selected gets no anchors here, so `select.segments` below selects it with
+        // just those segments.
         let items: Vec<Value> = kept
             .iter()
             .map(|i| {
                 let anchors: Vec<[usize; 2]> = match before.anchors.get(i) {
                     Some(a) => a.iter().map(|(p, k)| [*p, *k]).collect(),
+                    None if before.segments.contains_key(i) => Vec::new(),
                     None => doc.node(*i).and_then(|n| n.path_data()).map(|p| p.anchors().map(|(s, k, _)| [s, k]).collect()).unwrap_or_default(),
                 };
                 json!({"id": i.0, "anchors": anchors})
@@ -652,22 +752,62 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, before, layer, activated) = {
+    on_doc_layer(h, uid, keep_selection, true, f)
+}
+
+/// [`on_doc`], with `keep_layer` false for `f`s that choose the current layer (`layers.add()`,
+/// `activeLayer = layer`): the selection is put back, and the layer `f` left current stays current.
+fn on_doc_layer<T>(
+    h: &Host,
+    uid: u64,
+    keep_selection: bool,
+    keep_layer: bool,
+    f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
+) -> std::result::Result<T, HostError> {
+    let (index, active, mut before, layer, old, activated) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
         let st = &s.documents()[index];
-        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()), st.activated)
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()), st.doc.clone(), st.activated)
     };
     let switch = active != Some(index);
     if switch {
         command(h, "document.activate", &json!({"index": index}))?;
     }
     let r = f(h);
+    let layer = if keep_layer {
+        layer
+    } else {
+        let s = h.session.borrow();
+        s.active().filter(|st| st.uid == uid).map_or(layer, |st| (st.active_layer, st.highlighted_rows()))
+    };
     let mut restored = Ok(());
     if keep_selection {
         let doc = {
             let s = h.session.borrow();
-            s.active().filter(|st| st.uid == uid && st.selection != before).map(|st| st.doc.clone())
+            s.active().filter(|st| st.uid == uid).map(|st| st.doc.clone())
+        };
+        // Anchors and segments are selected by index: a path that gained, lost or replaced anchors
+        // is not selected again, so that other anchors of it are not selected in their place.
+        if let Some(doc) = &doc {
+            let counts = |d: &Document, id: NodeId| {
+                d.node(id).and_then(|n| n.path_data()).map(|p| p.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>())
+            };
+            let reshaped = h.dom.reshaping.get().filter(|it| it.doc.uid == uid).map(|it| it.id);
+            let partial: Vec<NodeId> = before.anchors.keys().chain(before.segments.keys()).copied().collect();
+            for id in partial {
+                if reshaped == Some(id) || counts(&old, id) != counts(doc, id) {
+                    before.anchors.remove(&id);
+                    before.segments.remove(&id);
+                    before.objects.retain(|o| *o != id);
+                    before.key_anchor = before.key_anchor.filter(|(k, _)| *k != id);
+                    before.key = before.key.filter(|k| *k != id);
+                }
+            }
+        }
+        let doc = {
+            let s = h.session.borrow();
+            doc.filter(|_| s.active().is_some_and(|st| st.selection != before))
         };
         if let Some(doc) = doc {
             restored = restore_selection(h, &doc, &before);
@@ -695,9 +835,14 @@ fn on_doc<T>(
     Ok(v)
 }
 
-/// Runs `id` with `params` on the item's document, its selection kept.
+/// Runs `id` with `params` on the item's document, its selection kept. The points the run read of
+/// the item's paths stay valid through the change ([`paths::see_all_points`]).
 fn edit_item(h: &Host, item: Item, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
-    on_doc(h, item.doc.uid, true, |h| command(h, id, params))
+    paths::see_all_points(h);
+    let kept = h.dom.editing.replace(Some(item));
+    let r = on_doc(h, item.doc.uid, true, |h| command(h, id, params));
+    h.dom.editing.set(kept);
+    r
 }
 
 /// Reads the document of `doc` with `f`.
@@ -755,13 +900,15 @@ fn app_set_coords(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// A path as `getIsFileOpen` compares it: `\` and `/` alike, and on Windows paths (a drive letter
-/// or a `\`) letters in one case.
+/// A path as `getIsFileOpen` compares it, without a trailing `/`: on Windows, `\` and `/` alike and
+/// letters in one case; elsewhere `\` is part of a name and case counts.
 fn path_key(p: &str) -> String {
-    let windows = p.contains('\\') || p.as_bytes().get(1) == Some(&b':');
-    let p = p.replace('\\', "/");
-    let p = p.trim_end_matches('/').to_string();
-    if windows { p.to_lowercase() } else { p }
+    path_key_on(p, cfg!(windows))
+}
+
+/// [`path_key`] for Windows when `windows`, else for macOS and Linux.
+pub(crate) fn path_key_on(p: &str, windows: bool) -> String {
+    if windows { p.replace('\\', "/").trim_end_matches('/').to_lowercase() } else { p.trim_end_matches('/').to_string() }
 }
 
 /// `app.getIsFileOpen(path)`: whether a document open in the run has the file `path`. The path is
@@ -1114,8 +1261,21 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
     }
     // The document starts from the first preset of the profile's category (Print: Letter).
     let first = profile.and_then(|n| crate::cmd::newdoc::category(&h.session.borrow(), n)?.into_iter().next());
+    let mut shadowed_by = None;
     if let Some(first) = first {
-        p.insert("preset".into(), json!(first.name));
+        let shadowed = h.session.borrow().prefs.new_doc_presets.iter().any(|q| q.name.trim().eq_ignore_ascii_case(first.name.trim()));
+        if shadowed {
+            shadowed_by = Some(first.clone());
+            // `file.new` would find the saved preset of that name first: the built-in preset's
+            // settings go as params instead, under the ones `presetSettings` gives.
+            if let Value::Object(base) = first.to_json() {
+                for (k, v) in base.into_iter().filter(|(k, _)| !matches!(k.as_str(), "name" | "size" | "orientation" | "profile")) {
+                    p.entry(k).or_insert(v);
+                }
+            }
+        } else {
+            p.insert("preset".into(), json!(first.name));
+        }
     }
     p.insert("profile".into(), profile.map_or(Value::Null, |n| json!(n)));
     if let Some(m) = mode {
@@ -1129,6 +1289,15 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
             let profile = e["profile"].as_str().unwrap_or_default();
             let reason = e["reason"].as_str().unwrap_or_default();
             return Err(HostError::Error(format!("the New Document profile {profile} could not be read: {reason}")));
+        }
+        // The built-in preset's settings went as params: Recent keeps its name, as `file.new`
+        // keeps a preset's name, unless its size changed (turning it doesn't count).
+        if let Some(first) = &shadowed_by {
+            let sorted = |d: &crate::cmd::newdoc::DocSettings| (d.width.min(d.height), d.width.max(d.height), d.units);
+            let mut s = h.session.borrow_mut();
+            if let Some(r) = s.prefs.recent_new_docs.first_mut().filter(|r| sorted(r) == sorted(first)) {
+                r.name.clone_from(&first.name);
+            }
         }
         // Each warning from reading the profile's file goes to the console.
         for w in value.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
@@ -1420,6 +1589,7 @@ fn selection_of(h: &Host, uid: u64) -> Answer {
 fn selection_ids(h: &Host, doc: Doc, v: &Data) -> std::result::Result<Vec<NodeId>, HostError> {
     let list: Vec<&Data> = match v {
         Data::Null => Vec::new(),
+        Data::Undefined => return Err(HostError::Type("the selection takes a page item, a list of them, null or [], not undefined".into())),
         Data::Array(a) if a.len() > MAX_LISTED => return Err(HostError::Range(format!("a selection takes at most {MAX_LISTED} objects"))),
         Data::Array(a) => a.iter().collect(),
         d => vec![d],
@@ -1491,12 +1661,18 @@ fn items_doc(h: &Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
 }
 
 fn items_length(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_length(h, a);
+    }
     let doc = items_doc(h, a)?;
     let n = with_doc(h, doc, |_, st| page_items(h, st).len());
     Ok(num(float(n as u64)))
 }
 
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_typename(h, a);
+    }
     items_doc(h, a)?;
     Ok(text("PageItems"))
 }
@@ -1507,6 +1683,9 @@ fn items_to_string(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_parent(h, a);
+    }
     let doc = items_doc(h, a)?;
     Ok(doc_ref(h, doc.uid))
 }
@@ -1517,14 +1696,23 @@ fn probing(a: &[Data]) -> bool {
     matches!(arg(a, 2), Data::Bool(true))
 }
 
+/// The answer of an indexer called with a name, from `found`, the collection's `getByName`: a
+/// name nothing has gives `undefined` for `name in collection` ([`probing`]) and throws otherwise.
+fn by_name_or_probe(a: &[Data], found: Answer) -> Answer {
+    match found {
+        Err(HostError::Error(e)) if e == NOT_FOUND && probing(a) => Ok(Data::Undefined),
+        r => r,
+    }
+}
+
 /// `pageItems[i]`, and `pageItems["name"]` as `getByName` reads it.
 fn items_at(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_at(h, a);
+    }
     let doc = items_doc(h, a)?;
     if let Data::String(_) = arg(a, 1) {
-        return match items_by_name(h, a) {
-            Err(HostError::Error(e)) if e == NOT_FOUND && probing(a) => Ok(Data::Undefined),
-            r => r,
-        };
+        return by_name_or_probe(a, items_by_name(h, a));
     }
     let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
     let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
@@ -1532,6 +1720,9 @@ fn items_at(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn items_by_name(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_by_name(h, a);
+    }
     let doc = items_doc(h, a)?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
@@ -1557,6 +1748,9 @@ fn items_index(h: &Host, a: &[Data]) -> Answer {
 /// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted,
 /// and so does an object on a locked artboard.
 fn items_remove_all(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_remove_all(h, a);
+    }
     let doc = items_doc(h, a)?;
     let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = top_items(&st.doc);
@@ -1778,6 +1972,33 @@ fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
 }
 
+/// The box of the anchors and direction handles of the paths in `n` that its visible bounds take
+/// in: a clipping group or layer gives only its clipping path's, and the source art a Shaper Group
+/// or a tracing keeps is left out, as are hidden objects.
+fn handles_box(n: &vectorcraft_doc::Node) -> Option<Rect> {
+    let children = n.editing_children();
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        _ if n.clips() => children.first().and_then(|c| handles_box(c)),
+        _ => children.iter().filter(|c| c.visible).fold(None, |acc, c| vectorcraft_geom::union_opt(acc, handles_box(c))),
+    }
+}
+
+/// The item's visible bounds grown to take in the direction handles of its paths.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = with_doc(h, item.doc, |_, st| {
+        let visible = st.doc.bounds_of(&[item.id], true);
+        let handles = st.doc.node(item.id).and_then(handles_box);
+        Ok::<_, HostError>((vectorcraft_geom::union_opt(visible, handles), frame(st)?))
+    })?;
+    // An object with nothing in it has no bounds, and they read as zeros like its other bounds.
+    match r {
+        Some(r) => Ok(f.bounds(h.dom.coords.get(), r)),
+        None => Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])),
+    }
+}
+
 fn item_position(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     match item_rect(h, item, false)? {
@@ -1978,7 +2199,11 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::
         }
         let (parent, beside) = match how {
             Placement::Top | Placement::Bottom => {
-                if !matches!(t.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
+                if matches!(t.kind, NodeKind::Compound { .. }) {
+                    if !d.node(item.id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })) {
+                        return Err(HostError::Error("a compound path holds only paths".into()));
+                    }
+                } else if !matches!(t.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
                     return Err(HostError::Error(format!("{} cannot hold objects", typename(t).unwrap_or("Layer"))));
                 }
                 (target, None)
@@ -2132,21 +2357,8 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-fn layer_name(h: &Host, a: &[Data]) -> Answer {
-    let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-    let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
-    with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
-}
-
-fn layer_typename(h: &Host, a: &[Data]) -> Answer {
-    layer_name(h, a)?;
-    Ok(text("Layer"))
-}
-
 /// `toString()` of an object with a name: `[Class name]`, `[PathItem ]` for an object with no name.
-fn named_text(class: &str, name: Answer) -> Answer {
+pub(super) fn named_text(class: &str, name: Answer) -> Answer {
     match name? {
         Data::String(n) => Ok(text(format!("[{class} {n}]"))),
         _ => Ok(text(format!("[{class} ]"))),
@@ -2161,12 +2373,8 @@ fn doc_to_string(h: &Host, a: &[Data]) -> Answer {
     named_text("Document", doc_name(h, a))
 }
 
-fn layer_to_string(h: &Host, a: &[Data]) -> Answer {
-    named_text("Layer", layer_name(h, a))
-}
-
 /// `toString()` of an object without a name: `[Class]`.
-fn class_text(name: &'static str) -> HostMember {
+pub(super) fn class_text(name: &'static str) -> HostMember {
     HostMember::Method(Rc::new(move |_| Ok(text(format!("[{name}]")))))
 }
 
@@ -2270,13 +2478,11 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("convertCoordinate", method(l, doc_convert)),
         ("pageItems", get(l, doc_page_items)),
         ("selection", property(l, doc_selection, doc_set_selection)),
+        ("pathItems", get(l, paths::doc_path_items)),
         ("toString", method(l, doc_to_string)),
     ]);
-    document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
-            .into_iter()
-            .map(|m| later(l, "Document", m)),
-    );
+    document.extend(["textFrames", "swatches", "symbols", "views", "saveAs", "close"].into_iter().map(|m| later(l, "Document", m)));
+    document.extend(layers::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -2310,7 +2516,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
+        ("controlBounds", get(l, item_control)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),
@@ -2319,12 +2525,12 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("zOrder", method(l, item_z_order)),
         ("toString", method(l, item_to_string)),
     ]);
+    page_item.extend(layers::page_item_members(l));
     page_item.extend(
         [
             "artworkKnockout",
             "blendingMode",
             "isIsolated",
-            "layer",
             "pixelAligned",
             "sliced",
             "uRL",
@@ -2343,14 +2549,16 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
-    classes.push(class(
-        "Layer",
-        None,
-        named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name)), ("toString", method(l, layer_to_string))]),
-        None,
-    ));
+    classes.extend(
+        ITEM_CLASSES
+            .iter()
+            .map(|c| class(c, Some("PageItem"), if *c == "PathItem" { paths::path_item_members(l) } else { layers::members(c, l) }, None)),
+    );
+    classes.extend(layers::classes(l));
+    classes.extend(paths::classes(l));
+    classes.extend(colors::classes(l));
     classes.extend(tags::classes(l));
+    paths::install_enums(realm)?;
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])?;
     // The application's members a script may name without `app.`, assigned as `app.<member>` is.
     realm.define_host_globals(vec![
