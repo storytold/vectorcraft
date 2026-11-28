@@ -501,7 +501,9 @@ impl DocState {
     /// Lock Guides `guides_locked`. `record` is the record of the selection before, in the same
     /// document: the objects that leave the selection are taken out of its paints and the objects
     /// that join it are read into them, unless that reads more objects than reading the selection
-    /// again would, or the paints left can't be told apart without reading them again.
+    /// again would, counting the contents of groups and containers on both sides
+    /// ([`cmd::SelectionPaints::reads_no_more_than`]), or the paints left can't be told apart
+    /// without reading them again.
     pub(crate) fn record_selection(&mut self, record: Option<SelectionRecord>, guides_locked: bool) {
         if !objects_only(&self.selection) {
             self.selection_record = None;
@@ -514,7 +516,8 @@ impl DocState {
                     let (kept, removed) = kept_from(&r.objects, objects);
                     let gone = left_out(&removed, objects);
                     let joined = left_out(&objects[kept..], &r.objects);
-                    if gone.len() + joined.len() > objects.len() || !p.remove(&self.doc, &gone) {
+                    let changed = [gone.as_slice(), joined.as_slice()].concat();
+                    if !cmd::SelectionPaints::reads_no_more_than(&self.doc, &changed, objects) || !p.remove(&self.doc, &gone) {
                         r.paints = None;
                     } else {
                         p.add(&self.doc, &joined);

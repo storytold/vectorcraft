@@ -863,6 +863,8 @@ pub use plugin_call::{Location, ParamsPlace, key_location, location_in, location
 pub use select::SIMILAR;
 pub(crate) use vectorcraft_doc::range::parse_range;
 
+#[cfg(test)]
+pub(crate) use paint::PAINTS_READ;
 /// What the fill and stroke proxies read from the selected objects, kept with the selection
 /// ([`crate::doc_state::SelectionRecord`]).
 pub(crate) use paint::SelectionPaints;
