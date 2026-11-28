@@ -118,6 +118,13 @@ pub(crate) struct HostObj {
     pub(crate) handle: Rc<[f64]>,
 }
 
+/// The estimated bytes an object of a host class holds beyond [`crate::heap::OBJECT_BYTES`] for a
+/// handle of `len` numbers: the handle in its slot and the copy in the realm's index of the objects
+/// scripts hold.
+pub(crate) fn handle_bytes(len: usize) -> usize {
+    len.saturating_mul(2 * std::mem::size_of::<f64>())
+}
+
 /// A class the realm has.
 #[derive(Clone)]
 pub(crate) struct Entry {
@@ -274,10 +281,12 @@ impl Interp {
             }
             return Ok(Value::Object(id));
         }
-        self.reserve_heap(crate::heap::OBJECT_BYTES)?;
+        let extra = handle_bytes(handle.len());
+        self.reserve_heap(crate::heap::OBJECT_BYTES.saturating_add(extra))?;
         let mut o = Object::new(Class::Host(HostObj { class, handle: handle.into() }), Some(proto));
         o.extensible = false;
         let id = self.heap.alloc_object(o);
+        self.heap.bytes = self.heap.bytes.saturating_add(extra);
         self.host_objects.insert(made, id);
         Ok(Value::Object(id))
     }

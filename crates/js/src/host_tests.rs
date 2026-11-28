@@ -1081,6 +1081,63 @@ fn an_evaluators_whole_source_must_fit_in_the_heap_before_it_is_parsed() {
     assert_eq!(r.run("host.evaluate()").unwrap_err().kind, RunErrorKind::Thrown);
 }
 
+/// A realm with the host class `Big` and `host.make(i, len)`, which gives the object of `Big` whose
+/// handle is `i` followed by `len - 1` zeros.
+fn big_handles() -> Realm {
+    let mut r = realm(10_000_000);
+    let make: HostFunction = Rc::new(|args| {
+        let (Some(Data::Number(i)), Some(Data::Number(len))) = (args.get(1), args.get(2)) else { panic!("{args:?}") };
+        let mut handle = vec![0.0; *len as usize];
+        handle[0] = *i;
+        Ok(host_ref("Big", &handle))
+    });
+    let big = HostClass { name: "Big".into(), parent: None, members: vec![], info: Vec::new(), index: None, construct: None };
+    let maker = HostClass {
+        name: "Maker".into(),
+        parent: None,
+        members: vec![("make".into(), HostMember::Method(make))],
+        info: Vec::new(),
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![big, maker], vec![("host".into(), host_ref("Maker", &[0.0]))]).unwrap();
+    r
+}
+
+#[test]
+fn a_host_objects_handle_must_fit_in_the_heap() {
+    let len = 8192;
+    let mut r = big_handles();
+    r.interp().collect_for_room();
+    // Room for the object and the call, and not for its handle.
+    let heap_bytes = r.interp().heap.bytes + crate::heap::OBJECT_BYTES + (32 << 10);
+    assert!(crate::host_classes::handle_bytes(len) > 2 * (32 << 10));
+    r.set_limits(Limits { fuel: 10_000_000, heap_bytes, ..Limits::default() });
+    assert_eq!(r.run(&format!("host.make(1, {len})")).unwrap_err().kind, RunErrorKind::Limit(LimitKind::Heap));
+    r.set_limits(Limits { fuel: 10_000_000, ..Limits::default() });
+    assert!(r.run(&format!("host.make(1, {len})")).is_ok());
+}
+
+#[test]
+fn each_host_objects_handle_counts_toward_the_heap() {
+    let mut r = big_handles();
+    // The growth from 100 objects to 200, so the script's own code and strings cancel out.
+    let mut per_hundred = |len: usize| {
+        let mut grown = |count: usize| {
+            r.run("var kept = [];").unwrap();
+            let before = r.collect_garbage();
+            r.run(&format!("for (var i = 0; i < {count}; i++) kept.push(host.make(i, {len}));")).unwrap();
+            r.collect_garbage() - before
+        };
+        grown(200) - grown(100)
+    };
+    // The first runs also leave bindings and names the later ones reuse.
+    per_hundred(1);
+    let short = per_hundred(1);
+    let long = per_hundred(65);
+    assert_eq!(long - short, 100 * crate::host_classes::handle_bytes(64));
+}
+
 proptest::proptest! {
     /// A slice size does not change what a script computes.
     #[test]
