@@ -529,6 +529,58 @@ fn boards(app: &VectorcraftApp) -> (Vec<vectorcraft_geom::Rect>, usize, Vec<Stri
     (st.doc.artboards.iter().map(|a| a.rect).collect(), st.history.undo.len(), st.doc.artboards.iter().map(|a| a.name.clone()).collect())
 }
 
+#[test]
+fn control_bar_name_cancels_typing_and_commits_one_rename() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    fn draw(app: &mut VectorcraftApp, ui: &mut Ui) {
+        assert!(control_bar(app, ui, true, false));
+    }
+
+    for commit in [Key::Enter, Key::Tab] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        select(&mut app, 1);
+        let mut panel = Panel::new(app, draw);
+        panel.room(egui::vec2(1000.0, 500.0));
+        let original = panel.app().session.active().unwrap().doc.clone();
+        let revision = panel.app().session.active().unwrap().revision;
+        let undo = undo_steps(&panel.app());
+        let name = panel.value_role("Name:", Role::TEXT_INPUT);
+        panel.click_role("Name:", Role::TEXT_INPUT);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("Discarded");
+        panel.type_text(" draft");
+        assert_eq!(panel.value_role("Name:", Role::TEXT_INPUT).as_deref(), Some("Discarded draft"));
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "typing only changes the field draft");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(panel.value_role("Name:", Role::TEXT_INPUT), name);
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+        assert_eq!(panel.app().session.active().unwrap().revision, revision);
+        assert_eq!(undo_steps(&panel.app()), undo);
+
+        panel.click_role("Name:", Role::TEXT_INPUT);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("Renamed");
+        panel.type_text(" board");
+        panel.key(commit, Modifiers::NONE);
+        {
+            let app = panel.app();
+            let doc = &app.session.active().unwrap().doc;
+            assert_eq!(doc.artboards[1].name, "Renamed board");
+            assert_eq!(doc.artboards[0], original.artboards[0]);
+            assert_eq!(doc.artboards[2], original.artboards[2]);
+            assert_eq!(undo_steps(&app), undo + 1);
+        }
+        panel.app().run("edit.undo", json!({})).unwrap();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+    }
+}
+
 /// The Control bar's size fields resize the active artboard about the reference point in one undo
 /// step: about its center, and from its top-left corner once the top-left point is chosen.
 #[test]
