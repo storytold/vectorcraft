@@ -2960,8 +2960,7 @@ other files through `$`:
   item before the value, so a stale item throws `Stale page item` whatever the value. Assigning `matrix` to an `add()`
   result without a file throws `PlacedItem.file is required` whatever the value, and assigning `file` to one checks
   the file and places the image. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a
-  file is dropped at the end of the run. `contentVariable`, `trace`, `colorants`, `colorize` and `overprint` are not
-  available yet.
+  file is dropped at the end of the run. `trace`, `colorants`, `colorize` and `overprint` are not available yet.
 - A `Document` also has `variables`, `dataSets`, `activeDataset`, `variablesLocked`, `importVariables(file)` and
   `exportVariables(file)` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/). `variables`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Variables/) and `dataSets`

@@ -660,7 +660,8 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("matrix", property(l, placed_matrix, placed_set_matrix)),
         ("boundingBox", get(l, placed_box)),
     ]);
-    placed.extend(["contentVariable", "trace"].into_iter().map(|m| later(l, "PlacedItem", m)));
+    placed.extend(super::variables::item_members(l, "PlacedItem"));
+    placed.push(later(l, "PlacedItem", "trace"));
     let mut raster = named(vec![
         ("bitsPerChannel", get(l, raster_bits)),
         ("channels", get(l, raster_channels)),
@@ -673,7 +674,8 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
         ("transparent", get(l, raster_transparent)),
         ("boundingBox", get(l, raster_box)),
     ]);
-    raster.extend(["colorants", "colorize", "contentVariable", "overprint", "trace"].into_iter().map(|m| later(l, "RasterItem", m)));
+    raster.extend(super::variables::item_members(l, "RasterItem"));
+    raster.extend(["colorants", "colorize", "overprint", "trace"].into_iter().map(|m| later(l, "RasterItem", m)));
     vec![
         class("PlacedItems", None, placed_list, Some(super::function(l, placed_at))),
         class("RasterItems", None, raster_list, Some(super::function(l, raster_at))),
