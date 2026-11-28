@@ -6,6 +6,7 @@ use super::*;
 
 mod clipfx;
 mod imageoutline;
+mod loneanchor;
 mod painted;
 mod rasterfollow;
 mod scale;

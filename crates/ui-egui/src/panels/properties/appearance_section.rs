@@ -61,6 +61,7 @@ fn opacity_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
 /// The fx button that opens the effect menu, as the Appearance panel's does, the Delete icon and
 /// the icon that shows the Appearance panel.
 fn effects_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
+    let editable = app.session.active().is_some_and(|st| st.selection.symbol_part.is_none());
     // The effects of one selected object: the fill's and stroke's as well as its own.
     let effects: Vec<(Option<usize>, usize, &str)> = if panels::selection_len(app) == 1 {
         let own = n.appearance.effects.iter().enumerate().map(|(k, e)| (None, k, e.id.as_str()));
@@ -71,9 +72,11 @@ fn effects_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
         vec![]
     };
     Row::new().show(ui, |ui, _| {
-        let fx = Button::new("fx").tooltip(tl!("Add New Effect")).show(ui);
-        Menu::new(tl!("Add New Effect")).opened_by(&fx.response, Trigger::Click).show(ui, |ui, _| appearance::fx_menu(app, ui));
-        effect_delete(app, ui, n.id, &effects);
+        let fx = Button::new("fx").tooltip(tl!("Add New Effect")).enabled(editable).show(ui);
+        if editable {
+            Menu::new(tl!("Add New Effect")).opened_by(&fx.response, Trigger::Click).show(ui, |ui, _| appearance::fx_menu(app, ui));
+        }
+        effect_delete(app, ui, n.id, &effects, editable);
         panel_button("ellipsis", "appearance", tl!("Appearance panel")).show(ui);
     });
 }
@@ -82,12 +85,12 @@ fn effects_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
 /// (<https://helpx.adobe.com/illustrator/desktop/get-started/learn-the-basics/properties-panel-overview.html>):
 /// with one effect applied, its name and an icon that removes it (`effect.remove`); with several,
 /// the icon shows the Appearance panel to remove them there. Nothing without effects.
-fn effect_delete(app: &mut VectorcraftApp, ui: &mut Ui, id: NodeId, effects: &[(Option<usize>, usize, &str)]) {
+fn effect_delete(app: &mut VectorcraftApp, ui: &mut Ui, id: NodeId, effects: &[(Option<usize>, usize, &str)], editable: bool) {
     match effects {
         [] => {}
         [(item, k, effect)] => {
             Text::new(appearance::shown_effect_label(effect)).elide(Elide::End).show(ui);
-            if IconButton::new(IconId::new("trash-2")).label(tl!("Remove Effect")).show(ui).clicked() {
+            if IconButton::new(IconId::new("trash-2")).label(tl!("Remove Effect")).enabled(editable).show(ui).clicked() {
                 app.run("effect.remove", json!({"ids": [id.0], "item": item, "index": k})).ok();
             }
         }

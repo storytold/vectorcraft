@@ -613,6 +613,18 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{tool: id, group?: bool, toolbar?: name} take `tool` (with `group`, its whole group) out of the current toolbar (with `toolbar`, out of that toolbar made with New Toolbar; one not in it stays out), as dragging it into the Edit Toolbar drawer does; returns the toolbar's slots",
     ),
     (
+        "toolbar.addCommand",
+        "Toolbar: Add Command",
+        "",
+        "{command: id, toolbar: name, at?: n} put a button for `command` (a Command Palette result other than a tool: a command's id, or `plugin:<id>`, `effect:<id>` or `panel:<id>`) on the toolbar made with New Toolbar called `toolbar`, after its tools, moving it if it is there already: at place `at` among its command buttons (0 = the first; omitted: at the end), as Add Command in its Add Tool… menu and Move Up and Move Down in the button's context menu do; a click on the button runs what the command's menu item runs; an unknown command, a tool, a command that needs params a click does not give (such as this one) or an `at` past the end is an error and changes nothing; kept with the workspace; returns the toolbar's commands",
+    ),
+    (
+        "toolbar.removeCommand",
+        "Toolbar: Remove Command",
+        "",
+        "{command: id, toolbar: name} take the button for `command` off the toolbar made with New Toolbar called `toolbar` (one not on it stays off; a command that is no longer installed can be taken off too), as Remove Command in its Add Tool… menu and Remove from Toolbar in the button's context menu do; returns the toolbar's commands",
+    ),
+    (
         "toolbar.reset",
         "Toolbar: Reset",
         "",
@@ -670,7 +682,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.toolbar.list",
         "List Toolbars",
         "",
-        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, floating, side, order}], `side` the edge it docks at (while floating, the edge it docked at last) and `order` its column's place in that edge's dock, 0 at the window's edge, while docked (else null)",
+        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, commands, floating, side, order}], `commands` the Command Palette results of its command buttons, `side` the edge it docks at (while floating, the edge it docked at last) and `order` its column's place in that edge's dock, 0 at the window's edge, while docked (else null)",
     ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
@@ -1256,7 +1268,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "ui.layerOptions",
         "Options for Selection…",
         "",
-        "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. OK runs layer.setProps (one undo step); for several rows it sends only the fields set in the dialog",
+        "{ids?|id?} open Layer Options for Layers panel rows (default: the highlighted rows, else the current layer), filled in from the first: dialog `layerOptions`, fields name, color (a preset name such as \"Light Blue\" or #rrggbb), template, locked, visible, printable, preview, dimImages (bool), dimPercent (0–100); an object's row has name, visible and locked. Unchanged OK adds no undo step; edits run layer.setProps in one undo step. Existing names are preserved unless Name is edited or explicitly set; for several rows it sends only the fields set in the dialog",
     ),
     (
         "ui.layerDelete",
@@ -2005,6 +2017,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "Install Plug-in…",
         "",
         "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing. Only a person can press OK: ui.dialog.confirm, answer_dialog and synthetic input are refused. When automation asked (a control or MCP request, synthetic input, or a file dialog one of them opened, even when the person picked the file), replace: true doesn't skip the question about replacing, and nothing in the dialog installs it, the person's OK included: the person chooses Object › Plug-ins › Install Plug-in… to install it → plugin.install's result | {pending: \"pluginInstall\"} while it asks | {pending: \"pluginInstall\", approval: \"personMustStartInstall\"} while it asks what automation asked | null on the web without path or dataBase64, once the browser's file picker opens (the picked file is handled as above)",
+    ),
+    (
+        "ui.failedPlugins",
+        "Plug-ins That Didn't Load…",
+        "",
+        "{} Object › Plug-ins › Plug-ins That Didn't Load…: list the plug-in files that didn't load in this session, each by its file name with why (plugin.list's failed), at most 50 and a count of the others (dialog `pluginsFailed`); Retry All loads them again (plugin.retry) and the status bar says how many loaded, Close changes nothing → {pending: \"pluginsFailed\", failed: n}. Disabled, and an error, while no plug-in failed to load",
     ),
     (
         "plugin.cancelRuns",

@@ -16,7 +16,7 @@ const DESATURATE_ID: &str = "org.vectorcraft.example.desaturate";
 /// Held by the tests that set the Additional Plug-ins Folder preference or run `plugin.reload`:
 /// the folder last loaded and its report are kept for the whole process, so another test loading
 /// its own folder between two steps would change what the next step loads or lists.
-static PREFS_FOLDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(super) static PREFS_FOLDER: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn run(s: &mut Session, cmd: &str, p: Value) -> Value {
     s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd}: {e}"))
@@ -620,6 +620,60 @@ fn a_painted_live_effect_draws_its_pieces_with_their_own_paints() {
     assert_eq!(drawn(&s).pixel(50, 50), GREEN);
     run(&mut s, "edit.undo", json!({}));
     assert_eq!(node(&s, id).appearance.effects[0].id, "plugin.test.engine.paints");
+}
+
+/// A piece that an effect declaring `appearanceOutput` returns with 50% opacity, Multiply and
+/// Offset Path keeps that look in SVG and PDF export, which leave the document alone, and Expand
+/// Appearance writes it as an ordinary path that draws the same, with the opacity and blending
+/// mode applied once, in one undo step.
+#[test]
+fn a_painted_piece_s_look_is_exported_and_expanded() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0, "#ff0000");
+    let piece = json!({"path": square_at(40.0), "fills": [solid("#00ff00")], "opacity": 0.5, "blend": "Multiply",
+        "effects": [{"id": "path.offsetPath", "params": {"offset": 5}}]});
+    let manifest =
+        r#"{"id":"test.engine.looks","name":"Looks","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{}}"#;
+    install_wat(&mut s, &tpl::returning(manifest, &json!({ "objects": [piece] }).to_string()));
+    run(&mut s, "effect.apply", json!({"ids": [id.0], "effect": "plugin.test.engine.looks"}));
+    assert_eq!(run(&mut s, "plugin.info", json!({"id": "test.engine.looks"}))["lastError"], Value::Null);
+    let near = |got: [u8; 4], want: [u8; 3]| got.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= 8);
+    let img = drawn(&s);
+    let (inside, grown, outside) = (img.pixel(50, 50), img.pixel(37, 50), img.pixel(32, 50));
+    assert!(near(inside, [128, 255, 128]) && near(grown, [128, 255, 128]), "half green, grown by the offset: {inside:?} {grown:?}");
+    assert_eq!((outside, img.pixel(15, 15)), (WHITE, WHITE));
+    let before = s.doc().unwrap().doc.clone();
+    let undo = s.doc().unwrap().history.undo.len();
+    let svg = s.execute("document.export", &json!({"format": "svg"})).unwrap();
+    let svg = String::from_utf8(vectorcraft_format::base64_decode(svg["dataBase64"].as_str().unwrap()).unwrap()).unwrap();
+    assert!(svg.contains("#00ff00") && svg.contains("multiply") && svg.contains("0.5"), "{svg}");
+    let pdf = s.execute("document.export", &json!({"format": "pdf"})).unwrap();
+    let pdf = vectorcraft_format::base64_decode(pdf["dataBase64"].as_str().unwrap()).unwrap();
+    assert!(pdf.windows(9).any(|w| w == b"/Multiply"), "the PDF sets the blending mode");
+    let back = vectorcraft_pdf::import(&pdf).unwrap();
+    let opts = vectorcraft_render::RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let read = vectorcraft_render::Renderer::new().render(&back, 200, 200, vectorcraft_geom::Affine::IDENTITY, &opts);
+    let (got_inside, got_grown) = (read.pixel(50, 50), read.pixel(37, 50));
+    assert!(
+        near(got_inside, [128, 255, 128]) && near(got_grown, [128, 255, 128]),
+        "the PDF's piece is half green and grown: {got_inside:?} {got_grown:?}"
+    );
+    assert_eq!(read.pixel(32, 50), WHITE);
+    assert_eq!(s.doc().unwrap().doc, before, "export doesn't change the document");
+    run(&mut s, "select.set", json!({"ids": [id.0]}));
+    run(&mut s, "effect.expandAppearance", json!({}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let (mut opacity, mut multiplies) = (1.0_f32, 0);
+    s.doc().unwrap().doc.walk(|n| {
+        assert!(n.appearance.effects.iter().all(|e| !e.id.starts_with("plugin.")), "no plug-in effect left");
+        opacity *= n.opacity;
+        multiplies += usize::from(n.blend == vectorcraft_color::BlendMode::Multiply);
+    });
+    assert_eq!((opacity, multiplies), (0.5, 1), "the look applies once");
+    let img = drawn(&s);
+    assert_eq!((img.pixel(50, 50), img.pixel(37, 50), img.pixel(32, 50)), (inside, grown, outside), "expanded, it draws the same");
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(node(&s, id).appearance.effects[0].id, "plugin.test.engine.looks");
 }
 
 /// On a fill, a painted effect returns only fills: they replace that fill on each piece. A result
@@ -2348,6 +2402,271 @@ fn store_with(name: &str, id: &str) -> (crate::tests_links::Folder, std::path::P
     std::fs::create_dir_all(&folder.0).unwrap();
     std::fs::write(&path, wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#)).unwrap()).unwrap();
     (folder, path)
+}
+
+/// The rows of `plugin.list`'s `failed` as (file, from).
+fn failed_rows(s: &mut Session) -> Vec<(String, String)> {
+    let list = run(s, "plugin.list", json!({}));
+    list["failed"].as_array().unwrap().iter().map(|r| (r["file"].as_str().unwrap().to_string(), r["from"].as_str().unwrap().to_string())).collect()
+}
+
+/// A stored module whose load panics is listed as failed while the store's other plug-in installs,
+/// and `plugin.retry` installs it once its load no longer panics.
+#[test]
+fn a_stored_plugin_whose_load_panicked_is_listed_and_loads_on_retry() {
+    let (folder, broken) = store_with("plugin-store-retry", "test.engine.retrypanics");
+    let good = folder.0.join("test.engine.retryloads.wasm");
+    std::fs::write(&good, wat::parse_str(tpl::returning(&tpl::manifest("test.engine.retryloads", "filter", "{}"), r#"{"objects":[]}"#)).unwrap())
+        .unwrap();
+    let file = broken.display().to_string();
+    let mut s = session();
+    {
+        let _lock = STORED_HOOK.lock().unwrap_or_else(|e| e.into_inner());
+        let target = broken.clone();
+        *crate::store::BEFORE_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()) = Some(std::sync::Arc::new(move |p: &std::path::Path| {
+            if p == target {
+                panic!("a load that panics");
+            }
+        }));
+        s.attach_plugin_store(folder.0.clone());
+        *crate::store::BEFORE_STORED_LOAD.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+    assert!(vectorcraft_plugins::registry::get("test.engine.retryloads").is_some(), "the other stored plug-in installs");
+    assert!(vectorcraft_plugins::registry::get("test.engine.retrypanics").is_none());
+    let list = run(&mut s, "plugin.list", json!({}));
+    let row = list["failed"].as_array().unwrap().iter().find(|r| r["file"] == json!(file)).cloned();
+    assert!(row.as_ref().is_some_and(|r| r["from"] == "store" && r["error"].as_str().unwrap().contains("panicked")), "{list}");
+
+    // Under read roots that leave the store out, the client names it by its file name and its file
+    // isn't read again.
+    let elsewhere = crate::tests_links::Folder::new("plugin-store-retry-roots");
+    let roots = crate::file_access::AutomationRoots::new(&[&elsewhere.0], &[]).unwrap();
+    let name = "test.engine.retrypanics.wasm";
+    let r = crate::file_access::confine(roots.as_ref(), || s.execute("plugin.retry", &json!({"file": name}))).unwrap();
+    assert_eq!((&r["retried"][0]["file"], &r["retried"][0]["loaded"]), (&json!(name), &json!(false)), "{r}");
+    assert!(vectorcraft_plugins::registry::get("test.engine.retrypanics").is_none(), "not loaded outside the roots");
+
+    let r = run(&mut s, "plugin.retry", json!({"file": file}));
+    assert_eq!(r["retried"], json!([{"file": file, "loaded": true, "id": "test.engine.retrypanics"}]), "{r}");
+    assert!(vectorcraft_plugins::registry::get("test.engine.retrypanics").is_some(), "installed on retry");
+    assert!(!failed_rows(&mut s).iter().any(|(f, _)| *f == file), "no longer listed as failed");
+    assert!(s.execute("plugin.retry", &json!({"file": file})).is_err(), "a file that didn't fail is refused");
+    run(&mut s, "plugin.remove", json!({"id": "test.engine.retrypanics"}));
+    run(&mut s, "plugin.remove", json!({"id": "test.engine.retryloads"}));
+}
+
+/// A folder file that didn't load stays listed as failed until a retry loads it, which also moves
+/// it to the folder report's loaded ids; `plugin.reload` replaces the folder's failed files with its
+/// own and leaves the plug-in store's alone.
+#[test]
+fn a_folder_plugin_loads_on_retry_and_reload_replaces_only_the_folder_s_failures() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    // The file the store keeps the module of plug-in `test.engine.retrystored` in, which isn't a module.
+    let store = crate::tests_links::Folder::new("plugin-store-retry-reload");
+    let stored = store.0.join(format!("{}.wasm", crate::store::file_stem("test.engine.retrystored")));
+    std::fs::write(&stored, b"\0asm?").unwrap();
+    let dir = crate::tests_links::Folder::new("plugin-folder-retry");
+    let id = "test.engine.retryfolder";
+    let module = wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#)).unwrap();
+    let broken = dir.0.join("later.wasm");
+    std::fs::write(&broken, b"\0asm?").unwrap();
+    let (file, stored_file) = (broken.display().to_string(), stored.display().to_string());
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    let path = dir.0.display().to_string();
+    run(&mut s, "plugin.reload", json!({"path": path}));
+    let both = failed_rows(&mut s);
+    assert!(both.contains(&(stored_file.clone(), "store".into())) && both.contains(&(file.clone(), "folder".into())), "{both:?}");
+
+    // Under read roots that leave the folder out, it isn't read and stays listed.
+    let elsewhere = crate::tests_links::Folder::new("plugin-folder-retry-roots");
+    let roots = crate::file_access::AutomationRoots::new(&[&elsewhere.0], &[]).unwrap();
+    let r = crate::file_access::confine(roots.as_ref(), || s.execute("plugin.retry", &json!({"file": "later.wasm"}))).unwrap();
+    assert_eq!(r["retried"][0]["loaded"], json!(false), "{r}");
+    let why = r["retried"][0]["error"].as_str().unwrap();
+    assert!(!why.is_empty() && !why.contains(path.as_str()), "the folder outside the roots isn't named: {r}");
+    assert!(failed_rows(&mut s).contains(&(file.clone(), "folder".into())), "still listed after a retry that couldn't read it");
+
+    // Still broken: it is listed with the new error.
+    let r = run(&mut s, "plugin.retry", json!({"file": file}));
+    assert_eq!((r["retried"][0]["loaded"].clone(), r["retried"].as_array().unwrap().len()), (json!(false), 1), "{r}");
+    assert!(failed_rows(&mut s).contains(&(file.clone(), "folder".into())));
+
+    std::fs::write(&broken, &module).unwrap();
+    let r = run(&mut s, "plugin.retry", json!({"file": file}));
+    assert_eq!(r["retried"], json!([{"file": file, "loaded": true, "id": id}]), "{r}");
+    let list = run(&mut s, "plugin.list", json!({}));
+    assert_eq!(list["folder"]["loaded"], json!([id]), "{list}");
+    assert!(list["folder"]["failed"].as_array().unwrap().is_empty(), "{list}");
+    assert_eq!(failed_rows(&mut s), vec![(stored_file.clone(), "store".into())]);
+
+    // A reload that finds it broken again lists it again, and the stored file stays listed.
+    run(&mut s, "plugin.remove", json!({"id": id}));
+    std::fs::write(&broken, b"\0asm?").unwrap();
+    run(&mut s, "plugin.reload", json!({"path": path}));
+    let again = failed_rows(&mut s);
+    assert!(again.contains(&(stored_file.clone(), "store".into())) && again.contains(&(file, "folder".into())), "{again:?}");
+
+    // Removing the stored module that didn't load takes it off the list.
+    run(&mut s, "plugin.remove", json!({"id": "test.engine.retrystored"}));
+    assert!(!failed_rows(&mut s).iter().any(|(f, _)| *f == stored_file), "a removed file is no longer listed");
+}
+
+/// A stored file that also fails in a `plugin.reload` of the store's own folder is listed once, and a
+/// retry by its name installs it and takes it out of the folder report's failed files too.
+#[test]
+fn a_reload_of_the_store_folder_lists_a_failed_stored_file_once() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "test.engine.retryboth";
+    let store = crate::tests_links::Folder::new("plugin-store-retry-both");
+    let stored = store.0.join(format!("{}.wasm", crate::store::file_stem(id)));
+    std::fs::write(&stored, b"\0asm?").unwrap();
+    let file = stored.display().to_string();
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    run(&mut s, "plugin.reload", json!({"path": store.0.display().to_string()}));
+    let rows = failed_rows(&mut s);
+    assert_eq!(rows.iter().filter(|(f, _)| std::path::Path::new(f) == stored).count(), 1, "{rows:?}");
+
+    std::fs::write(&stored, wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#)).unwrap()).unwrap();
+    let r = run(&mut s, "plugin.retry", json!({"file": file}));
+    assert_eq!(r["retried"][0]["loaded"], json!(true), "{r}");
+    let list = run(&mut s, "plugin.list", json!({}));
+    assert!(!list["failed"].as_array().unwrap().iter().any(|r| std::path::Path::new(r["file"].as_str().unwrap()) == stored), "{list}");
+    assert!(list["folder"]["failed"].as_array().unwrap().is_empty(), "{list}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// Removing or replacing a stored module also clears a failure recorded by a reload of the store
+/// folder, without clearing another file's failure.
+#[test]
+fn removing_or_replacing_a_stored_plugin_clears_its_folder_failure() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "test.engine.retryreplaced";
+    let store = crate::tests_links::Folder::new("plugin-store-retry-replaced");
+    let stored = store.0.join(format!("{}.wasm", crate::store::file_stem(id)));
+    let other = store.0.join("other.wasm");
+    std::fs::write(&other, b"\0asm?").unwrap();
+    let file = stored.display().to_string();
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    for replace in [false, true] {
+        std::fs::write(&stored, b"\0asm?").unwrap();
+        s.load_stored_plugins();
+        run(&mut s, "plugin.reload", json!({"path": store.0.display().to_string()}));
+        assert!(failed_rows(&mut s).contains(&(file.clone(), "store".into())));
+        if replace {
+            install_wat(&mut s, &tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#));
+            assert!(vectorcraft_plugins::registry::get(id).is_some());
+        } else {
+            run(&mut s, "plugin.remove", json!({"id": id}));
+            assert!(!stored.exists(), "the broken module was removed");
+        }
+        let list = run(&mut s, "plugin.list", json!({}));
+        assert!(!list["failed"].as_array().unwrap().iter().any(|row| row["file"] == file), "{list}");
+        let rows = list["folder"]["failed"].as_array().unwrap();
+        assert!(!rows.iter().any(|row| row["file"] == file), "{list}");
+        assert!(rows.iter().any(|row| row["file"] == other.display().to_string()), "the other failure stays: {list}");
+        let retry = run(&mut s, "plugin.retry", json!({}));
+        assert!(!retry["retried"].as_array().unwrap().iter().any(|row| row["file"] == file), "{retry}");
+    }
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// An older installed module doesn't make a retry succeed when the failed stored file is gone.
+#[test]
+fn retrying_a_missing_stored_plugin_does_not_count_its_old_installation() {
+    let id = "test.engine.retrymissing";
+    let (store, stored) = store_with("plugin-store-retry-missing", id);
+    let file = stored.display().to_string();
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    let installed = vectorcraft_plugins::registry::get(id).unwrap();
+    assert_eq!(installed.source(), Some(file.as_str()));
+    std::fs::write(&stored, b"\0asm?").unwrap();
+    s.load_stored_plugins();
+    assert!(failed_rows(&mut s).contains(&(file.clone(), "store".into())));
+    std::fs::remove_file(&stored).unwrap();
+    // A retry still waits for its own load when startup loads run in the background.
+    s.load_plugins_in_background(true);
+    let retry = run(&mut s, "plugin.retry", json!({"file": file}));
+    let row = &retry["retried"][0];
+    assert_eq!(row["loaded"], json!(false), "{retry}");
+    assert!(row.get("id").is_none() && row["error"].as_str().is_some_and(|e| !e.is_empty()), "{retry}");
+    assert_eq!(vectorcraft_plugins::registry::get(id).unwrap().serial(), installed.serial(), "the old installation stays");
+    assert!(failed_rows(&mut s).contains(&(file.clone(), "store".into())), "still listed, so a later retry can load it");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A stored file that also failed in a `plugin.reload` of the store's folder is taken out of the
+/// folder report once a store load installs it, here another session attaching the store.
+#[test]
+fn a_store_load_that_installs_a_failed_file_clears_its_folder_row() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "test.engine.retrystoreload";
+    let store = crate::tests_links::Folder::new("plugin-store-retry-storeload");
+    let stored = store.0.join(format!("{}.wasm", crate::store::file_stem(id)));
+    std::fs::write(&stored, b"\0asm?").unwrap();
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    run(&mut s, "plugin.reload", json!({"path": store.0.display().to_string()}));
+    std::fs::write(&stored, wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#)).unwrap()).unwrap();
+    let mut other = session();
+    other.attach_plugin_store(store.0.clone());
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the other session's store load installed it");
+    let list = run(&mut s, "plugin.list", json!({}));
+    assert!(!list["folder"]["failed"].as_array().unwrap().iter().any(|r| std::path::Path::new(r["file"].as_str().unwrap()) == stored), "{list}");
+    assert!(!list["failed"].as_array().unwrap().iter().any(|r| std::path::Path::new(r["file"].as_str().unwrap()) == stored), "{list}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A stored file that failed and is then repaired is no longer listed once a `plugin.reload` of the
+/// store's own folder installs it.
+#[test]
+fn a_reload_that_installs_a_failed_stored_file_takes_it_off_the_list() {
+    let _folder = PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
+    let id = "test.engine.retryreloaded";
+    let store = crate::tests_links::Folder::new("plugin-store-retry-reloaded");
+    let stored = store.0.join(format!("{}.wasm", crate::store::file_stem(id)));
+    std::fs::write(&stored, b"\0asm?").unwrap();
+    let file = stored.display().to_string();
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    assert!(failed_rows(&mut s).contains(&(file.clone(), "store".into())));
+
+    std::fs::write(&stored, wat::parse_str(tpl::returning(&tpl::manifest(id, "filter", "{}"), r#"{"objects":[]}"#)).unwrap()).unwrap();
+    run(&mut s, "plugin.reload", json!({"path": store.0.display().to_string()}));
+    assert!(vectorcraft_plugins::registry::get(id).is_some(), "the reload installed it");
+    let rows = failed_rows(&mut s);
+    assert!(!rows.iter().any(|(f, _)| std::path::Path::new(f) == stored), "{rows:?}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
+/// A file turned off after it failed to load is no longer listed as failed, also when it is turned
+/// off by the name `failed` gives a file outside the read roots; turned on again, it is listed.
+#[test]
+fn a_failed_file_turned_off_is_no_longer_listed() {
+    // Another test's store load replaces the process's list of disabled plug-ins.
+    if !in_own_process("a_failed_file_turned_off_is_no_longer_listed") {
+        return;
+    }
+    let store = crate::tests_links::Folder::new("plugin-store-retry-off");
+    let stored = store.0.join(format!("{}.wasm", crate::store::file_stem("test.engine.retryoff")));
+    std::fs::write(&stored, b"\0asm?").unwrap();
+    let file = stored.display().to_string();
+    let mut s = session();
+    s.attach_plugin_store(store.0.clone());
+    assert!(failed_rows(&mut s).contains(&(file.clone(), "store".into())));
+
+    let elsewhere = crate::tests_links::Folder::new("plugin-store-retry-off-roots");
+    let roots = crate::file_access::AutomationRoots::new(&[&elsewhere.0], &[]).unwrap();
+    let name = stored.file_name().unwrap().to_string_lossy().to_string();
+    crate::file_access::confine(roots.as_ref(), || s.execute("plugin.setEnabled", &json!({"file": name, "enabled": false}))).unwrap();
+    assert!(!failed_rows(&mut s).iter().any(|(f, _)| *f == file), "a file turned off isn't listed");
+    assert!(run(&mut s, "plugin.retry", json!({}))["retried"].as_array().unwrap().is_empty());
+
+    run(&mut s, "plugin.setEnabled", json!({"file": file, "enabled": true}));
+    assert!(failed_rows(&mut s).contains(&(file.clone(), "store".into())), "listed again once on");
 }
 
 /// With loads in the background, attaching a plug-in store returns while a stored module is

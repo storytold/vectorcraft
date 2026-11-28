@@ -136,6 +136,8 @@ pub(crate) struct Intrinsics {
     pub(crate) xml_list_proto: ObjId,
     pub(crate) namespace_proto: ObjId,
     pub(crate) qname_proto: ObjId,
+    /// The ECMAScript 2015 collections and binary data ([`crate::Options::es2015`]).
+    pub(crate) es2015: crate::builtins::collections::Es2015,
 }
 
 impl Intrinsics {
@@ -158,6 +160,7 @@ impl Intrinsics {
             xml_list_proto: o,
             namespace_proto: o,
             qname_proto: o,
+            es2015: crate::builtins::collections::Es2015::placeholder(),
         }
     }
 
@@ -193,6 +196,7 @@ impl Intrinsics {
             self.qname_proto,
         ];
         v.extend(self.error_protos);
+        v.extend(self.es2015.all());
         v
     }
 }
@@ -318,6 +322,9 @@ pub(crate) struct Interp {
     pub(crate) held_bytes: usize,
     /// Why installing the built-ins failed; a realm with this set runs no script.
     pub(crate) install_error: Option<String>,
+    /// The typed array whose element count the next array method reads as its length, set while a
+    /// `%TypedArray%.prototype` method runs the array method it shares and cleared once it is read.
+    pub(crate) typed_length: Option<ObjId>,
     /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
     pub(crate) files: Option<crate::file_classes::Classes>,
     /// `ExternalObject` and the XMP classes it loads, once a host has added them
@@ -645,6 +652,7 @@ impl Interp {
             join_stack: Vec::new(),
             held_bytes: 0,
             install_error: None,
+            typed_length: None,
             files: None,
             xmp: None,
             host_classes: Vec::new(),
@@ -1698,6 +1706,12 @@ impl Interp {
                     return Ok(Some(Prop::Data { value: self.binding_value(map.env, name)?, flags }));
                 }
             }
+            // A numeric name of a typed array is an element or nothing (section 9.4.5.1).
+            Class::TypedArray(view) => {
+                if let Some(n) = crate::builtins::binary::canonical_index(k) {
+                    return Ok(crate::builtins::binary::element(self, view, n).map(|v| Prop::Data { value: Value::Number(v), flags: OPEN }));
+                }
+            }
             _ => {}
         }
         Ok(o.props.get(k).cloned())
@@ -1710,6 +1724,10 @@ impl Interp {
         while let Some(o) = cur {
             if let Some(p) = self.get_own_property(o, k)? {
                 return Ok(Some(p));
+            }
+            // A typed array's prototypes are not searched for a numeric name (section 9.4.5.4).
+            if crate::builtins::binary::typed_key(self, o, k).is_some() {
+                return Ok(None);
             }
             cur = self.object(o)?.proto;
             steps += 1;
@@ -1830,6 +1848,9 @@ impl Interp {
                     return self.reject_bool(throw, &k, "the array's length is read-only");
                 }
                 self.define_ordinary(id, k, desc, throw)
+            }
+            Class::TypedArray(_) if crate::builtins::binary::canonical_index(&k).is_some() => {
+                crate::builtins::binary::define_element(self, id, &k, desc, throw)
             }
             Class::Arguments(map) => {
                 let mapped = array_index(&k).and_then(|i| map.names.get(i as usize)).and_then(Option::as_ref).cloned();
@@ -1983,7 +2004,12 @@ impl Interp {
     /// list is checked first.
     pub(crate) fn own_keys(&mut self, id: ObjId) -> JsResult<Vec<Key>> {
         let o = self.object(id)?;
-        let string_len = if let Class::String(s) = &o.class { s.len() } else { 0 };
+        // A typed array's indices come first, as a String object's do (section 9.4.5.6).
+        let string_len = match &o.class {
+            Class::String(s) => s.len(),
+            Class::TypedArray(view) => view.length,
+            _ => 0,
+        };
         let is_string = matches!(o.class, Class::String(_));
         let is_array = matches!(o.class, Class::Array { .. });
         let count = o.props.len().saturating_add(string_len).saturating_add(usize::from(is_string || is_array));
@@ -2025,6 +2051,9 @@ impl Interp {
 
     /// [[Put]] (section 8.12.5).
     pub(crate) fn put(&mut self, id: ObjId, k: Key, v: Value, throw: bool) -> JsResult<()> {
+        if let Some(n) = crate::builtins::binary::typed_key(self, id, &k) {
+            return crate::builtins::binary::set_element(self, id, n, &v);
+        }
         match self.get_own_property(id, &k)? {
             Some(Prop::Data { flags, .. }) => {
                 if flags & WRITABLE == 0 {
@@ -2109,6 +2138,18 @@ impl Interp {
 
     /// [[Delete]] (section 8.12.7).
     pub(crate) fn delete(&mut self, id: ObjId, k: &[u16], throw: bool) -> JsResult<bool> {
+        // A typed array's element cannot be deleted, and a numeric name it has no element for
+        // is not a property it can hold (section 9.4.5.6 of later editions).
+        if crate::builtins::binary::typed_key(self, id, k).is_some() {
+            if self.get_own_property(id, k)?.is_none() {
+                return Ok(true);
+            }
+            if throw {
+                let key = String::from_utf16_lossy(k);
+                return Err(self.type_error(&format!("cannot delete property '{key}' of a typed array")));
+            }
+            return Ok(false);
+        }
         match self.get_own_property(id, k)? {
             None => Ok(true),
             Some(p) if p.configurable() => {
@@ -2855,8 +2896,12 @@ impl Interp {
         let mut cur = Some(id);
         while let Some(o) = cur {
             let obj = self.object(o)?;
-            let string_len = if let Class::String(s) = &obj.class { Some(s.len()) } else { None };
-            let is_array = matches!(obj.class, Class::Array { .. });
+            let string_len = match &obj.class {
+                Class::String(s) => Some(s.len()),
+                Class::TypedArray(view) => Some(view.length),
+                _ => None,
+            };
+            let is_array = matches!(obj.class, Class::Array { .. } | Class::String(_));
             if let Some(len) = string_len {
                 self.reserve_heap(index_keys_bytes(len))?;
                 for i in 0..len {
@@ -2866,7 +2911,6 @@ impl Interp {
                         out.push(k);
                     }
                 }
-                seen.insert(key("length"));
             }
             if is_array {
                 seen.insert(key("length"));

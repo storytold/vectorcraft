@@ -194,7 +194,7 @@ fn leave_out(items: &mut [Node], placed: &std::collections::HashSet<String>) {
 }
 
 /// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
-/// Install Plug-in… and Reload Plug-ins.
+/// Install Plug-in…, Reload Plug-ins and Plug-ins That Didn't Load… ([`super::failed_plugins`]).
 pub fn object_menu() -> Vec<Node> {
     let mut items: Vec<Node> = registry::list()
         .iter()
@@ -204,7 +204,12 @@ pub fn object_menu() -> Vec<Node> {
     if items.is_empty() {
         items.push(placeholder(NO_FILTERS));
     }
-    items.extend([Sep, c("Install Plug-in…", "ui.installPlugin"), c("Reload Plug-ins", "plugin.reload")]);
+    items.extend([
+        Sep,
+        c("Install Plug-in…", "ui.installPlugin"),
+        c("Reload Plug-ins", "plugin.reload"),
+        c("Plug-ins That Didn't Load…", super::failed_plugins::COMMAND),
+    ]);
     items
 }
 
@@ -482,11 +487,16 @@ fn step_id(s: &Value) -> Option<&str> {
 
 /// Whether batch step `s`, which returned `result` if the batch reports it, may have installed,
 /// removed or reloaded plug-in `id`: a removal names its id, an install reports the id it installed,
-/// and a reload, or an install whose result is not known, may change any plug-in.
+/// a retry the ids it installed, and a reload, or an install or retry whose result is not known, may
+/// change any plug-in.
 fn may_change(s: &Value, result: Option<&Value>, id: &str) -> bool {
     match step_id(s) {
         Some("plugin.remove") => s.get("params").and_then(|p| p.get("id")).and_then(Value::as_str) == Some(id),
         Some("plugin.install") => result.and_then(|r| r.get("id")).and_then(Value::as_str).is_none_or(|i| i == id),
+        Some("plugin.retry") => result
+            .and_then(|r| r.get("retried"))
+            .and_then(Value::as_array)
+            .is_none_or(|rows| rows.iter().any(|row| row.get("id").and_then(Value::as_str) == Some(id))),
         Some("plugin.reload") => true,
         _ => false,
     }
