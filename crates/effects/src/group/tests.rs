@@ -1780,6 +1780,44 @@ fn perspective_projects_the_masks_in_a_symbols_art() {
     assert_eq!(mask, path, "and so is its mask");
 }
 
+/// The images in the art of a symbol instance drawn through a projection have their corners where
+/// the projection takes them, beside a path, in a group and in the art of a linked mask, and an
+/// image's own linked mask is projected with it.
+#[test]
+fn a_projection_puts_the_corners_of_the_images_in_a_symbols_art_where_it_takes_them() {
+    let masked = masked_by(white_square(22), image_node(23), true);
+    let art = Node::group(NodeId(20), vec![Arc::new(image_node(21)), Arc::new(Node::group(NodeId(24), vec![Arc::new(masked)]))]);
+    // An image with a linked mask of its own, whose path has a linked mask too.
+    let inner = masked_by(white_square(32), white_square(33), true);
+    let own = Node::group(NodeId(30), vec![Arc::new(masked_by(image_node(31), inner, true))]);
+    let at = vectorcraft_doc::PerspectiveAttachment { projection: Some([1.0, 0.2, 3.0, 0.1, 1.0, 2.0, 0.01, 0.02, 1.0]), ..Default::default() };
+    let h = at.homography().unwrap();
+    let mut instance = Node::new(NodeId(2), NodeKind::SymbolInstance { symbol: "t".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    instance.extras_mut().perspective = Some(Box::new(at.clone()));
+    let out = crate::reshape::reshape(None, &instance, Some(&own)).unwrap();
+    let mut masks = vec![];
+    out.walk(&mut |c| masks.extend(c.image_corners().and(c.extras().mask.as_deref()).map(|m| m.art.clone())));
+    let [mask] = masks.as_slice() else { panic!("one masked image: {out:?}") };
+    assert!(mask.path_data() != white_square(32).path_data(), "the image's mask is projected");
+    let inner = mask.extras().mask.as_deref().map(|m| m.art.path_data().cloned());
+    assert_eq!(inner, Some(mask.path_data().cloned()), "and so is the mask on that mask's path");
+    let mut instance = Node::new(NodeId(1), NodeKind::SymbolInstance { symbol: "s".into(), xf: vectorcraft_geom::Affine::IDENTITY });
+    instance.extras_mut().perspective = Some(Box::new(at));
+    let out = crate::reshape::reshape(None, &instance, Some(&art)).unwrap();
+    let want = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)].map(|(x, y)| h.apply(vectorcraft_geom::Point::new(x, y)).unwrap());
+    let mut images = vec![];
+    out.walk(&mut |c| {
+        images.extend(c.image_corners());
+        images.extend(c.extras().mask.as_deref().and_then(|m| m.art.image_corners()));
+    });
+    assert_eq!(images.len(), 2, "{out:?}");
+    for q in images {
+        for (got, want) in q.iter().zip(want) {
+            assert!(got.distance(want) < 1e-9, "{q:?} against {want:?}");
+        }
+    }
+}
+
 /// A group with `effect` holding `n` vertical then `n` horizontal bars, 2 wide on a 4-unit
 /// pitch, each crossing every bar of the other direction: n² crossings.
 fn crossing_bars(n: usize, effect: &str) -> Node {

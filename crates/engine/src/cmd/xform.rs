@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
-use vectorcraft_doc::{Node, NodeKind, OrientedBox, Scaling};
-use vectorcraft_geom::{Affine, Point, Rect, Vec2};
+use vectorcraft_doc::{Node, NodeKind, OrientedBox, Scaling, SymbolBoxes};
+use vectorcraft_geom::{Affine, Homography, Point, Rect, Vec2};
+use vectorcraft_tools::distort::project_node;
 
 use super::edit::{outermost, selected_roots};
 use super::{
@@ -21,7 +22,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Free Distort",
             [],
             None,
-            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), angle?: degrees (counter-clockwise; `from`, or the selection bounds, is then a box in the frame turned by it, as a rotated bounding box is; default 0), ids?} projective warp of anchors and handles; an image's four corners go exactly where the warp takes them and its pixels are drawn in perspective between them (an error, and nothing changes, when an image's corners would fold over, fall on one line, cross the warp's horizon or lie too close together for a perspective map); a linked opacity mask's art is warped with its object, an unlinked one stays; each warped object's bounding box (the objects inside groups and the art of linked masks too) turns as the warp turns the art at its center (object.resetBoundingBox squares it again); corners where the box already stands change nothing and add no undo step",
+            "{corners: [[x,y]×4] (TL, TR, BR, BL), from?: [x0,y0,x1,y1] (default: selection bounds), angle?: degrees (counter-clockwise; `from`, or the selection bounds, is then a box in the frame turned by it, as a rotated bounding box is; default 0), ids?} projective warp of anchors and handles; an image's four corners go exactly where the warp takes them and its pixels are drawn in perspective between them (an error, and nothing changes, when an image's corners would fold over, fall on one line, cross the warp's horizon or lie too close together for a perspective map); the corners of a type object's or symbol instance's box go exactly where the warp takes them too, and it stays type or an instance, drawn through the warp after any projection it had (the same errors, naming the object); a linked opacity mask's art is warped with its object, an unlinked one stays; each warped object's bounding box (the objects inside groups and the art of linked masks too) turns as the warp turns the art at its center (object.resetBoundingBox squares it again); corners where the box already stands change nothing and add no undo step",
             has_doc,
             distort
         ),
@@ -105,6 +106,21 @@ impl Projective {
         Point::new((a * u + b * v + c) / w, (d * u + e * v + f) / w)
     }
 
+    /// Whether the warp is a perspective map rather than an affine one.
+    fn is_projective(&self) -> bool {
+        let [.., g, h] = self.m;
+        g != 0.0 || h != 0.0
+    }
+
+    /// The warp as one page-to-page map, which [`Self::apply`] matches in front of the horizon.
+    fn homography(&self) -> Homography {
+        let [a, b, c, d, e, f, g, h] = self.m;
+        let scale = |len: f64| if len.abs() > 1e-12 { 1.0 / len } else { 0.0 };
+        let (sx, sy) = (scale(self.src.width()), scale(self.src.height()));
+        let to_unit = Affine::new([sx, 0.0, 0.0, sy, -self.src.x0 * sx, -self.src.y0 * sy]) * self.pre;
+        Homography([[a, b, c], [d, e, f], [g, h, 1.0]]).then_after(&Homography::from_affine(to_unit))
+    }
+
     /// Affine approximation at a point (for objects that can't be warped: text, images, symbols).
     fn affine_near(&self, p: Point) -> Affine {
         let eps = 1.0;
@@ -127,6 +143,8 @@ fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
     n.pin_gradients();
     // The children before these are left out of a group's or compound path's bounds.
     let skip = n.children().map_or(0, Vec::len) - n.editing_children().len();
+    // Type and symbol instances drawn through the warp keep their gradients in their own art.
+    let mut projected = false;
     let before = match &mut n.kind {
         NodeKind::Path { path, live, .. } => {
             let b = path.bounds();
@@ -156,6 +174,15 @@ fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
             }
             b
         }
+        // Type and symbol instances keep their art and are drawn through the warp, after the
+        // projection they had ([`project_node`]), so the corners of their box follow it exactly;
+        // [`distort`] has checked that the projection stays finite and their corners in front of
+        // the horizon.
+        NodeKind::Text(_) | NodeKind::SymbolInstance { .. } if pr.is_projective() => {
+            let b = n.geometric_bounds();
+            projected = project_node(n, &pr.homography());
+            b
+        }
         _ => {
             // No editable points: the affine approximation (which maps the gradients too).
             let b = n.geometric_bounds();
@@ -171,7 +198,9 @@ fn warp_node(n: &mut Node, pr: &Projective) -> Option<Rect> {
     if let Some(m) = n.extras_if_any().and_then(|x| x.mask.as_mut()).filter(|m| m.linked) {
         warp_node(Arc::make_mut(&mut m.art), pr);
     }
-    n.appearance.warp_gradients(&|p| pr.affine_near(p));
+    if !projected {
+        n.appearance.warp_gradients(&|p| pr.affine_near(p));
+    }
     before
 }
 
@@ -199,17 +228,19 @@ fn warp_children(children: &mut [Arc<Node>], pr: &Projective, counts: impl Fn(us
     })
 }
 
-/// The first image in `n` (its children and the art of linked opacity masks, as [`warp_node`]
-/// reaches them) whose corners `pr` would fold, collapse or carry past the warp's horizon, with
-/// why.
-fn unwarpable_image(n: &Node, pr: &Projective) -> Option<(vectorcraft_doc::NodeId, Unwarpable)> {
+/// The first image, type object or symbol instance in `n` (its children and the art of linked
+/// opacity masks, as [`warp_node`] reaches them) whose corners `pr` would fold, collapse or carry
+/// past the warp's horizon, or type being edited flat, with why. `symbols` measures the boxes of
+/// symbol instances.
+fn unwarpable(n: &Node, pr: &Projective, symbols: &SymbolBoxes) -> Option<(vectorcraft_doc::NodeId, Cornered, Unwarpable)> {
     if let (Some(q), NodeKind::Image(im)) = (n.image_corners(), &n.kind) {
         if !q.iter().all(|p| pr.in_front(*p)) {
-            return Some((n.id, Unwarpable::Horizon));
+            return Some((n.id, Cornered::Image, Unwarpable::Horizon));
         }
         if let Err(e) = vectorcraft_doc::image_quad::check_for(im, &q.map(|p| pr.apply(p))) {
             return Some((
                 n.id,
+                Cornered::Image,
                 match e {
                     vectorcraft_doc::image_quad::QuadError::NotFinite | vectorcraft_doc::image_quad::QuadError::NotConvex => Unwarpable::NotConvex,
                     vectorcraft_doc::image_quad::QuadError::TooNarrow => Unwarpable::TooNarrow,
@@ -217,24 +248,79 @@ fn unwarpable_image(n: &Node, pr: &Projective) -> Option<(vectorcraft_doc::NodeI
             ));
         }
     }
-    warped_parts(n).into_iter().find_map(|c| unwarpable_image(c, pr))
+    // Type and symbol instances are drawn through the warp ([`warp_node`]): their box's corners
+    // must stay in front of its horizon, and the projection they end with must be one that draws.
+    if let Some(kind) = Cornered::of(n).filter(|k| *k != Cornered::Image && pr.is_projective()) {
+        if kind == Cornered::Type && n.extras().perspective.as_deref().is_some_and(|p| p.editing) {
+            return Some((n.id, kind, Unwarpable::EditingFlat));
+        }
+        if n.drawn_corners(symbols).is_some_and(|q| !q.iter().all(|p| pr.in_front(*p))) {
+            return Some((n.id, kind, Unwarpable::Horizon));
+        }
+        let had = n.extras().perspective.as_deref().and_then(|p| p.homography()).unwrap_or(Homography::IDENTITY);
+        let Some(after) = pr.homography().checked_then_after(&had).and_then(|h| Homography::from_array(h.to_array())) else {
+            return Some((n.id, kind, Unwarpable::TooNarrow));
+        };
+        // The map it ends with must place its flat corners by the rules it is drawn with.
+        let flat = match n.extras().perspective.is_some() {
+            true => {
+                let mut flat = n.clone();
+                flat.extras_mut().perspective = None;
+                flat.drawn_corners(symbols)
+            }
+            false => n.drawn_corners(symbols),
+        };
+        if flat.is_some_and(|q| q.iter().any(|p| after.apply(*p).is_none())) {
+            return Some((n.id, kind, Unwarpable::Horizon));
+        }
+    }
+    warped_parts(n).into_iter().find_map(|c| unwarpable(c, pr, symbols))
 }
 
-/// The first image in `n` that [`warp_node`] reaches (its children and the art of linked opacity
-/// masks).
-fn first_image(n: &Node) -> Option<vectorcraft_doc::NodeId> {
-    if matches!(n.kind, NodeKind::Image(_)) {
-        return Some(n.id);
+/// The first image, type object or symbol instance in `n` that [`warp_node`] reaches (its children
+/// and the art of linked opacity masks), whose corners follow the warp exactly.
+fn first_cornered(n: &Node) -> Option<(vectorcraft_doc::NodeId, Cornered)> {
+    if let Some(kind) = Cornered::of(n) {
+        return Some((n.id, kind));
     }
-    warped_parts(n).into_iter().find_map(first_image)
+    warped_parts(n).into_iter().find_map(first_cornered)
+}
+
+/// The objects whose corners follow a distort exactly.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Cornered {
+    Image,
+    Type,
+    Symbol,
+}
+
+impl Cornered {
+    fn of(n: &Node) -> Option<Self> {
+        match n.kind {
+            NodeKind::Image(_) => Some(Self::Image),
+            NodeKind::Text(_) => Some(Self::Type),
+            NodeKind::SymbolInstance { .. } => Some(Self::Symbol),
+            _ => None,
+        }
+    }
+
+    /// The object's name in an error.
+    fn noun(self) -> &'static str {
+        match self {
+            Self::Image => "image",
+            Self::Type => "type object",
+            Self::Symbol => "symbol instance",
+        }
+    }
 }
 
 /// The objects inside `n` that [`warp_node`] warps point by point: the children of layers, groups
-/// and compound paths, and the art of a linked opacity mask on those, paths and images. Other
-/// objects (blends, envelopes, repeats and the rest) take the warp's affine approximation whole.
+/// and compound paths, and the art of a linked opacity mask on those, paths, images, type and
+/// symbol instances. Other objects (blends, envelopes, repeats and the rest) take the warp's affine
+/// approximation whole.
 fn warped_parts(n: &Node) -> Vec<&Node> {
     let inside = matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. } | NodeKind::Compound { .. });
-    let mask_too = inside || matches!(n.kind, NodeKind::Path { .. } | NodeKind::Image(_));
+    let mask_too = inside || matches!(n.kind, NodeKind::Path { .. } | NodeKind::Image(_) | NodeKind::Text(_) | NodeKind::SymbolInstance { .. });
     let children = n.children().filter(|_| inside).into_iter().flatten().map(|c| &**c);
     let mask = n.extras().mask.as_deref().filter(|m| mask_too && m.linked).map(|m| &*m.art);
     children.chain(mask).collect()
@@ -246,9 +332,11 @@ pub(crate) fn distorted_image_error(command: &str, id: vectorcraft_doc::NodeId) 
     bad(command, format!("object {} is an image changed by Perspective Distort or Free Distort, which this command does not work on", id.0))
 }
 
-/// Why an image cannot follow the corners of a distort.
+/// Why an image, type object or symbol instance cannot follow the corners of a distort.
 #[derive(Clone, Copy)]
 enum Unwarpable {
+    /// Type is being edited flat in Edit Text.
+    EditingFlat,
     /// Its corners would fold over, meet or fall on one line.
     NotConvex,
     /// A corner would cross the warp's horizon.
@@ -257,14 +345,16 @@ enum Unwarpable {
     TooNarrow,
 }
 
-/// The error of `object.distort` when image `id` cannot follow its corners.
-fn unwarpable_error(id: vectorcraft_doc::NodeId, why: Unwarpable) -> EngineError {
+/// The error of `object.distort` when object `id` (`kind`) cannot follow its corners.
+fn unwarpable_error(id: vectorcraft_doc::NodeId, kind: Cornered, why: Unwarpable) -> EngineError {
     const C: &str = "object.distort";
+    let noun = kind.noun();
     match why {
-        Unwarpable::NotConvex => bad(C, format!("image {} cannot be distorted this way: its corners would not make a convex shape", id.0)),
-        Unwarpable::Horizon => bad(C, format!("image {} cannot be distorted this way: its corners would cross the warp's horizon", id.0)),
+        Unwarpable::EditingFlat => bad(C, format!("{noun} {} cannot be distorted this way: it is being edited flat in Edit Text", id.0)),
+        Unwarpable::NotConvex => bad(C, format!("{noun} {} cannot be distorted this way: its corners would not make a convex shape", id.0)),
+        Unwarpable::Horizon => bad(C, format!("{noun} {} cannot be distorted this way: its corners would cross the warp's horizon", id.0)),
         Unwarpable::TooNarrow => {
-            bad(C, format!("image {} cannot be distorted this way: its corners would be too close together for a perspective map", id.0))
+            bad(C, format!("{noun} {} cannot be distorted this way: its corners would be too close together for a perspective map", id.0))
         }
     }
 }
@@ -311,25 +401,26 @@ fn distort(s: &mut Session, p: &Value) -> Result<Value> {
         return Ok(ids_json);
     }
     let pr = Projective::from_box(src, [tl, tr, br, bl]);
-    // An image's corners follow the handles exactly, so they must stay a convex shape: nothing
-    // changes when one would not.
+    // The corners of an image, a type object or a symbol instance follow the handles exactly, so
+    // they must stay a convex shape: nothing changes when one would not.
     let doc = &s.doc()?.doc;
     // Corners that do not make a convex shape give no perspective map (the warp falls back to an
-    // affine one), so an image cannot follow them.
+    // affine one), so such an object cannot follow them.
     if vectorcraft_doc::image_quad::check(&[tl, tr, br, bl]).is_err()
-        && let Some(id) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_image)
+        && let Some((id, kind)) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_cornered)
     {
-        return Err(unwarpable_error(id, Unwarpable::NotConvex));
+        return Err(unwarpable_error(id, kind, Unwarpable::NotConvex));
     }
     // Corners so close together that the map falls back to an affine one: the box's corners do
-    // not reach the handles, so an image cannot follow them either.
+    // not reach the handles, so such an object cannot follow them either.
     if !reaches_corners(src, [tl, tr, br, bl])
-        && let Some(id) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_image)
+        && let Some((id, kind)) = ids.iter().filter_map(|id| doc.node(*id)).find_map(first_cornered)
     {
-        return Err(unwarpable_error(id, Unwarpable::TooNarrow));
+        return Err(unwarpable_error(id, kind, Unwarpable::TooNarrow));
     }
-    if let Some((id, why)) = ids.iter().filter_map(|id| doc.node(*id)).find_map(|n| unwarpable_image(n, &pr)) {
-        return Err(unwarpable_error(id, why));
+    let symbols = doc.symbol_boxes();
+    if let Some((id, kind, why)) = ids.iter().filter_map(|id| doc.node(*id)).find_map(|n| unwarpable(n, &pr, &symbols)) {
+        return Err(unwarpable_error(id, kind, why));
     }
     s.edit("Free Distort", |d, _| {
         for id in &ids {

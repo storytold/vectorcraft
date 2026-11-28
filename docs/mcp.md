@@ -8513,6 +8513,21 @@ image between its corners and makes a plain image of the result. These rules are
 {"name":"run_command","arguments":{"command":"object.distort","params":{"corners":[[40,0],[60,0],[100,100],[0,100]]}}}
 ```
 
+## Perspective Distort and Free Distort on type and symbol instances
+
+`object.distort` puts the corners of a type object's box and of a symbol instance's box (its symbol's art box placed
+by its transform) exactly where the warp takes them, alone or with other objects. The object stays type or a symbol
+instance: it keeps its flat art and is drawn through the warp, as type and symbols in perspective are, so the canvas,
+printing and exports draw its outlines in perspective. An image in a symbol's art drawn this way, on the Perspective
+Grid too, has its corners where the projection takes them and its pixels drawn in perspective between them, and its
+linked opacity mask is projected with it. It is bounded by those corners, a move or another transform
+takes them along, and Object › Perspective › Edit Text (`perspective.editText`) shows distorted type flat for editing.
+A type object or symbol instance already drawn in perspective takes the warp after its projection. Corners that would
+fold the box over, put three corners on one line, carry a corner of the box past the warp's horizon or lie too close
+together for a perspective map are an error that names the object, and nothing changes; so is a warp of type that Edit
+Text shows flat, until Edit Text ends. A warp whose corners make a
+parallelogram moves, scales, rotates or shears the object as before. These rules are VectorCraft's own.
+
 ## Transform Each: Relative and Absolute
 
 `object.transformEach` scales by percentages of each object's size (the dialog's Relative, the default), or with

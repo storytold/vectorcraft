@@ -1544,11 +1544,40 @@ pub(crate) fn own_effects_art(doc: Option<&Document>, n: &Node) -> Option<Node> 
 /// follow it. The type and live objects in the art of those masks are outlined and evaluated
 /// first ([`outlined_members`], with the symbols of `doc`).
 fn project_leaves(art: &mut Node, h: &vectorcraft_geom::Homography, doc: Option<&Document>) {
+    project_art(art, h, doc, false);
+}
+
+/// [`project_leaves`], the linked opacity mask of `art` itself included when `own`.
+fn project_art(art: &mut Node, h: &vectorcraft_geom::Homography, doc: Option<&Document>, own: bool) {
     project_paths(art, h);
-    each_linked_mask_mut(art, false, 0, &mut |m| {
+    each_linked_mask_mut(art, own, 0, &mut |m| {
         *m = outlined_mask_art(doc, m);
         project_paths(m, h);
+        project_image_masks(m, h, doc);
     });
+    project_image_masks(art, h, doc);
+}
+
+/// The art of the linked opacity masks of the images under `art` (`art` itself, and in groups and
+/// layers, as [`project_images`] reaches them) projected through `h` as [`project_leaves`]
+/// projects art, the linked mask of that art's own root included, so that each mask stays on the
+/// object it masks. Unlinked masks stay where they are.
+fn project_image_masks(art: &mut Node, h: &vectorcraft_geom::Homography, doc: Option<&Document>) {
+    match &mut art.kind {
+        NodeKind::Image(_) => {
+            if let Some(m) = art.extras_if_any().and_then(|e| e.mask.as_mut()).filter(|m| m.linked) {
+                let a = Arc::make_mut(&mut m.art);
+                *a = outlined_mask_art(doc, a);
+                project_art(a, h, doc, true);
+            }
+        }
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+            for c in children.iter_mut() {
+                project_image_masks(Arc::make_mut(c), h, doc);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// `art`, the art of an opacity mask, with type and live objects in it outlined and evaluated
@@ -1584,6 +1613,27 @@ fn project_paths(art: &mut Node, h: &vectorcraft_geom::Homography) {
             _ => {}
         }
     });
+    project_images(art, h);
+}
+
+/// Place the corners of every image under `art` (in groups and layers, as [`for_each_leaf`] reaches
+/// paths) where the projective map `h` takes them, so that its pixels are drawn in perspective
+/// between them ([`Node::set_image_corners`]). An image with a corner that `h` sends past its
+/// horizon keeps its place, as the points of a path there do.
+fn project_images(n: &mut Node, h: &vectorcraft_geom::Homography) {
+    match &mut n.kind {
+        NodeKind::Image(_) => {
+            if let Some([Some(a), Some(b), Some(c), Some(d)]) = n.image_corners().map(|q| q.map(|p| h.apply(p))) {
+                let _ = n.set_image_corners([a, b, c, d]);
+            }
+        }
+        NodeKind::Group { children, .. } | NodeKind::Layer { children, .. } => {
+            for c in children.iter_mut() {
+                project_images(Arc::make_mut(c), h);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The visible geometry effects of `n`'s own effect list, in order.
