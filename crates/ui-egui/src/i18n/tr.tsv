@@ -7513,6 +7513,15 @@ axis	Y Axis	Y ekseni
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	salt okunur bir nesne atlandı: onu yalnızca {{"id": …}} olarak veya verildiği gibi döndürün
 @msg	a string	bir dize
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	bir konturda yalnızca `paint`, `width`, `join`, `cap` ve `miterLimit` bulunur
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	boyama türü canlı efektin bir parçasında yalnızca `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` ve `effects` bulunur
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	bir konturda yalnızca `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` ve `effects` bulunur
+@msg	`appearanceOutput` may only be true	`appearanceOutput` yalnızca true olabilir
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` yalnızca `paintOutput` bildiren, `api` 3 düzeyindeki canlı efekt içindir
+@msg	`opacity` must be a number from 0 to 1	`opacity` 0 ile 1 arasında bir sayı olmalıdır
+@msg	unknown blending mode; `blend` is one of {_1}	bilinmeyen karışım modu; `blend` şunlardan biridir: {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` en fazla {MAX_LOOK_EFFECTS} kayıtlık bir dizi olmalıdır
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	bir sonuç en fazla {MAX_RESULT_EFFECTS} efekt kaydı taşır
+@msg	this host takes no effects here	bu ana bilgisayar burada efekt kabul etmez
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	bir kontur {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} biçiminde olmalıdır
 @msg	an effect must be {{"id", "params"?, "visible"?}}	bir efekt {{"id", "params"?, "visible"?}} biçiminde olmalıdır
 @msg	an effect on a fill returns only `fills`	dolgudaki bir efekt yalnızca `fills` döndürür
@@ -10392,6 +10401,7 @@ breakText	Glyphs	Glifler
 	Place Brush Art	Fırça Çizimini Yerleştir
 	Replace Brush Art	Fırça Çizimini Değiştir
 	Replace Pattern Art	Desen Çizimini Değiştir
+	Place Pattern Art	Desen Çizimini Yerleştir
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturlar bu fırçayı kullanıyor. Yeni çizim bu konturlara uygulansın mı, yoksa konturlar olduğu gibi bırakılıp fırçanın yeni çizimli bir kopyası mı eklensin?
 	Apply to Strokes	Konturlara Uygula
 	Leave Strokes	Konturları Bırak
@@ -10461,6 +10471,8 @@ breakText	Glyphs	Glifler
 	Tangent Circle	Teğet Daire
 	Tangent Circle Tool	Teğet Daire Aracı
 	No tangent circle here	Burada teğet daire yok
+	Ask For Circle Radius	Daire Yarıçapını Sor
+	Auto-Update Default	Varsayılanı Otomatik Güncelle
 	Circle:	Daire:
 @msg	`ids` names an object twice	`ids` bir nesneyi iki kez belirtiyor
 @msg	select two or three paths or compound paths	iki veya üç yol ya da bileşik yol seçin

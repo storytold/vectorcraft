@@ -1145,6 +1145,20 @@ impl Host {
         self.pause.set(true);
         Ok(())
     }
+
+    /// The growth [`Host::charge_growth`] has counted, and whether the run waits for an answer about
+    /// it, for [`Host::put_growth_back`].
+    fn growth_mark(&self) -> (u64, u64, bool) {
+        (self.objects.get(), self.bytes_kept.get(), self.waiting.get())
+    }
+
+    /// Puts back the growth counted after [`Host::growth_mark`] gave `mark`: the commands that added
+    /// it were put back.
+    fn put_growth_back(&self, (objects, bytes, waiting): (u64, u64, bool)) {
+        self.objects.set(objects);
+        self.bytes_kept.set(bytes);
+        self.waiting.set(waiting);
+    }
 }
 
 /// A run in progress.
@@ -1388,16 +1402,15 @@ fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, H
 
 /// [`command`], with the command's result as it gave it as well as the script's copy of it.
 fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
-    let id = id.to_string();
-    let params = params.clone();
     let session = host.session.clone();
     let started = clock();
+    let before = dom::before_command(host, id);
     let r = {
         let mut s = session.borrow_mut();
-        step(&mut s, host, &id, &params)
+        step(&mut s, host, id, params)
     };
     // Only commands that exist are timed, so the table holds at most one row per command.
-    if let (Some(started), Some(spec)) = (started, crate::find_command(&id)) {
+    if let (Some(started), Some(spec)) = (started, crate::find_command(id)) {
         let nanos = started.elapsed().as_nanos();
         let mut times = host.commands.borrow_mut();
         let row = times.entry(spec.id).or_insert((0, 0, 0));
@@ -1410,13 +1423,18 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
         Err(EngineError::Cancelled) => return Err(HostError::Abort("canceled".into())),
         Err(e) => return Err(HostError::Error(e.to_string())),
     };
+    let mark = host.growth_mark();
     let crossed = host.charge_growth(objects, added).and_then(|()| {
         let data = to_data(&value, &result_limits(), 0, &mut (0, 0))
             .map_err(|place| HostError::Range(format!("vc.run: the result{place} is too large for a script")))?;
         host.charge_call(data_size(&data))?;
         Ok(data)
     });
-    // A command whose result does not reach the script is put back, like one that failed.
+    // A command whose result does not reach the script is put back, like one that failed, and so is
+    // the growth it was charged.
+    if crossed.is_err() {
+        host.put_growth_back(mark);
+    }
     if let Some(save) = save {
         let mut s = session.borrow_mut();
         if crossed.is_ok() {
@@ -1425,6 +1443,7 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
+    dom::after_command(host, before);
     crossed.map(|data| (data, value))
 }
 
@@ -2206,7 +2225,7 @@ impl Session {
             engine: engine.clone(),
             file: request.file.clone(),
             palette_event: RefCell::new(palette_event),
-            dom: dom::State::default(),
+            dom: dom::State::new(heap_bytes),
             run_docs: RefCell::new(
                 self.docs
                     .iter()

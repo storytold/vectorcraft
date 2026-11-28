@@ -7094,6 +7094,15 @@ axis	Y Axis	Trục Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {{"id": …}} hoặc như khi được nhận
 @msg	a string	một chuỗi
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	nét chỉ có `paint`, `width`, `join`, `cap` và `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` và `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	nét chỉ có `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` và `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` chỉ có thể là true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` chỉ dành cho hiệu ứng trực tiếp có khai báo `paintOutput`, ở `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` phải là một số từ 0 đến 1
+@msg	unknown blending mode; `blend` is one of {_1}	chế độ hòa trộn không xác định; `blend` là một trong {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` phải là một mảng tối đa {MAX_LOOK_EFFECTS} bản ghi
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	một kết quả mang tối đa {MAX_RESULT_EFFECTS} bản ghi hiệu ứng
+@msg	this host takes no effects here	máy chủ này không nhận hiệu ứng ở đây
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	nét phải có dạng {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	hiệu ứng phải có dạng {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	hiệu ứng trên phần tô chỉ trả về `fills`
@@ -8189,6 +8198,7 @@ breakText	Glyphs	Glyph
 	Place Brush Art	Đặt đối tượng của cọ
 	Replace Brush Art	Thay đối tượng của cọ
 	Replace Pattern Art	Thay đối tượng của họa tiết
+	Place Pattern Art	Đặt đối tượng của họa tiết
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
 	Apply to Strokes	Áp dụng cho nét
 	Leave Strokes	Giữ nguyên nét
@@ -8258,6 +8268,8 @@ breakText	Glyphs	Glyph
 	Tangent Circle	Đường tròn tiếp xúc
 	Tangent Circle Tool	Công cụ Đường tròn tiếp xúc
 	No tangent circle here	Không có đường tròn tiếp xúc ở đây
+	Ask For Circle Radius	Hỏi bán kính đường tròn
+	Auto-Update Default	Tự động cập nhật mặc định
 	Circle:	Đường tròn:
 @msg	`ids` names an object twice	`ids` nêu một đối tượng hai lần
 @msg	select two or three paths or compound paths	chọn hai hoặc ba đường dẫn hoặc đường dẫn phức hợp

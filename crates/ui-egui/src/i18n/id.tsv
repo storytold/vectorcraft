@@ -515,6 +515,15 @@
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objek baca-saja dihilangkan: kembalikan objek itu, sebagai {{"id": …}} saja atau seperti yang diberikan
 @msg	a string	string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	goresan hanya memiliki `paint`, `width`, `join`, `cap` dan `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	potongan efek langsung yang dicat hanya memiliki `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` dan `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	goresan hanya memiliki `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` dan `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` hanya boleh true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` hanya untuk efek langsung yang menyatakan `paintOutput`, pada `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` harus berupa angka dari 0 sampai 1
+@msg	unknown blending mode; `blend` is one of {_1}	mode campuran tidak dikenal; `blend` adalah salah satu dari {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` harus berupa larik berisi paling banyak {MAX_LOOK_EFFECTS} catatan
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	satu hasil membawa paling banyak {MAX_RESULT_EFFECTS} catatan efek
+@msg	this host takes no effects here	host ini tidak menerima efek di sini
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	goresan harus berupa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	efek harus berupa {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efek pada isian hanya mengembalikan `fills`
@@ -8334,6 +8343,7 @@ breakText	Glyphs	Glif
 	Place Brush Art	Tempatkan karya seni kuas
 	Replace Brush Art	Ganti karya seni kuas
 	Replace Pattern Art	Ganti karya seni pola
+	Place Pattern Art	Tempatkan karya seni pola
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
 	Apply to Strokes	Terapkan ke Stroke
 	Leave Strokes	Biarkan Stroke
@@ -8403,6 +8413,8 @@ breakText	Glyphs	Glif
 	Tangent Circle	Lingkaran singgung
 	Tangent Circle Tool	Alat lingkaran singgung
 	No tangent circle here	Tidak ada lingkaran singgung di sini
+	Ask For Circle Radius	Tanyakan Radius Lingkaran
+	Auto-Update Default	Perbarui Default Otomatis
 	Circle:	Lingkaran:
 @msg	`ids` names an object twice	`ids` menyebut satu objek dua kali
 @msg	select two or three paths or compound paths	pilih dua atau tiga jalur atau jalur gabungan

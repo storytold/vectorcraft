@@ -484,6 +484,18 @@ fn tagged_templates_get_one_frozen_strings_object_for_each_site() {
 }
 
 #[test]
+fn unreachable_closures_release_their_template_objects_in_one_collection() {
+    let mut realm = es();
+    assert_eq!(
+        realm.run("function tag(value) { return value; } var site = function () { return tag`gone`; }; site(); site = null; 0"),
+        Ok(JsValue::Number(0.0)),
+    );
+    assert_eq!(realm.interp().template_objects.len(), 1);
+    realm.collect_garbage();
+    assert_eq!(realm.interp().template_objects.len(), 0);
+}
+
+#[test]
 fn template_objects_go_once_their_code_cannot_run() {
     // Each eval makes code with two template sites; once it has run, nothing can run that code.
     let mut realm = es();

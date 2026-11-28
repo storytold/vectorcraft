@@ -7426,6 +7426,15 @@ axis	Y Axis	Y tengely
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
 @msg	a string	karakterlánc
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	a körvonalnak csak `paint`, `width`, `join`, `cap` és `miterLimit` kulcsa van
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` és `effects` kulcsa van
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	a körvonalnak csak `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` és `effects` kulcsa van
+@msg	`appearanceOutput` may only be true	Az `appearanceOutput` értéke csak true lehet
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	az `appearanceOutput` csak `paintOutput` kulcsot megadó élő effektushoz használható, `api` 3 mellett
+@msg	`opacity` must be a number from 0 to 1	az `opacity` értéke 0 és 1 közötti szám kell legyen
+@msg	unknown blending mode; `blend` is one of {_1}	ismeretlen keverési mód; a `blend` értéke ezek egyike: {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	az `effects` legfeljebb {MAX_LOOK_EFFECTS} bejegyzésből álló tömb lehet
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	egy eredmény legfeljebb {MAX_RESULT_EFFECTS} effektusbejegyzést tartalmazhat
+@msg	this host takes no effects here	ez a gazdagép itt nem fogad effektusokat
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	a körvonal formája {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} legyen
 @msg	an effect must be {{"id", "params"?, "visible"?}}	az effektus formája {{"id", "params"?, "visible"?}} legyen
 @msg	an effect on a fill returns only `fills`	a kitöltésen lévő effektus csak `fills` értéket ad vissza
@@ -8482,6 +8491,7 @@ breakText	Glyphs	Glifák
 	Place Brush Art	Ecsetgrafika elhelyezése
 	Replace Brush Art	Ecsetgrafika cseréje
 	Replace Pattern Art	Mintázatgrafika cseréje
+	Place Pattern Art	Mintázatgrafika elhelyezése
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Körvonalak használják ezt az ecsetet. Alkalmazod az új grafikát ezekre a körvonalakra, vagy változatlanul hagyod őket, és hozzáadod az ecset egy másolatát az új grafikával?
 	Apply to Strokes	Alkalmazás a körvonalakra
 	Leave Strokes	Körvonalak megtartása
@@ -8551,6 +8561,8 @@ breakText	Glyphs	Glifák
 	Tangent Circle	Érintőkör
 	Tangent Circle Tool	Érintőkör eszköz
 	No tangent circle here	Itt nincs érintőkör
+	Ask For Circle Radius	Kérdés a kör sugaráról
+	Auto-Update Default	Alapértelmezett érték automatikus frissítése
 	Circle:	Kör:
 @msg	`ids` names an object twice	`ids`: egy objektumot kétszer nevez meg
 @msg	select two or three paths or compound paths	jelölj ki két vagy három útvonalat vagy összetett útvonalat

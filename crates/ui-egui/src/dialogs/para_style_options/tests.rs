@@ -358,6 +358,33 @@ fn a_style_options_confirmation_stays_in_its_opening_document() {
     assert!(app.session.doc().unwrap().doc.para_styles.iter().any(|style| style.name == "Revised"));
 }
 
+/// After File > Revert the draft neither previews on nor commits to the restored document, and OK is refused.
+#[test]
+fn style_options_refuse_their_draft_after_file_revert() {
+    let mut app = app();
+    styled(&mut app, 6.0, "Opening document");
+    let dir = vectorcraft_testkit::TempDir::new("para-style-options-revert");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+    open(&mut app, "Body");
+    set(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    set(&app, "left_indent", json!("12"));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, restored, "Preview leaves the restored document's Body style unchanged");
+    assert!(!ok(&mut app), "the dialog stays open with the refusal");
+    assert_eq!(app.session.doc().unwrap().doc, restored, "OK leaves the restored document's Body style unchanged");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    let refusal = with_dialog(&app, |host, id| host.held_state(id));
+    assert!(matches!(refusal, Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")));
+}
+
 /// OK after the opening document has closed is refused and leaves the remaining document as it is.
 #[test]
 fn a_style_options_confirmation_is_refused_after_its_document_closes() {

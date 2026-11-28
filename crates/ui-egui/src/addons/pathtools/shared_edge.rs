@@ -1,5 +1,6 @@
 //! The Anchor Inspector panel's Shared Edges section: the Shared Edge Merge Tool's brush and
-//! coincidence, and Keep Shared Points Together.
+//! coincidence, and Keep Shared Points Together. Canceling a Diameter or Coincidence edit restores
+//! its opening tool value; a retired edit supplies no replacement.
 
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Props as _, Show as _};
@@ -31,14 +32,14 @@ pub(super) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut set: Option<Value> = None;
     let diameter_field = |ui: &mut Ui| {
         let field = NumberField::new(tl!("Diameter"), Bind::given(Some(diameter))).range(DIAMETER_RANGE.0..=DIAMETER_RANGE.1);
-        typed(field.unit_kind(UnitKind::Points).fixed_decimals(2).show(ui).value())
+        typed(field.unit_kind(UnitKind::Points).fixed_decimals(2).show(ui).events.landed())
     };
     if let Some(v) = row(ui, "Diameter", "shared-edge-diameter", diameter_field) {
         set = Some(json!({ "diameter": v }));
     }
     let coincidence_field = |ui: &mut Ui| {
         let field = NumberField::new(tl!("Coincidence"), Bind::given(Some(tolerance))).range(0.0..=MAX_COINCIDENCE);
-        typed(field.unit_kind(UnitKind::Points).fixed_decimals(3).show(ui).value())
+        typed(field.unit_kind(UnitKind::Points).fixed_decimals(3).show(ui).events.landed())
     };
     if let Some(v) = row(ui, "Coincidence", "shared-edge-tolerance", coincidence_field) {
         set = Some(json!({ "tolerance": v }));
