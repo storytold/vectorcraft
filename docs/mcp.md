@@ -15862,6 +15862,9 @@ Tools:
   `addon.pathtools.shape.set`. A double-click on the canvas places a shape with the last settings. A new shape's
   center and the point dragged out from it snap as drawn points do. Options
   (`tool.setOption`, or the panel with no shape selected) are the next shape's numbers, as the commands take them.
+  Canceling a Parametric Shape panel edit or Shape menu choice restores its opening value: a selected shape's edit is
+  one undo step that the cancel takes back, and with no shape selected the tool keeps its opening option. With no
+  shape selected, a highlighted Shape menu entry applies only once it is chosen.
 - **Corner Tool** (`cornerTool`, or the UI command `addon.pathtools.cornerTool`, which also shows the Anchor Inspector
   panel with its Corners section): edits the app's Live Corners on any path, selected or not. Over an anchor where two
   sides meet at an angle the anchor shows; a click runs `addon.pathtools.cornerSet` with the tool's `radius` (pt, 10)
