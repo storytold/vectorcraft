@@ -42,11 +42,13 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
-/// Reading a file or a folder, a file dialog and a message to the person do not change anything
-/// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.saveAs` and `close` throw "not available yet".
+/// Reading a file or a folder, a file dialog, a message to the person and a ScriptUI dialog do not
+/// change anything outside it. The document model (`app`, its classes and the enumerations) acts on
+/// the open documents; `Document.saveAs` and `close` throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
-    ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
+    ("", "$ File Folder UnitValue Window alert confirm localize prompt toSource"),
+    ("Window.", "alert confirm length prompt prototype"),
+    ("Window.prototype.", "add addEventListener center close constructor findElement hide remove removeEventListener show"),
     ("Object.prototype.", "reflect toSource"),
     ("UnitValue.", "baseUnit baseUnit= length prototype"),
     ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),

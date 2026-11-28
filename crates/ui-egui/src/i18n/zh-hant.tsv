@@ -8950,7 +8950,9 @@ breakText	Glyphs	字符
 @msg	missing `picks`	未提供 `picks`
 @msg	missing `word`	未提供 `word`
 @msg	must be an object with `kind` and `value`	必須是包含 `kind` 和 `value` 的物件
-@msg	must have `kind` alert, confirm or prompt	`kind` 必須是 alert、confirm 或 prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind` 必須是 alert、confirm、prompt 或 window
+@msg	is a window's answer, whose `value` must be a list of steps	是視窗的回答，其 `value` 必須是步驟清單
+@msg	has a step {i} that is not a valid click, change or close	的第 {i} 步不是有效的點按、變更或關閉
 @msg	must have exactly `kind` and `value`	只能有 `kind` 和 `value`
 @msg	needs a closing quote after the name	名稱之後需要結尾引號
 @msg	needs a name	需要名稱

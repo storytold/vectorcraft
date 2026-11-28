@@ -5093,7 +5093,9 @@ liquify-list-end	{0}, {1}	{0}, {1}
 @msg	is a confirm's answer, whose `value` must be true or false	es la respuesta de un confirm, cuyo `value` debe ser true o false
 @msg	is longer than 16 KiB	ocupa más de 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	es la respuesta de un prompt, cuyo `value` debe ser una cadena o null
-@msg	must have `kind` alert, confirm or prompt	debe tener `kind` alert, confirm o prompt
+@msg	must have `kind` alert, confirm, prompt or window	debe tener `kind` alert, confirm, prompt o window
+@msg	is a window's answer, whose `value` must be a list of steps	es la respuesta de una ventana, cuyo `value` debe ser una lista de pasos
+@msg	has a step {i} that is not a valid click, change or close	tiene un paso {i} que no es un clic, un cambio ni un cierre válido
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` solo es para una ejecución sin nadie a quien preguntar: en la aplicación, la persona responde cada cuadro de diálogo
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` debe ser un número entero de 1 a {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` está anidado a más de 64 niveles

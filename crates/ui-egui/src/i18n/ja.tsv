@@ -7618,7 +7618,9 @@ axis	Y Axis	Y 軸
 @msg	missing `picks`	`picks` がありません
 @msg	missing `word`	`word` がありません
 @msg	must be an object with `kind` and `value`	には `kind` と `value` を持つオブジェクトを指定してください
-@msg	must have `kind` alert, confirm or prompt	の `kind` には alert、confirm、prompt のいずれかを指定してください
+@msg	must have `kind` alert, confirm, prompt or window	の `kind` には alert、confirm、prompt、window のいずれかを指定してください
+@msg	is a window's answer, whose `value` must be a list of steps	は window の回答で、`value` には手順のリストを指定してください
+@msg	has a step {i} that is not a valid click, change or close	の手順 {i} は有効なクリック、変更、閉じる操作のいずれでもありません
 @msg	must have exactly `kind` and `value`	には `kind` と `value` だけを指定してください
 @msg	needs a closing quote after the name	名前の後に閉じ引用符が必要です
 @msg	needs a name	名前が必要です

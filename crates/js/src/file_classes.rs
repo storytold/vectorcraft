@@ -659,6 +659,7 @@ fn ask_pick(i: &mut Interp, kind: &'static str, me: Option<&Value>, prompt: &Val
         args: vec![Value::str(kind), prompt, Value::Bool(multi), start, types],
         keep: vec![Value::Bool(kind == "folder"), me.cloned().unwrap_or(Value::Null), filter.clone()],
         resume: picked,
+        failed: None,
     })
 }
 

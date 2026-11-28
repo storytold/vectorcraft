@@ -243,18 +243,25 @@ pub(crate) type CodeObserver = Rc<dyn Fn(&[u16])>;
 pub(crate) type PausableFn = fn(&mut Interp, Value, &[Value]) -> JsResult<Pause>;
 
 /// What a [`PausableFn`] does with the host's answer: it is given the values it kept and the
-/// answer, and gives the result of its call.
+/// answer, and gives the result of its call. One that puts another [`Pause`] in
+/// [`Interp::again`] makes that host call next, and the call's result is what that pause's
+/// resume function gives.
 pub(crate) type ResumeFn = fn(&mut Interp, &[Value], Value) -> JsResult<Value>;
+
+/// What a [`Pause`] does with its kept values when its host call fails.
+pub(crate) type FailFn = fn(&mut Interp, &[Value]);
 
 /// The host call a [`PausableFn`] makes: the host function `host` with `args`. Its answer goes to
 /// `resume` with `keep`, at once when the host answers at once. When the host waits
 /// ([`crate::HostError::Wait`]), the run pauses at the call, and `resume` runs when the run goes on
 /// after [`crate::Realm::answer`]; a run ended while it waits ([`crate::Realm::end`]) drops it.
+/// When the host call fails, `failed` is given `keep` before the error is thrown at the call.
 pub(crate) struct Pause {
     pub(crate) host: Value,
     pub(crate) args: Vec<Value>,
     pub(crate) keep: Vec<Value>,
     pub(crate) resume: ResumeFn,
+    pub(crate) failed: Option<FailFn>,
 }
 
 /// A [`Pause`] whose host call waits for its answer.
@@ -369,6 +376,10 @@ pub(crate) struct Interp {
     /// The built-in that waits with the host's call ([`Pause::Ask`]): it takes the answer before
     /// the next instruction runs.
     pub(crate) resuming: Option<Resumption>,
+    /// The next host call a resume function asks for ([`ResumeFn`]).
+    pub(crate) again: Option<Pause>,
+    /// ScriptUI's `Window` and its controls, when the host added them.
+    pub(crate) script_ui: Option<crate::scriptui::Classes>,
     /// The message of the uncatchable error a host function ended the run with.
     pub(crate) host_abort: Option<String>,
     /// How much a value passed to or from a host function may carry.
@@ -671,6 +682,8 @@ impl Interp {
             waiting_hosted: false,
             constructing: false,
             resuming: None,
+            again: None,
+            script_ui: None,
             host_abort: None,
             data_limits: crate::DataLimits::default(),
             source_tag: crate::realm::UNKNOWN_SOURCE,
@@ -919,6 +932,7 @@ impl Interp {
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
         roots.values.extend(self.resuming.iter().flat_map(|r| r.keep.iter()));
+        roots.values.extend(self.again.iter().flat_map(|p| p.keep.iter().chain(p.args.iter()).chain(std::iter::once(&p.host))));
         roots.values.push(&self.last_thrown);
         roots.values.push(&self.last_error);
         roots.values.push(&self.passing);
@@ -937,6 +951,7 @@ impl Interp {
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
         roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
+        roots.objects.extend(self.script_ui.iter().flat_map(crate::scriptui::Classes::objects));
         roots.objects.extend(self.xmp.iter().flat_map(crate::xmp_classes::Classes::objects));
         roots.objects.extend(self.host_classes.iter().flat_map(crate::host_classes::Entry::objects));
         roots.values.extend(self.symbols.root_values());
@@ -3378,35 +3393,64 @@ impl Interp {
     /// Makes the host call a [`PausableFn`] gave, whose answer goes to its resume function. A host
     /// function is called as the script's own code calls it, so it may wait; then the resume
     /// function is kept for the answer [`crate::Realm::answer`] gives, and the value that stands
-    /// in for that answer is the call's result for now.
+    /// in for that answer is the call's result for now. A resume function that asks [`Self::again`]
+    /// makes that call next, in this loop, so a built-in may ask any number of times.
     fn ask(&mut self, p: Pause) -> JsResult<Value> {
-        let Pause { host, args, keep, resume } = p;
-        let mark = self.temp_roots.len();
-        self.temp_roots.push(host.clone());
-        self.temp_roots.extend(args.iter().cloned());
-        self.temp_roots.extend(keep.iter().cloned());
-        let was_waiting = self.waiting;
-        let answer = match self.func_of(&host) {
-            Some(Func::Data { f, name, read }) => self.call_data(&f, &name, &Value::Undefined, &args, &read),
-            _ => self.call(&host, &Value::Undefined, &args),
-        };
-        self.temp_roots.truncate(mark);
-        let answer = answer?;
-        let r = Resumption { resume, keep };
-        if self.waiting && !was_waiting {
-            self.resuming = Some(r);
-            return Ok(answer);
+        let mut p = p;
+        loop {
+            let Pause { host, args, keep, resume, failed } = p;
+            let mark = self.temp_roots.len();
+            self.temp_roots.push(host.clone());
+            self.temp_roots.extend(args.iter().cloned());
+            self.temp_roots.extend(keep.iter().cloned());
+            let was_waiting = self.waiting;
+            let answer = match self.func_of(&host) {
+                Some(Func::Data { f, name, read }) => self.call_data(&f, &name, &Value::Undefined, &args, &read),
+                _ => self.call(&host, &Value::Undefined, &args),
+            };
+            if let Err(e) = &answer
+                && let Some(failed) = failed
+            {
+                // The thrown value stays kept from collection while `failed` runs.
+                if let Abrupt::Throw(v) = e {
+                    self.temp_roots.push(v.clone());
+                }
+                failed(self, &keep);
+            }
+            self.temp_roots.truncate(mark);
+            let answer = answer?;
+            let r = Resumption { resume, keep };
+            if self.waiting && !was_waiting {
+                self.resuming = Some(r);
+                return Ok(answer);
+            }
+            let v = self.resume_once(r, answer)?;
+            match self.again.take() {
+                Some(next) => p = next,
+                None => return Ok(v),
+            }
         }
-        self.resume(r, answer)
     }
 
-    /// Gives a [`PausableFn`]'s kept values and the host's `answer` to its resume function.
+    /// Gives a [`PausableFn`]'s kept values and the host's `answer` to its resume function, and
+    /// makes the host call it asks for next, if any.
     fn resume(&mut self, r: Resumption, answer: Value) -> JsResult<Value> {
+        let v = self.resume_once(r, answer)?;
+        match self.again.take() {
+            Some(next) => self.ask(next),
+            None => Ok(v),
+        }
+    }
+
+    fn resume_once(&mut self, r: Resumption, answer: Value) -> JsResult<Value> {
         let mark = self.temp_roots.len();
         self.temp_roots.push(answer.clone());
         self.temp_roots.extend(r.keep.iter().cloned());
         let v = (r.resume)(self, &r.keep, answer);
         self.temp_roots.truncate(mark);
+        if v.is_err() {
+            self.again = None;
+        }
         v
     }
 

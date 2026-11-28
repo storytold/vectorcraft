@@ -9999,7 +9999,9 @@ breakText	Glyphs	Glyfy
 @msg	more than {MAX_IMPORT} presets	více než {MAX_IMPORT} přednastavení
 @msg	moved must be [[x,y]…]	moved musí být [[x,y]…]
 @msg	must be an object with `kind` and `value`	musí být objekt s `kind` a `value`
-@msg	must have `kind` alert, confirm or prompt	musí mít `kind` alert, confirm nebo prompt
+@msg	must have `kind` alert, confirm, prompt or window	musí mít `kind` alert, confirm, prompt nebo window
+@msg	is a window's answer, whose `value` must be a list of steps	je odpověď okna, jejíž `value` musí být seznam kroků
+@msg	has a step {i} that is not a valid click, change or close	má krok {i}, který není platné kliknutí, změna ani zavření
 @msg	must have exactly `kind` and `value`	musí mít právě `kind` a `value`
 @msg	name (a toolbar's name) is required	name (název panelu nástrojů) je povinné
 @msg	name (a toolbar's name) must be a string	name (název panelu nástrojů) musí být řetězec
