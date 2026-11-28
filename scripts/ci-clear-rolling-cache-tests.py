@@ -92,6 +92,13 @@ class Deadline(unittest.TestCase):
         self.assertTrue(clear.start_overdue(queued, after_limit, self.began))
         self.assertFalse(clear.gave_up(queued, after_limit))
 
+    def test_a_leg_that_starts_after_the_start_limit_fails(self):
+        at = lambda seconds: warm_job("in_progress", started_at=(self.began + timedelta(seconds=seconds)).isoformat())
+        self.assertTrue(clear.started_late(at(clear.START_SECONDS + 5), self.began))
+        self.assertFalse(clear.started_late(at(clear.START_SECONDS - 10), self.began))
+        self.assertFalse(clear.started_late(warm_job("queued"), self.began))
+        self.assertFalse(clear.started_late(None, self.began))
+
 
 class Workflow(unittest.TestCase):
     ci = (Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml").read_text()
@@ -214,6 +221,22 @@ class AfterDeletion(unittest.TestCase):
     def test_a_save_canceled_after_the_deletion_exits_1(self):
         canceled = warm_job("completed", "cancelled", [("Gate", "completed", "success"), ("Post Setup", "completed", "cancelled")])
         self.assertEqual(self.run_main(canceled), 1)
+
+    def test_a_leg_that_starts_late_and_saves_deletes_nothing(self):
+        # Clock.now() is 04:00, so the leg starts 120 minutes 5 seconds after the script.
+        late = warm_job("in_progress", steps=self.SAVING, started_at="2026-11-28T06:00:05Z")
+        deleted = []
+
+        def run(args, **kwargs):
+            deleted.append(args[-1])
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        env = {"GITHUB_REPOSITORY": "storytold/vectorcraft", "GITHUB_RUN_ID": "1", "GITHUB_RUN_ATTEMPT": "1"}
+        with mock.patch.object(clear, "gh", lambda url: {"jobs": ME + [late]}), mock.patch.object(clear.subprocess, "run", run), \
+                mock.patch.object(clear.time, "sleep"), mock.patch.object(clear, "datetime", Clock), mock.patch.dict(os.environ, env), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(clear.main(), 1)
+        self.assertEqual(deleted, [])
 
     def test_a_save_that_fails_after_the_deletion_exits_1(self):
         failed = warm_job("completed", "failure", [("Gate", "completed", "success"), ("Post Setup", "completed", "failure")])

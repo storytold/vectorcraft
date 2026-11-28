@@ -103,6 +103,12 @@ def start_overdue(job, now, began):
     return started_at(job) is None and (now - began).total_seconds() > START_SECONDS
 
 
+def started_late(job, began):
+    """True when the warm leg started more than START_SECONDS after `began` (this script's start)."""
+    started = started_at(job)
+    return started is not None and (started - began).total_seconds() > START_SECONDS
+
+
 def gave_up(job, now):
     """True once GIVE_UP_SECONDS have passed since the warm leg started."""
     started = started_at(job)
@@ -167,6 +173,9 @@ def main():
     while True:
         jobs = gh(jobs_url) or {}
         job = warm_job(jobs.get('jobs', []))
+        if started_late(job, began):
+            print(f'::error::the cache warm leg did not start within {START_SECONDS // 60} minutes; nothing deleted')
+            return 1
         if job and saving(job):
             break
         if job is None:
