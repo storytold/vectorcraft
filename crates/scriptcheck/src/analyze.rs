@@ -647,6 +647,12 @@ struct Analyzer<'s, 'a, 'l> {
     /// What the receiver before the last `[` read defines in [`Analyzer::writers`], 0 for a receiver
     /// that is not such a variable.
     index_receiver: u8,
+    /// The variables that may get another value when code read elsewhere runs: assigned inside a
+    /// function body that does not declare them, or as a property of `this` ([`Analyzer::reassigned_later`]).
+    /// None of them joins [`Analyzer::writers`].
+    later: HashSet<String>,
+    /// `later` ran out of room: no variable joins [`Analyzer::writers`].
+    later_full: bool,
     /// This file or what the scan started with gives names values the analysis doesn't read
     /// ([`Declared::unsure`]): no object counts as a Folder object whatever the path names.
     unsure: bool,
@@ -727,6 +733,8 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             objects: vec![],
             closed: None,
             index_receiver: 0,
+            later: HashSet::new(),
+            later_full: false,
             unsure: known.unsure || declared.unsure,
             own_names: HashSet::new(),
             scopes: vec![],
@@ -1417,8 +1425,17 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             // A name after `.`, `..`, `.@`, `::` or `@` is a property's or an attribute's; any other
             // name before `=` is a variable, at the start of a statement or inside an expression.
             if !member_mark(h1) && !is(h1, "@") {
+                if !self.scopes.is_empty() && !self.declared_in_body(name.text) {
+                    self.reassigned_later(name.text);
+                }
                 self.assign = Some(Assign { name: name.text.to_string(), after_new: false });
             }
+        }
+        if let Some((name, _)) = self.updated(t)
+            && !self.scopes.is_empty()
+            && !self.declared_in_body(name)
+        {
+            self.reassigned_later(name);
         }
         match self.updated(t) {
             // The value on the right is read at this depth, and the name holds nothing the check
@@ -1435,10 +1452,32 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn settle_literal(&mut self, t: &Sig<'s>) {
         if let Some((name, bits)) = self.closed.take()
             && (t.is(";") || t.is(",") || (t.nl && !goes_on_with(t)))
+            && !self.later_full
+            && !self.later.contains(&name)
             && (self.writers.contains_key(&name) || self.acc.room(self.writers.len()))
         {
             self.writers.insert(name, bits);
         }
+    }
+
+    /// `name` may get another value when code read elsewhere runs: a function body assigns it without
+    /// declaring it, and the function may be called before or after any line, or it is assigned as a
+    /// property of `this`. Its object literal's methods are no longer known, now or later.
+    fn reassigned_later(&mut self, name: &str) {
+        self.writers.remove(name);
+        if !self.later.contains(name) {
+            if self.acc.room(self.later.len()) {
+                self.later.insert(name.to_string());
+            } else {
+                self.later_full = true;
+            }
+        }
+    }
+
+    /// Whether `name` is declared in a function body this token is inside (`var name`, `function
+    /// name`, a parameter).
+    fn declared_in_body(&self, name: &str) -> bool {
+        self.scopes.iter().any(|s| s.saved.get(name).is_some_and(|v| v.local))
     }
 
     /// `t` in an object literal assigned to a variable, `before` the bracket depth before `t`: a single

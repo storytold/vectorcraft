@@ -2935,7 +2935,8 @@ other files through `$`:
   format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with
   `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
   visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
-  when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
+  when the script's folders refuse one of those files, none of them is written; a write that fails once the
+  first file is in place leaves the files written before it. A listed option that is not mapped is accepted at its help page's default, and any other value throws
   an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`. A property the help
   pages do not list throws an error that names it (`PDFFileOptions` also accepts its read-only `typename` and
   `parent`), and an `undefined` one is left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
@@ -2956,7 +2957,8 @@ other files through `$`:
   undo step. With unsaved changes, `close` closes without them with `SaveOptions.DONOTSAVECHANGES`;
   `SaveOptions.SAVECHANGES` first saves them to the document's file with `file.saveAs`, in the format the document
   was last saved in and after the same write-access check of the path as `saveAs`, and throws an error
-  and leaves the document open when the document has no file (a converted or recovered document included); and
+  and leaves the document open when the document has no file (a converted or recovered document included) or when
+  its last save named some of its artboards, without writing anything; and
   `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws an error and leaves the document open, since a script cannot
   show the prompt. A bad value throws an error before anything is written.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)

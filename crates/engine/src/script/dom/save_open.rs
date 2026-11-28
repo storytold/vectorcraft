@@ -896,12 +896,29 @@ const UNSAVED_CHANGES: &str =
 const NO_FILE_TO_SAVE: &str =
     "the document has unsaved changes and no file to save them to: save it with saveAs first, or close with SaveOptions.DONOTSAVECHANGES";
 
+/// The error `close(SaveOptions.SAVECHANGES)` gives for a document with unsaved changes whose
+/// last save named some of its artboards: saving with those options again could leave changes out.
+const SAVES_SOME_ARTBOARDS: &str =
+    "the document was last saved with some of its artboards named: save it with saveAs first, or close with SaveOptions.DONOTSAVECHANGES";
+
+/// Whether the options `st` was last saved with name artboards (`artboard`, `artboards`, or a
+/// `range` other than all of them), so that a save with them may write only some of the artboards.
+fn picks_artboards(st: &crate::doc_state::DocState) -> bool {
+    let options = crate::cmd::fileio::remembered_save_options(st);
+    crate::cmd::fileio::ARTBOARD_PARAMS.iter().any(|k| match options.get(*k) {
+        None | Some(Value::Null) => false,
+        Some(Value::String(r)) if *k == "range" => !(r.trim().is_empty() || r.trim().eq_ignore_ascii_case("all")),
+        Some(_) => true,
+    })
+}
+
 /// `document.close(saveOptions?)`: `file.close` of the document. A document without unsaved
 /// changes closes with any `SaveOptions`. With unsaved changes, `SaveOptions.DONOTSAVECHANGES`
 /// closes it without them; `SaveOptions.SAVECHANGES` saves them to the document's file with
 /// `file.saveAs` in the format the document was last saved in, after the write-access check `saveAs` makes of
 /// the path, and then closes it, and throws [`NO_FILE_TO_SAVE`]
-/// for a document that has no file, a converted or recovered one included; and
+/// for a document that has no file, a converted or recovered one included, and
+/// [`SAVES_SOME_ARTBOARDS`] before writing when the document's last save named some of its artboards; and
 /// `SaveOptions.PROMPTTOSAVECHANGES`, the default, throws [`UNSAVED_CHANGES`], since a script
 /// cannot show the prompt.
 fn doc_close(h: &Host, a: &[Data]) -> Answer {
@@ -910,13 +927,16 @@ fn doc_close(h: &Host, a: &[Data]) -> Answer {
         Some(d) => member(d, "SaveOptions", &["DONOTSAVECHANGES", "PROMPTTOSAVECHANGES", "SAVECHANGES"], "saveOptions")?,
         None => "PROMPTTOSAVECHANGES",
     };
-    let (dirty, file, format) =
-        super::with_doc(h, doc, |_, st| (st.is_dirty(), st.path.clone().filter(|_| !st.converted && !st.recovered), st.format));
+    let (dirty, file, format, picked) =
+        super::with_doc(h, doc, |_, st| (st.is_dirty(), st.path.clone().filter(|_| !st.converted && !st.recovered), st.format, picks_artboards(st)));
     if dirty {
         match how {
             "DONOTSAVECHANGES" => {}
             "SAVECHANGES" => {
                 let path = file.ok_or_else(|| HostError::Error(NO_FILE_TO_SAVE.into()))?;
+                if picked {
+                    return Err(HostError::Error(SAVES_SOME_ARTBOARDS.into()));
+                }
                 // A refusal names the document, as `fullName` does when the read roots hide its file.
                 let name = super::with_doc(h, doc, |_, st| st.title());
                 let real = h.disk.borrow().save_target(&path).map_err(|m| refused(m, &name))?;

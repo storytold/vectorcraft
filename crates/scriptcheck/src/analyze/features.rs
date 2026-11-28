@@ -376,9 +376,24 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// `local[k] = w`, `delete local.saveAs`).
     fn writer_use(&mut self, t: &Sig<'s>) {
         let [h0, h1, h2, h3] = self.h;
-        let writer = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| s.filter(|s| self.writer_bits(Some(*s), before) != 0).map(|s| s.text);
         let changes = t.kind == T::Punct && (t.text == "=" || COMPOUND.contains(&t.text) || matches!(t.text, "++" | "--"));
         let key = t.is(":") && (is(h1, "{") || is(h1, ","));
+        // `this.local = …` or `this['local'] = …`: `this` is the global object in the global code and in a
+        // function called without a receiver (ECMA-262 3rd edition, sections 10.2.1 and 10.2.3), so the
+        // global variable of that name may get another value.
+        if changes {
+            let global = if is(h1, ".") && word(h2, "this") {
+                h0.filter(|s| s.kind == T::Ident).map(|s| s.text.to_string())
+            } else if is(h0, "]") && is(h2, "[") && word(h3, "this") {
+                h1.filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 64))
+            } else {
+                None
+            };
+            if let Some(name) = global {
+                self.reassigned_later(&name);
+            }
+        }
+        let writer = |s: Option<Sig<'s>>, before: Option<Sig<'s>>| s.filter(|s| self.writer_bits(Some(*s), before) != 0).map(|s| s.text);
         let escaped = if word(h0, "delete") {
             // `delete local…`
             writer(Some(*t), h0)

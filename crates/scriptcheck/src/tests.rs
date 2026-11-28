@@ -664,6 +664,46 @@ fn only_a_whole_var_value_makes_save_as_the_scripts_own() {
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 9, 11, 13, 14, 17][..]));
 }
 
+/// A function body read before the literal that assigns its variable without declaring it may run
+/// after the literal, so the literal's `saveAs` keeps reporting the write; a body that declares the
+/// name assigns its own variable.
+#[test]
+fn a_function_read_earlier_that_assigns_the_variable_keeps_save_as_writing() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "function choose() { d = app.activeDocument; }\n",
+        "var d = {saveAs: function () {}};\n",
+        "choose(); d.saveAs(f);\n",
+        "function bump() { e++; }\n",
+        "var e = {saveAs: function () {}};\n",
+        "e.saveAs(f);\n",
+        "function own() { var g; g = app.activeDocument; }\n",
+        "var g = {saveAs: function () {}};\n",
+        "g.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7][..]));
+}
+
+/// Assigning a property of `this`, the global object in the global code and in a function called
+/// without a receiver, may give the global variable of that name another value, before or after
+/// its literal.
+#[test]
+fn assigning_a_property_of_this_keeps_save_as_writing() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = {saveAs: function () {}};\n",
+        "this.d = app.activeDocument;\n",
+        "d.saveAs(f);\n",
+        "function swap() { this['e'] = app.activeDocument; }\n",
+        "var e = {saveAs: function () {}};\n",
+        "swap(); e.saveAs(f);\n",
+        "var g = {saveAs: function () {}};\n",
+        "this.other = 1;\n",
+        "g.saveAs(f);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7][..]));
+}
+
 /// A `saveAs` key's value is a method of the script's own only when the whole value is one function
 /// expression: a value that goes on after the function's body, and a literal inside another, leave
 /// `saveAs` writing the file. A literal given to a function body's own variable at the end of the body

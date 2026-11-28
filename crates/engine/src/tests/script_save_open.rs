@@ -208,7 +208,7 @@ fn a_save_writes_nothing_when_one_of_its_files_is_refused() {
 }
 
 /// When the writer a save is given does not check the file access itself, a save of several files
-/// still writes none of them after the refused one.
+/// whose file access refuses one of them hands none of them to the writer.
 #[test]
 fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
     use crate::cmd::fileio::{SaveMode, save_job, save_plan};
@@ -247,7 +247,7 @@ fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
     });
     assert!(r.is_err(), "{r:?}");
     let refused = refused.unwrap();
-    assert_eq!(written, std::slice::from_ref(&refused), "only the refused file went to the writer");
+    assert_eq!(written, Vec::<String>::new(), "no file went to the writer, the refused one ({refused}) included");
     let mut perms = std::fs::metadata(&refused).unwrap().permissions();
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
@@ -722,7 +722,46 @@ fn closing_with_save_changes_keeps_the_documents_format() {
     );
     let bytes = std::fs::read(dir.join("p.svg")).unwrap_or_default();
     assert!(bytes.starts_with(b"%PDF"), "the save on close keeps the PDF format");
+    let pdf = vectorcraft_pdf::import(&bytes).unwrap();
+    let mut sizes = vec![];
+    for l in &pdf.layers {
+        l.walk(&mut |n| sizes.extend(n.geometric_bounds().map(|b| (b.width(), b.height()))));
+    }
+    let near = |(w, h): (f64, f64), (x, y): (f64, f64)| (w - x).abs() < 0.01 && (h - y).abs() < 0.01;
+    assert!(sizes.iter().any(|&s| near(s, (5.0, 5.0))), "the file holds the rectangle drawn after the first save: {sizes:?}");
+    assert!(sizes.iter().any(|&s| near(s, (50.0, 20.0))), "and the first one: {sizes:?}");
     assert!(s.documents().is_empty());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// `close(SaveOptions.SAVECHANGES)` on a document whose last save named some of its artboards
+/// throws before writing and leaves the document open, so no change is left out of its file.
+#[test]
+fn closing_with_save_changes_refuses_a_save_of_some_artboards() {
+    let base = folder("closerange");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    let out = logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var d = app.documents.add(DocumentColorSpace.RGB, 200, 100);\n\
+             vc.run('artboard.new', {{x: 300, y: 0, width: 60, height: 80}});\n\
+             var o = new PDFSaveOptions(); o.artboardRange = '2'; d.saveAs(new File({d} + '/r.pdf'), o);\n\
+             vc.run('shape.rectangle', {{x: 20, y: 20, width: 5, height: 5}});\n\
+             var e = ''; try {{ d.close(SaveOptions.SAVECHANGES); }} catch (x) {{ e = String(x); }} vc.log([e, app.documents.length]);"
+        ),
+    );
+    assert!(out[0][0].as_str().unwrap().contains("some of its artboards"), "{}", out[0]);
+    assert_eq!(out[0][1], json!(1), "the document stays open");
+    let pdf = vectorcraft_pdf::import(&std::fs::read(dir.join("r.pdf")).unwrap()).unwrap();
+    let mut drawn = 0;
+    for l in &pdf.layers {
+        l.walk(&mut |n| drawn += usize::from(n.geometric_bounds().is_some_and(|b| (b.width() - 5.0).abs() < 0.01)));
+    }
+    assert_eq!(drawn, 0, "the file is left as the first save wrote it");
+    assert!(s.active().unwrap().is_dirty(), "the change is still unsaved");
     let _ = std::fs::remove_dir_all(base);
 }
 
