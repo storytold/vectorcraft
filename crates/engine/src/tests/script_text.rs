@@ -299,8 +299,10 @@ fn bad_text_paint_is_refused_without_a_change() {
 
 #[test]
 fn hidden_or_locked_type_is_not_edited() {
-    let (mut s, id) = doc_with("abc");
-    let (runs, text) = (paints(&s, id), plain(&s, id));
+    let state = |s: &Session, id: NodeId| match &s.active().unwrap().doc.node(id).unwrap().kind {
+        NodeKind::Text(t) => (paints(s, id), plain(s, id), sizes(s, id), t.para_at(0).justify),
+        _ => panic!("not text"),
+    };
     for hide in ["t.locked = true;", "t.hidden = true;"] {
         for edit in [
             "r.characters[1].fillColor = red;",
@@ -309,14 +311,17 @@ fn hidden_or_locked_type_is_not_edited() {
             "r.characters.add('!');",
             "r.justification = Justification.CENTER;",
         ] {
+            // Each case starts from a fresh frame, so the hidden cases test a frame that is only hidden.
+            let (mut s, id) = doc_with("abc");
+            let before = state(&s, id);
             let e = failure(
                 &mut s,
                 &format!("var t = app.activeDocument.textFrames[0], r = t.textRange, red = new RGBColor(); red.red = 255; {hide} {edit}"),
             );
             assert!(e.contains("Cannot edit TextFrame"), "{hide} {edit}: {e}");
+            assert_eq!(state(&s, id), before, "{hide} {edit}");
         }
     }
-    assert_eq!((paints(&s, id), plain(&s, id)), (runs, text));
 }
 
 #[test]
@@ -605,7 +610,7 @@ fn collections_of_text_add_words_characters_and_paragraphs() {
     }
     // Empty contents add nothing; bad arguments throw before anything changes.
     let (mut s, id) = doc_with("ab");
-    s.execute("text.create", &json!({"x": 20, "y": 200, "text": "other", "size": 12})).unwrap();
+    let other = NodeId(s.execute("text.create", &json!({"x": 20, "y": 200, "text": "other", "size": 12})).unwrap()["id"].as_u64().unwrap());
     let before = undo_steps(&s);
     let out = log(&mut s, "var n = app.activeDocument.textFrames[0].words.add(''); vc.log([n.length, n.start]);");
     assert_eq!(out, vec![json!([0, 5])]);
@@ -620,7 +625,35 @@ fn collections_of_text_add_words_characters_and_paragraphs() {
         assert!(e.contains(want), "{call}: {e}");
     }
     assert_eq!(undo_steps(&s), before);
+    assert_eq!(plain(&s, other), "other");
     assert_eq!(plain(&s, id), "ab");
+    // A range of a frame that was removed is stale, not of the wrong class.
+    let e = failure(&mut s, "var f = app.activeDocument.textFrames, b = f[0], a = f[1], r = b.textRange; b.remove(); a.characters.add('x', r);");
+    assert!(e.contains("Stale text range"), "{e}");
+    assert_eq!(plain(&s, id), "ab");
+}
+
+/// Type on a locked artboard stays: `removeAll()` throws and deletes nothing, as
+/// `pathItems.removeAll()` does.
+#[test]
+fn text_frames_remove_all_refuses_type_on_a_locked_artboard() {
+    let (mut s, id) = doc_with("ab");
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let steps = undo_steps(&s);
+    let e = failure(&mut s, "app.activeDocument.textFrames.removeAll();");
+    assert!(e.contains("cannot delete objects on a locked artboard") && e.contains(&id.0.to_string()), "{e}");
+    assert_eq!(plain(&s, id), "ab");
+    assert_eq!(undo_steps(&s), steps);
+    lock(&mut s, false);
+    log(&mut s, "app.activeDocument.textFrames.removeAll();");
+    assert_eq!(log(&mut s, "vc.log(app.activeDocument.textFrames.length);"), vec![json!(0)]);
 }
 
 #[test]
