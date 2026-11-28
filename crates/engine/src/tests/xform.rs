@@ -1235,6 +1235,166 @@ fn distort_names_the_horizon_and_an_unchanged_distort_of_a_distorted_image_recor
     assert_eq!(undo_len(&s), undo);
 }
 
+/// A type object or (`symbol`) a symbol instance made of a 100 × 60 rectangle, selected alone.
+fn type_or_instance(s: &mut Session, symbol: bool) -> NodeId {
+    let r = if symbol {
+        rect(s, 20.0, 30.0, 100.0, 60.0);
+        s.execute("symbol.new", &json!({"name": "Box"})).unwrap()
+    } else {
+        s.execute("text.create", &json!({"x": 20, "y": 80, "text": "Distort", "size": 40})).unwrap()
+    };
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    id
+}
+
+/// Where the corners of `id`'s box are drawn (top left, top right, bottom right, bottom left).
+fn drawn_corners(s: &Session, id: NodeId) -> [Point; 4] {
+    let doc = &s.doc().unwrap().doc;
+    doc.node(id).unwrap().drawn_corners(&doc.symbol_boxes()).unwrap()
+}
+
+fn assert_near_corners(got: [Point; 4], want: [Point; 4]) {
+    for (g, w) in got.iter().zip(want) {
+        assert!(g.distance(w) < 1e-6, "{got:?} against {want:?}");
+    }
+}
+
+/// Perspective Distort and Free Distort put the corners of a type object's box and of a symbol
+/// instance's box exactly on the handles, in one undo step: the object stays type or an instance,
+/// drawn through the warp, it is bounded by those corners, a move takes them along, and undo gives
+/// back the flat object.
+#[test]
+fn distort_puts_the_corners_of_type_and_symbol_instances_on_the_handles() {
+    // Perspective Distort, then Free Distort, as fractions of the box.
+    let quads = [[(0.4, 0.0), (0.6, 0.0), (1.0, 1.0), (0.0, 1.0)], [(0.1, 0.05), (0.9, 0.0), (1.2, 1.1), (0.0, 1.0)]];
+    for symbol in [false, true] {
+        for quad in quads {
+            let mut s = session();
+            let id = type_or_instance(&mut s, symbol);
+            let b = bounds(&s, id);
+            let flat = [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)].map(|(x, y)| Point::new(x, y));
+            assert_near_corners(drawn_corners(&s, id), flat);
+            let want = quad.map(|(u, v)| Point::new(b.x0 + u * b.width(), b.y0 + v * b.height()));
+            let undo = undo_len(&s);
+            s.execute("object.distort", &json!({ "corners": want.map(|p| [p.x, p.y]) })).unwrap();
+            assert_eq!(undo_len(&s), undo + 1);
+            assert_near_corners(drawn_corners(&s, id), want);
+            let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+            assert!(matches!(n.kind, vectorcraft_doc::NodeKind::Text(_) | vectorcraft_doc::NodeKind::SymbolInstance { .. }), "{:?}", n.kind);
+            assert!(n.projection().is_some());
+            let got = bounds(&s, id);
+            let (xs, ys) = (want.map(|p| p.x), want.map(|p| p.y));
+            let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+            assert!(
+                near(got.x0, xs.iter().copied().fold(f64::MAX, f64::min)) && near(got.x1, xs.iter().copied().fold(f64::MIN, f64::max)),
+                "{got:?}"
+            );
+            assert!(
+                near(got.y0, ys.iter().copied().fold(f64::MAX, f64::min)) && near(got.y1, ys.iter().copied().fold(f64::MIN, f64::max)),
+                "{got:?}"
+            );
+            s.execute("object.move", &json!({"dx": 10, "dy": 20})).unwrap();
+            assert_near_corners(drawn_corners(&s, id), want.map(|p| p + Vec2::new(10.0, 20.0)));
+            // Distorted type opens flat in Edit Text.
+            assert_eq!(s.execute("perspective.editText", &json!({"id": id.0})).is_ok(), !symbol);
+            if !symbol {
+                assert!(s.doc().unwrap().doc.node(id).unwrap().projection().is_none());
+                s.execute("object.exitIsolation", &json!({})).unwrap();
+                assert_near_corners(drawn_corners(&s, id), want.map(|p| p + Vec2::new(10.0, 20.0)));
+            }
+            s.execute("edit.undo", &json!({})).unwrap();
+            s.execute("edit.undo", &json!({})).unwrap();
+            if !symbol {
+                s.execute("edit.undo", &json!({})).unwrap();
+            }
+            assert!(s.doc().unwrap().doc.node(id).unwrap().projection().is_none());
+            assert_near_corners(drawn_corners(&s, id), flat);
+        }
+    }
+}
+
+/// Distorted together with paths, the corners of a type object's box and of a symbol instance's
+/// box follow the same warp as the anchors of a path drawn on that box.
+#[test]
+fn distort_moves_type_and_symbol_instances_with_a_path_as_one() {
+    for symbol in [false, true] {
+        let mut s = session();
+        let id = type_or_instance(&mut s, symbol);
+        let b = bounds(&s, id);
+        // A path on the object's box, and one beside it so that the box is not the selection's.
+        let frame = rect(&mut s, b.x0, b.y0, b.width(), b.height());
+        let side = rect(&mut s, b.x1 + 50.0, b.y0 - 40.0, 80.0, 80.0);
+        s.execute("select.set", &json!({"ids": [id.0, frame.0, side.0]})).unwrap();
+        let all = s.doc().unwrap().doc.bounds_of(&[id, frame, side], false).unwrap();
+        let corners = [[all.x0 + 30.0, all.y0], [all.x1 - 10.0, all.y0 + 20.0], [all.x1 + 40.0, all.y1], [all.x0, all.y1 - 5.0]];
+        s.execute("object.distort", &json!({ "corners": corners })).unwrap();
+        let anchors = match &s.doc().unwrap().doc.node(frame).unwrap().kind {
+            vectorcraft_doc::NodeKind::Path { path, .. } => path.subpaths[0].anchors.iter().map(|a| a.p).collect::<Vec<_>>(),
+            k => panic!("not a path: {k:?}"),
+        };
+        let got = drawn_corners(&s, id);
+        // The rectangle's first anchor may be any of its corners: each drawn corner is one of them.
+        for c in got {
+            assert!(anchors.iter().any(|p| p.distance(c) < 1e-6), "{got:?} against {anchors:?}");
+        }
+    }
+}
+
+/// Corners that would carry a type object's or a symbol instance's box past the warp's horizon,
+/// or fold it over, are refused, and nothing changes.
+#[test]
+fn distort_refuses_corners_type_and_symbol_instances_cannot_follow() {
+    for symbol in [false, true] {
+        let mut s = session();
+        let id = type_or_instance(&mut s, symbol);
+        let noun = if symbol { "symbol instance" } else { "type object" };
+        let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+        // The box (0, 0)-(10, 10) widens toward its bottom so fast that the warp's horizon lies at
+        // y = 15, across the object.
+        let e =
+            s.execute("object.distort", &json!({"from": [0, 0, 10, 10], "corners": [[0, 0], [10, 0], [20, 10], [-10, 10]]})).unwrap_err().to_string();
+        assert!(e.contains(&format!("{noun} {}", id.0)) && e.contains("horizon"), "{e}");
+        let b = bounds(&s, id);
+        let folded = [[b.x0, b.y0], [b.x1, b.y1], [b.x1, b.y0], [b.x0, b.y1]];
+        let e = s.execute("object.distort", &json!({ "corners": folded })).unwrap_err().to_string();
+        assert!(e.contains(&format!("{noun} {}", id.0)) && e.contains("convex"), "{e}");
+        assert_eq!(s.doc().unwrap().doc, before);
+        assert_eq!(undo_len(&s), undo);
+        // Near the edge of the canvas, the corners still reach the handles.
+        s.execute("object.move", &json!({"dx": 0, "dy": 3.9e6})).unwrap();
+        let b = bounds(&s, id);
+        let want = [(0.4, 0.0), (0.6, 0.0), (1.0, 1.0), (0.0, 1.0)].map(|(u, v)| Point::new(b.x0 + u * b.width(), b.y0 + v * b.height()));
+        s.execute("object.distort", &json!({ "corners": want.map(|p| [p.x, p.y]) })).unwrap();
+        let got = drawn_corners(&s, id);
+        assert!(got.iter().zip(want).all(|(g, w)| g.distance(w) < 1e-3), "{got:?} against {want:?}");
+    }
+}
+
+/// Projective distort refuses type being edited flat without changing the document or history;
+/// the same warp works after Edit Text ends.
+#[test]
+fn distort_refuses_type_being_edited_flat() {
+    let mut s = session();
+    let id = type_or_instance(&mut s, false);
+    let b = bounds(&s, id);
+    let corners = [(0.2, 0.0), (0.8, 0.0), (1.0, 1.0), (0.0, 1.0)].map(|(u, v)| [b.x0 + u * b.width(), b.y0 + v * b.height()]);
+    let p = json!({"ids": [id.0], "from": [b.x0, b.y0, b.x1, b.y1], "corners": corners});
+    s.execute("object.distort", &p).unwrap();
+    s.execute("perspective.editText", &json!({"id": id.0})).unwrap();
+    let (before, undo) = (s.doc().unwrap().doc.clone(), undo_len(&s));
+    let e = s.execute("object.distort", &p).unwrap_err().to_string();
+    assert!(e.contains("object.distort") && e.contains(&format!("type object {}", id.0)) && e.contains("being edited flat in Edit Text"), "{e}");
+    assert_eq!(s.doc().unwrap().doc, before);
+    assert_eq!(undo_len(&s), undo);
+    s.execute("object.exitIsolation", &json!({})).unwrap();
+    let before = drawn_corners(&s, id);
+    let undo = undo_len(&s);
+    s.execute("object.distort", &p).unwrap();
+    assert_ne!(drawn_corners(&s, id), before);
+    assert_eq!(undo_len(&s), undo + 1);
+}
+
 /// Image info gives a distorted image's resolution at its middle, not the resolution it had
 /// before the distort.
 #[test]
