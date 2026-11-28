@@ -33,6 +33,7 @@ pub const UI_FIELDS: &[(&str, &str, &str)] = &[
     ("__smartGuides", "Smart Guides", "Smart Guides (View → Smart Guides)"),
     ("__snapToGrid", "Guides & Grid", "Snap to Grid"),
     ("__taskBar", "General", "Enable Contextual Task Bar"),
+    ("__showDiscordButton", "General", "Show the Discord button in the app bar and on Home"),
 ];
 
 /// Whether User Interface shows VectorCraft Title Bar on Every Desktop (`appTitleBar`): Linux and the
@@ -203,6 +204,7 @@ pub fn open(app: &mut VectorcraftApp, category: Option<&str>) {
     draft.set("__smartGuides", &app.ui.view.smart_guides);
     draft.set("__snapToGrid", &app.ui.view.snap_to_grid);
     draft.set("__taskBar", &app.ui.task_bar);
+    draft.set("__showDiscordButton", &app.ui.show_discord_button);
     let selected = category.and_then(|c| PREF_CATEGORIES.iter().find(|x| x.eq_ignore_ascii_case(c))).copied().unwrap_or(PREF_CATEGORIES[0]);
     // The saved delay, so OK writes the delay in use in its place.
     let mut source = draft.clone();
@@ -416,10 +418,15 @@ pub(crate) fn imported(app: &mut VectorcraftApp, touch_workspace: bool) {
 
 /// The default of each UI-only row ([`UI_FIELDS`]), by key. Enable Contextual Task Bar takes the value the current
 /// workspace was saved with, so a reset leaves the workspace as it was saved.
-fn default_ui_fields(ui: &crate::UiState) -> [(&'static str, bool); 3] {
+fn default_ui_fields(ui: &crate::UiState) -> [(&'static str, bool); 4] {
     let first = crate::UiState::default();
     let task_bar = crate::workspaces::saved_task_bar(ui);
-    [("__smartGuides", first.view.smart_guides), ("__snapToGrid", first.view.snap_to_grid), ("__taskBar", task_bar)]
+    [
+        ("__smartGuides", first.view.smart_guides),
+        ("__snapToGrid", first.view.snap_to_grid),
+        ("__taskBar", task_bar),
+        ("__showDiscordButton", first.show_discord_button),
+    ]
 }
 
 /// After `prefs.reset`, alone or as a batch step, of every category or of one: the UI-only rows ([`UI_FIELDS`]) and
@@ -448,6 +455,7 @@ fn apply_prefs_resets_to(app: &mut VectorcraftApp, mut w: Option<&mut PrefsWindo
         match key {
             "__smartGuides" => app.ui.view.smart_guides = value,
             "__snapToGrid" => app.ui.view.snap_to_grid = value,
+            "__showDiscordButton" => app.ui.show_discord_button = value,
             _ => app.ui.task_bar = value,
         }
         // The window shows the reset row, so OK keeps it.

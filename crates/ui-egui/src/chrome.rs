@@ -118,8 +118,9 @@ fn leading(ui: &mut Ui, app: &mut VectorcraftApp) {
 /// bar.
 fn trailing(ui: &mut Ui, app: &mut VectorcraftApp) {
     let safe = vectorcraft_plugins::safe_mode::active();
+    let discord = app.ui.show_discord_button;
     Row::new().gap(Gap::Item).show(ui, |ui, _| {
-        for t in Trailing::SHOWN.into_iter().filter(|t| safe || *t != Trailing::Safe) {
+        for t in Trailing::SHOWN.into_iter().filter(|t| (safe || *t != Trailing::Safe) && (discord || *t != Trailing::Discord)) {
             match t.rank() {
                 Some(rank) => {
                     Row::new().fit_rank(rank).show(ui, |ui, _| t.show(app, ui));
