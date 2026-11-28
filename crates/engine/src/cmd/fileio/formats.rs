@@ -1,6 +1,6 @@
 use super::super::unique_name;
 use super::{
-    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, hpgl, json, metafile, native, pdf, screens, svg, text,
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, cmx, dxf, eps, hpgl, json, metafile, native, pdf, screens, svg, text,
     unsupported,
 };
 
@@ -195,6 +195,20 @@ const TRANSPARENCY: FormatOption = FormatOption {
     description: "pixels under half opacity become one transparent entry (false: everything is blended over the matte)",
 };
 
+const TRANSPARENCY_DITHER: FormatOption = FormatOption {
+    name: "transparencyDither",
+    ty: "string",
+    default: "\"none\"",
+    description: "with transparency, how partly transparent pixels are split between the transparent entry and their color: none (cut at half opacity), diffusion, pattern (8×8 ordered) or noise",
+};
+
+const TRANSPARENCY_DITHER_AMOUNT: FormatOption = FormatOption {
+    name: "transparencyDitherAmount",
+    ty: "integer",
+    default: "100",
+    description: "the diffusion transparency dither's strength 0–100 (0 cuts at half opacity; more than 100 is refused)",
+};
+
 const MATTE: FormatOption = FormatOption {
     name: "matte",
     ty: "string",
@@ -235,6 +249,8 @@ const PALETTE_OPTIONS: &[FormatOption] = &[
     DITHER,
     DITHER_AMOUNT,
     TRANSPARENCY,
+    TRANSPARENCY_DITHER,
+    TRANSPARENCY_DITHER_AMOUNT,
     MATTE,
 ];
 
@@ -537,9 +553,9 @@ pub const FORMATS: &[Format] = &[
     // them.
     reader("cdr", "CDR Drawing", &["cdr"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
     reader("cdt", "CDR Template", &["cdt"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
-    // `.cmx` exchange files with 32-bit coordinates, read by `craft-cdr`; exports don't write
-    // them.
-    reader("cmx", "CMX", &["cmx"], "image/x-cmx", false),
+    // `.cmx` exchange files with 32-bit coordinates, read and written by `craft-cdr`: a page for
+    // each chosen artboard, with the art's fills and strokes in their colors.
+    Format { id: "cmx", label: "CMX", extensions: &["cmx"], mime: "image/x-cmx", read: true, write: true, raster: false, options: cmx::OPTIONS },
     // QuickDraw pictures, read by `vectorcraft_metafile::import_pict` into paths, type and images.
     reader("pict", "PICT", &["pct", "pic", "pict"], "image/x-pict", false),
 ];

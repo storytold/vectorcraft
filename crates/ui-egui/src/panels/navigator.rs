@@ -230,11 +230,12 @@ fn shifted(mut view: CanvasView, region: DRect) -> CanvasView {
     view
 }
 
-/// The `view.setZoom` params for `edited`, a view of the region's frame: the zoom as the status bar
-/// shows it (with `print` screen points to an inch at 100%, [`crate::state::print_ppi`]), and the
-/// centre back in document units.
-fn view_params(edited: &CanvasView, region: DRect, print: Option<f64>) -> Value {
-    json!({"zoom": crate::state::zoom_display_percent(edited.zoom, print), "center": [edited.center.x + region.x0, edited.center.y + region.y0]})
+/// The `view.setZoom` params for `edited`, a canvas view of the region's frame at `ui_scaling`: the
+/// zoom as the status bar shows it (with `print` screen points to an inch at 100%,
+/// [`crate::state::print_ppi`]), and the centre back in document units.
+fn view_params(edited: &CanvasView, region: DRect, print: Option<f64>, ui_scaling: f32) -> Value {
+    let zoom = crate::state::View::zoom_of_canvas(edited, ui_scaling);
+    json!({"zoom": crate::state::zoom_display_percent(zoom, print), "center": [edited.center.x + region.x0, edited.center.y + region.y0]})
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
@@ -280,13 +281,51 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         && *edited != given
     {
         let print = app.print_ppi();
-        app.run("view.setZoom", view_params(edited, region, print)).ok();
+        let scaling = app.ui_scaling();
+        app.run("view.setZoom", view_params(edited, region, print, scaling)).ok();
+    }
+    if let Some(invalid) = out.invalid_zoom {
+        app.status(invalid.message(&env));
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn navigator_reports_a_malformed_zoom_entry() {
+        assert_malformed_zoom_entry_reported(show);
+    }
+
+    #[test]
+    fn status_bar_reports_a_malformed_zoom_entry() {
+        assert_malformed_zoom_entry_reported(crate::chrome::status_bar);
+    }
+
+    fn assert_malformed_zoom_entry_reported(draw: fn(&mut VectorcraftApp, &mut Ui)) {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.view_mut().unwrap().rect = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(460.0, 260.0));
+        app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, draw);
+        panel.app().ui.status.clear();
+        panel.type_into("Zoom", "80..2");
+        {
+            let app = panel.app();
+            assert!((app.view().unwrap().zoom - 0.8).abs() < 1e-9, "applies the valid prefix");
+            assert!(app.ui.status.contains("Closest value inserted"), "reports the partial entry: {:?}", app.ui.status);
+        }
+        panel.app().ui.status.clear();
+        panel.type_into("Zoom", "200");
+        {
+            let app = panel.app();
+            assert!((app.view().unwrap().zoom - 2.0).abs() < 1e-9, "still accepts a valid entry");
+            assert!(!app.ui.status.contains("Closest value inserted"), "does not warn for a valid entry");
+        }
+    }
 
     /// A centre edit of the shifted view reaches `view.setZoom` as the document point it shows, and
     /// an unedited view's centre is shifted by the region's corner.
@@ -299,7 +338,29 @@ mod tests {
         assert_eq!((given.center.x, given.center.y), (210.0, 170.0), "the centre minus the region's corner");
         let mut edited = given;
         edited.center = (100.0, 100.0).into();
-        assert_eq!(view_params(&edited, region, None)["center"], json!([90.0, 80.0]), "the edit plus the region's corner");
+        assert_eq!(view_params(&edited, region, None, 1.0)["center"], json!([90.0, 80.0]), "the edit plus the region's corner");
+    }
+
+    /// At UI Scaling 150% the panel's zoom field shows the zoom `view.setZoom` set, and a zoom typed into it is the
+    /// zoom the view gets, as at 100%: 200% gives the view the zoom `view.setZoom` gives for 200%.
+    #[test]
+    fn the_zoom_field_sets_the_typed_zoom_at_any_ui_scaling() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.session.prefs.ui_scaling = 1.5;
+        app.view_mut().unwrap().rect = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(460.0, 260.0));
+        app.run("view.setZoom", json!({"zoom": 200})).unwrap();
+        let wanted = app.view().unwrap().zoom;
+        app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, show);
+        assert!((panel.ctx().zoom_factor() - 1.5).abs() < 1e-6, "the interface is zoomed by UI Scaling");
+        let shown = |panel: &crate::tests::panel_harness::Panel| panel.value("Zoom").unwrap_or_default();
+        assert!(shown(&panel).starts_with("100"), "the field shows the zoom view.setZoom set: {}", shown(&panel));
+        panel.type_into("Zoom", "200");
+        let zoom = panel.app().view().unwrap().zoom;
+        assert!((zoom - wanted).abs() < 1e-9, "typing 200% gives the zoom of view.setZoom 200%: {zoom}, not {wanted}");
+        assert!(shown(&panel).starts_with("200"), "the field shows the typed zoom: {}", shown(&panel));
     }
 
     /// The panel menu's rows are titled, checked and enabled as the option says, and each row's

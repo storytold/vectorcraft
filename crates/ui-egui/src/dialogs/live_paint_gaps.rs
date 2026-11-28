@@ -26,6 +26,7 @@ use crate::VectorcraftApp;
 pub const KIND: &str = "livePaintGapOptions";
 
 const CMD: &str = "livePaint.gapOptions";
+const WRONG_DOCUMENT: &str = "Gap Options can only be applied in the document this dialog was opened for.";
 /// The undo step the preview and OK make.
 const PREVIEW_LABEL: &str = "Gap Options";
 
@@ -51,20 +52,31 @@ pub(super) static SPEC: OptionSpec = OptionSpec {
 pub(crate) struct Open {
     /// The dialog the preview belongs to.
     pub id: DialogId,
+    /// The drawing and loaded contents that own the preview interaction.
+    document: (u64, u64),
     /// The preview the options run as.
     pub preview: LivePreview,
 }
 
+impl Open {
+    fn cancel(self, app: &mut VectorcraftApp) {
+        if app.session.active().is_some_and(|active| (active.uid, active.reverts) == self.document) {
+            self.preview.cancel(app);
+        }
+    }
+}
+
 /// Open Gap Options on the selected Live Paint groups, filled in from the first one's options.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let groups: Vec<u64> = app
-        .session
-        .doc()
-        .map(|d| {
-            let doc = &d.doc;
-            d.selection.objects.iter().filter(|id| doc.node(**id).is_some_and(vectorcraft_tools::builder::is_live_paint)).map(|id| id.0).collect()
-        })
-        .unwrap_or_default();
+    let active = app.session.active().ok_or("select a Live Paint group")?;
+    let (document, reverts) = (active.uid, active.reverts);
+    let groups: Vec<u64> = active
+        .selection
+        .objects
+        .iter()
+        .filter(|id| active.doc.node(**id).is_some_and(vectorcraft_tools::builder::is_live_paint))
+        .map(|id| id.0)
+        .collect();
     let Some(&first) = groups.first() else { return Err("select a Live Paint group".into()) };
     let info = app.session.execute("livePaint.info", &json!({ "group": first })).map_err(|e| e.to_string())?;
     let o = &info["gapOptions"];
@@ -75,8 +87,13 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let fields =
         [("detect", o["detect"].clone()), ("size", json!(size)), ("custom", custom), ("color", o["color"].clone()), ("closeGaps", json!(false))];
     let values = Map::from_iter(fields.map(|(key, value)| (key.to_owned(), value)));
-    option_form::open(app, &SPEC, values, json!({ "ids": groups })).ok_or("no window")?;
+    option_form::open(app, &SPEC, values, json!({ "ids": groups, "document": document, "reverts": reverts })).ok_or("no window")?;
     Ok(Value::Null)
+}
+
+fn original_document(app: &VectorcraftApp, extra: &Value) -> Option<(u64, u64)> {
+    let document = (extra["document"].as_u64()?, extra["reverts"].as_u64()?);
+    app.session.active().filter(|active| (active.uid, active.reverts) == document).map(|_| document)
 }
 
 /// `livePaint.gapOptions` parameters from the values and the groups in `extra`.
@@ -111,24 +128,49 @@ fn body(ui: &mut egui::Ui, rows: &mut Rows<'_>) {
 
 /// OK: keep the previewed options as one undo step; with no preview running they run as one.
 fn run(app: &mut VectorcraftApp, values: &Map<String, Value>, extra: &Value) -> Result<Value, String> {
-    let preview = app.object_dialogs.gaps.take().map_or_else(LivePreview::default, |open| open.preview);
+    let document = original_document(app, extra).ok_or_else(|| {
+        if app.session.active().is_some_and(|active| extra["document"].as_u64() == Some(active.uid)) {
+            tl!("The document was reverted. Reopen this dialog to continue.").to_owned()
+        } else {
+            tl!(WRONG_DOCUMENT).to_owned()
+        }
+    })?;
+    let preview = app.object_dialogs.gaps.take().filter(|open| open.document == document).map_or_else(LivePreview::default, |open| open.preview);
     preview.commit(app, CMD, params(values, extra))
 }
 
 /// The dialog closed without OK: roll the preview back.
 fn cancelled(app: &mut VectorcraftApp) {
     if let Some(open) = app.object_dialogs.gaps.take() {
-        open.preview.cancel(app);
+        open.cancel(app);
     }
 }
 
 /// Runs the open Gap Options' preview as its options stand, once per frame after the shell pass: with Preview on the
 /// options apply to the groups, off they are rolled back; the gaps a new preview finds are kept for [`overlays`].
 /// Nothing runs while an OK waits for its answer, which keeps or refuses the preview that is running.
-pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
+pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let shown = dialogs.with(|host| {
-        let form = host.get::<OptionForm>().filter(|form| form.is(KIND))?;
+        let form = host.get_mut::<OptionForm>().filter(|form| form.is(KIND))?;
+        let source = form.extra["document"].as_u64()?;
+        if !app.session.documents().iter().any(|doc| doc.uid == source) {
+            host.cancel::<OptionForm>(ctx);
+            return None;
+        }
+        let document = original_document(app, &form.extra);
+        let paused = document.is_none();
+        if form.preview_paused != paused {
+            form.preview_paused = paused;
+            if !paused && form.held.refusal().is_some_and(|(reason, _)| reason.as_str() == tl!(WRONG_DOCUMENT)) {
+                form.held.clear_refusal();
+            }
+            ctx.request_repaint();
+        }
+        let Some(document) = document else {
+            form.previewed = Value::Null;
+            return None;
+        };
         if !form.held.state().is_none_or(|state| matches!(state, HeldOk::Refused(_))) {
             return None;
         }
@@ -137,17 +179,17 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
         if form.values.get("color").and_then(Value::as_str).is_some_and(has_alpha) {
             params["color"] = Value::Null;
         }
-        Some((form.id(), params, form.preview))
+        Some((form.id(), document, params, form.preview))
     });
-    let Some((id, params, on)) = shown else { return };
+    let Some((id, document, params, on)) = shown else { return };
     // A preview of another dialog is rolled back before this one starts its own.
     let mut open = match app.object_dialogs.gaps.take() {
-        Some(open) if open.id == id => open,
+        Some(open) if open.id == id && open.document == document => open,
         stale => {
             if let Some(stale) = stale {
-                stale.preview.cancel(app);
+                stale.cancel(app);
             }
-            Open { id, preview: LivePreview::default() }
+            Open { id, document, preview: LivePreview::default() }
         }
     };
     let ran = open.preview.run(app, on, PREVIEW_LABEL, CMD, &params);
@@ -177,6 +219,7 @@ pub(crate) fn overlays(app: &VectorcraftApp) -> Vec<Overlay> {
     let Some(dialogs) = app.dialogs() else { return vec![] };
     let shown = dialogs.with(|host| {
         let form = host.get::<OptionForm>().filter(|form| form.is(KIND) && form.preview)?;
+        original_document(app, &form.extra)?;
         Some((form.previewed.clone(), form.values.get("color").and_then(Value::as_str)?.to_owned()))
     });
     let Some((gaps, color)) = shown else { return vec![] };
@@ -234,6 +277,109 @@ mod tests {
         let p = app.run("path.create", json!({ "anchors": anchors })).unwrap();
         app.run("select.set", json!({"ids": [p["id"]]})).unwrap();
         app.run("livePaint.make", json!({})).unwrap()["id"].as_u64().unwrap()
+    }
+
+    fn open_with_matching_groups(app: &mut VectorcraftApp) -> u64 {
+        let group = gapped_group(app);
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        assert_eq!(gapped_group(app), group, "the new document reuses the group ID");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        set(app, "detect", json!(true)).unwrap();
+        group
+    }
+
+    #[test]
+    fn gap_confirmation_stays_with_its_document() {
+        let mut app = app();
+        let group = open_with_matching_groups(&mut app);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        assert!(!press_ok(&mut app), "the unrelated group cannot take the edit");
+        assert_eq!(options(&app, group), GapOptions::default());
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        pump_all(&mut app);
+        assert!(held(&app).is_none(), "the stale refusal clears on the original tab");
+        assert!(press_ok(&mut app), "the original group's edit can be retried");
+        assert!(options(&app, group).detect);
+    }
+
+    #[test]
+    fn closing_the_original_document_dismisses_gap_options() {
+        let mut app = app();
+        let group = open_with_matching_groups(&mut app);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        assert!(app.session.close_document(0));
+        pump_all(&mut app);
+        assert!(!is_open(&app));
+        assert_eq!(options(&app, group), GapOptions::default());
+    }
+
+    #[test]
+    fn gap_preview_disappears_in_another_document_and_resumes_on_return() {
+        let mut app = app();
+        let group = open_with_matching_groups(&mut app);
+        set(&app, "preview", json!(true)).unwrap();
+        pump_all(&mut app);
+        assert!(options(&app, group).detect);
+        assert!(!overlays(&app).is_empty());
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let unrelated_overlays = overlays(&app);
+        pump_all(&mut app);
+        let paused = |app: &VectorcraftApp| app.dialogs().unwrap().with(|host| host.get::<OptionForm>().unwrap().preview_paused);
+        assert!(paused(&app));
+        assert_eq!(fields(&app)["preview"], json!(true));
+        assert_eq!(options(&app, group), GapOptions::default());
+        assert!(!app.session.in_interaction());
+        assert!(unrelated_overlays.is_empty());
+        assert!(overlays(&app).is_empty());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        pump_all(&mut app);
+        assert!(!paused(&app));
+        assert!(options(&app, group).detect);
+        assert!(!overlays(&app).is_empty());
+        cancel(&mut app);
+        assert_eq!(options(&app, group), GapOptions::default());
+    }
+
+    #[test]
+    fn gap_preview_and_ok_do_not_edit_live_paint_restored_by_revert() {
+        let mut app = app();
+        let dir = vectorcraft_testkit::TempDir::new("live-paint-gap-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let group = gapped_group(&mut app);
+        let saved = options(&app, group);
+        app.run("file.saveAs", json!({"path": dir.join("Live Paint.vectorcraft")})).unwrap();
+        app.run("shape.rectangle", json!({"x": 140, "y": 140, "width": 20, "height": 20})).unwrap();
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        set(&app, "detect", json!(true)).unwrap();
+        set(&app, "preview", json!(true)).unwrap();
+        pump_all(&mut app);
+        assert!(options(&app, group).detect);
+
+        let source = app.session.active().unwrap();
+        let (uid, reverts) = (source.uid, source.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let current = app.session.active().unwrap();
+        assert_eq!((current.uid, current.reverts), (uid, reverts + 1));
+        let undo = current.history.undo.len();
+        pump_all(&mut app);
+        assert_eq!(options(&app, group), saved);
+        assert!(overlays(&app).is_empty());
+        assert!(!press_ok(&mut app));
+        assert_eq!(options(&app, group), saved);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        cancel(&mut app);
+
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        app.run("ui.livePaintGapOptions", json!({})).unwrap();
+        set(&app, "detect", json!(true)).unwrap();
+        assert!(press_ok(&mut app));
+        assert!(options(&app, group).detect);
     }
 
     #[test]

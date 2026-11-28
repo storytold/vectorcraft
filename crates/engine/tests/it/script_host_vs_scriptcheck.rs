@@ -37,6 +37,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
@@ -50,6 +51,8 @@ const INSIDE: &[(&str, &str)] = &[
     ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
+    ("ExternalObject.", "length prototype search"),
+    ("ExternalObject.prototype.", "constructor terminate"),
     (
         "$.",
         "about appEncoding appEncoding= bp build buildDate colorPicker decimalPoint engineName error fileName flags \
@@ -78,13 +81,13 @@ const INSIDE: &[(&str, &str)] = &[
         "activeDocument activeDocument= app Application Artboard Artboards CompoundPathItem CompoundPathItems \
          CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace DocumentPreset DocumentPresetType \
          DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents Documents ElementPlacement \
-         GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits selection selection= ZOrderMethod",
+         GroupItem GroupItems Layer Layers PageItem PageItems RulerUnits selection selection= Tag Tags ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
-        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection selection= toString typename",
+        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents executeMenuCommand \
+         getIsFileOpen selection selection= toString typename",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -101,7 +104,7 @@ const INSIDE: &[(&str, &str)] = &[
         "Document.prototype.",
         "activeLayer activeLayer= artboards close close= compoundPathItems constructor convertCoordinate \
          documentColorSpace groupItems height layers name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= textFrames textFrames= toString \
+         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
          typename views views= width",
     ),
     ("Layer.", "prototype"),
@@ -147,10 +150,14 @@ const INSIDE: &[(&str, &str)] = &[
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
          controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer left \
          left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
-         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= toString top top= transform \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
+    ("Tags.", "prototype"),
+    ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Tag.", "prototype"),
+    ("Tag.prototype.", "constructor name name= parent remove typename value value="),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
     ("DocumentColorSpace.", "CMYK RGB"),

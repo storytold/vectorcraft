@@ -92,25 +92,26 @@ fn pdf() -> Vec<u8> {
     vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap()
 }
 
-/// Poll each frame until every file read for Place has been placed (at most 60 s).
+/// Waits for each file read for Place in turn and polls once it is read, until every one has been
+/// placed.
 fn placed(app: &mut VectorcraftApp) {
-    let t0 = std::time::Instant::now();
-    while !app.placing.pending.is_empty() && t0.elapsed().as_secs() < 60 {
+    while !app.placing.pending.is_empty() {
+        let waiting = app.placing.pending.len();
+        wait(app);
         poll(app);
-        std::thread::yield_now();
+        assert!(app.placing.pending.len() < waiting, "the file that was read is placed");
     }
-    assert!(app.placing.pending.is_empty(), "read within 60 s");
 }
 
 /// Waits until the read that was started has finished on its job (the held reader was let go).
 fn read_finished(app: &VectorcraftApp) {
-    let t0 = std::time::Instant::now();
-    while !(app.placing.reading[1].load(std::sync::atomic::Ordering::SeqCst) >= 1
-        && app.placing.reading[0].load(std::sync::atomic::Ordering::SeqCst) == 0)
-    {
-        assert!(t0.elapsed().as_secs() < 60, "read within 60 s");
-        std::thread::yield_now();
-    }
+    app.placing.reading.wait_ended();
+}
+
+/// Waits until the first file read for Place has been read, then polls once.
+fn poll_read(app: &mut VectorcraftApp) {
+    wait(app);
+    poll(app);
 }
 
 /// What a place changes: the active document (without the second it was made in), its
@@ -250,7 +251,8 @@ impl ClipboardBackend for OtherApps {
         let hold = if self.holds.is_empty() { None } else { self.holds.remove(0) };
         Ok(Some(Box::new(move || {
             if let Some(hold) = hold {
-                let _ = hold.recv_timeout(std::time::Duration::from_secs(10));
+                // A send lets the read go on, and so does a sender dropped without one.
+                let _ = hold.recv();
             }
             *thread.lock().unwrap() = std::thread::current().name().map(str::to_string);
             bitmap.map(platform)
@@ -623,11 +625,8 @@ fn a_find_font_dialog_releases_a_deferred_swatch_paste_before_queued_work() {
         app.run("select.set", json!({"ids": [anchor]})).unwrap();
         crate::menus::invoke(&mut app, id, json!({}));
         crate::menus::invoke(&mut app, id, json!({}));
-        let start = std::time::Instant::now();
-        while open_dialogs(&app).is_empty() && start.elapsed().as_secs() < 60 {
-            poll(&mut app);
-            std::thread::yield_now();
-        }
+        poll_read(&mut app);
+        assert!(!open_dialogs(&app).is_empty(), "the first paste asks its question");
         assert!(swatches_asked(&app));
         assert_eq!(app.placing.pending.len(), 1);
         let later = app.run("shape.rectangle", json!({"x": 200, "y": 10, "width": 20, "height": 20})).unwrap()["id"].as_u64().unwrap();
@@ -871,11 +870,8 @@ fn a_queued_paste_stacks_after_a_deferred_swatch_confirmation() {
         app.run("select.set", json!({"ids": [anchor]})).unwrap();
         crate::menus::invoke(&mut app, id, json!({}));
         crate::menus::invoke(&mut app, id, json!({}));
-        let start = std::time::Instant::now();
-        while open_dialogs(&app).is_empty() && start.elapsed().as_secs() < 60 {
-            poll(&mut app);
-            std::thread::yield_now();
-        }
+        poll_read(&mut app);
+        assert!(!open_dialogs(&app).is_empty(), "the first paste asks its question");
         assert_eq!(app.placing.pending.len(), 1);
         answer_swatches(&mut app, true);
         placed(&mut app);
@@ -985,11 +981,7 @@ fn a_second_paste_in_front_follows_the_first() {
         app.run("select.set", json!({"ids": [b]})).unwrap();
         crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
         crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
-        let t0 = std::time::Instant::now();
-        while app.placing.pending.len() > 1 && t0.elapsed().as_secs() < 60 {
-            poll(&mut app);
-            std::thread::yield_now();
-        }
+        poll_read(&mut app);
         assert_eq!(app.placing.pending.len(), 1, "the first paste ran");
         if third {
             crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
@@ -1023,11 +1015,7 @@ fn a_paste_beside_a_finished_picture_does_not_follow_another_chain() {
     crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
     app.run("select.set", json!({"ids": [y]})).unwrap();
     crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
-    let t0 = std::time::Instant::now();
-    while app.placing.pending.len() > 1 && t0.elapsed().as_secs() < 60 {
-        poll(&mut app);
-        std::thread::yield_now();
-    }
+    poll_read(&mut app);
     assert_eq!(app.placing.pending.len(), 1, "the first paste ran");
     // The first picture is selected.
     crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
@@ -1055,11 +1043,7 @@ fn pastes_in_two_documents_follow_their_own() {
     app.run("select.set", json!({"ids": [b]})).unwrap();
     crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
     crate::menus::invoke(&mut app, "edit.pasteInFront", json!({}));
-    let t0 = std::time::Instant::now();
-    while app.placing.pending.len() > 1 && t0.elapsed().as_secs() < 60 {
-        poll(&mut app);
-        std::thread::yield_now();
-    }
+    poll_read(&mut app);
     assert_eq!(app.placing.pending.len(), 1, "the first paste ran");
     // A paste in another document, then one more in the first.
     app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
@@ -1413,17 +1397,12 @@ fn the_place_dialogs_lines_are_read_off_the_ui_thread() {
     app.run("file.place", p).unwrap();
     assert_eq!(place_lines(&app), ["", ""]);
     let host = app.dialogs().expect("the window's dialog host");
-    let t0 = std::time::Instant::now();
-    loop {
-        let reading = host.with(|h| {
-            let d = h.get_mut::<crate::dialogs::place::PlaceDialog>().expect("the dialog stays open");
-            crate::place::fill_lines(&mut app, &d.files, &mut d.info)
-        });
-        if !reading || t0.elapsed().as_secs() > 60 {
-            break;
-        }
-        std::thread::yield_now();
-    }
+    crate::place::wait_lines(&mut app);
+    let reading = host.with(|h| {
+        let d = h.get_mut::<crate::dialogs::place::PlaceDialog>().expect("the dialog stays open");
+        crate::place::fill_lines(&mut app, &d.files, &mut d.info)
+    });
+    assert!(!reading, "the lines were read");
     assert_eq!(place_lines(&app), want);
 }
 
@@ -1455,7 +1434,7 @@ fn files_dropped_together_are_read_one_at_a_time() {
     crate::place::drop_files(&mut app, dropped);
     placed(&mut app);
     assert_eq!(names(&app).len(), 4);
-    assert_eq!(app.placing.reading[1].load(std::sync::atomic::Ordering::SeqCst), 1, "the most reads at once");
+    assert_eq!(app.placing.reading.most(), 1, "the most reads at once");
 }
 
 /// A PNG read off the UI thread is decoded there once: its pixels are in the image store the
@@ -1828,11 +1807,7 @@ fn a_file_read_while_a_dialog_is_open_waits_for_it_to_close() {
     let mut app = app(true);
     start(&mut app, &json!({"path": path}), false).unwrap();
     let question = crate::tests::picks::show_question(&mut app);
-    let t0 = std::time::Instant::now();
-    while t0.elapsed().as_millis() < 400 {
-        poll(&mut app);
-        std::thread::yield_now();
-    }
+    poll_read(&mut app);
     assert!(names(&app).is_empty() && app.placing.pending.len() == 1, "the file waits for the dialog");
     crate::tests::picks::close_shown(&mut app, question);
     placed(&mut app);
@@ -1859,11 +1834,7 @@ fn a_file_read_during_a_drag_waits_for_it_to_end() {
             app.session.pointer(&PointerEvent::new(kind, x, 20.0), view).unwrap();
         }
         assert!(app.session.in_interaction());
-        let t0 = std::time::Instant::now();
-        while t0.elapsed().as_millis() < 400 {
-            poll(&mut app);
-            std::thread::yield_now();
-        }
+        poll_read(&mut app);
         assert!(app.placing.pending.len() == 1 && app.session.in_interaction(), "other document: {other_document}");
         // The drag moves on before it ends.
         for kind in [PointerKind::Drag, PointerKind::Up] {
@@ -1892,11 +1863,7 @@ fn a_file_read_during_a_place_cursor_drag_waits_for_it_to_end() {
         crate::canvas::dispatch(&mut app, &PointerEvent::new(kind, x, 20.0), view);
     }
     assert!(app.session.tool_busy() && !app.session.in_interaction());
-    let t0 = std::time::Instant::now();
-    while t0.elapsed().as_millis() < 400 {
-        poll(&mut app);
-        std::thread::yield_now();
-    }
+    poll_read(&mut app);
     assert!(app.placing.pending.len() == 1 && app.session.tool_busy(), "the file waits for the drag");
     crate::canvas::dispatch(&mut app, &PointerEvent::new(PointerKind::Up, 60.0, 20.0), view);
     placed(&mut app);
@@ -1961,13 +1928,7 @@ fn a_file_read_again_when_placed_stays_within_the_roots_it_was_read_in() {
     let mut app = app(true);
     let p = json!({"path": link.to_string_lossy(), "dxf": {"fit": true}, "at": [100, 150]});
     vectorcraft_engine::file_access::confine(Some(&roots), || start(&mut app, &p, false)).unwrap();
-    let t0 = std::time::Instant::now();
-    while !(app.placing.reading[1].load(std::sync::atomic::Ordering::SeqCst) == 1
-        && app.placing.reading[0].load(std::sync::atomic::Ordering::SeqCst) == 0)
-    {
-        assert!(t0.elapsed().as_secs() < 60, "read within 60 s");
-        std::thread::yield_now();
-    }
+    wait(&mut app);
     // Read; now the path leads outside the roots and the artboard under `at` changes.
     std::fs::remove_file(&link).unwrap();
     std::os::unix::fs::symlink(base.join("out").join("real.dxf"), &link).unwrap();
@@ -2003,13 +1964,12 @@ fn progress(app: &mut VectorcraftApp, ctx: &egui::Context) -> String {
 /// an indeterminate moving bar and a Cancel button (Escape); never two modals at once.
 #[test]
 fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
-    let hold = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let hold_read = hold.clone();
+    // Each read waits until `go` is dropped.
+    let (go, hold) = channel::<()>();
+    let hold = Mutex::new(hold);
     let services = Services {
         read: Some(Box::new(move |p: &str| {
-            while hold_read.load(std::sync::atomic::Ordering::SeqCst) {
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
+            let _ = hold.lock().map(|hold| hold.recv());
             std::fs::read(p).map_err(|e| e.to_string())
         })),
         ..Default::default()
@@ -2046,7 +2006,7 @@ fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
     assert!(texts.contains("Placing slow.png…") && texts.contains("waiting"), "{texts}");
 
     // Release and finish
-    hold.store(false, std::sync::atomic::Ordering::SeqCst);
+    drop(go);
     placed(&mut app);
 }
 
@@ -2054,13 +2014,12 @@ fn a_file_that_takes_a_while_to_place_shows_a_progress_window() {
 /// completely unmodified (no undo step added, no nodes added), and clears the status bar.
 #[test]
 fn cancelling_a_place_places_nothing() {
-    let hold = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let hold_read = hold.clone();
+    // Each read waits until `go` is dropped.
+    let (go, hold) = channel::<()>();
+    let hold = Mutex::new(hold);
     let services = Services {
         read: Some(Box::new(move |p: &str| {
-            while hold_read.load(std::sync::atomic::Ordering::SeqCst) {
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
+            let _ = hold.lock().map(|hold| hold.recv());
             std::fs::read(p).map_err(|e| e.to_string())
         })),
         ..Default::default()
@@ -2091,7 +2050,7 @@ fn cancelling_a_place_places_nothing() {
     assert!(!crate::menus::enabled(&app, "file.cancelPlace"));
 
     // Let the background read finish and drain
-    hold.store(false, std::sync::atomic::Ordering::SeqCst);
+    drop(go);
     read_finished(&app);
     poll(&mut app);
 

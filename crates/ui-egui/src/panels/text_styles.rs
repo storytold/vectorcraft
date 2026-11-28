@@ -66,6 +66,8 @@ impl StylesPanels {
 pub(crate) struct StylesPanel {
     /// The uid of the document the highlight was made in.
     document: Option<u64>,
+    /// Changes when the panel switches documents, so reopening a document cannot restore its old popup.
+    scope_generation: u64,
     /// The highlighted styles, in the order they were picked.
     highlight: Vec<String>,
     /// The selection's lead style.
@@ -83,7 +85,7 @@ fn highlighted(app: &mut VectorcraftApp, kind: Kind, listed: &[&str]) -> Vec<Str
     let document = app.session.active().map(|st| st.uid);
     let panel = app.ui.text_styles.of(kind);
     if panel.document.is_some_and(|made| Some(made) != document) {
-        *panel = StylesPanel::default();
+        *panel = StylesPanel { scope_generation: panel.scope_generation.wrapping_add(1), ..StylesPanel::default() };
     }
     panel.document = document;
     panel.highlight.retain(|n| listed.contains(&n.as_str()));
@@ -253,6 +255,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     let names = highlighted(app, kind, &listed);
     let panel = app.ui.text_styles.of(kind);
     let (lead, anchor, reveal) = (panel.lead.clone(), panel.anchor.clone(), panel.reveal.take());
+    let scope = (panel.document, panel.scope_generation);
     let mut sel = Selection::new(names.iter().filter_map(|n| id_of(n)).collect(), lead.as_deref().and_then(id_of), anchor.as_deref().and_then(id_of));
     let rows: Vec<TextStyleRow> =
         listed.iter().enumerate().map(|(i, name)| TextStyleRow::new(i as u64, super::label_or_name(name, i == 0))).collect();
@@ -271,7 +274,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui, kind: Kind) {
     if let Some(id) = reveal.as_deref().and_then(id_of) {
         list = list.reveal(id);
     }
-    let out = list.show(ui);
+    // The framework's row menu and footer drag use list indices that are local to this document.
+    let out = ui.push_id(("text-styles-document", kind.panel_kind(), scope), |ui| list.show(ui)).inner;
     let name_of = |id: &u64| listed.get(*id as usize).map(|n| n.to_string());
     let panel = app.ui.text_styles.of(kind);
     panel.highlight = sel.items.iter().filter_map(name_of).collect();

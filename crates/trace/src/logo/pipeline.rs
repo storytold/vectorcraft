@@ -406,7 +406,14 @@ fn choose_palette(params: &TraceParams, pix: &[Px], w: usize, h: usize) -> Resul
         // Every entry is checked, but only the first few distinct colours are kept.
         let c = parse_hex(s).ok_or_else(|| TraceError::BadPalette(s.clone()))?;
         let white = own_white(params) && c.iter().all(|&v| v >= WHITE_MIN);
-        if palette.len() < MAX_COLOURS && !white && !palette.iter().any(|&q| distance(q, c) < SAME_COLOUR) {
+        if palette.len() < MAX_COLOURS
+            && !white
+            && !palette.iter().any(|&q| {
+                #[cfg(test)]
+                NAMED_COMPARISONS.with(|n| n.set(n.get() + 1));
+                distance(q, c) < SAME_COLOUR
+            })
+        {
             palette.push(c);
         }
     }
@@ -416,6 +423,12 @@ fn choose_palette(params: &TraceParams, pix: &[Px], w: usize, h: usize) -> Resul
     // (One more than named: white takes a slot while the colors are found, and is left out after.)
     let tones = auto_palette(pix, w, h, (palette.len() + 1).max(params.colors as usize).clamp(2, MAX_COLOURS + 1));
     Ok((palette, tones))
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The named colors [`choose_palette`] has compared with the ones it kept, on this thread.
+    pub(crate) static NAMED_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Trace a flat-colour logo.

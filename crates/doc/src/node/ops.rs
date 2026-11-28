@@ -131,6 +131,13 @@ impl Node {
         matches!(self.kind, NodeKind::Layer { template: true, .. })
     }
 
+    /// Whether a view that hides template layers (`templates`) or guides (`guides`) leaves this
+    /// object out: a template layer while templates are hidden, or a path made into a guide while
+    /// guides are hidden. The canvas draws ruler guides apart from the art.
+    pub fn hidden_by_view(&self, templates: bool, guides: bool) -> bool {
+        (templates && self.is_template()) || (guides && matches!(self.kind, NodeKind::Path { guide: true, .. }))
+    }
+
     /// The art objects of this container: its children, looking through sublayers, which are not
     /// objects (bottom first). With `editable`, only the visible, unlocked objects in visible,
     /// unlocked, non-template sublayers.
@@ -360,15 +367,30 @@ impl Node {
         self.geometric(Some(symbols))
     }
 
-    /// Children that contribute to a container's editing bounds and selection highlights. A live trace retains a
-    /// hidden bitmap for re-tracing/release; only source-image views measure that bitmap.
+    /// Children that contribute to a container's editing bounds. A live trace retains a hidden bitmap for
+    /// re-tracing/release; only source-image views measure that bitmap. Selection highlights outline
+    /// [`Node::drawn_children`].
     pub fn editing_children(&self) -> &[Arc<Node>] {
         let children = self.children().map(Vec::as_slice).unwrap_or_default();
-        let trace_source = self.extras().trace.is_some()
-            && !self.trace_view().shows_source()
-            && children.first().is_some_and(|n| !n.visible && matches!(n.kind, NodeKind::Image(_)));
+        let trace_source = !self.trace_view().shows_source() && self.trace_source().is_some_and(|n| !n.visible);
         let skip = usize::from(self.extras().shaper.is_some() || trace_source);
         children.get(skip..).unwrap_or_default()
+    }
+
+    /// The children a selection highlight outlines: [`Node::editing_children`] without the hidden
+    /// members, which the canvas does not draw. An Image Trace object's hidden source image stays
+    /// when the object's view shows it, and every path of a compound path stays, since the compound
+    /// path draws all of them.
+    pub fn drawn_children(&self) -> impl Iterator<Item = &Arc<Node>> {
+        let members = !matches!(self.kind, NodeKind::Compound { .. });
+        let source = self.trace_source().filter(|_| self.trace_view().shows_source());
+        self.editing_children().iter().filter(move |c| !members || c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)))
+    }
+
+    /// The first child of an Image Trace object when it is an image: the bitmap the trace keeps.
+    fn trace_source(&self) -> Option<&Arc<Node>> {
+        self.extras().trace.as_ref()?;
+        self.children()?.first().filter(|n| matches!(n.kind, NodeKind::Image(_)))
     }
 
     /// The box of [`Node::geometric_bounds`], or of [`Node::geometric_bounds_with`] when `symbols`
@@ -406,6 +428,17 @@ impl Node {
             NodeKind::Intertwine { children } => union(children),
             // A ruler guide runs across the canvas (or an artboard): it adds nothing to a box.
             NodeKind::RulerGuide { .. } => None,
+        }
+    }
+
+    /// The box of what a path, or the paths of a compound path, draw before the strokes' reach
+    /// ([`PathData::drawn_bounds`]): lone anchors of closed subpaths count only with `dots`. Other
+    /// members of a compound path count by their geometric box. `None` when nothing is drawn.
+    fn drawn(&self, symbols: Option<&SymbolBoxes>, dots: bool) -> Option<Rect> {
+        match &self.kind {
+            NodeKind::Path { path, .. } => path.drawn_bounds(dots),
+            NodeKind::Compound { .. } => self.editing_children().iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.drawn(symbols, dots))),
+            _ => self.geometric(symbols),
         }
     }
 
@@ -463,7 +496,9 @@ impl Node {
                 self.geometric(symbols).map(|b| b.inflate(o, o))
             }
             NodeKind::Path { .. } | NodeKind::Compound { .. } => {
-                let b = self.geometric(symbols)?;
+                // A lone anchor is drawn only as the dot of a round or projecting cap on a closed subpath.
+                let dots = self.appearance.painted_strokes().any(|s| matches!(s.cap, crate::LineCap::Round | crate::LineCap::Square));
+                let b = self.drawn(symbols, dots).or_else(|| self.geometric(symbols))?;
                 Some(self.appearance.stroked_bounds(b, || self.stroke_path().unwrap_or_default()))
             }
             NodeKind::SymbolInstance { symbol, xf } => {

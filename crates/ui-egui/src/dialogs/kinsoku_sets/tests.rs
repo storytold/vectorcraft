@@ -47,6 +47,21 @@ fn cancel(app: &VectorcraftApp) {
     app.dialogs().unwrap().with(|h| h.cancel::<KinsokuDialog>(&ctx));
 }
 
+#[test]
+fn empty_kinsoku_list_shows_none_in_the_preset_picker() {
+    let mut fixture = craft::ui::testing::Fixture::new(|ui| crate::dialogs::host::window_dialogs(ui.ctx()).with(|host| host.run(ui)));
+    fixture.room(egui::vec2(800.0, 600.0));
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(fixture.ctx().clone());
+    app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    open(&mut app).unwrap();
+    fixture.settle();
+
+    let picker = fixture.by_label("Kinsoku Set").expect("Kinsoku Set picker");
+    assert_eq!(fixture.tree().value_of(picker.node), Some("None"));
+    assert!(picked(&app).is_empty(), "the caption does not select a set");
+}
+
 /// Type › Kinsoku Shori Settings… opens on the document's sets; New adds one based on Hard, its
 /// categories edited in their fields and Add putting in a character by its code point; nothing
 /// changes until OK, which sets them as one undo step; Cancel leaves them.
@@ -209,6 +224,47 @@ fn ok_sets_the_document_the_dialog_opened_on() {
     pump(&mut app);
     assert!(!is_open(&app));
     assert!(app.session.documents().iter().all(|d| d.doc.kinsoku_sets.is_empty()));
+}
+
+#[test]
+fn old_ok_keeps_restored_kinsoku_rules_and_the_current_tab() {
+    let mut app = app();
+    app.run("type.kinsokuSets.set", json!({"sets": [{"name": "Custom", "cannotStart": "ゝ"}]})).unwrap();
+    let file = std::env::temp_dir().join(format!("vectorcraft-kinsoku-revert-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("type.kinsokuSets.set", json!({"sets": [{"name": "Custom", "cannotStart": "ゞ"}]})).unwrap();
+    open(&mut app).unwrap();
+    set(&app, "cannotStart", json!("ー"));
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert_eq!(doc_sets(&app)[0].cannot_start, ['ゝ']);
+    let undo = steps(&app);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let other = app.session.active().unwrap().uid;
+    assert_ne!(uid, other);
+
+    pump(&mut app);
+    let restored = app.session.documents().iter().find(|st| st.uid == uid).unwrap();
+    assert_eq!(restored.doc.kinsoku_sets[0].cannot_start, ['ゝ'], "an old OK must keep the saved line-breaking rule");
+    assert_eq!(restored.history.undo.len(), undo);
+    assert_eq!(app.session.active().unwrap().uid, other, "a stale OK does not activate the original tab");
+    assert!(is_open(&app));
+    dialog(&app, |d| assert_eq!(d.problem.as_deref(), Some("The document was reverted. Reopen this dialog to continue.")));
+    cancel(&app);
+
+    assert!(app.session.set_active(0));
+    open(&mut app).unwrap();
+    set(&app, "cannotStart", json!("ー"));
+    pump(&mut app);
+    assert!(!is_open(&app));
+    assert_eq!(doc_sets(&app)[0].cannot_start, ['ー'], "a fresh draft can edit the restored rule");
 }
 
 /// OK keeps a set the document gained while the dialog was open, after the dialog's sets, and a

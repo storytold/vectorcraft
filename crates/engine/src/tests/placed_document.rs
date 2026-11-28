@@ -182,6 +182,33 @@ fn a_placed_document_is_vectors_in_every_output() {
 }
 
 #[test]
+fn a_placed_documents_spot_color_stays_a_spot_color_in_a_cmx_file() {
+    let dir = Folder::new("placed-cmx-spot");
+    let src = dir.file("logo.vectorcraft");
+    let mut d = Document::new(100.0, 50.0);
+    let gold = Color::cmyk(0.0, 0.2, 0.8, 0.1);
+    d.swatches.push(vectorcraft_color::Swatch { name: "Gold".into(), paint: Paint::solid(gold), global: true, spot: true });
+    let layer = d.layers[0].id;
+    let id = d.alloc_id();
+    let paint = Paint::Solid { color: gold, swatch: Some("Gold".into()), tint: 1.0 };
+    let look = Appearance::basic(paint, Paint::None, 0.0);
+    d.insert(Some(layer), 0, Node::path(id, shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 50.0)), look)).unwrap();
+    write(&src, &vectorcraft_format::save_file(&d));
+    let mut s = session();
+    place(&mut s, &src);
+    assert!(s.doc().unwrap().doc.swatch("Gold").is_none(), "the placing document has no swatch of that name");
+    let bytes = decode(&s.execute("document.serialize", &json!({"format": "cmx"})).unwrap());
+    let drawing = craft_cdr::read_cmx(&bytes, craft_cdr::Limits::default()).unwrap();
+    let mut fills = Vec::new();
+    for o in drawing.pages.iter().flat_map(|p| &p.layers).flat_map(|l| &l.objects) {
+        if let craft_cdr::model::Object::Shape(shape) = o {
+            fills.extend(shape.fill.clone());
+        }
+    }
+    assert!(fills.iter().any(|c| matches!(c, craft_cdr::model::Color::Spot { name, .. } if name == "Gold")), "{fills:?}");
+}
+
+#[test]
 fn the_preview_is_saved_so_the_document_shows_it_without_its_file() {
     let dir = Folder::new("placed-saved");
     let src = dir.file("logo.vectorcraft");

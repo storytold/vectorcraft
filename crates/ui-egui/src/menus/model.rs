@@ -485,7 +485,8 @@ impl Build<'_> {
         match id {
             // A panel row shows the chord of the panel's shortcut (`panel:<id>`), which binds `window.panel {panel}`;
             // a Window row runs it with `toggle: true`, so the framework finds no chord for the row's own command.
-            "window.panel" => {
+            // Settings' first page shows Preferences' shortcut, which binds `edit.preferences` with no page.
+            "window.panel" | "edit.preferences" if !params.is_null() => {
                 let mut item = item;
                 item.shortcut = super::labels::item_shortcut(self.app, id, params);
                 item

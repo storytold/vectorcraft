@@ -380,12 +380,9 @@ fn takes_art(ty: &str) -> bool {
     matches!(ty, "scatter" | "art" | "pattern")
 }
 
-/// The ids of art dragged off the canvas of the document `doc` (its uid).
-fn art_of(payload: &PanelDrag, doc: u64) -> Option<Vec<u64>> {
-    match payload {
-        PanelDrag::Art { document, ids, .. } if *document == doc => Some(ids.iter().map(|id| id.0).collect()),
-        _ => None,
-    }
+/// The ids of art dragged from the displayed drawing.
+fn art_of(payload: &PanelDrag, uid: u64, reverts: u64) -> Option<Vec<u64>> {
+    payload.artwork_for(uid, reverts).map(|ids| ids.iter().map(|id| id.0).collect())
 }
 
 /// The library and name of a brush dragged out of a brush library panel; a folder or another kind's item is none.
@@ -547,7 +544,7 @@ fn keys_of(sel: &Selection<String>, doc: u64) -> Selection<BrushKey> {
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (list, current) = brushes(app);
     let doc = app.session.active().map(|st| st.doc.clone());
-    let (uid, revision) = app.session.active().map_or((0, 0), |st| (st.uid, st.revision));
+    let (uid, revision, reverts) = app.session.active().map_or((0, 0, 0), |st| (st.uid, st.revision, st.reverts));
     let memo = app.session.active().map(document_brushes).unwrap_or_default();
     let first = by_name(&memo);
     let multi = picked(app, &list, current.as_deref());
@@ -584,7 +581,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         // the pass that drops and the held ones in a rerun pass, which takes no drop.
         let art_onto = PresetDrop::new::<PanelDrag>(DropPlace::Onto, move |payload: &PanelDrag, at: &DropAt<BrushKey>| {
             let DropAt::Onto(key) = at else { return false };
-            art_of(payload, uid).is_some()
+            payload.artwork_for(uid, reverts).is_some()
                 && !key.group
                 && type_of(first, key).is_some_and(takes_art)
                 && craft::ui::runtime::pointer::frame(&ctx).pick_mods.alt
@@ -607,7 +604,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut footed = None;
     let shown = Stack::new().label(tl!("Brushes")).fill().footer(|ui, _| footed = Some(footer(app, ui, on))).show(ui, |ui, _| {
         let library = DropAction::<ListDrag<LibraryKey>>::new(|drag| library_brush(drag).is_some()).sizing(Sizing::Fill).show(ui, |ui, _| {
-            let art = DropAction::<PanelDrag>::new(move |payload| art_of(payload, uid).is_some()).sizing(Sizing::Fill).show(ui, |ui, _| browser(ui));
+            let art = DropAction::<PanelDrag>::new(move |payload| payload.artwork_for(uid, reverts).is_some())
+                .sizing(Sizing::Fill)
+                .show(ui, |ui, _| browser(ui));
             (art.output.dropped, art.inner.unwrap_or_default())
         });
         (library.output.dropped, library.inner.unwrap_or_default())
@@ -642,7 +641,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             PresetEvent::Menu { target, command, .. } => item_command(app, &target, &command, multi.as_ref()),
             PresetEvent::Reorder(edit) => move_brush(app, &rows(uid, &memo, &hidden), first, &edit),
             PresetEvent::Dropped { at, payload, .. } => {
-                if let (DropAt::Onto(key), Some(ids)) = (&at, payload.get::<PanelDrag>().and_then(|p| art_of(p, uid))) {
+                if let (DropAt::Onto(key), Some(ids)) = (&at, payload.get::<PanelDrag>().and_then(|p| art_of(p, uid, reverts))) {
                     crate::dialogs::brush_replace_art::replace(app, &key.name, &ids);
                 }
             }
@@ -650,7 +649,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     // Art dropped on the list opens New Brush for that art, as the New Brush button opens it for the selection.
-    if let Some(ids) = art_drop.as_ref().and_then(|p| art_of(p, uid))
+    if let Some(ids) = art_drop.as_ref().and_then(|p| art_of(p, uid, reverts))
         && let Err(e) = app.run("ui.newBrush", json!({ "ids": ids }))
     {
         app.status(e);
@@ -944,7 +943,7 @@ pub(crate) fn load_library(app: &mut VectorcraftApp, params: Value) -> Result<Va
 /// dialog.
 pub(crate) fn other_library(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
     let filters = library_panel::library_pick_filters(BrushLibraries::KIND);
-    library_panel::pick_library_file(app, path, filters, |app, path| load_library(app, json!({ "path": path })))
+    library_panel::pick_library_file(app, path, filters, load_library)
 }
 
 /// The id prefix of the Window → Brush Libraries → User Defined slots.

@@ -21,7 +21,10 @@ pub(crate) type After = Option<Box<dyn FnOnce(&mut VectorcraftApp) -> Result<Val
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Export {
     /// Export As.
-    As,
+    As {
+        /// The drawing and content generation whose export the dialog configures, when one was open.
+        document: Option<(u64, u64)>,
+    },
     /// The options of the raster format `format`.
     Raster {
         /// The format's id.
@@ -49,7 +52,7 @@ pub(crate) enum Export {
     /// Save for Office Documents.
     Office,
     /// Text Export Options.
-    Text,
+    Text { source: Option<text_export::SelectionSource> },
     /// The options a save or open asks for before it goes on, for `action`.
     Save {
         /// The action the options belong to.
@@ -61,6 +64,8 @@ pub(crate) enum Export {
 pub(crate) struct Open {
     /// The hosted dialog's id.
     pub id: DialogId,
+    /// The drawing and loaded contents whose options and output this dialog controls.
+    document: Option<(u64, u64)>,
     /// Which dialog it is.
     pub kind: Export,
     /// Whether Export Selection opened it: OK then writes the selection alone.
@@ -85,6 +90,22 @@ impl ExportDialogs {
     }
 }
 
+impl Open {
+    fn check_source(&self, app: &VectorcraftApp) -> Result<(), String> {
+        if matches!(self.kind, Export::As { .. } | Export::Hpgl { .. }) {
+            return Ok(());
+        }
+        let active = app.session.active().map(|doc| (doc.uid, doc.reverts));
+        if active == self.document {
+            return Ok(());
+        }
+        if active.zip(self.document).is_some_and(|((uid, _), (source, _))| uid == source) {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
+        Err(tl!("Return to the original drawing to continue").into())
+    }
+}
+
 /// `ids` paired with `labels` as the options of a choice row.
 pub(super) fn options<L: From<&'static str>>(ids: &[&'static str], labels: &[&'static str]) -> Vec<(String, L)> {
     ids.iter().zip(labels).map(|(id, label)| (id.to_string(), L::from(label))).collect()
@@ -93,13 +114,18 @@ pub(super) fn options<L: From<&'static str>>(ids: &[&'static str], labels: &[&'s
 /// Opens `dialog` as the export dialog `kind` and records it; `None` without a window. A dialog of the same key
 /// replaces the one open, and its record.
 pub(crate) fn open(app: &mut VectorcraftApp, kind: Export, selection: bool, dialog: HostedParamDialog) -> Option<DialogId> {
+    let document = match &kind {
+        Export::As { .. } | Export::Hpgl { .. } => None,
+        Export::EpsCustom { parent } => app.export_dialogs.find(*parent)?.document,
+        _ => app.session.active().map(|doc| (doc.uid, doc.reverts)),
+    };
     let options = match &kind {
         Export::EpsCustom { parent } => HeldOptions { parent: Some(*parent), cancel: None },
         _ => HeldOptions::default(),
     };
     let id = host::open_held_with(app, dialog, answer, options)?;
     app.export_dialogs.0.retain(|o| o.id != id);
-    app.export_dialogs.0.push(Open { id, kind, selection, after: None });
+    app.export_dialogs.0.push(Open { id, document, kind, selection, after: None });
     Some(id)
 }
 
@@ -114,9 +140,10 @@ pub(super) fn set_fields(app: &VectorcraftApp, id: DialogId, fields: &[(&str, Va
 
 /// OK of the dialog `result` is from: its kind's `confirm`, and the step that follows kept for [`pump`].
 fn answer(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
-    let (id, kind, selection) =
-        app.export_dialogs.find(result.id).map(|o| (o.id, o.kind.clone(), o.selection)).ok_or("this export dialog is no longer open")?;
-    let open = Open { id, kind, selection, after: None };
+    let open = app.export_dialogs.find(result.id).ok_or("this export dialog is no longer open")?;
+    open.check_source(app)?;
+    let id = open.id;
+    let open = Open { id, document: open.document, kind: open.kind.clone(), selection: open.selection, after: None };
     let after = confirm(app, &open, &result.fields)?;
     if let Some(record) = app.export_dialogs.0.iter_mut().find(|o| o.id == id) {
         record.after = after;
@@ -126,7 +153,7 @@ fn answer(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> 
 
 fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Result<After, String> {
     match &open.kind {
-        Export::As => export_as::confirm(app, open, fields),
+        Export::As { document } => export_as::confirm(app, *document, fields),
         Export::Raster { .. } => png_options::confirm(app, open, fields),
         Export::Svg { .. } => svg_options::confirm(app, open, fields),
         Export::Eps => eps_options::confirm(app, open, fields),
@@ -134,7 +161,7 @@ fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Resu
         Export::Dxf => dxf_options::confirm(app, open, fields),
         Export::Hpgl { .. } => hpgl_options::confirm(app, open, fields),
         Export::Office => office_export::confirm(app, open, fields),
-        Export::Text => text_export::confirm(app, open, fields),
+        Export::Text { source } => text_export::confirm(app, open, source.as_ref(), fields),
         Export::Save { .. } => save_options::confirm(app, open, fields),
     }
 }
@@ -194,14 +221,20 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         let Some((footer, actions)) = taken else {
             // The dialog closed: the step after an OK runs, a cancelled one has none.
             if let Some(i) = app.export_dialogs.0.iter().position(|o| o.id == id) {
-                let record = app.export_dialogs.0.remove(i);
-                if let Some(after) = record.after {
-                    let result = after(app);
+                let mut record = app.export_dialogs.0.remove(i);
+                if let Some(after) = record.after.take() {
+                    let result = record.check_source(app).and_then(|()| after(app));
                     report(app, result);
                 }
             }
             continue;
         };
+        if let Err(error) = open.check_source(app) {
+            if footer.is_some() || !actions.is_empty() {
+                app.status(error);
+            }
+            continue;
+        }
         if let Export::Svg { mode } = kind {
             if footer.as_deref() == Some(svg_options::BROWSER_ACTION)
                 && let Some(fields) = fields_of(app, id)

@@ -68,8 +68,7 @@ fn layout_glyph(l: ArtboardLayout, rtl: bool) -> (&'static str, &'static LayoutG
     }
 }
 
-/// The settings the dialog edits, and for Rearrange the artboards it lays out (`indices`, sorted
-/// and once each), which the dialog does not edit.
+/// The settings the dialog edits.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct RearrangeValues {
     layout: ArtboardLayout,
@@ -78,26 +77,21 @@ pub(crate) struct RearrangeValues {
     columns: f64,
     spacing: f64,
     move_artwork: bool,
-    indices: Option<Vec<usize>>,
 }
 
 impl Default for RearrangeValues {
     fn default() -> Self {
-        RearrangeValues { layout: ArtboardLayout::GridByRow, rtl: false, columns: 2.0, spacing: 20.0, move_artwork: true, indices: None }
+        RearrangeValues { layout: ArtboardLayout::GridByRow, rtl: false, columns: 2.0, spacing: 20.0, move_artwork: true }
     }
 }
 
 impl RearrangeValues {
     /// `artboard.rearrange` parameters.
     fn params(&self) -> Value {
-        let mut p = json!({
+        json!({
             "layout": self.layout.id(), "order": self.order(), "columns": self.columns,
             "spacing": self.spacing, "moveArtwork": self.move_artwork,
-        });
-        if let Some(indices) = &self.indices {
-            p["indices"] = json!(indices);
-        }
-        p
+        })
     }
 
     fn order(&self) -> &'static str {
@@ -154,16 +148,19 @@ pub(crate) fn open_selected(app: &mut VectorcraftApp, indices: &[usize]) {
 
 /// Opens the dialog for `indices` (Rearrange), or for every artboard (Rearrange All Artboards).
 fn open_with(app: &mut VectorcraftApp, indices: Option<Vec<usize>>) -> Result<Value, String> {
-    let mut values = RearrangeValues::default();
-    if let Some(spacing) = app.ui.rearrange_artboards_spacing.as_f64() {
-        values.spacing = spacing;
-    }
-    let artboards = indices.as_ref().map_or_else(|| app.session.active().map_or(0, |doc| doc.doc.artboards.len()), Vec::len);
-    values.indices = indices;
+    let st = app.session.active().ok_or("no document")?;
+    let artboards = indices.as_ref().map_or(st.doc.artboards.len(), Vec::len);
+    let selected = indices
+        .map(|indices| {
+            indices.into_iter().map(|i| st.doc.artboards.get(i).map(|a| (i, a.id)).ok_or("no such artboard")).collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?;
+    let values = RearrangeValues { spacing: app.ui.rearrange_artboards_spacing.as_f64().unwrap_or(20.0), ..RearrangeValues::default() };
+    let document = (st.uid, st.reverts);
     let lengths = LengthUnits::new(UnitKind::Points, length_kind(app.session.general_unit()), 72.0);
     let lengths = crate::fields::bare_points(lengths, app.session.prefs.numbers_without_units_are_points);
     let dialogs = app.dialogs().ok_or("no window")?;
-    dialogs.with(|host| host.open(RearrangeArtboardsDialog { id: dialog_id(CMD), open: true, values, artboards, lengths }));
+    dialogs.with(|host| host.open(RearrangeArtboardsDialog { id: dialog_id(CMD), open: true, values, document, selected, artboards, lengths }));
     Ok(Value::Null)
 }
 
@@ -181,6 +178,9 @@ pub(crate) struct RearrangeArtboardsDialog {
     id: DialogId,
     open: bool,
     values: RearrangeValues,
+    document: (u64, u64),
+    /// Each selected artboard's opening row index and stable ID. None lays out the entire document.
+    selected: Option<Vec<(usize, u32)>>,
     /// The artboards the dialog lays out (the document's, or the selected ones), which bounds Columns
     /// and is the count it shows.
     artboards: usize,
@@ -188,8 +188,20 @@ pub(crate) struct RearrangeArtboardsDialog {
     lengths: LengthUnits,
 }
 
+pub(crate) struct RearrangeAnswer {
+    values: RearrangeValues,
+    document: (u64, u64),
+    selected: Option<Vec<(usize, u32)>>,
+}
+
+impl RearrangeArtboardsDialog {
+    fn answer(&self, values: RearrangeValues) -> RearrangeAnswer {
+        RearrangeAnswer { values, document: self.document, selected: self.selected.clone() }
+    }
+}
+
 /// The rows of the dialog for `artboards` artboards, Spacing shown in `unit`.
-fn body(ui: &mut egui::Ui, v: &mut RearrangeValues, artboards: usize, lengths: LengthUnits) {
+fn body(ui: &mut egui::Ui, v: &mut RearrangeValues, artboards: usize, selected: bool, lengths: LengthUnits) {
     Field::new(tl!("Layout:")).id_salt("layout").show(ui, |ui, _| {
         let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL
             .into_iter()
@@ -231,12 +243,12 @@ fn body(ui: &mut egui::Ui, v: &mut RearrangeValues, artboards: usize, lengths: L
             v.move_artwork = on;
         }
     });
-    let label = if v.indices.is_some() { tl!("Selected Artboards: {n}") } else { tl!("Artboards: {n}") };
+    let label = if selected { tl!("Selected Artboards: {n}") } else { tl!("Artboards: {n}") };
     Text::new(crate::i18n::fmt(label, &[("n", &artboards.to_string())])).role(TypeRole::Caption).show(ui);
 }
 
 impl StackDialog for RearrangeArtboardsDialog {
-    type Result = RearrangeValues;
+    type Result = RearrangeAnswer;
 
     fn id(&self) -> DialogId {
         self.id
@@ -246,30 +258,31 @@ impl StackDialog for RearrangeArtboardsDialog {
         Some(CMD)
     }
 
-    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<RearrangeValues>> {
+    fn show(&mut self, ui: &mut egui::Ui, _: &DialogStack) -> Option<DialogResult<RearrangeAnswer>> {
         let (artboards, lengths) = (self.artboards, self.lengths);
-        let title = if self.values.indices.is_some() { tl!("Rearrange") } else { tl!("Rearrange All Artboards") };
+        let selected = self.selected.is_some();
+        let title = if selected { tl!("Rearrange") } else { tl!("Rearrange All Artboards") };
         let shown = FormDialog::new(title, Bind::bound(&mut self.values)).opened(Bind::bound(&mut self.open)).show(ui, |ui, _, v| {
-            body(ui, v, artboards, lengths);
+            body(ui, v, artboards, selected, lengths);
             true
         });
         match (shown.accepted, shown.closed) {
-            (Some(value), _) => Some(DialogResult::Ok(value)),
+            (Some(value), _) => Some(DialogResult::Ok(self.answer(value))),
             (None, Some(_)) => Some(DialogResult::Cancel),
             (None, None) => None,
         }
     }
 
-    fn confirm(&mut self, _: &egui::Context) -> Option<RearrangeValues> {
-        Some(self.values.clone())
+    fn confirm(&mut self, _: &egui::Context) -> Option<RearrangeAnswer> {
+        Some(self.answer(self.values.clone()))
     }
 
     fn json_fields(&self) -> Option<Value> {
         let v = &self.values;
         let mut fields =
             json!({"layout": v.layout.id(), "order": v.order(), "columns": v.columns, "spacing": v.spacing, "moveArtwork": v.move_artwork});
-        if let Some(indices) = &v.indices {
-            fields["indices"] = json!(indices);
+        if let Some(selected) = &self.selected {
+            fields["indices"] = json!(selected.iter().map(|(index, _)| index).collect::<Vec<_>>());
         }
         Some(fields)
     }
@@ -311,30 +324,36 @@ impl StackDialog for RearrangeArtboardsDialog {
 /// ([`place`]).
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
-    let Some(DialogResult::Ok(values)) = dialogs.with(|host| host.take::<RearrangeArtboardsDialog>()) else { return };
-    match &values.indices {
-        None => match app.run(CMD, values.params()) {
-            Ok(_) => app.ui.rearrange_artboards_spacing = json!(values.spacing),
-            Err(e) => app.status(e),
+    let Some(DialogResult::Ok(RearrangeAnswer { values, document, selected })) = dialogs.with(|host| host.take::<RearrangeArtboardsDialog>()) else {
+        return;
+    };
+    let applied = match app.session.active() {
+        Some(st) if st.uid == document.0 && st.reverts != document.1 => Err(tl!("Reopen Rearrange Artboards after reverting the drawing").to_owned()),
+        Some(st) if (st.uid, st.reverts) == document => match selected {
+            Some(selected) => wait_for_click(app, &selected, values.params()),
+            None => app.run(CMD, values.params()).map(drop),
         },
-        Some(listed) => match wait_for_click(app, listed, values.params()) {
-            Ok(()) => app.ui.rearrange_artboards_spacing = json!(values.spacing),
-            Err(e) => app.status(e),
-        },
+        _ => Err(tl!("Rearrange Artboards can only change the document where it was opened.").to_owned()),
+    };
+    match applied {
+        Ok(()) => app.ui.rearrange_artboards_spacing = json!(values.spacing),
+        Err(e) => app.status(e),
     }
     ctx.request_repaint();
 }
 
-/// Rearrange for artboards `listed` with `params`, confirmed: it waits for its click on the canvas,
-/// for the active document and the tool in use.
-fn wait_for_click(app: &mut VectorcraftApp, listed: &[usize], params: Value) -> Result<(), String> {
+/// Rearrange the originally selected artboards in their current row order when the canvas is clicked.
+fn wait_for_click(app: &mut VectorcraftApp, selected: &[(usize, u32)], mut params: Value) -> Result<(), String> {
     let st = app.session.active().ok_or_else(|| "no document".to_string())?;
-    let ids: Vec<u32> = listed.iter().filter_map(|i| st.doc.artboards.get(*i)).map(|a| a.id).collect();
-    if ids.len() != listed.len() {
-        return Err("no such artboard".into());
+    let wanted: std::collections::HashSet<_> = selected.iter().map(|&(_, id)| id).collect();
+    let (indices, ids): (Vec<_>, Vec<_>) =
+        st.doc.artboards.iter().enumerate().filter_map(|(index, a)| wanted.contains(&a.id).then_some((index, a.id))).unzip();
+    if ids.len() != selected.len() {
+        return Err(tl!("An artboard selected when the dialog opened was removed.").to_owned());
     }
+    params["indices"] = json!(indices);
     let (doc, tool) = (st.uid, app.session.tool_id().to_string());
-    app.ui.rearrange_placement = Some(RearrangePlacement { doc, tool, params, ids, armed: false });
+    app.ui.rearrange_placement = Some(RearrangePlacement { doc, reverts: st.reverts, tool, params, ids, armed: false });
     app.status(PLACE_HINT);
     Ok(())
 }
@@ -352,11 +371,11 @@ pub(crate) fn cancel_placement(app: &mut VectorcraftApp) {
 }
 
 /// Whether a placement waits for its click: one whose document is no longer the active one, whose
-/// tool is no longer the tool in use, or whose listed places no longer hold the artboards it was
-/// confirmed for (removed or moved in the list) is dropped.
+/// tool is no longer in use, or whose confirmed artboards were reloaded, removed or reordered
+/// is dropped.
 pub(crate) fn refresh_placement(app: &mut VectorcraftApp) -> bool {
     let Some(pl) = app.ui.rearrange_placement.as_ref() else { return false };
-    let same = app.session.active().filter(|d| d.uid == pl.doc).is_some_and(|d| {
+    let same = app.session.active().filter(|d| d.uid == pl.doc && d.reverts == pl.reverts).is_some_and(|d| {
         let listed = placed(pl);
         listed.len() == pl.ids.len() && listed.iter().zip(&pl.ids).all(|(i, id)| d.doc.artboards.get(*i).is_some_and(|a| a.id == *id))
     });
@@ -384,6 +403,9 @@ pub(crate) fn arm(app: &mut VectorcraftApp) {
 /// point, or the pointer when Enter placed it); without `at` the grid starts at the first selected
 /// artboard's top-left. When every selected artboard is locked, the status bar says so.
 pub(crate) fn place(app: &mut VectorcraftApp, at: Option<Point>) {
+    if !refresh_placement(app) {
+        return;
+    }
     let Some(mut pl) = app.ui.rearrange_placement.take() else { return };
     let listed = placed(&pl);
     let locked = app.session.active().is_some_and(|d| listed.iter().all(|i| d.doc.artboards.get(*i).is_some_and(|a| a.locked)));
@@ -402,7 +424,9 @@ pub(crate) fn place(app: &mut VectorcraftApp, at: Option<Point>) {
 /// outline of each artboard that moves, in the Artboard tool's color, 1 point wide on screen.
 pub(crate) fn placement_overlays(app: &VectorcraftApp) -> Vec<Overlay> {
     let Some(pl) = app.ui.rearrange_placement.as_ref().filter(|pl| app.session.tool_id() == pl.tool) else { return vec![] };
-    let (Some(at), Some(st)) = (app.hover_doc, app.session.active().filter(|d| d.uid == pl.doc)) else { return vec![] };
+    let (Some(at), Some(st)) = (app.hover_doc, app.session.active().filter(|d| d.uid == pl.doc && d.reverts == pl.reverts)) else {
+        return vec![];
+    };
     let boards: Vec<&vectorcraft_doc::Artboard> = placed(pl).into_iter().filter_map(|i| st.doc.artboards.get(i)).collect();
     let sizes: Vec<(f64, f64)> = boards.iter().map(|a| (a.rect.width(), a.rect.height())).collect();
     let p = &pl.params;
@@ -471,6 +495,135 @@ mod tests {
         app.dialogs().unwrap().with(|host| host.open_dialogs().last().and_then(|d| d.fields.clone())).unwrap()
     }
 
+    fn check_rearrange_stays_in_opening_document(selected: bool) {
+        let mut app = app(3);
+        app.run("file.new", json!({"width": 100, "height": 50, "artboards": 3})).unwrap();
+        let destination = app.session.active().unwrap().uid;
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        if selected {
+            app.select_tool("artboard");
+            open_selected(&mut app, &[0, 2]);
+        } else {
+            open_from_menu(&mut app);
+        }
+        set(&app, &[("layout", json!("row")), ("order", json!("rightToLeft")), ("spacing", json!(37))]).unwrap();
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        assert_eq!(app.session.active().unwrap().uid, destination);
+        let before = origins(&app);
+        let undo = app.session.active().unwrap().history.undo.len();
+        let spacing = app.ui.rearrange_artboards_spacing.clone();
+        ok(&mut app);
+        assert_eq!(origins(&app), before, "OK leaves the other tab's artboards in place");
+        assert!(app.ui.rearrange_placement.is_none(), "the other tab cannot start placement");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.rearrange_artboards_spacing, spacing);
+    }
+
+    #[test]
+    fn rearrange_opening_for_all_artboards_leaves_a_new_tab_untouched() {
+        check_rearrange_stays_in_opening_document(false);
+    }
+
+    #[test]
+    fn rearrange_opening_for_selected_artboards_cannot_place_in_a_new_tab() {
+        check_rearrange_stays_in_opening_document(true);
+    }
+
+    fn check_revert_retires_rearrange(selected: bool, already_confirmed: bool) {
+        let mut app = app(3);
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let dir = vectorcraft_testkit::TempDir::new("rearrange-artboards-revert");
+        app.run("file.saveAs", json!({"path": dir.join("artboards.vectorcraft")})).unwrap();
+        let saved = origins(&app);
+        let source = app.session.active().unwrap();
+        let version = (source.uid, source.reverts);
+
+        app.run(CMD, json!({"layout": "row", "spacing": 47})).unwrap();
+        assert_ne!(origins(&app), saved);
+        if selected {
+            app.select_tool("artboard");
+            open_selected(&mut app, &[0, 2]);
+        } else {
+            open_from_menu(&mut app);
+        }
+        set(&app, &[("layout", json!("row")), ("spacing", json!(37))]).unwrap();
+        if already_confirmed {
+            ok(&mut app);
+            assert!(refresh_placement(&mut app));
+        }
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let source = app.session.active().unwrap();
+        assert_eq!(source.uid, version.0);
+        assert_ne!(source.reverts, version.1);
+        assert_eq!(origins(&app), saved);
+        let undo = source.history.undo.len();
+        let remembered = app.ui.rearrange_artboards_spacing.clone();
+        if already_confirmed {
+            assert!(!refresh_placement(&mut app), "reloaded artboards cannot receive a pending placement");
+            place(&mut app, Some(Point::new(700.0, 300.0)));
+        } else {
+            ok(&mut app);
+        }
+        assert_eq!(origins(&app), saved, "reloaded artboards stay at their saved locations");
+        assert!(app.ui.rearrange_placement.is_none());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(app.ui.rearrange_artboards_spacing, remembered);
+    }
+
+    #[test]
+    fn revert_retires_rearrange_all_artboards_settings() {
+        check_revert_retires_rearrange(false, false);
+    }
+
+    #[test]
+    fn revert_retires_rearrange_selected_artboards_settings() {
+        check_revert_retires_rearrange(true, false);
+    }
+
+    #[test]
+    fn revert_retires_rearrange_canvas_placement() {
+        check_revert_retires_rearrange(true, true);
+    }
+
+    #[test]
+    fn rearrange_opening_keeps_the_intended_artboards_after_rows_move() {
+        let mut app = app(3);
+        app.select_tool("artboard");
+        let st = app.session.active().unwrap();
+        let source = [st.doc.artboards[0].id, st.doc.artboards[2].id];
+        open_selected(&mut app, &[0, 2]);
+        set(&app, &[("layout", json!("row")), ("spacing", json!(20))]).unwrap();
+        app.run("artboard.reorder", json!({"index": 0, "to": 1})).unwrap();
+        let before = origins(&app);
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        ok(&mut app);
+        let placement = app.ui.rearrange_placement.as_ref().expect("the original artboards wait for placement");
+        assert_eq!(placement.ids, source);
+        assert_eq!(placement.params["indices"], json!([1, 2]));
+        place(&mut app, Some(Point::new(700.0, 300.0)));
+        assert_eq!(origins(&app), [before[0], (700.0, 300.0), (820.0, 300.0)]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+    }
+
+    #[test]
+    fn rearrange_opening_does_not_place_a_deleted_artboards_replacement() {
+        let mut app = app(3);
+        app.select_tool("artboard");
+        open_selected(&mut app, &[0]);
+        app.run("artboard.delete", json!({"index": 0})).unwrap();
+        let before = origins(&app);
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        ok(&mut app);
+        assert!(app.ui.rearrange_placement.is_none(), "the replacement row is not a placement target");
+        assert_eq!(origins(&app), before);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+
     /// #681: the menu item opens the dialog; each setting reaches `artboard.rearrange`, as one undo step; a
     /// setting the layout makes meaningless is refused.
     #[test]
@@ -537,7 +690,7 @@ mod tests {
         assert_eq!(shown["indices"], json!([0, 2]));
         let (title, count) = app.dialogs().unwrap().with(|host| {
             let d = host.get::<RearrangeArtboardsDialog>().unwrap();
-            (d.values.indices.is_some(), d.artboards)
+            (d.selected.is_some(), d.artboards)
         });
         assert_eq!((title, count), (true, 2), "Rearrange for the 2 selected artboards");
         set(&app, &[("layout", json!("row"))]).unwrap();
