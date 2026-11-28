@@ -318,7 +318,7 @@ impl Session {
                 .into_iter()
                 .filter(|id| editable(&id))
                 .collect();
-            return targets.iter().zip(row.per_target(self, &targets)).find_map(|(id, at)| {
+            return targets.iter().zip(row.each_target(self, &targets)).find_map(|(id, at)| {
                 let n = st.doc.node(*id)?;
                 of(n, at?.resolve(&n.appearance, !stroke, "paint.proxies").ok()?)
             });
