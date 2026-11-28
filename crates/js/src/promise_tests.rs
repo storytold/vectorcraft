@@ -89,6 +89,26 @@ fn promise_statics_accept_registered_host_constructors_and_bound_targets() {
 }
 
 #[test]
+fn promise_statics_reject_host_classes_registered_without_construct() {
+    let mut r = realm();
+    r.define_host_classes(vec![HostClass { name: "Fixed".into(), parent: None, members: Vec::new(), index: None, construct: None }], Vec::new())
+        .unwrap();
+    let result = r
+        .run(
+            "var log = []; \
+         try { new Fixed(); log.push('constructed'); } \
+         catch (e) { log.push(e instanceof TypeError && e.message === 'Fixed cannot be constructed by a script'); } \
+         var methods = ['resolve', 'reject', 'all', 'allSettled', 'race']; \
+         for (var j = 0; j < methods.length; j++) { \
+           try { Promise[methods[j]].call(Fixed, []); log.push('accepted'); } \
+           catch (e) { log.push(e instanceof TypeError && e.message.indexOf('not a constructor') >= 0); } \
+         } log.join()",
+        )
+        .unwrap();
+    assert_eq!(result, JsValue::String(["true"; 6].join(",")));
+}
+
+#[test]
 fn promise_prototype_has_a_configurable_string_tag() {
     assert_eq!(
         string(
