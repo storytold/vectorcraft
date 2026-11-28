@@ -223,7 +223,7 @@ fn resolution_row() -> Param {
         let entries: Vec<Entry<usize>> = RESOLUTION_LABELS.iter().enumerate().map(|(i, label)| Entry::new(i, tl!(*label))).collect();
         let (mut picked, mut typed) = (None, None);
         let shown = Row::new().show(ui, |ui, _| {
-            picked = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).value().copied();
+            picked = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).events.committed().copied();
             if preset.is_none() {
                 let field = NumberField::new(tl!("Resolution:"), Bind::given(Some(ppi)))
                     .range(1.0..=4608.0)
@@ -274,7 +274,7 @@ fn color_choice(
         let color = (at == ids.len()).then(|| Srgba::from(Rgba::from_hex(&current).unwrap_or(Rgba::rgb(128, 128, 128))));
         let (mut picked, mut pick_color) = (None, false);
         let shown = Row::new().show(ui, |ui, _| {
-            picked = Select::new(tl!(label), Bind::given(at.max(start)), &entries).show(ui).value().copied();
+            picked = Select::new(tl!(label), Bind::given(at.max(start)), &entries).show(ui).events.committed().copied();
             if let Some(color) = color {
                 pick_color = Swatch::new(tl!(label), color).show(ui).clicked;
             }

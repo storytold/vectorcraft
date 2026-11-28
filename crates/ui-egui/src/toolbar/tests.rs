@@ -473,3 +473,57 @@ fn a_tool_card_shows_what_the_tool_does_and_what_its_keys_do() {
     app.run("prefs.set", json!({"key": "showToolTips", "value": false})).unwrap();
     assert!(!card::Cards::new(&app).has(&"selection".to_string()), "tool tips off: no card");
 }
+
+/// The Control bar's lists of the Mirror & Cut tool (Axis, Keep) and of Crop Image (PPI): an entry highlighted with the
+/// arrow keys leaves the tool's options as they were, Escape closes the list with nothing changed, and the entry
+/// chosen with Enter sets the option without touching the drawing.
+#[test]
+fn a_highlighted_control_bar_option_applies_only_once_it_is_chosen() {
+    use craft::ui::contract::Role as Kind;
+    use egui::{Key, Modifiers};
+
+    use crate::tests::panel_harness::Panel;
+
+    let png = vectorcraft_testkit::temp_dir("toolbar-crop-ppi").join("red.png");
+    let image = craft_image_codecs::Image::from_raw(
+        40,
+        40,
+        craft_image_codecs::ChannelLayout::Rgba,
+        craft_image_codecs::SampleType::U8,
+        [200u8, 40, 40, 255].repeat(40 * 40),
+    )
+    .unwrap();
+    let encoded = craft_image_codecs::encode(&image, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap();
+    std::fs::write(&png, encoded).unwrap();
+    for (tool, name, key) in [("mirrorCut", "Axis:", "axis"), ("mirrorCut", "Keep:", "keep"), (vectorcraft_tools::cropimage::ID, "PPI", "ppi")] {
+        let mut app = app_with(300, 300);
+        if tool == vectorcraft_tools::cropimage::ID {
+            app.run("file.place", json!({"path": png, "link": true, "at": [100.0, 100.0]})).unwrap();
+            app.run("ui.cropImage", json!({})).unwrap();
+        } else {
+            app.run("tool.select", json!({ "tool": tool })).unwrap();
+        }
+        assert_eq!(app.session.tool_id(), tool);
+        let mut panel = Panel::new(app, control_bar_options);
+        let state = |panel: &Panel| {
+            let app = panel.app();
+            let st = app.session.active().unwrap();
+            (app.session.tool_options()[key].clone(), st.doc.clone(), st.history.undo.len())
+        };
+        let before = state(&panel);
+        panel.click_role(name, Kind::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(state(&panel), before, "a highlighted {name} entry changes no option");
+        panel.key(Key::Escape, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(state(&panel), before, "Escape leaves {name} as it was");
+        panel.click_role(name, Kind::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        panel.frame();
+        let (option, doc, undo) = state(&panel);
+        assert_ne!(option, before.0, "Enter sets {name}");
+        assert_eq!((doc, undo), (before.1, before.2), "{name} only changes the tool's options");
+    }
+}

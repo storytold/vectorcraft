@@ -66,7 +66,7 @@ fn check(ui: &mut Ui, label: &'static str, on: bool, enabled: bool) -> Option<bo
 }
 
 /// A select named `name` (shown before it when `caption`) over `items` of `(value, shown name)`; the
-/// value the user picked this pass.
+/// value the user chose this pass, not one only highlighted.
 fn pick<T: Clone + PartialEq + Send + Sync + 'static>(
     ui: &mut Ui,
     name: &str,
@@ -82,7 +82,8 @@ fn pick<T: Clone + PartialEq + Send + Sync + 'static>(
         if caption {
             Text::new(label.clone()).show(ui);
         }
-        picked = Select::new(label.clone(), Bind::given(current.clone()), &entries).enabled(enabled).id_salt(name).show(ui).value().cloned();
+        picked =
+            Select::new(label.clone(), Bind::given(current.clone()), &entries).enabled(enabled).id_salt(name).show(ui).events.committed().cloned();
     });
     picked
 }
@@ -539,6 +540,45 @@ mod tests {
         assert_eq!(row(Some("B")).params(AssignChoice::Profile, Some("B")), None);
         let none = AssignRow { others: vec![], ..row(None) };
         assert_eq!(none.params(AssignChoice::Profile, None), None, "no other profile to pick");
+    }
+
+    /// A profile highlighted in the Assign rows' Profile list assigns nothing, Escape leaves the document as it was,
+    /// and the profile chosen with Enter is assigned in one undo step.
+    #[test]
+    fn a_highlighted_profile_is_assigned_only_once_it_is_chosen() {
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        // Assigning a profile to the front document changes the process's active color settings.
+        if !crate::testing::in_own_process("panels::separations::tests::a_highlighted_profile_is_assigned_only_once_it_is_chosen") {
+            return;
+        }
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({})).unwrap();
+        app.run("edit.assignProfile", json!({"rgb": null, "cmyk": null})).unwrap();
+        let row = AssignRow::of(&app.session.active().unwrap().doc);
+        assert!(row.others.len() >= 2, "{row:?}");
+        let mut panel = Panel::new(app, show);
+        let state = |panel: &Panel| {
+            let app = panel.app();
+            let st = app.session.active().unwrap();
+            (vectorcraft_engine::cmd::colormgmt::doc_profiles(&st.doc), st.history.undo.len())
+        };
+        let before = state(&panel);
+        panel.click_role("Profile:", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(state(&panel), before, "a highlighted profile assigns nothing");
+        panel.key(Key::Escape, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(state(&panel), before, "Escape leaves the document's profiles as they were");
+        panel.click_role("Profile:", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        panel.frame();
+        let ((rgb, _), undo) = state(&panel);
+        assert_eq!(rgb.as_deref(), Some(row.others[1].as_str()), "Enter assigns the chosen profile");
+        assert_eq!(undo, before.1 + 1, "the choice is one undo step");
     }
 
     /// The Assign rows follow the document's color mode: an RGB document lists the RGB working space

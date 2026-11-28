@@ -224,6 +224,47 @@ fn png_options_name_the_pixel_size_in_the_accessibility_tree() {
     assert_eq!(sizes(&mut app), ["120 × 80 px"]);
 }
 
+/// PNG Options' Resolution and Background Color, and PNG-8 Options' Matte: an entry highlighted with the arrow keys
+/// changes no field, Escape closes the list with the dialog open and its fields as they were, and Enter applies the
+/// entry.
+#[test]
+fn a_highlighted_raster_option_applies_only_once_it_is_chosen() {
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+    use vectorcraft_engine::cmd::fileio::FORMATS;
+
+    use crate::tests::panel_harness::Panel;
+
+    for (id, name) in [("png", "Resolution:"), ("png", "Background Color:"), ("png8", "Matte:")] {
+        let mut app = VectorcraftApp::new(Session::new(), Services::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(1280.0, 1100.0));
+        let format = FORMATS.iter().find(|f| f.id == id).unwrap();
+        super::png_options::open(&mut panel.app(), format, json!({"format": id, "path": format!("/out/a.{id}")}));
+        panel.frame();
+        panel.frame();
+        let fields =
+            |panel: &Panel| on_top(&panel.app(), |h, _, at| h.open_dialogs().into_iter().find(|d| d.id == at).and_then(|d| d.fields)).flatten();
+        let before = fields(&panel);
+        assert!(before.is_some(), "{id} options are open");
+        panel.click_role(name, Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(fields(&panel), before, "a highlighted {name} entry changes no field");
+        panel.key(Key::Escape, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(fields(&panel), before, "Escape closes the {name} list with the fields as they were");
+        panel.click_role(name, Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        panel.frame();
+        let after = fields(&panel);
+        assert!(after.is_some(), "Enter in the {name} list keeps the dialog open");
+        assert_ne!(after, before, "Enter applies the {name} entry");
+    }
+}
+
 /// The role and name of each node of the window's accessibility tree, in a frame drawn once the dialogs have settled.
 fn access_names(app: &mut VectorcraftApp) -> Vec<(egui::accesskit::Role, String)> {
     super::tests::settle(app);
