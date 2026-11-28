@@ -371,11 +371,12 @@ fn row(ui: &mut egui::Ui, name: &Label, salt: &str, mut body: impl FnMut(&mut eg
     Field::new(name.clone()).id_salt(salt).show(ui, |ui, _| body(ui));
 }
 
-/// A select of `entries` named `name` (an English label), over `value`; `set` takes a pick.
+/// A select of `entries` named `name` (an English label), over `value`; `set` takes the entry chosen, not one only
+/// highlighted.
 fn choose<T: craft::behavior::Value>(ui: &mut egui::Ui, name: &str, salt: &str, entries: &[Entry<T>], value: T, mut set: impl FnMut(T)) {
     let label = word(name);
     row(ui, &label, salt, |ui| {
-        if let Some(picked) = Select::new(label.clone(), Bind::given(value.clone()), entries).show(ui).value().cloned() {
+        if let Some(picked) = Select::new(label.clone(), Bind::given(value.clone()), entries).show(ui).events.committed().cloned() {
             set(picked);
         }
     });

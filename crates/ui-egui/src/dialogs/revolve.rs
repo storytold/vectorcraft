@@ -130,14 +130,15 @@ fn set_value(fields: &mut DialogFields, key: &str, value: &Value) {
     }
 }
 
-/// A select over `titles`: the index picked this pass. `at` is the shown entry (none shows a placeholder).
+/// A select over `titles`: the index chosen this pass, not one only highlighted. `at` is the shown entry (none shows a
+/// placeholder).
 fn pick(ui: &mut egui::Ui, label: &str, titles: &[String], at: Option<usize>, default: Option<usize>) -> Option<usize> {
     let entries: Vec<Entry<usize>> = titles.iter().enumerate().map(|(i, t)| Entry::new(i, t.clone())).collect();
     let mut bind = Bind::given(at.unwrap_or(usize::MAX));
     if let Some(d) = default {
         bind = bind.reset(d);
     }
-    Select::new(label.to_owned(), bind, &entries).id_salt(label).show(ui).value().copied()
+    Select::new(label.to_owned(), bind, &entries).id_salt(label).show(ui).events.committed().copied()
 }
 
 /// A select row of JSON `options` (value, title) for `key`.

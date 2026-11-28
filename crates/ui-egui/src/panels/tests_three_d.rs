@@ -237,6 +237,39 @@ fn a_drag_previews_and_records_one_undo_step_when_released() {
     assert_eq!(undo_len(&app), history + 1);
 }
 
+/// A bevel shape highlighted with the arrow keys leaves the effect as it was, Escape closes the list with nothing
+/// changed, and the shape chosen with Enter applies in one undo step.
+#[test]
+fn a_highlighted_bevel_shape_applies_only_once_it_is_chosen() {
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    use crate::tests::panel_harness::Panel;
+
+    let mut app = app();
+    set_type(&mut app, "extrude").unwrap();
+    let mut panel = Panel::new(app, show);
+    let state = |panel: &Panel| {
+        let app = panel.app();
+        (effect(&app).1, undo_len(&app))
+    };
+    let before = state(&panel);
+    panel.click_role("Bevel Shape", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.frame();
+    assert_eq!(state(&panel), before, "a highlighted bevel shape changes nothing");
+    panel.key(Key::Escape, Modifiers::NONE);
+    panel.frame();
+    assert_eq!(state(&panel), before, "Escape leaves the effect as it was");
+    panel.click_role("Bevel Shape", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Enter, Modifiers::NONE);
+    panel.frame();
+    let (params, undo) = state(&panel);
+    assert_ne!(params["bevel"], before.0["bevel"], "Enter applies the chosen bevel shape");
+    assert_eq!(undo, before.1 + 1, "the choice is one undo step");
+}
+
 #[test]
 fn a_change_reaches_each_selected_3d_effect_and_no_other_effect() {
     let mut app = app();

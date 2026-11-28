@@ -223,6 +223,42 @@ fn enter(app: &mut VectorcraftApp) {
     frame(app);
 }
 
+/// Define Grid's Type, Units and Scale: an entry highlighted with the arrow keys changes no field, Escape closes the
+/// list with the dialog open and its fields as they were, and Enter applies the entry.
+#[test]
+fn a_highlighted_define_grid_choice_applies_only_once_it_is_chosen() {
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    use crate::tests::panel_harness::Panel;
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 800, "height": 600})).unwrap();
+    let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+    panel.room(egui::vec2(1280.0, 1100.0));
+    panel.app().run("ui.perspectiveGridDialog", json!({})).unwrap();
+    panel.frame();
+    panel.frame();
+    let fields = |panel: &Panel| host(&panel.app(), |h| h.open_dialogs().pop().and_then(|d| d.fields));
+    for name in ["Type:", "Units:", "Scale:"] {
+        let before = fields(&panel);
+        panel.click_role(name, Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(fields(&panel), before, "a highlighted {name} entry changes no field");
+        panel.key(Key::Escape, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(kind(&panel.app()).as_deref(), Some(super::perspective_grid::KIND), "Escape closes the list, not the dialog");
+        assert_eq!(fields(&panel), before, "Escape leaves the fields as they were");
+        panel.click_role(name, Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(kind(&panel.app()).as_deref(), Some(super::perspective_grid::KIND), "Enter in the list keeps the dialog open");
+        assert_ne!(fields(&panel), before, "Enter applies the {name} entry");
+    }
+}
+
 #[test]
 fn enter_is_ok_in_define_grid_and_save_grid_as_preset() {
     let mut app = app();

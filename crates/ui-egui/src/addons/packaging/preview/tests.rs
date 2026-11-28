@@ -565,3 +565,37 @@ fn the_status_line_reports_open_joints_crossing_panels_and_other_blanks() {
     // With no fold there is the one line that says why.
     assert_eq!(status(0, None, false).len(), 1);
 }
+
+/// View and Inside: an entry highlighted with the arrow keys changes no setting, Escape leaves the settings as they
+/// were, and Enter applies the entry.
+#[test]
+fn a_highlighted_view_or_inside_applies_only_once_it_is_chosen() {
+    use craft::ui::contract::Role;
+
+    use crate::tests::panel_harness::Panel;
+
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let (mut app, _) = app();
+    app.run("ui.foldPreview", json!({"view": "front", "inside": ""})).unwrap();
+    let mut panel = Panel::new(app, show);
+    panel.room(vec2(520.0, 440.0));
+    let settings = |panel: &Panel| panel.app().ui.fold_preview.clone();
+    for name in ["View", "Inside"] {
+        let before = settings(&panel);
+        panel.click_role(name, Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(settings(&panel), before, "a highlighted {name} entry changes no setting");
+        panel.key(Key::Escape, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(settings(&panel), before, "Escape leaves the {name} setting as it was");
+        panel.click_role(name, Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        panel.frame();
+        assert_ne!(settings(&panel), before, "Enter applies the {name} entry");
+    }
+    let set = settings(&panel);
+    assert_eq!((set.rotate_x, set.rotate_y), (0.0, 180.0), "the entry after Front is Back");
+    assert!(!set.inside.is_empty(), "the entry after White is a swatch");
+}

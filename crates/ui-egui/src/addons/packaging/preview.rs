@@ -562,13 +562,13 @@ fn toolbar(ui: &mut Ui, words: &FoldPreviewWords, doc: &vectorcraft_engine::doc:
         .collect();
     Row::new().wrap(true).show(ui, |ui, _| {
         let current = set.view().map_or("", |v| v.1);
-        if let Some(&id) = Select::new(words.view.clone(), Bind::given(current), &views).show(ui).value()
+        if let Some(&id) = Select::new(words.view.clone(), Bind::given(current), &views).show(ui).events.committed()
             && let Some(&(_, _, x, y)) = VIEWS.iter().find(|v| v.1 == id)
         {
             (set.rotate_x, set.rotate_y, set.pan) = (x, y, [0.0; 2]);
         }
         let inside = Select::new(words.inside.clone(), Bind::given(set.inside.clone()), &insides).placeholder(set.inside.clone()).show(ui);
-        if let Some(name) = inside.value() {
+        if let Some(name) = inside.events.committed() {
             set.inside.clone_from(name);
         }
         Checkbox::new(Bind::bound(&mut set.show_fold_lines)).label(words.show_fold_lines.clone()).show(ui);

@@ -599,7 +599,9 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         let entries: Vec<Entry<&'static str>> = choices.iter().map(|&(value, name)| Entry::new(value, tl!(name))).collect();
         let current = opts[key].as_str().and_then(|v| choices.iter().find(|(value, _)| *value == v)).map(|(value, _)| *value);
         let picked = Field::new(tl!(label))
-            .show(ui, |ui, _| Select::new(tl!(label), Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), &entries).show(ui).value().copied())
+            .show(ui, |ui, _| {
+                Select::new(tl!(label), Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), &entries).show(ui).events.committed().copied()
+            })
             .inner
             .flatten();
         if let Some(value) = picked {
@@ -645,7 +647,7 @@ fn crop_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     let label = |v: f64| crate::i18n::fmt(tl!("{n} ppi"), &[("n", &format!("{}", (v * 100.0).round() / 100.0))]);
     let choices: Vec<Entry<f64>> = PPI_CHOICES.iter().map(|&v| Entry::new(v, label(v)).enabled(v <= max + 1e-6)).collect();
     Field::new(tl!("PPI")).show(ui, |ui, _| {
-        if let Some(v) = Select::new(tl!("PPI"), Bind::given(ppi), &choices).placeholder(label(ppi)).show(ui).value().copied() {
+        if let Some(v) = Select::new(tl!("PPI"), Bind::given(ppi), &choices).placeholder(label(ppi)).show(ui).events.committed().copied() {
             edits.push(("ppi", json!(v)));
         }
         // An image's own resolution above the limit (a linked image's, or one past 2400 ppi) still
