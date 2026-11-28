@@ -206,6 +206,34 @@ fn done_keeps_the_settings_without_printing_and_bad_settings_keep_the_dialog() {
     assert!(!crate::menus::enabled(&app, "print.printerSetup"), "the mock has no settings to open");
 }
 
+#[test]
+fn print_does_not_send_or_update_the_other_drawing() {
+    let (mut app, jobs) = app();
+    app.run("file.new", json!({"width": 180, "height": 100, "name": "Other drawing"})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 50, "height": 30})).unwrap();
+    let activate = |app: &mut VectorcraftApp, index| app.run("document.activate", json!({"index": index})).unwrap();
+    let undo = app.session.active().unwrap().history.undo.len();
+
+    activate(&mut app, 0);
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    set(&mut app, "copies", json!(2));
+    activate(&mut app, 1);
+    confirm(&mut app);
+
+    assert!(jobs.borrow().is_empty());
+    let other = app.session.active().unwrap();
+    assert!(other.doc.print_setup.is_none());
+    assert_eq!(other.history.undo.len(), undo);
+    assert!(is_open(&app));
+    assert_eq!(fields(&app)["copies"], 2);
+    activate(&mut app, 0);
+    confirm(&mut app);
+    assert_eq!(jobs.borrow().len(), 1);
+    assert_eq!(pages(&jobs.borrow()[0].2), 6);
+    assert!(!is_open(&app));
+}
+
 /// A print queue that puts each page on the paper as it is, as `lp` does.
 struct UprightQueue(Jobs);
 
@@ -221,6 +249,59 @@ impl PrintService for UprightQueue {
     fn turns_landscape(&self) -> bool {
         false
     }
+}
+
+/// The printers whose settings the setup service was asked to open.
+type Setups = Rc<RefCell<Vec<Option<String>>>>;
+
+/// A print service that opens printer settings, recording each printer it was asked for.
+struct SetupPrint(Jobs, Setups);
+
+impl PrintService for SetupPrint {
+    fn printers(&mut self) -> Vec<Printer> {
+        MockPrint(self.0.clone()).printers()
+    }
+
+    fn print(&mut self, job: &PrintJob) -> Result<String, String> {
+        MockPrint(self.0.clone()).print(job)
+    }
+
+    fn has_setup(&self) -> bool {
+        true
+    }
+
+    fn setup(&mut self, printer: Option<&str>) -> Result<(), String> {
+        self.1.borrow_mut().push(printer.map(str::to_string));
+        Ok(())
+    }
+}
+
+#[test]
+fn setup_opens_the_settings_of_the_printer_chosen() {
+    let setups = Setups::default();
+    let services = Services { print: Some(Box::new(SetupPrint(Jobs::default(), setups.clone()))), ..Default::default() };
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+    app.run("file.new", json!({"width": 120, "height": 90})).unwrap();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    press(&mut app, "Setup…");
+    set(&mut app, "printer", json!("Office"));
+    press(&mut app, "Setup…");
+    assert_eq!(*setups.borrow(), [Some("Proofer".to_string()), Some("Office".to_string())], "the default printer, then the one chosen");
+    // PDF File has no printer settings.
+    set(&mut app, "printer", json!("PDF File"));
+    // The frame after the change draws the row with PDF File's controls.
+    pump(&mut app);
+    pump(&mut app);
+    let r = call_raw(&mut app, "ui.click", json!({"control": {"name": "Setup…"}}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert_eq!(setups.borrow().len(), 2);
+    // A service without printer settings shows no Setup….
+    let (mut app, _) = self::app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    let r = call_raw(&mut app, "ui.click", json!({"control": {"name": "Setup…"}}));
+    assert_eq!(r["ok"], false, "{r}");
 }
 
 #[test]
@@ -346,6 +427,23 @@ fn the_control_channel_fills_and_confirms_the_dialog() {
     assert_eq!(jobs.borrow().len(), 1);
 }
 
+/// The Summary section's Pages, Options and Warnings are each named in the window's accessibility tree, with their
+/// summary text as the value.
+#[test]
+fn the_summary_names_its_pages_options_and_warnings() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    set(&mut app, "section", json!("Summary"));
+    pump(&mut app);
+    let ctx = ctx(&app);
+    let out = crate::testing::app_frame(&mut app, &ctx, Default::default());
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    for name in ["Pages", "Options", "Warnings"] {
+        assert!(nodes.iter().any(|(_, n)| n.label() == Some(name) && n.value().is_some_and(|v| !v.is_empty())), "{name} has no summary");
+    }
+}
+
 /// Scale W and H of the open dialog, and its link.
 fn scale(app: &VectorcraftApp) -> (f64, f64, bool) {
     let f = fields(app);
@@ -413,6 +511,23 @@ fn a_print_preset_keeps_the_scale_link() {
 }
 
 #[test]
+fn print_preset_changes_survive_a_paused_preview() {
+    let (mut app, jobs) = app();
+    app.run("print.presets.save", json!({"name": "Apart", "settings": {"scaling": "custom", "scale": {"width": 30, "height": 90}}})).unwrap();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    app.run("file.new", json!({"width": 90, "height": 90})).unwrap();
+    set(&mut app, "preset", json!("Apart"));
+    let ctx = ctx(&app);
+    super::print::pump(&mut app, &ctx);
+    assert_eq!(scale(&app), (30.0, 90.0, false));
+    assert!(jobs.borrow().is_empty());
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    super::print::pump(&mut app, &ctx);
+    assert_eq!(scale(&app), (30.0, 90.0, false));
+}
+
+#[test]
 fn a_scale_set_through_the_dialog_keeps_the_percentage_it_changes() {
     let (mut app, _) = app();
     app.run("file.print", json!({})).unwrap();
@@ -467,4 +582,41 @@ fn a_spot_inks_icon_converts_it_to_process_and_back() {
     call_raw(&mut app, "ui.click", json!({"control": {"name": "Keep Gold as spot"}}));
     pump(&mut app);
     assert_eq!(inks(&app), json!([{"name": "Gold", "print": true, "convertToProcess": false}]));
+}
+
+/// The names screen readers give the number and text fields in `out`'s accessibility tree: a field's own
+/// name, else the text of a label it is labeled by, else "".
+pub(super) fn field_names(out: &egui::FullOutput) -> Vec<String> {
+    use egui::accesskit::Role;
+    let nodes = &out.platform_output.accesskit_update.as_ref().expect("an accessibility tree").nodes;
+    let text_of = |id| nodes.iter().find(|(n, _)| *n == id).and_then(|(_, n)| n.label().or(n.value())).map(str::to_string);
+    nodes
+        .iter()
+        .filter(|(_, n)| matches!(n.role(), Role::TextInput | Role::SpinButton))
+        .map(|(_, n)| n.label().map(str::to_string).or_else(|| n.labelled_by().iter().find_map(|l| text_of(*l))).unwrap_or_default())
+        .collect()
+}
+
+/// Every number and length field of the dialog's sections has a name that tells it from the others in its row.
+#[test]
+fn every_number_and_length_field_is_named() {
+    let (mut app, _) = app();
+    app.run("file.print", json!({})).unwrap();
+    pump(&mut app);
+    let sections: [(&str, &[&str]); 4] = [
+        ("General", &["Copies", "Range", "Width", "Height", "Overlap", "Tile Range", "Gutter", "Scale 1", "Scale 2"]),
+        ("Marks and Bleed", &["Offset", "Top", "Bottom", "Left", "Right"]),
+        ("Graphics", &["Flatness"]),
+        ("Advanced", &["Unprintable margin"]),
+    ];
+    for (section, expected) in sections {
+        set(&mut app, "section", json!(section));
+        pump(&mut app);
+        let ctx = ctx(&app);
+        let out = crate::testing::app_frame(&mut app, &ctx, Default::default());
+        let names = field_names(&out);
+        for name in expected {
+            assert!(names.iter().any(|n| n == name), "{section}: {name} in {names:?}");
+        }
+    }
 }

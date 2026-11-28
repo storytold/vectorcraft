@@ -16,7 +16,7 @@ use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, GlyphLabel, LabelKind, LabelPress, Props, Show, ShowContainer, SideLabel, Sizing};
-use craft::ui::display::{Shade, Text};
+use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::PanelRow;
@@ -436,24 +436,23 @@ fn angle_field(
         .side(SideLabel::new().kind(LabelKind::Glyph(GlyphLabel::icon(IconId::new(icon)))).tooltip(label).scrub(true))
         .enabled(enabled)
         .show(ui, |ui, _| {
-            NumberField::new(label, Bind::given(Some(shown)))
-                .unit("°")
-                .commit_decimals(2)
-                .range(range.clone())
-                .step_arrows(StepArrows::Leading)
-                .presets(&entries)
-                .stepper(stops_stepper(15.0, presets, |v| format!("{v:.2}")))
-                .show(ui)
+            let field = NumberField::new(label, Bind::given(Some(shown))).unit("°").commit_decimals(2).range(range.clone());
+            // No presets: the plain field production's Properties panel shows.
+            if presets.is_empty() {
+                field.show(ui)
+            } else {
+                field.step_arrows(StepArrows::Leading).presets(&entries).stepper(stops_stepper(15.0, presets, |v| format!("{v:.2}"))).show(ui)
+            }
         })
         .inner
 }
 
 /// Rotate: the bounding box's angle, and a new value turns the selection to it about the reference point
-/// (Alt+Enter turns a copy).
-pub(crate) fn rotate_field(app: &mut VectorcraftApp, ui: &mut Ui) {
+/// (Alt+Enter turns a copy). With no `presets` the field is plain: no step arrows and no preset list.
+pub(crate) fn rotate_field(app: &mut VectorcraftApp, ui: &mut Ui, presets: &[f64]) {
     let bx = app.selection_box();
     let angle = bx.as_ref().map_or(0.0, |b| b.angle);
-    let Some(out) = angle_field(ui, tl!("Rotate"), "rotate-ccw", angle, -360.0..=f64::INFINITY, &ANGLE_PRESETS, bx.is_some()) else { return };
+    let Some(out) = angle_field(ui, tl!("Rotate"), "rotate-ccw", angle, -360.0..=f64::INFINITY, presets, bx.is_some()) else { return };
     let copy = out.edit.submit_mods.alt && app.session.active().is_some_and(|st| st.selection.anchors.is_empty());
     apply_edits(app, &out.edit, EditPath::Preview, |app, v, live| {
         // The angle shown is the preview's while the gesture runs: its release keeps it.
@@ -568,7 +567,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     object_fields(app, ui, panel_groups());
     Row::new().show(ui, |ui, _| {
-        rotate_field(app, ui);
+        rotate_field(app, ui, &ANGLE_PRESETS);
         shear_field(app, ui);
     });
     // Lucide's flip icons are named for their mirror line: flip-vertical-2 draws a vertical
@@ -577,18 +576,21 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         IconButton::command(IconId::new("flip-vertical-2"), FLIP_HORIZONTAL).show(ui);
         IconButton::command(IconId::new("flip-horizontal-2"), FLIP_VERTICAL).show(ui);
     });
-    // Live shape properties (a path with live corners is no shape).
+    // Live shape properties (a path with live corners is no shape), ruled off from the fields as the options are.
     if let Some(n) = first_selected(app)
         && let NodeKind::Path { live: Some(live), .. } = &n.kind
         && !matches!(**live, LiveShape::Path { .. })
-        && !live_shape_rows(app, ui, &n, live, true)
     {
-        Text::new(tl!("Shape Properties:")).show(ui);
-        Text::new(tl!(n.kind_label())).shade(Shade::Muted).show(ui);
+        Divider::horizontal().show(ui);
+        if !live_shape_rows(app, ui, &n, live, true) {
+            Text::new(tl!("Shape Properties:")).show(ui);
+            Text::new(tl!(n.kind_label())).shade(Shade::Muted).show(ui);
+        }
     }
     if part_hidden(app, HIDE_OPTIONS_KEY) {
         return;
     }
+    Divider::horizontal().show(ui);
     let (sc, ss) = (app.session.prefs.scale_corners, app.session.prefs.scale_strokes);
     option_check(app, ui, tl!("Scale Corners"), "scaleCorners", sc);
     option_check(app, ui, tl!("Scale Strokes & Effects"), "scaleStrokes", ss);

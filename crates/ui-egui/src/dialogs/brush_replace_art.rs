@@ -22,7 +22,7 @@ super::confirm::wrapped_dialog!(ReplaceArtQuestion, StandardPrompt, KIND);
 
 /// What the question is about: the document it was asked in, the brush and the art.
 struct ReplaceArtAsk {
-    doc: Option<u64>,
+    doc: Option<(u64, u64)>,
     name: String,
     ids: Vec<u64>,
 }
@@ -59,7 +59,7 @@ pub fn ask(app: &mut VectorcraftApp, name: &str, ids: &[u64]) {
         app.status("no window");
         return;
     };
-    let doc = app.session.active().map(|d| d.uid);
+    let doc = app.session.active().map(|d| (d.uid, d.reverts));
     let prompt = StandardPrompt::custom(tl!(
         "Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?"
     ))
@@ -86,7 +86,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 
 /// Runs `brush.replaceArt`. When another document has become the active one, no brush changes.
 fn confirm(app: &mut VectorcraftApp, question: ReplaceArtAsk, apply: bool) {
-    if question.doc != app.session.active().map(|doc| doc.uid) {
+    if !super::brush_delete::confirmation_is_current(app, question.doc) {
         return;
     }
     let params = json!({"name": question.name, "ids": question.ids, "applyToStrokes": apply});

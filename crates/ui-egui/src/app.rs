@@ -1,17 +1,25 @@
 use craft::automation::ControlChannel;
 use craft::host::{AppInfo, Host, Wake};
+use craft::layers::ui::filter::ObjectsSearch;
 use craft::platform::clipboard::{Clipboard, ClipboardProbe, EventClipboard};
 use craft::platform::clock::monotonic_ms;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::{ActiveLook, PushButtonLook};
-use craft::ui::contract::{Bind, GlyphColon};
-use craft::ui::menu::MenuTitlePad;
+use craft::ui::choice::ChoiceLook;
+use craft::ui::contract::{Bind, CaptionInk, GlyphColon, LinkLabelInk, LinkLabelUnderline, MoveBandCursor, QuietHeader, SectionRhythm};
+use craft::ui::docking::IconGroupSeparator;
+use craft::ui::list::{CommandHighlight, ThumbRows};
+use craft::ui::menu::MenuTitleLook;
+use craft::ui::patterns::form_dialogs::PresetCardLook;
 use craft::ui::runtime::env::{RootEnv, Scale, ScrubDrags, WindowKey};
 use craft::ui::runtime::frame::{FrameInput, FrameOutput};
 use craft::ui::runtime::toast::{self, Toast};
 use craft::ui::runtime::windows::WindowHost;
+use craft::ui::sections::{DialogButtonLook, QuietTitleRow};
 use craft::ui::shell::embed::CloseDecision;
 use craft::ui::shell::{AppShell, CanvasPanel, Slot};
+use craft::ui::style::TrackFill;
+use craft::ui::tabs::{DocumentTabLook, TabCloseLook};
 use craft::ui::text::{NumberLook, NumberPrecision};
 use vectorcraft_engine::cmd::clipboard::PASTE_ORDER;
 use vectorcraft_engine::cmd::toast::Level;
@@ -23,7 +31,7 @@ use super::state::SYSTEM_CLIPBOARD_POLL;
 use super::{
     Arc, AutomationRoots, ControlRequest, Receiver, Session, UiState, VectorcraftApp, View, ViewInfo, background, canvas, chrome, credits, dialogs,
     edits, export_progress, file_access, file_asks, fileio, font_menu, i18n, io, menus, opening, palette, panel_docking, panels, place, placing,
-    plugin_runs, prefs_dialog, recovery, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
+    plugin_runs, prefs_dialog, recovery, retype_runs, screen_color, shortcuts, theme, trace_runs, unsaved, updates_ui,
 };
 
 mod commands;
@@ -40,8 +48,12 @@ pub(crate) mod view;
 
 pub use fonts::MAX_RECENT_FONTS;
 
-/// VectorCraft as the framework's services know it: the settings folder, the name and the version.
-const APP_INFO: AppInfo = AppInfo { id: "vectorcraft", name: "VectorCraft", version: env!("CARGO_PKG_VERSION") };
+/// VectorCraft as the framework's services know it: the settings id, the name and the version.
+/// A nightly build gives its own name and feed version; the id stays the stable one, since the
+/// runtime keys a theme's `[apps.<id>]` pins on it.
+fn app_info() -> AppInfo {
+    AppInfo { id: crate::os_window::SETTINGS_APP_ID, name: crate::os_window::name(), version: crate::os_window::version() }
+}
 
 /// Monotonic seconds of the app's clock, which recovery, the clipboard look and the frame rate
 /// count in.
@@ -90,7 +102,7 @@ impl VectorcraftApp {
             }
         };
         // PLAN: the hosts (hub-w3) replace `host` with the one they build (files, settings, jobs); every frame installs it through `frame_input`.
-        let host = Arc::new(Host::builder(APP_INFO).i18n(i18n::shared()).build());
+        let host = Arc::new(Host::builder(app_info()).i18n(i18n::shared()).build());
         Self {
             session,
             ui: UiState::default(),
@@ -108,6 +120,9 @@ impl VectorcraftApp {
                 last_ms: 0.0,
                 moved: false,
                 from_worker: false,
+                whole_frames: false,
+                view_sized_bounds: None,
+                web_patch_renderer: None,
                 reused: None,
                 waits_for_still: cfg!(target_arch = "wasm32"),
                 still: None,
@@ -121,6 +136,7 @@ impl VectorcraftApp {
                 find_font: None,
                 hidden_chars: Default::default(),
                 spelling: Default::default(),
+                text_nodes: Default::default(),
                 momentary: None,
                 selection_box: None,
                 selection_bounds: None,
@@ -132,10 +148,12 @@ impl VectorcraftApp {
                 plugin_keys: Default::default(),
                 placed_keys: Default::default(),
                 view_moved: None,
+                hover_object: None,
                 grab: None,
                 carry_target: None,
                 last_drag: None,
                 escaped_press: false,
+                host_caps_lock: None,
                 committed_preview: false,
                 panes: Default::default(),
                 windows: crate::doc_windows::Windows::new(known),
@@ -171,6 +189,7 @@ impl VectorcraftApp {
             titlebar_inset: 0.0,
             last_effect: None,
             last_pathfinder: None,
+            last_filters: Default::default(),
             character_focus: None,
             run_count: 0,
             channel: None,
@@ -207,6 +226,7 @@ impl VectorcraftApp {
             plugin_runs: Default::default(),
             placing: Default::default(),
             trace_runs: Default::default(),
+            retype_runs: Default::default(),
             recovery: Default::default(),
             closing: None,
             prefs: None,
@@ -215,13 +235,17 @@ impl VectorcraftApp {
             shortcuts_dialog: None,
             shortcut_overrides: Default::default(),
             told: Default::default(),
+            missing_font_edit_token: None,
             held: Default::default(),
+            document_setup_source: None,
             edit_scopes: Default::default(),
             command_dialog: Default::default(),
             effect_dialogs: Default::default(),
             three_d_dialog: None,
             three_d: Default::default(),
             export_dialogs: Default::default(),
+            slice_dialogs: Default::default(),
+            package_document: None,
             web_export: Default::default(),
             flattener_preview: Default::default(),
             flatten_dialog: Default::default(),
@@ -251,6 +275,8 @@ impl VectorcraftApp {
             ticked_pass: None,
             #[cfg(test)]
             now_override: None,
+            #[cfg(test)]
+            clock_origin: craft::ui::runtime::motion::now(),
             #[cfg(test)]
             fail_next_tool_choice: None,
             held_tool: Vec::new(),
@@ -308,6 +334,26 @@ impl VectorcraftApp {
 /// eframe isn't a dependency of this crate (the host owns the event loop); these entry points are
 /// called from the host's `eframe::App` impl through `embed`'s hooks.
 impl VectorcraftApp {
+    /// Seconds on the app's clock: the monotonic clock, or the time a test set in `now_override`.
+    pub(crate) fn now(&self) -> f64 {
+        #[cfg(test)]
+        if let Some(now) = self.now_override {
+            return now;
+        }
+        now_secs()
+    }
+
+    /// The app's clock as an instant, which the control channel times requests and captures with:
+    /// [`motion::now`](craft::ui::runtime::motion::now), or `now_override` seconds after the app was
+    /// made when a test set it.
+    pub(crate) fn instant(&self) -> craft::ui::runtime::motion::Instant {
+        #[cfg(test)]
+        if let Some(now) = self.now_override {
+            return self.clock_origin + std::time::Duration::from_secs_f64(now.max(0.0));
+        }
+        craft::ui::runtime::motion::now()
+    }
+
     /// Applies the work that finished off the UI thread. It stays pending while a script runs, since
     /// every change to the documents ends in a busy error until the script ends.
     pub(crate) fn poll_finished_work(&mut self) {
@@ -319,6 +365,7 @@ impl VectorcraftApp {
         plugin_runs::poll(self);
         trace_runs::poll(self);
         placing::poll(self);
+        retype_runs::poll(self);
     }
 
     /// The language the UI is drawn in: the Preferences window's choice while it is open (so a
@@ -354,12 +401,14 @@ impl VectorcraftApp {
         }
         font_menu::end_previews(self, &out.ended_previews);
         edits::end_removed(self, &out.removed_gestures);
+        dialogs::three_d::sync_graphics_source(self);
         let lang = self.ui_language();
         if self.host.lang() != lang {
             self.host = Arc::new(self.host.with_lang(lang));
         }
         let native_ppp = self.ui_ctx.as_ref().map_or(1.0, |ctx| ctx.pixels_per_point() / ctx.zoom_factor());
-        let root = root_env(&self.session.prefs, native_ppp);
+        // The canvas steps through the zoom stops of the current window's display.
+        let root = root_env(&self.session.prefs, native_ppp, self.print_ppi());
         FrameInput::new(root).commands(menus::model::command_input(self)).host(self.host.clone())
     }
 
@@ -415,12 +464,17 @@ impl VectorcraftApp {
         // Monotonic host time, never egui's `InputState::time`: a hidden window's `logic` replays
         // the last shown pass's time, freezing recovery, clipboard polling and deadlines. Tests
         // inject a clock to drive idle scheduling deterministically.
-        #[cfg(test)]
-        let now = self.now_override.unwrap_or_else(now_secs);
-        #[cfg(not(test))]
-        let now = now_secs();
+        let now = self.now();
         self.perf.fps = self.frame_rate.frame(now, self.perf.frame_ms / 1000.0);
         self.sync_views();
+        // With no document open too, so closing the last one stops the host reading the wheel. A
+        // held press, whose previews change the document each frame, keeps what it was told.
+        if self.canvas.grab.is_none() {
+            crate::stylus::sync_wheel_use(self);
+        }
+        // A document that moved between the main window and a floating OS window, or opened, takes
+        // the density of the display that shows it.
+        self.settle_screen_ppi_if_changed();
         self.refresh_replace_font_warning(false);
         updates_ui::tick(self, ctx);
         // Read the system clipboard only when that alone decides whether Paste is enabled. A
@@ -479,6 +533,7 @@ impl VectorcraftApp {
             || !self.plugin_runs.running.is_empty()
             || !self.placing.pending.is_empty()
             || !self.trace_runs.running.is_empty()
+            || self.retype_runs.running.is_some()
         {
             // Keep the status bar's progress moving and pick the result up when it arrives.
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
@@ -490,6 +545,18 @@ impl VectorcraftApp {
         crate::keymap::note_os(ctx);
         prefs_dialog::apply_runtime(self, ctx);
         self.run_control(ctx);
+        // Plug-ins loading on other threads since launch install as their loads finish; until then
+        // the host keeps coming back to look again, and once more when the last one installs, for
+        // what waits for them. They install after the control requests are drained, so the frame
+        // after the last one opens the files held for them (the desktop app does that before this
+        // pass) before a control request waiting for them runs.
+        if self.session.plugins_loading() {
+            if self.session.poll_plugin_loads() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
+            } else {
+                ctx.request_repaint();
+            }
+        }
         // In the next frame's first pass, as production's one-pass frames did: a second pass of the frame that asked
         // for it (one a background run's result can bring) doesn't open it early.
         if ctx.current_pass_index() == 0
@@ -505,6 +572,9 @@ impl VectorcraftApp {
         if let Some(wait) = crate::panels::actions::tick_playback(self, now) {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
+        // A `prefs.reset` run in this frame outside `Self::run` (a script's, say): the pass that follows draws the
+        // reset rows.
+        prefs_dialog::apply_prefs_resets(self);
     }
 
     /// The canvas panel's body: the document tabs, then the canvas (a pane for each document while
@@ -513,11 +583,13 @@ impl VectorcraftApp {
     pub(crate) fn canvas_area(&mut self, ui: &mut egui::Ui) {
         let opening = !self.opening.pending.is_empty();
         let presenting = self.ui.presenting();
+        let large_tabs = self.session.prefs.large_tabs;
         // The tab strip and the document are two closures of one panel: they take the app in
         // turn, and a borrow that fails (a closure re-entered) skips its part.
         let app = std::cell::RefCell::new(self);
         CanvasPanel::new()
             .opening(opening)
+            .large_tabs(large_tabs)
             .tabs(|ui, _cx| {
                 if !presenting && let Ok(mut app) = app.try_borrow_mut() {
                     chrome::doc_tabs(&mut app, ui);
@@ -527,7 +599,10 @@ impl VectorcraftApp {
                 let Ok(mut app) = app.try_borrow_mut() else { return };
                 let app: &mut VectorcraftApp = &mut app;
                 app.canvas.windows.area = Some(ui.available_rect_before_wrap());
-                app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
+                // Only the shown pass starts the frame's panes: a measuring run before it would drop the last frame's.
+                if !craft::ui::runtime::measure::active(ui.ctx()) {
+                    app.canvas.windows.last_noted = std::mem::take(&mut app.canvas.windows.noted);
+                }
                 let floats = crate::doc_windows::current_floats(app);
                 // The current window's body is in its floating window, drawn after this pane: the pane's drop catcher
                 // waits for it ([`crate::doc_windows::show`]).
@@ -592,17 +667,29 @@ impl VectorcraftApp {
         // PLAN: assumed `chrome::window_title(&VectorcraftApp) -> String` (shell-01 A1 names the call, no row gives its signature; shell-w9).
         let window_title = chrome::window_title(self);
         let shown = AppShell::new(WindowKey::main())
-            .title_bar_if(true, chrome::app_bar)
-            .options_bar(self.ui.control_bar, |ui, _cx, app: &mut VectorcraftApp| {
-                chrome::control_bar(app, ui);
-            })
+            .title_bar_if(true, |_| None, chrome::app_bar)
+            .options_bar(
+                self.ui.control_bar,
+                |_| None,
+                |ui, _cx, app: &mut VectorcraftApp| {
+                    chrome::control_bar(app, ui);
+                },
+            )
             .options_place(Bind::bound(&mut control_bar_place))
-            .status(self.ui.status_bar, |ui, _cx, app: &mut VectorcraftApp| {
-                chrome::status_bar(app, ui);
-            })
-            .bottom(Slot::new(chrome::HINT_SLOT).visible(self.ui.help_bar), |ui, _cx, app: &mut VectorcraftApp| {
-                chrome::hint_bar(app, ui);
-            })
+            .status(
+                self.ui.status_bar,
+                |_| None,
+                |ui, _cx, app: &mut VectorcraftApp| {
+                    chrome::status_bar(app, ui);
+                },
+            )
+            .bottom(
+                Slot::new(chrome::HINT_SLOT).visible(self.ui.help_bar),
+                |_| None,
+                |ui, _cx, app: &mut VectorcraftApp| {
+                    chrome::hint_bar(app, ui);
+                },
+            )
             .window_title(window_title)
             .screen_mode(Bind::given(given))
             .allow_reveal(!self.ui.presenting())
@@ -654,16 +741,21 @@ impl VectorcraftApp {
     }
 }
 
+/// Use the same supported scale for the interface and the canvas. Invalid saved values fall back to 100%.
+fn applied_ui_scaling(saved: f64) -> f32 {
+    if saved.is_finite() && saved > 0.0 { saved.clamp(0.75, 2.0) as f32 } else { 1.0 }
+}
+
 /// The root values the preferences give every frame: the theme, the interface scale (UI Scaling
-/// over the display's `native_ppp`), Show Tool Tips, the zoom stops and which drags scrub a value
-/// (Scrub Numeric Fields: the side label only, or nothing).
-pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> RootEnv {
+/// over the display's `native_ppp`), Show Tool Tips, the zoom stops (100% at `print` screen points
+/// to an inch, [`crate::state::print_ppi`]) and which drags scrub a value (Scrub Numeric Fields: the
+/// side label only, or nothing).
+pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32, print: Option<f64>) -> RootEnv {
     let (theme, mode, accent) = theme::root_theme(prefs);
-    // A hand-edited preferences file must not scale the interface to nothing.
-    let scaling = if prefs.ui_scaling.is_finite() && prefs.ui_scaling > 0.0 { prefs.ui_scaling as f32 } else { 1.0 };
+    let scaling = applied_ui_scaling(prefs.ui_scaling);
     let mut root = RootEnv::new().theme(theme).mode(mode).accent(accent).scale(Scale::new(scaling)).tooltips(prefs.show_tool_tips);
     root.sizes = theme::app_sizes();
-    root.values.set(view::zoom_scheme(prefs, native_ppp));
+    root.values.set(view::zoom_scheme(print, native_ppp));
     root.values.set(if prefs.scrub_numeric_fields { ScrubDrags::LabelOnly } else { ScrubDrags::Off });
     // Number fields as production drew them: the value and its unit one run at the start ("720 pt"), percentages
     // whole and lengths to a thousandth of a point (357.114 pt).
@@ -677,8 +769,45 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32) -> Ro
     // A glyph that stands for a word caption ("X", "W") takes a form's colon as production drew it ("X:"); "#" and
     // the colour channel letters stay bare.
     root.values.set(GlyphColon::Form);
-    // The menu bar's titles stand as close as production's, which share the line with the bar's other controls.
-    root.values.set(MenuTitlePad::Control);
+    // A field's label that opens its options ("Opacity:", "Stroke") reads in the normal ink, underlined, as production
+    // drew it.
+    root.values.set(LinkLabelInk::Neutral);
+    // Its underline stands inside the label's rect, under the text, as production drew it.
+    root.values.set(LinkLabelUnderline::Inside);
+    // Other field labels ("X:", "Angle:", "Opacity") read in the normal ink of the values beside them, as production
+    // drew them.
+    root.values.set(CaptionInk::Normal);
+    // Menu rows, open menu bar titles and the command palette's active row show production's hover highlight.
+    root.values.set(CommandHighlight::Hover);
+    // Check boxes, radio buttons and switches that are on take the strong accent with a white mark, sliders fill their
+    // track to the value in the accent, and a dialog's Cancel is a filled button beside its accent answer.
+    root.values.set(ChoiceLook::Strong);
+    root.values.set(TrackFill::Accent);
+    root.values.set(DialogButtonLook::Filled);
+    // Sections stand apart with production's room around their dividers.
+    root.values.set(SectionRhythm::Spaced);
+    // The Properties kind line ("Ellipse") heads the sections under it, so the first draws no divider above it, as
+    // production's did.
+    root.values.set(QuietHeader::Heads);
+    // Quiet headings (the kind line, "Ellipse Properties:") stand a line of text high over their fields, as
+    // production's did.
+    root.values.set(QuietTitleRow::Text);
+    // Layers rows stand as production's: the thumbnail with a tight gap, 14 points of indent per level.
+    root.values.set(ThumbRows::Tight);
+    // The Layers Objects search field fills the filter bar up to its Filter button, as production's did.
+    root.values.set(ObjectsSearch::Fill);
+    // The menu bar's titles are production's egui buttons: a push button high, 2 points beside the text, rounded.
+    root.values.set(MenuTitleLook::Button);
+    // The title bar and the panel headers keep the arrow, over the menu titles too, as production's did.
+    root.values.set(MoveBandCursor::Arrow);
+    // Document tabs show their title and its `*` in the label's semibold face, as production drew them.
+    root.values.set(DocumentTabLook::Semibold);
+    // A document tab's × is a small glyph that brightens under the pointer, with no fill, as production drew it.
+    root.values.set(TabCloseLook::Glyph);
+    // A collapsed panel column's icon groups stand apart by a hairline, as production drew them.
+    root.values.set(IconGroupSeparator::Rule);
+    // New Document's preset cards show blank paper on a flat card, as production drew them.
+    root.values.set(PresetCardLook::Page);
     // A bare Tab on the canvas, or with nothing focused, toggles the panels (`window.dock`) instead of moving focus.
     root.tab_toggles_chrome = true;
     // Escape in a text field gives up its focus, reverting any typing, so the next keys are the window's.

@@ -56,6 +56,7 @@ pub mod layout_migration;
 pub mod menus;
 pub mod opening;
 mod original_editor;
+pub mod os_window;
 #[doc(hidden)]
 pub use original_editor::Choice as OriginalEditorChoice;
 mod page_glyphs;
@@ -71,6 +72,7 @@ pub mod prefs_dialog;
 pub mod print;
 pub mod recovery;
 pub mod render_worker;
+pub mod retype_runs;
 pub mod screen_color;
 pub mod script_runs;
 pub mod scripts_menu;
@@ -126,7 +128,7 @@ pub use app::MAX_RECENT_FONTS;
 pub use caches::{CacheKey, CanvasCache, LivePaintGapsCache, Perf, PlacedKey, PrintTilingCache, SliceCache};
 #[cfg(test)]
 pub(crate) use services::browsable_url;
-pub use services::{DownloadFn, ExistsFn, Inbox, ReadFn, SaveStreamFn, SaveWriteFn, Services, WriteFn};
+pub use services::{DownloadFn, ExistsFn, Inbox, ReadFn, SaveStreamFn, SaveWriteFn, ScreenDensity, ScreenPpi, Services, WriteFn};
 pub use ui_fonts::ui_fonts;
 
 pub struct VectorcraftApp {
@@ -162,6 +164,8 @@ pub struct VectorcraftApp {
     pub last_effect: Option<(String, serde_json::Value)>,
     /// Last successful destructive Pathfinder operation, repeated on the current selection.
     pub last_pathfinder: Option<String>,
+    /// The parameters each object filter plug-in last ran with (Object › Plug-ins › Apply Last Filter).
+    pub last_filters: dialogs::plugin::LastFilters,
     /// The Character panel field that takes the keyboard focus when the panel next draws it
     /// ([`panels::character::highlight`]).
     pub(crate) character_focus: Option<panels::character::Field>,
@@ -246,6 +250,8 @@ pub struct VectorcraftApp {
     pub placing: placing::Placing,
     /// Image Traces running off the UI thread ([`trace_runs`]).
     pub trace_runs: trace_runs::TraceRuns,
+    /// Retype's search of the installed fonts, off the UI thread ([`retype_runs`]).
+    pub retype_runs: retype_runs::RetypeRuns,
     /// Data Recovery's timer and startup question ([`recovery`]).
     pub recovery: recovery::Timer,
     /// The Close, Close All or Quit in progress, which asks about each unsaved document in turn.
@@ -263,8 +269,12 @@ pub struct VectorcraftApp {
     pub(crate) shortcut_overrides: Arc<craft::keymap::Overrides>,
     /// Messages waiting for the dialog that shows them.
     pub(crate) told: dialogs::host::Told,
+    /// The Type tool's pending edit, kept even when the dialog closes without a prompt answer.
+    pub(crate) missing_font_edit_token: Option<u64>,
     /// The hosted dialogs whose OK the app answers, one record each.
     pub(crate) held: dialogs::host::Held,
+    /// The document whose settings the open Document Setup dialog edits.
+    pub(crate) document_setup_source: Option<(u64, u64)>,
     /// The undo step each value gesture in progress edits under: a scrub or a slider drag is one
     /// step however many values it sets.
     pub(crate) edit_scopes: HashMap<GestureId, UndoScope>,
@@ -278,6 +288,10 @@ pub struct VectorcraftApp {
     pub(crate) three_d: panels::three_d::Model,
     /// The open export option dialogs and what runs after each.
     pub(crate) export_dialogs: dialogs::export_host::ExportDialogs,
+    /// The document and selection used by each open slice dialog.
+    pub(crate) slice_dialogs: dialogs::slices::SliceDialogs,
+    /// The drawing and loaded contents the open Package dialog saves and collects.
+    pub(crate) package_document: Option<(u64, u64)>,
     /// Save for Web's renders and colour table.
     pub(crate) web_export: dialogs::save_for_web::WebExport,
     /// The Flattener Preview panel's model.
@@ -301,13 +315,13 @@ pub struct VectorcraftApp {
     /// Check Spelling's walk through the documents' type, while its dialog is open.
     pub(crate) spelling: Option<dialogs::check_spelling::SpellingWalk>,
     /// The Character Style Options dialog's live preview.
-    pub(crate) char_style_preview: dialogs::preview::LivePreview,
+    pub(crate) char_style_preview: dialogs::char_style_options::Preview,
     /// The Paragraph Style Options dialog's live preview.
-    pub(crate) para_style_preview: dialogs::preview::LivePreview,
+    pub(crate) para_style_preview: dialogs::char_style_options::Preview,
     /// The Justification dialog, while it is open.
     pub(crate) justification: Option<dialogs::justification::Open>,
     /// The Bullets and Numbering dialog's live preview.
-    pub(crate) bullets_preview: dialogs::preview::LivePreview,
+    pub(crate) bullets_preview: Option<dialogs::bullets_numbering::Preview>,
     /// The paste that waits for the answer to its colour profile question.
     pub(crate) pending_paste: Option<dialogs::profile_mismatch::PasteAsk>,
     /// The missing links' questions, while they are asked.
@@ -340,10 +354,15 @@ pub struct VectorcraftApp {
     pub(crate) pen_end: stylus::PenEnd,
     /// The window pass whose [`Self::tick`] ran last: work started in that pass, before its end, waits for the next.
     pub(crate) ticked_pass: Option<u64>,
-    /// A test's clock for [`Self::tick`], replacing the monotonic clock so idle scheduling can be
-    /// driven one simulated frame at a time (production always leaves this `None`).
+    /// A test's clock for [`Self::tick`] and the progress window's delay, replacing the monotonic
+    /// clock so idle scheduling can be driven one simulated frame at a time (production always
+    /// leaves this `None`).
     #[cfg(test)]
     pub(crate) now_override: Option<f64>,
+    /// The instant `now_override`'s zero stands for, so [`Self::instant`] reads the same test clock
+    /// as an [`craft::ui::runtime::motion::Instant`].
+    #[cfg(test)]
+    pub(crate) clock_origin: craft::ui::runtime::motion::Instant,
     /// An error the next tool choice returns before the engine sees it ([`Self::try_select_tool`]),
     /// so tests can drive a failed switch (production has no such field).
     #[cfg(test)]

@@ -20,7 +20,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Background, ColorMode, Unit};
 use vectorcraft_engine::cmd::newdoc::{self, ArtboardLayout, DocSettings, MAX_ARTBOARDS, PreviewMode, RASTER_PPI};
 
-use craft::behavior::Mixed;
+use craft::behavior::{IconId, Mixed};
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Segmented};
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
@@ -35,7 +35,7 @@ use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::sections::Section;
-use craft::ui::text::{LinkMode, LinkedFields, NumberField};
+use craft::ui::text::{LinkMode, LinkedFields, LinkedLayout, NumberField};
 
 use super::host::open_held;
 use crate::VectorcraftApp;
@@ -296,10 +296,14 @@ impl DocumentSettings for VcNewDocument {
                 }
             });
         });
-        Row::new().show(ui, |ui, _| {
+        // Host viewports below the desktop main window's 800-point minimum need this row to wrap.
+        Row::new().wrap(ui.ctx().content_rect().width() < 800.0).show(ui, |ui, _| {
             Field::new(height.clone()).show(ui, |ui, _| size_field(ui, &height, &mut s.height, lengths));
             Field::new(orientation.clone()).show(ui, |ui, _| {
-                let entries = [Entry::new(Orientation::Portrait, portrait.clone()), Entry::new(Orientation::Landscape, landscape.clone())];
+                let entries = [
+                    Entry::new(Orientation::Portrait, portrait.clone()).icon(IconId::new("orientation_portrait")),
+                    Entry::new(Orientation::Landscape, landscape.clone()).icon(IconId::new("orientation_landscape")),
+                ];
                 picked = Segmented::new(orientation.clone(), Bind::given(current), &entries).show(ui).value().cloned();
             });
             Field::new(artboards.clone()).show(ui, |ui, _| {
@@ -326,6 +330,7 @@ impl DocumentSettings for VcNewDocument {
             let captions = [text(tl!("Top")), text(tl!("Bottom")), text(tl!("Left")), text(tl!("Right"))];
             let out = LinkedFields::<4>::new(bleed.clone(), Bind::given(parts), Bind::bound(&mut linked))
                 .mode(LinkMode::Equal)
+                .layout(LinkedLayout::Columns)
                 .captions(captions)
                 .range(0.0..=vectorcraft_doc::setup::MAX_BLEED)
                 .lengths(lengths)
@@ -476,7 +481,7 @@ fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
     Field::new(layout.clone()).show(ui, |ui, _| {
         let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL.iter().map(|l| Entry::new(*l, text(tl!(l.label())))).collect();
         if let Some(l) = Segmented::new(layout.clone(), Bind::given(s.layout), &entries).enabled(several).show(ui).value().copied() {
-            pick_layout(s, l);
+            choose_layout(s, l);
         }
     });
     let rtl = Checkbox::new(Bind::given(s.right_to_left)).label(right_to_left).enabled(several).show(ui);
@@ -491,46 +496,35 @@ fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
     });
     Field::new(columns.clone()).show(ui, |ui, _| {
         let n = f64::from(s.artboards.max(1));
-        let field = NumberField::new(columns.clone(), Bind::given(Some(shown_columns(s))))
-            .range(1.0..=n)
-            .step(1.0)
-            .commit_decimals(0)
-            .enabled(several && grid);
+        let shown = f64::from(shown_columns(s));
+        let field = NumberField::new(columns.clone(), Bind::given(Some(shown))).range(1.0..=n).step(1.0).commit_decimals(0).enabled(several && grid);
         if let Some(v) = field.show(ui).value().copied().flatten().filter(|v| v.is_finite()) {
-            set_columns(s, v);
+            // A column count replaces a preset's rows.
+            s.columns = v.round().clamp(1.0, n) as u32;
+            s.rows = 0;
         }
     });
 }
 
-/// The columns More Settings shows: for a grid by column made with `file.new`'s `rows`, the
-/// columns those rows give the current number of artboards, as `file.new` lays them out;
-/// otherwise the stored count, within the artboards.
-fn shown_columns(s: &DocSettings) -> f64 {
-    let n = f64::from(s.artboards.max(1));
-    if s.layout == ArtboardLayout::GridByColumn && s.rows > 0 {
-        return f64::from(u32::try_from(s.grid_columns()).unwrap_or(MAX_ARTBOARDS)).min(n);
-    }
-    f64::from(s.columns.max(1)).min(n)
+/// The columns More Settings shows: for a grid by column made with `file.new`'s `rows`, the columns
+/// those rows give the current number of artboards, as `file.new` lays them out; otherwise the
+/// stored count. At most one for each artboard.
+fn shown_columns(s: &DocSettings) -> u32 {
+    let n = s.artboards.max(1);
+    if s.layout == ArtboardLayout::GridByColumn && s.rows > 0 { u32::try_from(s.grid_columns()).unwrap_or(n) } else { s.columns.max(1).min(n) }
 }
 
-/// A layout picked in More Settings. A new layout replaces the rows of a preset made with
-/// `file.new`'s `rows` and keeps the column count those rows showed.
-fn pick_layout(s: &mut DocSettings, layout: ArtboardLayout) {
-    if layout == s.layout {
+/// Chooses a layout in More Settings. Another layout replaces a preset's rows and keeps the column
+/// count those rows showed; choosing the layout that is already selected keeps the rows.
+fn choose_layout(s: &mut DocSettings, l: ArtboardLayout) {
+    if l == s.layout {
         return;
     }
     if s.rows > 0 {
-        s.columns = shown_columns(s) as u32;
+        s.columns = shown_columns(s);
         s.rows = 0;
     }
-    s.layout = layout;
-}
-
-/// A column count typed in More Settings, kept within the artboards. It replaces the rows of a
-/// preset made with `file.new`'s `rows`.
-fn set_columns(s: &mut DocSettings, columns: f64) {
-    s.columns = columns.round().clamp(1.0, f64::from(s.artboards.max(1))) as u32;
-    s.rows = 0;
+    s.layout = l;
 }
 
 /// Manage Profiles' pop-up: a row per New Document profile with Edit, which opens the profile as a
@@ -794,6 +788,50 @@ mod tests {
         app.run("prefs.set", json!({"key": "unitsGeneral", "value": units, "documentUnits": false})).unwrap();
     }
 
+    /// The window's frames with the dialog open, laid out; the last frame's output.
+    fn laid_out(app: &mut VectorcraftApp) -> egui::FullOutput {
+        let ctx = ctx(app);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let mut frame = |i: u32| {
+            let input = egui::RawInput { time: Some(0.1 * f64::from(i)), screen_rect: Some(screen), ..Default::default() };
+            crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui))
+        };
+        (0..3).for_each(|i| drop(frame(i)));
+        frame(3)
+    }
+
+    /// Orientation shows a page icon for Portrait and for Landscape, named for screen readers, as production's buttons
+    /// did; before, it showed the words, and Landscape, cut short, ran into Artboards.
+    #[test]
+    fn orientation_shows_two_page_icons_beside_artboards() {
+        fn texts(s: &egui::Shape, out: &mut Vec<(String, egui::Pos2)>) {
+            match s {
+                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect().center())),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+                _ => {}
+            }
+        }
+        let mut app = app();
+        open(&mut app);
+        let out = laid_out(&mut app);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let bounds = |label: &str, role: egui::accesskit::Role| {
+            let (_, n) = nodes.iter().find(|(_, n)| n.label() == Some(label) && n.role() == role).unwrap_or_else(|| panic!("no {role:?} {label}"));
+            n.bounds().expect("bounds")
+        };
+        let landscape = bounds("Landscape", egui::accesskit::Role::RadioButton);
+        let artboards = bounds("Artboards", egui::accesskit::Role::SpinButton);
+        assert!(landscape.x1 <= artboards.x0, "Landscape {landscape:?} stays left of Artboards {artboards:?}");
+        let group = bounds("Orientation", egui::accesskit::Role::RadioGroup);
+        let mut drawn = Vec::new();
+        out.shapes.iter().for_each(|s| texts(&s.shape, &mut drawn));
+        let inside: Vec<_> = drawn
+            .iter()
+            .filter(|(_, at)| (group.x0..=group.x1).contains(&f64::from(at.x)) && (group.y0..=group.y1).contains(&f64::from(at.y)))
+            .collect();
+        assert!(inside.is_empty(), "the segments draw icons, not words: {inside:?}");
+    }
+
     /// Recent shows each entry as it was made: a portrait and a landscape A3 are two documents, and
     /// the built-in cards turn to the picked orientation (#2860).
     #[test]
@@ -841,6 +879,39 @@ mod tests {
         assert_eq!(fields(&app)["name"], json!("Untitled-2"));
     }
 
+    /// The four Bleed fields stay inside the dialog in a 1280 by 900 window; in one row, Right ran past the dialog's
+    /// right edge.
+    #[test]
+    fn bleed_fields_stay_inside_the_dialog() {
+        let mut app = app();
+        open(&mut app);
+        let ctx = ctx(&app);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        // Each frame gives the app's input once, as the hosts do.
+        let frame = |app: &mut VectorcraftApp, i: u32| {
+            let mut raw = egui::RawInput { time: Some(0.1 * f64::from(i)), screen_rect: Some(screen), ..Default::default() };
+            app.adopt_context(&ctx);
+            app.raw_input(&ctx, &mut raw);
+            craft::ui::shell::embed::before_input(&ctx, |out| app.frame_input(out));
+            let mut out = ctx.run_ui(raw, |ui| app.ui(ui));
+            out.textures_delta.clear();
+            out
+        };
+        (0..3).for_each(|i| drop(frame(&mut app, i)));
+        let out = frame(&mut app, 3);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        let bounds = |label: Option<&str>, role: egui::accesskit::Role| {
+            let found = nodes.iter().find(|(_, n)| n.role() == role && label.is_none_or(|l| n.label() == Some(l)));
+            let (_, n) = found.unwrap_or_else(|| panic!("no {role:?} {label:?}"));
+            n.bounds().expect("bounds")
+        };
+        let dialog = bounds(None, egui::accesskit::Role::Dialog);
+        for side in ["Top", "Bottom", "Left", "Right"] {
+            let field = bounds(Some(side), egui::accesskit::Role::SpinButton);
+            assert!(dialog.x0 <= field.x0 && field.x1 <= dialog.x1, "Bleed {side} {field:?} stays inside the dialog {dialog:?}");
+        }
+    }
+
     /// More Settings edits only the artboard layout, spacing and columns, and creates nothing.
     #[test]
     fn more_settings_is_a_popup_holding_only_the_artboard_layout() {
@@ -870,6 +941,53 @@ mod tests {
         assert_eq!(saved.artboards, 4);
         assert!(saved.right_to_left);
         assert_eq!((saved.layout, saved.spacing), (ArtboardLayout::Column, 30.0));
+    }
+
+    /// A grid by column with a preset's rows.
+    fn by_rows(artboards: u32, rows: u32) -> DocSettings {
+        DocSettings { artboards, layout: ArtboardLayout::GridByColumn, columns: 2, rows, ..DocSettings::default() }
+    }
+
+    /// Columns shows what a preset's rows give the current number of artboards, and the stored
+    /// count without rows.
+    #[test]
+    fn columns_follow_a_presets_rows_as_artboards_change() {
+        for (artboards, shown) in [(5, 2), (9, 3), (2, 1)] {
+            assert_eq!(shown_columns(&by_rows(artboards, 4)), shown, "{artboards} artboards");
+        }
+        assert_eq!(shown_columns(&by_rows(9, 0)), 2);
+    }
+
+    /// Another layout replaces a preset's rows and keeps the columns they showed, so Create lays out
+    /// what the dialog showed; the layout already selected keeps the rows.
+    #[test]
+    fn a_new_layout_keeps_the_columns_a_presets_rows_showed() {
+        for to in [ArtboardLayout::GridByRow, ArtboardLayout::Row, ArtboardLayout::Column] {
+            let mut s = by_rows(9, 4);
+            choose_layout(&mut s, to);
+            assert_eq!((s.layout, s.columns, s.rows), (to, 3, 0), "{to:?}");
+        }
+        let mut s = by_rows(9, 4);
+        choose_layout(&mut s, ArtboardLayout::GridByColumn);
+        assert_eq!(s, by_rows(9, 4));
+        let mut s = by_rows(9, 0);
+        choose_layout(&mut s, ArtboardLayout::GridByRow);
+        assert_eq!((s.columns, s.rows), (2, 0));
+    }
+
+    /// A preset's rows reach the dialog's fields and Create puts that many artboards in each column.
+    #[test]
+    fn a_presets_rows_reach_the_document_create_makes() {
+        let mut app = app();
+        open(&mut app);
+        set(&app, "artboards", json!(5)).unwrap();
+        set(&app, "artboardLayout", json!({"layout": "gridByColumn", "rows": 3.6, "spacing": 10})).unwrap();
+        assert_eq!(fields(&app)["artboardLayout"]["rows"], json!(4));
+        create(&mut app);
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.artboards.len(), 5);
+        let first: Vec<_> = st.doc.artboards.iter().filter(|a| a.rect.x0 == 0.0).map(|a| a.rect.y0).collect();
+        assert_eq!(first.len(), 4, "four artboards in the first column: {first:?}");
     }
 
     /// Align New Objects to Pixel Grid reaches a saved preset and the document Create makes.
@@ -993,55 +1111,65 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Settings read from `params` as `file.new` reads them.
-    fn read(params: Value) -> DocSettings {
-        DocSettings::default().with_params(&params, "file.new").unwrap()
-    }
-
-    /// A column count typed in More Settings replaces a preset's rows, and Create lays out that
-    /// many columns.
     #[test]
-    fn a_new_column_count_replaces_a_presets_rows() {
-        let mut s = read(json!({"artboards": 9, "artboardLayout": {"layout": "gridByColumn", "rows": 4}}));
-        assert_eq!(shown_columns(&s), 3.0);
-        set_columns(&mut s, 2.0);
-        assert_eq!((s.rows, s.columns, s.grid_columns()), (0, 2, 2));
-        assert_eq!(shown_columns(&s), 2.0);
-        assert!(s.to_json()["artboardLayout"].get("rows").is_none());
-    }
+    fn orientation_remains_clickable_in_compact_web_windows() {
+        use crate::i18n::LangExt;
+        use egui::{Event, Modifiers, PointerButton, Pos2, RawInput, Rect, pos2, vec2};
 
-    /// A new layout keeps the columns a preset's rows showed, so Create lays out what the dialog
-    /// showed. Picking the layout already shown keeps the rows, and without rows the stored
-    /// columns stay.
-    #[test]
-    fn a_new_layout_keeps_the_columns_a_presets_rows_showed() {
-        for to in [ArtboardLayout::GridByRow, ArtboardLayout::Row, ArtboardLayout::Column] {
-            for rows in [json!(4), json!(4.0), json!(3.6)] {
-                let mut s = read(json!({"artboards": 9, "artboardLayout": {"layout": "gridByColumn", "columns": 2, "rows": rows}}));
-                assert_eq!(shown_columns(&s), 3.0, "9 artboards in rows {rows}");
-                pick_layout(&mut s, to);
-                assert_eq!((s.layout, s.rows, s.columns), (to, 0, 3), "{to:?}, rows {rows}");
+        for code in ["en", "de", "fr", "el"] {
+            for width in [800.0, 640.0, 540.0, 799.0, 801.0] {
+                let services = crate::Services { download: Some(Box::new(|_: &str, _: &[u8]| Ok(()))), ..Default::default() };
+                let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), services));
+                app.session.prefs.interface_language = code.into();
+                let lang = crate::i18n::Lang::from_code(code).unwrap();
+                crate::i18n::set_current(lang);
+                open(&mut app);
+                set(&app, "width", json!(400)).unwrap();
+                set(&app, "height", json!(600)).unwrap();
+                set(&app, "units", json!("pt")).unwrap();
+                let context = ctx(&app);
+                let size = vec2(width, 500.0);
+                let screen = Rect::from_min_size(Pos2::ZERO, size);
+                let mut time = 0.0;
+                let mut draw = |app: &mut VectorcraftApp, events| {
+                    time += 0.25;
+                    let out = crate::testing::app_frame(
+                        app,
+                        &context,
+                        RawInput { events, time: Some(time), screen_rect: Some(screen), ..Default::default() },
+                    );
+                    assert_eq!(context.content_rect().size(), size, "the web host keeps the requested viewport");
+                    out
+                };
+                for _ in 0..6 {
+                    draw(&mut app, vec![]);
+                }
+                let original = fields(&app);
+                let out = draw(&mut app, vec![]);
+                let nodes = out.platform_output.accesskit_update.unwrap().nodes;
+                let bounds = nodes
+                    .iter()
+                    .find(|(_, node)| node.role() == egui::accesskit::Role::RadioButton && node.label() == Some(crate::i18n::tr(lang, "Landscape")))
+                    .and_then(|(_, node)| node.bounds())
+                    .expect("Landscape is shown");
+                let at = pos2(((bounds.x0 + bounds.x1) * 0.5) as f32, ((bounds.y0 + bounds.y1) * 0.5) as f32);
+                draw(&mut app, vec![Event::PointerMoved(at)]);
+                for pressed in [true, false] {
+                    draw(&mut app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+                }
+                draw(&mut app, vec![]);
+                let turned = fields(&app);
+                assert_eq!(turned["width"], original["height"], "{code} {width}: Landscape swaps the page width");
+                assert_eq!(turned["height"], original["width"], "{code} {width}: Landscape swaps the page height");
+                for _ in 0..3 {
+                    draw(&mut app, vec![]);
+                }
+                for idle in 0..3 {
+                    let output = draw(&mut app, vec![]);
+                    assert_eq!(output.platform_output.num_completed_passes, 1, "{code} {width}: idle frame {idle} repeats layout");
+                }
             }
         }
-        let mut s = read(json!({"artboards": 9, "artboardLayout": {"layout": "gridByColumn", "rows": 4}}));
-        pick_layout(&mut s, ArtboardLayout::GridByColumn);
-        assert_eq!((s.rows, shown_columns(&s)), (4, 3.0), "the same layout keeps the rows");
-        let mut s = read(json!({"artboards": 9, "artboardLayout": {"layout": "gridByRow", "columns": 2}}));
-        pick_layout(&mut s, ArtboardLayout::GridByColumn);
-        assert_eq!((s.columns, shown_columns(&s), s.grid_columns()), (2, 2.0, 2));
-    }
-
-    /// Columns shows what a preset's rows give the current number of artboards; without rows it
-    /// shows the stored count.
-    #[test]
-    fn columns_follow_a_presets_rows_as_artboards_change() {
-        let mut s = read(json!({"artboards": 5, "artboardLayout": {"layout": "gridByColumn", "columns": 2, "rows": 4}}));
-        for (artboards, shown) in [(5, 2.0), (9, 3.0), (2, 1.0)] {
-            s.artboards = artboards;
-            assert_eq!(shown_columns(&s), shown, "{artboards} artboards");
-            assert_eq!(shown_columns(&s), s.grid_columns() as f64, "as Create lays them out");
-        }
-        let s = read(json!({"artboards": 9, "artboardLayout": {"layout": "gridByRow", "columns": 2}}));
-        assert_eq!(shown_columns(&s), 2.0);
+        crate::i18n::set_current(crate::i18n::Lang::EN);
     }
 }

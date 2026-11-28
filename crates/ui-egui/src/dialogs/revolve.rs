@@ -9,8 +9,9 @@ use craft::behavior::{DisplayOrder, ItemSource, SelectionChange};
 use craft::theme::Srgba;
 use craft::ui::buttons::Button;
 use craft::ui::contract::Entry;
-use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, clicked};
-use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamKind, ParamRows};
+use craft::ui::contract::{Bind, CollectionEvent, Gap, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::patterns::form_dialogs::{CustomContext, DialogFields, FieldValue, HostedParamDialog, Param, ParamKind, ParamRows};
 use craft::ui::pickers::Select;
 use craft::ui::runtime::env::LengthUnits;
 use craft::ui::runtime::env::UnitKind;
@@ -174,8 +175,13 @@ impl Rows<'_> {
         self.defaults.get(key).and_then(Value::as_f64).unwrap_or(0.0)
     }
 
-    fn range(&self, key: &str, label: &'static str, (lo, hi): (f64, f64), decimals: u32, unit: UnitKind) -> Param {
-        Param::new(key, label, ParamKind::range(lo, hi, self.default_number(key), SliderScale::Linear)).decimals(decimals).unit(unit).resettable()
+    fn range(&self, key: &str, label: &'static str, range: (f64, f64), decimals: u32, unit: UnitKind) -> Param {
+        self.plain(key, label, range, decimals).unit(unit)
+    }
+
+    /// A slider over a number shown with no unit after it, such as a count.
+    fn plain(&self, key: &str, label: &'static str, (lo, hi): (f64, f64), decimals: u32) -> Param {
+        Param::new(key, label, ParamKind::range(lo, hi, self.default_number(key), SliderScale::Linear)).decimals(decimals).resettable()
     }
 
     fn degrees(&self, key: &str, label: &'static str, range: (f64, f64), decimals: u32) -> Param {
@@ -272,7 +278,7 @@ fn object_rows(data: &Data, rows: &Rows, effect: &str, place: Place) -> Vec<Para
     out.push(bevel_row(data, effect, place));
     out.push(sized(rows.length("bevelWidth", tl!("Width"), (0.0, 1000.0))));
     out.push(sized(rows.length("bevelHeight", tl!("Height"), (0.0, 1000.0))));
-    out.push(sized(rows.range("bevelRepeat", tl!("Repeat"), (1.0, 32.0), 0, UnitKind::Pixels)));
+    out.push(sized(rows.plain("bevelRepeat", tl!("Repeat"), (1.0, 32.0), 0)));
     out.push(sized(rows.percent("bevelSpace", c3("Space"), (0.0, 90.0))));
     out.push(sized(rows.flag("bevelInside", tl!("Bevel Inside"))));
     out.push(sized(rows.flag("bevelBothSides", tl!("Bevel both sides"))));
@@ -294,15 +300,16 @@ fn bevel_heading() -> Param {
     let defaults = bevel_defaults();
     let keys: Vec<String> = defaults.keys().cloned().collect();
     Param::custom("__bevelHeading", c3("Bevel"), move |ui, fields, _| {
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(c3("Bevel")).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if pressed(ui, tl!("Reset"), differs_from(fields, &defaults), None) {
-                    defaults.iter().for_each(|(k, v)| set_value(fields, k, v));
-                }
-            });
-        })
-        .response
+        let mut reset = false;
+        let changed = differs_from(fields, &defaults);
+        let shown = crate::panels::section(c3("Bevel"))
+            .id_salt("bevel")
+            .controls(|ui, _| reset = pressed(ui, tl!("Reset"), changed, None))
+            .show(ui, |_, _| {});
+        if reset {
+            defaults.iter().for_each(|(k, v)| set_value(fields, k, v));
+        }
+        shown.output.response
     })
     .companions(keys)
     .full_width()
@@ -369,19 +376,23 @@ pub(crate) fn bevel_row(data: &Data, effect: &str, place: Place) -> Param {
         };
         let default_at = options[..builtin].iter().position(|(_, v, _)| *v == default);
         let titles: Vec<String> = options.iter().map(|(l, _, _)| l.clone()).collect();
-        ui.horizontal(|ui| {
-            if let Some((_, v, c)) = pick(ui, c3("Bevel Shape"), &titles, current, default_at).and_then(|i| options.get(i)) {
-                set_value(fields, "bevel", v);
-                if let Some((n, p)) = c {
-                    set_value(fields, BEVEL_NAME, &json!(n));
-                    set_value(fields, BEVEL_PROFILE, p);
-                }
+        // The row's body may run more than once in a pass: it reports the pick and the press, which apply after it.
+        let (mut picked, mut edit) = (None, false);
+        let row = Row::new().show(ui, |ui, _| {
+            picked = pick(ui, c3("Bevel Shape"), &titles, current, default_at);
+            edit = place == Place::Panel && pressed(ui, tl!("Edit Bevels…"), file, None);
+        });
+        if let Some((_, v, c)) = picked.and_then(|i| options.get(i)) {
+            set_value(fields, "bevel", v);
+            if let Some((n, p)) = c {
+                set_value(fields, BEVEL_NAME, &json!(n));
+                set_value(fields, BEVEL_PROFILE, p);
             }
-            if place == Place::Panel && pressed(ui, tl!("Edit Bevels…"), file, None) {
-                fields.set("__editBevels", true);
-            }
-        })
-        .response
+        }
+        if edit {
+            fields.set("__editBevels", true);
+        }
+        row.output
     })
     .companions([BEVEL_NAME, BEVEL_PROFILE, "__editBevels"])
 }
@@ -408,7 +419,7 @@ fn differs_from(fields: &DialogFields, defaults: &serde_json::Map<String, Value>
 
 /// Revolve's Rotation page: shape, view and the advanced settings.
 fn revolve_rows(rows: &Rows, effect: &str, place: Place) -> Vec<Param> {
-    let mut advanced = vec![rows.range("segments", tl!("Segments"), (8.0, 128.0), 0, UnitKind::Pixels)];
+    let mut advanced = vec![rows.plain("segments", tl!("Segments"), (8.0, 128.0), 0)];
     if place == Place::Dialog {
         advanced.push(rows.flag("__showAxis", tl!("Show axis")));
     }
@@ -675,12 +686,13 @@ fn light_color_row() -> Param {
     Param::custom("lightColor", tl!("Color"), |ui, fields, cx| {
         let hex = fields.text("lightColor").unwrap_or("#ffffff").to_owned();
         let color = Srgba::from_hex(&hex).unwrap_or(Srgba::rgb(1.0, 1.0, 1.0));
-        ui.horizontal(|ui| {
-            if pressed(ui, &hex.to_uppercase(), true, Some(tl!("Color"))) {
-                cx.pick_color("__lightPick", color);
-            }
-        })
-        .response
+        // The row's body may run more than once in a pass: the picker opens after it.
+        let mut ask = false;
+        let row = Row::new().show(ui, |ui, _| ask = pressed(ui, &hex.to_uppercase(), true, Some(tl!("Color"))));
+        if ask {
+            cx.pick_color("__lightPick", color);
+        }
+        row.output
     })
     .opens_with("#ffffff")
 }
@@ -711,57 +723,68 @@ pub(crate) fn light_editor(_data: &Data, place: Place, classic: bool) -> Param {
     // The classic effects' lights have no colour.
     let settings: Vec<Param> = settings.into_iter().filter(|p| !(classic && p.key == "lightColor")).collect();
     Param::custom("lights", tl!("Lights"), move |ui, fields, cx| {
-        ui.vertical(|ui| {
-            if let Some(Value::String(hex)) = fields.color("__lightPick").map(|c| json!(Srgba::from_rgb_array(c).to_hex())) {
-                fields.remove("__lightPick");
-                set_light_value(fields, "lightColor", json!(hex));
-            }
-            let mut list = explicit_lights(fields).unwrap_or_else(|| vec![light_record(fields)]);
-            let mut index = light_index(fields, list.len());
-            let titles: Vec<String> = (1..=list.len()).map(|i| format!("{} {i}", c3("Light"))).collect();
-            if let Some(next) = pick(ui, tl!("Lights"), &titles, Some(index), None) {
-                index = next;
-            }
-            // Add Light is off while a setting of the single light is mixed.
-            let mixed = explicit_lights(fields).is_none() && LIGHT_KEYS.iter().any(|(_, key)| fields.is_mixed(key));
-            ui.horizontal(|ui| {
-                if pressed(ui, tl!("Add Light"), list.len() < vectorcraft_three_d::MAX_LIGHTS && !mixed, None) {
-                    let mut added = selected_light(fields);
-                    let defaults = vectorcraft_effects::default_params(fields.text("__effect").unwrap_or_default()).unwrap_or(json!({}));
-                    for (_, key) in LIGHT_KEYS {
-                        if let Some(value) = defaults.get(key) {
-                            set_value(&mut added, key, value);
-                        }
-                    }
-                    set_value(&mut added, "lightRotation", &json!(0.0));
-                    set_value(&mut added, "lightHeight", &json!(90.0));
-                    list.push(light_record(&added));
-                    index = list.len() - 1;
-                    fields.set("lights", FieldValue::Json(Value::Array(list.clone())));
-                }
-                if pressed(ui, tl!("Delete Light"), list.len() > 1, None) && index < list.len() {
-                    list.remove(index);
-                    index = index.min(list.len().saturating_sub(1));
-                    fields.set("lights", FieldValue::Json(Value::Array(list.clone())));
+        if let Some(Value::String(hex)) = fields.color("__lightPick").map(|c| json!(Srgba::from_rgb_array(c).to_hex())) {
+            fields.remove("__lightPick");
+            set_light_value(fields, "lightColor", json!(hex));
+        }
+        // The list with its buttons and sphere, then the selected light's settings, a stack gap apart.
+        super::form::stacked(ui, fields, |ui, fields| {
+            Stack::new().gap(Gap::Stack).show(ui, |ui, _| {
+                Stack::new().show(ui, |ui, _| light_list(ui, fields, cx, place, classic));
+                let mut selected = selected_light(fields);
+                let before = light_record(&selected);
+                let out = ParamRows::new(tl!("Light Settings"), &settings, Bind::bound(&mut selected)).show(ui);
+                cx.gesture(&out.events);
+                if light_record(&selected) != before {
+                    store_selected(fields, &selected);
                 }
             });
-            fields.set("__light", i64::try_from(index).unwrap_or(0));
-            if place == Place::Panel || classic {
-                super::revolve_lights::sphere(ui, fields, cx, classic);
-            }
-            let mut selected = selected_light(fields);
-            let before = light_record(&selected);
-            let out = ParamRows::new(tl!("Light Settings"), &settings, Bind::bound(&mut selected)).show(ui);
-            cx.gesture(&out.events);
-            if light_record(&selected) != before {
-                store_selected(fields, &selected);
-            }
         })
-        .response
     })
     .companions(LIGHT_KEYS.iter().map(|(_, k)| *k).chain(["__light", "__lightPick"]))
     .on_set(set_light_field)
     .full_width()
+}
+
+/// The light list with Add Light and Delete Light, and the sphere where `place` and `classic` show it.
+fn light_list(ui: &mut egui::Ui, fields: &mut DialogFields, cx: &mut CustomContext, place: Place, classic: bool) {
+    let mut list = explicit_lights(fields).unwrap_or_else(|| vec![light_record(fields)]);
+    let mut index = light_index(fields, list.len());
+    let titles: Vec<String> = (1..=list.len()).map(|i| format!("{} {i}", c3("Light"))).collect();
+    if let Some(next) = pick(ui, tl!("Lights"), &titles, Some(index), None) {
+        index = next;
+    }
+    // Add Light is off while a setting of the single light is mixed.
+    let mixed = explicit_lights(fields).is_none() && LIGHT_KEYS.iter().any(|(_, key)| fields.is_mixed(key));
+    // The row's body may run more than once in a pass: it reports the presses, which apply after it.
+    let (mut add, mut delete) = (false, false);
+    Row::new().show(ui, |ui, _| {
+        add = pressed(ui, tl!("Add Light"), list.len() < vectorcraft_three_d::MAX_LIGHTS && !mixed, None);
+        delete = pressed(ui, tl!("Delete Light"), list.len() > 1, None);
+    });
+    if add {
+        let mut added = selected_light(fields);
+        let defaults = vectorcraft_effects::default_params(fields.text("__effect").unwrap_or_default()).unwrap_or(json!({}));
+        for (_, key) in LIGHT_KEYS {
+            if let Some(value) = defaults.get(key) {
+                set_value(&mut added, key, value);
+            }
+        }
+        set_value(&mut added, "lightRotation", &json!(0.0));
+        set_value(&mut added, "lightHeight", &json!(90.0));
+        list.push(light_record(&added));
+        index = list.len() - 1;
+        fields.set("lights", FieldValue::Json(Value::Array(list.clone())));
+    }
+    if delete && index < list.len() {
+        list.remove(index);
+        index = index.min(list.len().saturating_sub(1));
+        fields.set("lights", FieldValue::Json(Value::Array(list.clone())));
+    }
+    fields.set("__light", i64::try_from(index).unwrap_or(0));
+    if place == Place::Panel || classic {
+        super::revolve_lights::sphere(ui, fields, cx, classic);
+    }
 }
 
 /// The light editor's set-time rule: a light setting set from outside goes to the selected light, as its rows do.

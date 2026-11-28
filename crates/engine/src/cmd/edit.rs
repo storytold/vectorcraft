@@ -225,7 +225,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Clear",
             ["Edit"],
             Some("Delete"),
-            "{ids?, guides?: bool (with ids: also delete the selected ruler guides)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too); without ids, refused while an object of a symbol instance's art is selected",
+            "{ids?, guides?: bool (with ids: also delete the selected ruler guides), keepJoined?: bool (without ids: the direct-selected anchors of a path with no selected segment are removed as path.removeAnchors removes them, without opening the path, and the next anchor along is selected (the one before at an open path's end); default: prefs deleteKeepsPathsJoined), keepEmpty?: bool (keep a compound path left with no members)} delete the objects `ids`, else the selection (fully selected objects and direct-selected anchors together, else ruler guides; a compound-path member selected on its own is deleted alone, and a compound left with no members goes too unless keepEmpty); without ids, refused while an object of a symbol instance's art is selected",
             has_selection_or_guides,
             clear
         ),
@@ -695,6 +695,7 @@ fn undo_group_end(s: &mut Session, p: &Value) -> Result<Value> {
 /// goes to the running command's result or the tool's status messages, as the tool's own commit
 /// reports it ([`Session::note_settled_warning`]).
 pub(crate) fn settle_interaction(s: &mut Session) -> Result<()> {
+    s.put_back_interaction();
     let typing = typing_in_progress(s);
     match s.unapplied_interaction_preview().filter(|_| !s.previewing) {
         Some((cmd, p)) => match s.preview(&cmd, &p) {
@@ -808,11 +809,13 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     let selection = shared_selection(selection, st.history.redo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
     turned.named = e.named;
+    turned.effect = e.effect;
     let paints = e.color_mode_paints.clone();
     turned.color_mode_paints = e.color_mode_paints;
     turned.recost_paints();
     st.history.redo.push(turned);
     st.history.trim();
+    st.history_restores += 1;
     st.revision += 1;
     st.selection.prune(&st.doc);
     // Guides locked and slices locked or hidden since the step was made stay deselected.
@@ -820,7 +823,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     super::symboledit::follow_history(st, editing_symbol.as_ref());
-    leave_isolation_if_gone(st);
+    st.leave_isolation_if_gone();
     super::globaledit::follow_history(st);
     st.drop_stale_variables_highlight();
     if let Some((before, _)) = paints {
@@ -844,33 +847,26 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     let selection = shared_selection(selection, st.history.undo.last());
     let mut turned = crate::HistoryEntry::turned(e.label, doc, selection, &st.doc, costs);
     turned.named = e.named;
+    turned.effect = e.effect;
     let paints = e.color_mode_paints.clone();
     turned.color_mode_paints = e.color_mode_paints;
     turned.recost_paints();
     st.history.undo.push(turned);
     st.history.trim();
+    st.history_restores += 1;
     st.revision += 1;
     st.selection.prune(&st.doc);
     crate::deselect_hidden(&menu, &st.doc, &mut st.selection);
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     super::symboledit::follow_history(st, editing_symbol.as_ref());
-    leave_isolation_if_gone(st);
+    st.leave_isolation_if_gone();
     super::globaledit::follow_history(st);
     st.drop_stale_variables_highlight();
     if let Some((_, after)) = paints {
         s.paint = after;
     }
     Ok(json!({ "redone": label }))
-}
-
-/// After undo or redo, isolation mode ends when the isolated object is no longer in the document,
-/// such as the clip group Draw Inside made around the isolated object (#3705), rather than naming
-/// an id a later object may take.
-fn leave_isolation_if_gone(st: &mut crate::DocState) {
-    if st.isolation.is_some_and(|i| st.doc.node(i).is_none()) {
-        st.isolation = None;
-    }
 }
 
 /// History panel › Clear History: removes the steps after the current state and the steps before
@@ -894,8 +890,10 @@ fn clear_history(s: &mut Session, _: &Value) -> Result<Value> {
 fn new_document_from_state(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "edit.newDocumentFromState";
     let created = date_param(p, "created", C)?;
+    // The row as the panel lists it now, with a drag in progress on show: keeping it below
+    // changes the rows.
+    s.put_back_interaction();
     let st = s.doc()?;
-    // The row as the panel lists it now: keeping an edit in progress below changes the rows.
     let chosen = match super::index_opt(p, "index", C)? {
         None => None,
         Some(row) => {
@@ -953,8 +951,12 @@ fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::
 /// instance as it is. Copy copies the instance whole ([`copy_cut_targets`]).
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
     refuse_symbol_part(s)?;
-    let st = s.doc()?;
-    Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+    Ok(selection_roots(s.doc()?))
+}
+
+/// [`selected_roots`] of one document's selection.
+pub(crate) fn selection_roots(st: &crate::DocState) -> Vec<NodeId> {
+    roots_of(&st.doc, st.selection.in_paint_order(&st.doc))
 }
 
 /// [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art is selected:
@@ -1221,6 +1223,8 @@ fn cut_direct_selection(s: &mut Session, roots: &[NodeId]) -> Result<Value> {
 
 fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     let guides = switch_or(p, "guides", false, "edit.clear")?;
+    let keep_empty = switch_or(p, "keepEmpty", false, "edit.clear")?;
+    switch_or(p, "keepJoined", false, "edit.clear")?;
     let explicit = if p.get("ids").is_some() { Some(checked_ids_param(s, p, "ids", "edit.clear")?) } else { None };
     // An object of a symbol instance's art can't be removed from the instance alone.
     if explicit.is_none() && s.doc()?.selection.symbol_part.is_some() {
@@ -1228,7 +1232,8 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Direct-selected anchors or segments: remove those, and any objects selected whole with them.
     if explicit.is_none() && (!s.doc()?.selection.anchors.is_empty() || !s.doc()?.selection.segments.is_empty()) {
-        return super::path::delete_anchors(s, p);
+        let keep_joined = keeps_paths_joined(s, p)?;
+        return super::path::delete_anchors_joined(s, p, keep_joined);
     }
     // Selected ruler guides (selected on their own).
     if explicit.is_none() && s.doc()?.selection.is_empty() {
@@ -1252,8 +1257,11 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         return ok();
     }
     s.edit("Clear", |d, sel| {
-        let parents: Vec<_> =
-            ids.iter().filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })))).collect();
+        let parents: Vec<_> = if keep_empty {
+            Vec::new()
+        } else {
+            ids.iter().filter_map(|id| d.parent_of(*id).filter(|p| matches!(d.node(*p).map(|n| &n.kind), Some(NodeKind::Compound { .. })))).collect()
+        };
         d.remove_many(&ids)?;
         for p in parents {
             if d.node(p).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())) {
@@ -1273,6 +1281,17 @@ fn clear(s: &mut Session, p: &Value) -> Result<Value> {
         Ok(())
     })?;
     ok()
+}
+
+/// Does Clear remove direct-selected anchors without opening their paths (`keepJoined` param, else
+/// General › Delete Removes Anchor Points and Keeps Paths Joined)? Noted in the journal, so a
+/// replay removes them the same way whatever the preference is at the time. A saved step without `keepJoined`
+/// was recorded before the preference existed, so it opens the paths as it did then.
+fn keeps_paths_joined(s: &mut Session, p: &Value) -> Result<bool> {
+    let default = s.prefs.delete_keeps_paths_joined && !s.replaying();
+    let on = switch_or(p, "keepJoined", default, "edit.clear")?;
+    s.note_journal("keepJoined", json!(on));
+    Ok(on)
 }
 
 /// Document ids scope node ids: two tabs may contain objects with the same node id.
@@ -1568,6 +1587,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         for xf in placements {
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
+                // A pasted object never goes in as a clip group's clipping path, so a copied clipping
+                // path comes back as an ordinary path that the path commands work on (#9227).
+                if let NodeKind::Path { clipping, .. } = &mut c.kind {
+                    *clipping = false;
+                }
                 // A pasted symbol set packs from the density recorded for it at Copy.
                 d.carry_set_densities(n, &c, &clip.set_densities);
                 imported.apply(&mut c, d);

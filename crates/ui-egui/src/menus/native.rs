@@ -1,12 +1,13 @@
 //! The macOS menu bar on craft-menu's native menu: installed once, polled and run before the UI
 //! each frame, and synced after it.
 
+use craft::keymap::{Chord, CommandRef};
 use craft::menu::{Gate, ItemKind, LayoutOptions, MenuBar, NativeMenu, Node, mac, mac_layout};
 use craft::ui::runtime::commands::{FirePhase, FireSource, Fired, holder};
 
 use crate::VectorcraftApp;
-use crate::menus::TODO;
 use crate::menus::model::{APP_NAME, item_title, pressed_pass, recording_shortcut, refresh, state_key, translate_label};
+use crate::menus::{command_shortcuts, item_shortcut_in, unbound};
 
 /// The layout options every Mac layout of VectorCraft's menus uses: the app's name and its
 /// translation of the labels the layout writes itself.
@@ -56,16 +57,20 @@ pub(crate) fn sync(app: &mut VectorcraftApp, ctx: &egui::Context) {
     app.services.native_menu = Some(menu);
 }
 
-/// The menus with each item's title, and whether it is on and checked, as they are now: AppKit's items show their own,
-/// where the in-window bar reads them from the command states. Read here and not from the model, which is built before
-/// the frame's input: a drag released or an Escape in this frame already shows.
+/// The menus with each item's title, shortcut, and whether it is on and checked, as they are now: AppKit's items show
+/// their own, where the in-window bar reads them from the command states. Read here and not from the model, which is
+/// built before the frame's input: a drag released or an Escape in this frame already shows. Each item's shortcut is
+/// the one the menus show for it ([`crate::menus::item_shortcut`]), else its command's chord in the keymap, the user's
+/// set included, as the in-window bar's rows show it. It is also the item's key equivalent. The model's own shortcuts
+/// (Window rows, Settings' first page) are read again here: the model built before the window's first keymap has none.
 fn stated(app: &VectorcraftApp) -> MenuBar {
-    fn walk(app: &VectorcraftApp, lang: crate::i18n::Lang, nodes: &mut [Node]) {
+    fn walk(app: &VectorcraftApp, lang: crate::i18n::Lang, chord: &dyn Fn(&CommandRef) -> Option<Chord>, nodes: &mut [Node]) {
         for node in nodes {
             match node {
-                Node::Item(it) if it.command.id == TODO => it.enabled = false,
+                Node::Item(it) if unbound(&it.command.id) => it.enabled = false,
                 Node::Item(it) => {
                     let (id, params) = (it.command.id.as_str(), &it.command.params);
+                    it.shortcut = item_shortcut_in(chord, id, params).or_else(|| chord(&it.command));
                     if let Some((enabled, checked)) = crate::menus::shown_state(app, id, params) {
                         it.enabled = enabled;
                         if let Some(on) = checked {
@@ -78,15 +83,16 @@ fn stated(app: &VectorcraftApp) -> MenuBar {
                         it.label = title;
                     }
                 }
-                Node::Submenu { children, .. } => walk(app, lang, children),
+                Node::Submenu { children, .. } => walk(app, lang, chord, children),
                 _ => {}
             }
         }
     }
     let mut bar = app.menus.bar.clone();
     let lang = crate::i18n::current();
+    let chord = command_shortcuts(app);
     for menu in &mut bar.menus {
-        walk(app, lang, &mut menu.children);
+        walk(app, lang, &chord, &mut menu.children);
     }
     bar
 }

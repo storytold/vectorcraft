@@ -51,6 +51,8 @@ const GLOBAL: &str = "global";
 pub(crate) struct Open {
     /// The dialog's id on the host.
     pub id: DialogId,
+    /// The drawing and loaded generation whose art the dialog can adjust.
+    document: Option<(u64, u64)>,
     /// The preview the dialog's values run as one interaction.
     pub preview: LivePreview,
 }
@@ -85,22 +87,31 @@ impl Adjust {
     fn try_open(self, app: &mut VectorcraftApp) -> Result<(), String> {
         const NO_WINDOW: &str = "no window to open the dialog in";
         let ctx = app.ui_ctx.clone().ok_or(NO_WINDOW)?;
-        if let Some(old) = (self.slot)(&mut app.color_dialogs).take() {
+        let document = app.session.active().map(|st| (st.uid, st.reverts));
+        if let Some(old) = (self.slot)(&mut app.color_dialogs).take()
+            && old.document == document
+        {
             old.preview.cancel(app);
         }
         let dialog = HostedParamDialog::new(&ctx, self.kind, (self.initial)(), move |fields| {
             ParamDialog::new(self.kind, self.label, (self.rows)()).values(Bind::bound(fields)).previews(true)
         });
         let id = host::open_held(app, dialog, move |app, answer| self.commit(app, answer)).ok_or(NO_WINDOW)?;
-        *(self.slot)(&mut app.color_dialogs) = Some(Open { id, preview: LivePreview::default() });
+        *(self.slot)(&mut app.color_dialogs) = Some(Open { id, document, preview: LivePreview::default() });
         Ok(())
     }
 
     /// OK: keeps the preview as one undo step; an `Err` keeps the dialog open with the reason.
     fn commit(self, app: &mut VectorcraftApp, answer: &ParamResult) -> Result<(), String> {
-        let live = (self.slot)(&mut app.color_dialogs).as_ref().map(|open| open.preview.clone()).unwrap_or_default();
-        // PLAN: assumed `LivePreview::commit(self, ..)` as the contract row says; the clone keeps the record when it fails.
-        live.commit(app, self.cmd, (self.params)(&answer.fields))?;
+        let document = app.session.active().map(|st| (st.uid, st.reverts));
+        let open = (self.slot)(&mut app.color_dialogs).as_ref().ok_or(tl!("This adjustment can only apply to the document where it was opened."))?;
+        if open.document != document {
+            if open.document.zip(document).is_some_and(|((uid, _), (active, _))| uid == active) {
+                return Err(tl!("Reopen the color adjustment after reverting the drawing").into());
+            }
+            return Err(tl!("This adjustment can only apply to the document where it was opened.").into());
+        }
+        open.preview.clone().commit(app, self.cmd, (self.params)(&answer.fields))?;
         *(self.slot)(&mut app.color_dialogs) = None;
         Ok(())
     }
@@ -108,17 +119,22 @@ impl Adjust {
     /// Once per frame: previews the dialog's values while its Preview box is on, and rolls the preview back once the
     /// dialog is gone without OK.
     pub(super) fn pump(self, app: &mut VectorcraftApp) {
-        let Some(Open { id, mut preview }) = (self.slot)(&mut app.color_dialogs).take() else { return };
+        let Some(mut open) = (self.slot)(&mut app.color_dialogs).take() else { return };
+        let on_its_document = app.session.active().map(|st| (st.uid, st.reverts)) == open.document;
         let shown = app.dialogs().and_then(|dialogs| {
-            dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|dialog| (dialog.is_previewing(), (self.params)(dialog.fields()))))
+            dialogs.with(|host| host.get_by_id::<HostedParamDialog>(open.id).map(|dialog| (dialog.is_previewing(), (self.params)(dialog.fields()))))
         });
-        match shown {
-            Some((on, params)) => {
+        if let Some((on, params)) = shown {
+            if on_its_document {
                 // `run` reports a failed preview to the status line itself.
-                let _ = preview.run(app, on, self.label, self.cmd, &params);
-                *(self.slot)(&mut app.color_dialogs) = Some(Open { id, preview });
+                let _ = open.preview.run(app, on, self.label, self.cmd, &params);
+            } else {
+                // Switching or reverting the drawing rolled back the original interaction.
+                open.preview = LivePreview::default();
             }
-            None => preview.cancel(app),
+            *(self.slot)(&mut app.color_dialogs) = Some(open);
+        } else if on_its_document {
+            open.preview.cancel(app);
         }
     }
 }
@@ -144,7 +160,7 @@ fn slot(dialogs: &mut ColorDialogs) -> &mut Option<Open> {
 
 /// Open the dialog with every channel at 0, adjusting fills and strokes.
 pub fn open(app: &mut VectorcraftApp) {
-    ADJUST.open(app);
+    Adjust { label: tl!(ADJUST.label), ..ADJUST }.open(app);
 }
 
 /// Previews the open dialog; one line of `dialogs::host::pump`.
@@ -199,31 +215,30 @@ fn track(key: &str, x: f32) -> Srgba {
 
 /// The channel rows of the current mode.
 fn channels(ui: &mut egui::Ui, fields: &mut DialogFields, _cx: &mut CustomContext) -> egui::Response {
-    ui.vertical(|ui| {
+    super::form::stacked(ui, fields, |ui, fields| {
         for (key, label) in mode(fields).channels {
-            percent_row(ui, fields, key, label, |x| track(key, x));
+            percent_row(ui, fields, key, tl!(label), |x| track(key, x));
         }
     })
-    .response
 }
 
 fn rows() -> Vec<Param> {
-    let modes = MODES.iter().map(|m| (m.id.to_owned(), Label::from(m.label))).collect();
+    let modes = MODES.iter().map(|m| (m.id.to_owned(), Label::from(tl!(m.label)))).collect();
     let with_model = MODES.iter().map(|m| m.id).filter(|id| *id != GLOBAL);
     vec![
-        Param::new("mode", "Color Mode", ParamKind::choice(modes, Some("rgb".to_owned()))),
-        Param::new("convert", "Convert", ParamKind::bool(false)).enabled_when_in("mode", with_model),
-        Param::read_only_text("note", "", "Shifts the tints of global and spot colors; other colors stay.").visible_when("mode", GLOBAL),
+        Param::new("mode", tl!("Color Mode"), ParamKind::choice(modes, Some("rgb".to_owned()))),
+        Param::new("convert", tl!("Convert"), ParamKind::bool(false)).enabled_when_in("mode", with_model),
+        Param::read_only_text("note", "", tl!("Shifts the tints of global and spot colors; other colors stay.")).visible_when("mode", GLOBAL),
         Param::custom("channels", "Channels", channels).companions(channel_keys()),
         Param::section("Adjust Options"),
-        Param::new("fill", "Fill", ParamKind::bool(true)),
-        Param::new("stroke", "Stroke", ParamKind::bool(true)),
+        Param::new("fill", tl!("Fill"), ParamKind::bool(true)),
+        Param::new("stroke", tl!("Stroke"), ParamKind::bool(true)),
     ]
 }
 
 #[cfg(test)]
 mod tests {
-    use craft::ui::dialog::dialog_id;
+    use craft::ui::dialog::{HeldOk, dialog_id};
     use vectorcraft_engine::Session;
 
     use super::*;
@@ -249,6 +264,148 @@ mod tests {
     fn confirm(app: &mut VectorcraftApp, ctx: &egui::Context) {
         app.dialogs().unwrap().with(|host| host.confirm_by_id(ctx, dialog_id(KIND)));
         host::pump(app, ctx);
+    }
+
+    fn two_documents(color: &str) -> (VectorcraftApp, egui::Context, [u64; 2]) {
+        let (mut app, ctx) = app();
+        let ids = [0, 1].map(|_| {
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            let id = app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+            app.run("paint.setFill", json!({"color": color})).unwrap();
+            id
+        });
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        (app, ctx, ids)
+    }
+
+    #[test]
+    fn color_adjustment_stays_in_its_opening_document_with_preview_on() {
+        let (mut app, ctx, [source, destination]) = two_documents("#808080");
+        let id = dialog_id(KIND);
+        let dialogs = app.dialogs().unwrap();
+        let source_undo = app.session.active().unwrap().history.undo.len();
+        open(&mut app);
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#b38080");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, destination), "#808080", "another document is not previewed");
+        assert!(!app.session.in_interaction());
+        confirm(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        confirm(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Accepted)));
+        assert_eq!(fill_hex(&app, source), "#b38080");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), source_undo + 1);
+    }
+
+    #[test]
+    fn color_adjustment_stays_in_its_opening_document_with_preview_off() {
+        let (mut app, ctx, [source, destination]) = two_documents("#cc6666");
+        let id = dialog_id(crate::dialogs::saturate::KIND);
+        let dialogs = app.dialogs().unwrap();
+        crate::dialogs::saturate::open(&mut app);
+        dialogs.with(|host| {
+            host.set_json_field(&ctx, id, "intensity", json!(-100)).unwrap();
+            host.set_json_field(&ctx, id, "preview", json!(false)).unwrap();
+        });
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#cc6666");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        dialogs.with(|host| host.confirm_by_id(&ctx, id));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, destination), "#cc6666", "another document is not adjusted");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        dialogs.with(|host| host.confirm_by_id(&ctx, id));
+        host::pump(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Accepted)));
+        assert_ne!(fill_hex(&app, source), "#cc6666");
+    }
+
+    #[test]
+    fn stale_color_adjustment_leaves_the_fill_restored_by_revert() {
+        let (mut app, ctx) = app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let dir = vectorcraft_testkit::TempDir::new("color-adjustment-revert");
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+        app.run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("color.vectorcraft")})).unwrap();
+        app.run("paint.setFill", json!({"color": "#406080"})).unwrap();
+        open(&mut app);
+        let doc = app.session.active().unwrap();
+        let version = (doc.uid, doc.reverts);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let doc = app.session.active().unwrap();
+        assert_eq!(doc.uid, version.0);
+        assert_ne!(doc.reverts, version.1);
+        let undo = doc.history.undo.len();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(fill_hex(&app, id), "#808080");
+
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, id), "#808080", "old Preview leaves the saved fill in place");
+        set(&app, &ctx, "preview", json!(false));
+        confirm(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, id), "#808080", "old OK leaves the saved fill in place");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+
+    #[test]
+    fn color_adjustment_cancel_leaves_the_new_documents_interaction_intact() {
+        let (mut app, ctx, [source, destination]) = two_documents("#808080");
+        let id = dialog_id(KIND);
+        let dialogs = app.dialogs().unwrap();
+        open(&mut app);
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#b38080");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.session.begin_interaction("Change fill").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+        dialogs.with(|host| host.cancel_by_id(&ctx, id));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, destination), "#00ff00", "cancelling the old dialog leaves the new edit intact");
+        assert!(app.session.in_interaction());
+    }
+
+    /// With its preview turned off, OK leaves an edit that began in the same document since then in place and keeps
+    /// the dialog open.
+    #[test]
+    fn color_adjustment_ok_leaves_a_later_edit_in_its_document_intact() {
+        let (mut app, ctx, [source, _]) = two_documents("#808080");
+        let id = dialog_id(KIND);
+        let dialogs = app.dialogs().unwrap();
+        open(&mut app);
+        set(&app, &ctx, "r", json!(20));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#b38080");
+        set(&app, &ctx, "preview", json!(false));
+        host::pump(&mut app, &ctx);
+        assert_eq!(fill_hex(&app, source), "#808080", "turning Preview off rolls the preview back");
+
+        app.session.begin_interaction("Change fill").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        confirm(&mut app, &ctx);
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(HeldOk::Refused(_))));
+        assert_eq!(fill_hex(&app, source), "#00ff00", "the later edit keeps its color");
+        assert!(app.session.in_interaction());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
     }
 
     #[test]

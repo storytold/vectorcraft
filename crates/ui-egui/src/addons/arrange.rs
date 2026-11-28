@@ -7,6 +7,7 @@ use std::borrow::Cow;
 
 use craft::menu::Node;
 use craft::ui::canvas::ViewCommands;
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Value, json};
@@ -221,16 +222,16 @@ pub(crate) fn open(app: &mut VectorcraftApp, id: &str) -> Option<Result<Value, S
     };
     let fields = form::fields_of(&rows, opening.as_object()?);
     let opened = match command {
-        GRID => super::dialogs::open(app, &GRID_SPEC, fields, move |_| dialog(GRID, grid_rows(lengths))),
-        REPLACE => super::dialogs::open(app, &REPLACE_SPEC, fields, |_| dialog(REPLACE, replace_rows())),
+        GRID => super::dialogs::open(app, &GRID_SPEC, fields, move |fields| dialog(GRID, grid_rows(lengths)).values(Bind::bound(fields))),
+        REPLACE => super::dialogs::open(app, &REPLACE_SPEC, fields, |fields| dialog(REPLACE, replace_rows()).values(Bind::bound(fields))),
         OPACITY => super::dialogs::open(app, &OPACITY_SPEC, fields, |fields| {
             let (min, max) = (fields.number("min").unwrap_or(0.0), fields.number("max").unwrap_or(100.0));
-            dialog(OPACITY, opacity_rows()).ok_enabled(min <= max)
+            dialog(OPACITY, opacity_rows()).ok_enabled(min <= max).values(Bind::bound(fields))
         }),
-        SORT => super::dialogs::open(app, &SORT_SPEC, fields, |_| dialog(SORT, sort_rows())),
+        SORT => super::dialogs::open(app, &SORT_SPEC, fields, |fields| dialog(SORT, sort_rows()).values(Bind::bound(fields))),
         _ => super::dialogs::open(app, &SIZE_SPEC, fields, move |fields| {
             let either = fields.bool("widthOn").unwrap_or(true) || fields.bool("heightOn").unwrap_or(true);
-            dialog(SIZE, size_rows(lengths)).ok_enabled(either).ok_reason(tl!("Tick Width or Height.").into())
+            dialog(SIZE, size_rows(lengths)).ok_enabled(either).ok_reason(tl!("Tick Width or Height.").into()).values(Bind::bound(fields))
         }),
     };
     Some(opened)

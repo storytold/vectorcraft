@@ -32,12 +32,11 @@ pub fn open(app: &mut VectorcraftApp) {
     fields.set("steps", f64::from(current.steps));
     fields.set("amount", f64::from(current.amount));
     let steps = Param::custom("steps", field_label(tl!("Steps:")), |ui, fields, _| {
-        ui.vertical(|ui| {
+        super::form::stacked(ui, fields, |ui, fields| {
             slider(ui, fields, "steps", tl!("Steps:"), 1.0..=f64::from(GuideOptions::MAX_STEPS), None);
             let ends = [(0.0, tl!("Less").to_owned()), (100.0, tl!("More").to_owned())];
             slider(ui, fields, "amount", tl!("Variation:"), 0.0..=100.0, Some(ends));
         })
-        .response
     })
     .companions(["amount"]);
     let variations = Param::custom("variations", field_label(tl!("Variations:")), move |ui, fields, _| {

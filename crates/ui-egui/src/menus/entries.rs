@@ -3,13 +3,13 @@ use super::labels::{display_label, dynamic_label, effect_item_label, item_shortc
 use super::slots::{recent_readable, recent_slot};
 use super::state::{shortcut_of, shown_state};
 use super::tree::{Listed, menu_tree_named};
-use super::{Node, Serialize, TODO, Value, VectorcraftApp};
+use super::{Node, Serialize, Value, VectorcraftApp, unbound};
 
 /// The label of the menu item that runs `id` with `p` and reads `label` in English, as the menus
 /// draw it in the UI language: an effect's own name (Pathfinder › Add), an object's name, a
 /// spelling suggestion, or [`display_label`].
 pub fn shown_label(app: &VectorcraftApp, id: &str, p: &Value, label: &str) -> String {
-    effect_item_label(id, p)
+    effect_item_label(id, p, crate::i18n::current())
         .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
         .or_else(|| spelling_item_label(id, p))
         .unwrap_or_else(|| display_label(app, id, label))
@@ -169,7 +169,7 @@ pub fn insertable_items(english_names: bool, listed: &Listed) -> Vec<InsertableI
 pub(super) fn flatten(app: &VectorcraftApp, path: Vec<String>, shown: Vec<String>, nodes: &[Node], out: &mut Vec<MenuEntry>) {
     for node in nodes {
         match node {
-            Node::Item(it) if it.command.id == TODO => out.push(MenuEntry {
+            Node::Item(it) if unbound(&it.command.id) => out.push(MenuEntry {
                 path: path.clone(),
                 label: it.label.clone(),
                 command: None,

@@ -398,35 +398,6 @@ fn the_tile_items_check_the_layout_the_panes_show() {
     }
 }
 
-/// The Arrange Documents items tile and consolidate through the commands they name.
-#[test]
-fn the_arrange_documents_items_tile_and_consolidate() {
-    let mut app = app_with(3);
-    let items = crate::menus::arrange_documents_items();
-    let items = commands(&items);
-    let labels: Vec<&str> = items.iter().map(|(l, ..)| *l).collect();
-    for item in [
-        "Consolidate All Windows",
-        "Tile",
-        "Tile All Vertically",
-        "Tile All Horizontally",
-        "2-Up Layout",
-        "3-Up Layout",
-        "4-Up Layout",
-        "6-Up Layout",
-    ] {
-        assert!(labels.contains(&item), "the items list {item}");
-    }
-    let choose = |app: &mut VectorcraftApp, label: &str| {
-        let (_, id, p) = items.iter().find(|(l, ..)| *l == label).unwrap_or_else(|| panic!("{label} is listed"));
-        app.run(id, if p.is_null() { json!({}) } else { (*p).clone() }).unwrap();
-    };
-    choose(&mut app, "Tile All Vertically");
-    assert!(app.ui.tiled && app.ui.tile_layout == Layout::Vertical, "{}", app.ui.status);
-    choose(&mut app, "Consolidate All Windows");
-    assert!(!app.ui.tiled);
-}
-
 #[test]
 fn tile_shows_a_pane_for_each_document_fitted_to_it() {
     let mut app = app_with(3);
@@ -825,6 +796,69 @@ fn other_panes_draw_their_guides_and_selected_objects() {
     let guides = format!("{:?}", crate::canvas::guides::shown(&app, st, &tokens.unwrap()));
     assert!(guides.contains("300"), "the guide at 300 is shown in the pane: {guides}");
     assert!(!crate::canvas::selection::outlines(&app, st).is_empty(), "the selected rectangle is outlined in its pane");
+}
+
+/// Another pane crosses a selected linked image from corner to corner, as the current pane does, and outlines a
+/// selected embedded image alone (#9080).
+#[test]
+fn other_panes_cross_a_selected_linked_image() {
+    use craft_image_codecs::{ChannelLayout, EncodeOptions, Format, Image, SampleType};
+    let png = vectorcraft_testkit::temp_dir("panes-linked-image").join("red.png");
+    let image = Image::from_raw(40, 40, ChannelLayout::Rgba, SampleType::U8, [200u8, 40, 40, 255].repeat(40 * 40)).unwrap();
+    std::fs::write(&png, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
+    let mut app = app_with(2);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let mut place = |link: bool, at: [f64; 2]| {
+        app.session.execute("file.place", &json!({"path": png, "link": link, "at": at})).unwrap()["ids"][0].as_u64().unwrap()
+    };
+    let (linked, embedded) = (place(true, [100.0, 100.0]), place(false, [250.0, 100.0]));
+    app.run("window.arrange.tile", json!({})).unwrap();
+    let ctx = crate::testing::ui_context();
+    // How many paths the first document's pane outlines with `id` selected there.
+    let mut paths = |id: u64| {
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.session.execute("select.set", &json!({"ids": [id]})).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        let st = &app.session.documents()[0];
+        crate::canvas::selection::outlines(&app, st).iter().map(|o| o.paths.len()).sum::<usize>()
+    };
+    let (linked, embedded) = (paths(linked), paths(embedded));
+    assert_eq!((linked, embedded), (2, 1), "the outline of a linked image and its crossing lines; an embedded image's outline alone");
+}
+
+/// Another pane outlines a selected group's visible members only: hiding a member draws the same outlines as deleting
+/// it.
+#[test]
+fn other_panes_leave_out_a_selected_groups_hidden_members() {
+    let mut app = app_with(2);
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    let id = |made: serde_json::Value| made["id"].as_u64().unwrap();
+    let shown = id(app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 80})).unwrap());
+    let hidden = id(app.run("shape.ellipse", json!({"x": 200, "y": 100, "width": 90, "height": 60})).unwrap());
+    app.run("select.set", json!({"ids": [shown, hidden]})).unwrap();
+    let group = id(app.run("object.group", json!({})).unwrap());
+    app.run("window.arrange.tile", json!({})).unwrap();
+    let ctx = crate::testing::ui_context();
+    // The paths the first document's pane outlines with the group selected there, after the commands `edit` there.
+    let outlines = |app: &mut VectorcraftApp, edit: &[(&str, serde_json::Value)]| {
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        for (command, params) in edit {
+            app.run(command, params.clone()).unwrap();
+        }
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        frame(app, &ctx, vec![]);
+        frame(app, &ctx, vec![]);
+        let st = &app.session.documents()[0];
+        crate::canvas::selection::outlines(app, st).into_iter().flat_map(|o| o.paths).map(|p| p.elements().to_vec()).collect::<Vec<_>>()
+    };
+    let both = outlines(&mut app, &[]);
+    let without = outlines(&mut app, &[("select.set", json!({"ids": [hidden]})), ("edit.clear", json!({}))]);
+    let with_hidden = outlines(&mut app, &[("edit.undo", json!({})), ("select.set", json!({"ids": [hidden]})), ("object.hide", json!({}))]);
+    assert_ne!(both, without, "the outlines show both members");
+    assert_eq!(with_hidden, without, "a hidden member is not outlined");
 }
 
 #[test]

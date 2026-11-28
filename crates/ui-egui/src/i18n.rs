@@ -301,6 +301,33 @@ pub fn t_id<'a>(id: &str, label: &'a str) -> &'a str {
     tr_id(current(), id, label)
 }
 
+/// The Effect menu's label of effect `id` in `lang`: an `@id` row for the effect's id, else the
+/// row of its English menu label. A plug-in effect's label is the plug-in's own text. `None` for
+/// an id that names no effect. The Effect menu, History, Edit › Undo and Redo, the Appearance
+/// panel and the effect dialogs all name an effect through this lookup.
+pub fn effect_menu_label(lang: Lang, id: &str) -> Option<String> {
+    match built_in_effect_label(id) {
+        Some(label) => Some(tr_id(lang, id, label).to_string()),
+        None => vectorcraft_plugins::effect::plugin_id(id).and_then(|_| vectorcraft_effects::effect_info(id)).map(|info| info.label.to_string()),
+    }
+}
+
+/// [`effect_menu_label`] without its trailing ellipsis: an effect's name in `lang`.
+pub fn effect_name(lang: Lang, id: &str) -> Option<String> {
+    effect_menu_label(lang, id).map(|s| s.trim_end_matches('…').to_string())
+}
+
+/// Does `lang`'s catalog name built-in effect `id`: an `@id` row for the id, or a row for its
+/// English menu label?
+pub fn has_effect_name(lang: Lang, id: &str) -> bool {
+    built_in_effect_label(id).is_some_and(|label| i18n().get(lang, "@id", id).is_some() || has(lang, label))
+}
+
+/// The English Effect menu label of built-in effect `id`.
+fn built_in_effect_label(id: &str) -> Option<&'static str> {
+    vectorcraft_effects::built_in_effect(id).map(|(_, label)| label)
+}
+
 /// Fill `{name}` placeholders in one pass: a value that holds `{name}` text stays as it is.
 /// Unknown placeholders are left as written.
 pub fn fmt(template: &str, args: &[(&str, &str)]) -> String {

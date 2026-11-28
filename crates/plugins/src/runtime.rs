@@ -4,10 +4,10 @@ use wasmi::{
     Config, CustomFuelCosts, EnforcedLimits, Engine, ExternType, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall,
     Val, ValType, WasmParams, WasmResults,
 };
-use wasmparser::{Validator, WasmFeatures};
+use wasmparser::{CompositeInnerType, Parser, Payload, Validator, WasmFeatures};
 
 use crate::host::{self, Bridge, Deadline, Host, Report, Run};
-use crate::manifest::{MANIFEST_SECTION, MAX_MANIFEST_BYTES, Manifest};
+use crate::manifest::{MANIFEST_SECTION, MAX_MANIFEST_BYTES, Manifest, Runtime};
 use crate::permissions::Permission;
 use crate::{Error, Kind, Result};
 
@@ -42,10 +42,44 @@ const WASM_FEATURES: WasmFeatures = WasmFeatures::MUTABLE_GLOBAL
     .union(WasmFeatures::EXTENDED_CONST)
     .union(WasmFeatures::FLOATS);
 
+/// The most parameters or results a function type may have: the limit `EnforcedLimits::strict()`
+/// sets in wasmi 2.0.0.
+const MAX_FUNC_TYPE_VALUES: usize = 32;
+
 /// Validates `bytes` with only [`WASM_FEATURES`] on, before wasmi reads the module. A module that
-/// uses any other proposal is refused with the validator's error, which names the proposal.
+/// uses any other proposal is refused with the validator's error, which names the proposal. A
+/// function type with more than [`MAX_FUNC_TYPE_VALUES`] parameters or results is refused before
+/// any function body is validated.
 fn check_features(bytes: &[u8]) -> Result<()> {
+    check_func_types(bytes)?;
     Validator::new_with_features(WASM_FEATURES).validate_all(bytes).map(|_| ()).map_err(|e| Error::Module(e.to_string()))
+}
+
+/// Refuses a function type in the type section with more than [`MAX_FUNC_TYPE_VALUES`] parameters
+/// or results, with wasmi's message. Reading stops at the code section. A section that doesn't
+/// parse is left to the validator, which reports it.
+fn check_func_types(bytes: &[u8]) -> Result<()> {
+    for payload in Parser::new(0).parse_all(bytes) {
+        let types = match payload {
+            Ok(Payload::TypeSection(types)) => types,
+            Ok(Payload::CodeSectionStart { .. }) | Err(_) => return Ok(()),
+            Ok(_) => continue,
+        };
+        for group in types {
+            let Ok(group) = group else { return Ok(()) };
+            for ty in group.types() {
+                if let CompositeInnerType::Func(f) = &ty.composite_type.inner {
+                    if f.params().len() > MAX_FUNC_TYPE_VALUES {
+                        return Err(Error::Module(format!("a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters")));
+                    }
+                    if f.results().len() > MAX_FUNC_TYPE_VALUES {
+                        return Err(Error::Module(format!("a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results")));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Sets each WebAssembly proposal that wasmi's `Config` has a setter for in this build on or off,
@@ -135,12 +169,17 @@ impl Default for Limits {
     }
 }
 
+/// A plug-in's code: a WebAssembly module, or a JavaScript file ([`crate::js`]).
+enum Code {
+    Wasm { engine: Engine, module: Module },
+    Js(crate::js::Script),
+}
+
 /// A loaded, validated plug-in. Cheap to share (`Arc`) and safe to run from several threads:
-/// every run gets its own store and instance.
+/// every run gets its own store and instance, or for a JavaScript plug-in its own realm.
 pub struct Plugin {
     manifest: Manifest,
-    engine: Engine,
-    module: Module,
+    code: Code,
     limits: Limits,
     size: usize,
     hash: String,
@@ -307,12 +346,20 @@ impl Plugin {
     /// is one the host offers ([`crate::host::IMPORTS`]) and its manifest allows, and checks the
     /// exports. A module that carries its manifest in a [`MANIFEST_SECTION`] custom section is
     /// checked without being instantiated, so none of its code runs; one without that section is
-    /// instantiated to call `vc_abi_version` and `vc_manifest`. In Safe Mode nothing is loaded
-    /// ([`Error::SafeMode`]).
+    /// instantiated to call `vc_abi_version` and `vc_manifest`. Bytes that hold a JSON object with
+    /// `"runtime": "js"` are a JavaScript plug-in ([`crate::js`]): its manifest is checked and its
+    /// script parsed, and none of it runs. In Safe Mode nothing is loaded ([`Error::SafeMode`]).
     pub fn load(bytes: &[u8], limits: Limits) -> Result<Plugin> {
         crate::safe_mode::check()?;
         if bytes.len() > limits.max_module_bytes {
             return Err(Error::Module(format!("module is {} bytes (limit {})", bytes.len(), limits.max_module_bytes)));
+        }
+        if bytes.trim_ascii_start().starts_with(b"{") {
+            let (manifest, script) = crate::js::read_bundle(bytes)?;
+            let hash = crate::permissions::sha256_hex(bytes);
+            let mut p = Plugin { manifest, code: Code::Js(script), limits, size: bytes.len(), hash, source: None, serial: 0 };
+            p.heavy_limits();
+            return Ok(p);
         }
         if !bytes.starts_with(b"\0asm") {
             return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into()));
@@ -328,8 +375,17 @@ impl Plugin {
         let module = Module::new(&engine, bytes).map_err(|e| Error::Module(e.to_string()))?;
         let imports = host::check_imports(&module)?;
         let hash = crate::permissions::sha256_hex(bytes);
-        let mut p = Plugin { manifest: Manifest::placeholder(), engine, module, limits, size: bytes.len(), hash, source: None, serial: 0 };
-        let live = match section_manifest(&p.module)? {
+        let section = section_manifest(&module)?;
+        let mut p = Plugin {
+            manifest: Manifest::placeholder(),
+            code: Code::Wasm { engine, module: module.clone() },
+            limits,
+            size: bytes.len(),
+            hash,
+            source: None,
+            serial: 0,
+        };
+        let live = match section {
             Some(manifest) => {
                 p.manifest = manifest;
                 None
@@ -354,13 +410,11 @@ impl Plugin {
                 Some(live)
             }
         };
-        host::check_granted(&p.manifest, &imports)?;
-        // A heavy filter's runs get the larger budget the host allows for one, which the host
-        // lets the user allow or refuse before installing it.
-        if p.manifest.budget == crate::Budget::Heavy {
-            p.limits.fuel_base = p.limits.fuel_base.max(p.limits.heavy_fuel);
-            p.limits.wall_time_ms = p.limits.wall_time_ms.max(p.limits.heavy_wall_time_ms);
+        if p.manifest.runtime != Runtime::Wasm {
+            return Err(Error::Manifest("a WebAssembly module's manifest leaves `runtime` out: \"js\" is for a JavaScript plug-in".into()));
         }
+        host::check_granted(&p.manifest, &imports)?;
+        p.heavy_limits();
         // The other exports must exist with the right types.
         match live {
             Some(live) => {
@@ -368,11 +422,33 @@ impl Plugin {
                 live.func::<RunArgs, i64>("vc_run")?;
             }
             None => {
-                check_exports(&p.module, p.limits.max_memory_bytes)?;
+                check_exports(&module, p.limits.max_memory_bytes)?;
                 check_tables(bytes)?;
             }
         }
         Ok(p)
+    }
+
+    /// A heavy filter's runs get the larger budget the host allows for one, which the host lets the
+    /// user allow or refuse before installing it.
+    fn heavy_limits(&mut self) {
+        if self.manifest.budget == crate::Budget::Heavy {
+            self.limits.fuel_base = self.limits.fuel_base.max(self.limits.heavy_fuel);
+            self.limits.wall_time_ms = self.limits.wall_time_ms.max(self.limits.heavy_wall_time_ms);
+        }
+    }
+
+    /// What runs its code ([`Manifest::runtime`]).
+    pub fn runtime(&self) -> Runtime {
+        self.manifest.runtime
+    }
+
+    /// A JavaScript plug-in's script file name; `None` for a WebAssembly module.
+    pub fn script(&self) -> Option<&str> {
+        match &self.code {
+            Code::Js(script) => Some(&script.name),
+            Code::Wasm { .. } => None,
+        }
     }
 
     pub fn manifest(&self) -> &Manifest {
@@ -418,6 +494,7 @@ impl Plugin {
     /// A new instance for `run`, with the host imports of the permissions `granted` linked. When the
     /// module's start function fails, what it reported through the host imports goes to `report`.
     fn instantiate(&self, run: Run, granted: &[Permission], report: &mut Report) -> Result<Live> {
+        let Code::Wasm { engine, module } = &self.code else { return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into())) };
         let limits = StoreLimitsBuilder::new()
             .memory_size(self.limits.max_memory_bytes)
             .memories(1)
@@ -425,13 +502,13 @@ impl Plugin {
             .table_elements(MAX_TABLE_ELEMENTS as usize)
             .instances(1)
             .build();
-        let mut store = Store::new(&self.engine, Host { limits, run });
+        let mut store = Store::new(engine, Host { limits, run });
         store.limiter(|h| &mut h.limits);
         // The start function (if any) runs on one slice of fuel: it runs before `call` can check
         // the deadline or a cancel between slices, so a heavy budget would let it run for minutes.
         store.set_fuel(self.limits.fuel_base.min(FUEL_SLICE)).map_err(wasm_err)?;
-        let linker = host::linker(&self.engine, granted);
-        let instance = match linker.instantiate_and_start(&mut store, &self.module) {
+        let linker = host::linker(engine, granted);
+        let instance = match linker.instantiate_and_start(&mut store, module) {
             Ok(instance) => instance,
             Err(e) => {
                 *report = std::mem::take(&mut store.data_mut().run.report);
@@ -561,6 +638,14 @@ impl Plugin {
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
         let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
+        if let Code::Js(script) = &self.code {
+            // Its manifest lists no `commands`, so nothing calls it with a bridge.
+            if bridge.is_some() {
+                return Err(Error::Abi("a JavaScript plug-in makes no command calls".into()));
+            }
+            let call = crate::js::Call { input, params, limits, max_memory: self.limits.max_memory_bytes, deadline };
+            return crate::js::run(script, m, &call, run, report);
+        }
         let mut live = self.instantiate(run, &m.permissions(), report)?;
         // Calls can be made from `vc_run` on, not from the start function.
         if bridge.is_some() {

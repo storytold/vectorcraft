@@ -483,6 +483,40 @@ fn isolation_keeps_a_confirmed_delete_to_the_rows_listed() {
     assert!(app.session.active().unwrap().doc.node(sub).is_none());
 }
 
+#[test]
+fn delete_selection_approval_does_not_remove_restored_layer_art() {
+    let (app, [_, sub, _, _, art, _]) = nested();
+    let mut app = crate::testing::windowed(app);
+    let file = std::env::temp_dir().join(format!("vectorcraft-layer-delete-revert-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("layer.setProps", json!({"id": sub.0, "name": "Edited sublayer"})).unwrap();
+    assert!(app.run("ui.layerDelete", json!({"ids": [sub.0]})).unwrap().is_null());
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert_eq!(st.doc.node(sub).unwrap().name.as_deref(), Some("Sub"));
+    assert!(st.doc.node(art).is_some());
+    let undo = undo_len(&app);
+
+    let confirm = craft::ui::dialog::dialog_id(crate::dialogs::confirm::KIND);
+    crate::tests::picks::answer_dialog(&mut app, confirm, &[], true);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.node(sub).is_some() && st.doc.node(art).is_some(), "old approval cannot delete restored artwork");
+    assert_eq!(undo_len(&app), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+
+    assert!(app.run("ui.layerDelete", json!({"ids": [sub.0]})).unwrap().is_null());
+    crate::tests::picks::answer_dialog(&mut app, confirm, &[], true);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.node(sub).is_none() && st.doc.node(art).is_none(), "a fresh confirmation still deletes the requested layer");
+}
+
 /// A document put in isolation mode opens its isolated row at once, and showing the documents again opens nothing.
 #[test]
 fn isolation_opens_the_isolated_row_of_each_document() {

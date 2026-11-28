@@ -150,6 +150,18 @@ impl<'a> SessionTool<'a> {
         Self { app: RefCell::new(app), view, carrying: Cell::new(false), ctx: ui.ctx().clone(), layer: ui.layer_id() }
     }
 
+    /// `ev` with Shift, Alt, Cmd and Ctrl as they were held when the gesture's button went up in this pass, latched ones
+    /// included (the pointer frame's `pick_mods`), instead of as they are at the end of the pass: a modifier pressed or
+    /// let go after the release does not count for it. Space and Backtick stay as the host holds them. Unchanged in a
+    /// pass where that button did not come up.
+    fn at_release(&self, pointer: &ToolPointer, mut ev: PointerEvent) -> PointerEvent {
+        let frame = craft::ui::runtime::pointer::frame(&self.ctx);
+        if frame.release == Some(pointer.button) {
+            ev.mods = tool_mods(frame.pick_mods, ev.mods.space);
+        }
+        ev
+    }
+
     /// Whether another window covers the canvas at `pointer`, so art moved there leaves the canvas: a floating
     /// document's or a floating panel's OS window.
     fn covered(&self, pointer: &ToolPointer) -> bool {
@@ -181,6 +193,19 @@ impl<'a> SessionTool<'a> {
     /// [`tool_enter`] in this canvas's view.
     fn enter(&self, mods: Mods) -> bool {
         tool_enter(&mut self.app(), mods, self.view)
+    }
+
+    /// Enter places Rearrange waiting for its click: at the pointer over the canvas, else at the first selected
+    /// artboard's top-left → whether one was waiting. The Enter that confirmed its dialog is not taken.
+    fn place_rearrange(&self) -> bool {
+        use crate::dialogs::rearrange_artboards as rearrange;
+        let mut app = self.app();
+        if !rearrange::refresh_placement(&mut app) || !rearrange::armed(&app) {
+            return false;
+        }
+        let at = app.hover_doc;
+        rearrange::place(&mut app, at);
+        true
     }
 
     /// A key the tool does not claim while its gesture runs: arrows and digits still reach it, with no modifier (a
@@ -259,6 +284,13 @@ impl CanvasTool for SessionTool<'_> {
             app.canvas.last_drag = None;
             return ToolAction::Claimed;
         }
+        // Rearrange waiting for its click takes the press whole: the grid's top-left goes where it was pressed, and the
+        // tool gets no press, drag or release.
+        if crate::dialogs::rearrange_artboards::refresh_placement(&mut app) && !app.any_dialog_open() {
+            let at = pointer_event(PointerKind::Down, pointer, cx).pos;
+            crate::dialogs::rearrange_artboards::place(&mut app, Some(at));
+            return ToolAction::Done;
+        }
         // Text typed into a panel's field (its preview) goes to the object it edits before the press can select another.
         if app.session.active().and_then(|st| st.interaction.as_ref()).is_some_and(|it| it.keep_on_switch) {
             if let Err(e) = app.session.commit_interaction() {
@@ -302,7 +334,8 @@ impl CanvasTool for SessionTool<'_> {
         let covered = self.covered(pointer);
         let carried = super::drops::carry_out(&mut self.app(), cx, pointer, covered);
         if !carried {
-            let ev = pointer_event(PointerKind::Drag, pointer, cx);
+            // The moves of the pass that releases the press came before its release, with the keys held then.
+            let ev = self.at_release(pointer, pointer_event(PointerKind::Drag, pointer, cx));
             dispatch(&mut self.app(), &ev, self.view);
             self.app().canvas.last_drag = Some((pointer.pos, ev));
         }
@@ -320,21 +353,31 @@ impl CanvasTool for SessionTool<'_> {
             return;
         }
         drop(app);
+        // The press ends where it went up, with the keys held at its release.
+        let up = self.at_release(pointer, pointer_event(PointerKind::Up, pointer, cx));
         let covered = self.covered(pointer);
         let carried = super::drops::carried(&self.app(), cx, pointer, covered);
         self.app().canvas.panes.released_from = carried.as_ref().map(|art| (art.document, art.revision));
-        if cx.over_drop_target() || carried.is_some() {
+        let given_up = cx.over_drop_target() || carried.is_some();
+        if given_up {
             // The art goes to the drop target, or nowhere off the canvas: the move is given up where it started.
             let _ = self.app().session.cancel_interaction();
         }
         if let Some(art) = carried.filter(|_| !cx.over_drop_target()) {
             // Released over a pane in the frame the pointer reached it: no target could take it yet.
-            let op = if pointer.mods.alt { DropOperation::Copy } else { DropOperation::Move };
+            let op = if up.mods.alt { DropOperation::Copy } else { DropOperation::Move };
             let mut app = self.app();
             app.canvas.panes.released = super::drops::released_on_pane(&app, art, pointer.pos, op);
         }
         self.app().canvas.grab = None;
-        self.send(PointerKind::Up, pointer, cx);
+        // When the pointer moved or the keys changed since the drag's last move, the tool gets a move where the press went
+        // up first, as it does while held: the last move of the release's pass still sizes the shape, and Shift pressed in
+        // that pass still draws a square. A move that was given up gets none.
+        let last = self.app().canvas.last_drag.map(|(_, ev)| ev);
+        if !given_up && last.is_some_and(|last| (last.pos, last.mods, last.backquote) != (up.pos, up.mods, up.backquote)) {
+            dispatch(&mut self.app(), &PointerEvent { kind: PointerKind::Drag, ..up }, self.view);
+        }
+        dispatch(&mut self.app(), &up, self.view);
         if self.app().canvas.last_drag.is_some() {
             // A press that dragged is no click, and the framework counts presses: the next press starts a new run.
             self.app().ui.trace_pick_clicks = pointer.clicks;
@@ -347,14 +390,18 @@ impl CanvasTool for SessionTool<'_> {
             _ => return,
         };
         let before = self.app().session.tool_id();
-        self.send(follow, pointer, cx);
+        dispatch(&mut self.app(), &PointerEvent { kind: follow, ..up }, self.view);
         // A double click on type switched a selection tool to the Type tool: the caret goes where the type was
         // clicked, so typing edits it at once.
         let switched = follow == PointerKind::DoubleClick && before != "type" && self.app().session.tool_id() == "type";
         if switched {
             self.app().session.set_tool_option("prevTool", &json!(before));
-            self.send(PointerKind::Down, pointer, cx);
-            self.send(PointerKind::Up, pointer, cx);
+            for kind in [PointerKind::Down, PointerKind::Up] {
+                // Without Cmd, so the Type tool takes the click instead of lending a selection tool.
+                let mut ev = pointer_event(kind, pointer, cx);
+                ev.mods.cmd = false;
+                dispatch(&mut self.app(), &ev, self.view);
+            }
         }
     }
 
@@ -458,6 +505,9 @@ impl CanvasTool for SessionTool<'_> {
             ToolKey::Submit => {
                 // In Presentation Mode Enter opens no dialog: the tool takes none.
                 let presenting = self.app().ui.screen_mode == 3;
+                if !presenting && self.place_rearrange() {
+                    return true;
+                }
                 !presenting && (self.send_key(EngineKey::Enter, held) || self.enter(held))
             }
             ToolKey::Cancel => {
@@ -465,6 +515,13 @@ impl CanvasTool for SessionTool<'_> {
                 if self.app().ui.screen_mode == 3 {
                     return false;
                 }
+                // Escape drops Rearrange waiting for its click.
+                let mut app = self.app();
+                if crate::dialogs::rearrange_artboards::refresh_placement(&mut app) {
+                    crate::dialogs::rearrange_artboards::cancel_placement(&mut app);
+                    return true;
+                }
+                drop(app);
                 let ends = self.app().session.tool_ends_on_escape(self.view);
                 if self.send_key(EngineKey::Escape, held) {
                     return true;
@@ -543,8 +600,13 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
     }
     // Once a frame, before its press, which then uses the new tool; a held press (its grab) waits for the frame after
     // the release, and a pointer over another window for the pointer to come in.
-    if ui.ctx().current_pass_index() == 0 && app.canvas.grab.is_none() && ui.input(|i| i.pointer.has_pointer()) {
-        crate::stylus::sync_eraser_tool(app);
+    if ui.ctx().current_pass_index() == 0
+        && app.canvas.grab.is_none()
+        && ui.input(|i| i.pointer.has_pointer())
+        && crate::stylus::sync_eraser_tool(app)
+    {
+        // Before the press, which holds what the host was told about the wheel until its release.
+        crate::stylus::sync_wheel_use(app);
     }
     // A press on the canvas that a view tool takes (a middle-button pan, a held Space's Hand) counts as a press
     // elsewhere for the clicks the tool's double-click or triple-click compares.
@@ -607,6 +669,10 @@ pub(crate) fn run(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass) -> Too
         (PressPhase::Idle, _) | (_, None) => None,
         (_, Some(view)) => ui.input(|i| i.pointer.hover_pos()).map(|p| view.to_doc(p)),
     };
+    // Rearrange waiting for its click: dropped with its document or tool, and from the next pass Enter places it.
+    if crate::dialogs::rearrange_artboards::refresh_placement(app) {
+        crate::dialogs::rearrange_artboards::arm(app);
+    }
     show_overlays(app, ui, pass, view_info);
     response
 }
@@ -636,6 +702,8 @@ fn show_overlays(app: &mut VectorcraftApp, ui: &mut Ui, pass: &ToolPass, view_in
     }
     // Gap Options' Preview shows the gaps it finds.
     let mut extra = crate::dialogs::live_paint_gaps::overlays(app);
+    // Rearrange waiting for its click shows where its artboards go.
+    extra.extend(crate::dialogs::rearrange_artboards::placement_overlays(app));
     if app.ui.view.edges && !revolve {
         if app.ui.view.text_threads {
             extra.extend(super::marks::thread_overlays(app, space.view.zoom));
@@ -664,7 +732,7 @@ pub fn dispatch(app: &mut VectorcraftApp, ev: &PointerEvent, view: ViewInfo) {
         return;
     }
     // A press lent to a selection tool (Cmd/Ctrl held) does not use the tool of a held key.
-    if ev.kind == PointerKind::Down && app.session.lent_tool_id(&ev.mods).is_none() {
+    if ev.kind == PointerKind::Down && !app.session.press_lends_tool(ev, view) {
         crate::shortcuts::note_tool_use(app);
     }
     let r = app.session.pointer(ev, view);

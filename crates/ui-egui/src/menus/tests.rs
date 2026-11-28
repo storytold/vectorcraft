@@ -76,6 +76,95 @@ fn answer_open(app: &mut VectorcraftApp, fields: Value, ok: bool) {
 }
 
 #[test]
+fn view_snapping_submenu_keeps_top_level_commands_and_shortcuts() {
+    let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests_synthetic::key_frame(&mut app, &ctx, vec![]);
+    let view = menu_nodes("View");
+    let items = submenu_nodes(&view, "Snapping").expect("View › Snapping");
+    let expected = [
+        ("Smart Guides", "view.smartGuides"),
+        ("Snap to Point", "view.snapToPoint"),
+        ("Snap to Grid", "view.snapToGrid"),
+        ("Snap to Pixel", "view.snapToPixel"),
+        ("Snap to Glyph", "view.snapToGlyph"),
+        ("Pixel Snapping Options…", "view.snapToPixel.options"),
+    ];
+    assert_eq!(items.len(), 7);
+    assert_eq!(separators(items), [5]);
+    let commands: Vec<_> = command_rows(items).into_iter().map(|(label, id, _)| (label, id)).collect();
+    assert_eq!(commands, expected);
+    let entries = menu_entries(&app);
+    for (_, id) in expected.iter().take(5) {
+        let top = entries.iter().find(|e| e.path == ["View"] && e.command.as_deref() == Some(id)).unwrap();
+        let nested = entries.iter().find(|e| e.path == ["View", "Snapping"] && e.command.as_deref() == Some(id)).unwrap();
+        assert_eq!(top.shortcut, nested.shortcut, "{id}");
+        assert_eq!(top.shortcut, shortcut_of(&app, id).map(|c| c.to_string()).unwrap_or_default(), "{id}");
+    }
+    let previous_lang = crate::i18n::current();
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    model::refresh(&mut app, &ctx);
+    let view = app.menus.bar.menus.iter().find(|m| m.title == tl!("View")).unwrap();
+    let translated = tl!("Snapping").to_string();
+    let localized = submenu_nodes(&view.children, &translated).is_some();
+    crate::i18n::set_current(previous_lang);
+    assert!(localized, "the built menu uses the localized Snapping label");
+    assert_ne!(translated, "Snapping");
+}
+
+#[test]
+fn snapping_menu_clicks_toggle_view_state_and_painted_checkmarks() {
+    use crate::tests::panel_harness::Panel;
+    use craft::behavior::Mixed;
+
+    // Draw the model's real Snapping children in a small menu bar, without the top-level
+    // duplicate rows, so each pointer target and its checkmark have an unambiguous name.
+    fn draw(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+        model::refresh(app, ui.ctx());
+        let view = app.menus.bar.menus.iter().find(|m| m.title == "View").unwrap();
+        let items = submenu_nodes(&view.children, "Snapping").unwrap().to_vec();
+        let bar = craft::tracked::Tracked::new(craft::menu::MenuBar::new(vec![craft::menu::Menu::new("Snapping", items)]));
+        craft::menu::MenuBarUi::new(&bar).show(ui);
+    }
+    let states = |app: &VectorcraftApp| {
+        let v = &app.ui.view;
+        [v.smart_guides, v.snap_to_point, v.snap_to_grid, v.snap_to_pixel, v.snap_to_glyph]
+    };
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    app.run("file.new", json!({})).unwrap();
+    let mut menu = Panel::new(app, draw);
+    menu.click("Snapping");
+    for (index, (label, id)) in [
+        ("Smart Guides", "view.smartGuides"),
+        ("Snap to Point", "view.snapToPoint"),
+        ("Snap to Grid", "view.snapToGrid"),
+        ("Snap to Pixel", "view.snapToPixel"),
+        ("Snap to Glyph", "view.snapToGlyph"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        for _ in 0..2 {
+            let before = states(&menu.app());
+            assert!(menu.enabled(label), "{id}");
+            assert_eq!(checked(&menu.app(), id, &Value::Null), Some(before[index]), "{id}");
+            // The shared renderer exposes the state of the row's drawn checkmark.
+            assert_eq!(menu.toggled(label), Some(Mixed::Same(before[index])), "{id}");
+            menu.click(label);
+            let mut expected = before;
+            expected[index] = !expected[index];
+            assert_eq!(states(&menu.app()), expected, "{id} must toggle only its own state");
+            assert_eq!(checked(&menu.app(), id, &Value::Null), Some(expected[index]), "{id}");
+            menu.click("Snapping");
+            assert_eq!(menu.toggled(label), Some(Mixed::Same(expected[index])), "{id}");
+        }
+    }
+    assert!(menu.enabled("Pixel Snapping Options…"));
+    assert_eq!(menu.toggled("Pixel Snapping Options…"), None);
+}
+
+#[test]
 fn help_f1_opens_discover_without_a_document() {
     let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
     let help = menu_nodes("Help");
@@ -480,25 +569,28 @@ fn last_effect_dialog_and_view_toggles() {
     }
 }
 
-/// Edit › Undo and Edit › Redo name the step in the UI language as the History panel lists it
-/// (`panels::history::step_name`), including a step named after an effect whose catalog holds
-/// only the effect's menu row with an ellipsis, as Japanese does for Feather.
+/// Edit › Undo and Edit › Redo name the step in the UI language as the History panel lists it: a
+/// step that applied an effect by the effect's name as the Effect menu shows it
+/// (`i18n::effect_name`), even where the plain row of its English label holds another word, as
+/// French does for Feather, and any other step by `panels::history::step_name` of its label.
 #[test]
 fn undo_and_redo_name_the_step_as_the_history_panel_does() {
-    let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
-    crate::i18n::set_current(ja);
+    let fr = crate::i18n::Lang::from_code("fr").expect("fr registered");
+    crate::i18n::set_current(fr);
     let mut app = app_with_a_rectangle();
     app.run("effect.apply", json!({"effect": "stylize.feather"})).unwrap();
     assert_eq!(app.session.active().unwrap().history.undo.last().map(|h| h.label.as_str()), Some("Feather"));
     let shown = |app: &mut VectorcraftApp, id: &'static str| shown_label(app, id).unwrap_or_else(|| panic!("{id} is not a menu item"));
-    let step = |template: &str, name: &str| {
-        let name = crate::panels::history::step_name(ja, name).unwrap_or_else(|| name.to_string());
-        crate::i18n::fmt(crate::i18n::tr(ja, template), &[("name", &name)])
-    };
-    assert_eq!(shown(&mut app, "edit.undo"), step("Undo {name}", "Feather"));
+    let step = |lang, template: &str, name: &str| crate::i18n::fmt(crate::i18n::tr(lang, template), &[("name", name)]);
+    let feather = crate::i18n::effect_name(fr, "stylize.feather").expect("the Effect menu names Feather");
+    assert_eq!(shown(&mut app, "edit.undo"), step(fr, "Undo {name}", &feather));
     app.run("edit.undo", json!({})).unwrap();
-    assert_eq!(shown(&mut app, "edit.redo"), step("Redo {name}", "Feather"));
-    assert_eq!(shown(&mut app, "edit.undo"), step("Undo {name}", "Rectangle"), "a step with a plain row");
+    assert_eq!(shown(&mut app, "edit.redo"), step(fr, "Redo {name}", &feather));
+    // Japanese names a rectangle in other words than English.
+    let ja = crate::i18n::Lang::from_code("ja").expect("ja registered");
+    crate::i18n::set_current(ja);
+    let rectangle = crate::panels::history::step_name(ja, "Rectangle").unwrap_or_else(|| "Rectangle".to_string());
+    assert_eq!(shown(&mut app, "edit.undo"), step(ja, "Undo {name}", &rectangle), "a step with a plain row");
     crate::i18n::set_current(crate::i18n::Lang::EN);
     assert_eq!(shown(&mut app, "edit.redo"), "Redo Feather");
 }
@@ -1237,8 +1329,8 @@ fn every_bound_menu_command_exists() {
             match n {
                 Node::Item(it) => {
                     let id = it.command.id.as_str();
-                    // A Coming Soon row (`TODO`) is bound to no command.
-                    if id != TODO
+                    // A Coming Soon row (`TODO`) or a placeholder is bound to no command.
+                    if !unbound(id)
                         && vectorcraft_engine::find_command(id).is_none()
                         && !UI_COMMANDS.iter().any(|c| c.0 == id)
                         && !id.starts_with("object.path.")
@@ -1256,6 +1348,56 @@ fn every_bound_menu_command_exists() {
         walk(&children, &mut bad);
     }
     assert!(bad.is_empty(), "menu items bound to unknown commands: {bad:?}");
+}
+
+/// File › Open With and Object › Plug-ins stay in the laid-out bar with nothing of their kind installed, showing a
+/// disabled row that says so. Plug-ins are process-wide and other tests install some, so each list is checked only
+/// while it holds none of its own rows.
+#[test]
+fn plugin_lists_show_a_disabled_row_when_nothing_is_installed() {
+    fn submenu<'a>(nodes: &'a [Node], english: &str) -> Option<&'a [Node]> {
+        nodes.iter().find_map(|n| match n {
+            Node::Submenu { label, english: e, children, .. } if e.as_deref().unwrap_or(label) == english => Some(children.as_slice()),
+            _ => None,
+        })
+    }
+    fn placeholder_off(nodes: &[Node], text: &str) -> bool {
+        nodes.iter().any(|n| matches!(n, Node::Item(it) if it.command.id == PLACEHOLDER && it.command.params["label"] == text && !it.enabled))
+    }
+    fn lists(nodes: &[Node], id: &str) -> bool {
+        nodes.iter().any(|n| match n {
+            Node::Item(it) => it.command.id == id,
+            Node::Submenu { children, .. } => lists(children, id),
+            _ => false,
+        })
+    }
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+    let ctx = crate::testing::ui_context();
+    crate::menus::model::refresh(&mut app, &ctx);
+    let menu = |english: &str| {
+        app.menus.laid.menus.iter().find(|m| m.english.as_deref().unwrap_or(&m.title) == english).map(|m| m.children.as_slice()).unwrap_or_default()
+    };
+
+    let open_with = submenu(menu("File"), "Open With").expect("File › Open With is in the bar");
+    if !lists(open_with, "file.openWith") {
+        assert!(placeholder_off(open_with, crate::dialogs::plugin::NO_IMPORTERS), "{open_with:?}");
+    }
+    let plugins = submenu(menu("Object"), "Plug-ins").expect("Object › Plug-ins is in the bar");
+    if !lists(plugins, "plugin.dialog") {
+        assert!(placeholder_off(plugins, crate::dialogs::plugin::NO_FILTERS), "{plugins:?}");
+    }
+
+    // Whatever is installed: the layout keeps an empty list's row, and the submenu that holds only that row.
+    let row = |nodes: &[Node], text: &str| nodes.iter().any(|n| matches!(n, Node::Item(it) if it.command.id == PLACEHOLDER && it.label == text));
+    let mut empty = vec![
+        sub("Open With", vec![placeholder(crate::dialogs::plugin::NO_IMPORTERS)]),
+        placeholder(crate::dialogs::plugin::NO_FILTERS),
+        Sep,
+        c("Reload Plug-ins", "plugin.reload"),
+    ];
+    craft::menu::tidy(&mut empty);
+    assert!(submenu(&empty, "Open With").is_some_and(|o| row(o, crate::dialogs::plugin::NO_IMPORTERS)), "{empty:?}");
+    assert!(row(&empty, crate::dialogs::plugin::NO_FILTERS), "{empty:?}");
 }
 
 /// #543: Object › Image Trace › Make and Make and Expand trace with the Default preset at once,
