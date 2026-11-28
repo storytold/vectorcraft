@@ -2645,8 +2645,8 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   whose argument isn't a string literal.
 - `outside` lists what the script does outside the document: `filesWritten` (with the open modes used; setting a
   File object's `length`, `hidden` or `readonly` counts too, on any object that may be a File object; only
-  `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out, and
-  nothing is left out in a check whose files use `with`, name `eval`, `Function`, `evalFile` or `constructor` as a
+  `new Folder(…)` and the `Folder` places such as `Folder.temp`, other than `Folder.current`, are left out; a
+  document's `saveAs` or `exportFile` counts too, and nothing is left out in a check whose files use `with`, name `eval`, `Function`, `evalFile` or `constructor` as a
   word or as a string literal in brackets, read, call or assign a property in brackets (a `[` after a value, not an
   array literal) when the brackets hold anything but one number or string literal (`o[k]`, `this['ev' + 'al'](s)`,
   `this[('eval')](s)`, `this[0, 'eval'](s)`, `o[a[0]]`, or a preprocessor line inside the brackets) or the `[` opens
@@ -2797,8 +2797,8 @@ other files through `$`:
   its old value. `addDocument` checks the ranges of the values. `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` also take `null` and can be assigned, but `addDocument` throws an error that says they are not available yet when
   the preset it is given holds one of them with a value other than `null`, and makes no document. A
-  `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
-  `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
+  `presetSettings` of `null` or `undefined` counts as omitted. Any other `presetSettings` that is not a
+  `DocumentPreset` (a plain object such as `{width: 500}` included) throws a `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
   automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
   profile and the reason, and makes no document. Each warning from reading the profile's file (a color profile in it
   that cannot be used, for example) goes to the Script Console as a line `addDocument: <warning>`. A `previewMode` of
@@ -2815,8 +2815,10 @@ other files through `$`:
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
   100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
-  or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  visible bounds with the anchors and Bézier handles of the object's paths, and of the shown paths in its groups and
+  compound paths; a clip group's come from its clipping path), `editable` (false for an object that is hidden or
+  locked, in a hidden or locked layer or group, or on a locked artboard), `zOrderPosition`,
+  `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
@@ -2841,9 +2843,9 @@ other files through `$`:
   as an empty group or that compound path, reads its bounds, `position`, `width` and `height` as zeros, and
   assigning them does nothing (VectorCraft's own rule). `duplicate` on a path inside a compound path throws
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
-  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that
-  holds a placed image keeps the same object when the image is embedded: the next read gives that object, now a
-  `RasterItem`. The enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
+  `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. When a placed image is embedded, an
+  object a script holds for it is stale, and the next read gives a new `RasterItem` object. The
+  enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
   `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
   `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
   `pageItems` lists the art topmost first, as the example on
@@ -2894,6 +2896,108 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `Document.saveAs(file, options?)` runs `file.saveAs`, and the document then has the new file.
+  `Document.exportFile(file, exportType, options?)` runs `document.export` and leaves the document's file as it is.
+  `app.open(file, documentColorSpace?, options?)` runs `document.open` and gives the new `Document`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/Application/).
+  `file` is a `File`. `new IllustratorSaveOptions()`, `new EPSSaveOptions()` and `new PDFSaveOptions()` pick the
+  format (https://ai-scripting.docsforadobe.dev/jsobjref/IllustratorSaveOptions/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/EPSSaveOptions/, https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/);
+  without options the path's extension picks it. Without options, `saveAs` to a `.ai`, `.eps` or `.pdf` path and
+  `exportFile` as `PNG24`, `JPEG` or `SVG` use the defaults a new options object of that class holds. `saveAs` maps `compressed`, `pdfCompatible`, `embedICCProfile` and
+  `compatibility` (`ILLUSTRATOR17` and `ILLUSTRATOR19`) of `.ai`; `cmykPostScript`, `includeDocumentThumbnails`,
+  `postScript`, `preview`, `overprint` and `compatibility` of EPS; and `pDFPreset`, `compatibility` (`ACROBAT4` to
+  `ACROBAT8` as PDF 1.3 to 1.7), `artboardRange`, `preserveEditability`, `acrobatLayers` and `compressArt` of PDF.
+  `exportType` is an `ExportType`: `PNG24`, `JPEG` and `SVG` take `new ExportOptionsPNG24()`, `new ExportOptionsJPEG()`
+  and `new ExportOptionsSVG()` (https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/, https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/),
+  with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, from 1 to
+  776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
+  `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
+  `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
+  `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
+  `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
+  each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
+  `EPSPostScriptLevelEnum`, `PDFOverprint` and `UserInteractionLevel` hold strings such as `"ExportType.PNG24"`, as
+  do the enumerations of the other options' defaults (`CompressionQuality`, `DownsampleMethod`,
+  `SVGCSSPropertyLocation` and the like), with the members
+  https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/ lists.
+  VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
+  command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
+  document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
+  read-only`; a file a `File` object holds open for writing throws `Script file is open for writing` on `saveAs`
+  and `exportFile`, and `Script file access denied` when a command would write it besides the file named; and the
+  files a command reads or writes besides the one named, such as an SVG's linked files, are
+  read and written only where the script's folders allow. `userInteractionLevel` does not change what a command
+  does or where it may read and write, since a command a script runs never shows a dialog. `exportFile` adds the
+  format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with
+  `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
+  visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
+  when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
+  an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`; properties the help
+  pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
+  keeps the preset's value. A bad value throws an error before anything is written.
+- `Document.placedItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItems/) lists the document's linked
+  images and `Document.rasterItems` (https://ai-scripting.docsforadobe.dev/jsobjref/RasterItems/) its embedded ones,
+  topmost first as `pageItems` lists them, each with `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`. `placedItems.add()`
+  gives a `PlacedItem` with no file; assigning a `File` to its `file` runs `file.place` with `link: true`, and every
+  other member of it throws `PlacedItem.file is required` until then. A `PlacedItem`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/) has `file`, `relink(file)` (`links.relink`), `embed()`
+  (`links.embed`), `matrix` and `boundingBox`. A `RasterItem` (https://ai-scripting.docsforadobe.dev/jsobjref/RasterItem/)
+  has `bitsPerChannel`, `channels`, `imageColorSpace` and `transparent`, read from the header of its encoded pixels,
+  and `colorizedGrayscale`, `embedded`, `file`, `status`, `matrix` and `boundingBox`. The enumeration values are
+  strings such as `"ImageColorSpace.Grayscale"` and `"RasterLinkState.NODATA"`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/). VectorCraft's own rules: `file` is assigned
+  once, on a `placedItems.add()` result, and is read-only after (`PlacedItem.file is read-only: use relink`). A file
+  to place or relink must be a `File` the script may read, checked as `app.open` checks its file, of at most
+  256 MiB, holding an image; its size is read before its contents, and anything else throws an error with nothing
+  changed (`Script file access denied` names no path). Reading `file` of an image whose file the script may not read
+  throws `Script file access denied`. After `embed()` the object is stale and `rasterItems` has the image under the
+  same id; an image whose file is missing throws `Linked image is missing` and stays linked. `RasterItem.file` is
+  `null`, `embedded` is `true` and takes only `true`, and `status` is `RasterLinkState.NODATA`. `transparent` is true
+  for an image with an alpha channel or a transparent palette entry. `matrix` is a record of `mValueA` to `mValueTY`
+  that maps the image's pixels, row 0 at the top, to script coordinates, and a distorted image has none. Assigning
+  `matrix` runs `object.transform`; a value that is not finite, a matrix with no area and one that puts a corner of
+  the image outside the canvas throw an error with nothing changed. `boundingBox` is the pixel rectangle at one point
+  a pixel. `removeAll()` refuses images as `pageItems.removeAll()` refuses objects, and so throws `cannot delete
+  objects on a locked artboard` and deletes nothing when an image is on one. Assigning `file` or `matrix` checks the
+  item before the value, so a stale item throws `Stale page item` whatever the value. Assigning `matrix` to an `add()`
+  result without a file throws `PlacedItem.file is required` whatever the value, and assigning `file` to one checks
+  the file and places the image. A run keeps at most 1,024 `placedItems.add()` results, and one that was not given a
+  file is dropped at the end of the run. `contentVariable`, `colorants`, `colorize` and `overprint` are not available
+  yet.
+- `PlacedItem.trace()` and `RasterItem.trace()` trace the image with `imageTrace.make` and the Default preset and
+  return the Image Trace object as a `PluginItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PluginItem/), whose
+  `isTracing` is `true` and whose `tracing` is its `TracingObject`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TracingObject/). A `TracingObject` has `sourceArt` (the traced image),
+  `pathCount`, `anchorCount`, `usedColorCount`, `imageResolution`, `tracingOptions`, `parent`, `expandTracing()`
+  (`imageTrace.expand`, which returns the expanded group) and `releaseTracing()` (`imageTrace.release`, which returns
+  the image). `TracingOptions` (https://ai-scripting.docsforadobe.dev/jsobjref/TracingOptions/) has `tracingMode`,
+  `threshold`, `maxColors`, `palette`, `fills`, `strokes`, `ignoreWhite`, `minArea`, `viewRaster`, `viewVector`,
+  `preset`, `parent`, `loadFromPreset(name)` and `storeToPreset(name)`, and the enumerations `TracingModeType`,
+  `ViewRasterType` and `ViewVectorType` hold strings such as `"TracingModeType.TRACINGMODECOLOR"`. VectorCraft's own
+  rules: `trace()` returns once the trace is made. It throws `The image is the source art of a tracing` on an image an
+  Image Trace object holds, and `Linked image is missing` on a linked image whose file is missing. `pathCount` does not
+  count the seam fills of an Abutting trace, `usedColorCount` counts the different fill and stroke paints, and
+  `imageResolution` is the image's pixels per inch as placed, an error for an image placed at different resolutions
+  across and down. Assigning an option, or `loadFromPreset(name)`, traces again with `imageTrace.make`, keeps the
+  source image and the view, and a value the tracing already has runs no command. Assigning `viewRaster` or
+  `viewVector` does not trace again: it runs `imageTrace.setView`. The `PluginItem`, `TracingObject`
+  and `TracingOptions` follow the new object, and a run traces again at most 10,000 times. `threshold` takes a whole
+  number from 0 to 255, `maxColors` from 2 to 256 and `minArea` (the Noise setting, in pixels) from 0 to the largest
+  image the tracer reads; `fills` and `strokes` cannot both be `false`; `palette` is `""` (automatic), `"Limited"`,
+  `"Full Tone"` or `"Document Library"`; `viewRaster` and `viewVector` take only the pairs that match an Image Trace
+  view. A value of the wrong type throws a `TypeError`, a number out of range a `RangeError`, and nothing changes.
+  `expandTracing(true)` throws `TracingObject.expandTracing(true) is not implemented` with nothing changed. A preset
+  name is a string of at most 256 bytes without `/`, `\`, `:` or control characters. `storeToPreset` returns `false`
+  for a built-in preset name and `Custom`, and throws for any other name, since a script cannot run
+  `imageTrace.presets.save`. A tracing that was expanded, released, deleted, traced again by a command, or whose
+  source image was deleted throws `Stale page item`. A script gets the source image from `sourceArt`, and `pageItems`,
+  `placedItems` and `rasterItems` do not list it. Assigning a different `name` to a `PluginItem` throws
+  `The name of a tracing cannot be changed`. `areaCount`, `cornerAngle`, `livePaintOutput`,
+  `maxStrokeWeight`, `minStrokeLength`, `outputToSwatches`, `pathFitting`, `preprocessBlur`, `resample` and
+  `resampleResolution` throw an error that says they are not implemented. With a script running, `imageTrace.make`
+  stops at the run's stop request and changes nothing.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
   with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
   `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page

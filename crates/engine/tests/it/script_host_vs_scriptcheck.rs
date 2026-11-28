@@ -38,12 +38,15 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
     ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
+    ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
+    ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.saveAs` and `close` throw "not available yet".
+/// documents; `Document.close` throws "not available yet". `app.open` reads the file it is given,
+/// and `PlacedItem.file=` and `PlacedItem.relink` read the image file they are given.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -80,13 +83,14 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
          DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
-         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= Tag Tags ZOrderMethod",
+         Documents ElementPlacement Layer PageItem PageItems PlacedItem PlacedItems PluginItem RasterItem RasterItems RulerUnits \
+         selection selection= Tag Tags TracingObject TracingOptions ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents executeMenuCommand \
-         getIsFileOpen selection selection= toString typename",
+         getIsFileOpen open selection selection= toString typename userInteractionLevel userInteractionLevel=",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -102,9 +106,9 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
-         typename views views= width",
+         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= placedItems rasterItems \
+         rulerOrigin rulerOrigin= rulerUnits selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= \
+         toString typename views views= width",
     ),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name toString typename"),
@@ -119,6 +123,37 @@ const INSIDE: &[(&str, &str)] = &[
          position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
+    ),
+    ("PlacedItems.", "prototype"),
+    ("PlacedItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("PlacedItem.", "prototype"),
+    ("PlacedItem.prototype.", "boundingBox constructor contentVariable contentVariable= embed file file= matrix matrix= relink trace"),
+    ("PluginItem.", "prototype"),
+    ("PluginItem.prototype.", "constructor isTracing tracing"),
+    ("RasterItems.", "prototype"),
+    ("RasterItems.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("RasterItem.", "prototype"),
+    (
+        "RasterItem.prototype.",
+        "bitsPerChannel boundingBox channels colorants colorants= colorize colorize= colorizedGrayscale constructor \
+         contentVariable contentVariable= embedded embedded= file imageColorSpace matrix matrix= overprint overprint= status \
+         trace transparent",
+    ),
+    ("TracingObject.", "prototype"),
+    (
+        "TracingObject.prototype.",
+        "anchorCount areaCount constructor expandTracing imageResolution parent pathCount releaseTracing sourceArt \
+         tracingOptions typename usedColorCount",
+    ),
+    ("TracingOptions.", "prototype"),
+    (
+        "TracingOptions.prototype.",
+        "constructor cornerAngle cornerAngle= fills fills= ignoreWhite ignoreWhite= livePaintOutput livePaintOutput= \
+         loadFromPreset maxColors maxColors= maxStrokeWeight maxStrokeWeight= minArea minArea= minStrokeLength \
+         minStrokeLength= outputToSwatches outputToSwatches= palette palette= parent pathFitting pathFitting= \
+         preprocessBlur preprocessBlur= preset resample resample= resampleResolution resampleResolution= storeToPreset \
+         strokes strokes= threshold threshold= tracingMode tracingMode= typename viewRaster viewRaster= viewVector \
+         viewVector=",
     ),
     ("Tags.", "prototype"),
     ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
@@ -138,11 +173,78 @@ const INSIDE: &[(&str, &str)] = &[
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
+    // The enumerations of saving, exporting and opening.
+    ("", "Compatibility EPSPostScriptLevelEnum EPSPreview ExportType PDFBoxType PDFCompatibility PDFOverprint UserInteractionLevel"),
+    (
+        "Compatibility.",
+        "ILLUSTRATOR10 ILLUSTRATOR11 ILLUSTRATOR12 ILLUSTRATOR13 ILLUSTRATOR14 ILLUSTRATOR15 ILLUSTRATOR16 ILLUSTRATOR17 \
+         ILLUSTRATOR19 ILLUSTRATOR8 ILLUSTRATOR9 JAPANESEVERSION3",
+    ),
+    ("EPSPostScriptLevelEnum.", "LEVEL2 LEVEL3"),
+    ("EPSPreview.", "BWTIFF COLORTIFF None TRANSPARENTCOLORTIFF"),
+    ("ExportType.", "AutoCAD FLASH GIF JPEG PNG24 PNG8 SVG TIFF"),
+    ("PDFBoxType.", "PDFARTBOX PDFBLEEDBOX PDFBOUNDINGBOX PDFCROPBOX PDFMEDIABOX PDFTRIMBOX"),
+    ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
+    ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
+    ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
+    // The enumerations of the save and export options' defaults.
+    (
+        "",
+        "ColorConversion ColorDestination ColorProfile CompressionQuality DownsampleMethod MonochromeCompression \
+         OutputFlattening PDFChangesAllowedEnum PDFPrintAllowedEnum PDFTrimMarkWeight PDFXStandard PageMarksTypes \
+         SVGCSSPropertyLocation SVGDTDVersion SVGDocumentEncoding SVGFontSubsetting SVGFontType",
+    ),
+    ("ColorConversion.", "COLORCONVERSIONREPURPOSE COLORCONVERSIONTODEST None"),
+    (
+        "ColorDestination.",
+        "COLORDESTINATIONDOCCMYK COLORDESTINATIONDOCRGB COLORDESTINATIONPROFILE COLORDESTINATIONWORKINGCMYK \
+         COLORDESTINATIONWORKINGRGB None",
+    ),
+    ("ColorProfile.", "INCLUDEALLPROFILE INCLUDEDESTPROFILE INCLUDERGBPROFILE LEAVEPROFILEUNCHANGED None"),
+    (
+        "CompressionQuality.",
+        "AUTOMATICJPEG2000HIGH AUTOMATICJPEG2000LOSSLESS AUTOMATICJPEG2000LOW AUTOMATICJPEG2000MAXIMUM \
+         AUTOMATICJPEG2000MEDIUM AUTOMATICJPEG2000MINIMUM AUTOMATICJPEGHIGH AUTOMATICJPEGLOW AUTOMATICJPEGMAXIMUM \
+         AUTOMATICJPEGMEDIUM AUTOMATICJPEGMINIMUM JPEG2000HIGH JPEG2000LOSSLESS JPEG2000LOW JPEG2000MAXIMUM \
+         JPEG2000MEDIUM JPEG2000MINIMUM JPEGHIGH JPEGLOW JPEGMAXIMUM JPEGMEDIUM JPEGMINIMUM None ZIP4BIT ZIP8BIT",
+    ),
+    ("DownsampleMethod.", "AVERAGEDOWNSAMPLE BICUBICDOWNSAMPLE NODOWNSAMPLE SUBSAMPLE"),
+    ("MonochromeCompression.", "CCIT3 CCIT4 MONOZIP None RUNLENGTH"),
+    ("OutputFlattening.", "PRESERVEAPPEARANCE PRESERVEPATHS"),
+    (
+        "PDFChangesAllowedEnum.",
+        "CHANGE128ANYCHANGES CHANGE128COMMENTING CHANGE128EDITPAGE CHANGE128FILLFORM CHANGE128NONE \
+         CHANGE40ANYCHANGES CHANGE40COMMENTING CHANGE40NONE CHANGE40PAGELAYOUT",
+    ),
+    ("PDFPrintAllowedEnum.", "PRINT128HIGHRESOLUTION PRINT128LOWRESOLUTION PRINT128NONE PRINT40HIGHRESOLUTION PRINT40NONE"),
+    ("PDFTrimMarkWeight.", "TRIMMARKWEIGHT0125 TRIMMARKWEIGHT025 TRIMMARKWEIGHT05"),
+    ("PDFXStandard.", "PDFX1A2001 PDFX1A2003 PDFX32002 PDFX32003 PDFX42007 PDFXNONE"),
+    ("PageMarksTypes.", "Japanese Roman"),
+    ("SVGCSSPropertyLocation.", "ENTITIES PRESENTATIONATTRIBUTES STYLEATTRIBUTES STYLEELEMENTS"),
+    ("SVGDTDVersion.", "SVG1_0 SVG1_1 SVGBASIC1_1 SVGTINY1_1 SVGTINY1_1PLUS SVGTINY1_2"),
+    ("SVGDocumentEncoding.", "ASCII UTF16 UTF8"),
+    ("SVGFontSubsetting.", "ALLGLYPHS COMMONENGLISH COMMONROMAN GLYPHSUSED GLYPHSUSEDPLUSENGLISH GLYPHSUSEDPLUSROMAN None"),
+    ("SVGFontType.", "CEFFONT OUTLINEFONT SVGFONT"),
+    // The enumerations of placed and raster items.
+    ("", "ImageColorSpace RasterLinkState"),
+    ("ImageColorSpace.", "CMYK DeviceN Grayscale Indexed LAB RGB Separation"),
+    ("RasterLinkState.", "DATAFROMFILE DATAMODIFIED NODATA"),
+    // The enumerations of tracings.
+    ("", "TracingModeType ViewRasterType ViewVectorType"),
+    ("TracingModeType.", "TRACINGMODEBLACKANDWHITE TRACINGMODECOLOR TRACINGMODEGRAY"),
+    ("ViewRasterType.", "TRACINGVIEWRASTERADJUSTEDIMAGE TRACINGVIEWRASTERNOIMAGE TRACINGVIEWRASTERORIGINALIMAGE TRACINGVIEWRASTERTRANSPARENTIMAGE"),
+    (
+        "ViewVectorType.",
+        "TRACINGVIEWVECTORNOTRACINGRESULT TRACINGVIEWVECTOROUTLINES TRACINGVIEWVECTOROUTLINESWITHTRACING \
+         TRACINGVIEWVECTORTRACINGRESULT",
+    ),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: the page item types.
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// and the save and export option classes.
 const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+     PlacedDocumentItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
+     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

@@ -933,6 +933,10 @@ pub use retype::{RetypeFound, RetypeRun, RetypeSearch};
 /// The saved Image Trace presets' revision and latest changes ([`crate::Session`] keeps them).
 pub(crate) use buildcmds::TracePresetChanges;
 
+/// Whether an object is an Image Trace object, the source image of one, or the seam fills group in
+/// one.
+pub(crate) use buildcmds::{is_seam_fills, is_trace_group, is_trace_source};
+
 /// The shapes a group selected alone gives the Pathfinder panel.
 pub use pathops::shape_count;
 

@@ -9,8 +9,9 @@
 //! of a host class from its own data. A class's prototype and constructor are frozen. While a
 //! script holds the object for a class and handle, each read of that class and handle gives the
 //! same object. Classes that descend from the same class without a parent share their objects: a
-//! read of another of them with the same handle gives the object the script holds, now of the
-//! class that read names.
+//! read of an ancestor or descendant of the held object's class with the same handle gives the
+//! object the script holds, now of the class that read names. A read of a class on another branch
+//! gives a new object, and the held object keeps its class.
 //!
 //! Every member function gets the object it is called on (`this`) as its first argument, or
 //! `undefined` when `this` is not an object of a host class, followed by the call's arguments; a
@@ -95,6 +96,18 @@ pub(crate) struct Entry {
     unavailable: Rc<HashSet<Key>>,
 }
 
+/// Whether class `a` is class `b` or descends from it, both indexes into `classes`.
+fn descends(classes: &[Entry], a: u32, b: u32) -> bool {
+    let mut at = Some(a);
+    while let Some(c) = at {
+        if c == b {
+            return true;
+        }
+        at = classes.get(c as usize).and_then(|e| e.parent);
+    }
+    false
+}
+
 impl Entry {
     pub(crate) fn objects(&self) -> [ObjId; 2] {
         [self.proto, self.ctor]
@@ -104,8 +117,9 @@ impl Entry {
 /// A family of classes ([`Entry::family`]) and the bits of a handle.
 type MadeKey = (u32, Box<[u64]>);
 
-/// The object made for each family of classes and handle ([`Interp::host_objects`]).
-pub(crate) type Made = std::collections::HashMap<MadeKey, ObjId>;
+/// The objects made for each family of classes and handle ([`Interp::host_objects`]), one for each
+/// branch of the family a read named, oldest first.
+pub(crate) type Made = std::collections::HashMap<MadeKey, Vec<ObjId>>;
 
 /// Whether `id` is still the object made for `key`, and not a freed cell or another object that
 /// was given its cell.
@@ -120,7 +134,10 @@ fn is_made(heap: &crate::heap::Heap, classes: &[Entry], id: ObjId, key: &MadeKey
 
 /// Drops the entries of `made` whose objects the last collection freed.
 pub(crate) fn forget_collected(made: &mut Made, heap: &crate::heap::Heap, classes: &[Entry]) {
-    made.retain(|key, id| is_made(heap, classes, *id, key));
+    made.retain(|key, ids| {
+        ids.retain(|id| is_made(heap, classes, *id, key));
+        !ids.is_empty()
+    });
 }
 
 /// The [`Data`] that stands for the object of host class `class` with `handle`.
@@ -189,10 +206,24 @@ impl Interp {
         let (proto, family) = (entry.proto, entry.family);
         let class = u32::try_from(class).unwrap_or(u32::MAX);
         let made = (family, handle.iter().map(|n| n.to_bits()).collect::<Box<[u64]>>());
-        if let Some(&id) = self.host_objects.get(&made)
-            && is_made(&self.heap, &self.host_classes, id, &made)
-        {
-            // An object of another class of the family becomes one of `class`.
+        // The held object of `class` itself, or else the newest of an ancestor or descendant class,
+        // which becomes one of `class`. An object of a class on another branch of the family keeps
+        // its class, and a read of `class` with no such object gives a new object.
+        let mut found = None;
+        for &id in self.host_objects.get(&made).map(Vec::as_slice).unwrap_or_default() {
+            if !is_made(&self.heap, &self.host_classes, id, &made) {
+                continue;
+            }
+            let Class::Host(h) = &self.object(id)?.class else { continue };
+            if h.class == class {
+                found = Some(id);
+                break;
+            }
+            if descends(&self.host_classes, h.class, class) || descends(&self.host_classes, class, h.class) {
+                found = Some(id);
+            }
+        }
+        if let Some(id) = found {
             let o = self.object_mut(id)?;
             if let Class::Host(h) = &mut o.class
                 && h.class != class
@@ -206,7 +237,13 @@ impl Interp {
         let mut o = Object::new(Class::Host(HostObj { class, handle: handle.into() }), Some(proto));
         o.extensible = false;
         let id = self.heap.alloc_object(o);
-        self.host_objects.insert(made, id);
+        if let Some(ids) = self.host_objects.get_mut(&made) {
+            let (heap, classes) = (&self.heap, &self.host_classes);
+            ids.retain(|&old| old != id && is_made(heap, classes, old, &made));
+            ids.push(id);
+        } else {
+            self.host_objects.insert(made, vec![id]);
+        }
         Ok(Value::Object(id))
     }
 

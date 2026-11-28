@@ -88,6 +88,8 @@
 @msg	Script file could not be written	Scriptfilen kunne ikke skrives
 @msg	Script file dialogs need a person to answer them	Scriptets fildialoger skal besvares af en person
 @msg	Script file is not open for writing	Scriptfilen er ikke åben for skrivning
+@msg	Script file is read-only	Scriptfilen er skrivebeskyttet
+@msg	Script file is open for writing	Scriptfilen er åben for skrivning
 @msg	Script file name is already in use	Scriptfilens navn er allerede i brug
 @msg	Script file name must be a name without a folder	Scriptfilens navn skal være et navn uden en mappe
 @msg	Script file permission can be kept only for a script run from a file	Filtilladelsen kan kun beholdes for et script, der køres fra en fil

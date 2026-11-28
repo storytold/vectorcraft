@@ -1040,6 +1040,31 @@ fn a_save_canceled_after_its_first_file_writes_them_all() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// A save that writes several files, through a writer that does not check the file access in
+/// force, writes none of them when that access refuses one: the save refuses it itself.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_save_of_several_files_refused_by_the_file_access_writes_none_through_any_writer() {
+    let d = tmp_dir("refused-files");
+    let mut s = session(100.0, 100.0, 2);
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 30, "height": 30})).unwrap();
+    let path = d.join("logo.eps").to_string_lossy().to_string();
+    let plan = save_plan(&s, SaveMode::Copy, &json!({"path": path, "options": {"useArtboards": true}})).unwrap();
+    let job = save_job(&mut s, plan).unwrap();
+    let mut written = vec![];
+    let r = crate::file_access::confine(Some(&crate::file_access::AutomationRoots::none()), || {
+        job.write(|p, b| {
+            std::fs::write(p, b).map_err(|e| EngineError::Other(e.to_string()))?;
+            written.push(p.to_string());
+            Ok(())
+        })
+    });
+    assert!(r.as_ref().is_err_and(|e| e.to_string().contains("write authority is absent")), "{r:?}");
+    assert!(written.is_empty(), "{written:?}");
+    assert_eq!(std::fs::read_dir(&d).unwrap().count(), 0, "nothing written");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// A save that fails leaves File Info's dates and the saved state alone; one that works stamps them.
 #[test]
 fn a_failed_save_does_not_stamp_the_documents_dates() {

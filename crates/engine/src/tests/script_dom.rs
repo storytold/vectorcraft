@@ -134,6 +134,20 @@ fn page_item_geometry_uses_document_coordinates_with_y_up() {
     assert_eq!(out[4], json!([20, 250, 80, 210]));
 }
 
+/// `controlBounds` takes in the Bézier handles of a path, which can reach past what it draws.
+#[test]
+fn page_item_control_bounds_take_in_the_handles() {
+    let (mut s, _, _) = doc();
+    let anchors = json!([{"x": 0, "y": 100, "out": [0, 0]}, {"x": 100, "y": 100, "in": [100, 0]}]);
+    s.execute("path.create", &json!({"anchors": anchors})).unwrap();
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0]; vc.log(i.visibleBounds); vc.log(i.controlBounds);");
+    let b = |v: &Value| -> Vec<f64> { v.as_array().unwrap().iter().map(|n| n.as_f64().unwrap()).collect() };
+    let (visible, control) = (b(&out[0]), b(&out[1]));
+    assert!(visible[1] < 290.0, "the curve stays well under its handles: {visible:?}");
+    assert!((control[1] - 300.0).abs() < 1e-9, "the handles reach the top of the page: {control:?}");
+    assert!(control[0] <= visible[0] && control[2] >= visible[2] && control[3] <= visible[3], "{visible:?} {control:?}");
+}
+
 #[test]
 fn page_item_size_setters_on_a_rotated_object_give_the_page_aligned_size() {
     let (mut s, a, b) = doc();
@@ -656,6 +670,14 @@ fn a_grid_by_column_takes_the_number_of_rows() {
         let tops = distinct(boards.iter().map(|b| b.rect.y0.round() as i64).collect());
         let lefts = distinct(boards.iter().map(|b| b.rect.x0.round() as i64).collect());
         assert_eq!((tops, lefts), (rows, cols), "{layout} {count}");
+        if layout.ends_with("GridByCol") {
+            // A column fills from the top before the next one starts, to the right of it (to the
+            // left from right to left).
+            let (first, second, next) = (boards[0].rect, boards[1].rect, boards[rows].rect);
+            assert!((second.x0 - first.x0).abs() < 1e-9 && second.y0 > first.y0, "{layout} {count}: {first:?} {second:?}");
+            let rightward = next.x0 > first.x0;
+            assert_eq!(rightward, layout == "GridByCol", "{layout} {count}: {first:?} {next:?}");
+        }
     }
 }
 
@@ -859,7 +881,7 @@ fn assigning_the_selection_selects_a_symbol_or_on_path_group_as_a_whole() {
 }
 
 #[test]
-fn a_held_image_stays_the_same_object_when_it_is_embedded() {
+fn a_held_image_is_stale_when_it_is_embedded() {
     let dir = super::links::Folder::new("dom-embed");
     let photo = dir.file("photo.png");
     super::links::write(&photo, &super::links::png(20, 10, [255, 0, 0]));
@@ -869,11 +891,12 @@ fn a_held_image_stays_the_same_object_when_it_is_embedded() {
         &mut s,
         &format!(
             "var i = app.activeDocument.pageItems[0]; vc.log(i.typename); vc.run('links.embed', {{ids: [{}]}});\
-             var j = app.activeDocument.pageItems[0]; vc.log([i === j, i.typename, i instanceof RasterItem, i instanceof PlacedItem]);",
+             var j = app.activeDocument.pageItems[0], m = ''; try {{ i.typename; }} catch (e) {{ m = e.message; }}\
+             vc.log([i === j, m, j.typename, j instanceof RasterItem, i instanceof PlacedItem]);",
             id.0
         ),
     );
-    assert_eq!(out, vec![json!("PlacedItem"), json!([true, "RasterItem", true, false])]);
+    assert_eq!(out, vec![json!("PlacedItem"), json!([false, "Stale page item", "RasterItem", true, true])]);
 }
 
 #[test]

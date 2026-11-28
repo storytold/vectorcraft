@@ -17,10 +17,15 @@ thread_local! {
 
 // ---------- Image Trace ----------
 
-fn is_trace_group(n: &Node) -> bool {
+pub(crate) fn is_trace_group(n: &Node) -> bool {
     matches!(n.kind, NodeKind::Group { clip: false, .. })
         && n.name.as_deref() == Some(TRACE_NAME)
         && n.children().is_some_and(|c| c.first().is_some_and(|i| matches!(i.kind, NodeKind::Image(_))))
+}
+
+/// Whether object `id` of `d` is the source image an Image Trace object keeps as its first child.
+pub(crate) fn is_trace_source(d: &Document, id: NodeId) -> bool {
+    d.parent_of(id).and_then(|g| d.node(g)).is_some_and(|g| is_trace_group(g) && g.children().and_then(|c| c.first()).is_some_and(|f| f.id == id))
 }
 
 /// The name of the clip group that holds an Abutting trace's seam fills (see [`tr::seam_fills`]).
@@ -32,7 +37,7 @@ const SEAM_FILLS_NAME: &str = "Seam Fills";
 /// it is renamed or its strokes are edited. (Auto Grouping groups are not clip groups.) Traces made
 /// before the seam fills were clipped hold a group without a clip: one named as seam fills, or one
 /// of stroked paths without fills. (Auto Grouping groups hold filled paths.)
-fn is_seam_fills(n: &Node) -> bool {
+pub(crate) fn is_seam_fills(n: &Node) -> bool {
     let path = |m: &Arc<Node>| matches!(m.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
     let stroke_only = |m: &Arc<Node>| path(m) && m.appearance.fill_paint() == Paint::None && m.appearance.stroke_paint() != Paint::None;
     let fill_only = |m: &Arc<Node>| path(m) && m.appearance.fill_paint() != Paint::None && m.appearance.stroke_paint() == Paint::None;
@@ -774,8 +779,12 @@ pub fn image_trace_target(s: &Session, p: &Value) -> Result<NodeId> {
 fn target_image(s: &Session, c: &str, p: &Value) -> Result<(NodeId, Box<ImageObject>)> {
     let roots = root_ids(s, p)?;
     let d = &s.doc()?.doc;
+    // The source image an Image Trace object keeps is traced through that object, so it is never
+    // the object traced, and naming only such images is an error.
+    let source = |r: &NodeId| is_trace_source(d, *r);
     roots
         .iter()
+        .filter(|r| !source(r))
         .find_map(|r| {
             let n = d.node(*r)?;
             match &n.kind {
@@ -787,7 +796,10 @@ fn target_image(s: &Session, c: &str, p: &Value) -> Result<(NodeId, Box<ImageObj
                 _ => None,
             }
         })
-        .ok_or_else(|| bad(c, "select an image (or an Image Trace group)"))
+        .ok_or_else(|| match roots.iter().find(|r| source(r)) {
+            Some(r) => bad(c, format!("object {} is the source image of an Image Trace object: trace that object", r.0)),
+            None => bad(c, "select an image (or an Image Trace group)"),
+        })
 }
 
 /// What command `c` with params `p` traces, and how, from the session: everything but the trace.
@@ -1076,10 +1088,12 @@ pub(super) fn trace_make(s: &mut Session, p: &Value, expand: bool) -> Result<Val
         let recorded = serde_json::to_value(&q.params).map_err(|e| EngineError::Other(e.to_string()))?;
         s.note_journal("savedPreset", recorded);
     }
-    // A trace handed in for these very inputs ([`TraceRun`]), else one made now.
+    // A trace handed in for these very inputs ([`TraceRun`]), else one made now. A script's trace
+    // stops when the script is asked to stop.
+    let stop = s.script_in_run.then(|| s.script_interrupt());
     let Traced { raster, res, seams: seam_fills, .. } = match s.trace_hand_off.take() {
         Some(traced) if traced.inputs == inputs => traced,
-        _ => trace_now(&inputs, &trace, &|_, _| true)?,
+        _ => trace_now(&inputs, &trace, &|_, _| stop.as_ref().is_none_or(|i| !i.is_set()))?,
     };
     let TraceInputs { target, image: img, .. } = inputs;
     let mut warnings = keep_warnings(&trace, &res);

@@ -1283,16 +1283,24 @@ fn a_trace_off_the_ui_thread_is_adopted_when_it_lands() {
 }
 
 /// The object Trace acts on as the panel found it before [`find_target`]: every selected object put
-/// in paint order, the first image or Image Trace object among them taken, else the first selected
-/// object.
+/// in paint order, the first image or Image Trace object among them taken (an Image Trace object's
+/// source image is traced through that object, so it is skipped), else the first selected object
+/// when it is neither.
 fn target_node_sorting_everything(app: &VectorcraftApp) -> Option<Node> {
     let st = app.session.active()?;
-    let traceable = |n: &&Node| is_trace(n) || matches!(n.kind, NodeKind::Image(_));
+    let traceable = |n: &Node| is_trace(n) || matches!(n.kind, NodeKind::Image(_));
+    let source = |id: NodeId| {
+        st.doc
+            .parent_of(id)
+            .and_then(|g| st.doc.node(g))
+            .is_some_and(|g| is_trace(g) && g.children().and_then(|c| c.first()).is_some_and(|f| f.id == id))
+    };
     st.selection
         .in_paint_order(&st.doc)
         .into_iter()
-        .find_map(|id| st.doc.node(id).filter(traceable).cloned())
-        .or_else(|| first_selected(app).map(|n| (*n).clone()))
+        .filter(|id| !source(*id))
+        .find_map(|id| st.doc.node(id).filter(|n| traceable(n)).cloned())
+        .or_else(|| first_selected(app).filter(|n| !traceable(n)).map(|n| (*n).clone()))
 }
 
 /// [`Target`] from [`target_node_sorting_everything`] and a scan of the whole selection for Image
@@ -1390,6 +1398,9 @@ fn the_target_lookup_matches_sorting_the_whole_selection() {
         &["trace", "trace image"],
         &["trace image", "trace"],
         &["rect", "trace image"],
+        &["trace image"],
+        &["trace image", "rect"],
+        &["trace image", "front"],
         &["clip"],
         &["rect", "clipped"],
         &["outer"],

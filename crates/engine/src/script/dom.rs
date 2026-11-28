@@ -67,12 +67,17 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod images;
+mod save_open;
 mod tags;
+mod tracing;
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
 /// The error for an object that was deleted, or that came from an earlier run.
 pub const STALE_ITEM: &str = "Stale page item";
+/// The error for a new name given to a `PluginItem`.
+const TRACING_NAME: &str = "The name of a tracing cannot be changed";
 /// The error for a document that was closed, or that came from an earlier run.
 pub const STALE_DOCUMENT: &str = "Stale document";
 /// The error of `index` and `getByName` when nothing matches.
@@ -102,6 +107,7 @@ const ITEM_CLASSES: &[&str] = &[
     "RepeatItem",
     "PlacedDocumentItem",
     "IntertwineItem",
+    "PluginItem",
 ];
 
 /// `app.coordinateSystem`.
@@ -125,7 +131,13 @@ pub(super) struct State {
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
+    /// `app.userInteractionLevel` ([`save_open`]).
+    save_options: save_open::State,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    /// What the placed and raster items keep ([`images::State`]).
+    images: images::State,
+    /// What the tracings keep ([`tracing::State`]).
+    tracing: tracing::State,
 }
 
 impl State {
@@ -248,7 +260,7 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "PageItem" | "PlacedItem" | "RasterItem" => {
                 item_of(&h, arg(&a, 0))?;
             }
             _ => {}
@@ -368,15 +380,23 @@ fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError
     }
 }
 
-/// The page item `d` names, which must still be in its document.
+/// The page item `d` names, which must still be in its document and still be of its class (an
+/// embedded `PlacedItem` is a `RasterItem` after, and its old object is stale).
 fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
-    let Some(handle) = handle_of(d, "PageItem") else { return Err(HostError::Type("this is not a page item".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-    let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let Some((class, handle)) = host_ref_parts(d).filter(|(c, _)| ITEM_CLASSES.contains(c)) else {
+        return Err(HostError::Type("this is not a page item".into()));
+    };
+    let (run, uid, id) = match handle.as_slice() {
+        [run, uid, high, low] => (*run, *uid, id_of(*high, *low)),
+        [run, uid, _, _, slot] => (*run, *uid, Some(images::pending_id(h, *run, *uid, *slot)?)),
+        _ => return Err(HostError::Type("this is not a page item".into())),
+    };
+    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let id = id.ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let id = if class == "PluginItem" { tracing::follow(h, doc.uid, id) } else { id };
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
-    if st.doc.node(id).is_none_or(|n| typename(n).is_none()) {
+    if st.doc.node(id).is_none_or(|n| typename(n) != Some(class)) {
         return Err(HostError::Error(STALE_ITEM.into()));
     }
     Ok(Item { doc, id })
@@ -387,6 +407,7 @@ fn typename(n: &crate::doc::Node) -> Option<&'static str> {
     Some(match &n.kind {
         NodeKind::Layer { .. } | NodeKind::RulerGuide { .. } => return None,
         NodeKind::Group { .. } if n.extras().graph.is_some() => "GraphItem",
+        NodeKind::Group { .. } if crate::cmd::is_trace_group(n) => "PluginItem",
         NodeKind::Group { .. } => "GroupItem",
         NodeKind::Path { .. } => "PathItem",
         NodeKind::Compound { .. } => "CompoundPathItem",
@@ -431,7 +452,10 @@ fn page_items(h: &Host, st: &DocState) -> Rc<Vec<NodeId>> {
                 _ => {
                     out.push(n.id);
                     if let Some(children) = n.children() {
-                        walk(children, out);
+                        // The source image an Image Trace object keeps hidden as its first child is
+                        // reached through that object's `tracing`.
+                        let source = usize::from(crate::cmd::is_trace_group(n));
+                        walk(children.get(source..).unwrap_or_default(), out);
                     }
                 }
             }
@@ -461,9 +485,11 @@ fn top_items(d: &Document) -> Vec<NodeId> {
     out
 }
 
-/// Whether `n` and every object inside it are shown and unlocked.
+/// Whether `n` and every object inside it are shown and unlocked. The source image an Image Trace
+/// object keeps hidden as its first child is part of that object and is not counted.
 fn all_editable(n: &crate::doc::Node) -> bool {
-    n.visible && !n.locked && n.children().is_none_or(|c| c.iter().all(|c| all_editable(c)))
+    let source = usize::from(crate::cmd::is_trace_group(n));
+    n.visible && !n.locked && n.children().is_none_or(|c| c.iter().skip(source).all(|c| all_editable(c)))
 }
 
 /// Whether the object and every layer and group it is in are shown and unlocked.
@@ -1639,6 +1665,13 @@ fn item_set_name(h: &Host, a: &[Data]) -> Answer {
     if name.len() > MAX_TEXT_BYTES {
         return Err(HostError::Range("the name is too long".into()));
     }
+    // An Image Trace object is known by its name, so renaming one would end the tracing.
+    let item = this_item(h, a)?;
+    let tracing =
+        with_doc(h, item.doc, |_, st| st.doc.node(item.id).is_some_and(|n| crate::cmd::is_trace_group(n) && n.name.as_deref() != Some(&**name)));
+    if tracing {
+        return Err(HostError::Error(TRACING_NAME.into()));
+    }
     set_props(h, a, |n| n.name.as_deref().unwrap_or("") == name, json!({"name": name}))
 }
 
@@ -1776,6 +1809,32 @@ fn item_geometric(h: &Host, a: &[Data]) -> Answer {
 
 fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
+}
+
+/// `controlBounds`: the visible bounds and the Bézier handles of the item's paths, zeros for an
+/// object with nothing in it.
+fn item_control(h: &Host, a: &[Data]) -> Answer {
+    let item = this_item(h, a)?;
+    let (r, f) = item_rect(h, item, true)?;
+    let handles = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(handle_bounds));
+    match r.into_iter().chain(handles).reduce(|a, b| a.union(b)) {
+        Some(r) => Ok(f.bounds(h.dom.coords.get(), r)),
+        None => Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])),
+    }
+}
+
+/// The bounds of the anchors and handles of `n`'s paths: a path's own, and those of the shown
+/// paths in a group or compound path (a clip group's from its clipping path). `None` for other
+/// objects.
+fn handle_bounds(n: &crate::doc::Node) -> Option<Rect> {
+    match &n.kind {
+        NodeKind::Path { path, .. } => path.control_bounds(),
+        NodeKind::Group { children, clip: true } => children.first().and_then(|c| handle_bounds(c)),
+        NodeKind::Group { children, .. } | NodeKind::Compound { children, .. } => {
+            children.iter().filter(|c| c.visible).filter_map(|c| handle_bounds(c)).reduce(|a, b| a.union(b))
+        }
+        _ => None,
+    }
 }
 
 fn item_position(h: &Host, a: &[Data]) -> Answer {
@@ -1957,18 +2016,25 @@ struct Destination {
 fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::Result<Destination, HostError> {
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
-    let handle = handle_of(target, "PageItem").or_else(|| handle_of(target, "Layer"));
-    let Some(&[run, uid, high, low]) = handle.as_deref() else {
-        if handle_of(target, "Document").is_some() {
-            return Err(HostError::Error("a document as the relative object is not available yet".into()));
-        }
-        return Err(HostError::Type("the relative object must be a page item or a layer".into()));
+    // A page item is looked up as its class names it (a wrapper whose object changed class is
+    // stale), a layer by its handle.
+    let (doc, target) = if handle_of(target, "PageItem").is_some() {
+        let t = item_of(h, target)?;
+        (t.doc, t.id)
+    } else {
+        let handle = handle_of(target, "Layer");
+        let Some(&[run, uid, high, low]) = handle.as_deref() else {
+            if handle_of(target, "Document").is_some() {
+                return Err(HostError::Error("a document as the relative object is not available yet".into()));
+            }
+            return Err(HostError::Type("the relative object must be a page item or a layer".into()));
+        };
+        let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+        (doc, id_of(high, low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?)
     };
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     if doc.uid != item.doc.uid {
         return Err(HostError::Error(CROSS_DOCUMENT.into()));
     }
-    let target = id_of(high, low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     with_doc(h, doc, |_, st| {
         let d = &st.doc;
         let t = d.node(target).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
@@ -2006,7 +2072,10 @@ fn place(h: &Host, doc: Doc, id: NodeId, to: &Destination) -> std::result::Resul
         let d = &st.doc;
         let from = d.position(id);
         let count = d.children(Some(to.parent)).map_or(0, Vec::len) - usize::from(from.is_some_and(|(p, ..)| p == Some(to.parent)));
-        let clips = d.node(to.parent).is_some_and(crate::doc::Node::clips) && count > 0;
+        // A clip group's first child is its clipping path, and an Image Trace object's its source
+        // image: both stay first (the source image itself may go to the end of its own tracing).
+        let source = crate::cmd::is_trace_source(d, id) && d.parent_of(id) == Some(to.parent);
+        let clips = d.node(to.parent).is_some_and(|n| n.clips() || (crate::cmd::is_trace_group(n) && !source)) && count > 0;
         let at = match (to.how, to.beside) {
             (Placement::Top, _) => count,
             (Placement::Bottom, _) => 0,
@@ -2212,7 +2281,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
-    for (name, members) in ENUMS {
+    for (name, members) in ENUMS.iter().chain(save_open::ENUMS).chain(images::ENUMS).chain(tracing::ENUMS) {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
@@ -2228,6 +2297,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(save_open::application_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |_: Vec<Data>| {
@@ -2273,10 +2343,12 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("toString", method(l, doc_to_string)),
     ]);
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
+        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "close"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.extend(save_open::document_members(l));
+    document.extend(images::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -2310,7 +2382,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
+        ("controlBounds", get(l, item_control)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),
@@ -2343,7 +2415,12 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    let own = |c: &&&str| images::CLASSES.contains(c) || tracing::CLASSES.contains(c);
+    classes.extend(ITEM_CLASSES.iter().filter(|c| !own(c)).map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(images::classes(l));
+    tracing::add_trace(&mut classes, l);
+    classes.extend(tracing::classes(l));
+    classes.extend(save_open::classes(l));
     classes.push(class(
         "Layer",
         None,
