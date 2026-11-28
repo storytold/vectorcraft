@@ -304,7 +304,7 @@ fn selection_assignment_is_atomic_across_invalid_items() {
 /// An index past the end of `pageItems` gives `undefined`, which does not clear the selection;
 /// `null` and `[]` do.
 #[test]
-fn assigning_undefined_to_the_selection_throws_and_keeps_it() {
+fn assigning_an_index_past_the_end_to_the_selection_throws_and_keeps_it() {
     let (mut s, a, _) = doc();
     s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
     let caught = "var d = app.activeDocument, m = '';\
@@ -1064,16 +1064,17 @@ fn a_document_preset_is_an_instance_of_its_class() {
 #[test]
 fn document_preset_values_are_bounded_by_the_runs_heap() {
     use crate::script::TEST_ENGINE_HEAP;
-    TEST_ENGINE_HEAP.with(|h| h.set(Some(8 << 20)));
+    TEST_ENGINE_HEAP.with(|h| h.set(Some(2 << 20)));
     let mut s = Session::new();
-    let big = "var s = 'a'; while (s.length < (1 << 19)) s += s;";
+    // A title of 4,092 bytes, which with the loop counter stays within the 4,096 a title may have.
+    let big = "var s = 'a'; while (s.length < 4092) s += 'a';";
     let again =
-        format!("#targetengine presets\n{big} var p = new DocumentPreset(); for (var k = 0; k < 40; k++) p.title = s + k; vc.log(p.title.length);");
-    assert_eq!(log(&mut s, &again), vec![json!(524_290)]);
+        format!("#targetengine presets\n{big} var p = new DocumentPreset(); for (var k = 0; k < 1000; k++) p.title = s + k; vc.log(p.title.length);");
+    assert_eq!(log(&mut s, &again), vec![json!(4095)]);
     let many = format!(
         "#targetengine presets\n{big} var m = '';\
-         try {{ for (var k = 0; k < 40; k++) {{ var p = new DocumentPreset(); p.title = s; }} }} catch (e) {{ m = e.name + ': ' + e.message; }}\
-         vc.log(k < 40); vc.log(m);"
+         try {{ for (var k = 0; k < 2000; k++) {{ var p = new DocumentPreset(); p.title = s; }} }} catch (e) {{ m = e.name + ': ' + e.message; }}\
+         vc.log(k < 2000); vc.log(m);"
     );
     let out = log(&mut s, &many);
     TEST_ENGINE_HEAP.with(|h| h.set(None));
@@ -1081,22 +1082,30 @@ fn document_preset_values_are_bounded_by_the_runs_heap() {
     assert!(out[1].as_str().unwrap().starts_with("RangeError: the DocumentPreset settings"), "{out:?}");
 }
 
-/// An array a preset holds counts a whole value for each element, so arrays of booleans kept by
-/// many presets stop at the run's heap too.
+/// An array a preset holds counts a whole value for each element: presets that each hold a
+/// `documentBleedOffsetRect` of four numbers reach the run's heap after fewer presets than ones
+/// that each hold an eight-byte `title`, which counts one value and its text.
 #[test]
 fn document_preset_arrays_count_each_element_they_hold() {
     use crate::script::TEST_ENGINE_HEAP;
-    TEST_ENGINE_HEAP.with(|h| h.set(Some(8 << 20)));
-    let mut s = Session::new();
-    let out = log(
-        &mut s,
-        "#targetengine presets\nvar a = []; for (var i = 0; i < 20000; i++) a.push(true); var m = '';\
-         try { for (var k = 0; k < 40; k++) { var p = new DocumentPreset(); p.title = a; } } catch (e) { m = e.name + ': ' + e.message; }\
-         vc.log(k < 40); vc.log(m);",
-    );
-    TEST_ENGINE_HEAP.with(|h| h.set(None));
-    assert_eq!(out[0], json!(true), "{out:?}");
-    assert!(out[1].as_str().unwrap().starts_with("RangeError: the DocumentPreset settings"), "{out:?}");
+    let made = |assign: &str| {
+        TEST_ENGINE_HEAP.with(|h| h.set(Some(1 << 20)));
+        let mut s = Session::new();
+        let out = log(
+            &mut s,
+            &format!(
+                "#targetengine presets\nvar m = '';\
+                 try {{ for (var k = 0; k < 10000; k++) {{ var p = new DocumentPreset(); {assign} }} }} catch (e) {{ m = e.name + ': ' + e.message; }}\
+                 vc.log(k); vc.log(m);"
+            ),
+        );
+        TEST_ENGINE_HEAP.with(|h| h.set(None));
+        assert!(out[1].as_str().unwrap().starts_with("RangeError: the DocumentPreset settings"), "{assign}: {out:?}");
+        out[0].as_f64().unwrap()
+    };
+    let with_title = made("p.title = 'abcdefgh';");
+    let with_rect = made("p.documentBleedOffsetRect = [1, 2, 3, 4];");
+    assert!(with_rect < with_title, "{with_rect} presets with a rectangle, {with_title} with a title");
 }
 
 #[test]
