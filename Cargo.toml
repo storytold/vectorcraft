@@ -108,14 +108,14 @@ wat = "1.228"
 # rendering / formats
 # Without `text` (glyph runs, through glifo and a second skrifa): the renderer draws the outlines
 # vectorcraft-text gives it. The other default features stay.
-vello_cpu = { version = "0.2", default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
+vello_cpu = { version = "0.4", default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
 # The image crate still decodes and encodes for the readers not yet moved to craft-image-codecs
 # (File › Open's raster path, PDF and SVG images, the renderer's image paint, DIBs). Its format
 # features stay until the last of those moves, so no file that opens today stops opening.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "tiff", "bmp", "tga"] }
 # Without `text` and the system fonts (fontdb, harfrust and skrifa, at other versions than ours):
 # SVG import reads `<text>` from the XML itself and never gives usvg a font.
-usvg = { version = "0.48", default-features = false, features = ["svgz"] }
+usvg = { version = "0.49", default-features = false, features = ["svgz"] }
 # Without `simple-text` (its text shaping, the only user of rustybuzz and ttf-parser, which are
 # unmaintained, #1730): the PDF writer places glyphs itself. A test of the PDF crate turns it on.
 krilla = { version = "0.8", default-features = false, features = ["raster-images"] }
@@ -141,7 +141,7 @@ jxl-grid = "0.6.2"
 # Tests: a lossless JPEG XL encoder (pure Rust, MIT OR Apache-2.0 OR Zlib) for the `.jxl` test files.
 zune-jpegxl = { version = "0.5.2", default-features = false, features = ["std"] }
 zune-core = "0.5"
-hayro-ccitt = "0.3"
+hayro-ccitt = "0.5"
 jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
 # Substring search for the EPS reader's PostScript `search`.
 memchr = "2"
