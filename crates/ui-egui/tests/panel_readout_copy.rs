@@ -4,7 +4,7 @@
 
 use std::io::Cursor;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex, MutexGuard, mpsc};
 use std::time::Duration;
 
 use craft::platform::clipboard::{Clipboard, ClipboardBackend, ClipboardError, ClipboardImage, Flavor};
@@ -13,10 +13,32 @@ use craft::ui::shell::embed;
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, Shape, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
-use vectorcraft_ui_egui::{Services, VectorcraftApp, background};
+use vectorcraft_ui_egui::{Services, VectorcraftApp, background, i18n};
 
 const COPIED: &str = "Copied the value";
 const LENGTH: &str = "234 pt";
+
+static CASE: Mutex<()> = Mutex::new(());
+
+// Integration binaries use a process-wide locale, and the Location case draws in French and
+// German. Each app holds the guard, so cases run one at a time, and restores the language.
+struct Language {
+    _lock: MutexGuard<'static, ()>,
+    previous: i18n::Lang,
+}
+impl Language {
+    fn english() -> Self {
+        let lock = CASE.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = i18n::current();
+        i18n::set_current(i18n::Lang::EN);
+        Self { _lock: lock, previous }
+    }
+}
+impl Drop for Language {
+    fn drop(&mut self) {
+        i18n::set_current(self.previous);
+    }
+}
 
 type ClipboardOffers = Arc<Mutex<Vec<Vec<Flavor>>>>;
 
@@ -57,10 +79,12 @@ struct App {
     app: VectorcraftApp,
     ctx: egui::Context,
     time: f64,
+    _language: Language,
 }
 
 impl App {
     fn new() -> Self {
+        let language = Language::english();
         let mut app = VectorcraftApp::new(Session::new(), Services::default());
         app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
         app.run("shape.rectangle", json!({"x": 200, "y": 150, "width": 20, "height": 20})).unwrap();
@@ -68,7 +92,7 @@ impl App {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         embed::install(&ctx, craft::ui::testing::install_spec(), &vectorcraft_ui_egui::ui_fonts()).unwrap();
-        let mut a = Self { app, ctx, time: 0.0 };
+        let mut a = Self { app, ctx, time: 0.0, _language: language };
         a.settle();
         a
     }

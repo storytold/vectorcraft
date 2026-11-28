@@ -285,6 +285,9 @@ fn save_summary_sees_a_deleted_flattener_preset() {
 /// dialog stays open: they are then refused, and nothing is written.
 #[test]
 fn save_summary_sees_a_removed_profile() {
+    if !crate::testing::in_own_process("dialogs::save_pdf::tests::save_summary_sees_a_removed_profile") {
+        return;
+    }
     use vectorcraft_color::cms;
     let name = "Summary Stamp CMYK";
     // The built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.

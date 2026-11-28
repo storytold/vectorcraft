@@ -340,8 +340,9 @@ impl View {
         Some((f, ms))
     }
 
-    /// What the window draws for `doc` at `revision` with `set`: its blanks, the fold and the print.
-    fn scene(&mut self, ui: &Ui, doc: &Arc<vectorcraft_engine::doc::Document>, uid: u64, revision: u64, set: &Settings) -> Scene {
+    /// What the window draws for `doc` at `revision` with `set` at `now` (seconds on the app's
+    /// clock): its blanks, the fold and the print.
+    fn scene(&mut self, ui: &Ui, doc: &Arc<vectorcraft_engine::doc::Document>, uid: u64, revision: u64, set: &Settings, now: f64) -> Scene {
         let (blanks, errors) = self.blanks(uid, revision, doc);
         let base = set.base.map(|[x, y]| Point::new(x, y));
         let picked = pick(&blanks, base).or_else(|| pick(&blanks, None));
@@ -349,13 +350,13 @@ impl View {
             let blank = blanks.get(b)?;
             let key = (uid, revision, b, panel, set.amount.to_bits());
             let (folded, fold_ms) = self.fold(key, blank, panel, set.amount)?;
-            let print = self.print_of(ui, doc, key, blank, set.show_fold_lines);
+            let print = self.print_of(ui, doc, key, blank, set.show_fold_lines, now);
             Some(Folding { doc: doc.clone(), blanks: blanks.clone(), blank: b, folded, key, fold_ms, print })
         });
         Scene { blanks: blanks.len(), errors, drawn }
     }
 
-    /// The print to draw for the fold `key` of `blank`, brought up to date first.
+    /// The print to draw for the fold `key` of `blank`, brought up to date first at `now`.
     fn print_of(
         &mut self,
         ui: &Ui,
@@ -363,6 +364,7 @@ impl View {
         key: FoldKey,
         blank: &Blank,
         fold_lines: bool,
+        now: f64,
     ) -> Option<(PrintKey, Arc<Print>)> {
         let region = print_region(blank)?;
         let (width, height, scale) = print_size(region);
@@ -374,13 +376,14 @@ impl View {
             width,
             height,
         };
-        self.update_print(ui, doc, pkey, region, scale);
+        self.update_print(ui, doc, pkey, region, scale, now);
         self.print_for(&pkey)
     }
 
     /// Take in the prints that finished, then bring the print up to `key`: queued on the host's
-    /// jobs, and not before the document has settled unless there is no print of it yet.
-    fn update_print(&mut self, ui: &Ui, doc: &Arc<vectorcraft_engine::doc::Document>, key: PrintKey, region: DRect, scale: f64) {
+    /// jobs, and not before the document has settled by `now` (seconds on the app's clock) unless
+    /// there is no print of it yet.
+    fn update_print(&mut self, ui: &Ui, doc: &Arc<vectorcraft_engine::doc::Document>, key: PrintKey, region: DRect, scale: f64, now: f64) {
         let queue = self.prints.get_or_insert_with(|| print_queue(ui));
         let inline = QueueOptions::default_lanes() == 0;
         if inline {
@@ -403,7 +406,7 @@ impl View {
             return;
         }
         let have = shown.is_some_and(|k| k.uid == key.uid);
-        if have && !self.settle.settled(ui.ctx(), key.uid, key.revision, monotonic_ms() / 1000.0) {
+        if have && !self.settle.settled(ui.ctx(), key.uid, key.revision, now) {
             return;
         }
         let opts = vectorcraft_render::RenderOptions {
@@ -626,6 +629,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let (uid, revision, doc) = (st.uid, st.revision, st.doc.clone());
     let mut set = app.ui.fold_preview.clone().clamped();
     let words = Env::of(ui).words::<FoldPreviewWords>();
+    let now = app.now();
     let view = &mut app.addon_panels.fold_view;
     let mut drawn = None;
     Stack::new().fill().show(ui, |ui, _| {
@@ -635,7 +639,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             .step(1.0)
             .unit_kind(UnitKind::Degrees)
             .show(ui);
-        let scene = view.scene(ui, &doc, uid, revision, &set);
+        let scene = view.scene(ui, &doc, uid, revision, &set, now);
         let out = FoldView::new(words.image.clone(), set.clone(), scene.drawn.clone(), view.shown.clone()).sizing(Sizing::Fill).show(ui);
         set = out.set;
         drawn = out.drawn;

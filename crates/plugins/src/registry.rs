@@ -65,6 +65,14 @@ pub fn approved(plugin: &Plugin) -> bool {
     !m.asks_permissions() || granted(&m.id).is_some_and(|g| g.covers(&m.id, plugin.hash(), &m.permissions()))
 }
 
+/// Tests: what runs before an install waits for the plug-ins, given the plug-in's id.
+#[cfg(test)]
+type InstallHook = Arc<dyn Fn(&str) + Send + Sync>;
+
+/// Tests: runs right before [`install`] waits for the plug-ins' write lock.
+#[cfg(test)]
+static BEFORE_INSTALL_LOCK: Mutex<Option<InstallHook>> = Mutex::new(None);
+
 /// Installs `plugin`, replacing one with the same id, when it is [`approved`]: a module that lists
 /// permissions no recorded grant gives this very module is refused ([`Error::NeedsApproval`]), and
 /// the plug-in installed under its id, the grants and the revision stay as they were.
@@ -72,6 +80,13 @@ pub fn install(plugin: Plugin) -> Result<Arc<Plugin>> {
     // The revision moves while the write lock is held, so a cache that reads the new revision and
     // then the plug-ins finds the new plug-in among them. The approval is checked while it is held
     // too.
+    #[cfg(test)]
+    {
+        let hook = BEFORE_INSTALL_LOCK.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        if let Some(hook) = hook {
+            hook(plugin.id());
+        }
+    }
     let mut plugins = PLUGINS.write().unwrap_or_else(|e| e.into_inner());
     if !approved(&plugin) {
         return Err(Error::NeedsApproval(crate::permissions::names(&plugin.manifest().permissions()).join(", ")));
@@ -518,6 +533,15 @@ impl FolderLoad {
         Self::list_on(dir, allow, None)
     }
 
+    /// [`FolderLoad::list`] for the one file `file` of a folder, without listing the folder: a file
+    /// that is no longer there is reported as failed.
+    pub fn list_file(
+        file: &std::path::Path,
+        allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
+    ) -> Result<FolderLoad> {
+        Self::list_found(Ok((vec![file.to_path_buf()], 0)), allow, None)
+    }
+
     /// Starts the loads, unless they started already.
     pub fn start(&mut self) {
         self.changes.start();
@@ -531,13 +555,26 @@ impl FolderLoad {
         allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
         workers: Option<usize>,
     ) -> Result<FolderLoad> {
+        Self::list_found(Err(dir), allow, workers)
+    }
+
+    /// [`FolderLoad::list_on`] for the files of folder `Err(dir)`, or for the files and the count of
+    /// files left out given as `Ok`.
+    fn list_found(
+        found: std::result::Result<(Vec<std::path::PathBuf>, usize), &std::path::Path>,
+        allow: impl Fn(&std::path::Path) -> std::result::Result<(), String> + Send + Sync + 'static,
+        workers: Option<usize>,
+    ) -> Result<FolderLoad> {
         use crate::loader::{Job, Loads};
         use crate::safe_mode::{self, Item};
         safe_mode::check()?;
         // A change made elsewhere once the folder starts being listed is one the load doesn't undo.
         let mut changes = LoadChanges::default();
         changes.start();
-        let (found, left_out) = folder_files(dir)?;
+        let (found, left_out) = match found {
+            Ok(found) => found,
+            Err(dir) => folder_files(dir)?,
+        };
         let allow = std::sync::Arc::new(allow);
         let mut files = Vec::with_capacity(found.len());
         let mut jobs = Vec::new();
@@ -718,15 +755,24 @@ mod tests {
         let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let plugin = Plugin::load(include_bytes!("../tests/fixtures/desaturate.wasm"), Limits::default()).unwrap();
         let id = plugin.id().to_string();
+        let (waits, install_waits) = std::sync::mpsc::channel();
+        let ours = id.clone();
+        *BEFORE_INSTALL_LOCK.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(move |p: &str| {
+            if p == ours {
+                let _ = waits.send(());
+            }
+        }));
         let held = PLUGINS.read().unwrap_or_else(|e| e.into_inner());
         let before = revision();
         let installing = std::thread::spawn(move || install(plugin));
-        let moved = (0..1_000_000).any(|_| {
-            std::thread::yield_now();
-            revision() != before
-        });
+        // The install has done everything it does before it waits for the set, which the test holds.
+        let reached = install_waits.recv();
+        let moved = revision() != before;
         drop(held);
-        installing.join().unwrap().unwrap();
+        let installed = installing.join();
+        *BEFORE_INSTALL_LOCK.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        installed.unwrap().unwrap();
+        assert!(reached.is_ok(), "the install never asked for the set");
         assert!(!moved, "the revision changed while the install waited for the set");
         assert!(revision() > before && remove(&id));
     }
@@ -1117,46 +1163,40 @@ mod tests {
         let first = dir.join("a.wasm");
         let (go, a_waits) = std::sync::mpsc::channel::<()>();
         let a_waits = Mutex::new(a_waits);
-        let seen = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let (reached, a_reached) = std::sync::mpsc::channel::<()>();
         let held = first.clone();
-        let saw = seen.clone();
         let _hook = Hooked::set(move |p| {
-            saw.lock().unwrap_or_else(|e| e.into_inner()).push(p.to_path_buf());
             if p == held {
+                let _ = reached.send(());
                 let _ = a_waits.lock().unwrap_or_else(|e| e.into_inner()).recv();
             }
         });
         // Two workers, so the other files load while the first one waits.
-        let loading = std::thread::spawn({
-            let dir = dir.clone();
-            move || {
-                let mut load = FolderLoad::list_on(&dir, |_| Ok(()), Some(2))?;
-                load.start();
-                while !load.done() {
-                    load.wait();
-                    load.install_ready(|_| false);
-                }
-                Ok::<_, Error>(load.finish())
-            }
-        });
-        // The other two files load on the other worker while the first one waits: their loads have
-        // started (the hook saw them) and ended (the launch marker list no longer has them).
+        let mut load = FolderLoad::list_on(&dir, |_| Ok(()), Some(2)).unwrap();
+        load.start();
+        // Bound after `load`, so a failing assertion lets the first file go before dropping `load`
+        // waits for it.
+        let go = go;
+        a_reached.recv().unwrap();
+        // The other two files load on the other worker while the first one waits: their outcomes
+        // come in, and the launch marker no longer names them.
+        let others = [load.loads.record_next(), load.loads.record_next()];
         let all = ["a", "b", "c"].map(|n| dir.join(format!("{n}.wasm")));
-        let finished = |p: &std::path::Path| {
+        let named = |p: &std::path::Path| {
             let item = crate::safe_mode::Item::file(p.display().to_string());
-            seen.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|s| s == p) && !crate::safe_mode::still_loading().iter().any(|i| i.same(&item))
+            crate::safe_mode::still_loading().iter().any(|i| i.same(&item))
         };
-        // Looked at a bounded number of times, and given up when the load ends first.
-        let reached = (0..10_000_000).any(|_| {
-            std::thread::yield_now();
-            loading.is_finished() || (seen.lock().unwrap_or_else(|e| e.into_inner()).contains(&first) && finished(&all[1]) && finished(&all[2]))
-        });
-        assert!(reached && !loading.is_finished(), "the load ended, or the other files didn't load, while the first one waited");
-        assert!(ids.iter().all(|id| get(id).is_none()), "nothing installs before the first file has loaded");
+        assert!(others == [Some(1), Some(2)] && !named(&all[1]) && !named(&all[2]), "the other files didn't load meanwhile: {others:?}");
+        let early = load.install_ready(|_| false);
+        assert!(!load.done(), "the load ended while the first file waited");
+        assert!(early.is_empty() && ids.iter().all(|id| get(id).is_none()), "nothing installs before the first file has loaded");
         go.send(()).unwrap();
-        let r = loading.join().unwrap();
+        while !load.done() {
+            load.wait();
+            load.install_ready(|_| false);
+        }
+        let r = load.finish();
         std::fs::remove_dir_all(&dir).unwrap();
-        let r = r.unwrap();
         assert_eq!(r.loaded, ids.to_vec(), "{r:?}");
         let serials: Vec<u64> = ids.iter().map(|id| get(id).unwrap().serial()).collect();
         assert!(serials.windows(2).all(|w| w[0] < w[1]), "installed in file-name order: {serials:?}");

@@ -470,6 +470,36 @@ fn property_to_string(i: &mut Interp, this: Value, _: &[Value], _: bool) -> JsRe
     if matches!(v, Value::Undefined) { Ok(Value::str("")) } else { Ok(Value::String(i.to_str(&v)?)) }
 }
 
+fn property_parts(value: &xmp::Value, item: Option<usize>) -> Option<(Option<&str>, u32, &str)> {
+    match item {
+        None => Some((value.text(), value.options(), "")),
+        Some(index) => match value {
+            xmp::Value::Array { items, .. } => {
+                items.get(index).map(|item| (Some(item.text.as_str()), item.options(), item.lang.as_deref().unwrap_or("")))
+            }
+            _ => None,
+        },
+    }
+}
+
+fn property_at(i: &mut Interp, o: ObjId, at: usize, item: Option<usize>, ns: &str, path: &str) -> JsResult<Value> {
+    let scan_bytes = match (&meta_of(i, o)?.props[at].value, item) {
+        (xmp::Value::Array { form: Form::Alt, items }, None) => items.len().saturating_mul(std::mem::size_of::<Item>()).saturating_mul(2),
+        _ => 0,
+    };
+    if scan_bytes != 0 {
+        spend(i, scan_bytes)?;
+    }
+    let bytes = {
+        let Some((text, _, locale)) = property_parts(&meta_of(i, o)?.props[at].value, item) else { return Ok(Value::Undefined) };
+        text.map_or(0, str::len).saturating_add(locale.len())
+    };
+    spend(i, bytes.saturating_mul(4))?;
+    let Some((text, options, locale)) = property_parts(&meta_of(i, o)?.props[at].value, item) else { return Ok(Value::Undefined) };
+    let (text, locale) = (text.map(str::to_owned), locale.to_owned());
+    property(i, ns, path, text.as_deref(), options, &locale)
+}
+
 fn get_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let what = "XMPMeta.getProperty";
     let o = this_meta(i, &this, what)?;
@@ -480,22 +510,20 @@ fn get_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResul
     }
     let found = {
         let m = meta_of(i, o)?;
-        match m.find(&ns, &name).map(|at| &m.props[at].value) {
+        match m.find(&ns, &name) {
             None => Ok(None),
-            Some(value) => match step {
-                Step::Whole => Ok(Some((value.text().map(str::to_string), value.options(), String::new()))),
-                Step::Item(index) => match value {
-                    xmp::Value::Array { items, .. } => Ok(position(index, items.len())
-                        .and_then(|p| items.get(p))
-                        .map(|item| (Some(item.text.clone()), item.options(), item.lang.clone().unwrap_or_default()))),
+            Some(at) => match step {
+                Step::Whole => Ok(Some((at, None))),
+                Step::Item(index) => match &m.props[at].value {
+                    xmp::Value::Array { items, .. } => Ok(position(index, items.len()).map(|p| (at, Some(p)))),
                     _ => Err(()),
                 },
             },
         }
     };
     let found = found.map_err(|()| not_array(i, what, &name))?;
-    let Some((text, options, locale)) = found else { return Ok(Value::Undefined) };
-    property(i, &ns, &path, text.as_deref(), options, &locale)
+    let Some((at, item)) = found else { return Ok(Value::Undefined) };
+    property_at(i, o, at, item, &ns, &path)
 }
 
 fn set_property(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -629,13 +657,8 @@ fn get_array_item(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsRes
     let index = item_index(i, &arg(args, 2), what)?;
     let Some((at, _, len)) = array_items(i, o, &ns, &name, what)? else { return Ok(Value::Undefined) };
     let Some(p) = position(index, len) else { return Ok(Value::Undefined) };
-    let item = match &meta_of(i, o)?.props[at].value {
-        xmp::Value::Array { items, .. } => items.get(p).cloned(),
-        _ => None,
-    };
-    let Some(item) = item else { return Ok(Value::Undefined) };
     let path = format!("{path}[{}]", p + 1);
-    property(i, &ns, &path, Some(&item.text), item.options(), item.lang.as_deref().unwrap_or(""))
+    property_at(i, o, at, Some(p), &ns, &path)
 }
 
 fn does_array_item_exist(i: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -803,13 +826,13 @@ fn generic_lang(lang: Option<&str>, generic: &str) -> bool {
 
 /// The item of `items` for `specific`, else one whose language starts with `generic`, else the
 /// `x-default` item, else the first.
-fn pick_lang<'a>(items: &'a [Item], generic: &str, specific: &str) -> Option<&'a Item> {
+fn pick_lang(items: &[Item], generic: &str, specific: &str) -> Option<usize> {
     items
         .iter()
-        .find(|i| same_lang(i.lang.as_deref(), specific))
-        .or_else(|| items.iter().find(|i| generic_lang(i.lang.as_deref(), generic)))
-        .or_else(|| items.iter().find(|i| same_lang(i.lang.as_deref(), "x-default")))
-        .or_else(|| items.first())
+        .position(|i| same_lang(i.lang.as_deref(), specific))
+        .or_else(|| items.iter().position(|i| generic_lang(i.lang.as_deref(), generic)))
+        .or_else(|| items.iter().position(|i| same_lang(i.lang.as_deref(), "x-default")))
+        .or_else(|| (!items.is_empty()).then_some(0))
 }
 
 /// A language argument: `null` and `undefined` are empty.
@@ -843,11 +866,11 @@ fn get_localized_text(i: &mut Interp, this: Value, args: &[Value], _: bool) -> J
         return Err(not_alt_text(i, what, &name));
     }
     let found = match &meta_of(i, o)?.props[at].value {
-        xmp::Value::Array { items, .. } => pick_lang(items, &generic, &specific).cloned(),
+        xmp::Value::Array { items, .. } => pick_lang(items, &generic, &specific),
         _ => None,
     };
     match found {
-        Some(item) => property(i, "", "", Some(&item.text), item.options(), item.lang.as_deref().unwrap_or("")),
+        Some(item) => property_at(i, o, at, Some(item), "", ""),
         None => Ok(Value::Undefined),
     }
 }
@@ -1478,6 +1501,55 @@ mod namespace_heap_tests {
     }
 
     #[test]
+    fn selected_property_values_charge_for_copying_their_text() {
+        let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
+        install(&mut interp).unwrap();
+        let text = "x".repeat(1024 * 1024);
+        let value = new_meta(
+            &mut interp,
+            Meta {
+                props: vec![
+                    xmp::Prop { ns: xmp::DC.into(), name: "value".into(), value: xmp::Value::Simple { text: text.clone(), uri: false } },
+                    xmp::Prop {
+                        ns: xmp::DC.into(),
+                        name: "items".into(),
+                        value: xmp::Value::Array { form: Form::Alt, items: vec![Item { text, lang: Some("en-US".into()) }] },
+                    },
+                ],
+                ..Meta::default()
+            },
+        )
+        .unwrap();
+        interp
+            .rooted(std::slice::from_ref(&value), |interp| {
+                let mut limited = Vec::new();
+                for fuel in [1_000, 100_000] {
+                    for getter in 0..3 {
+                        interp.fuel = fuel;
+                        let result = match getter {
+                            0 => get_property(interp, value.clone(), &[Value::str(xmp::DC), Value::str("value")], false),
+                            1 => get_array_item(interp, value.clone(), &[Value::str(xmp::DC), Value::str("items"), Value::Number(1.0)], false),
+                            _ => get_localized_text(
+                                interp,
+                                value.clone(),
+                                &[Value::str(xmp::DC), Value::str("items"), Value::str("fr"), Value::str("fr-FR")],
+                                false,
+                            ),
+                        };
+                        if fuel == 1_000 {
+                            limited.push(matches!(result, Err(Abrupt::Limit(crate::LimitKind::Fuel))));
+                        } else {
+                            assert!(result.is_ok(), "getter {getter} failed with sufficient fuel");
+                        }
+                    }
+                }
+                assert_eq!(limited, [true; 3]);
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    #[test]
     fn localized_text_lookup_charges_for_language_scans() {
         let mut interp = Interp::new(crate::Options::default(), crate::Limits::default());
         install(&mut interp).unwrap();
@@ -1499,8 +1571,12 @@ mod namespace_heap_tests {
                 interp.fuel = 1_000;
                 let result = get_localized_text(interp, value.clone(), &args, false);
                 assert!(matches!(result, Err(Abrupt::Limit(crate::LimitKind::Fuel))), "{result:?}");
+                interp.fuel = 1_000;
+                let result = get_property(interp, value.clone(), &args[..2], false);
+                assert!(matches!(result, Err(Abrupt::Limit(crate::LimitKind::Fuel))), "whole-array options did not charge for their scan");
                 interp.fuel = 1_000_000;
                 assert!(get_localized_text(interp, value.clone(), &args, false).is_ok());
+                assert!(get_property(interp, value.clone(), &args[..2], false).is_ok());
                 Ok(())
             })
             .unwrap();

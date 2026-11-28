@@ -7828,6 +7828,15 @@ variable-list-end	{0}, {1}	{0} i {1}
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	s’ha omès un objecte de només lectura: retorneu-lo com a {{"id": …}} sol o tal com s’ha rebut
 @msg	a string	una cadena
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un traç només té `paint`, `width`, `join`, `cap` i `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	una peça d’un efecte dinàmic de pintura només té `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` i `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	un traç només té `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` i `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` només pot ser true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` només és per a un efecte dinàmic que declara `paintOutput`, amb `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` ha de ser un nombre de 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	mode de fusió desconegut; `blend` és un de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` ha de ser una llista d’un màxim de {MAX_LOOK_EFFECTS} registres
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	un resultat porta com a màxim {MAX_RESULT_EFFECTS} registres d’efecte
+@msg	this host takes no effects here	aquest amfitrió no accepta efectes aquí
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un traç ha de ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	un efecte ha de ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un efecte en un farciment només retorna `fills`
@@ -8515,6 +8524,7 @@ breakText	Glyphs	Glifs
 	Place Brush Art	Col·loca l’art del pinzell
 	Replace Brush Art	Substitueix l’art del pinzell
 	Replace Pattern Art	Substitueix l’art del motiu
+	Place Pattern Art	Col·loca l’art del motiu
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Hi ha traços que fan servir aquest pinzell. Voleu aplicar l’art nou a aquests traços, o deixar-los com estan i afegir una còpia del pinzell amb l’art nou?
 	Apply to Strokes	Aplica als traços
 	Leave Strokes	Deixa els traços

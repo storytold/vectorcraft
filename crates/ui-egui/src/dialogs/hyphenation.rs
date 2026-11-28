@@ -49,7 +49,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let editing = character::text_editing_kept(app)?;
     character::text_style(app).ok_or("select some type first")?;
     let source = app.session.active().ok_or("no document open")?;
-    let document = source.uid;
+    let (document, reverts) = (source.uid, source.reverts);
     let mut target = Map::new();
     let mut story_focus = None;
     let ids = if let Some((id, start, end)) = editing {
@@ -87,8 +87,10 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         if p.is_empty() {
             return Ok(());
         }
-        if app.session.active().is_none_or(|st| st.uid != document) {
-            return Err(tl!("This dialog was opened in a different document.").to_owned());
+        let active =
+            app.session.active().filter(|st| st.uid == document).ok_or_else(|| tl!("This dialog was opened in a different document.").to_owned())?;
+        if active.reverts != reverts {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
         character::text_editing_kept(app)?;
         p.extend(target.clone());
@@ -397,6 +399,37 @@ mod tests {
         app.run("document.activate", json!({"index": 0})).unwrap();
         driver::ok(&mut app);
         assert!(!driver::is_open(&app));
+        assert!(paras(&app, id).0.hyphenate);
+    }
+
+    #[test]
+    fn hyphenation_approval_refuses_to_change_restored_text() {
+        let (mut app, id) = app();
+        let dir = vectorcraft_testkit::TempDir::new("hyphenation-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let before = paras(&app, id);
+        app.run("text.setFormat", json!({"ids": [id], "afterFirst": 2})).unwrap();
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let dialog = craft::ui::dialog::dialog_id(KIND);
+        crate::tests::picks::answer_dialog(&mut app, dialog, &[], true);
+        assert_eq!(paras(&app, id), before);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(
+            app.dialogs().unwrap().with(|h| h.held_state(dialog)),
+            Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+
+        driver::cancel(&mut app);
+        app.run("ui.hyphenation", json!({})).unwrap();
+        driver::set(&mut app, "hyphenate", json!(true));
+        driver::ok(&mut app);
         assert!(paras(&app, id).0.hyphenate);
     }
 }

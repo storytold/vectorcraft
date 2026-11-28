@@ -174,11 +174,12 @@ fn body(ui: &mut Ui, fields: &mut DialogFields, cx: &mut CustomContext, data: &D
 fn library(ui: &mut Ui, data: &Data, apply: bool) -> Option<Action> {
     Text::new(tl!("Graphics")).show(ui);
     let mut action = None;
-    let (Some(doc), Some(uid)) = (data.doc.clone(), data.document_uid) else { return action };
+    let Some(doc) = data.doc.clone() else { return action };
+    let source_drawing = data.document;
     let names: Vec<String> = doc.symbols.iter().map(|s| s.name.clone()).collect();
     let keys = crate::panels::symbols::document_symbols(&doc, data.revision);
     let source = keyed(&names[..], |name: &String| name.clone()).with_text(|name| Cow::Borrowed(name.as_str()));
-    let drop_art = DropAction::<PanelDrag>::new(move |drag| matches!(drag, PanelDrag::Art { document, .. } if *document == uid));
+    let drop_art = DropAction::<PanelDrag>::new(move |drag| source_drawing.is_some_and(|(uid, reverts)| drag.artwork_for(uid, reverts).is_some()));
     let mut dropped = drop_art.show(ui, |ui, _| {
         TileGrid::new(tl!("Graphics")).activate(ActivateOn::Click).show_items(ui, &source, &mut |name, _| {
             let tip = if apply { name.clone() } else { format!("{name}: {}", tl!("Select a 3D object to map the graphic onto it.")) };
@@ -199,11 +200,83 @@ fn library(ui: &mut Ui, data: &Data, apply: bool) -> Option<Action> {
             action = Some(Action::Map(name));
         }
     }
-    if let Some(PanelDrag::Art { ids, .. }) = dropped.output.dropped {
+    if let Some((uid, reverts)) = source_drawing
+        && let Some(ids) = dropped.output.dropped.as_ref().and_then(|drag| drag.artwork_for(uid, reverts))
+    {
         action = Some(Action::Add(Some(ids.iter().map(|id| id.0).collect())));
     }
     if clicked(&Button::new(tl!("Add as Single Graphic")).enabled(data.selected).show(ui)) {
         action = Some(Action::Add(None));
     }
     action
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::VectorcraftApp;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::{ListDrag, Role};
+    use craft::ui::list::{List, ListRow};
+    use craft::ui::runtime::drag;
+
+    fn draw_graphics(app: &mut VectorcraftApp, ui: &mut Ui) {
+        let st = app.session.active().unwrap();
+        let payload = PanelDrag::Art { document: st.uid, reverts: st.reverts, ids: st.selection.objects.clone() };
+        ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
+            let keys = keyed(&[0_usize], |key: &usize| *key);
+            List::<usize>::new("Artwork")
+                .drag_payload(move |_: &ListDrag<usize>| Some(payload.clone()))
+                .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged artwork"));
+        });
+        if let Some(open) = &app.three_d_dialog {
+            let data = open.data.read().unwrap();
+            let _ = library(ui, &data, true);
+        }
+    }
+
+    #[test]
+    fn held_graphics_drag_is_refused_after_the_opening_drawing_reverts() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let dir = vectorcraft_testkit::TempDir::new("three-d-graphics-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        let shape = app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 50, "height": 50})).unwrap()["id"].clone();
+        app.run("threeD.addGraphic", json!({"name": "Opening Graphic"})).unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("shape.rectangle", json!({"x": 120, "y": 90, "width": 45, "height": 40})).unwrap();
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        assert!(app.session.set_active(0));
+        app.run("select.set", json!({"ids": [shape]})).unwrap();
+
+        let mut panel = Panel::new(app, draw_graphics);
+        panel.room(egui::vec2(800.0, 820.0));
+        super::super::three_d::open(&mut panel.app(), &json!({"effect": INFLATE})).unwrap();
+        panel.frame();
+        let from = panel.rect("Dragged artwork").center();
+        let to = panel.rect("Opening Graphic").center();
+        panel.drag_hold_role("Dragged artwork", Role::LIST_ITEM, to - from);
+        assert!(drag::mark(panel.ctx()).is_some(), "the opening drawing's drag is accepted");
+        assert!(panel.app().session.set_active(1));
+        panel.frame();
+        assert!(drag::mark(panel.ctx()).is_some(), "switching drawings retains the opening drawing's drag");
+
+        {
+            let mut app = panel.app();
+            assert!(app.session.set_active(0));
+            let source = app.session.active().unwrap();
+            let (uid, generation) = (source.uid, source.reverts);
+            app.run("file.revert", json!({"confirmed": true})).unwrap();
+            let restored = app.session.active().unwrap();
+            assert_eq!(restored.uid, uid);
+            assert_ne!(restored.reverts, generation);
+            assert!(app.session.set_active(1));
+        }
+        panel.frame();
+        assert!(drag::active::<PanelDrag>(panel.ctx()).is_some(), "the same drag is still in progress");
+        assert!(drag::mark(panel.ctx()).is_none(), "the drop stops accepting artwork from the reverted generation");
+        let _ = panel.rect("Opening Graphic");
+        panel.release();
+    }
 }

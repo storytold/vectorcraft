@@ -62,7 +62,7 @@ fn art_and_assets(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
     use craft::ui::list::{List, ListRow};
 
     let st = app.session.active().unwrap();
-    let payload = crate::panel_drag::PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+    let payload = crate::panel_drag::PanelDrag::Art { document: st.uid, reverts: st.reverts, ids: st.selection.objects.clone() };
     ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
         let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
         List::<usize>::new("Artwork")

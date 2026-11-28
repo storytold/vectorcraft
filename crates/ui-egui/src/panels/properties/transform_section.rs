@@ -108,7 +108,9 @@ pub(super) fn corner_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The corners differ in kind: no entry is the value.
     let kind = picked.kind.map_or(Mixed::Mixed, Mixed::Same);
     let entries = panels::corner_entries();
-    let chosen = Field::new(tl!("Corner")).show(ui, |ui, _| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).value().copied()).inner;
+    let chosen = Field::new(tl!("Corner"))
+        .show(ui, |ui, _| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).events.committed().copied())
+        .inner;
     if let Some(Some(kind)) = chosen {
         panels::set_picked_corners(app, &picked, json!({"kind": kind}));
     }

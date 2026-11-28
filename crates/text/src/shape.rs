@@ -719,6 +719,8 @@ pub(crate) fn shape_runs(
         if rr.start >= range.end {
             break;
         }
+        #[cfg(test)]
+        crate::layout::count_paragraph_run();
         let a = rr.start.max(range.start);
         let b = rr.end.min(range.end);
         if a >= b || text.get(a..b).is_none() {
@@ -1572,6 +1574,8 @@ fn is_mark(c: char) -> bool {
 fn shape_segment(text: &str, context: &Range<usize>, seg: &Segment, feats: &OtFeatures, out: &mut Vec<SGlyph>) {
     let Segment { db, range, runs, source_runs, st, face, small, level } = seg;
     let (range, small) = (range.clone(), *small);
+    #[cfg(test)]
+    crate::layout::count_layout_work(range.len());
     // The source runs the segment's bytes lie in (a span can hold many segments).
     let span = runs.get(source_runs.clone()).unwrap_or_default();
     let first = span.partition_point(|(r, _)| r.end <= range.start);
