@@ -1,5 +1,5 @@
 use super::align::{align, can_distribute, distribute, distribute_spacing};
-use super::arrange::{Arrange, arrange, exit_isolation, group, hide, isolate, lock, send_to_current_layer, show_all, ungroup, unlock_all};
+use super::arrange::{Arrange, arrange, exit_isolation, group, hide, isolate, lock, new_group, send_to_current_layer, show_all, ungroup, unlock_all};
 use super::bounds::set_bounds;
 use super::compound::{clip_edit, clip_make, clip_release, compound_make, compound_release};
 use super::pixelgrid::set_pixel_aligned;
@@ -136,6 +136,15 @@ pub fn specs() -> Vec<CommandSpec> {
             "{ids?: [id…] (selected first; default: the selection)} → {id}",
             has_selection,
             group
+        ),
+        cmd!(
+            "object.newGroup",
+            "Group",
+            [],
+            None,
+            "{parent?: layer or group id (default: the current layer), index?: n (0 = bottom, or directly above the clipping path in a clipping layer or group; default: on top), compound?: bool (default false; true: an empty compound path instead of a group)} → {id}: an empty group or compound path in a shown, unlocked layer or group; the selection stays as it is",
+            has_doc,
+            new_group
         ),
         cmd!(
             "object.ungroup",

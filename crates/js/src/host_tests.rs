@@ -857,6 +857,15 @@ fn a_host_class_constructor_called_with_new_cannot_wait() {
 }
 
 #[test]
+fn a_host_class_constructor_called_with_new_cannot_give_a_primitive() {
+    let mut r = realm(1_000_000);
+    let make: HostFunction = Rc::new(|_| Ok(Data::Number(7.0)));
+    with_thing(&mut r, Some(make));
+    r.start("var r; try { r = new Thing(); } catch (e) { r = e instanceof TypeError; } r").unwrap();
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::Bool(true));
+}
+
+#[test]
 fn objects_of_a_host_class_report_its_available_members_as_their_own() {
     let mut r = realm(1_000_000);
     let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));

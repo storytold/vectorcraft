@@ -15,7 +15,8 @@
 //!
 //! Collections are counted from 0, and `pageItems` lists art topmost first, as
 //! <https://ai-scripting.docsforadobe.dev/jsobjref/CMYKColor/> reads the frontmost path as
-//! `pathItems[0]`. A collection read with a name, `pageItems["name"]`, gives the object `getByName`
+//! `pathItems[0]`; the `layers` module gives the order of a layer's, a group's and a compound
+//! path's lists. A collection read with a name, `pageItems["name"]`, gives the object `getByName`
 //! gives, and a script may name the application's members without `app.`, as
 //! <https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/> describes; here
 //! that holds for `activeDocument`, `documents` and `selection`. `documents[0]` is the active
@@ -67,6 +68,7 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+pub(super) mod layers;
 mod tags;
 
 /// The error for a member read or called with no document open.
@@ -125,10 +127,22 @@ pub(super) struct State {
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
+    /// The last [`layers::ART_LISTS`] lists of art [`layers`]' collections gave, least recently
+    /// used first, each kept while its document is unchanged.
+    art: RefCell<Vec<layers::ArtList>>,
+    /// The uids of the documents whose active artboard `setActiveArtboardIndex` changed.
+    pub(super) active_artboards: RefCell<Vec<u64>>,
+    /// Each open document's uid and the index of its active artboard when the run started.
+    pub(super) boards_at_start: Vec<(u64, usize)>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
 }
 
 impl State {
+    /// The state of a run that starts with the documents `docs` open.
+    pub(super) fn new(docs: &[DocState]) -> Self {
+        Self { boards_at_start: docs.iter().map(|st| (st.uid, active_artboard(st))).collect(), ..Self::default() }
+    }
+
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()
@@ -236,8 +250,8 @@ fn method(link: &Link, f: Member) -> HostMember {
 }
 
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
-/// the check that a document or page item `this` is still there. `hasOwnProperty` is false for it,
-/// so a script that checks for the member first skips it.
+/// the check that a document, layer or page item `this` is still there. `hasOwnProperty` is false
+/// for it, so a script that checks for the member first skips it.
 fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
@@ -248,7 +262,10 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "Layer" => {
+                layers::layer_of(&h, arg(&a, 0))?;
+            }
+            c if c == "PageItem" || ITEM_CLASSES.contains(&c) => {
                 item_of(&h, arg(&a, 0))?;
             }
             _ => {}
@@ -652,6 +669,18 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
+    on_doc_layer(h, uid, keep_selection, true, f)
+}
+
+/// [`on_doc`], with `keep_layer` false for `f`s that choose the current layer (`layers.add()`,
+/// `activeLayer = layer`): the selection is put back, and the layer `f` left current stays current.
+fn on_doc_layer<T>(
+    h: &Host,
+    uid: u64,
+    keep_selection: bool,
+    keep_layer: bool,
+    f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
+) -> std::result::Result<T, HostError> {
     let (index, active, before, layer, activated) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
@@ -663,6 +692,12 @@ fn on_doc<T>(
         command(h, "document.activate", &json!({"index": index}))?;
     }
     let r = f(h);
+    let layer = if keep_layer {
+        layer
+    } else {
+        let s = h.session.borrow();
+        s.active().filter(|st| st.uid == uid).map_or(layer, |st| (st.active_layer, st.highlighted_rows()))
+    };
     let mut restored = Ok(());
     if keep_selection {
         let doc = {
@@ -1491,12 +1526,18 @@ fn items_doc(h: &Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
 }
 
 fn items_length(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_length(h, a);
+    }
     let doc = items_doc(h, a)?;
     let n = with_doc(h, doc, |_, st| page_items(h, st).len());
     Ok(num(float(n as u64)))
 }
 
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_typename(h, a);
+    }
     items_doc(h, a)?;
     Ok(text("PageItems"))
 }
@@ -1507,6 +1548,9 @@ fn items_to_string(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_parent(h, a);
+    }
     let doc = items_doc(h, a)?;
     Ok(doc_ref(h, doc.uid))
 }
@@ -1519,6 +1563,9 @@ fn probing(a: &[Data]) -> bool {
 
 /// `pageItems[i]`, and `pageItems["name"]` as `getByName` reads it.
 fn items_at(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_at(h, a);
+    }
     let doc = items_doc(h, a)?;
     if let Data::String(_) = arg(a, 1) {
         return match items_by_name(h, a) {
@@ -1532,6 +1579,9 @@ fn items_at(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn items_by_name(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_by_name(h, a);
+    }
     let doc = items_doc(h, a)?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
@@ -1557,6 +1607,9 @@ fn items_index(h: &Host, a: &[Data]) -> Answer {
 /// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted,
 /// and so does an object on a locked artboard.
 fn items_remove_all(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_remove_all(h, a);
+    }
     let doc = items_doc(h, a)?;
     let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = top_items(&st.doc);
@@ -1706,8 +1759,14 @@ fn item_set_locked(h: &Host, a: &[Data]) -> Answer {
     set_props(h, a, |n| n.locked == locked, json!({"locked": locked}))
 }
 
+/// The percentage a page item's or a layer's `opacity` reports for `opacity`, rounded to four
+/// decimals.
+fn reported_opacity(opacity: f32) -> f64 {
+    (f64::from(opacity) * 100.0 * 1e4).round() / 1e4
+}
+
 fn item_opacity(h: &Host, a: &[Data]) -> Answer {
-    read_item(h, a, |_, n| Ok(num((f64::from(n.opacity) * 100.0 * 1e4).round() / 1e4)))
+    read_item(h, a, |_, n| Ok(num(reported_opacity(n.opacity))))
 }
 
 fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
@@ -1724,7 +1783,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
     let (now, keeps_other) = with_doc(h, item.doc, |_, st| {
         let d = &st.doc;
         // Only the exact number the getter reports counts as the same opacity.
-        let now = d.node(item.id).map(|n| f64::from(n.opacity) * 100.0).filter(|now| (now * 1e4).round() / 1e4 == v);
+        let now = d.node(item.id).filter(|n| reported_opacity(n.opacity) == v).map(|n| f64::from(n.opacity) * 100.0);
         let keeps_other =
             crate::cmd::graph::series_object_opacity_differs(d, &[item.id]) || crate::cmd::graph::label_object_opacity_differs(d, &[item.id]);
         (now, keeps_other)
@@ -1978,7 +2037,11 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::
         }
         let (parent, beside) = match how {
             Placement::Top | Placement::Bottom => {
-                if !matches!(t.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
+                if matches!(t.kind, NodeKind::Compound { .. }) {
+                    if !d.node(item.id).is_some_and(|n| matches!(n.kind, NodeKind::Path { guide: false, .. })) {
+                        return Err(HostError::Error("a compound path holds only paths".into()));
+                    }
+                } else if !matches!(t.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) {
                     return Err(HostError::Error(format!("{} cannot hold objects", typename(t).unwrap_or("Layer"))));
                 }
                 (target, None)
@@ -2132,19 +2195,6 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-fn layer_name(h: &Host, a: &[Data]) -> Answer {
-    let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-    let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
-    with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
-}
-
-fn layer_typename(h: &Host, a: &[Data]) -> Answer {
-    layer_name(h, a)?;
-    Ok(text("Layer"))
-}
-
 /// `toString()` of an object with a name: `[Class name]`, `[PathItem ]` for an object with no name.
 fn named_text(class: &str, name: Answer) -> Answer {
     match name? {
@@ -2159,10 +2209,6 @@ fn item_to_string(h: &Host, a: &[Data]) -> Answer {
 
 fn doc_to_string(h: &Host, a: &[Data]) -> Answer {
     named_text("Document", doc_name(h, a))
-}
-
-fn layer_to_string(h: &Host, a: &[Data]) -> Answer {
-    named_text("Layer", layer_name(h, a))
 }
 
 /// `toString()` of an object without a name: `[Class]`.
@@ -2272,11 +2318,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, doc_selection, doc_set_selection)),
         ("toString", method(l, doc_to_string)),
     ]);
-    document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
-            .into_iter()
-            .map(|m| later(l, "Document", m)),
-    );
+    document.extend(["pathItems", "textFrames", "swatches", "symbols", "views", "saveAs", "close"].into_iter().map(|m| later(l, "Document", m)));
+    document.extend(layers::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -2319,12 +2362,12 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("zOrder", method(l, item_z_order)),
         ("toString", method(l, item_to_string)),
     ]);
+    page_item.extend(layers::page_item_members(l));
     page_item.extend(
         [
             "artworkKnockout",
             "blendingMode",
             "isIsolated",
-            "layer",
             "pixelAligned",
             "sliced",
             "uRL",
@@ -2343,13 +2386,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
-    classes.push(class(
-        "Layer",
-        None,
-        named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name)), ("toString", method(l, layer_to_string))]),
-        None,
-    ));
+    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), layers::members(c, l), None)));
+    classes.extend(layers::classes(l));
     classes.extend(tags::classes(l));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])?;
     // The application's members a script may name without `app.`, assigned as `app.<member>` is.

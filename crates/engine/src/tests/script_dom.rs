@@ -278,6 +278,23 @@ fn assigning_the_reported_opacity_changes_nothing() {
     assert_eq!(undo_steps(&s), steps + 1);
 }
 
+/// An item's or a layer's opacity that differs from the reported one, however little, is set as
+/// given.
+#[test]
+fn an_opacity_near_the_reported_one_is_still_set() {
+    let (mut s, a, _) = doc();
+    s.execute("object.setProps", &json!({"id": a.0, "opacity": 0})).unwrap();
+    let out = log(
+        &mut s,
+        "var q = app.activeDocument.pageItems, i = q[0].opacity === 0 ? q[0] : q[1]; i.opacity = 0.00009; vc.log(i.opacity);\
+         var l = app.activeDocument.layers[0]; l.opacity = 0; l.opacity = 0.00009; vc.log(l.opacity);",
+    );
+    assert_eq!(out, vec![json!(0.0001), json!(0.0001)]);
+    let d = &s.active().unwrap().doc;
+    assert!(d.node(a).unwrap().opacity > 0.0);
+    assert!(d.node(d.layer_containing(a).unwrap()).unwrap().opacity > 0.0);
+}
+
 #[test]
 fn selection_assignment_is_atomic_across_invalid_items() {
     let (mut s, a, b) = doc();
@@ -915,7 +932,7 @@ fn page_item_members_not_built_yet_throw_on_read_and_assignment() {
     {
         assert!(failure(&mut s, source).contains("is not available yet"), "{source}");
     }
-    assert!(failure(&mut s, "app.activeDocument.layers = 1;").contains("Document.layers is not available yet"));
+    assert!(failure(&mut s, "app.activeDocument.views = 1;").contains("Document.views is not available yet"));
     // A deleted item or an earlier run's document is stale first.
     let e = failure(&mut s, "var i = app.activeDocument.pageItems[0]; i.remove(); i.blendingMode;");
     assert!(e.contains("Stale page item"), "{e}");
@@ -1345,6 +1362,64 @@ fn remove_and_remove_all_refuse_art_on_a_locked_artboard() {
     assert_eq!(out, vec![json!(0)]);
 }
 
+/// The `removeAll()` of a layer's or group's collections, and of `groupItems` and
+/// `compoundPathItems`, refuses art on a locked artboard as the document's `pageItems.removeAll()`
+/// does, and deletes nothing.
+#[test]
+fn scoped_remove_all_refuses_art_on_a_locked_artboard() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let c = rect(&mut s, 200.0, 100.0, 20.0, 20.0);
+    let e = rect(&mut s, 250.0, 100.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [c.0, e.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let lock = |s: &mut Session, locked: bool| {
+        s.edit("Lock Artboard", |d, _| {
+            d.artboards[0].locked = locked;
+            Ok(())
+        })
+        .unwrap();
+    };
+    lock(&mut s, true);
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let steps = undo_steps(&s);
+    for scope in [
+        "app.activeDocument.layers[0].pageItems",
+        "app.activeDocument.layers[0].groupItems",
+        "app.activeDocument.groupItems",
+        "app.activeDocument.groupItems[0].pageItems",
+        "app.activeDocument.layers[0].compoundPathItems",
+        "app.activeDocument.compoundPathItems",
+    ] {
+        let err = failure(&mut s, &format!("{scope}.removeAll();"));
+        assert!(err.contains("cannot delete objects on a locked artboard"), "{scope}: {err}");
+        assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before, "{scope}");
+        assert_eq!(undo_steps(&s), steps, "{scope}");
+    }
+    lock(&mut s, false);
+    let out = log(&mut s, "var d = app.activeDocument; d.layers[0].pageItems.removeAll(); vc.log(d.pageItems.length);");
+    assert_eq!(out, vec![json!(0)]);
+}
+
+/// `removeAll()` on a compound path's `pathItems` deletes its paths and keeps the compound path,
+/// empty, as `remove()` on its last path does.
+#[test]
+fn removing_all_the_paths_of_a_compound_path_keeps_the_compound_path() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let compound = layer_order(&s)[0];
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var c = app.activeDocument.compoundPathItems[0]; c.pathItems.removeAll(); vc.log([c.typename, c.pathItems.length, app.activeDocument.compoundPathItems.length]);",
+    );
+    assert_eq!(out, vec![json!(["CompoundPathItem", 0, 1])]);
+    assert!(s.active().unwrap().doc.node(compound).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())), "the compound path stays, empty");
+    assert_eq!(undo_steps(&s), steps + 1);
+}
+
 #[test]
 fn move_and_duplicate_refuse_art_on_a_locked_artboard() {
     let (mut s, a, b) = doc();
@@ -1587,7 +1662,808 @@ fn prototype_changes_cannot_forge_a_page_item() {
 #[test]
 fn unsupported_members_say_so() {
     let (mut s, _, _) = doc();
-    assert!(failure(&mut s, "app.activeDocument.layers;").contains("Document.layers is not available yet"));
+    assert!(failure(&mut s, "app.activeDocument.views;").contains("Document.views is not available yet"));
+}
+
+fn layer_names(s: &Session) -> Vec<String> {
+    s.active().unwrap().doc.layers.iter().rev().map(|n| n.name.clone().unwrap_or_default()).collect()
+}
+
+#[test]
+fn layers_list_top_first_and_add_makes_the_new_layer_current() {
+    let (mut s, a, _) = doc();
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, L = d.layers; vc.log(L.length); vc.log(L.typename); vc.log(L.parent.typename);\
+         var n = L.add(); n.name = 'Top'; vc.log(L.length); vc.log(L[0].name); vc.log(d.activeLayer.name);\
+         vc.log(L.getByName('Top').zOrderPosition); vc.log(L[1].zOrderPosition); vc.log(n.parent.typename);\
+         var sub = L[1].layers.add(); sub.name = 'Sub'; vc.log(L[1].layers.length); vc.log(sub.parent.name);\
+         vc.log(L.length); vc.log(L[5] === undefined); vc.log(L[1].pageItems.length); vc.log(L[1].pageItems[0].typename);\
+         vc.log(sub.zOrderPosition);",
+    );
+    let expected = [json!(1), json!("Layers"), json!("Document"), json!(2), json!("Top"), json!("Top"), json!(2), json!(1), json!("Document")];
+    assert_eq!(out[..9], expected);
+    // A layer's pageItems hold its art, not its sublayers, and a sublayer's zOrderPosition counts
+    // only the layers beside it.
+    assert_eq!(out[9..], [json!(1), json!("Layer 1"), json!(2), json!(true), json!(2), json!("PathItem"), json!(1)]);
+    assert_eq!(layer_names(&s), ["Top", "Layer 1"]);
+    // One run is one undo step.
+    assert_eq!(undo_steps(&s), steps + 1);
+    let lid = s.active().unwrap().doc.layer_containing(a).unwrap();
+    assert!(failure(&mut s, "app.activeDocument.layers.getByName('none');").contains("Not found"));
+    assert!(failure(&mut s, "app.activeDocument.layers.getByName(5);").contains("give a name"));
+    assert_eq!(s.active().unwrap().doc.layer_containing(a), Some(lid));
+}
+
+#[test]
+fn a_new_or_assigned_layer_stays_the_current_layer() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, base = d.layers[0];\
+         var n = d.layers.add(); n.name = 'New'; vc.log(d.activeLayer.name);\
+         d.activeLayer = base; vc.log(d.activeLayer.name);\
+         d.activeLayer = n; vc.log(d.activeLayer.name);\
+         var sub = base.layers.add(); sub.name = 'Sub'; vc.log(d.activeLayer.name);\
+         vc.log(d.selection.length); vc.log(d.selection[0].layer.name);",
+    );
+    assert_eq!(out, [json!("New"), json!("Layer 1"), json!("New"), json!("Sub"), json!(1), json!("Layer 1")]);
+    // The layer the script made current is still current after the run.
+    let st = s.active().unwrap();
+    let current = st.current_layer().and_then(|l| st.doc.node(l)).and_then(|n| n.name.clone());
+    assert_eq!(current.as_deref(), Some("Sub"));
+}
+
+#[test]
+fn a_new_layer_or_group_with_a_large_id_is_the_new_one() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    // The new ids, 2^53 + 1 and 2^53 + 3, are not exact as numbers.
+    for (id, source) in
+        [(1, "var l = app.activeDocument.layers.add(); l.name = 'made';"), (3, "var g = app.activeDocument.groupItems.add(); g.name = 'made';")]
+    {
+        let big = (1u64 << 53) + id;
+        s.active_mut().unwrap().change_unsaved(|d| std::sync::Arc::make_mut(d).raise_next_id(big));
+        run(&mut s, source).unwrap_or_else(|e| panic!("{source}: {e}"));
+        let d = &s.active().unwrap().doc;
+        assert_eq!(d.node(NodeId(big)).and_then(|n| n.name.clone()).as_deref(), Some("made"), "{source}");
+    }
+}
+
+#[test]
+fn layer_properties_round_trip_and_reject_bad_values() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var l = app.activeDocument.layers[0];\
+         l.name = 'Art'; l.printable = false; l.preview = false; l.opacity = 40; l.dimPlacedImages = true;\
+         l.color = {red: 10, green: 20, blue: 30};\
+         vc.log(l.name); vc.log(l.printable); vc.log(l.preview); vc.log(l.opacity); vc.log(l.dimPlacedImages);\
+         var c = l.color; vc.log([c.red, c.green, c.blue]); vc.log(l.visible); vc.log(l.locked); vc.log(l.typename);\
+         l.visible = false; vc.log(l.visible); l.visible = true; l.locked = true; vc.log(l.locked); l.locked = false;",
+    );
+    let expected = [json!("Art"), json!(false), json!(false), json!(40), json!(true), json!([10, 20, 30]), json!(true), json!(false)];
+    assert_eq!(out[..8], expected);
+    assert_eq!(out[8..], [json!("Layer"), json!(false), json!(true)]);
+    // Setting the values a layer has adds no undo step.
+    let steps = undo_steps(&s);
+    let same = "var l = app.activeDocument.layers[0]; l.name = 'Art'; l.opacity = 40; l.printable = false; l.color = {red: 10, green: 20, blue: 30};";
+    run(&mut s, same).unwrap();
+    assert_eq!(undo_steps(&s), steps);
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    for (src, msg) in [
+        ("app.activeDocument.layers[0].name = null;", "name must be a string"),
+        ("app.activeDocument.layers[0].name = {};", "name must be a string"),
+        ("app.activeDocument.layers[0].name = '  ';", "cannot be empty"),
+        ("app.activeDocument.layers[0].name = new Array(600).join('x');", "at most 512"),
+        ("app.activeDocument.layers[0].opacity = 200;", "from 0 to 100"),
+        ("app.activeDocument.layers[0].opacity = NaN;", "finite number"),
+        ("app.activeDocument.layers[0].visible = 1;", "true or false"),
+        ("app.activeDocument.layers[0].color = {red: 300, green: 0, blue: 0};", "color.red"),
+        ("app.activeDocument.layers[0].color = {red: 1.5, green: 0, blue: 0};", "color.red"),
+        ("app.activeDocument.layers[0].color = 'red';", "red, green and blue"),
+        ("app.activeDocument.layers[0].zOrder('up');", "ZOrderMethod"),
+        ("app.activeDocument.activeLayer = 3;", "not a Layer"),
+    ] {
+        assert!(failure(&mut s, src).contains(msg), "{src}");
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
+fn layer_move_and_z_order_keep_ids() {
+    let (mut s, _, _) = doc();
+    run(&mut s, "var L = app.activeDocument.layers; L.add().name = 'B'; L.add().name = 'C';").unwrap();
+    assert_eq!(layer_names(&s), ["C", "B", "Layer 1"]);
+    let out = log(
+        &mut s,
+        "var L = app.activeDocument.layers, c = L[0]; c.zOrder(ZOrderMethod.SENDTOBACK); vc.log(L[2].name); vc.log(c.zOrderPosition);\
+         c.zOrder(ZOrderMethod.BRINGFORWARD); vc.log(L[1].name);\
+         c.move(L.getByName('B'), ElementPlacement.PLACEBEFORE); vc.log(L[0].name);\
+         c.move(L.getByName('B')); vc.log(L.length); vc.log(c.parent.name); vc.log(c.name);\
+         c.move(app.activeDocument); vc.log(L.length); vc.log(L[0].name);",
+    );
+    assert_eq!(out, [json!("C"), json!(1), json!("C"), json!("C"), json!(2), json!("B"), json!("C"), json!(3), json!("C")]);
+    assert!(failure(&mut s, "var L = app.activeDocument.layers; L[0].move(L[0]);").contains("into itself"));
+    assert!(failure(&mut s, "var L = app.activeDocument.layers; L[0].move(L[1].pageItems);").contains("a layer or a document"));
+    assert!(failure(&mut s, "var L = app.activeDocument.layers; L[0].move();").contains("relative object"));
+}
+
+#[test]
+fn sublayer_z_order_steps_past_the_next_layer_and_the_art_between() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var P = app.activeDocument.layers[0], x = P.layers.add(); x.name = 'X'; x.zOrder(ZOrderMethod.SENDTOBACK);\
+         var y = P.layers.add(); y.name = 'Y'; vc.log([x.zOrderPosition, y.zOrderPosition]);\
+         y.zOrder(ZOrderMethod.SENDBACKWARD); vc.log([x.zOrderPosition, y.zOrderPosition, P.layers[0].name]);\
+         y.zOrder(ZOrderMethod.BRINGFORWARD); vc.log([x.zOrderPosition, y.zOrderPosition, P.layers[0].name]);\
+         y.zOrder(ZOrderMethod.BRINGFORWARD); vc.log(P.pageItems.length);",
+    );
+    assert_eq!(out, [json!([1, 2]), json!([2, 1, "X"]), json!([1, 2, "Y"]), json!(2)]);
+    // The last step had no layer to pass, so Y stayed under the art.
+    let d = &s.active().unwrap().doc;
+    let p = d.layers.last().unwrap();
+    let kids = d.children(Some(p.id)).unwrap();
+    assert!(kids[1].is_layer() && !kids[2].is_layer() && !kids[3].is_layer());
+}
+
+#[test]
+fn removed_layers_throw_and_the_last_layer_stays() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var L = app.activeDocument.layers, n = L.add(); n.layers.add(); n.layers.add(); vc.log(n.layers.length);\
+         n.layers.removeAll(); vc.log(n.layers.length); n.remove(); vc.log(L.length);\
+         try { n.name; } catch (e) { vc.log(String(e)); }",
+    );
+    assert_eq!(out[..3], [json!(2), json!(0), json!(1)]);
+    assert!(out[3].as_str().unwrap().contains("Stale layer"), "{out:?}");
+    assert_eq!(s.active().unwrap().doc.layers.len(), 1);
+    assert!(failure(&mut s, "app.activeDocument.layers[0].remove();").contains("at least one layer"));
+    assert!(failure(&mut s, "app.activeDocument.layers.removeAll();").contains("at least one layer"));
+    assert_eq!(s.active().unwrap().doc.layers.len(), 1);
+    assert!(failure(&mut s, "Object.getOwnPropertyDescriptor(Layer.prototype, 'name').get.call({});").contains("not a Layer"));
+}
+
+#[test]
+fn group_items_list_every_depth_and_clipped_toggles_the_mask() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, g = d.groupItems[0]; vc.log(d.groupItems.length); vc.log(g.pageItems.length);\
+         var inner = g.groupItems.add(); vc.log(inner.typename); vc.log(inner.pageItems.length);\
+         vc.log(d.groupItems.length); vc.log(g.groupItems.length); vc.log(d.layers[0].groupItems.length);\
+         vc.log(g.layer.name); vc.log(g.clipped); vc.log(d.compoundPathItems.length);\
+         d.layers[0].groupItems.add(); vc.log(d.layers[0].groupItems.length); vc.log(g.pageItems.parent.typename);",
+    );
+    let expected = [json!(1), json!(2), json!("GroupItem"), json!(0), json!(2), json!(1), json!(1), json!("Layer 1"), json!(false), json!(0)];
+    assert_eq!(out[..10], expected);
+    assert_eq!(out[10..], [json!(2), json!("GroupItem")]);
+    // `clipped` on a group with a path on top makes the topmost path its clipping path.
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 10.0, 10.0), rect(&mut s, 0.0, 0.0, 5.0, 5.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let gid = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let steps = undo_steps(&s);
+    run(&mut s, "var g = app.activeDocument.layers[0].groupItems[0]; g.clipped = false;").unwrap();
+    assert_eq!(undo_steps(&s), steps);
+    assert_eq!(log(&mut s, "var g = app.activeDocument.layers[0].groupItems[0]; g.clipped = true; vc.log(g.clipped);"), [json!(true)]);
+    let st = s.active().unwrap();
+    let g = st.doc.node(gid).unwrap();
+    assert!(g.clips());
+    assert_eq!(g.children().unwrap()[0].id, b);
+    assert_eq!(undo_steps(&s), steps + 1);
+    assert!(failure(&mut s, "app.activeDocument.groupItems[0].clipped = 'yes';").contains("true or false"));
+    assert!(failure(&mut s, "app.activeDocument.groupItems.getByName('none');").contains("Not found"));
+}
+
+#[test]
+fn a_layers_and_a_groups_lists_give_the_topmost_object_first() {
+    let (mut s, a, b) = doc();
+    let c = rect(&mut s, 200.0, 100.0, 70.0, 20.0);
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    s.execute("object.group", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    // The layer holds, bottom to top, the compound path of `a` and the group of `b` (50 pt wide)
+    // and `c` (70 pt wide).
+    let out = log(
+        &mut s,
+        "var L = app.activeDocument.layers[0], P = L.pageItems, g = L.groupItems[0];\
+         vc.log(P[0].typename); vc.log(P[1].typename); vc.log(g.pageItems[0].width); vc.log(g.pageItems[1].width);\
+         var e = L.groupItems.add(); e.name = 'E'; vc.log(L.groupItems[0].name); vc.log(L.pageItems[0].name);\
+         vc.log(L.compoundPathItems[0].pathItems[0].width);",
+    );
+    assert_eq!(out, [json!("GroupItem"), json!("CompoundPathItem"), json!(70), json!(50), json!("E"), json!("E"), json!(30)]);
+}
+
+#[test]
+fn compound_path_items_add_makes_an_empty_compound_path_that_takes_paths() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let red = s.active().unwrap().doc.node(a).unwrap().appearance.clone();
+    let steps = undo_steps(&s);
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, c = d.compoundPathItems.add(); c.name = 'C'; vc.log(c.typename); vc.log(c.pathItems.length);\
+         vc.log(d.compoundPathItems.length); vc.log(c.layer.name);",
+    );
+    assert_eq!(out, [json!("CompoundPathItem"), json!(0), json!(1), json!("Layer 1")]);
+    assert_eq!(undo_steps(&s), steps + 1);
+    let cid = {
+        let d = &s.active().unwrap().doc;
+        let lid = d.layer_containing(a).unwrap();
+        d.node(lid).unwrap().children().unwrap().iter().find(|n| matches!(n.kind, NodeKind::Compound { .. })).unwrap().id
+    };
+    // Paths moved into it become its members, and it takes the paint of the first one. The layer
+    // lists the new compound path first, then `b`, then `a`.
+    let source = "var d = app.activeDocument, c = d.compoundPathItems.getByName('C'), L = d.layers[0].pageItems, a = L[2], b = L[1];\
+         vc.log(L[0].name); a.move(c, ElementPlacement.PLACEATBEGINNING); b.move(c, ElementPlacement.PLACEATEND);\
+         vc.log(c.pathItems.length); vc.log(a.parent.typename); vc.log(b.parent.typename);";
+    assert_eq!(log(&mut s, source), [json!("C"), json!(2), json!("CompoundPathItem"), json!("CompoundPathItem")]);
+    let c = s.active().unwrap().doc.node(cid).unwrap();
+    let members: Vec<NodeId> = c.children().unwrap().iter().map(|n| n.id).collect();
+    assert_eq!(members.len(), 2);
+    assert!(members.contains(&a) && members.contains(&b));
+    assert_eq!(c.appearance, red);
+    // A group goes neither into a compound path nor beside a path inside one.
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    for src in [
+        "var d = app.activeDocument, g = d.groupItems.add(); g.move(d.compoundPathItems.getByName('C'));",
+        "var d = app.activeDocument, g = d.groupItems.add(); g.move(d.compoundPathItems.getByName('C').pathItems[0], ElementPlacement.PLACEBEFORE);",
+        "app.activeDocument.compoundPathItems.add().move(app.activeDocument.compoundPathItems.getByName('C'));",
+    ] {
+        assert!(failure(&mut s, src).contains("only paths"), "{src}");
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert!(s.execute("object.newGroup", &json!({"compound": 1})).unwrap_err().to_string().contains("true or false"));
+}
+
+/// The paint of a compound path's only path is the compound path's: moved into an empty compound
+/// path, the path gives it that paint, not its own default one.
+#[test]
+fn a_path_moved_out_of_a_compound_path_gives_an_empty_one_the_paint_it_was_drawn_with() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    let red = s.active().unwrap().doc.node(a).unwrap().appearance.clone();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, old = d.compoundPathItems[0], c = d.compoundPathItems.add(); c.name = 'C';\
+         old.pathItems[0].move(c); vc.log(d.compoundPathItems.getByName('C').pathItems.length);",
+    );
+    assert_eq!(out, [json!(1)]);
+    let d = &s.active().unwrap().doc;
+    let c = d.parent_of(a).and_then(|p| d.node(p)).unwrap();
+    assert_eq!(c.name.as_deref(), Some("C"));
+    assert_eq!(c.appearance, red);
+    assert_ne!(d.node(a).unwrap().appearance, red);
+}
+
+/// `node.move` into a compound path leaves the path without paint or pixel alignment of its own,
+/// as Make Compound Path leaves its paths, and the compound path takes the alignment.
+#[test]
+fn node_move_into_a_compound_path_clears_the_paths_own_paint() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let cid = s.active().unwrap().doc.parent_of(a).unwrap();
+    s.execute("select.set", &json!({"ids": [b.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("object.setPixelAligned", &json!({"on": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let painted = s.active().unwrap().doc.node(b).unwrap().appearance.clone();
+    let member = s.active().unwrap().doc.node(a).unwrap().appearance.clone();
+    let steps = undo_steps(&s);
+    s.execute("node.move", &json!({"id": b.0, "parent": cid.0, "index": 1})).unwrap();
+    assert_eq!(undo_steps(&s), steps + 1);
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(b), Some(cid));
+    let n = d.node(b).unwrap();
+    assert_ne!(n.appearance, painted);
+    assert_eq!(n.appearance, member);
+    assert!(!n.extras().pixel_aligned);
+    assert!(d.node(cid).unwrap().extras().pixel_aligned);
+}
+
+#[test]
+fn node_move_refuses_a_guide_and_a_locked_or_hidden_compound_path() {
+    let (mut s, a, b) = doc();
+    let cid = NodeId(s.execute("object.newGroup", &json!({"compound": true})).unwrap()["id"].as_u64().unwrap());
+    assert!(matches!(s.active().unwrap().doc.node(cid).unwrap().kind, NodeKind::Compound { .. }));
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("view.guides.make", &json!({})).unwrap();
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let err = s.execute("node.move", &json!({"id": a.0, "parent": cid.0, "index": 0})).unwrap_err().to_string();
+    assert!(err.contains("only paths"), "{err}");
+    for hide in ["object.lock", "object.hide"] {
+        s.execute("select.set", &json!({"ids": [cid.0]})).unwrap();
+        s.execute(hide, &json!({})).unwrap();
+        let before = format!("{:?}", s.active().unwrap().doc.layers);
+        let err = s.execute("node.move", &json!({"id": b.0, "parent": cid.0, "index": 0})).unwrap_err().to_string();
+        assert!(err.contains("hidden or locked"), "{hide}: {err}");
+        assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+}
+
+/// `node.move` refuses a clip group's clipping path for a compound path and leaves the group
+/// clipped as it was; the art the group clips still goes in.
+#[test]
+fn node_move_refuses_a_clipping_path_for_a_compound_path() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let cid = NodeId(s.execute("object.newGroup", &json!({"compound": true})).unwrap()["id"].as_u64().unwrap());
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.position(b).map(|(p, i, _)| (p, i)), Some((Some(g), 0)));
+    let (before, steps) = (format!("{:?}", d.layers), undo_steps(&s));
+    let err = s.execute("node.move", &json!({"id": b.0, "parent": cid.0, "index": 0})).unwrap_err().to_string();
+    assert!(err.contains("clipping path"), "{err}");
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    assert_eq!(undo_steps(&s), steps);
+    s.execute("node.move", &json!({"id": a.0, "parent": cid.0, "index": 0})).unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(a), Some(cid));
+    assert!(d.node(g).unwrap().clips());
+    assert_eq!(d.position(b).map(|(p, i, _)| (p, i)), Some((Some(g), 0)));
+}
+
+/// `duplicate(compoundPath)` puts the copy into the compound path; an empty one takes its paint.
+#[test]
+fn a_path_duplicated_into_an_empty_compound_path_becomes_its_path() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#0000ff"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let blue = s.active().unwrap().doc.node(a).unwrap().appearance.clone();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, c = d.compoundPathItems.add(), p = d.layers[0].pageItems[2]; var q = p.duplicate(c);\
+         vc.log(c.pathItems.length); vc.log(q.parent.typename); vc.log(p.parent.typename);",
+    );
+    assert_eq!(out, [json!(1), json!("CompoundPathItem"), json!("Layer")]);
+    let d = &s.active().unwrap().doc;
+    let lid = d.layer_containing(a).unwrap();
+    let c = d.node(lid).unwrap().children().unwrap().iter().find(|n| matches!(n.kind, NodeKind::Compound { .. })).unwrap();
+    assert_eq!(c.appearance, blue);
+    assert_eq!(d.node(a).unwrap().appearance, blue);
+    // The copy keeps no paint, live shape or pixel alignment of its own.
+    let q = &c.children().unwrap()[0];
+    assert_ne!(q.appearance, blue);
+    assert!(matches!(q.kind, NodeKind::Path { live: None, .. }));
+    assert!(!q.extras().pixel_aligned);
+}
+
+/// A compound path's `pathItems` list its topmost path first.
+#[test]
+fn a_compound_paths_path_items_list_the_topmost_path_first() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let cid = s.active().unwrap().doc.parent_of(a).unwrap();
+    let source = "var P = app.activeDocument.compoundPathItems[0].pathItems; vc.log(P[0].width); vc.log(P[1].width);";
+    // `b` (50 pt wide) on top, then `a` (30 pt wide) on top.
+    s.execute("node.move", &json!({"id": b.0, "parent": cid.0, "index": 1})).unwrap();
+    assert_eq!(log(&mut s, source), [json!(50), json!(30)]);
+    s.execute("node.move", &json!({"id": a.0, "parent": cid.0, "index": 1})).unwrap();
+    assert_eq!(log(&mut s, source), [json!(30), json!(50)]);
+}
+
+/// A path that leaves a compound path for a layer is drawn as it was: it takes the compound
+/// path's paint and pixel alignment, as Release Compound Path gives them.
+#[test]
+fn a_path_moved_out_of_a_compound_path_keeps_the_paint_it_was_drawn_with() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("object.setPixelAligned", &json!({"on": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    let (cid, red, lid) = {
+        let d = &s.active().unwrap().doc;
+        let cid = d.parent_of(a).unwrap();
+        (cid, d.node(cid).unwrap().appearance.clone(), d.layer_containing(a).unwrap())
+    };
+    assert_ne!(s.active().unwrap().doc.node(a).unwrap().appearance, red);
+    s.execute("node.move", &json!({"id": a.0, "parent": lid.0})).unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(a), Some(lid));
+    let n = d.node(a).unwrap();
+    assert_eq!(n.appearance, red);
+    assert!(n.extras().pixel_aligned);
+    // The path left behind keeps none of its own.
+    assert_eq!(d.parent_of(b), Some(cid));
+    assert_ne!(d.node(b).unwrap().appearance, red);
+}
+
+/// A path that leaves a pixel-aligned compound path for another compound path makes that one
+/// pixel-aligned, as it gives it the paint it was drawn with.
+#[test]
+fn a_path_moved_between_compound_paths_keeps_its_pixel_alignment() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    s.execute("object.setPixelAligned", &json!({"on": true})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    assert!(!s.active().unwrap().doc.node(a).unwrap().extras().pixel_aligned);
+    let to = NodeId(s.execute("object.newGroup", &json!({"compound": true})).unwrap()["id"].as_u64().unwrap());
+    assert!(!s.active().unwrap().doc.node(to).unwrap().extras().pixel_aligned);
+    s.execute("node.move", &json!({"id": a.0, "parent": to.0, "index": 0})).unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.parent_of(a), Some(to));
+    assert!(d.node(to).unwrap().extras().pixel_aligned);
+    assert!(!d.node(a).unwrap().extras().pixel_aligned);
+}
+
+#[test]
+fn a_compound_paths_path_items_are_path_items() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.compoundPathItems[0].pathItems; vc.log(p.typename); vc.log(p.length);\
+         vc.log(p[0].typename); vc.log(d.layers[0].pageItems.typename);",
+    );
+    assert_eq!(out, [json!("PathItems"), json!(2), json!("PathItem"), json!("PageItems")]);
+}
+
+#[test]
+fn art_collections_follow_edits_between_reads() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.layers[0].pageItems, g = d.groupItems; vc.log(p.length); vc.log(g.length);\
+         d.layers[0].groupItems.add(); vc.log(p.length); vc.log(p[0].typename); vc.log(g.length);\
+         p[0].remove(); vc.log(p.length); vc.log(p[0].typename);",
+    );
+    assert_eq!(out, [json!(2), json!(0), json!(3), json!("GroupItem"), json!(1), json!(2), json!("PathItem")]);
+}
+
+#[test]
+fn a_loop_over_groups_and_their_items_lists_each_collection_once() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    for i in 0..5 {
+        let x = f64::from(i) * 20.0;
+        let (a, b) = (rect(&mut s, x, 0.0, 10.0, 10.0), rect(&mut s, x, 20.0, 10.0, 10.0));
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        s.execute("object.group", &json!({})).unwrap();
+    }
+    // Both scripts make the same calls. The first reads the groups and each group's items in
+    // turn; the second reads every group before any group's items, so it builds each list once.
+    let nested = "var gs = app.activeDocument.groupItems, n = 0;\
+                  for (var i = 0; i < gs.length; i++) { var p = gs[i].pageItems; for (var j = 0; j < p.length; j++) { p[j]; n++; } }\
+                  vc.log(n);";
+    let in_order = "var gs = app.activeDocument.groupItems, all = [], n = 0;\
+                    for (var i = 0; i < gs.length; i++) { all.push(gs[i]); }\
+                    for (var k = 0; k < all.length; k++) { var p = all[k].pageItems; for (var j = 0; j < p.length; j++) { p[j]; n++; } }\
+                    vc.log(n);";
+    let (a, b) = (run(&mut s, nested).unwrap(), run(&mut s, in_order).unwrap());
+    assert_eq!((a["log"].clone(), b["log"].clone()), (json!([10]), json!([10])));
+    assert_eq!(a["hostCalls"], b["hostCalls"], "{a}\n{b}");
+}
+
+#[test]
+fn group_items_remove_all_refuses_locked_groups() {
+    let (mut s, a, b) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
+    s.execute("object.setProps", &json!({"ids": [g], "locked": true})).unwrap();
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    assert!(failure(&mut s, "app.activeDocument.groupItems.removeAll();").contains("hidden or locked"));
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
+    s.execute("object.setProps", &json!({"ids": [g], "locked": false})).unwrap();
+    run(&mut s, "app.activeDocument.groupItems.removeAll();").unwrap();
+    let d = &s.active().unwrap().doc;
+    assert!(d.node(NodeId(g)).is_none() && d.node(a).is_none() && d.node(b).is_some());
+}
+
+#[test]
+fn new_group_command_checks_its_parent() {
+    let (mut s, a, _) = doc();
+    let layer = s.active().unwrap().doc.layer_containing(a).unwrap();
+    let g = s.execute("object.newGroup", &json!({"parent": layer.0, "index": 0})).unwrap()["id"].as_u64().unwrap();
+    let d = &s.active().unwrap().doc;
+    assert_eq!(d.position(NodeId(g)).map(|(p, i, _)| (p, i)), Some((Some(layer), 0)));
+    assert!(s.execute("object.newGroup", &json!({"parent": a.0})).unwrap_err().to_string().contains("not a layer or group"));
+    assert!(s.execute("object.newGroup", &json!({"parent": 999_999})).unwrap_err().to_string().contains("no layer or group"));
+    assert!(s.execute("object.newGroup", &json!({"parent": "x"})).unwrap_err().to_string().contains("parent must be"));
+    assert!(s.execute("object.newGroup", &json!({"index": -1})).unwrap_err().to_string().contains("index must be"));
+    s.execute("layer.setProps", &json!({"id": layer.0, "locked": true})).unwrap();
+    assert!(s.execute("object.newGroup", &json!({"parent": layer.0})).unwrap_err().to_string().contains("hidden or locked"));
+}
+
+#[test]
+fn artboards_add_insert_rename_and_remove() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var A = app.activeDocument.artboards; vc.log(A.length); vc.log(A[0].artboardRect); vc.log(A.typename);\
+         var b = A.add([500, 300, 700, 100]); b.name = 'Two'; vc.log(A.length); vc.log(A[1].name); vc.log(b.artboardRect);\
+         A.insert([0, -100, 100, -200], 1); vc.log(A[1].artboardRect); vc.log(b.name); vc.log(A.getByName('Two').artboardRect[0]);\
+         b.artboardRect = [500, 300, 650, 150]; vc.log(b.artboardRect); b.rulerPAR = 2; vc.log(b.rulerPAR);\
+         b.showCenter = true; b.showCrossHairs = true; b.showSafeAreas = true; vc.log([b.showCenter, b.showCrossHairs, b.showSafeAreas]);\
+         b.rulerOrigin = [10, 20]; vc.log(b.rulerOrigin); vc.log(b.parent.typename);\
+         A.remove(0); vc.log(A.length); b.remove(); vc.log(A.length); try { b.name; } catch (e) { vc.log(String(e)); }",
+    );
+    assert_eq!(out[..4], [json!(1), json!([0, 300, 400, 0]), json!("Artboards"), json!(2)]);
+    assert_eq!(out[4..7], [json!("Two"), json!([500, 300, 700, 100]), json!([0, -100, 100, -200])]);
+    assert_eq!(out[7..11], [json!("Two"), json!(500), json!([500, 300, 650, 150]), json!(2)]);
+    assert_eq!(out[11..16], [json!([true, true, true]), json!([10, 20]), json!("Document"), json!(2), json!(1)]);
+    assert!(out[16].as_str().unwrap().contains("Stale artboard"), "{out:?}");
+    assert_eq!(s.active().unwrap().doc.artboards.len(), 1);
+}
+
+#[test]
+fn new_artboards_get_a_name_no_other_artboard_has() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var A = app.activeDocument.artboards; A[0].name = 'Artboard 2';\
+         vc.log(A.add([500, 300, 700, 100]).name); vc.log(A.insert([0, -100, 100, -200], 0).name);\
+         vc.log(A.add([800, 300, 900, 100]).name);",
+    );
+    assert_eq!(out, [json!("Artboard 3"), json!("Artboard 4"), json!("Artboard 5")]);
+}
+
+#[test]
+fn names_take_numbers_and_booleans() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, L = d.layers[0];\
+         L.name = 5; vc.log(L.name); vc.log(typeof L.name); L.name = 1.5; vc.log(L.name); L.name = true; vc.log(L.name);\
+         d.artboards[0].name = 7; vc.log(d.artboards[0].name); vc.log(typeof d.artboards[0].name);",
+    );
+    assert_eq!(out, [json!("5"), json!("string"), json!("1.5"), json!("true"), json!("7"), json!("string")]);
+}
+
+#[test]
+fn an_empty_artboard_name_gives_the_default_name() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var A = app.activeDocument.artboards; A.add([500, 300, 700, 100]);\
+         A[0].name = 'Front'; A[1].name = 'Back'; A[0].name = ''; A[1].name = '  ';\
+         vc.log([A[0].name, A[1].name]);",
+    );
+    assert_eq!(out, [json!(["Artboard 1", "Artboard 2"])]);
+}
+
+#[test]
+fn two_artboards_may_share_a_name() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var A = app.activeDocument.artboards; A.add([500, 300, 700, 100]);\
+         A[1].name = 'Same'; A[0].name = 'Same'; vc.log([A[0].name, A[1].name]); vc.log(A.getByName('Same').artboardRect[0]);",
+    );
+    assert_eq!(out, [json!(["Same", "Same"]), json!(0)]);
+    let names: Vec<String> = s.active().unwrap().doc.artboards.iter().map(|a| a.name.clone()).collect();
+    assert_eq!(names, ["Same", "Same"]);
+}
+
+#[test]
+fn artboards_reject_bad_arguments_before_any_change() {
+    let (mut s, _, _) = doc();
+    run(&mut s, "app.activeDocument.artboards.add([500, 300, 700, 100]).name = 'Two';").unwrap();
+    let before = format!("{:?}", s.active().unwrap().doc.artboards);
+    let steps = undo_steps(&s);
+    for (src, msg) in [
+        ("app.activeDocument.artboards.add([0, 0, 10]);", "four numbers"),
+        ("app.activeDocument.artboards.add('x');", "four numbers"),
+        ("app.activeDocument.artboards.add([10, 0, 0, 10]);", "right side"),
+        ("app.activeDocument.artboards.add([0, 0, NaN, -10]);", "finite number"),
+        ("app.activeDocument.artboards.add([0, 0, 1e300, -10]);", "outside the canvas"),
+        ("app.activeDocument.artboards.add([0, 0, 0.5, -10]);", "at least 1 point"),
+        ("app.activeDocument.artboards[0].artboardRect = [0, 0, 10, -0.25];", "at least 1 point"),
+        ("app.activeDocument.artboards.insert([0, 0, 10, -10], 5);", "index must be"),
+        ("app.activeDocument.artboards.insert([0, 0, 10, -10]);", "needs an index"),
+        ("app.activeDocument.artboards.remove(2);", "index must be"),
+        ("app.activeDocument.artboards.remove(-1);", "index must be"),
+        ("app.activeDocument.artboards[0].name = null;", "must be a string"),
+        ("app.activeDocument.artboards[0].name = new Array(5000).join('x');", "too long"),
+        ("app.activeDocument.artboards[0].rulerPAR = 20;", "from 0.1 to 10"),
+        ("app.activeDocument.artboards[0].showCenter = 'on';", "true or false"),
+        ("app.activeDocument.artboards.setActiveArtboardIndex(9);", "index must be"),
+        ("app.activeDocument.artboards.getByName('none');", "Not found"),
+    ] {
+        assert!(failure(&mut s, src).contains(msg), "{src}");
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.artboards), before);
+    assert_eq!(undo_steps(&s), steps);
+    run(&mut s, "app.activeDocument.artboards.remove(1);").unwrap();
+    assert!(failure(&mut s, "app.activeDocument.artboards[0].remove();").to_lowercase().contains("artboard"));
+    assert_eq!(s.active().unwrap().doc.artboards.len(), 1);
+}
+
+#[test]
+fn set_active_artboard_index_is_reported_without_an_undo_step() {
+    let (mut s, _, _) = doc();
+    run(&mut s, "app.activeDocument.artboards.add([500, 300, 700, 100]);").unwrap();
+    let steps = undo_steps(&s);
+    let r = run(&mut s, "var A = app.activeDocument.artboards; A.setActiveArtboardIndex(1); vc.log(A.getActiveArtboardIndex());").unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": 1}]));
+    assert_eq!(undo_steps(&s), steps);
+    let st = s.active().unwrap();
+    assert_eq!(st.active_artboard, Some(st.doc.artboards[1].id));
+    // Artboard coordinates follow the active artboard.
+    let out = log(&mut s, "app.coordinateSystem = CoordinateSystem.ARTBOARDCOORDINATESYSTEM; vc.log(app.activeDocument.artboards[1].artboardRect);");
+    assert_eq!(out, [json!([0, 0, 200, 200])]);
+    let r = run(&mut s, "app.activeDocument.artboards.setActiveArtboardIndex(1);").unwrap();
+    assert!(r.get("activeArtboards").is_none());
+}
+
+/// Choosing the artboard that is active only by default keeps that artboard: one inserted before it
+/// moves it to the next index, and the report gives that index.
+#[test]
+fn choosing_the_default_active_artboard_keeps_it_when_one_is_inserted_before() {
+    let (mut s, _, _) = doc();
+    assert_eq!(s.active().unwrap().active_artboard, None);
+    let first = s.active().unwrap().doc.artboards[0].id;
+    let r = run(
+        &mut s,
+        "var A = app.activeDocument.artboards; A.setActiveArtboardIndex(0); A.insert([800, 300, 900, 100], 0);\
+         vc.log(A.getActiveArtboardIndex());",
+    )
+    .unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": 1}]));
+    assert_eq!(s.active().unwrap().active_artboard, Some(first));
+}
+
+#[test]
+fn the_report_gives_the_active_artboard_the_run_leaves() {
+    let (mut s, _, _) = doc();
+    run(&mut s, "var A = app.activeDocument.artboards; A.add([500, 300, 700, 100]); A.add([800, 300, 900, 100]);").unwrap();
+    // The chosen artboard is deleted later in the run: the report gives the one active at the end.
+    let r =
+        run(&mut s, "var A = app.activeDocument.artboards; A.setActiveArtboardIndex(2); A.remove(2); vc.log(A.getActiveArtboardIndex());").unwrap();
+    let active = r["log"][0].clone();
+    assert!(active.as_u64().is_some_and(|i| i < 2), "{r}");
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": active}]));
+}
+
+#[test]
+fn the_report_gives_the_active_artboards_new_index_after_an_insert_or_remove() {
+    let (mut s, _, _) = doc();
+    run(&mut s, "var A = app.activeDocument.artboards; A.add([500, 300, 700, 100]); A.setActiveArtboardIndex(1);").unwrap();
+    // An artboard inserted or removed before the active one moves it to another index.
+    let r = run(&mut s, "var A = app.activeDocument.artboards; A.insert([800, 300, 900, 100], 0); vc.log(A.getActiveArtboardIndex());").unwrap();
+    assert_eq!(r["log"], json!([2]));
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": 2}]));
+    let r = run(&mut s, "var A = app.activeDocument.artboards; A.remove(0); vc.log(A.getActiveArtboardIndex());").unwrap();
+    assert_eq!(r["log"], json!([1]));
+    assert_eq!(r["activeArtboards"], json!([{"document": 0, "artboard": 1}]));
+    // One added after it leaves its index as it was.
+    let r = run(&mut s, "app.activeDocument.artboards.add([1000, 300, 1100, 100]);").unwrap();
+    assert!(r.get("activeArtboards").is_none(), "{r}");
+}
+
+#[test]
+fn an_artboard_rectangle_stays_inside_the_canvas() {
+    let (mut s, _, _) = doc();
+    let before = format!("{:?}", s.active().unwrap().doc.artboards);
+    let steps = undo_steps(&s);
+    // Each number is within the coordinate range, but the right edge is past the canvas.
+    for src in [
+        "app.activeDocument.artboards[0].artboardRect = [3999950, 0, 4000100, -100];",
+        "app.activeDocument.artboards.add([-4000100, 0, -3999950, -100]);",
+        "app.activeDocument.artboards.insert([0, 4000600, 100, 4000500], 0);",
+    ] {
+        assert!(failure(&mut s, src).contains("outside the canvas"), "{src}");
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.artboards), before);
+    assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
+fn has_selected_artwork_selects_and_deselects_a_layers_art() {
+    let (mut s, a, b) = doc();
+    s.execute("select.none", &json!({})).unwrap();
+    let out = log(
+        &mut s,
+        "var l = app.activeDocument.layers[0]; vc.log(l.hasSelectedArtwork); l.hasSelectedArtwork = true;\
+         vc.log(app.activeDocument.selection.length); vc.log(l.hasSelectedArtwork); vc.log(l.isIsolated);",
+    );
+    assert_eq!(out, [json!(false), json!(2), json!(true), json!(false)]);
+    let sel = &s.active().unwrap().selection.objects;
+    assert!(sel.contains(&a) && sel.contains(&b));
+    run(&mut s, "app.activeDocument.layers[0].hasSelectedArtwork = false;").unwrap();
+    assert!(s.active().unwrap().selection.objects.is_empty());
+    assert!(failure(&mut s, "app.activeDocument.layers[0].hasSelectedArtwork = 0;").contains("true or false"));
+}
+
+#[test]
+fn has_selected_artwork_keeps_the_rest_of_the_selection() {
+    let (mut s, a, b) = doc();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 120})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    // An empty layer has nothing to deselect or add: the selected guide stays.
+    let steps = undo_steps(&s);
+    run(&mut s, "var l = app.activeDocument.layers.add(); l.hasSelectedArtwork = false; l.hasSelectedArtwork = true;").unwrap();
+    assert_eq!(s.active().unwrap().selection.guides.len(), 1);
+    assert_eq!(undo_steps(&s), steps + 1);
+    // Deselecting a layer's art leaves the guide selected, and so does adding it.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    run(&mut s, "app.activeDocument.layers.getByName('Layer 1').hasSelectedArtwork = false;").unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((sel.objects.len(), sel.guides.len()), (0, 1));
+    run(&mut s, "app.activeDocument.layers.getByName('Layer 1').hasSelectedArtwork = true;").unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert!(sel.objects.contains(&a) && sel.objects.contains(&b));
+    assert_eq!(sel.guides.len(), 1);
+}
+
+/// The selection limit counts only the art an assignment would add: a layer with nothing to add
+/// changes nothing beside a selection already at the limit, and one with art to add throws.
+#[test]
+fn has_selected_artwork_checks_the_limit_only_for_art_it_adds() {
+    let (mut s, a, _) = doc();
+    run(&mut s, "app.activeDocument.layers.add();").unwrap();
+    // A selection of 10,001 entries, as the limit counts them.
+    s.active_mut().unwrap().selection.objects = vec![a; 10_001];
+    run(&mut s, "var l = app.activeDocument.layers[0]; l.hasSelectedArtwork = true;").unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(s.active().unwrap().selection.objects.len(), 10_001);
+    s.active_mut().unwrap().selection.objects = vec![a; 10_000];
+    let e = failure(&mut s, "app.activeDocument.layers.getByName('Layer 1').hasSelectedArtwork = true;");
+    assert!(e.contains("at most 10000"), "{e}");
+}
+
+#[test]
+fn artboards_stop_at_one_hundred() {
+    let (mut s, _, _) = doc();
+    run(&mut s, "var A = app.activeDocument.artboards; for (var i = 1; i < 100; i++) A.add([i * 10, -400, i * 10 + 5, -405]);").unwrap();
+    assert_eq!(s.active().unwrap().doc.artboards.len(), 100);
+    let steps = undo_steps(&s);
+    assert!(failure(&mut s, "app.activeDocument.artboards.add([0, -500, 10, -510]);").contains("at most 100 artboards"));
+    assert!(failure(&mut s, "app.activeDocument.artboards.insert([0, -500, 10, -510], 0);").contains("at most 100 artboards"));
+    assert_eq!(s.active().unwrap().doc.artboards.len(), 100);
+    assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
+fn every_page_item_has_its_layer_and_members_check_this() {
+    let (mut s, _, _) = doc();
+    let out = log(
+        &mut s,
+        "var d = app.activeDocument, p = d.pageItems[0], n = d.layers.add(); n.name = 'Up'; p.move(n);\
+         vc.log(p.layer.name); vc.log(d.pageItems[d.pageItems.length - 1].layer.name); vc.log(p.layer.layers.typename);\
+         vc.log(n.pageItems.typename); vc.log(n.groupItems.typename);",
+    );
+    assert_eq!(out, [json!("Up"), json!("Layer 1"), json!("Layers"), json!("PageItems"), json!("GroupItems")]);
+    for src in [
+        "Object.getOwnPropertyDescriptor(Layers.prototype, 'typename').get.call({});",
+        "Object.getOwnPropertyDescriptor(GroupItems.prototype, 'typename').get.call({});",
+        "Object.getOwnPropertyDescriptor(Artboard.prototype, 'typename').get.call({});",
+        "Object.getOwnPropertyDescriptor(Artboards.prototype, 'typename').get.call({});",
+        "Object.getOwnPropertyDescriptor(Layer.prototype, 'pathItems').get.call({});",
+    ] {
+        assert!(failure(&mut s, src).contains("this is not a"), "{src}");
+    }
+    let stale = "var L = app.activeDocument.layers, n = L.add(), c = n.layers, g = n.groupItems; n.remove();";
+    for read in ["c.typename", "g.typename", "n.pathItems"] {
+        assert!(failure(&mut s, &format!("{stale} {read};")).contains("Stale"), "{read}");
+    }
 }
 
 /// A script that names each visible selected object after its place in `app.selection`, testing
@@ -1679,7 +2555,7 @@ fn page_items_report_their_available_members_as_their_own() {
          vc.log([p.hasOwnProperty('opacity'), p.hasOwnProperty('typename'), p.hasOwnProperty('duplicate'),\
            Object.prototype.hasOwnProperty.call(p, 'name'), p.propertyIsEnumerable('opacity'), d.hasOwnProperty('selection'),\
            app.hasOwnProperty('activeDocument')]);\
-         vc.log([p.hasOwnProperty('blendingMode'), p.hasOwnProperty('rotate'), d.hasOwnProperty('layers'),\
+         vc.log([p.hasOwnProperty('blendingMode'), p.hasOwnProperty('rotate'), d.hasOwnProperty('views'),\
            p.hasOwnProperty('nosuch'), p.hasOwnProperty('hasOwnProperty'), p.hasOwnProperty('constructor')]);\
          vc.log([keys.indexOf('opacity') >= 0, keys.indexOf('typename') >= 0, keys.indexOf('duplicate'), keys.indexOf('blendingMode')]);",
     );

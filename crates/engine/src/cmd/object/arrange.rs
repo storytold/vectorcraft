@@ -105,6 +105,48 @@ pub(super) fn group(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({ "id": gid.0 }))
 }
 
+/// `object.newGroup`: an empty group, or with `compound` an empty compound path, in a layer or a
+/// group (default: the current layer), on top of its contents or at `index` (0 = bottom). The
+/// selection stays as it is.
+pub(super) fn new_group(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "object.newGroup";
+    let compound = match p.get("compound") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or_else(|| bad(C, "compound must be true or false"))?,
+    };
+    let st = s.doc()?;
+    let parent = match p.get("parent") {
+        None | Some(Value::Null) => st.current_layer().or_else(|| st.doc.default_layer()).ok_or_else(|| bad(C, "the document has no layer"))?,
+        Some(v) => NodeId(v.as_u64().ok_or_else(|| bad(C, "parent must be a layer or group id"))?),
+    };
+    let index = match p.get("index") {
+        None | Some(Value::Null) => usize::MAX,
+        Some(v) => v.as_u64().and_then(|i| usize::try_from(i).ok()).ok_or_else(|| bad(C, "index must be a whole number"))?,
+    };
+    let d = &st.doc;
+    let Some(n) = d.node(parent) else { return Err(bad(C, format!("no layer or group {}", parent.0))) };
+    if !matches!(n.kind, NodeKind::Layer { .. } | NodeKind::Group { .. }) || n.extras().graph.is_some() {
+        return Err(bad(C, format!("{} is not a layer or group", parent.0)));
+    }
+    if !d.is_editable(parent) {
+        return Err(bad(C, "the layer or group is hidden or locked"));
+    }
+    let label = if compound { "Compound Path" } else { "Group" };
+    let gid = s.edit(label, |d, _| {
+        let gid = d.alloc_id();
+        let clips = d.node(parent).is_some_and(Node::clips);
+        let index = if clips { index.max(1) } else { index };
+        let node = if compound {
+            Node::new(gid, NodeKind::Compound { children: Vec::new(), rule: vectorcraft_geom::FillRule::NonZero })
+        } else {
+            Node::group(gid, Vec::new())
+        };
+        d.insert(Some(parent), index, node)?;
+        Ok(gid)
+    })?;
+    Ok(json!({ "id": gid.0 }))
+}
+
 /// Put `ids` (top-level objects, in paint order) in a new group where the front-most one was.
 pub(crate) fn group_nodes(d: &mut Document, ids: &[NodeId]) -> Result<NodeId> {
     if ids.is_empty() {
