@@ -61,8 +61,13 @@ impl Rig {
 
     /// Clicks the node named `name`.
     pub(crate) fn click(&mut self, name: &str) {
+        self.click_with(name, Modifiers::NONE);
+    }
+
+    /// Clicks the node named `name` with `mods` held.
+    pub(crate) fn click_with(&mut self, name: &str, mods: Modifiers) {
         let target = self.target(name).unwrap_or_else(|| panic!("no node named {name:?}"));
-        self.fx.click(&target);
+        self.fx.hold(mods).click(&target).hold(Modifiers::NONE);
         self.settle();
     }
 

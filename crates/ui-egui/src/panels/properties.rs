@@ -129,19 +129,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
         });
     });
     if n_sel > 1 {
-        section(tl!("Pathfinder")).show(ui, |ui, _| {
-            Row::new().show(ui, |ui, _| {
-                for (icon, tip, op) in [
-                    ("squares-unite", tl!("Unite"), "unite"),
-                    ("squares-subtract", tl!("Minus Front"), "minusFront"),
-                    ("squares-intersect", tl!("Intersect"), "intersect"),
-                    ("squares-exclude", tl!("Exclude"), "exclude"),
-                ] {
-                    IconButton::command(IconId::new(icon), CommandRef::new(format!("object.pathfinder.{op}"))).label(tip).show(ui);
-                }
-                more_options(ui, "pathfinder", tl!("More Pathfinder options"));
-            });
-        });
+        pathfinder_section(app, ui);
     }
     if anchors != crate::chrome::AnchorControls::None {
         section(tl!("Anchor Point")).show(ui, |ui, _| crate::chrome::anchor_buttons(app, ui, anchors));
@@ -152,6 +140,32 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
         }
         quick_action_buttons(app, ui);
         appearance_section::global_edit_row(app, ui);
+    });
+}
+
+/// The Pathfinder section, shown for two or more selected objects. Its Shape Mode buttons are the
+/// Pathfinder panel's: Alt, read from the click, its Compound Shapes setting and selected
+/// compound-shape members work here too (#6333).
+pub(crate) fn pathfinder_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+    use vectorcraft_doc::ShapeMode;
+    section(tl!("Pathfinder")).show(ui, |ui, _| {
+        Row::new().show(ui, |ui, _| {
+            // Selected members can always take a mode, as on the Pathfinder panel.
+            let members = !vectorcraft_engine::cmd::selected_member_modes(&app.session).is_empty();
+            for (icon, tip, op, mode) in [
+                ("squares-unite", tl!("Unite"), "unite", ShapeMode::Add),
+                ("squares-subtract", tl!("Minus Front"), "minusFront", ShapeMode::Subtract),
+                ("squares-intersect", tl!("Intersect"), "intersect", ShapeMode::Intersect),
+                ("squares-exclude", tl!("Exclude"), "exclude", ShapeMode::Exclude),
+            ] {
+                let enabled = members || crate::menus::enabled(app, &format!("object.pathfinder.{op}"));
+                let button = IconButton::new(IconId::new(icon)).label(tip).enabled(enabled).show(ui);
+                if button.clicked() {
+                    super::pathfinder::shape_mode(app, op, mode, members, button.mods.alt);
+                }
+            }
+            more_options(ui, "pathfinder", tl!("More Pathfinder options"));
+        });
     });
 }
 

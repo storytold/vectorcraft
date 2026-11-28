@@ -303,7 +303,7 @@ fn offer(app: &VectorcraftApp, images_memo: &mut Memo, smooth_memo: &mut Memo) -
             if mixed {
                 items.push((tl!("Make Clipping Mask"), "dc-pf-crop", "object.clippingMask.make", none()));
             } else {
-                items.push((tl!("Unite"), "squares-unite", "object.pathfinder.unite", none()));
+                items.push((tl!("Unite"), "squares-unite", TASK_BAR_UNITE, none()));
             }
         } else if is_trace {
             items.push((tl!("Expand"), "maximize-2", "imageTrace.expand", none()));
@@ -455,6 +455,8 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
     let paints = chip_paints(app, ui.ctx());
     let has_shape = offer.shape.is_some();
     let mut run: Option<(&'static str, serde_json::Value)> = None;
+    // Whether Alt was held for the click that set `run`.
+    let mut alt = false;
     let mut show_swatches = false;
     let shown = TaskBar::new(tl!("Contextual Task Bar"), &offer.anchor, Bind::bound(&mut local))
         .grip(TaskBarGrip::Bar)
@@ -476,8 +478,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                     if IconButton::new(IconSpec::svg(IconId::new(icon))).label(*label).show(ui).clicked() {
                         run = Some((*cmd, params.clone()));
                     }
-                } else if Button::new(*label).variant(Variant::SECONDARY).icon(IconSpec::svg(IconId::new(icon))).show(ui).clicked() {
-                    run = Some((*cmd, params.clone()));
+                } else {
+                    let button = Button::new(*label).variant(Variant::SECONDARY).icon(IconSpec::svg(IconId::new(icon))).show(ui);
+                    if button.clicked() {
+                        run = Some((*cmd, params.clone()));
+                        alt = button.mods.alt;
+                    }
                 }
             }
             // Type's font family, font style and Font Size, which act as the Character panel's do: on the
@@ -559,6 +565,12 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
         // The convert buttons convert the direct-selected anchors, as the Control bar's buttons do.
         Some((TASK_BAR_TO_CORNER, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "corner"})),
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
+        // Unite is the Pathfinder panel's Shape Mode: Alt, read from the click, and the Compound
+        // Shapes setting make a compound shape, and selected members take the mode (#6333).
+        Some((TASK_BAR_UNITE, _)) => {
+            let members = !vectorcraft_engine::cmd::selected_member_modes(&app.session).is_empty();
+            crate::panels::pathfinder::shape_mode(app, "unite", vectorcraft_doc::ShapeMode::Add, members, alt);
+        }
         Some((c, p)) => crate::menus::invoke(app, c, p),
         None => {}
     }
@@ -615,7 +627,7 @@ pub(crate) const TASK_BAR_ACTIONS: [(&str, &str, Option<&str>); 37] = [
     ("convertToSmooth", TASK_BAR_TO_SMOOTH, None),
     ("group", "object.group", None),
     ("makeClippingMask", "object.clippingMask.make", None),
-    ("unite", "object.pathfinder.unite", None),
+    ("unite", TASK_BAR_UNITE, None),
     ("expand", "imageTrace.expand", None),
     ("editClippingPath", "object.clippingMask.editMask", None),
     ("releaseClippingMask", "object.clippingMask.release", None),
@@ -749,3 +761,6 @@ const TASK_BAR_TO_CORNER: &str = "taskBar.toCorner";
 /// anchors or a path selected whole with Direct Selection. The bar's Smooth button runs
 /// `object.path.smooth` instead.
 const TASK_BAR_TO_SMOOTH: &str = "taskBar.toSmooth";
+
+/// The Contextual Task Bar's Unite button for two or more selected objects.
+const TASK_BAR_UNITE: &str = "taskBar.unite";

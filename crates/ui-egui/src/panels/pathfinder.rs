@@ -108,8 +108,9 @@ fn tip(label: &str) -> TooltipSpec {
 /// A Shape Mode button activated: Alt makes a compound shape of the selection in `mode`; with
 /// members of compound shapes selected they take `mode`; otherwise operation `op` runs. With the
 /// Compound Shapes add-on's setting on, a click on the selection (not on members) makes the
-/// compound shape and Alt gives the permanent result.
-fn shape_mode(app: &mut VectorcraftApp, op: &str, mode: ShapeMode, members: bool, alt: bool) {
+/// compound shape and Alt gives the permanent result. Every Shape Mode button goes through here:
+/// this panel's, the Properties panel's and the Contextual Task Bar's Unite (#6333).
+pub(crate) fn shape_mode(app: &mut VectorcraftApp, op: &str, mode: ShapeMode, members: bool, alt: bool) {
     if members {
         if alt {
             crate::menus::invoke(app, "object.compoundShape.make", json!({"mode": mode.name()}));
@@ -750,6 +751,56 @@ mod tests {
         p.app().run("window.pathfinder.compoundShapes", json!({})).unwrap();
         assert!(!p.app().ui.shape_modes_compound);
         assert_eq!(crate::menus::checked(&p.app(), "window.pathfinder.compoundShapes", &Value::Null), Some(false));
+    }
+
+    /// #6333: the Properties panel's Shape Mode buttons are the Pathfinder panel's. A click is
+    /// permanent and Alt makes a compound shape; with the Compound Shapes setting on it is the
+    /// other way round; selected members take the clicked mode.
+    #[test]
+    fn the_properties_panel_shape_modes_follow_alt_the_setting_and_selected_members() {
+        let panel = |app| Panel::new(app, crate::panels::properties::pathfinder_section);
+        let permanent = |p: &Panel| {
+            let app = p.app();
+            (objects(&app).len(), compound_shapes(&app))
+        };
+        let mut p = panel(two_squares());
+        p.click("Unite");
+        assert_eq!(permanent(&p), (1, 0), "a click is permanent");
+        let mut p = panel(two_squares());
+        p.click_with("Unite", Modifiers::ALT);
+        assert_eq!(compound_shapes(&p.app()), 1, "Alt makes a compound shape");
+
+        let mut p = panel(two_squares());
+        p.app().run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        p.click("Unite");
+        assert_eq!(compound_shapes(&p.app()), 1, "with the setting on, a click makes a compound shape");
+        let mut p = panel(two_squares());
+        p.app().run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        p.click_with("Unite", Modifiers::ALT);
+        assert_eq!(permanent(&p), (1, 0), "with the setting on, Alt is permanent");
+
+        // Both members of a compound shape selected: they take Minus Front, no second shape.
+        let select_members = |p: &Panel| {
+            let mut app = p.app();
+            let shape = app.session.active().unwrap().selection.objects[0];
+            let members: Vec<_> = app.session.active().unwrap().doc.node(shape).unwrap().children().unwrap().iter().map(|n| n.id.0).collect();
+            app.run("select.set", json!({"ids": members})).unwrap();
+        };
+        let mut p = panel(two_squares());
+        p.click_with("Unite", Modifiers::ALT);
+        select_members(&p);
+        p.click("Minus Front");
+        assert_eq!(compound_shapes(&p.app()), 1, "no second compound shape");
+        assert_eq!(vectorcraft_engine::cmd::selected_member_modes(&p.app().session), [ShapeMode::Subtract, ShapeMode::Subtract]);
+
+        // With the setting on, Alt-click on selected members makes a compound shape of them,
+        // nested in the first, instead of the permanent operation.
+        let mut p = panel(two_squares());
+        p.click_with("Unite", Modifiers::ALT);
+        select_members(&p);
+        p.app().run("window.pathfinder.compoundShapes", json!({})).unwrap();
+        p.click_with("Unite", Modifiers::ALT);
+        assert_eq!(compound_shapes(&p.app()), 2, "a compound shape nested in the first");
     }
 
     /// Members of a compound shape that are selected take the clicked mode whatever the setting says.
