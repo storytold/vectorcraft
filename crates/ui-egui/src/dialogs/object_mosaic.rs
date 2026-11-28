@@ -108,6 +108,9 @@ pub struct ObjectMosaicDialog {
     note: Option<Label>,
     /// Use Ratio was pressed; [`pump`] works out the counts.
     use_ratio: bool,
+    /// Why OK or Use Ratio last found the dialog away from its image (another drawing, or the image
+    /// not selected). Back on the image, [`sync`] takes that warning away.
+    away: Option<Label>,
     /// OK, until [`pump`] has run the command on it.
     held: HeldAnswer<Mosaic>,
 }
@@ -202,10 +205,15 @@ pub(crate) fn sync(app: &mut VectorcraftApp) {
     let Some(dialogs) = app.dialogs() else { return };
     let selected = selected_image(app);
     let lengths = crate::canvas::general_lengths(app);
+    let Some(source) = dialogs.with(|host| host.get_mut::<ObjectMosaicDialog>().map(|dialog| dialog.source)) else { return };
+    let back = source.size(app).is_ok();
     dialogs.with(|host| {
         if let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() {
             let size = selected.filter(|(source, _)| *source == dialog.source).map(|(_, size)| size);
             dialog.sync(size, lengths);
+            if back {
+                dialog.came_back();
+            }
         }
     });
 }
@@ -234,7 +242,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     match work {
         None => {}
         Some(Work::Ratio(mut values, source)) => {
-            let counts = source.size(app).and_then(|image| {
+            let image = source.size(app);
+            let away = image.as_ref().err().map(|why| Label::from(why.clone()));
+            let counts = image.and_then(|image| {
                 follow_ratio(&mut values, image);
                 let mut p = params(&values, image);
                 p["useRatio"] = json!(values.side.key());
@@ -242,6 +252,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
             });
             dialogs.with(|host| {
                 let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() else { return };
+                if away.is_some() {
+                    dialog.away = away;
+                }
                 match counts {
                     Ok((cols, rows)) => {
                         dialog.values.columns = cols as f64;
@@ -253,8 +266,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
             });
         }
         Some(Work::Run(mut values, source)) => {
-            let answer = source
-                .size(app)
+            let image = source.size(app);
+            let away = image.as_ref().err().map(|why| Label::from(why.clone()));
+            let answer = image
                 .and_then(|image| {
                     follow_ratio(&mut values, image);
                     app.run(COMMAND, params(&values, image)).map(|_| ())
@@ -262,6 +276,9 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
                 .map_err(Label::from);
             dialogs.with(|host| {
                 if let Some(dialog) = host.get_mut::<ObjectMosaicDialog>() {
+                    if away.is_some() {
+                        dialog.away = away;
+                    }
                     dialog.held.answer(answer);
                 }
             });
@@ -280,6 +297,7 @@ impl ObjectMosaicDialog {
             lengths,
             note: None,
             use_ratio: false,
+            away: None,
             held: HeldAnswer::new(),
         }
     }
@@ -294,6 +312,18 @@ impl ObjectMosaicDialog {
             if self.note.as_ref().is_some_and(|n| n.as_str() == NO_IMAGE) {
                 self.note = None;
             }
+        }
+    }
+
+    /// The dialog is on its image again: the warning that being away gave goes. A refusal of the
+    /// values themselves, and one after Revert or Undo (which never comes back), stays.
+    fn came_back(&mut self) {
+        let Some(away) = self.away.take() else { return };
+        if self.note.as_ref().is_some_and(|n| n.as_str() == away.as_str()) {
+            self.note = None;
+        }
+        if self.held.refusal().is_some_and(|(reason, _)| reason.as_str() == away.as_str()) {
+            self.held.clear_refusal();
         }
     }
 }
@@ -967,5 +997,44 @@ mod tests {
         ok(&mut app);
         assert_eq!(mosaic(&app), Some((100.0, 50.0, 4)));
         assert!(!is_open(&mut app));
+    }
+
+    /// The warning in the dialog's notice: a held refusal, or a refused Use Ratio's note.
+    fn warning(app: &mut VectorcraftApp) -> Option<String> {
+        with_dialog(app, |d| d.note.clone().or_else(|| d.held.refusal().map(|(reason, _)| reason.clone())).map(|l| l.as_str().to_owned())).flatten()
+    }
+
+    /// Use Ratio as a click: the dialog asks, and the app works out the counts.
+    fn use_ratio(app: &mut VectorcraftApp) {
+        with_dialog(app, |d| d.use_ratio = true).expect("an open dialog");
+        crate::dialogs::host::pump(app, &crate::testing::ui_context());
+    }
+
+    /// The warning that OK or Use Ratio gave in another drawing shows only while the dialog is away
+    /// from its image: back on it, with the fields unchanged, the warning goes.
+    #[test]
+    fn a_warning_from_another_drawing_goes_on_return_to_the_original_image() {
+        let mut app = app_with_image();
+        open(&mut app, &json!({"columns": 2, "rows": 2})).unwrap();
+        add_image(&mut app);
+        let away = tl!("Return to the original drawing to create the mosaic.");
+
+        ok(&mut app);
+        assert_eq!(warning(&mut app).as_deref(), Some(away));
+        sync(&mut app);
+        assert_eq!(warning(&mut app).as_deref(), Some(away), "still away, the warning stays");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        sync(&mut app);
+        assert_eq!(warning(&mut app), None, "back on the image, OK's warning goes");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        use_ratio(&mut app);
+        assert_eq!(warning(&mut app).as_deref(), Some(away));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        sync(&mut app);
+        assert_eq!(warning(&mut app), None, "back on the image, Use Ratio's warning goes");
+
+        ok(&mut app);
+        assert_eq!(mosaic(&app), Some((100.0, 50.0, 4)));
     }
 }
