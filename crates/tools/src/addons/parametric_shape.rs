@@ -41,6 +41,7 @@ pub fn to_json(s: &ParametricShape) -> Value {
     json!({
         "kind": s.kind.id(), "center": [s.center.x, s.center.y], "width": s.width, "height": s.height,
         "rotation": s.rotation, "count": s.count, "a": s.a, "b": s.b, "radius": s.radius,
+        "sliceStart": s.slice_start, "sliceEnd": s.slice_end,
     })
 }
 
@@ -61,7 +62,16 @@ pub fn apply(mut s: ParametricShape, p: &Value) -> Result<ParametricShape, Strin
         let (x, y) = xy.ok_or("`center` must be [x, y]")?;
         s.center = Point::new(x, y);
     }
-    for (key, slot) in [("width", &mut s.width), ("height", &mut s.height), ("a", &mut s.a), ("b", &mut s.b), ("radius", &mut s.radius)] {
+    let slots = [
+        ("width", &mut s.width),
+        ("height", &mut s.height),
+        ("a", &mut s.a),
+        ("b", &mut s.b),
+        ("radius", &mut s.radius),
+        ("sliceStart", &mut s.slice_start),
+        ("sliceEnd", &mut s.slice_end),
+    ];
+    for (key, slot) in slots {
         if let Some(v) = num(key)? {
             *slot = v;
         }

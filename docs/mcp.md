@@ -16210,16 +16210,20 @@ Commands:
   60,000,000 pairs of segments to compare in all, when the curves are too tangled to find where they cross, or when
   checking `points` against the paths would take more than 60,000,000 comparisons. These rules are VectorCraft's own.
   → `{ids, removed}`: the paths left of those trimmed, and the stretches removed.
-- `addon.pathtools.shape.create {center, kind?, width?, height?, rotation?, count?, a?, b?, radius?}` draws a parametric
-  shape with the current paint, selected. `kind`: `rectangle`, `ellipse`, `polygon` (default), `star`, `ring`, `arrow`,
-  `cross`, `heart`, `gear` or `bubble` (a speech bubble). `width` and `height` are 0.01 to 16,384 pt (100);
-  `rotation` is in degrees clockwise (0: upright, a polygon's first corner up); `count` is a polygon's sides, a star's
+- `addon.pathtools.shape.create {center, kind?, width?, height?, rotation?, count?, a?, b?, radius?, sliceStart?,
+  sliceEnd?}` draws a parametric shape with the current paint, selected. `kind`: `rectangle`, `ellipse`, `polygon`
+  (default), `star`, `ring`, `arrow`, `cross`, `heart`, `gear` or `bubble` (a speech bubble). `width` and `height`
+  are 0.01 to 16,384 pt (100); `rotation` is in degrees clockwise (0: upright, a polygon's first corner up); `count` is a polygon's sides, a star's
   points or a gear's teeth (3 to 1,000); `radius` rounds the corners (0 to 16,384 pt; no corner passes the middle of a
   side). `a` and `b` are the kind's own values, fractions of its size: star, inner radius (0.01 to 1, 0.5); ring, the
   hole (0.01 to 0.99, 0.5); arrow, head length and shaft width (0.05 to 0.95, 0.4 each); cross, the bar's offset (−0.9
   to 0.9, 0; negative is up) and the arms' thickness (0.05 to 0.95, 1/3); heart, the notch's depth and the point's
   roundness (0 to 1; 0.4 and 0); gear, tooth height (0.01 to 0.9, 0.2); bubble, the tail's height (0.05 to 0.9, 0.25)
-  and where its tip is across (−1 to 1, −0.4). → `{id, shape}`.
+  and where its tip is across (−1 to 1, −0.4). `sliceStart` and `sliceEnd` (0 to 360, both 0) cut a rectangle,
+  ellipse, polygon, star or ring as a slice: the angles are degrees clockwise from the shape's top, measured as if the
+  shape were as high as it is wide (45° is a rectangle's top right corner), and the slice runs clockwise from the start
+  to the end and back through the center; a ring's slice runs back along its hole. The same start and end leave the
+  whole shape, rounded corners are rounded before the cut, and the other kinds ignore both values. → `{id, shape}`.
 - `addon.pathtools.shape.set {id, …}` changes a parametric shape's numbers (the same keys; a new `kind` takes its own
   defaults for the values not given) and redraws it in place. With `reference` (0 to 8 on the 9-point grid of the
   bounding box as `object.setBounds` measures it, rotated with rotated objects) and no `center`, that point of the box
