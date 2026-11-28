@@ -18,7 +18,8 @@
 //! `pathItems[0]`. A collection read with a name, `pageItems["name"]`, gives the object `getByName`
 //! gives, and a script may name the application's members without `app.`, as
 //! <https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/> describes; here
-//! that holds for `activeDocument`, `documents` and `selection`.
+//! that holds for `activeDocument`, `documents` and `selection`. `documents[0]` is the active
+//! document, as the same page says.
 //!
 //! VectorCraft's own rules:
 //! - A document's selection lists the selected objects topmost first, as `pageItems` does, whatever
@@ -29,8 +30,8 @@
 //! - Assigning `activeDocument` or `selection` without `app.` assigns `app.activeDocument` or the
 //!   active document's selection. A top-level `var selection = ...` does the same and does
 //!   not make a variable of the script. Assigning `documents` keeps its value.
-//! - Collections list documents in tab order. The objectReferences page says `documents[0]` is
-//!   always the active document; VectorCraft does not follow that yet.
+//! - After `documents[0]`, documents are listed from the one active most recently to the one
+//!   active longest ago. A change a script makes to a document in the back does not move it.
 //! - `pageItems` lists every object, with the objects inside groups and compound paths after the
 //!   group or compound path, and leaves out layers and ruler guides. The `layers` module gives the
 //!   order of a layer's, a group's and a compound path's lists. An index out of range gives
@@ -70,6 +71,7 @@ use crate::{DocState, Document, NodeId, NodeKind, Session};
 mod colors;
 pub(super) mod layers;
 mod paths;
+mod tags;
 #[cfg(test)]
 pub(crate) use paths::index_builds;
 
@@ -762,11 +764,11 @@ fn on_doc_layer<T>(
     keep_layer: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, mut before, layer, old) = {
+    let (index, active, mut before, layer, old, activated) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
         let st = &s.documents()[index];
-        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()), st.doc.clone())
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()), st.doc.clone(), st.activated)
     };
     let switch = active != Some(index);
     if switch {
@@ -820,6 +822,13 @@ fn on_doc_layer<T>(
         Some(a) if switch => command(h, "document.activate", &json!({"index": a})).map(drop),
         _ => Ok(()),
     };
+    // The switch for the change does not move the document up in `documents`.
+    if switch
+        && back.is_ok()
+        && let Some(st) = h.session.borrow_mut().document_mut(uid)
+    {
+        st.activated = activated;
+    }
     let v = r?;
     restored?;
     back?;
@@ -920,6 +929,62 @@ fn app_is_open(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Bool(open))
 }
 
+/// The menu command strings `app.executeMenuCommand` takes, each with the command it runs. The
+/// strings are the ones
+/// <https://community.adobe.com/questions-652/a-list-of-illustrator-menu-commands-we-can-call-from-javascript-769510>
+/// lists, and `Fit Artboard to artwork bounds` is the one
+/// <https://gist.github.com/shalakolee/df3246659d4289eb99149b9ed00a00ee> gives for Object ›
+/// Artboards › Fit to Artwork Bounds.
+const MENU_COMMANDS: &[(&str, &str)] = &[
+    ("selectall", "select.all"),
+    ("deselectall", "select.none"),
+    ("group", "object.group"),
+    ("ungroup", "object.ungroup"),
+    ("makeMask", "object.clippingMask.make"),
+    ("releaseMask", "object.clippingMask.release"),
+    ("compoundPath", "object.compoundPath.make"),
+    ("noCompoundPath", "object.compoundPath.release"),
+    ("Fit Artboard to artwork bounds", "artboard.fitToArt"),
+];
+
+/// `app.executeMenuCommand(name)`: runs the command of the menu item `name` names
+/// ([`MENU_COMMANDS`]) on the active document, as
+/// <https://www.indesignjs.de/indesignapi/illustrator/illustrator.d.ts> describes the method. A
+/// name it does not list throws an error that names it. A menu item that is not available, with
+/// no document open or nothing selected that it acts on, does nothing, as a dimmed menu item does
+/// (VectorCraft's own rule). A menu item the menus show as available runs its command, and an error
+/// that command returns throws. `Fit Artboard to artwork bounds` fits the active artboard, and does
+/// nothing when that artboard is locked or has no art, as the canvas's right-click menu dims
+/// the item then ([`DocState::any_art_to_fit`]).
+fn app_menu_command(h: &Host, a: &[Data]) -> Answer {
+    let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("executeMenuCommand needs a menu command, as a string".into())) };
+    if name.len() > MAX_TEXT_BYTES {
+        return Err(HostError::Range("the menu command is too long".into()));
+    }
+    let Some(&(_, id)) = MENU_COMMANDS.iter().find(|(n, _)| n == name) else {
+        return Err(HostError::Error(format!("executeMenuCommand: unknown menu command \"{name}\"")));
+    };
+    let params = {
+        let s = h.session.borrow();
+        let Some(spec) = crate::find_command(id) else { return Err(HostError::Abort(format!("executeMenuCommand: no command {id}"))) };
+        if (spec.enabled)(&s).is_err() {
+            return Ok(Data::Undefined);
+        }
+        match (id, s.active()) {
+            ("artboard.fitToArt", Some(st)) => {
+                let index = active_artboard(st);
+                if !st.any_art_to_fit(&[index]) {
+                    return Ok(Data::Undefined);
+                }
+                json!({"index": index})
+            }
+            _ => json!({}),
+        }
+    };
+    command(h, id, &params)?;
+    Ok(Data::Undefined)
+}
+
 // ---- Documents ----
 
 fn docs_length(h: &Host, _: &[Data]) -> Answer {
@@ -930,12 +995,17 @@ fn app_ref(_: &Host, _: &[Data]) -> Answer {
     Ok(host_ref("Application", &[]))
 }
 
+/// The open documents in the order `documents` lists them ([`Session::front_order`]).
+fn front_docs(s: &Session) -> impl Iterator<Item = &DocState> {
+    s.front_order().into_iter().map(|i| &s.documents()[i])
+}
+
 /// `documents[i]`, and `documents["name"]` as `getByName` reads it.
 fn docs_at(h: &Host, a: &[Data]) -> Answer {
     let s = h.session.borrow();
     let at = match arg(a, 1) {
-        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| s.documents().get(i)),
-        Data::String(name) => match s.documents().iter().find(|d| d.title() == *name) {
+        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| front_docs(&s).nth(i)),
+        Data::String(name) => match front_docs(&s).find(|d| d.title() == *name) {
             None if !probing(a) => return Err(HostError::Error(NOT_FOUND.into())),
             found => found,
         },
@@ -947,7 +1017,7 @@ fn docs_at(h: &Host, a: &[Data]) -> Answer {
 fn docs_by_name(h: &Host, a: &[Data]) -> Answer {
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     let s = h.session.borrow();
-    let st = s.documents().iter().find(|d| d.title() == *name).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
+    let st = front_docs(&s).find(|d| d.title() == *name).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
     Ok(doc_ref(h, st.uid))
 }
 
@@ -1292,8 +1362,58 @@ fn preset_of(h: &Host, d: &Data) -> Option<usize> {
     (i < h.dom.presets.borrow().len()).then_some(i)
 }
 
-/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`, and
-/// a value is checked when `addDocument` uses it.
+/// The enumeration whose values the `DocumentPreset` setting `key` takes, when it takes one.
+fn preset_enum(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "artboardLayout" => "DocumentArtboardLayout",
+        "colorMode" => "DocumentColorSpace",
+        "previewMode" => "DocumentPreviewMode",
+        "rasterResolution" => "DocumentRasterResolution",
+        "transparencyGrid" => "DocumentTransparencyGrid",
+        "units" => "RulerUnits",
+        _ => return None,
+    })
+}
+
+/// Checks that `value` is of the kind the `DocumentPreset` setting `key` holds: a value of its
+/// enumeration, a finite number, a title of at most [`MAX_TEXT_BYTES`] bytes, `true` or `false` for
+/// `documentBleedLink`, or four finite numbers for `documentBleedOffsetRect`. `undefined` unsets any
+/// setting, and the three settings `addDocument` does not apply yet also take `null`.
+fn check_preset_value(key: &str, value: &Data) -> std::result::Result<(), HostError> {
+    let wrong = |kind: &str| Err(HostError::Type(format!("DocumentPreset.{key} must be {kind}")));
+    match value {
+        Data::Undefined => return Ok(()),
+        Data::Null if matches!(key, "documentBleedLink" | "documentBleedOffsetRect" | "transparencyGrid") => return Ok(()),
+        _ => {}
+    }
+    if let Some(name) = preset_enum(key) {
+        let member = ENUMS.iter().find(|(n, _)| *n == name).map_or(&[][..], |(_, m)| *m);
+        return match value {
+            Data::String(s) if s.strip_prefix(name).and_then(|r| r.strip_prefix('.')).is_some_and(|m| member.contains(&m)) => Ok(()),
+            _ => wrong(&format!("a {name} value")),
+        };
+    }
+    match key {
+        "title" => match value {
+            Data::String(t) if t.len() > MAX_TEXT_BYTES => Err(HostError::Range("the title is too long".into())),
+            Data::String(_) => Ok(()),
+            _ => wrong("a string"),
+        },
+        "documentBleedLink" => match value {
+            Data::Bool(_) => Ok(()),
+            _ => wrong("true or false"),
+        },
+        "documentBleedOffsetRect" => match value {
+            Data::Array(r) if r.len() == 4 && r.iter().all(|n| matches!(n, Data::Number(n) if n.is_finite())) => Ok(()),
+            _ => wrong("an array of four finite numbers"),
+        },
+        _ => number(value, &format!("DocumentPreset.{key}")).map(|_| ()),
+    }
+}
+
+/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`. The
+/// setter checks the kind and size of a value ([`check_preset_value`]) and keeps the old value when
+/// it throws; `addDocument` checks the ranges.
 fn preset_field(link: &Link, key: &'static str) -> HostMember {
     let not_preset = || HostError::Type("this is not a DocumentPreset".into());
     let l = link.clone();
@@ -1313,6 +1433,7 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         let value = arg(&a, 1).clone();
         h.charge_call(16 + data_size(&value))?;
         let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        check_preset_value(key, &value)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
         match fields.iter_mut().find(|(k, _)| k == key) {
@@ -1556,6 +1677,11 @@ fn items_typename(h: &Host, a: &[Data]) -> Answer {
     Ok(text("PageItems"))
 }
 
+fn items_to_string(h: &Host, a: &[Data]) -> Answer {
+    items_doc(h, a)?;
+    Ok(text("[PageItems]"))
+}
+
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
     if layers::is_scoped(a) {
         return layers::scoped_parent(h, a);
@@ -1733,16 +1859,23 @@ fn item_set_note(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-/// Refuses a change to the item's appearance, place, stacking order or size while a layer it is in
-/// is hidden or locked. Its name and note may still change.
-fn refuse_in_closed_layer(h: &Host, item: Item) -> std::result::Result<(), HostError> {
+/// Refuses appearance, place, stacking order and size changes in hidden or locked layers and on
+/// locked artboards. Names and notes may still change.
+fn refuse_protected_edit(h: &Host, item: Item) -> std::result::Result<(), HostError> {
     let refused = with_doc(h, item.doc, |_, st| {
         let d = &st.doc;
         let closed = |i: &NodeId| d.node(*i).is_some_and(|n| matches!(n.kind, NodeKind::Layer { .. }) && (!n.visible || n.locked));
-        d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)).then(|| d.node(item.id).and_then(typename).unwrap_or("page item"))
+        let why = if d.ancestry(item.id).is_some_and(|a| a.iter().any(closed)) {
+            Some("a layer it is in is hidden or locked")
+        } else if on_locked_artboard(h, st, item.id) {
+            Some("it is on a locked artboard")
+        } else {
+            None
+        };
+        why.map(|why| (d.node(item.id).and_then(typename).unwrap_or("page item"), why))
     });
     match refused {
-        Some(name) => Err(HostError::Error(format!("Cannot edit {name} {}: a layer it is in is hidden or locked", item.id.0))),
+        Some((name, why)) => Err(HostError::Error(format!("Cannot edit {name} {}: {why}", item.id.0))),
         None => Ok(()),
     }
 }
@@ -1753,7 +1886,7 @@ fn item_hidden(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_hidden(h: &Host, a: &[Data]) -> Answer {
     let hidden = boolean(arg(a, 1), "hidden")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.visible != hidden, json!({"visible": !hidden}))
 }
 
@@ -1763,7 +1896,7 @@ fn item_locked(h: &Host, a: &[Data]) -> Answer {
 
 fn item_set_locked(h: &Host, a: &[Data]) -> Answer {
     let locked = boolean(arg(a, 1), "locked")?;
-    refuse_in_closed_layer(h, this_item(h, a)?)?;
+    refuse_protected_edit(h, this_item(h, a)?)?;
     set_props(h, a, |n| n.locked == locked, json!({"locked": locked}))
 }
 
@@ -1791,7 +1924,7 @@ fn item_set_opacity(h: &Host, a: &[Data]) -> Answer {
         (now, keeps_other)
     });
     if now.is_none() || keeps_other {
-        refuse_in_closed_layer(h, item)?;
+        refuse_protected_edit(h, item)?;
     }
     set_props(h, a, |_| false, json!({"opacity": now.unwrap_or(v)}))
 }
@@ -1902,7 +2035,8 @@ fn item_height(h: &Host, a: &[Data]) -> Answer {
 /// stays).
 fn move_to(h: &Host, a: &[Data], x: Option<f64>, y: Option<f64>) -> Answer {
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), f) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let c = h.dom.coords.get();
     let now = f.to_script(c, Point::new(r.x0, r.y0));
@@ -1939,7 +2073,8 @@ fn resize(h: &Host, a: &[Data], width: bool) -> Answer {
         return Err(HostError::Range(format!("{what} must be more than 0 and at most 3999856 points")));
     }
     let item = this_item(h, a)?;
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (Some(r), _) = item_rect(h, item, false)? else { return Ok(Data::Undefined) };
     let now = if width { r.width() } else { r.height() };
     if now <= 0.0 {
@@ -2189,7 +2324,8 @@ fn item_duplicate(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `zOrder(method)`: one of the four Object › Arrange commands for the item. A path inside a
-/// compound path is refused, and so is an object in a hidden or locked layer.
+/// compound path is refused. The item must be selectable and outside hidden or locked layers and
+/// locked artboards.
 fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     let id = match arg(a, 1) {
         Data::String(s) if s == "ZOrderMethod.BRINGTOFRONT" => "object.arrange.bringToFront",
@@ -2202,7 +2338,8 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER_ORDER.into()));
     }
-    refuse_in_closed_layer(h, item)?;
+    refuse_protected_edit(h, item)?;
+    selection_ids(h, item.doc, arg(a, 0))?;
     let (before, after) = with_doc(h, item.doc, |_, st| {
         let at = st.doc.position(item.id);
         let count = at.and_then(|(p, ..)| st.doc.children(p).map(Vec::len)).unwrap_or(0);
@@ -2295,6 +2432,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, app_selection, app_set_selection)),
         ("coordinateSystem", property(l, app_coords, app_set_coords)),
         ("getIsFileOpen", method(l, app_is_open)),
+        ("executeMenuCommand", method(l, app_menu_command)),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
@@ -2345,6 +2483,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     ]);
     document.extend(["textFrames", "swatches", "symbols", "views", "saveAs", "close"].into_iter().map(|m| later(l, "Document", m)));
     document.extend(layers::document_members(l));
+    document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -2356,7 +2495,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             ("index", method(l, items_index)),
             ("getByName", method(l, items_by_name)),
             ("removeAll", method(l, items_remove_all)),
-            ("toString", class_text("PageItems")),
+            ("toString", method(l, items_to_string)),
         ]),
         Some(function(l, items_at)),
     ));
@@ -2365,6 +2504,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("parent", get(l, item_parent)),
         ("name", property(l, item_name, item_set_name)),
         ("note", property(l, item_note, item_set_note)),
+        ("tags", get(l, tags::item_tags)),
         ("hidden", property(l, item_hidden, item_set_hidden)),
         ("locked", property(l, item_locked, item_set_locked)),
         ("selected", property(l, item_selected, item_set_selected)),
@@ -2393,7 +2533,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "isIsolated",
             "pixelAligned",
             "sliced",
-            "tags",
             "uRL",
             "uuid",
             "visibilityVariable",
@@ -2418,6 +2557,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     classes.extend(layers::classes(l));
     classes.extend(paths::classes(l));
     classes.extend(colors::classes(l));
+    classes.extend(tags::classes(l));
     paths::install_enums(realm)?;
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])?;
     // The application's members a script may name without `app.`, assigned as `app.<member>` is.

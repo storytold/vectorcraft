@@ -216,6 +216,24 @@ fn reset_category_and_all() {
     assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
 }
 
+/// `prefs.reset` records each category it reset once, `None` for every category, and a failed
+/// reset records nothing.
+#[test]
+fn prefs_reset_records_the_categories_it_reset() {
+    let mut s = Session::new();
+    assert!(s.take_prefs_resets().is_empty());
+    s.execute("prefs.reset", &json!({"category": "general"})).unwrap();
+    s.execute("prefs.reset", &json!({"category": "General"})).unwrap();
+    assert_eq!(s.take_prefs_resets(), vec![Some("General")]);
+    assert!(s.take_prefs_resets().is_empty(), "taking clears the list");
+    assert!(s.execute("prefs.reset", &json!({"category": "Bogus"})).is_err());
+    assert!(s.execute("prefs.reset", &json!({"category": 5})).is_err());
+    assert!(s.take_prefs_resets().is_empty(), "a failed reset records nothing");
+    s.execute("prefs.reset", &json!({})).unwrap();
+    s.execute("prefs.reset", &json!({"category": "Type"})).unwrap();
+    assert_eq!(s.take_prefs_resets(), vec![None, Some("Type")]);
+}
+
 /// A rectangle made into a guide path; nothing is selected after.
 fn guide_path(s: &mut Session, x: f64) -> NodeId {
     let id = square(s, x, 0.0);
@@ -623,10 +641,11 @@ fn selection_preferences_drive_the_selection_tool() {
     assert!(click(&mut s, 225.0, plain).is_empty(), "a click inside the fill selects nothing");
     assert_eq!(click(&mut s, 250.0, plain), vec![front], "a click on the path selects it");
     set(&mut s, "objectSelectionByPathOnly", json!(false));
-    // Command Click to Select Objects Behind (on by default): each Cmd/Ctrl-click goes one down,
-    // then back to the top.
+    // Command Click to Select Objects Behind (on by default): the first Cmd/Ctrl-click is Direct
+    // Selection's, then each one goes one down, then back to the top.
     let cmd = Mods { cmd: true, ..Mods::default() };
     assert_eq!(click(&mut s, 175.0, plain), vec![front]);
+    assert_eq!(click(&mut s, 175.0, cmd), vec![front], "the first Cmd-click arms Select Behind");
     assert_eq!(click(&mut s, 175.0, cmd), vec![back], "the object behind");
     assert_eq!(click(&mut s, 175.0, cmd), vec![front], "back to the topmost");
     set(&mut s, "ctrlClickSelectsBehind", json!(false));

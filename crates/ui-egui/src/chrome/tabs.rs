@@ -224,10 +224,29 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         crumbs.push((None, false, pn.clone()));
     }
     // Up one level: the isolated object's parent group, or `object.exitIsolation`, which goes from an
-    // isolated sublayer to its parent layer and otherwise leaves isolation mode.
-    let up = match ancestry.iter().rev().nth(1).filter(|p| st.doc.node(**p).is_some_and(|n| !n.is_layer())) {
+    // isolated sublayer to its parent layer, from a group in a symbol's art to the symbol's layer, and
+    // otherwise leaves isolation mode. While a pattern is edited the back arrow is Done. Screen readers
+    // call it by what it does.
+    let parent_group = ancestry.iter().rev().nth(1).copied().filter(|p| st.doc.node(*p).is_some_and(|n| !n.is_layer()));
+    let up = match parent_group {
         Some(parent) => ("object.isolate", json!({ "id": parent.0 })),
         None => ("object.exitIsolation", json!({})),
+    };
+    let symbol_layer = st.doc.symbol_edit.as_ref().map(|e| e.layer);
+    let up_one = parent_group.is_some()
+        || symbol_layer.is_some_and(|l| l != iso && ancestry.contains(&l))
+        || (st.doc.mask_edit.is_none()
+            && symbol_layer.is_none()
+            && st.doc.node(iso).is_some_and(|n| n.is_layer())
+            && st.doc.parent_of(iso).is_some_and(|p| st.doc.is_editable(p)));
+    let back_name = if pattern_edit.is_some() {
+        tl!("Done")
+    } else if up_one {
+        tl!("Back One Level")
+    } else if symbol_layer == Some(iso) {
+        tl!("Exit Symbol Editing Mode")
+    } else {
+        tl!("Exit Isolation Mode")
     };
     let entries: Vec<Entry<usize>> = crumbs.iter().enumerate().map(|(i, (_, _, name))| Entry::new(i, name.clone())).collect();
     let mut nav: Option<(&str, serde_json::Value)> = None;
@@ -237,7 +256,7 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
     let mut bar_ui = ui.new_child(egui::UiBuilder::new().max_rect(area));
     Bar::new(tl!("Isolation mode"), BarKind::Options).show(&mut bar_ui, |ui, _| {
         Row::new().fill().senses_surface().show(ui, |ui, cx| {
-            if IconButton::new(craft::behavior::IconId::new("chevron_left")).label(tl!("Back")).show(ui).clicked() {
+            if IconButton::new(craft::behavior::IconId::new("chevron_left")).label(back_name).show(ui).clicked() {
                 if pattern_edit.is_some() {
                     pattern_cmd = Some("object.pattern.done");
                 } else {

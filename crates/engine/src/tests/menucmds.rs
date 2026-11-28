@@ -1153,6 +1153,28 @@ fn transform_each_random_is_deterministic_with_seed() {
     assert!(x.x0.abs() <= 50.0 && x.width() == 100.0);
 }
 
+/// Random with the same horizontal and vertical scale scales each object evenly, Relative and
+/// Absolute alike: one random share takes both sides toward the value, so squares stay square, each
+/// by its own share (#9320).
+#[test]
+fn transform_each_random_with_equal_scales_keeps_proportions() {
+    for p in [
+        json!({"scaleH": 40, "scaleV": 40, "random": true, "seed": 7}),
+        json!({"scaleH": 40, "scaleV": 40, "relative": false, "random": true, "seed": 7}),
+    ] {
+        let mut s = session();
+        let ids: Vec<NodeId> = (0..8).map(|i| rect(&mut s, f64::from(i) * 150.0, 0.0, 100.0, 100.0)).collect();
+        sel(&mut s, &ids);
+        s.execute("object.transformEach", &p).unwrap();
+        let sizes: Vec<(f64, f64)> = ids.iter().map(|id| bounds(&s, *id)).map(|b| (b.width(), b.height())).collect();
+        for (w, h) in &sizes {
+            assert!(close(*w, *h), "{p}: a square came out {w} × {h}");
+            assert!(*w < 100.0, "{p}: a square didn't shrink: {w}");
+        }
+        assert!(sizes.iter().any(|(w, _)| !close(*w, sizes[0].0)), "{p}: every square took the same share: {sizes:?}");
+    }
+}
+
 /// A `reference` or `seed` that is not a whole number (a fraction, a negative number or a string) is an error naming
 /// the key, and the object stays as it was; a `reference` of 0.0 is the top-left point.
 #[test]
@@ -4642,6 +4664,47 @@ fn a_ruler_guide_rotates_with_the_selected_art() {
     assert!(!s.doc().unwrap().selection.anchors.is_empty());
     s.execute("object.rotate", &json!({"angle": 90})).unwrap();
     assert!(!guides(&s)[0].0, "the vertical guide is horizontal now: {:?}", guides(&s));
+}
+
+/// The reply to a transform lists the guide paths it makes of ruler guides: for a guide alone,
+/// with a copy, beside selected art and beside direct-selected anchors.
+#[test]
+fn a_transform_replies_with_the_guide_paths_it_makes() {
+    fn reply_ids(r: &Value) -> Vec<NodeId> {
+        r["ids"].as_array().unwrap().iter().map(|v| NodeId(v.as_u64().unwrap())).collect()
+    }
+    let mut s = session();
+    s.execute("guide.add", &json!({"vertical": true, "pos": 100})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    // A copy keeps the ruler guide and adds a guide path, the only new object.
+    let r = s.execute("object.rotate", &json!({"angle": 45, "copy": true})).unwrap();
+    let [copy] = selected(&s)[..] else { panic!("the copy is selected") };
+    assert_eq!(reply_ids(&r), vec![copy]);
+    // Without a copy the guide becomes a guide path.
+    s.execute("guide.select", &json!({"indexes": [0]})).unwrap();
+    let r = s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let [path] = selected(&s)[..] else { panic!("one guide path selected") };
+    assert_ne!(path, copy);
+    assert_eq!(reply_ids(&r), vec![path]);
+    // With art selected, the reply lists the art and then the guide path.
+    let a = rect(&mut s, 300.0, 100.0, 100.0, 100.0);
+    s.execute("guide.add", &json!({"vertical": false, "pos": 50})).unwrap();
+    sel(&mut s, &[a]);
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    let r = s.execute("object.rotate", &json!({"angle": 20})).unwrap();
+    let paths: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [mixed] = paths[..] else { panic!("the guide path is selected with the art") };
+    assert_eq!(reply_ids(&r), vec![a, mixed]);
+    // With direct-selected anchors, the guide path joins the reply too.
+    s.execute("guide.add", &json!({"vertical": true, "pos": 600})).unwrap();
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("guide.select", &json!({"indexes": [0], "toggle": true})).unwrap();
+    assert!(!s.doc().unwrap().selection.anchors.is_empty());
+    let r = s.execute("object.rotate", &json!({"angle": 30})).unwrap();
+    let anchored: Vec<NodeId> = selected(&s).into_iter().filter(|id| *id != a).collect();
+    let [made] = anchored[..] else { panic!("the guide path is selected with the path") };
+    assert!(line_ends(&s, made).1, "it is a guide path");
+    assert!(reply_ids(&r).contains(&made), "{r}");
 }
 
 #[test]

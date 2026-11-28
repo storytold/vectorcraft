@@ -84,7 +84,7 @@ fn iter_result_bytes() -> usize {
 }
 
 /// CreateIterResultObject (section 7.4.7): `{ value, done }`.
-fn iter_result(interp: &mut Interp, value: Value, done: bool) -> JsResult<Value> {
+pub(crate) fn iter_result(interp: &mut Interp, value: Value, done: bool) -> JsResult<Value> {
     interp.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(iter_result_bytes()))?;
     let proto = interp.intrinsics.object_proto;
     let o = interp.heap.alloc_object(Object::new(Class::Ordinary, Some(proto)));
