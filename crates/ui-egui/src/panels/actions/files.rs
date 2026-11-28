@@ -20,7 +20,7 @@
 //! `actionSet.read`), a Set Selection step as a Select Object step.
 
 use craft::automation::actions::{Action, ActionColor, ActionStep, ActionsFile};
-use craft::host::{PickKind, PickRequest}; // PLAN: assumed path of the host's picker types in the app's `craft` facade
+use craft::host::{PickKind, PickRequest, Picked}; // PLAN: assumed path of the host's picker types in the app's `craft` facade
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -577,15 +577,20 @@ fn read_path(app: &mut VectorcraftApp, path: &str) -> Result<FileRead, String> {
         (None, Some(read)) => read(path)?,
         (None, None) => return Err("no file reader".into()),
     };
+    read_bytes(app, path, &bytes)
+}
+
+/// A desktop or browser file's contents, with its name used only as the unnamed set's fallback.
+fn read_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Result<FileRead, String> {
     if bytes.len() > MAX_SET_FILE {
         return Err("the action set file is larger than 8 MiB".into());
     }
-    if is_aia(&bytes) {
-        return read_aia(app, json!({ "name": path, "dataBase64": vectorcraft_format::base64_encode(&bytes) }));
+    if is_aia(bytes) {
+        return read_aia(app, json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }));
     }
-    let stem = std::path::Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let text = String::from_utf8(bytes).map_err(|_| "not an action set file")?;
-    let (name, actions) = read_set(&text, if stem.is_empty() { "Actions" } else { &stem })?;
+    let stem = std::path::Path::new(name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let text = std::str::from_utf8(bytes).map_err(|_| "not an action set file")?;
+    let (name, actions) = read_set(text, if stem.is_empty() { "Actions" } else { &stem })?;
     Ok(FileRead { name, actions, aia: None })
 }
 
@@ -613,8 +618,16 @@ fn read_file(
     let exts = [&[ACTIONS_EXT], vectorcraft_engine::cmd::actionset::EXTS].concat();
     let request = PickRequest::open("actions").filter("Action sets", &exts);
     Ok(file_asks::ask(app, request, Owner::Free, move |app, picked| {
-        let path = picked.first_path().ok_or("cancelled")?;
-        let read = read_path(app, &path.to_string_lossy())?;
+        let read = match picked {
+            Picked::Contents(files) => {
+                let (name, bytes) = files.into_iter().next().ok_or("cancelled")?;
+                read_bytes(app, &name, &bytes)?
+            }
+            other => {
+                let path = other.first_path().ok_or("cancelled")?;
+                read_path(app, &path.to_string_lossy())?
+            }
+        };
         then(app, read)
     }))
 }

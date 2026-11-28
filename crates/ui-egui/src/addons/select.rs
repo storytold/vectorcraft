@@ -200,10 +200,7 @@ fn body(ui: &mut Ui, fields: &mut Fields, rows: &[(String, String)], go_to: &mut
     });
     let relations: Vec<Entry<String>> = RELATIONS.iter().map(|&(value, text)| Entry::new(value.to_owned(), label(tl!(text)))).collect();
     Field::new(label(tl!("Select:"))).show(ui, |ui, _| {
-        let picked = Select::new(label(tl!("Select:")), Bind::given(fields.relation.clone()), &relations).show(ui).value().cloned();
-        if let Some(relation) = picked {
-            fields.relation = relation;
-        }
+        Select::new(label(tl!("Select:")), Bind::bound(&mut fields.relation), &relations).show(ui);
     });
 }
 

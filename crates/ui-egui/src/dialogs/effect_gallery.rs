@@ -10,7 +10,7 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use craft::imaging::ui::filter_gallery::{
     EffectChange, EffectLayer, EffectParameters, EffectStack, FilterCatalog, FilterCategory, FilterGallerySession, FilterIndex, FilterTree,
@@ -20,9 +20,9 @@ use craft::theme::variant::Tone;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, HoldsOk, StackDialog, dialog_id};
-use craft::ui::display::Picture;
+use craft::ui::display::{Picture, PictureSize};
 use craft::ui::layout_components::{Row, Stack};
-use craft::ui::list::ThumbAspect;
+use craft::ui::list::{ThumbAspect, ThumbSize};
 use craft::ui::notices::{Notice, NoticeLayout};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue};
 use craft::ui::primitives::textures::{Revision, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
@@ -32,6 +32,7 @@ use craft::ui::runtime::words::CommonWords;
 use craft::ui::sections::{DialogRole, FooterButton};
 use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
+use vectorcraft_doc::Selection;
 use vectorcraft_effects::{EffectInfo, PIXEL_EFFECTS, PixelSpace};
 use vectorcraft_geom::{Affine, Point};
 
@@ -45,7 +46,7 @@ use crate::file_asks::Owner;
 
 /// Thumbnail of one filter, in pixels at most. The drawing is original; the filter is this app's.
 const THUMB: usize = 36;
-/// In-dialog preview, in pixels, drawn at twice this size.
+/// Sample image dimensions before the dialog scales the image to its display size.
 const PREVIEW_W: usize = 120;
 const PREVIEW_H: usize = 84;
 
@@ -75,35 +76,121 @@ struct StackEntry {
     params: Map<String, Value>,
 }
 
-/// What the app keeps of the open gallery: the dialog's id and the canvas preview it runs.
+/// What the app keeps of the open gallery and the canvas preview it runs.
 pub(crate) struct Open {
     id: DialogId,
+    opening: Arc<()>,
+    source: (u64, u64),
     preview: LivePreview,
+    preview_owner: Option<PreviewOwner>,
+}
+
+/// The interaction and batch preview last written by this gallery.
+struct PreviewOwner {
+    selection: Weak<Selection>,
+    batch: Option<(String, Value)>,
+}
+
+impl Open {
+    fn check_source(&self, app: &VectorcraftApp) -> Result<(), String> {
+        let Some(doc) = app.session.active().filter(|doc| doc.uid == self.source.0) else {
+            return Err(tl!("Return to the original drawing to apply these effects").into());
+        };
+        if doc.reverts != self.source.1 {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
+        Ok(())
+    }
+
+    fn owns_preview(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().filter(|doc| (doc.uid, doc.reverts) == self.source).and_then(|doc| doc.interaction.as_ref()).is_some_and(|interaction| {
+            self.preview_owner.as_ref().is_some_and(|owner| {
+                owner.selection.upgrade().is_some_and(|selection| Arc::ptr_eq(&selection, &interaction.selection))
+                    && owner.batch == interaction.preview
+            })
+        })
+    }
+
+    fn cancel_preview(self, app: &mut VectorcraftApp) {
+        if self.owns_preview(app) {
+            self.preview.cancel(app);
+        }
+    }
+
+    fn ready_to_edit(&mut self, app: &mut VectorcraftApp) -> Result<bool, String> {
+        if self.owns_preview(app) {
+            return Ok(true);
+        }
+        self.preview = LivePreview::default();
+        self.preview_owner = None;
+        if app.session.in_interaction() {
+            app.keep_typing()?;
+        }
+        Ok(!app.session.in_interaction())
+    }
+
+    fn run_preview(&mut self, app: &mut VectorcraftApp, on: bool, batch: &Value) -> Result<(), String> {
+        if (on || self.owns_preview(app)) && self.ready_to_edit(app)? {
+            let ran = self.preview.run(app, on, LABEL, COMMAND, batch);
+            if !on {
+                self.preview_owner = None;
+            } else if ran.is_some() {
+                self.preview_owner = app
+                    .session
+                    .active()
+                    .and_then(|doc| doc.interaction.as_ref())
+                    .map(|interaction| PreviewOwner { selection: Arc::downgrade(&interaction.selection), batch: interaction.preview.clone() });
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Opens the gallery on the current selection. OK is held: [`commit`] keeps the previewed stack, and a refusal
 /// keeps the dialog open with its reason; Cancel takes the canvas preview away.
 pub fn open(app: &mut VectorcraftApp, _: &Value) -> Result<Value, String> {
-    if app.session.active().is_none_or(|s| s.selection.is_empty()) {
+    let Some(doc) = app.session.active().filter(|doc| !doc.selection.is_empty()) else {
         return Err(tl!("Select artwork to apply effects").into());
-    }
+    };
+    let source = (doc.uid, doc.reverts);
     let dialog = EffectGalleryDialog::new(app);
-    let rollback = |app: &mut VectorcraftApp| {
-        if let Some(open) = app.effect_dialogs.gallery.take() {
-            open.preview.cancel(app);
+    let opening = Arc::clone(&dialog.opening);
+    let cancelled = Arc::clone(&opening);
+    let rollback = move |app: &mut VectorcraftApp| {
+        if app.effect_dialogs.gallery.as_ref().is_some_and(|open| Arc::ptr_eq(&cancelled, &open.opening))
+            && let Some(open) = app.effect_dialogs.gallery.take()
+        {
+            open.cancel_preview(app);
         }
     };
     let options = HeldOptions { cancel: Some(Box::new(rollback)), ..HeldOptions::default() };
     let id = open_held_with(app, dialog, commit, options).ok_or("no window")?;
-    app.effect_dialogs.gallery = Some(Open { id, preview: LivePreview::default() });
+    if let Some(old) = app.effect_dialogs.gallery.take() {
+        old.cancel_preview(app);
+    }
+    app.effect_dialogs.gallery = Some(Open { id, opening, source, preview: LivePreview::default(), preview_owner: None });
     Ok(Value::Null)
 }
 
 /// The held OK: keeps the previewed stack as one undo step. A refused batch leaves the gallery and its preview open.
-fn commit(app: &mut VectorcraftApp, batch: &Value) -> Result<(), String> {
-    let Some(open) = app.effect_dialogs.gallery.take() else { return app.run(COMMAND, batch.clone()).map(drop) };
-    let committed = open.preview.clone().commit(app, COMMAND, batch.clone()).map(drop);
+fn commit(app: &mut VectorcraftApp, answer: &GalleryAnswer) -> Result<(), String> {
+    let Some(mut open) = app.effect_dialogs.gallery.take() else {
+        return Err(tl!("The Effect Gallery is closed").into());
+    };
+    if !Arc::ptr_eq(&answer.opening, &open.opening) {
+        app.effect_dialogs.gallery = Some(open);
+        return Err(tl!("The Effect Gallery is closed").into());
+    }
+    let ready = open
+        .check_source(app)
+        .and_then(|()| if open.ready_to_edit(app)? { Ok(()) } else { Err(tl!("Finish the current edit before applying the effects").into()) });
+    if let Err(why) = ready {
+        app.effect_dialogs.gallery = Some(open);
+        return Err(why);
+    }
+    let committed = std::mem::take(&mut open.preview).commit(app, COMMAND, answer.batch.clone()).map(drop);
     if committed.is_err() {
+        open.preview_owner = None;
         app.effect_dialogs.gallery = Some(open);
     }
     committed
@@ -116,7 +203,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &Context) {
     let Some(mut open) = app.effect_dialogs.gallery.take() else { return };
     let id = open.id;
     let shown = dialogs.with(|host| {
-        host.get_mut_by_id::<EffectGalleryDialog>(id).map(|dialog| {
+        host.get_mut_by_id::<EffectGalleryDialog>(id).filter(|dialog| Arc::ptr_eq(&open.opening, &dialog.opening)).map(|dialog| {
             let visible = dialog.entries(true);
             let asked = dialog.asked.take().map(|layer| (Arc::clone(&dialog.opening), layer));
             (dialog.preview_on && !visible.is_empty(), stack_batch_params(&visible), asked)
@@ -126,8 +213,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &Context) {
         app.effect_dialogs.gallery = Some(open);
         return;
     };
-    // `run` reports a failed preview itself.
-    let _ = open.preview.run(app, on, LABEL, COMMAND, &batch);
+    if open.check_source(app).is_ok()
+        && let Err(why) = open.run_preview(app, on, &batch)
+    {
+        app.status(why);
+    }
     app.effect_dialogs.gallery = Some(open);
     if let Some((opening, layer)) = asked {
         ask_texture(app, id, opening, layer);
@@ -137,6 +227,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _: &Context) {
 /// Load Texture follows `layer` within its gallery opening and drops the reply when either is gone.
 fn ask_texture(app: &mut VectorcraftApp, id: DialogId, opening: Arc<()>, layer: LayerId) {
     effect::pick_texture(app, Owner::Free, move |app, _, fields| {
+        let live = app.effect_dialogs.gallery.as_ref().is_some_and(|open| {
+            Arc::ptr_eq(&opening, &open.opening) && app.session.documents().iter().any(|doc| (doc.uid, doc.reverts) == open.source)
+        });
+        if !live {
+            return;
+        }
         let Some(dialogs) = app.dialogs() else { return };
         dialogs.with(|host| {
             if let Some(dialog) = host.get_mut_by_id::<EffectGalleryDialog>(id).filter(|dialog| Arc::ptr_eq(&opening, &dialog.opening)) {
@@ -291,15 +387,22 @@ impl EffectGalleryDialog {
     }
 }
 
+/// The stack filed for OK and the opening that supplied it.
+#[derive(Clone)]
+pub(crate) struct GalleryAnswer {
+    opening: Arc<()>,
+    batch: Value,
+}
+
 impl HoldsOk for EffectGalleryDialog {
-    type Answer = Value;
+    type Answer = GalleryAnswer;
 
     fn held_ok(self) -> Self {
         self
     }
 
-    fn take_ok(&mut self) -> Option<Value> {
-        self.held.take()
+    fn take_ok(&mut self) -> Option<GalleryAnswer> {
+        Some(GalleryAnswer { opening: Arc::clone(&self.opening), batch: self.held.take()? })
     }
 
     fn answer_ok(&mut self, answer: Result<(), Label>) {
@@ -356,7 +459,7 @@ impl StackDialog for EffectGalleryDialog {
             let Some(layer) = effects.get(current) else { return };
             let image = || color_image(&preview_rgba(&visible, PREVIEW_W, PREVIEW_H), PREVIEW_W, PREVIEW_H);
             Stack::new().show(ui, |ui, _| {
-                Picture::new(tl!("Preview"), key, &image).aspect(ThumbAspect::new(10, 7)).show(ui);
+                Picture::new(tl!("Preview"), key, &image).aspect(ThumbAspect::new(10, 7)).extent(PictureSize::Sample(ThumbSize::Large)).show(ui);
                 Row::new().show(ui, |ui, _| {
                     let tree = FilterTree::new(index, &layer.filter, &thumbs, &Thumbs).layout(FilterTreeLayout::Lists).show(ui);
                     if let Some(filter) = tree.picked {
@@ -460,7 +563,7 @@ fn stack_batch_params(stack: &[StackEntry]) -> Value {
 }
 
 fn effect_label(id: &str) -> String {
-    vectorcraft_effects::effect_info(id).map(|e| tl!(e.label).trim_end_matches('…').to_string()).unwrap_or_else(|| id.to_string())
+    crate::i18n::effect_name(crate::i18n::current(), id).unwrap_or_else(|| id.to_string())
 }
 
 /// Where the preview rasters sit: one document point per pixel, origin at the top-left.
@@ -617,6 +720,122 @@ mod tests {
     }
 
     #[test]
+    fn localized_compact_gallery_pointer_applies_and_cancels() {
+        use egui::accesskit::Role;
+        use egui::{Event, Modifiers, MouseWheelSource, MouseWheelUnit, PointerButton, Pos2, RawInput, Rect, TouchPhase, pos2, vec2};
+
+        let viewport = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
+        let mut preview_heights = Vec::new();
+        for language in ["en", "de", "ja"] {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            app.session.prefs.interface_language = language.to_owned();
+            let lang = app.ui_language();
+            let ctx = app.ui_ctx.clone().unwrap();
+            let time = std::cell::Cell::new(0.0);
+            let frame = |app: &mut VectorcraftApp, events: Vec<Event>| {
+                ctx.enable_accesskit();
+                time.set(time.get() + 0.1);
+                crate::testing::app_frame(app, &ctx, RawInput { events, time: Some(time.get()), screen_rect: Some(viewport), ..Default::default() })
+            };
+            let locate = |app: &mut VectorcraftApp, label: &str, role: Option<Role>| {
+                frame(app, vec![]);
+                let nodes = frame(app, vec![]).platform_output.accesskit_update?.nodes;
+                let node = nodes.iter().map(|(_, node)| node).find(|node| {
+                    let named = node.label() == Some(label)
+                        || node.labelled_by().iter().any(|id| nodes.iter().any(|(key, name)| key == id && name.label() == Some(label)));
+                    named && role.is_none_or(|role| node.role() == role) && node.bounds().is_some()
+                })?;
+                let bounds = node.bounds()?;
+                Some(Rect::from_min_max(pos2(bounds.x0 as f32, bounds.y0 as f32), pos2(bounds.x1 as f32, bounds.y1 as f32)))
+            };
+            let click = |app: &mut VectorcraftApp, at: Pos2| {
+                assert!(viewport.contains(at), "{language}: pointer target is outside the actual 800 × 500 viewport: {at:?}");
+                frame(app, vec![Event::PointerMoved(at)]);
+                for pressed in [true, false] {
+                    frame(app, vec![Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }]);
+                }
+                frame(app, vec![]);
+                frame(app, vec![]);
+            };
+            let reach = |app: &mut VectorcraftApp, name: &str, role: Option<Role>, x: f32| {
+                let mut found = None;
+                for _ in 0..7 {
+                    found = locate(app, name, role);
+                    if let Some(rect) = found.filter(|rect| viewport.contains(rect.center())) {
+                        return rect;
+                    }
+                    frame(app, vec![Event::PointerMoved(pos2(x, 310.0))]);
+                    frame(
+                        app,
+                        vec![Event::MouseWheel {
+                            unit: MouseWheelUnit::Point,
+                            delta: vec2(0.0, -110.0),
+                            phase: TouchPhase::Move,
+                            modifiers: Modifiers::NONE,
+                            source: MouseWheelSource::Unknown,
+                        }],
+                    );
+                }
+                panic!("{language}: {name} cannot be reached in the actual viewport: {found:?}");
+            };
+            let label = |name: &'static str| crate::i18n::tr(lang, name);
+
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            let node = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+            let history = app.session.active().unwrap().history.undo.len();
+            frame(&mut app, vec![]);
+            assert_eq!(ctx.content_rect(), viewport);
+            app.run("ui.effectGalleryDialog", json!({})).unwrap();
+            let gallery = locate(&mut app, label("Effect Gallery"), Some(Role::Dialog)).expect("localized Effect Gallery");
+            let picture = locate(&mut app, label("Preview"), Some(Role::Image)).expect("localized preview image");
+            let ok = locate(&mut app, label("OK"), Some(Role::Button)).expect("localized OK button");
+            eprintln!("{language}: window {viewport:?}, Gallery {gallery:?}, picture {picture:?}, OK {ok:?}");
+            preview_heights.push((language, picture.height()));
+            assert!(app.session.in_interaction(), "{language}: initial live preview is active");
+
+            let cutout_label = crate::i18n::effect_name(lang, "artistic.cutout").unwrap();
+            let cutout = reach(&mut app, &cutout_label, None, 330.0);
+            click(&mut app, cutout.center());
+            assert_eq!(
+                effects(&app, node).first().map(|effect| effect.id.as_str()),
+                Some("artistic.cutout"),
+                "{language}: filter click updates preview"
+            );
+
+            let levels_label = label("Levels");
+            let levels = if let Some(rect) = locate(&mut app, levels_label, None) {
+                rect
+            } else {
+                let rect = reach(&mut app, "Levels", None, 550.0);
+                eprintln!("{language}: generic setting shown as Levels instead of {levels_label}");
+                rect
+            };
+            let preview = reach(&mut app, label("Preview"), Some(Role::CheckBox), 550.0);
+            eprintln!("{language}: Cutout {cutout:?}, Levels {levels:?}, Preview checkbox {preview:?}");
+            assert!(viewport.contains(levels.center()), "{language}: Levels numeric field is reachable");
+            click(&mut app, preview.center());
+            assert!(effects(&app, node).is_empty(), "{language}: turning Preview off restores the original");
+            click(&mut app, ok.center());
+            let applied = effects(&app, node);
+            assert_eq!(applied.len(), 1, "{language}: pointer OK applies one effect");
+            assert_eq!(applied[0].id, "artistic.cutout");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+            assert!(!app.session.in_interaction());
+
+            app.run("ui.effectGalleryDialog", json!({})).unwrap();
+            let cancel = locate(&mut app, label("Cancel"), Some(Role::Button)).expect("localized Cancel button");
+            assert!(app.session.in_interaction(), "{language}: reopening starts another preview");
+            click(&mut app, cancel.center());
+            let after_cancel = effects(&app, node);
+            assert_eq!(after_cancel.len(), 1, "{language}: pointer Cancel discards only the second preview");
+            assert_eq!(after_cancel[0].id, "artistic.cutout");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+            assert!(!app.session.in_interaction());
+        }
+        assert!(preview_heights.iter().all(|(_, height)| *height >= 64.0), "the preview is an artwork sample: {preview_heights:?}");
+    }
+
+    #[test]
     fn stack_preview_is_one_interaction() {
         let (mut app, ctx, node) = drawing();
         set(&app, &ctx, "effects", json!([{ "filter": "artistic.cutout", "visible": true, "params": { "levels": 3 } }]));
@@ -715,5 +934,124 @@ mod tests {
         });
         assert_eq!(answers, [false, false], "a reopened gallery keeps its own textures");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn ownership_stack(app: &VectorcraftApp, ctx: &egui::Context) {
+        set(app, ctx, "effects", json!([{ "filter": "artistic.cutout", "visible": true, "params": { "levels": 3 } }]));
+    }
+
+    fn second_drawing(app: &mut VectorcraftApp) -> u64 {
+        app.run("file.new", json!({"width": 220, "height": 220})).unwrap();
+        app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap()
+    }
+
+    fn hold_ok(app: &VectorcraftApp, ctx: &egui::Context) {
+        assert!(!app.dialogs().unwrap().with(|host| host.confirm_by_id(ctx, id())));
+    }
+
+    #[test]
+    fn gallery_ownership_preview_resumes_in_the_opening_drawing() {
+        let (mut app, ctx, original) = drawing();
+        ownership_stack(&app, &ctx);
+        frame(&mut app, &ctx);
+        assert_eq!(effects(&app, original)[0].id, "artistic.cutout");
+        let other = second_drawing(&mut app);
+        frame(&mut app, &ctx);
+        assert!(effects(&app, other).is_empty(), "gallery preview reached the other drawing");
+        assert!(!app.session.in_interaction());
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        frame(&mut app, &ctx);
+        assert_eq!(effects(&app, original)[0].id, "artistic.cutout");
+    }
+
+    #[test]
+    fn gallery_ownership_ok_refuses_the_other_drawing_and_can_retry() {
+        let (mut app, ctx, original) = drawing();
+        ownership_stack(&app, &ctx);
+        hold_ok(&app, &ctx);
+        let other = second_drawing(&mut app);
+        let history = app.session.active().unwrap().history.undo.len();
+        frame(&mut app, &ctx);
+        assert!(effects(&app, other).is_empty(), "gallery OK reached the other drawing");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), history);
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let history = app.session.active().unwrap().history.undo.len();
+        hold_ok(&app, &ctx);
+        frame(&mut app, &ctx);
+        assert_eq!(effects(&app, original)[0].id, "artistic.cutout");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), history + 1);
+    }
+
+    #[test]
+    fn gallery_ownership_cancel_preserves_the_other_drawings_edit() {
+        let (mut app, ctx, _) = drawing();
+        ownership_stack(&app, &ctx);
+        frame(&mut app, &ctx);
+        second_drawing(&mut app);
+        app.session.begin_interaction("Other drawing's edit").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#00aa00"})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id())));
+        frame(&mut app, &ctx);
+        assert!(app.session.in_interaction(), "gallery Cancel ended the other drawing's edit");
+        assert!(app.session.active().unwrap().doc == before);
+    }
+
+    #[test]
+    fn gallery_ownership_cancel_preserves_a_replaced_preview_in_the_same_drawing() {
+        let (mut app, ctx, _) = drawing();
+        ownership_stack(&app, &ctx);
+        frame(&mut app, &ctx);
+        app.session.preview("paint.setFill", &json!({"color": "#00aa00"})).unwrap();
+        let before = app.session.active().unwrap().doc.clone();
+        assert!(app.dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id())));
+        frame(&mut app, &ctx);
+        assert!(app.session.in_interaction(), "gallery Cancel ended another preview on the same interaction");
+        assert!(app.session.active().unwrap().doc == before);
+    }
+
+    #[test]
+    fn gallery_ownership_replacement_keeps_its_own_preview_and_answer() {
+        let (mut app, ctx, original) = drawing();
+        ownership_stack(&app, &ctx);
+        frame(&mut app, &ctx);
+        super::open(&mut app, &json!({})).unwrap();
+        set(&app, &ctx, "effects", json!([{ "filter": "artistic.cutout", "visible": true, "params": { "levels": 5 } }]));
+        frame(&mut app, &ctx);
+        assert!(app.effect_dialogs.gallery.is_some(), "a replaced gallery's Cancel removed the new opening");
+        assert_eq!(effects(&app, original)[0].params["levels"], 5);
+        hold_ok(&app, &ctx);
+        frame(&mut app, &ctx);
+        assert_eq!(effects(&app, original)[0].params["levels"], 5);
+    }
+
+    #[test]
+    fn gallery_ownership_ok_refuses_a_reloaded_drawing() {
+        let (mut app, ctx, original) = drawing();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let folder = vectorcraft_testkit::TempDir::new("effect-gallery-opening-revert");
+        let path = folder.join("drawing.vectorcraft");
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        app.run("shape.rectangle", json!({"x": 80, "y": 80, "width": 30, "height": 30})).unwrap();
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        let source = app.session.active().unwrap();
+        let (uid, generation) = (source.uid, source.reverts);
+        ownership_stack(&app, &ctx);
+        hold_ok(&app, &ctx);
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let reloaded = app.session.active().unwrap();
+        assert_eq!(reloaded.uid, uid);
+        assert_ne!(reloaded.reverts, generation);
+        app.run("select.set", json!({"ids": [original]})).unwrap();
+        let history = app.session.active().unwrap().history.undo.len();
+        frame(&mut app, &ctx);
+        assert!(effects(&app, original).is_empty(), "gallery OK reached the reloaded drawing");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), history);
+        super::open(&mut app, &json!({})).unwrap();
+        ownership_stack(&app, &ctx);
+        hold_ok(&app, &ctx);
+        frame(&mut app, &ctx);
+        assert_eq!(effects(&app, original)[0].id, "artistic.cutout");
     }
 }

@@ -70,7 +70,7 @@ fn icon_button(ui: &mut Ui, icon: &'static str, label: &'static str, enabled: bo
 fn name_field(ui: &mut Ui, name: &str) -> Option<String> {
     let mut typed = None;
     Field::new(tl!("Name:")).id_salt("ab-name").show(ui, |ui, _| {
-        typed = TextField::new(tl!("Name:"), Bind::given(name.to_owned())).show(ui).events.landed().cloned();
+        typed = TextField::new(tl!("Name:"), Bind::given(name.to_owned())).show(ui).events.committed().cloned();
     });
     typed.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty() && n != name)
 }
@@ -436,10 +436,11 @@ pub(crate) fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
 }
 
 /// Whether Select All's shortcut selects every artboard ([`select_all`]) instead of the art: the list has
-/// key focus and the Artboard tool is in use. The list keeps the keys only while its window draws it in every pass, so
-/// a closed panel gives them back to the art; the fired commands run after the frame, a pass after the list's last.
+/// key focus and the Artboard tool is in use. Fired commands run a pass after the list's last draw.
+/// A detached window's pass counter stops when it closes, so the panel must still be visible.
 pub(crate) fn selects_all(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
     app.session.tool_id() == "artboard"
+        && crate::panel_docking::visible(app, "artboards")
         && app.ui.artboards_ui.focused_pass.is_some_and(|(window, pass)| ctx.cumulative_pass_nr_for(window) <= pass + 1)
 }
 

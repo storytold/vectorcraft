@@ -4,12 +4,12 @@ use craft::color_ui::ui::SwatchKey;
 use craft::keymap::Mods;
 use craft::ui::contract::{DropAt, ReorderMove};
 
-/// Swatches take paint payloads and artwork from the current document's canvas.
-pub(super) fn accepts(drag: &PanelDrag, document: u64) -> bool {
+/// Swatches take paints, and take swatch rows or canvas art from the current document.
+pub(super) fn accepts(drag: &PanelDrag, document: u64, reverts: u64) -> bool {
     match drag {
+        PanelDrag::Paint { rows: Some(rows), .. } => rows.document == document,
         PanelDrag::Paint { .. } => true,
-        PanelDrag::Art { document: source, .. } => *source == document,
-        _ => false,
+        _ => drag.artwork_for(document, reverts).is_some(),
     }
 }
 
@@ -44,7 +44,6 @@ impl Drop {
                 Some(Drop::Move { names: r.names.clone(), target, after, with })
             }
             PanelDrag::Paint { paint, .. } => Some(Drop::New { paint: paint.clone(), target, replace: mods.alt, spot: mods.cmd }),
-            // PLAN: assumed `Art { document: u64, ids: Vec<NodeId> }` (widgets-w13).
             PanelDrag::Art { ids, .. } => Some(Drop::Pattern { ids: ids.iter().map(|id| id.0).collect(), target, replace: mods.alt }),
             _ => None,
         }
@@ -53,17 +52,20 @@ impl Drop {
 
 /// The drag a row of `key` starts, moving rows `names`. Colour groups have no paint of their own
 /// (the chip under the pointer draws Registration's mark for Registration).
-pub(super) fn drag_of(d: &Document, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
+pub(super) fn drag_of(d: &Document, document: u64, key: &SwatchKey, names: Vec<String>) -> PanelDrag {
     let name = name_of(key);
-    let (paint, params) = match key {
-        SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name)),
+    let (paint, params, unlinked_process_color) = match key {
+        SwatchKey::Swatch(_) if name == REGISTRATION => (Paint::registration(), swatch_params(d, name), false),
         SwatchKey::Swatch(_) => match d.swatch(name) {
-            Some(w) => (w.paint.clone(), swatch_params(d, name)),
-            None => (Paint::None, Value::Null),
+            Some(w) => {
+                let process = !w.global && !w.spot && matches!(w.paint, Paint::Solid { swatch: None, .. });
+                (w.paint.clone(), swatch_params(d, name), process)
+            }
+            None => (Paint::None, Value::Null, false),
         },
-        _ => (Paint::None, Value::Null),
+        _ => (Paint::None, Value::Null, false),
     };
-    let rows = SwatchRows { grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)) };
+    let rows = SwatchRows { document, grabbed: name.to_string(), names, groups: matches!(key, SwatchKey::Group(_)), unlinked_process_color };
     PanelDrag::Paint { paint, params, rows: Some(rows), library: None }
 }
 
@@ -84,7 +86,7 @@ fn place(shown: &[SwatchKey], at: &DropAt<SwatchKey>) -> (Option<String>, bool) 
 /// `drag` dropped onto a swatch or between rows of the `shown` list (ap.AP2 `Dropped`); a gap with no
 /// row under the pointer is the end of the list.
 pub(super) fn on_dropped(app: &mut VectorcraftApp, shown: &[SwatchKey], at: &DropAt<SwatchKey>, drag: &PanelDrag, mods: Mods) {
-    if !app.session.active().is_some_and(|st| accepts(drag, st.uid)) {
+    if !app.session.active().is_some_and(|st| accepts(drag, st.uid, st.reverts)) {
         return;
     }
     let (target, after) = place(shown, at);
@@ -124,6 +126,9 @@ pub(super) enum FooterTarget {
 /// the button does. Other drags are left to their own targets.
 pub(super) fn on_footer_drop(app: &mut VectorcraftApp, target: FooterTarget, drag: &PanelDrag) {
     let PanelDrag::Paint { rows: Some(r), .. } = drag else { return };
+    if !app.session.active().is_some_and(|state| state.uid == r.document) {
+        return;
+    }
     let rows = footer_rows(app, r);
     match target {
         FooterTarget::Delete => {
