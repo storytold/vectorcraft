@@ -481,6 +481,9 @@
 	Fill Color	Kolor wypełnienia
 	Opacity	Krycie
 	Show Opacity	Pokaż krycie
+	Show Hex Field	Pokaż pole hex
+	Hex or CSS color	Kolor hex lub CSS
+	Parse Color	Analizuj kolor
 	Stroke Color	Kolor obrysu
 	Fill Gradient	Gradient wypełnienia
 	Stroke Gradient	Gradient obrysu
@@ -5395,6 +5398,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musi mieć wartość hue, saturation, brightness, red, green lub blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` musi mieć wartość none, oklch lub hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH wymaga sRGB jako roboczej przestrzeni RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` musi być kolorem hex (#rgb, #rgba, #rrggbb lub #rrggbbaa) albo kolorem CSS rgb(), hsl() lub oklch() o długości najwyżej 48 znaków
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` to wbudowany obszar roboczy; wybierz inną nazwę
@@ -9008,7 +9012,9 @@ breakText	Glyphs	Glify
 @msg	missing `picks`	brak `picks`
 @msg	missing `word`	brak `word`
 @msg	must be an object with `kind` and `value`	musi być obiektem z `kind` i `value`
-@msg	must have `kind` alert, confirm or prompt	`kind` musi mieć wartość alert, confirm lub prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind` musi mieć wartość alert, confirm, prompt lub window
+@msg	is a window's answer, whose `value` must be a list of steps	jest odpowiedzią okna, której `value` musi być listą kroków
+@msg	has a step {i} that is not a valid click, change or close	ma krok {i}, który nie jest prawidłowym kliknięciem, zmianą ani zamknięciem
 @msg	must have exactly `kind` and `value`	musi mieć dokładnie `kind` i `value`
 @msg	needs a closing quote after the name	wymaga zamykającego cudzysłowu po nazwie
 @msg	needs a name	wymaga nazwy

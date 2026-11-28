@@ -4,10 +4,11 @@ use super::{Value, VectorcraftApp, json};
 /// What a menu click runs: items whose label ends with "…" and that carry default params open a
 /// generic parameter dialog (fields = the defaults) instead of running immediately. A script of the
 /// Scripts folder runs, whatever its name ends with, and so does a proof setup saved in the Proof
-/// Setups folder.
+/// Setups folder. A plug-in command's item runs its command, which opens the plug-in's own dialog.
 pub fn click_target(label: &str, id: &str, p: &Value) -> (String, Value) {
     let dialog = label.ends_with('…')
         && p.as_object().is_some_and(|o| !o.is_empty())
+        && !vectorcraft_engine::cmd::plugin::is_command_id(id)
         && !matches!(
             id,
             "effect.dialog"
@@ -115,8 +116,9 @@ pub fn invoke(app: &mut VectorcraftApp, id: &str, p: Value) {
         }
         return;
     }
-    // A plug-in command with parameters asks for them, from its menu item or its shortcut.
-    if p.as_object().is_none_or(|o| o.is_empty()) && crate::dialogs::plugin::open_command(app, id) {
+    // A plug-in command with parameters asks for them, from its menu item, its shortcut or a
+    // context menu (which gives only `ids`).
+    if crate::dialogs::plugin::open_command(app, id, &p) {
         return;
     }
     if open_view_dialog(app, id, &p) || open_object_dialog(app, id, &p) {

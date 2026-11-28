@@ -667,6 +667,11 @@ fn main() -> std::process::ExitCode {
     // framework decides the frame for that backend, from the platform, `VECTORCRAFT_TITLEBAR` and
     // Preferences › User Interface › System Title Bar.
     let shell_info = if forced_to_x11 { ShellInfo::current().backend(Backend::X11) } else { ShellInfo::current() };
+    // On Wayland with no cursor theme, the system pointer stays and no tool cursor is painted
+    // beside it (#2450, #5311).
+    let wayland = !forced_to_x11 && Backend::from_env() == Backend::Wayland;
+    let caps = cursor_theme::shell_caps(shell_info.caps, wayland, cursor_theme::theme_missing);
+    let shell_info = shell_info.caps(caps);
     let titlebar_pref =
         if engine_pref("systemTitleBar").and_then(|v| v.as_bool()).unwrap_or(false) { TitleBarPref::System } else { TitleBarPref::Integrated };
     let decision = decide_for(Prefix::new("VECTORCRAFT"), shell_info.backend, titlebar_pref);

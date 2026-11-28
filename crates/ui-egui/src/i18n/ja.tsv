@@ -587,6 +587,9 @@ digits	Malayalam	マラヤーラム数字
 	Make Sides Equal	辺の長さをそろえる
 	Opacity	不透明度
 	Show Opacity	不透明度を表示
+	Show Hex Field	16 進フィールドを表示
+	Hex or CSS color	16 進または CSS カラー
+	Parse Color	カラーを解析
 	Pie End Angle:	扇形の終了角度:
 	Pie Start Angle:	扇形の開始角度:
 	Stroke Color	カラー (線)
@@ -5715,6 +5718,7 @@ variable-list-end	{0}, {1}	{0}、{1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` には hue、saturation、brightness、red、green、blue のいずれかを指定してください
 @msg	`sliders` must be none, oklch or hsl	`sliders` には none、oklch、hsl のいずれかを指定してください
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH には作業用 RGB スペースとして sRGB が必要です
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` には 16 進カラー (#rgb、#rgba、#rrggbb、#rrggbbaa) または 48 文字以内の CSS の rgb()、hsl()、oklch() カラーを指定してください
 @msg	`{key}` must be true or false	`{key}` には true または false を指定してください
 @msg	`top` and `below` can't both be true	`top` と `below` を同時に true にすることはできません
 @msg	`select` must be true or false	`select` には true または false を指定してください
@@ -7618,7 +7622,9 @@ axis	Y Axis	Y 軸
 @msg	missing `picks`	`picks` がありません
 @msg	missing `word`	`word` がありません
 @msg	must be an object with `kind` and `value`	には `kind` と `value` を持つオブジェクトを指定してください
-@msg	must have `kind` alert, confirm or prompt	の `kind` には alert、confirm、prompt のいずれかを指定してください
+@msg	must have `kind` alert, confirm, prompt or window	の `kind` には alert、confirm、prompt、window のいずれかを指定してください
+@msg	is a window's answer, whose `value` must be a list of steps	は window の回答で、`value` には手順のリストを指定してください
+@msg	has a step {i} that is not a valid click, change or close	の手順 {i} は有効なクリック、変更、閉じる操作のいずれでもありません
 @msg	must have exactly `kind` and `value`	には `kind` と `value` だけを指定してください
 @msg	needs a closing quote after the name	名前の後に閉じ引用符が必要です
 @msg	needs a name	名前が必要です

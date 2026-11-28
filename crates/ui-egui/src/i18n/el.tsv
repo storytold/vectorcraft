@@ -2161,6 +2161,9 @@ font-technology	Variable	Μεταβλητές
 	Only Web Colors	Μόνο χρώματα ιστού
 	Opacity	Αδιαφάνεια
 	Show Opacity	Εμφάνιση αδιαφάνειας
+	Show Hex Field	Εμφάνιση πεδίου Hex
+	Hex or CSS color	Χρώμα Hex ή CSS
+	Parse Color	Ανάλυση χρώματος
 	Opacity Mask	Μάσκα αδιαφάνειας
 	Opacity:	Αδιαφάνεια:
 	Open	Άνοιγμα
@@ -2815,7 +2818,9 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	is a confirm's answer, whose `value` must be true or false	είναι απάντηση σε confirm, οπότε το `value` πρέπει να είναι true ή false
 @msg	is longer than 16 KiB	είναι μεγαλύτερο από 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	είναι απάντηση σε prompt, οπότε το `value` πρέπει να είναι συμβολοσειρά ή null
-@msg	must have `kind` alert, confirm or prompt	πρέπει να έχει `kind` alert, confirm ή prompt
+@msg	must have `kind` alert, confirm, prompt or window	πρέπει να έχει `kind` alert, confirm, prompt ή window
+@msg	is a window's answer, whose `value` must be a list of steps	είναι απάντηση παραθύρου, της οποίας το `value` πρέπει να είναι λίστα βημάτων
+@msg	has a step {i} that is not a valid click, change or close	έχει ένα βήμα {i} που δεν είναι έγκυρο κλικ, αλλαγή ή κλείσιμο
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	το `answers` είναι μόνο για εκτέλεση χωρίς κανέναν να ερωτηθεί: στην εφαρμογή, το άτομο απαντά σε κάθε παράθυρο διαλόγου
 @msg	`maxFuel` must be a whole number from 1 to {_1}	το `maxFuel` πρέπει να είναι ακέραιος από 1 έως {_1}
 @msg	`args{place}` is nested more than 64 levels deep	το `args{place}` έχει ένθεση μεγαλύτερη των 64 επιπέδων
@@ -7084,6 +7089,7 @@ effect	Points	Σημεία
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	το `channel` πρέπει να είναι hue, saturation, brightness, red, green ή blue
 @msg	`sliders` must be none, oklch or hsl	Το `sliders` πρέπει να είναι none, oklch ή hsl
 @msg	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	Το `text` πρέπει να είναι χρώμα Hex (#rgb, #rgba, #rrggbb ή #rrggbbaa) ή χρώμα CSS rgb(), hsl() ή oklch() με έως 48 χαρακτήρες
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης

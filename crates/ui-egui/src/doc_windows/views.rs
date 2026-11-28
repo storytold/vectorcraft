@@ -94,6 +94,16 @@ pub(crate) fn view_mut(app: &mut VectorcraftApp, (i, n): Win) -> Option<&mut Vie
     app.canvas.windows.views.others.iter_mut().find(|o| o.uid == u && o.number == n).map(|o| &mut o.view)
 }
 
+pub(crate) fn view_by_id_mut(app: &mut VectorcraftApp, (uid, id): (u64, u64)) -> Option<&mut View> {
+    if !app.session.documents().iter().any(|d| d.uid == uid) {
+        return None;
+    }
+    if let Some(i) = app.view_uids.iter().zip(&app.views).position(|(u, v)| *u == uid && v.runtime_id == id) {
+        return app.views.get_mut(i);
+    }
+    app.canvas.windows.views.others.iter_mut().find(|o| o.uid == uid && o.view.runtime_id == id).map(|o| &mut o.view)
+}
+
 /// Unfit every window's view: each fits where it shows next.
 pub(crate) fn unfit_all(app: &mut VectorcraftApp) {
     for v in &mut app.views {
@@ -175,7 +185,7 @@ pub(crate) fn new_window(app: &mut VectorcraftApp) -> Result<Value, String> {
     let (Some(u), Some(view)) = (uid(app, i), app.views.get(i).copied()) else { return Err("no document open".into()) };
     let number = numbers(app, i).last().copied().unwrap_or(n) + 1;
     let floats = super::floats(app, (i, n));
-    app.canvas.windows.views.others.push(OtherView { uid: u, number, view });
+    app.canvas.windows.views.others.push(OtherView { uid: u, number, view: view.copy_for_window() });
     show_window(app, (i, number));
     if floats {
         super::place(app, &[(i, number)]);

@@ -7269,6 +7269,27 @@ fn placed_plugin_commands_are_listed_in_their_menu() {
     assert!(listed(&s, &low(bee)).is_none());
 }
 
+/// `plugin.info`'s `manifest` gives each command's context menus in its `menu`, for a command
+/// placed in another menu and for one listed only in context menus.
+#[test]
+fn plugin_info_gives_a_command_s_context_menus() {
+    let mut s = session();
+    let id = "test.engine.place.context";
+    let commands = json!([
+        {"id": "low", "label": "Low", "menu": {"path": ["Select"], "context": [{"menu": "canvas", "when": "selection"}]}},
+        {"id": "tidy", "label": "Tidy", "menu": {"context": [{"menu": "layers", "when": "layerRow"}]}},
+        {"id": "keep", "label": "Keep"}
+    ]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Ctx","api":2,"version":"1","kind":"filter","commands":{commands}}}"#);
+    install_wat(&mut s, &tpl::returning(&manifest, r#"{"objects":[]}"#));
+    let info = run(&mut s, "plugin.info", json!({"id": id}));
+    let shown = &info["manifest"]["commands"];
+    assert_eq!(shown[0]["menu"], json!({"path": ["Select"], "context": [{"menu": "canvas", "when": "selection"}]}), "{info}");
+    assert_eq!(shown[1]["menu"], json!({"context": [{"menu": "layers", "when": "layerRow"}]}), "{info}");
+    assert!(shown[2].get("menu").is_none(), "{info}");
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A command run is journaled like any other, so an action records it with its parameters and
 /// plays it back.
 #[test]

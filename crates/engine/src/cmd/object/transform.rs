@@ -63,20 +63,31 @@ pub(super) fn scaling_options(s: &Session, p: &Value) -> Scaling {
 }
 
 /// Transform Patterns: do the pattern fills and strokes of `ids` transform with them (`patterns`
-/// param, else General › Transform Pattern Tiles)? Noted in the journal when they use a pattern,
-/// so a replay moves their tiles alike whatever the preference is then.
+/// param, else General › Transform Pattern Tiles)? Noted in the journal when they or the art of
+/// their linked opacity masks use a pattern, so a replay moves their tiles alike whatever the preference is then.
 pub(crate) fn transform_patterns(s: &mut Session, p: &Value, ids: &[NodeId]) -> Result<bool> {
     let on = bool_or(p, "patterns", s.prefs.transform_pattern_tiles);
     let d = &s.doc()?.doc;
     let mut uses = false;
     let paths = d.index_paths(ids.iter().copied());
     for n in ids.iter().filter_map(|id| paths.get(id)).filter_map(|p| d.node_at(p)) {
-        n.walk(&mut |c| uses |= vectorcraft_doc::pattern::uses_pattern(c, None));
+        uses |= uses_pattern_with_masks(n);
     }
     if uses {
         s.note_journal("patterns", json!(on));
     }
     Ok(on)
+}
+
+/// Whether `n`, a descendant or the art of a linked opacity mask among them (and theirs) has a
+/// pattern fill or stroke: what Transform Patterns moves when `n` is transformed.
+fn uses_pattern_with_masks(n: &vectorcraft_doc::Node) -> bool {
+    let mut uses = false;
+    n.walk(&mut |c| {
+        uses |= vectorcraft_doc::pattern::uses_pattern(c, None)
+            || c.extras().mask.as_deref().is_some_and(|m| m.linked && uses_pattern_with_masks(&m.art));
+    });
+    uses
 }
 
 /// Transform Objects (`objects` param, on unless it is false): off, a transform leaves the art

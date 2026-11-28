@@ -301,6 +301,7 @@ pub(crate) fn command(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<R
                 // command buttons too.
                 if let Some(bar) = crate::custom_toolbars::find_mut(&mut app.ui, &name) {
                     bar.commands.clear();
+                    bar.labels.clear();
                 }
                 return edit_custom(app, &name, |cats| {
                     cats.clear();

@@ -724,6 +724,8 @@ mod tests {
         use egui::accesskit::Role;
         use egui::{Event, Modifiers, MouseWheelSource, MouseWheelUnit, PointerButton, Pos2, RawInput, Rect, TouchPhase, pos2, vec2};
 
+        // The Japanese pass measures OK when the dialog opens and clicks it after other edits.
+        crate::testing::wait_for_cjk_fonts();
         let viewport = Rect::from_min_size(Pos2::ZERO, vec2(800.0, 500.0));
         let mut preview_heights = Vec::new();
         for language in ["en", "de", "ja"] {

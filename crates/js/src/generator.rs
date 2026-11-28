@@ -65,6 +65,8 @@ pub(crate) struct SavedFrame {
     pub(crate) var_env: EnvId,
     env_depth: u32,
     pub(crate) this: Value,
+    /// The frame was running a class's heritage or computed keys when it yielded.
+    strict_class: bool,
     pub(crate) callee: Option<ObjId>,
     pub(crate) completion: Value,
     pub(crate) stack: Vec<Value>,
@@ -158,6 +160,7 @@ impl Interp {
             var_env: frame.var_env,
             env_depth: frame.env_depth,
             this: frame.this,
+            strict_class: frame.strict_class,
             callee: frame.callee,
             completion: frame.completion,
             stack,
@@ -275,7 +278,7 @@ impl Interp {
         }
         let base = self.stack.len();
         self.drop_left_finally_sites(base);
-        let SavedFrame { code, pc, env, var_env, env_depth, this, callee, completion, stack, sites, marks } = saved;
+        let SavedFrame { code, pc, env, var_env, env_depth, this, strict_class, callee, completion, stack, sites, marks } = saved;
         self.stack.extend(stack);
         if let Some((value, mode)) = received {
             self.stack.push(value);
@@ -291,8 +294,14 @@ impl Interp {
             var_env,
             env_depth,
             this,
+            // A generator is neither an arrow function nor a constructor, so it reads its own
+            // `this` and has no `new.target`.
+            this_in_env: false,
+            strict_class,
             callee,
             construct: None,
+            new_target: None,
+            this_env: None,
             completion,
             boundary,
             generator: Some(generator),

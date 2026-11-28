@@ -443,10 +443,18 @@ fn changed_aligned(before: &[Arc<Node>], after: &[Arc<Node>], out: &mut Vec<Node
 /// After an edit that replaces object `id`'s geometry: snap it, or the pixel-aligned compound path
 /// that holds it, to the pixel grid again when it is pixel-aligned.
 pub(crate) fn resnap(d: &mut Document, id: NodeId) {
-    if let Some(n) = d.node_mut(id) {
-        snap_if_aligned(n);
+    resnap_with(d, id, Scaling::default());
+}
+
+/// [`resnap`] with `sc`: the patterns of an object that the snap moves move with it when `sc`
+/// transforms patterns.
+pub(crate) fn resnap_with(d: &mut Document, id: NodeId, sc: Scaling) {
+    if let Some(n) = d.node_mut(id)
+        && n.extras().pixel_aligned
+    {
+        snap_object(n, sc);
     }
-    keep_compound_aligned(d, id, Scaling::default());
+    keep_compound_aligned(d, id, sc);
 }
 
 /// After an edit of `n`'s strokes: when `n` is pixel-aligned, round its stroke weights and snap it to

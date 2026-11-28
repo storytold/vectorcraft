@@ -65,7 +65,8 @@ use craft::theme::variant::Tone;
 use craft::ui::buttons::{IconButton, Link, PopupMark};
 use craft::ui::choice::{Radio, RadioGroup, SwatchSpacing};
 use craft::ui::contract::{
-    Bind, CaptionColumn, CommandSet as _, Entry, LabelScheme, ListDrag, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing, Trigger,
+    Bind, CaptionColumn, CommandSet as _, Entry, Gap, LabelScheme, ListDrag, Pad, PopupKind, Props as _, Show as _, ShowContainer as _, Sizing,
+    Trigger,
 };
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::{Field, FieldGroup};
@@ -1068,11 +1069,28 @@ pub(crate) fn option_link(label: impl Into<Label>) -> Link {
 /// The empty state of a panel with nothing to show: `icon` over the title and the message,
 /// centred in the panel.
 pub(crate) fn empty_state(ui: &mut Ui, icon: &'static str, title: &str, body: &str) {
-    Notice::new(Tone::Neutral, body.to_owned())
-        .layout(NoticeLayout::Centred)
-        .title(title.to_owned())
-        .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new(icon))))
-        .show(ui);
+    notice_frame(ui, |ui| {
+        Notice::new(Tone::Neutral, body.to_owned())
+            .layout(NoticeLayout::Centred)
+            .title(title.to_owned())
+            .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new(icon))))
+            .show(ui);
+    });
+}
+
+/// Shows a panel's centred notice inside the roomy pad, so that it keeps its distance from the tab strip, the panel's
+/// edges and the controls above it.
+pub(crate) fn notice_frame<R>(ui: &mut Ui, mut body: impl FnMut(&mut Ui) -> R) -> Option<R> {
+    let mut out = None;
+    Stack::new().fill_width().pad(Pad::Roomy).show(ui, |ui, _| out = Some(body(ui)));
+    out
+}
+
+/// The body of a popover holding a form: the regular pad around it and the stack gap between its rows.
+pub(crate) fn popover_body<R>(ui: &mut Ui, mut body: impl FnMut(&mut Ui) -> R) -> Option<R> {
+    let mut out = None;
+    Stack::new().pad(Pad::Regular).gap(Gap::Stack).show(ui, |ui, _| out = Some(body(ui)));
+    out
 }
 
 #[cfg(test)]
@@ -1214,6 +1232,8 @@ mod tests_color_wheel_document_colors;
 mod tests_color_wheel_gamut;
 #[cfg(test)]
 mod tests_color_wheel_harmony;
+#[cfg(test)]
+mod tests_color_wheel_hex;
 #[cfg(test)]
 mod tests_color_wheel_opacity;
 #[cfg(test)]

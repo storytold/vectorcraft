@@ -313,6 +313,18 @@ pub(super) fn frame_ppp(size: egui::Vec2, ppp: f32, max_side: usize) -> f32 {
     if longest.round() <= max { ppp } else { ppp * (max / longest) }
 }
 
+/// Where a frame drawn `size` points across from `min` goes on a display of `device_ppp` pixels a
+/// point: `min` moved to the nearest device pixel, the size unchanged. A canvas whose corner falls
+/// between device pixels would otherwise draw every pixel of the frame across two device pixels,
+/// and each edge in the art would show as a soft double line.
+pub(super) fn snapped_rect(min: egui::Pos2, size: egui::Vec2, device_ppp: f32) -> egui::Rect {
+    if !(device_ppp.is_finite() && device_ppp > 0.0) {
+        return egui::Rect::from_min_size(min, size);
+    }
+    let snap = |c: f32| (c * device_ppp).round() / device_ppp;
+    egui::Rect::from_min_size(pos2(snap(min.x), snap(min.y)), size)
+}
+
 /// Pixel Preview: the whole document pixels (x0, y0, x1, y1) under the canvas, rotated view
 /// included. None when the view is degenerate, or when a side of the region is more than
 /// `max_side` pixels, the largest texture side the display supports.
@@ -975,7 +987,8 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, view: &CanvasV
                 let old = CanvasView::new(old_rect, Point::new(k.cx, k.cy), k.zoom).rotation(rotation);
                 let a = view.to_screen(old.to_doc(old_rect.min));
                 let b = view.to_screen(old.to_doc(old_rect.max));
-                painter.image(tex.id(), egui::Rect::from_min_max(a, b), egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+                let placed = snapped_rect(a, b - a, painter.pixels_per_point());
+                painter.image(tex.id(), placed, egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
             }
             // The view turned after the last frame was rendered, and the worker renders the frame at
             // the new angle. Until it arrives, the last frame is drawn turned into this view: each

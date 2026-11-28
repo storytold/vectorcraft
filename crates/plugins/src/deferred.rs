@@ -414,6 +414,8 @@ impl Deferrals {
         }
         drop(s);
         if out.refreshed > 0 {
+            #[cfg(any(test, feature = "test-steady"))]
+            let _change = crate::steady::plugin_change();
             REVISION.fetch_add(1, Ordering::Relaxed);
         }
         out
@@ -613,6 +615,8 @@ fn unmark(key: u64) {
 pub(crate) fn resolved(key: u64) {
     let marked = MARKED.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|m| m.contains_key(&key));
     if marked {
+        #[cfg(any(test, feature = "test-steady"))]
+        let _change = crate::steady::plugin_change();
         REVISION.fetch_add(1, Ordering::Relaxed);
     }
 }
@@ -873,6 +877,25 @@ mod tests {
         assert!(marked(), "another stage holds the key");
         drop((d, other));
         assert!(!marked(), "the document closed");
+    }
+
+    /// While a thread holds [`crate::steady::steady_plugins`], a result for a deferred key given on
+    /// another thread changes the revision only once the guard is dropped.
+    #[test]
+    fn a_result_on_another_thread_waits_for_steady_plugins() {
+        const KEY: u64 = 0xdef0_0002;
+        let d = Deferrals::with_clock(stepping(1));
+        d.defer(Stage::default(), "a", Reason::Budget, KEY);
+        let steady = crate::steady::steady_plugins();
+        let before = revision();
+        std::thread::scope(|scope| {
+            let resolving = scope.spawn(|| resolved(KEY));
+            crate::steady::asked(resolving.thread().id(), || resolving.is_finished());
+            assert_eq!(revision(), before, "the other thread's result waits for the guard");
+            drop(steady);
+            resolving.join().unwrap();
+        });
+        assert!(revision() > before, "the revision changes once the guard is dropped");
     }
 
     /// Deferrals after the first view with `n` stages, one input each, keyed from `base`.

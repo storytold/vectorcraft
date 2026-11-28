@@ -59,6 +59,8 @@ pub struct RearrangePlacement {
 /// Per-document view (camera).
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct View {
+    #[serde(skip, default = "next_view_id")]
+    pub(crate) runtime_id: u64,
     /// The zoom (1.0 = 100%): points of the screen per document point, counted before
     /// Preferences › User Interface › UI Scaling, which scales the interface and not the art.
     /// [`Self::canvas`] gives the zoom in the interface's points.
@@ -107,6 +109,7 @@ pub struct View {
 impl Default for View {
     fn default() -> Self {
         Self {
+            runtime_id: next_view_id(),
             zoom: 1.0,
             center: Point::new(306.0, 396.0),
             fitted: false,
@@ -123,7 +126,16 @@ impl Default for View {
     }
 }
 
+fn next_view_id() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 impl View {
+    pub(crate) fn copy_for_window(&self) -> Self {
+        Self { runtime_id: next_view_id(), ..*self }
+    }
+
     /// The view a document opens at: the one it was saved with, else fitted on first display, on
     /// the artboard the opened file names as its active one ([`vectorcraft_doc::Document::opened_artboard`]),
     /// else the first.
@@ -904,8 +916,9 @@ pub struct UiState {
     #[serde(skip)]
     pub(crate) new_swatch: Option<crate::dialogs::new_swatch::Open>,
     /// Color Wheel panel: the wheel or the box, the box's channel, the slider rows, the
-    /// out-of-gamut shading, Show Opacity, Show Contrast, Contrast For and Contrast Background, and
-    /// the color vision row (`ui.colorWheel`, [`crate::panels::color_wheel::deserialize_settings`]).
+    /// out-of-gamut shading, Show Opacity, Show Hex Field, Show Contrast, Contrast For and Contrast
+    /// Background, and the color vision row (`ui.colorWheel`,
+    /// [`crate::panels::color_wheel::deserialize_settings`]).
     #[serde(default, deserialize_with = "crate::panels::color_wheel::deserialize_settings")]
     pub color_wheel: crate::panels::color_wheel::Settings,
     /// Swatches panel: Show Recent Colors in its panel menu, which draws the panel's Recent Colors
@@ -1253,6 +1266,10 @@ pub struct CustomToolbar {
     /// plug-in's, is kept and shows as unavailable until it comes back.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<String>,
+    /// The labels given to its command buttons with Rename Button…, keyed by the command's id. A
+    /// button without one shows its command's label.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub labels: std::collections::BTreeMap<String, String>,
 }
 
 /// A category of an edited toolbar: its name (one of the Basic toolbar's; none in the Advanced
