@@ -319,8 +319,9 @@ fn raster_metadata_uses_encoded_header_not_rgb_fallback() {
     std::fs::write(&g, gray_png(6, 4)).unwrap();
     std::fs::write(&c, super::links::png(3, 2, [10, 20, 30])).unwrap();
     let mut s = session();
-    place(&mut s, &g, false);
+    // `rasterItems` lists the topmost image first, so the gray image placed last is `r[0]`.
     place(&mut s, &c, false);
+    place(&mut s, &g, false);
     let out = log(
         &mut s,
         &base,

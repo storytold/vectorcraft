@@ -135,7 +135,8 @@ pub(super) fn pending_as_item(h: &Host, d: &Data) -> Result<Option<[f64; 4]>, Ho
     Ok(Some([run, uid, high, low]))
 }
 
-/// The ids of a document's linked (`placed`) or embedded images in paint order.
+/// The ids of a document's linked (`placed`) or embedded images, topmost first, in the order of
+/// `pageItems`.
 fn images(h: &Host, st: &DocState, placed: bool) -> Result<Rc<Vec<NodeId>>, HostError> {
     let pick = |l: &Lists| if placed { l.2.clone() } else { l.3.clone() };
     if let Some(l) = &*h.dom.images.lists.borrow()

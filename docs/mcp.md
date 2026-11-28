@@ -2933,7 +2933,8 @@ other files through `$`:
   keeps the preset's value. A bad value throws an error before anything is written.
 - `Document.placedItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItems/) lists the document's linked
   images and `Document.rasterItems` (https://ai-scripting.docsforadobe.dev/jsobjref/RasterItems/) its embedded ones,
-  in paint order, each with `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`. `placedItems.add()`
+  topmost first as `pageItems` lists them, each with `length`, `[i]`, `index(key)`, `getByName(name)` and
+  `removeAll()`. `placedItems.add()`
   gives a `PlacedItem` with no file; assigning a `File` to its `file` runs `file.place` with `link: true`, and every
   other member of it throws `PlacedItem.file is required` until then. A `PlacedItem`
   (https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/) has `file`, `relink(file)` (`links.relink`), `embed()`
