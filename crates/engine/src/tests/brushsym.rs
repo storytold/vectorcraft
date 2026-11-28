@@ -1810,6 +1810,44 @@ fn scatter_hue_jitter_saves_and_exports() {
     assert_eq!(piece_fills(&s.doc().unwrap().doc, id), plain);
 }
 
+/// Scatter Brush Options' `saturation_jitter`: shown by `brush.get`, set by `brush.options` (a value
+/// past 100 clamped), saved with the document, and the moved colors drawn the same after Open and
+/// written by SVG export.
+#[test]
+fn scatter_saturation_jitter_saves_and_exports() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0, 200.0, 8.0, 8.0);
+    s.execute("paint.setFill", &json!({"color": "#cc6666"})).unwrap();
+    let name = s.execute("brush.new", &json!({"type": "scatter", "name": "Confetti", "ids": [r.0]})).unwrap()["name"].as_str().unwrap().to_string();
+    let id = line(&mut s);
+    select(&mut s, &[id]);
+    s.execute("brush.apply", &json!({ "name": name })).unwrap();
+    let plain = piece_fills(&s.doc().unwrap().doc, id);
+    assert!(plain.len() > 10 && plain.iter().all(|c| c == "#cc6666"), "{plain:?}");
+    let get = |s: &mut Session| s.execute("brush.get", &json!({ "name": name })).unwrap()["saturation_jitter"].clone();
+    assert_eq!(get(&mut s), json!(0.0), "brush.get shows the option at 0");
+    s.execute("brush.options", &json!({"name": name, "params": {"saturation_jitter": 250}})).unwrap();
+    assert_eq!(get(&mut s), json!(100.0), "a value past 100 is clamped");
+    s.execute("brush.options", &json!({"name": name, "params": {"saturation_jitter": 40}})).unwrap();
+    assert_eq!(get(&mut s), json!(40.0));
+    let doc = s.doc().unwrap().doc.clone();
+    let moved = piece_fills(&doc, id);
+    assert_eq!(moved.len(), plain.len());
+    let distinct: std::collections::HashSet<&String> = moved.iter().collect();
+    assert!(distinct.len() > 5, "{moved:?}");
+    // Saved and opened again, the stroke draws the same colors.
+    let back = vectorcraft_format::load(&vectorcraft_format::save(&doc, false)).unwrap();
+    assert_eq!(piece_fills(&back, id), moved);
+    // SVG export writes each copy's moved color.
+    let svg = vectorcraft_svg::export(&doc, &Default::default());
+    for c in &distinct {
+        assert!(svg.contains(&format!("fill=\"{c}\"")), "{c} missing from the SVG");
+    }
+    // Back to 0, the copies draw the art's own color.
+    s.execute("brush.options", &json!({"name": name, "params": {"saturation_jitter": 0}})).unwrap();
+    assert_eq!(piece_fills(&s.doc().unwrap().doc, id), plain);
+}
+
 /// The bounds of the brush art `id`'s strokes draw.
 fn brushed_bounds(s: &Session, id: NodeId) -> Rect {
     let st = s.doc().unwrap();

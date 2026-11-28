@@ -1249,6 +1249,189 @@ fn hue_jitter_turns_type_every_colorization_and_linked_colors() {
     }
 }
 
+/// A stroke's own hue and saturation jitter replace the brush's, as its other scatter settings do,
+/// and are kept within their ranges.
+#[test]
+fn a_strokes_own_jitter_replaces_the_brushs() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    let pink = Color::rgb(0.8, 0.4, 0.4);
+    let b = sat_jittered(pink, Colorization::None, 0.0, 0.0);
+    let own = stroke_pieces(&doc, &b, &path, &with_options(serde_json::json!({"hue_jitter": 30.0, "saturation_jitter": 40.0})));
+    let brushed = stroke_pieces(&doc, &sat_jittered(pink, Colorization::None, 30.0, 40.0), &path, &stroke(1.0));
+    assert_eq!(fill_colors(&own), fill_colors(&brushed));
+    assert!(fill_colors(&own).iter().any(|c| *c != pink));
+    let options = serde_json::Map::from_iter([("saturation_jitter".to_string(), serde_json::json!(500.0))]);
+    assert_eq!(
+        b.stroke_options_that_differ(&options).unwrap(),
+        serde_json::Map::from_iter([("saturation_jitter".to_string(), serde_json::json!(100.0))])
+    );
+    // A stroke that sets 0 on a jittered brush draws the art's own color.
+    let still =
+        stroke_pieces(&doc, &sat_jittered(pink, Colorization::None, 0.0, 40.0), &path, &with_options(serde_json::json!({"saturation_jitter": 0.0})));
+    assert!(!still.is_empty() && fill_colors(&still).iter().all(|c| *c == pink));
+}
+
+/// A scatter brush of rectangles filled `fill`, with `colorization`, `hue_jitter` and
+/// `saturation_jitter`.
+fn sat_jittered(fill: Color, colorization: Colorization, hue_jitter: f64, saturation_jitter: f64) -> Brush {
+    let mut b = jittered(fill, colorization, hue_jitter);
+    if let BrushKind::Scatter(s) = &mut b.kind {
+        s.saturation_jitter = saturation_jitter;
+    }
+    b
+}
+
+/// The HSB of an RGB color's own values.
+fn rgb_hsb(c: &Color) -> [f32; 3] {
+    let Color::Rgb { r, g, b } = *c else { panic!("not RGB: {c:?}") };
+    vectorcraft_color::rgb_to_hsb([r, g, b])
+}
+
+#[test]
+fn saturation_jitter_moves_each_copy_the_same_every_time() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    // A red at 50% saturation and 80% brightness.
+    let pink = Color::rgb(0.8, 0.4, 0.4);
+    let b = sat_jittered(pink, Colorization::None, 0.0, 40.0);
+    let out = stroke_pieces(&doc, &b, &path, &stroke(1.0));
+    assert_eq!(out.len(), 20);
+    assert_eq!(stroke_pieces(&doc, &b, &path, &stroke(1.0)), out, "the same stroke draws the same colors");
+    let colors = fill_colors(&out);
+    let hsb: Vec<[f32; 3]> = colors.iter().map(rgb_hsb).collect();
+    // Each copy's saturation is within 40 points of 50%; its hue and brightness stay.
+    assert!(hsb.iter().all(|[h, s, v]| hue_gap(*h, 0.0) < 1e-3 && (s - 0.5).abs() <= 0.4001 && near(f64::from(*v), 0.8, 1e-4)), "{hsb:?}");
+    assert!(hsb.iter().any(|[_, s, _]| *s > 0.55) && hsb.iter().any(|[_, s, _]| *s < 0.45), "the copies move both ways: {hsb:?}");
+    let distinct: std::collections::HashSet<String> = colors.iter().map(Color::to_hex).collect();
+    assert!(distinct.len() > 10, "each copy moves by its own amount: {distinct:?}");
+    // The copies stay where they were, at their size and angle.
+    let plain = stroke_pieces(&doc, &sat_jittered(pink, Colorization::None, 0.0, 0.0), &path, &stroke(1.0));
+    let boxes = |o: &[Node]| o.iter().map(|n| n.geometric_bounds().unwrap()).collect::<Vec<_>>();
+    assert_eq!(boxes(&out), boxes(&plain));
+    // Another path draws other amounts.
+    let other = fill_colors(&stroke_pieces(&doc, &b, &line(0.0, 10.0, 200.0, 10.0), &stroke(1.0)));
+    assert_ne!(other, colors);
+    // At 100 the copies reach gray or full saturation and go no further.
+    let full: Vec<f32> = fill_colors(&stroke_pieces(&doc, &sat_jittered(pink, Colorization::None, 0.0, 100.0), &path, &stroke(1.0)))
+        .iter()
+        .map(|c| rgb_hsb(c)[1])
+        .collect();
+    assert!(full.iter().all(|s| (0.0..=1.0).contains(s)), "{full:?}");
+    assert!(full.iter().any(|s| *s < 1e-6) && full.iter().any(|s| *s > 1.0 - 1e-6), "{full:?}");
+    // Saturation jitter leaves the hue jitter's amounts as they were.
+    let red = Color::rgb(1.0, 0.0, 0.0);
+    let hue_only = fill_colors(&stroke_pieces(&doc, &sat_jittered(red, Colorization::None, 90.0, 0.0), &path, &stroke(1.0)));
+    let both = fill_colors(&stroke_pieces(&doc, &sat_jittered(red, Colorization::None, 90.0, 50.0), &path, &stroke(1.0)));
+    assert_eq!(both.len(), hue_only.len());
+    assert_ne!(both, hue_only);
+    for (b, h) in both.iter().zip(&hue_only) {
+        assert!(hue_gap(rgb_hsb(b)[0], rgb_hsb(h)[0]) < 0.01, "{b:?} from {h:?}");
+    }
+}
+
+#[test]
+fn saturation_jitter_of_zero_changes_nothing() {
+    let pink = Color::rgb(0.8, 0.4, 0.4);
+    let out = stroke_pieces(&Document::new(1.0, 1.0), &sat_jittered(pink, Colorization::None, 0.0, 0.0), &line(0.0, 0.0, 200.0, 0.0), &stroke(1.0));
+    assert!(!out.is_empty() && fill_colors(&out).iter().all(|c| *c == pink));
+    // A brush without saturation jitter is saved as before, and one saved before reads as 0.
+    let v = serde_json::to_value(sat_jittered(pink, Colorization::None, 0.0, 0.0)).unwrap();
+    assert!(v.get("saturation_jitter").is_none(), "{v}");
+    let mut old = serde_json::to_value(sat_jittered(pink, Colorization::None, 0.0, 25.0)).unwrap();
+    assert_eq!(old.as_object_mut().unwrap().remove("saturation_jitter"), Some(serde_json::json!(25.0)));
+    let BrushKind::Scatter(s) = Brush::from_json(old).unwrap().kind else { panic!("not a scatter brush") };
+    assert_eq!(s.saturation_jitter, 0.0, "a brush saved without the key reads as 0");
+    let mut with = v.clone();
+    with["saturation_jitter"] = serde_json::json!(25.0);
+    let BrushKind::Scatter(s) = Brush::from_json(with).unwrap().kind else { panic!("not a scatter brush") };
+    assert_eq!(s.saturation_jitter, 25.0);
+    // Values outside 0..100 are clamped.
+    for (given, kept) in [(250.0, 100.0), (-5.0, 0.0)] {
+        let mut v = v.clone();
+        v["saturation_jitter"] = serde_json::json!(given);
+        let BrushKind::Scatter(s) = Brush::from_json(v).unwrap().kind else { panic!("not a scatter brush") };
+        assert_eq!(s.saturation_jitter, kept, "{given}");
+    }
+}
+
+#[test]
+fn saturation_jitter_moves_after_the_colorization_in_each_model() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    // Tints: black art takes the blue stroke color, whose saturation then moves.
+    let blue = StrokeLayer::new(Paint::solid(Color::rgb(0.0, 0.0, 1.0)), 1.0);
+    let hsb: Vec<[f32; 3]> =
+        fill_colors(&stroke_pieces(&doc, &sat_jittered(Color::BLACK, Colorization::Tints, 0.0, 30.0), &path, &blue)).iter().map(rgb_hsb).collect();
+    assert!(!hsb.is_empty() && hsb.iter().all(|[h, s, _]| hue_gap(*h, 240.0) < 1e-3 && *s >= 0.6999), "{hsb:?}");
+    assert!(hsb.iter().any(|[_, s, _]| *s < 0.97), "{hsb:?}");
+    // Black, white and grays have no saturation to move, in every model.
+    for key in
+        [Color::rgb(0.5, 0.5, 0.5), Color::cmyk(0.0, 0.0, 0.0, 1.0), Color::cmyk(0.0, 0.0, 0.0, 0.5), Color::gray(0.4), Color::lab(60.0, 0.0, 0.0)]
+    {
+        let key = StrokeLayer::new(Paint::solid(key), 1.0);
+        let moved = stroke_pieces(&doc, &sat_jittered(Color::BLACK, Colorization::Tints, 0.0, 100.0), &path, &key);
+        let still = stroke_pieces(&doc, &sat_jittered(Color::BLACK, Colorization::Tints, 0.0, 0.0), &path, &key);
+        assert_eq!(fill_colors(&moved), fill_colors(&still), "{key:?}");
+    }
+    // A process color stays a process color with its K kept, moved over its C, M and Y.
+    let cmyk = fill_colors(&stroke_pieces(&doc, &sat_jittered(Color::cmyk(0.0, 0.6, 0.6, 0.25), Colorization::None, 0.0, 30.0), &path, &stroke(1.0)));
+    assert!(cmyk.iter().any(|c| *c != Color::cmyk(0.0, 0.6, 0.6, 0.25)), "{cmyk:?}");
+    for c in &cmyk {
+        let Color::Cmyk { c, m, y, k } = *c else { panic!("not CMYK: {c:?}") };
+        // No cyan, as before, and magenta equal to yellow: the hue stays; the ink is within 30 points.
+        assert!(k == 0.25 && near(f64::from(c), 0.0, 1e-5) && near(f64::from(m), f64::from(y), 1e-5), "{c} {m} {y} {k}");
+        assert!((m - 0.6).abs() <= 0.3001, "{m}");
+    }
+    // A Lab color keeps its lightness and hue angle; its chroma moves within 20 of its 50.
+    let lab = fill_colors(&stroke_pieces(&doc, &sat_jittered(Color::lab(50.0, 40.0, 30.0), Colorization::None, 0.0, 20.0), &path, &stroke(1.0)));
+    assert!(lab.iter().any(|c| *c != Color::lab(50.0, 40.0, 30.0)), "{lab:?}");
+    for c in &lab {
+        let Color::Lab { l, a, b } = *c else { panic!("not Lab: {c:?}") };
+        let chroma = f64::from(a.hypot(b));
+        assert!(l == 50.0 && (chroma - 50.0).abs() <= 20.001 && near(f64::from(b.atan2(a)), 30f64.atan2(40.0), 1e-4), "{c:?}");
+    }
+    // A chroma that grows stops where a and b reach their largest.
+    let vivid = fill_colors(&stroke_pieces(&doc, &sat_jittered(Color::lab(50.0, 120.0, 0.0), Colorization::None, 0.0, 100.0), &path, &stroke(1.0)));
+    assert!(vivid.iter().all(|c| matches!(*c, Color::Lab { a, b, .. } if (0.0..=127.0001).contains(&a) && b.abs() < 1e-4)), "{vivid:?}");
+    assert!(vivid.iter().any(|c| matches!(*c, Color::Lab { a, .. } if a > 126.999)), "{vivid:?}");
+}
+
+/// Saturation jitter moves type's characters and a color linked to a swatch (which loses the
+/// link); a pattern paint stays.
+#[test]
+fn saturation_jitter_moves_type_and_linked_colors() {
+    let doc = Document::new(1.0, 1.0);
+    let path = line(0.0, 0.0, 200.0, 0.0);
+    let red = Paint::solid(Color::rgb(1.0, 0.0, 0.0));
+    let typed = |saturation_jitter| Brush {
+        name: "s".into(),
+        kind: BrushKind::Scatter(Scatter { art: type_art(red.clone(), red.clone()), saturation_jitter, ..Default::default() }),
+    };
+    let still = run_paints(&stroke_pieces(&doc, &typed(0.0), &path, &stroke(1.0)));
+    let moved = run_paints(&stroke_pieces(&doc, &typed(60.0), &path, &stroke(1.0)));
+    assert!(!still.is_empty() && still.iter().all(|p| *p == (red.clone(), red.clone())), "{still:?}");
+    assert_eq!(moved.len(), still.len());
+    assert!(moved.iter().any(|p| *p != (red.clone(), red.clone())), "the characters move: {moved:?}");
+    assert!(moved.iter().all(|(f, s)| f == s), "a copy's character fill and stroke move by the same amount: {moved:?}");
+    let linked = Paint::Solid { color: Color::rgb(0.8, 0.4, 0.4), swatch: Some("Rose".into()), tint: 1.0 };
+    let pattern = Paint::Pattern { pattern: "Dots".into(), xf: Affine::IDENTITY };
+    let mut art = rect_art(10.0, 4.0);
+    art.appearance.set_fill(linked.clone());
+    art.appearance.set_stroke(pattern.clone());
+    let b = |saturation_jitter| Brush {
+        name: "s".into(),
+        kind: BrushKind::Scatter(Scatter { art: art.clone(), saturation_jitter, ..Default::default() }),
+    };
+    let moved = stroke_pieces(&doc, &b(50.0), &path, &stroke(1.0));
+    assert!(!moved.is_empty());
+    assert!(moved.iter().any(|n| n.appearance.fill_paint().color() != Some(Color::rgb(0.8, 0.4, 0.4))), "the linked color moves");
+    for n in &moved {
+        assert!(matches!(n.appearance.fill_paint(), Paint::Solid { swatch: None, .. }), "{:?}", n.appearance.fill_paint());
+        assert_eq!(n.appearance.stroke().map(|s| &s.paint), Some(&pattern));
+    }
+}
+
 /// An instance whose fill has an opacity of 0 does not stain its symbol's art, so the art keeps its
 /// swatch links.
 #[test]
