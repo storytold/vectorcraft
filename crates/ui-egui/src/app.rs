@@ -388,6 +388,7 @@ impl VectorcraftApp {
         }
         font_menu::end_previews(self, &out.ended_previews);
         edits::end_removed(self, &out.removed_gestures);
+        dialogs::three_d::sync_graphics_source(self);
         let lang = self.ui_language();
         if self.host.lang() != lang {
             self.host = Arc::new(self.host.with_lang(lang));
