@@ -16305,6 +16305,10 @@ Commands:
   at right angles to the bisector of the angle its neighbours make at it, each `ratio` (0.1 to 0.5, 0.3905 by default:
   the ratio that makes a square's corners a circle) × the nearer neighbour's distance long; an open end aims its handle
   at its neighbour's. Equalize gives both handles their average length and makes a missing one opposite the other.
+  In the panel, an edit of X, Y or a handle's Length or Angle runs `addon.pathtools.setAnchor` as it is typed and is
+  one undo step; canceling it restores the anchor and leaves no undo step. While an Angle edit runs, the field shows
+  the handle's angle in the typed value's turn (`200` stays `200` rather than `-160`). Canceling a Points per segment
+  edit restores the count Add Points uses.
 - `addon.pathtools.removeKeepShape {}` removes the direct-selected anchors, refitting the handles beside each.
 - `addon.pathtools.addPoints {count?}` splits each selected segment (between two selected anchors, or every segment of
   a path selected whole) into `count + 1` (1 to 100) pieces of equal length.

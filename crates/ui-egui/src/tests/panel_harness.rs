@@ -140,6 +140,19 @@ impl Panel {
         self.after();
     }
 
+    /// [`Panel::click_role`] on the zero-based `index`th control of `role` named `name`, where controls of one role share
+    /// the name (an In and an Out handle's Length).
+    pub(crate) fn click_role_nth(&mut self, name: &str, role: craft::ui::contract::Role, index: usize) {
+        self.frame();
+        let target = {
+            let tree = self.fixture.tree();
+            self.fixture.by_role(role).into_iter().filter(|t| tree.name_of(t.node) == Some(name)).nth(index)
+        };
+        let target = target.unwrap_or_else(|| panic!("no {role:?} named {name:?} at {index} in {:?}", self.names()));
+        self.fixture.click(&target);
+        self.after();
+    }
+
     /// The control of `role` named `name` in the latest frame, where nodes of other roles share the name.
     fn look_role(&self, name: &str, role: craft::ui::contract::Role) -> Target {
         let tree = self.fixture.tree();

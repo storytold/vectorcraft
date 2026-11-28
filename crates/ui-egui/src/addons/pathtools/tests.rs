@@ -1,4 +1,6 @@
+use craft::ui::contract::Role;
 use craft::ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
+use egui::{Key, Modifiers};
 use serde_json::json;
 use vectorcraft_engine::Session;
 use vectorcraft_tools::addons::parametric_shape::ShapeKind;
@@ -68,6 +70,81 @@ fn a_short_anchor_inspector_scrolls_to_the_selected_anchors_actions() {
     panel.click("Make Smooth");
     let anchor = readout(&panel.app()).anchor.unwrap();
     assert!(anchor.lengths.iter().all(|length| *length > 0.0));
+}
+
+/// The Anchor Inspector's anchor fields with what each test types: the field's name, which of the fields with that name
+/// it is (In, then Out) and the text typed.
+const ANCHOR_TYPED: [(&str, usize, &str); 6] =
+    [("X", 0, "40"), ("Y", 0, "60"), ("Length", 0, "30"), ("Angle", 0, "45"), ("Length", 1, "25"), ("Angle", 1, "200")];
+
+/// An app whose open path's middle anchor is direct-selected and has both handles, from Make Smooth.
+fn app_with_smooth_anchor() -> VectorcraftApp {
+    let mut app = app();
+    let r = app.run("path.create", json!({"anchors": [{"x": 10, "y": 10}, {"x": 110, "y": 10}, {"x": 110, "y": 110}], "closed": false})).unwrap();
+    let id = vectorcraft_doc::NodeId(r["id"].as_u64().unwrap());
+    app.session
+        .select(|_, sel| {
+            sel.set([id]);
+            sel.anchors.insert(id, [(0, 1)].into_iter().collect());
+        })
+        .unwrap();
+    app.run("addon.pathtools.smooth", json!({})).unwrap();
+    app
+}
+
+fn undo_len(app: &VectorcraftApp) -> usize {
+    app.session.active().unwrap().history.undo.len()
+}
+
+#[test]
+fn canceling_an_anchor_field_restores_the_anchor_and_enter_is_one_undo_step() {
+    for (label, nth, text) in ANCHOR_TYPED {
+        for cancel in [false, true] {
+            let mut panel = Panel::new(app_with_smooth_anchor(), super::show);
+            let doc = panel.app().session.active().unwrap().doc.clone();
+            let undo = undo_len(&panel.app());
+            panel.click_role_nth(label, Role::SPIN_BUTTON, nth);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(text);
+            panel.frame();
+            let proposed = panel.app().session.active().unwrap().doc.clone();
+            assert_ne!(proposed, doc, "{label} {nth} changes the anchor while typing");
+            let shown = readout(&panel.app()).anchor.unwrap();
+            panel.key(if cancel { Key::Escape } else { Key::Enter }, Modifiers::NONE);
+            panel.frame();
+            assert!(panel.shows(label), "{label} {nth}: the panel stays open");
+            let app = panel.app();
+            if cancel {
+                assert_eq!(app.session.active().unwrap().doc, doc, "{label} {nth} restores the anchor on Escape");
+                assert_eq!(undo_len(&app), undo, "{label} {nth}: Escape leaves no undo step");
+            } else {
+                // Enter applies the typed value once more, which can move a handle by a rounding error.
+                let kept = readout(&app).anchor.unwrap();
+                let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+                let angles = kept.angles.iter().zip(shown.angles).all(|(a, b)| a.zip(b).is_some_and(|(a, b)| near(a, b)));
+                let lengths = kept.lengths.iter().zip(shown.lengths).all(|(a, b)| near(*a, b));
+                assert!(near(kept.x, shown.x) && near(kept.y, shown.y) && lengths && angles, "{label} {nth}: Enter keeps the edit");
+                assert_eq!(undo_len(&app), undo + 1, "{label} {nth}: the edit is one undo step");
+            }
+        }
+    }
+}
+
+#[test]
+fn canceling_points_per_segment_restores_its_value_and_enter_keeps_it() {
+    for cancel in [false, true] {
+        let mut panel = Panel::new(app_with_smooth_anchor(), super::show);
+        let undo = undo_len(&panel.app());
+        panel.click_role("Points per segment", Role::SPIN_BUTTON);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("5");
+        panel.key(if cancel { Key::Escape } else { Key::Enter }, Modifiers::NONE);
+        panel.frame();
+        assert!(panel.shows("Points per segment"), "the panel stays open");
+        let kept = if cancel { 1 } else { 5 };
+        assert_eq!(panel.app().addon_panels.inspector.points_per_segment, kept, "canceled: {cancel}");
+        assert_eq!(undo_len(&panel.app()), undo, "the field adds no undo step");
+    }
 }
 
 /// Runs `f` on the held options dialog, `None` when none is open.
