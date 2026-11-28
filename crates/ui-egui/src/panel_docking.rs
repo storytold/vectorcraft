@@ -518,6 +518,22 @@ fn flyout_tab(layout: &Layout<String>, panel: &str) -> Option<String> {
         .map(|front| front.to_string())
 }
 
+/// The actions that expand each floating window the pass made from part of a column collapsed to
+/// icons, so a group or tab dragged out of an icon column floats as an expanded panel with its tabs
+/// in the window. A whole icon column floated stays collapsed.
+fn floated_from_icons(before: &Layout<String>, after: &Layout<String>) -> Vec<Action<String>> {
+    after
+        .floating
+        .iter()
+        .filter(|window| window.column.iconic && !before.floating.iter().any(|old| old.id == window.id))
+        .filter_map(|window| {
+            let first = window.panels().next()?;
+            let (_, column) = column_of(before, first)?;
+            (column.iconic && column.panels().count() > window.panels().count()).then(|| Action::set_iconic(first.clone(), false))
+        })
+        .collect()
+}
+
 /// Show `panel` as `window.panel` does, but leave it be when it can be seen already ([`visible`]):
 /// a command that opens a panel to work in (Edit › Color Settings…) never puts it away. A flyout
 /// keeps the name of the icon that opened it after another of its tabs is clicked, so a panel whose
@@ -1374,12 +1390,19 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, keeps_tools: boo
     app.dock_rt.rails = rails;
     // A workspace a command switched to or changed in this pass (`Workspace::replace`) stays; the
     // pass's edits were to the one it replaced.
+    let mut expand = Vec::new();
     if app.ui.dock_workspace.revision() == revision {
-        app.ui.dock_workspace = workspace;
+        let before = std::mem::replace(&mut app.ui.dock_workspace, workspace);
+        expand = floated_from_icons(before.layout(), layout_of(&app.ui));
     }
     // A command of this pass that opened or closed a flyout wins over the area's own change.
     if app.ui.open_panel == flyout_before {
         app.ui.open_panel = flyout;
+    }
+    if !expand.is_empty()
+        && let Err(error) = apply(app, None, expand)
+    {
+        app.status(error);
     }
     if output.error.is_some() {
         Arc::make_mut(&mut app.ui.dock_workspace).replace(default_workspace(&[]));
