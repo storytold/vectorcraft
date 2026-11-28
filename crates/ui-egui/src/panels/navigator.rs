@@ -1,23 +1,31 @@
-//! Navigator panel: a thumbnail of the document (rendered with `Renderer::render_region_with`,
-//! cached by document revision, off the UI thread for heavy documents and not during drags: see
-//! [`crate::thumb_worker`]) with the view box you drag to pan, zoom out/in buttons, a zoom slider
-//! and a zoom field. Panel Options… sets the view box's color and whether the thumbnail draws
-//! dashed lines as solid lines, and the panel menu's View Artboard Contents Only (on by default)
-//! limits the thumbnail to the art inside the artboards ([`PanelOptions`]).
+//! Navigator panel: the framework's [`NavigatorPanel`] (preview box with the view box you drag to
+//! pan, zoom out/in buttons, a zoom slider and a zoom field) over a thumbnail of the document
+//! rendered with `Renderer::render_region_with` and kept by the framework's [`Thumbnails`]: made on
+//! a lane thread, held while an interaction is open. Panel Options… sets the view box's color and
+//! whether the thumbnail draws dashed lines as solid lines, and the panel menu's View Artboard
+//! Contents Only (on by default) limits the thumbnail to the art inside the artboards
+//! ([`PanelOptions`]).
 
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
-use egui::{Color32, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use craft::behavior::CanvasView;
+use craft::ui::canvas::{AppPaint, NavigatorPreview, ProxyColor};
+use craft::ui::contract::Bind;
+use craft::ui::menu::PanelRow;
+use craft::ui::patterns::canvas::NavigatorPanel;
+use craft::ui::primitives::{LoadedPicture, Priority, Revision, ThumbPaint, ThumbRender, ThumbRequest, ThumbSource, ThumbnailOptions, Thumbnails};
+use craft::ui::runtime::commands::{CommandRef, CommandState, CommandStates};
+use craft::ui::runtime::env::Env;
+use craft::ui::style::StyleCx;
+use egui::{Color32, Rect, Shape, Ui, pos2};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vectorcraft_color::Color;
 use vectorcraft_doc::LAYER_COLORS;
-use vectorcraft_geom::{Point, Rect as DRect};
+use vectorcraft_geom::Rect as DRect;
 
-use crate::VectorcraftApp;
-use crate::theme::Tokens;
-use crate::thumb_worker::{Settle, ThumbWorker};
-use crate::widgets::{self, menu_item};
+use crate::{CanvasCache, VectorcraftApp};
 
 /// The view box's color by default (Light Red, the first of [`view_box_colors`]).
 pub const VIEW_BOX_RED: [u8; 3] = [0xff, 0x30, 0x30];
@@ -62,14 +70,6 @@ impl Default for PanelOptions {
     }
 }
 
-impl PanelOptions {
-    /// The color the view box is drawn in: [`Self::color`], or Light Red when it is not a color.
-    pub fn view_box(&self) -> Color32 {
-        let [r, g, b] = resolve(&self.color).unwrap_or(VIEW_BOX_RED);
-        Color32::from_rgb(r, g, b)
-    }
-}
-
 /// `ui.navigatorPanelOptions {color?, solidDashes?, viewArtboardContentsOnly?}`: with none, open
 /// Panel Options on the panel's options; otherwise set the ones given and answer the options.
 pub fn set_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
@@ -97,140 +97,113 @@ pub fn set_options(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String>
     Ok(serde_json::to_value(&app.ui.navigator_panel).unwrap_or_default())
 }
 
-/// What a navigator image shows: document `uid` at `revision`, `w`×`h` pixels, the artboards only,
-/// dashed lines drawn as solid lines.
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct ImageKey {
+/// The id of the command both panel-menu rows run.
+const OPTIONS_COMMAND: &str = "ui.navigatorPanelOptions";
+
+/// The panel menu's View Artboard Contents Only row while the option is `on`: it sets the opposite.
+fn contents_only_row(on: bool) -> CommandRef {
+    CommandRef::with_params(OPTIONS_COMMAND, json!({"viewArtboardContentsOnly": !on}))
+}
+
+/// The panel menu's Panel Options… row.
+fn options_row() -> CommandRef {
+    CommandRef::with_params(OPTIONS_COMMAND, json!({}))
+}
+
+/// The Navigator panel menu's rows.
+pub(crate) fn menu_rows(app: &VectorcraftApp) -> Vec<PanelRow> {
+    let on = app.ui.navigator_panel.view_artboard_contents_only;
+    vec![PanelRow::Command(contents_only_row(on)), PanelRow::Command(options_row())]
+}
+
+/// Titles, checks and enabled state of the panel menu's rows.
+pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
+    let on = app.ui.navigator_panel.view_artboard_contents_only;
+    states.set(contents_only_row(on), CommandState::new().title(tl!("View Artboard Contents Only")).checked(on).enabled(true));
+    states.set(options_row(), CommandState::new().title(tl!("Panel Options…")).enabled(true));
+}
+
+/// What a navigator picture slot shows: document `uid`, the artboards only, dashed lines drawn as
+/// solid lines. The document's revision and the region are the picture's version
+/// ([`NavThumbs::revision`]), so a new revision replaces the picture of the same slot and the old
+/// one stays as its stand-in until the new one lands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct NavKey {
     uid: u64,
-    revision: u64,
-    w: u32,
-    h: u32,
     artboard_only: bool,
     solid_dashes: bool,
 }
 
-#[derive(Default)]
-struct Cache {
-    /// Renders heavy documents' images (None: on this thread).
-    worker: Option<ThumbWorker<(), (ImageKey, DRect)>>,
-    worker_started: bool,
-    /// The region shown for (uid, revision, artboard only): the art bounds walk the whole document.
-    region: Option<((u64, u64, bool), DRect)>,
-    /// The image shown: what it shows and the document rect it covers.
-    shown: Option<(ImageKey, DRect)>,
-    tex: Option<egui::TextureHandle>,
-    /// The image the worker is making.
-    pending: Option<ImageKey>,
-    /// How long the last image took: past [`HEAVY_MS`] the next goes to the worker.
-    last_ms: f64,
-    settle: Settle,
-    /// Images made (tests count them).
-    renders: u64,
+/// The slot of document `uid` under `options`.
+fn nav_key(uid: u64, options: &PanelOptions) -> NavKey {
+    NavKey { uid, artboard_only: options.view_artboard_contents_only, solid_dashes: options.solid_dashes }
 }
 
-/// An image that took longer than this (ms) makes the next one render off the UI thread.
-const HEAVY_MS: f64 = 8.0;
-
-thread_local! {
-    static CACHE: crate::graphics::TexCache<Cache> = crate::graphics::TexCache::default();
+/// The color the view box is drawn in: [`PanelOptions::color`], or Light Red when it is not a color.
+fn proxy_color(options: &PanelOptions) -> ProxyColor {
+    ProxyColor::Custom(resolve(&options.color).unwrap_or(VIEW_BOX_RED))
 }
 
-impl Cache {
-    /// Upload image `r` showing `key` over `region`.
-    fn upload(&mut self, ctx: &egui::Context, key: ImageKey, region: DRect, r: &vectorcraft_render::Rendered, ms: f64) {
-        let img = crate::canvas::color_image(r);
-        match &mut self.tex {
-            Some(tx) => tx.set(img, egui::TextureOptions::LINEAR),
-            None => self.tex = Some(ctx.load_texture("navigator", img, egui::TextureOptions::LINEAR)),
-        }
-        self.shown = Some((key, region));
-        self.last_ms = ms;
-        self.renders += 1;
+/// The document's navigator picture at one revision over one region.
+struct NavThumbs {
+    doc: Arc<vectorcraft_doc::Document>,
+    revision: u64,
+    region: DRect,
+}
+
+impl NavThumbs {
+    /// The source of `doc` at `revision`, over `region` (document units).
+    fn new(doc: &Arc<vectorcraft_doc::Document>, revision: u64, region: DRect) -> Self {
+        Self { doc: doc.clone(), revision, region }
+    }
+}
+
+impl ThumbSource<NavKey> for NavThumbs {
+    fn revision(&self, _key: &NavKey, _request: &ThumbRequest) -> Revision {
+        let mut hasher = DefaultHasher::new();
+        self.revision.hash(&mut hasher);
+        [self.region.x0, self.region.y0, self.region.x1, self.region.y1].map(f64::to_bits).hash(&mut hasher);
+        Revision::new(hasher.finish())
     }
 
-    /// The region (artboards, and the art unless `artboard_only`, with a margin) to show
-    /// `doc` (`uid` at `revision`) in. While `busy` (a drag) the last one of the document stays,
-    /// rather than walking the whole document every frame.
-    fn region(&mut self, doc: &vectorcraft_doc::Document, uid: u64, revision: u64, artboard_only: bool, busy: bool) -> DRect {
-        let key = (uid, revision, artboard_only);
-        if let Some((k, r)) = self.region
-            && (k == key || (busy && k.0 == uid && k.2 == artboard_only))
-        {
-            return r;
-        }
-        let mut region = doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b)).unwrap_or(DRect::new(0.0, 0.0, 612.0, 792.0));
-        if !artboard_only && let Some(b) = doc.art_bounds() {
-            region = region.union(b);
-        }
-        let region = region.inflate(region.width() * 0.04 + 4.0, region.height() * 0.04 + 4.0);
-        self.region = Some((key, region));
-        region
+    fn render(&self, key: &NavKey, request: &ThumbRequest) -> ThumbRender {
+        let (doc, region, key) = (self.doc.clone(), self.region, *key);
+        // The longest side of the region gets `side` pixels.
+        let scale = f64::from(request.side) / region.width().max(region.height()).max(f64::EPSILON);
+        ThumbRender::Later(Box::new(move |_cancel| {
+            let options = image_options(key);
+            let renderer = if key.solid_dashes { &SOLID_RENDERER } else { &NAV_RENDERER };
+            let image = renderer.with(|r| r.borrow_mut().render_region_with(&doc, region, scale, &options));
+            Ok(LoadedPicture::Image(crate::canvas::color_image(&image)))
+        }))
     }
+}
 
-    /// Bring the image up to `key` (`doc` over `region`): heavy documents render on the worker
-    /// while the last image stays, and nothing renders during a drag (`busy`) or before the
-    /// document has settled, unless there's no image of it yet.
-    fn update(&mut self, ctx: &egui::Context, doc: &Arc<vectorcraft_doc::Document>, key: ImageKey, region: DRect, busy: bool) {
-        if !self.worker_started {
-            self.worker_started = true;
-            self.worker = ThumbWorker::spawn(ctx, "navigator");
-        }
-        let done = match self.worker.as_ref().map(ThumbWorker::poll) {
-            Some(Some(done)) => done,
-            Some(None) => {
-                // The thread is gone: render here from now on.
-                (self.worker, self.pending) = (None, None);
-                vec![]
-            }
-            None => vec![],
-        };
-        for d in done {
-            if self.pending == Some(d.key.0) {
-                self.pending = None;
-            }
-            if let Some(img) = d.img {
-                self.upload(ctx, d.key.0, d.key.1, &img, d.ms);
-            }
-        }
-        let shown = self.shown.map(|(k, _)| k);
-        if shown == Some(key) || self.pending == Some(key) {
-            return;
-        }
-        let have = self.tex.is_some() && shown.is_some_and(|k| k.uid == key.uid);
-        let now = ctx.input(|i| i.time);
-        if have && (busy || !self.settle.settled(ctx, key.uid, key.revision, now)) {
-            return;
-        }
-        let s = (key.w as f64 / region.width()).min(key.h as f64 / region.height());
-        let opts = image_options(key);
-        let heavy = self.last_ms > HEAVY_MS && have;
-        if heavy && let Some(w) = &self.worker {
-            let (doc, opts) = (doc.clone(), opts.clone());
-            let job = move |r: &mut vectorcraft_render::Renderer| {
-                if opts.solid_dashes {
-                    SOLID_RENDERER.with(|solid| solid.borrow_mut().render_region_with(&doc, region, s, &opts))
-                } else {
-                    r.render_region_with(&doc, region, s, &opts)
-                }
-            };
-            if w.submit((), (key, region), Box::new(move |r| Some(job(r)))) {
-                self.pending = Some(key);
-                return;
-            }
-            self.worker = None;
-        }
-        let t0 = crate::now_ms();
-        let renderer = if key.solid_dashes { &SOLID_RENDERER } else { &NAV_RENDERER };
-        let img = renderer.with(|r| r.borrow_mut().render_region_with(doc, region, s, &opts));
-        self.upload(ctx, key, region, &img, crate::now_ms() - t0);
+/// The region (artboards, and the art unless `artboard_only`, with a margin) to show `doc` (`uid`
+/// at `revision`) in; the art bounds walk the whole document, so the last one is kept in `cache`
+/// per revision. While `busy` (a drag) the last one of the document stays: the picture held for
+/// the drag was made for it.
+fn region(doc: &vectorcraft_doc::Document, uid: u64, revision: u64, artboard_only: bool, busy: bool, cache: &mut CanvasCache) -> DRect {
+    let key = (uid, revision, artboard_only);
+    if let Some((k, r)) = cache.nav_region
+        && (k == key || (busy && k.0 == uid && k.2 == artboard_only))
+    {
+        return r;
     }
+    let mut region = doc.artboards.iter().map(|a| a.rect).reduce(|a, b| a.union(b)).unwrap_or(DRect::new(0.0, 0.0, 612.0, 792.0));
+    if !artboard_only && let Some(b) = doc.art_bounds() {
+        region = region.union(b);
+    }
+    let region = region.inflate(region.width() * 0.04 + 4.0, region.height() * 0.04 + 4.0);
+    cache.nav_region = Some((key, region));
+    region
 }
 
 /// How the image `key` names is drawn: as exported (template layers and guides left out),
 /// transparent, with images far smaller than they are sampling their mip levels, with Draw
 /// Dashed Lines as Solid Lines, dashed strokes without their dashes, and with View Artboard
 /// Contents Only, the art cut to the artboards (none in the gaps between them).
-fn image_options(key: ImageKey) -> vectorcraft_render::RenderOptions {
+fn image_options(key: NavKey) -> vectorcraft_render::RenderOptions {
     vectorcraft_render::RenderOptions {
         skip_templates: true,
         image_mips: true,
@@ -241,7 +214,7 @@ fn image_options(key: ImageKey) -> vectorcraft_render::RenderOptions {
 }
 
 thread_local! {
-    /// Renders light documents' images on the UI thread.
+    /// Renders the pictures on the thread of the lane that makes them.
     static NAV_RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
     /// Renders the images with Draw Dashed Lines as Solid Lines on, on the thread that renders
     /// them: each renderer draws every image it makes with one setting, so the art it keeps from
@@ -249,152 +222,70 @@ thread_local! {
     static SOLID_RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
 }
 
-/// Map a document point into the thumbnail rect (region → rect, aspect preserved).
-pub fn doc_to_thumb(region: DRect, thumb: Rect, p: Point) -> egui::Pos2 {
-    let s = (thumb.width() as f64 / region.width()).min(thumb.height() as f64 / region.height());
-    let ox = thumb.left() as f64 + (thumb.width() as f64 - region.width() * s) / 2.0;
-    let oy = thumb.top() as f64 + (thumb.height() as f64 - region.height() * s) / 2.0;
-    pos2((ox + (p.x - region.x0) * s) as f32, (oy + (p.y - region.y0) * s) as f32)
+/// `view` with its centre moved into the region's frame: the framework's document is
+/// `(0, 0)..size`, the app's starts at the region's corner.
+fn shifted(mut view: CanvasView, region: DRect) -> CanvasView {
+    view.center.x -= region.x0;
+    view.center.y -= region.y0;
+    view
 }
 
-/// Inverse of [`doc_to_thumb`].
-pub fn thumb_to_doc(region: DRect, thumb: Rect, p: egui::Pos2) -> Point {
-    let s = (thumb.width() as f64 / region.width()).min(thumb.height() as f64 / region.height());
-    let ox = thumb.left() as f64 + (thumb.width() as f64 - region.width() * s) / 2.0;
-    let oy = thumb.top() as f64 + (thumb.height() as f64 - region.height() * s) / 2.0;
-    Point::new(region.x0 + (p.x as f64 - ox) / s, region.y0 + (p.y as f64 - oy) / s)
-}
-
-/// The view box in the thumbnail: the corners of the canvas `canvas` showing view `v` (with the
-/// interface zoomed by `ui_zoom`), mapped into the document (turned with the view) and then into
-/// the thumbnail, cut to the thumbnail grown by a point. Fewer than three points when the view is
-/// outside the thumbnail.
-fn view_box(region: DRect, thumb: Rect, canvas: Rect, v: &crate::state::View, ui_zoom: f32) -> Vec<egui::Pos2> {
-    let xf = crate::canvas::Xf::at(canvas, v, ui_zoom);
-    let mut pts: Vec<egui::Pos2> = [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()]
-        .iter()
-        .map(|c| doc_to_thumb(region, thumb, xf.to_doc(*c)))
-        .collect();
-    let b = thumb.expand(1.0);
-    // One edge of `b` at a time: how far a point is inside it (negative outside).
-    let edges: [fn(egui::Pos2, Rect) -> f32; 4] = [|p, b| p.x - b.left(), |p, b| b.right() - p.x, |p, b| p.y - b.top(), |p, b| b.bottom() - p.y];
-    for inside in edges {
-        let Some(&last) = pts.last() else { break };
-        let mut out = vec![];
-        let mut prev = last;
-        for &p in &pts {
-            let (s0, s1) = (inside(prev, b), inside(p, b));
-            if (s0 >= 0.0) != (s1 >= 0.0) {
-                // Where the side from `prev` to `p` crosses the edge.
-                out.push(prev + (p - prev) * (s0 / (s0 - s1)));
-            }
-            if s1 >= 0.0 {
-                out.push(p);
-            }
-            prev = p;
-        }
-        pts = out;
-    }
-    pts
-}
-
-/// Slider position (0..1) ↔ zoom percent on a log range, 3.13 %–64 000 %.
-pub fn zoom_to_slider(z: f64) -> f64 {
-    ((z.clamp(3.13, 64000.0)).ln() - 3.13f64.ln()) / (64000f64.ln() - 3.13f64.ln())
-}
-pub fn slider_to_zoom(t: f64) -> f64 {
-    (3.13f64.ln() + t.clamp(0.0, 1.0) * (64000f64.ln() - 3.13f64.ln())).exp()
+/// The `view.setZoom` params for `edited`, a canvas view of the region's frame at `ui_scaling`: the
+/// zoom as the status bar shows it (with `print` screen points to an inch at 100%,
+/// [`crate::state::print_ppi`]), and the centre back in document units.
+fn view_params(edited: &CanvasView, region: DRect, print: Option<f64>, ui_scaling: f32) -> Value {
+    let zoom = crate::state::View::zoom_of_canvas(edited, ui_scaling);
+    json!({"zoom": crate::state::zoom_display_percent(zoom, print), "center": [edited.center.x + region.x0, edited.center.y + region.y0]})
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let t = Tokens::get(ui.ctx());
     let Some(st) = app.session.active() else {
         super::empty_state(ui, "map", tl!("No document"), tl!("Open a document to navigate it."));
         return;
     };
-    let artboard_only = app.ui.navigator_panel.view_artboard_contents_only;
-    let doc = st.doc.clone();
-    let (uid, revision) = (st.uid, st.revision);
-    // A drag in progress: every pointer move makes a new revision. The image waits for its end.
+    let (doc, uid, revision) = (st.doc.clone(), st.uid, st.revision);
+    // A drag in progress: every pointer move makes a new revision. The picture waits for its end.
     let busy = st.interaction.is_some() || app.session.tool_busy();
-    let region = CACHE.with(|c| c.borrow_mut().region(&doc, uid, revision, artboard_only, busy));
-    let w = ui.available_width();
-    let h = (w * 0.72).clamp(100.0, 200.0);
-    let (thumb, resp) = ui.allocate_exact_size(vec2(w, h), Sense::click_and_drag());
-    ui.painter().rect_filled(thumb, 0.0, t.pasteboard);
-    let ppp = ui.ctx().pixels_per_point();
-    let (pw, ph) = ((w * ppp) as u32, (h * ppp) as u32);
-    let key = ImageKey { uid, revision, w: pw, h: ph, artboard_only, solid_dashes: app.ui.navigator_panel.solid_dashes };
-    let (tex, tex_region) = CACHE.with(|c| {
-        let mut c = c.borrow_mut();
-        c.update(ui.ctx(), &doc, key, region, busy);
-        // Never another document's image.
-        match c.shown {
-            Some((k, r)) if k.uid == uid => (c.tex.clone(), r),
-            _ => (None, region),
-        }
+    let Some(view) = app.canvas_view() else { return };
+    let options = app.ui.navigator_panel.clone();
+    let key = nav_key(uid, &options);
+    let region = region(&doc, uid, revision, key.artboard_only, busy, &mut app.canvas);
+    let given = shifted(view, region);
+    let env = Env::of(ui);
+    let pasteboard = StyleCx::of_env(ui.ctx(), &env).color(env.tokens.color.surface.canvas).egui();
+    let paint = AppPaint::new(|cx, fitted: Rect| {
+        let ctx = cx.painter.ctx();
+        // Artboards (white) over the pasteboard, under the art, like the canvas.
+        let scale = fitted.width() / region.width() as f32;
+        let at = |x: f64, y: f64| pos2(fitted.min.x + (x - region.x0) as f32 * scale, fitted.min.y + (y - region.y0) as f32 * scale);
+        let mut shapes = vec![Shape::rect_filled(fitted, 0.0, pasteboard)];
+        shapes.extend(
+            doc.artboards
+                .iter()
+                .map(|a| Shape::rect_filled(Rect::from_two_pos(at(a.rect.x0, a.rect.y0), at(a.rect.x1, a.rect.y1)), 0.0, Color32::WHITE)),
+        );
+        cx.data_shapes(shapes);
+        let thumbs = Thumbnails::<NavKey>::in_context(ctx, "navigator", ThumbnailOptions::new());
+        thumbs.hold(busy);
+        let source = NavThumbs::new(&doc, revision, region);
+        let request = ThumbRequest::for_cell(fitted.width().max(fitted.height()), ctx.pixels_per_point());
+        let state = thumbs.state(ctx, &source, &key, &request, Priority::VISIBLE);
+        thumbs.paint(cx, fitted, &state, &ThumbPaint::default().checker(false));
     });
-    // Artboards (white) under the art thumbnail, like the canvas.
-    for a in &doc.artboards {
-        let r = Rect::from_min_max(doc_to_thumb(region, thumb, a.rect.origin()), doc_to_thumb(region, thumb, Point::new(a.rect.x1, a.rect.y1)));
-        ui.painter().rect_filled(r, 0.0, Color32::WHITE);
+    // PLAN: assumed `DRect::size()` is the `kurbo::Size` the panel takes
+    let out = NavigatorPanel::new(tl!("Navigator"), Bind::given(given), region.size())
+        .proxy(proxy_color(&options))
+        .preview(NavigatorPreview::Paint(paint))
+        .show(ui);
+    if let Some(edited) = out.view.value()
+        && *edited != given
+    {
+        let print = app.print_ppi();
+        let scaling = app.ui_scaling();
+        app.run("view.setZoom", view_params(edited, region, print, scaling)).ok();
     }
-    if let Some(tex) = tex {
-        let tl = doc_to_thumb(region, thumb, tex_region.origin());
-        let br = doc_to_thumb(region, thumb, Point::new(tex_region.x1, tex_region.y1));
-        ui.painter().image(tex.id(), Rect::from_min_max(tl, br), Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
-    }
-    // The view box: the canvas's corners in the document, turned with the view, cut to the thumbnail.
-    let view = app.view().copied();
-    if let (Some(v), Some(cr)) = (view, app.canvas_rect) {
-        let box_points = view_box(region, thumb, cr, &v, app.canvas_ui_zoom);
-        if box_points.len() > 2 {
-            let color = app.ui.navigator_panel.view_box();
-            ui.painter().with_clip_rect(thumb).add(egui::Shape::closed_line(box_points, Stroke::new(1.5, color)));
-        }
-        if (resp.dragged() || resp.clicked())
-            && let Some(p) = resp.interact_pointer_pos()
-        {
-            let c = thumb_to_doc(region, thumb, p);
-            app.run("view.setZoom", json!({"zoom": v.zoom * 100.0, "center": [c.x, c.y]})).ok();
-        }
-    }
-    ui.painter().rect_stroke(thumb, 0.0, Stroke::new(1.0, t.border), StrokeKind::Outside);
-    // Zoom controls.
-    let zoom = view.map(|v| v.zoom * 100.0).unwrap_or(100.0);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        let mut z = None;
-        if let Some(v) = widgets::plain_field(ui, "nav-zoom", zoom, "%", 2, 64.0) {
-            z = Some(v);
-        }
-        if widgets::icon_button(ui, "dc-zoom-small", tl!("Zoom Out"), false, 22.0).clicked() {
-            app.run("view.zoomOut", json!({})).ok();
-        }
-        let sw = (ui.available_width() - 30.0).max(40.0);
-        let track = |_: f32| t.input_border;
-        let shown = widgets::SliderValue::field(zoom, 3.13..=64000.0, "%", 2);
-        if let (Some(v), phase) = widgets::color_slider_valued(ui, "nav-slider", tl!("Zoom"), Some(shown), zoom_to_slider(zoom) as f32, sw, &track)
-            && phase != widgets::Live::Idle
-        {
-            z = Some(slider_to_zoom(v as f64));
-        }
-        if widgets::icon_button(ui, "dc-zoom-large", tl!("Zoom In"), false, 22.0).clicked() {
-            app.run("view.zoomIn", json!({})).ok();
-        }
-        if let Some(z) = z {
-            app.run("view.setZoom", json!({"zoom": z.clamp(3.13, 64000.0)})).ok();
-        }
-    });
-}
-
-pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let ab = app.ui.navigator_panel.view_artboard_contents_only;
-    if menu_item(ui, tl!("View Artboard Contents Only"), true, ab) {
-        app.run("ui.navigatorPanelOptions", json!({"viewArtboardContentsOnly": !ab})).ok();
-    }
-    if menu_item(ui, tl!("Panel Options…"), true, false) {
-        app.run("ui.navigatorPanelOptions", json!({})).ok();
+    if let Some(invalid) = out.invalid_zoom {
+        app.status(invalid.message(&env));
     }
 }
 
@@ -402,173 +293,125 @@ pub fn menu(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use super::*;
 
-    /// Screen readers get the Zoom slider's percent as the zoom field beside it shows it, on the
-    /// slider's 3.13% to 64000% range.
     #[test]
-    fn screen_readers_get_the_zoom_the_field_shows() {
-        use crate::widgets::accessibility_tests::{slider_value, tree};
+    fn navigator_reports_a_malformed_zoom_entry() {
+        assert_malformed_zoom_entry_reported(show);
+    }
+
+    #[test]
+    fn status_bar_reports_a_malformed_zoom_entry() {
+        assert_malformed_zoom_entry_reported(crate::chrome::status_bar);
+    }
+
+    fn assert_malformed_zoom_entry_reported(draw: fn(&mut VectorcraftApp, &mut Ui)) {
+        crate::i18n::set_current(crate::i18n::Lang::EN);
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
-        app.run("view.setZoom", json!({"zoom": 250})).unwrap();
-        let shown = tree(|ui| show(&mut app, ui));
-        assert_eq!(slider_value(&shown, "Zoom"), (Some(250.0), Some(3.13), Some(64000.0), Some("250%".to_string())));
-    }
-
-    #[test]
-    fn thumb_mapping_roundtrip() {
-        let region = DRect::new(0.0, 0.0, 200.0, 100.0);
-        let thumb = Rect::from_min_size(pos2(10.0, 10.0), vec2(100.0, 100.0));
-        let p = doc_to_thumb(region, thumb, Point::new(100.0, 50.0));
-        assert!((p.x - 60.0).abs() < 1e-3 && (p.y - 60.0).abs() < 1e-3);
-        let q = thumb_to_doc(region, thumb, p);
-        assert!((q.x - 100.0).abs() < 1e-6 && (q.y - 50.0).abs() < 1e-6);
-    }
-
-    /// In a view turned 90° the red view box outlines what the canvas shows: the canvas's corners
-    /// mapped into the document and then into the thumbnail.
-    #[test]
-    fn the_view_box_turns_with_the_view() {
-        use vectorcraft_engine::Session;
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-        let canvas = Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
-        app.canvas_rect = Some(canvas);
-        app.run("view.setZoom", json!({"zoom": 400, "center": [200, 150]})).unwrap();
-        app.run("view.rotate", json!({"angle": 90})).unwrap();
-        let ctx = egui::Context::default();
-        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
-        out.textures_delta.clear();
-        // The thumbnail is the rectangle filled with the pasteboard color.
-        let pasteboard = Tokens::get(&ctx).pasteboard;
-        let thumb = out
-            .shapes
-            .iter()
-            .find_map(|c| match &c.shape {
-                egui::Shape::Rect(r) if r.fill == pasteboard => Some(r.rect),
-                _ => None,
-            })
-            .expect("the thumbnail");
-        let red = egui::epaint::ColorMode::Solid(Color32::from_rgb(0xff, 0x30, 0x30));
-        let drawn: Vec<Vec<egui::Pos2>> = out
-            .shapes
-            .into_iter()
-            .filter_map(|c| match c.shape {
-                egui::Shape::Path(p) if p.closed && p.stroke.color == red => Some(p.points),
-                _ => None,
-            })
-            .collect();
-        let [points] = &drawn[..] else { panic!("one view box: {drawn:?}") };
-        let region = CACHE.with(|c| c.borrow().region.unwrap().1);
-        let xf = crate::canvas::Xf::new(canvas, app.view().unwrap());
-        let want =
-            [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()].map(|c| doc_to_thumb(region, thumb, xf.to_doc(c)));
-        assert_eq!(points.len(), 4, "{points:?}");
-        assert!(points.iter().zip(&want).all(|(a, b)| a.distance(*b) < 0.5), "{points:?} is not {want:?}");
-    }
-
-    /// With the interface zoomed by Preferences › User Interface › UI Scaling, the view box still
-    /// outlines what the canvas shows: at 400% and UI Scaling 1.5×, a canvas 600 interface points
-    /// wide shows 600 × 1.5 / 4 document points.
-    #[test]
-    fn the_view_box_outlines_the_canvas_at_every_ui_scaling() {
-        use vectorcraft_engine::Session;
-        for ui_zoom in [0.75_f32, 1.5, 2.0] {
-            let mut app = VectorcraftApp::new(Session::new(), Default::default());
-            app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-            let canvas = Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
-            app.canvas_rect = Some(canvas);
-            app.canvas_ui_zoom = ui_zoom;
-            app.run("view.setZoom", json!({"zoom": 400, "center": [200, 150]})).unwrap();
-            let ctx = egui::Context::default();
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(&mut app, ui));
-            out.textures_delta.clear();
-            let pasteboard = Tokens::get(&ctx).pasteboard;
-            let thumb = out
-                .shapes
-                .iter()
-                .find_map(|c| match &c.shape {
-                    egui::Shape::Rect(r) if r.fill == pasteboard => Some(r.rect),
-                    _ => None,
-                })
-                .expect("the thumbnail");
-            let red = egui::epaint::ColorMode::Solid(Color32::from_rgb(0xff, 0x30, 0x30));
-            let drawn: Vec<Vec<egui::Pos2>> = out
-                .shapes
-                .into_iter()
-                .filter_map(|c| match c.shape {
-                    egui::Shape::Path(p) if p.closed && p.stroke.color == red => Some(p.points),
-                    _ => None,
-                })
-                .collect();
-            let [points] = &drawn[..] else { panic!("UI Scaling {ui_zoom}×: one view box: {drawn:?}") };
-            let region = CACHE.with(|c| c.borrow().region.unwrap().1);
-            // Each canvas corner is (its offset from the canvas's center) × UI Scaling / zoom
-            // document points from the view's center.
-            let k = f64::from(ui_zoom) / 4.0;
-            let want = [canvas.left_top(), canvas.right_top(), canvas.right_bottom(), canvas.left_bottom()].map(|c| {
-                let d = c - canvas.center();
-                doc_to_thumb(region, thumb, Point::new(200.0 + f64::from(d.x) * k, 150.0 + f64::from(d.y) * k))
-            });
-            assert_eq!(points.len(), 4, "UI Scaling {ui_zoom}×: {points:?}");
-            assert!(points.iter().zip(&want).all(|(a, b)| a.distance(*b) < 0.5), "UI Scaling {ui_zoom}×: {points:?} is not {want:?}");
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.view_mut().unwrap().rect = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(460.0, 260.0));
+        app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, draw);
+        panel.app().ui.status.clear();
+        panel.type_into("Zoom", "80..2");
+        {
+            let app = panel.app();
+            assert!((app.view().unwrap().zoom - 0.8).abs() < 1e-9, "applies the valid prefix");
+            assert!(app.ui.status.contains("Closest value inserted"), "reports the partial entry: {:?}", app.ui.status);
+        }
+        panel.app().ui.status.clear();
+        panel.type_into("Zoom", "200");
+        {
+            let app = panel.app();
+            assert!((app.view().unwrap().zoom - 2.0).abs() < 1e-9, "still accepts a valid entry");
+            assert!(!app.ui.status.contains("Closest value inserted"), "does not warn for a valid entry");
         }
     }
 
-    /// The panel menu's Panel Options… is enabled, and a click opens the Navigator Panel Options.
+    /// A centre edit of the shifted view reaches `view.setZoom` as the document point it shows, and
+    /// an unedited view's centre is shifted by the region's corner.
     #[test]
-    fn panel_options_opens_from_the_panel_menu() {
-        use crate::widgets::accessibility_tests::{named, tree};
+    fn a_navigator_edit_moves_the_view_to_the_document_point_it_shows() {
+        let region = DRect::new(-10.0, -20.0, 190.0, 180.0);
+        let canvas = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(600.0, 400.0));
+        let view = CanvasView::new(canvas, (200.0, 150.0).into(), 1.0);
+        let given = shifted(view, region);
+        assert_eq!((given.center.x, given.center.y), (210.0, 170.0), "the centre minus the region's corner");
+        let mut edited = given;
+        edited.center = (100.0, 100.0).into();
+        assert_eq!(view_params(&edited, region, None, 1.0)["center"], json!([90.0, 80.0]), "the edit plus the region's corner");
+    }
+
+    /// At UI Scaling 150% the panel's zoom field shows the zoom `view.setZoom` set, and a zoom typed into it is the
+    /// zoom the view gets, as at 100%: 200% gives the view the zoom `view.setZoom` gives for 200%.
+    #[test]
+    fn the_zoom_field_sets_the_typed_zoom_at_any_ui_scaling() {
         let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        // Menu rows pad their label where a check mark would go.
-        assert!(!named(&tree(|ui| menu(&mut app, ui)), "   Panel Options…").is_disabled());
-        let ctx = egui::Context::default();
-        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(240.0, 400.0)));
-        let raw = |events| egui::RawInput { events, screen_rect: screen, ..Default::default() };
-        let mut out = ctx.run_ui(raw(vec![]), |ui| menu(&mut app, ui));
-        out.textures_delta.clear();
-        let item = out
-            .shapes
-            .iter()
-            .find_map(|c| match &c.shape {
-                egui::Shape::Text(t) if t.galley.text().trim_start() == "Panel Options…" => Some(t.visual_bounding_rect().center()),
-                _ => None,
-            })
-            .expect("the menu item");
-        let button = |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-        ctx.run_ui(raw(vec![egui::Event::PointerMoved(item), button(true), button(false)]), |ui| menu(&mut app, ui)).textures_delta.clear();
-        assert_eq!(app.ui.dialog.as_ref().map(|d| d.kind.as_str()), Some(crate::dialogs::navigator_panel_options::KIND));
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.session.prefs.ui_scaling = 1.5;
+        app.view_mut().unwrap().rect = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(460.0, 260.0));
+        app.run("view.setZoom", json!({"zoom": 200})).unwrap();
+        let wanted = app.view().unwrap().zoom;
+        app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+        let mut panel = crate::tests::panel_harness::Panel::new(app, show);
+        assert!((panel.ctx().zoom_factor() - 1.5).abs() < 1e-6, "the interface is zoomed by UI Scaling");
+        let shown = |panel: &crate::tests::panel_harness::Panel| panel.value("Zoom").unwrap_or_default();
+        assert!(shown(&panel).starts_with("100"), "the field shows the zoom view.setZoom set: {}", shown(&panel));
+        panel.type_into("Zoom", "200");
+        let zoom = panel.app().view().unwrap().zoom;
+        assert!((zoom - wanted).abs() < 1e-9, "typing 200% gives the zoom of view.setZoom 200%: {zoom}, not {wanted}");
+        assert!(shown(&panel).starts_with("200"), "the field shows the typed zoom: {}", shown(&panel));
+    }
+
+    /// The panel menu's rows are titled, checked and enabled as the option says, and each row's
+    /// command flips the option or opens the options dialog.
+    #[test]
+    fn the_panel_menu_rows_check_and_open_what_they_name() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        let states = |app: &VectorcraftApp| {
+            let mut states = CommandStates::new();
+            menu_states(app, &mut states);
+            states
+        };
+        let rows = menu_rows(&app);
+        assert_eq!(rows.len(), 2);
+        let on = states(&app);
+        let toggle = contents_only_row(true);
+        assert_eq!(
+            on.get(&toggle),
+            Some(&CommandState::new().title(tl!("View Artboard Contents Only")).checked(true).enabled(true)),
+            "checked while the option is on"
+        );
+        assert_eq!(on.get(&options_row()), Some(&CommandState::new().title(tl!("Panel Options…")).enabled(true)));
+        app.run(&toggle.id, toggle.params.clone()).unwrap();
+        assert!(!app.ui.navigator_panel.view_artboard_contents_only, "the row turns the option off");
+        let off = states(&app);
+        assert_eq!(
+            off.get(&contents_only_row(false))
+                .map(|s| s == &CommandState::new().title(tl!("View Artboard Contents Only")).checked(false).enabled(true)),
+            Some(true)
+        );
+        let again = contents_only_row(false);
+        app.run(&again.id, again.params.clone()).unwrap();
+        assert!(app.ui.navigator_panel.view_artboard_contents_only, "the row turns it on again");
+        let options = options_row();
+        app.run(&options.id, options.params.clone()).unwrap();
+        let open = app.dialogs().is_some_and(|d| d.with(|h| h.is_open::<crate::dialogs::navigator_panel_options::NavigatorOptionsDialog>()));
+        assert!(open, "Panel Options… opens the dialog");
     }
 
     /// `ui.navigatorPanelOptions` sets the view box color and Draw Dashed Lines as Solid Lines: the
-    /// view box is drawn in that color (Light Red by default), and the thumbnail is made again with
-    /// the dashes left out. A value that is not a color, or not true or false, is refused and
-    /// changes nothing.
+    /// panel is given that color (Light Red by default) and the picture slot names the dashes. A
+    /// value that is not a color, or not true or false, is refused and changes nothing.
     #[test]
     fn panel_options_set_the_view_box_color_and_solid_dashes() {
-        use vectorcraft_engine::Session;
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
-        app.canvas_rect = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0)));
-        app.run("view.setZoom", json!({"zoom": 400, "center": [200, 150]})).unwrap();
-        let ctx = egui::Context::default();
-        // The view boxes drawn in `color` in one frame.
-        let boxes = |app: &mut VectorcraftApp, color: Color32| {
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
-            out.textures_delta.clear();
-            let want = egui::epaint::ColorMode::Solid(color);
-            out.shapes.into_iter().filter(|c| matches!(&c.shape, egui::Shape::Path(p) if p.closed && p.stroke.color == want)).count()
-        };
-        let (red, blue) = (Color32::from_rgb(0xff, 0x30, 0x30), Color32::from_rgb(0x4f, 0x80, 0xff));
-        assert_eq!((boxes(&mut app, red), boxes(&mut app, blue)), (1, 0), "Light Red by default");
-        let shown = || CACHE.with(|c| c.borrow().shown.map(|(k, _)| k.solid_dashes));
-        assert_eq!(shown(), Some(false));
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        assert_eq!(proxy_color(&app.ui.navigator_panel), ProxyColor::Custom(VIEW_BOX_RED), "Light Red by default");
+        assert!(!nav_key(1, &app.ui.navigator_panel).solid_dashes);
         let set = app.run("ui.navigatorPanelOptions", json!({"color": "light blue", "solidDashes": true})).unwrap();
         assert_eq!(set, json!({"color": "#4f80ff", "solidDashes": true, "viewArtboardContentsOnly": true}));
-        assert_eq!((boxes(&mut app, red), boxes(&mut app, blue)), (0, 1));
-        for _ in 0..12 {
-            boxes(&mut app, blue);
-        }
-        assert_eq!(shown(), Some(true), "the thumbnail is made again with solid dashes");
+        assert_eq!(proxy_color(&app.ui.navigator_panel), ProxyColor::Custom([0x4f, 0x80, 0xff]));
+        assert!(nav_key(1, &app.ui.navigator_panel).solid_dashes, "the picture is made again with solid dashes");
         let bad = [
             json!({"color": 12}),
             json!({"color": "#zz0000"}),
@@ -608,13 +451,13 @@ mod tests {
             d.insert(Some(l), 0, n).unwrap();
             d
         };
-        let key = ImageKey { uid: 1, revision: 1, w: 100, h: 100, artboard_only: false, solid_dashes: false };
-        let draw = |d: &Document, key: ImageKey| {
+        let key = NavKey { uid: 1, artboard_only: false, solid_dashes: false };
+        let draw = |d: &Document, key: NavKey| {
             vectorcraft_render::Renderer::new().render_region_with(d, DRect::new(0.0, 0.0, 100.0, 100.0), 1.0, &image_options(key)).pixels
         };
         let solid = draw(&line(false), key);
         assert_ne!(draw(&line(true), key), solid, "the dashes show without the option");
-        let on = ImageKey { solid_dashes: true, ..key };
+        let on = NavKey { solid_dashes: true, ..key };
         assert!(image_options(on).solid_dashes && !image_options(key).solid_dashes);
         assert_eq!(draw(&line(true), on), solid, "the dashes go with the option");
         assert_eq!(draw(&line(false), on), solid, "a solid stroke draws as it did");
@@ -636,38 +479,6 @@ mod tests {
         assert_eq!(set, json!({"color": "#ff3030", "solidDashes": false, "viewArtboardContentsOnly": false}));
         let back: crate::UiState = serde_json::from_value(serde_json::to_value(&app.ui).unwrap()).unwrap();
         assert!(!back.navigator_panel.view_artboard_contents_only, "a saved off stays off");
-    }
-
-    /// The panel menu's View Artboard Contents Only starts checked, and a click turns it off (the
-    /// same option `ui.navigatorPanelOptions` sets), then on again.
-    #[test]
-    fn view_artboard_contents_only_is_checked_in_the_panel_menu_and_a_click_toggles_it() {
-        use crate::widgets::accessibility_tests::{named, tree};
-        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
-        named(&tree(|ui| menu(&mut app, ui)), "✓ View Artboard Contents Only");
-        let ctx = egui::Context::default();
-        let screen = Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(240.0, 400.0)));
-        let raw = |events| egui::RawInput { events, screen_rect: screen, ..Default::default() };
-        let click = |app: &mut VectorcraftApp| {
-            let mut out = ctx.run_ui(raw(vec![]), |ui| menu(app, ui));
-            out.textures_delta.clear();
-            let item = out
-                .shapes
-                .iter()
-                .find_map(|c| match &c.shape {
-                    egui::Shape::Text(t) if t.galley.text().ends_with("View Artboard Contents Only") => Some(t.visual_bounding_rect().center()),
-                    _ => None,
-                })
-                .expect("the menu item");
-            let button =
-                |pressed| egui::Event::PointerButton { pos: item, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-            ctx.run_ui(raw(vec![egui::Event::PointerMoved(item), button(true), button(false)]), |ui| menu(app, ui)).textures_delta.clear();
-        };
-        click(&mut app);
-        assert!(!app.ui.navigator_panel.view_artboard_contents_only, "a click turns it off");
-        named(&tree(|ui| menu(&mut app, ui)), "   View Artboard Contents Only");
-        click(&mut app);
-        assert!(app.ui.navigator_panel.view_artboard_contents_only, "a second click turns it on");
     }
 
     /// With View Artboard Contents Only the thumbnail draws only the art inside the artboards: a
@@ -695,14 +506,14 @@ mod tests {
             d.insert(Some(l), 0, n).unwrap();
         }
         let alpha = |artboard_only: bool, x: u32, y: u32| {
-            let key = ImageKey { uid: 1, revision: 1, w: 260, h: 140, artboard_only, solid_dashes: false };
+            let key = NavKey { uid: 1, artboard_only, solid_dashes: false };
             vectorcraft_render::Renderer::new().render_region_with(&d, DRect::new(0.0, 0.0, 260.0, 140.0), 1.0, &image_options(key)).pixel(x, y)[3]
         };
         assert_eq!([alpha(true, 125, 50), alpha(true, 40, 90), alpha(true, 40, 120)], [0, 255, 0], "the gap and below the artboard are empty");
         assert_eq!([alpha(false, 125, 50), alpha(false, 40, 90), alpha(false, 40, 120)], [255, 255, 255], "all the art draws");
     }
 
-    /// Turning View Artboard Contents Only off makes the thumbnail again, fitted to the art on the
+    /// Turning View Artboard Contents Only off makes the picture again, fitted to the art on the
     /// pasteboard as well as the artboards; turning it on fits it to the artboards again.
     #[test]
     fn the_thumbnail_is_made_again_when_view_artboard_contents_only_changes() {
@@ -710,65 +521,62 @@ mod tests {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 400, "y": 50, "width": 50, "height": 50})).unwrap();
-        let ctx = egui::Context::default();
-        let frames = |app: &mut VectorcraftApp| {
-            for _ in 0..12 {
-                let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
-                out.textures_delta.clear();
-            }
-            CACHE.with(|c| c.borrow().shown.map(|(k, r)| (k.artboard_only, r.x1)))
+        let (doc, uid, revision) = {
+            let st = app.session.active().unwrap();
+            (st.doc.clone(), st.uid, st.revision)
         };
-        let Some((true, right)) = frames(&mut app) else { panic!("an image of the artboards only") };
-        assert!(right < 300.0, "fitted to the artboard: {right}");
-        app.run("ui.navigatorPanelOptions", json!({"viewArtboardContentsOnly": false})).unwrap();
-        let Some((false, right)) = frames(&mut app) else { panic!("an image with the pasteboard's art") };
-        assert!(right > 450.0, "fitted to the art on the pasteboard too: {right}");
-        app.run("ui.navigatorPanelOptions", json!({"viewArtboardContentsOnly": true})).unwrap();
-        assert!(matches!(frames(&mut app), Some((true, r)) if r < 300.0));
+        let request = ThumbRequest::for_cell(100.0, 1.0);
+        let at = |app: &mut VectorcraftApp, only: bool| {
+            let region = region(&doc, uid, revision, only, false, &mut app.canvas);
+            let key = NavKey { uid, artboard_only: only, solid_dashes: false };
+            (NavThumbs::new(&doc, revision, region).revision(&key, &request), region.x1)
+        };
+        let (on, right_on) = at(&mut app, true);
+        assert!(right_on < 300.0, "fitted to the artboard: {right_on}");
+        let (off, right_off) = at(&mut app, false);
+        assert!(right_off > 450.0, "fitted to the art on the pasteboard too: {right_off}");
+        assert_ne!(on, off, "the picture is a new one");
+        assert_eq!(at(&mut app, true), (on, right_on), "turning it on restores both");
     }
 
-    #[test]
-    fn zoom_slider_roundtrip() {
-        assert!((zoom_to_slider(3.13)).abs() < 1e-9);
-        assert!((zoom_to_slider(64000.0) - 1.0).abs() < 1e-9);
-        assert!((slider_to_zoom(zoom_to_slider(100.0)) - 100.0).abs() < 1e-6);
-    }
-
-    /// The navigator images made on this thread so far.
-    fn renders() -> u64 {
-        CACHE.with(|c| c.borrow().renders)
-    }
-
+    /// No picture is made while an interaction is open; one is made after it, of the document's new
+    /// revision.
     #[test]
     fn no_image_is_rendered_during_a_drag_and_one_is_after_it() {
         use vectorcraft_engine::Session;
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.session.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
         app.session.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
-        // One context, so its clock runs on (1/60 s a pass) and the document can settle.
-        let ctx = egui::Context::default();
-        let frame = |app: &mut VectorcraftApp| {
-            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
+        let ctx = crate::testing::ui_context();
+        let request = ThumbRequest::for_cell(100.0, 1.0);
+        // One pass of the panel's picture: the images the store uploaded in it, and the version asked for.
+        let frame = |app: &mut VectorcraftApp, held: bool| {
+            let (doc, uid, revision) = {
+                let st = app.session.active().unwrap();
+                (st.doc.clone(), st.uid, st.revision)
+            };
+            let region = region(&doc, uid, revision, true, held, &mut app.canvas);
+            let source = NavThumbs::new(&doc, revision, region);
+            let key = NavKey { uid, artboard_only: true, solid_dashes: false };
+            let mut uploads = 0;
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let thumbs = Thumbnails::<NavKey>::in_context(ui.ctx(), "navigator", ThumbnailOptions::new().lanes(0));
+                thumbs.hold(held);
+                thumbs.state(ui.ctx(), &source, &key, &request, Priority::VISIBLE);
+                uploads = thumbs.cache().statistics(ui.ctx()).uploads;
+            });
             out.textures_delta.clear();
+            (uploads, source.revision(&key, &request))
         };
-        frame(&mut app);
-        let first = renders();
-        assert!(first >= 1, "the first image renders at once");
+        let first = (0..12).map(|_| frame(&mut app, false)).find(|(uploads, _)| *uploads > 0).expect("the first picture is made");
         // A move drag: every preview is a new revision.
         app.session.begin_interaction("Move").unwrap();
         for i in 1..=20 {
             app.session.preview("object.transform", &json!({"matrix": [1, 0, 0, 1, i, 0]})).unwrap();
-            frame(&mut app);
+            assert_eq!(frame(&mut app, true).0, 0, "nothing is made while the drag goes on");
         }
-        assert_eq!(renders(), first, "nothing renders while the drag goes on");
         app.session.commit_interaction().unwrap();
-        frame(&mut app);
-        assert_eq!(renders(), first, "the document settles first");
-        for _ in 0..12 {
-            frame(&mut app);
-        }
-        assert_eq!(renders(), first + 1, "one image after the drag");
-        let shown = CACHE.with(|c| c.borrow().shown.map(|(k, _)| k.revision));
-        assert_eq!(shown, Some(app.session.active().unwrap().revision));
+        let after = (0..12).map(|_| frame(&mut app, false)).find(|(uploads, _)| *uploads > 0).expect("a picture after the drag");
+        assert_ne!(after.1, first.1, "the picture is of the document's new revision");
     }
 }

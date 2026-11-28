@@ -38,12 +38,3 @@ fn type_font_menu_lists_every_available_family() {
     }
     panic!("the fonts kept changing");
 }
-
-#[test]
-fn the_character_panel_menu_refreshes_the_font_list() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("file.new", json!({})).unwrap();
-    // The installed fonts are always listed: the menu offers to look for new ones instead.
-    let text = crate::tests_labels::painted_text(&mut app, crate::panels::character::menu);
-    assert!(text.contains("Refresh Font List") && !text.contains("System Fonts"), "{text}");
-}

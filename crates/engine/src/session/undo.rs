@@ -17,7 +17,8 @@ impl Session {
         if let Some(st) = self.active_mut()
             && st.undo_group.is_none()
         {
-            st.undo_group = Some(UndoGroup { first: None, journal: vec![], steps: vec![], label, paint });
+            let isolation = st.isolation;
+            st.undo_group = Some(UndoGroup { first: None, journal: vec![], steps: vec![], label, paint, isolation });
         }
     }
 
@@ -31,7 +32,9 @@ impl Session {
         let paint = self.paint.clone();
         for st in &mut self.docs {
             if !open.contains(&st.uid) && st.undo_group.is_none() {
-                st.undo_group = Some(UndoGroup { first: None, journal: vec![], steps: vec![], label: label.clone(), paint: paint.clone() });
+                let isolation = st.isolation;
+                st.undo_group =
+                    Some(UndoGroup { first: None, journal: vec![], steps: vec![], label: label.clone(), paint: paint.clone(), isolation });
             }
         }
     }
@@ -113,9 +116,10 @@ impl Session {
                 if let Some((before, _)) = e.color_mode_paints {
                     self.paint = before;
                 }
-                st.doc = e.doc;
+                let undone = std::mem::replace(&mut st.doc, e.doc);
                 st.selection = Arc::unwrap_or_clone(e.selection);
                 deselect_hidden(&self.menu, &st.doc, &mut st.selection);
+                st.restore_isolation(g.isolation, &undone);
                 st.sync_new_art();
                 cmd::globaledit::follow_history(st);
                 st.drop_stale_variables_highlight();
@@ -229,10 +233,11 @@ impl Session {
             .and_then(|first| st.history.undo.last().filter(|e| Arc::ptr_eq(&e.doc, first)).and_then(|e| e.color_mode_paints.clone()));
         let paint = self.paint.clone();
         let joined = st.undo_group.as_ref().map(|g| (st.doc.clone(), st.selection.clone(), g.first.clone()));
+        let isolation = st.isolation;
         if joined.is_none() {
             self.begin_undo_group();
         }
-        Some(UndoScope { uid, journal, joined, paint, color_mode_paints })
+        Some(UndoScope { uid, journal, joined, isolation, paint, color_mode_paints })
     }
 
     /// End `scope` in its own document, whichever document is active now; undo groups open in other
@@ -268,8 +273,9 @@ impl Session {
             }
             Some(_) => return,
         }
-        st.doc = doc;
+        let undone = std::mem::replace(&mut st.doc, doc);
         st.selection = selection;
+        st.restore_isolation(scope.isolation, &undone);
         cmd::globaledit::follow_history(st);
         st.drop_stale_variables_highlight();
         deselect_hidden(&menu, &st.doc, &mut st.selection);

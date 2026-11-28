@@ -801,3 +801,69 @@ fn auto_alignment_saves_readable_by_older_builds() {
     // Files from before the flag keep their alignment.
     assert_eq!(serde_json::from_str::<ParaStyle>(r#"{"justify":"Center"}"#).unwrap().justify, Justify::Center);
 }
+
+/// The default character and paragraph styles are in range, and each number outside its range,
+/// one that is not a number included, is the error naming its attribute; an attribute the check
+/// is not asked about is not checked.
+#[test]
+fn style_ranges_name_the_attribute_out_of_range() {
+    let all = |_: &str| true;
+    assert_eq!(CharStyle::default().check_ranges(all), Ok(()));
+    let key = |s: CharStyle| s.check_ranges(all).map_err(|e| e.key);
+    let d = CharStyle::default();
+    assert_eq!(key(CharStyle { baseline_shift: f64::NAN, ..d.clone() }), Err("baseline_shift".into()));
+    assert_eq!(key(CharStyle { leading: Some(1e9), ..d.clone() }), Err("leading".into()));
+    assert_eq!(key(CharStyle { v_scale: 0.0, ..d.clone() }), Err("v_scale".into()));
+    assert_eq!(key(CharStyle { kerning: Some(f64::INFINITY), ..d.clone() }), Err("kerning".into()));
+    assert_eq!(key(CharStyle { rotation: 720.0, ..d.clone() }), Err("rotation".into()));
+    assert_eq!(key(CharStyle { warichu_lines: 9, ..d.clone() }), Err("warichuLines".into()));
+    assert_eq!(key(CharStyle { stroke_miter_limit: 0.0, ..d.clone() }), Err("stroke_miter_limit".into()));
+    assert_eq!(key(CharStyle { small_caps: Some(0.0), ..d.clone() }), Err("small_caps".into()));
+    let axes = std::iter::once(("wght".to_string(), f64::NAN)).collect();
+    assert_eq!(key(CharStyle { font_axes: axes, ..d.clone() }), Err("fontAxes".into()));
+    let dash = Some(Dash { pattern: vec![2.0, -1.0], offset: 0.0, align_corners: false });
+    assert_eq!(key(CharStyle { stroke_dash: dash, ..d.clone() }), Err("stroke_dash.pattern".into()));
+    assert_eq!(CharStyle { size: 0.0, ..d.clone() }.check_ranges(|k| k != "size"), Ok(()));
+
+    let all = |_: &str, _: Option<&str>| true;
+    let p = ParaStyle::default();
+    assert_eq!(p.check_ranges(Some(&JustificationOptions::default()), &[], all), Ok(()));
+    let key = |s: ParaStyle, j: Option<&JustificationOptions>| s.check_ranges(j, &[], all).map_err(|e| e.key);
+    assert_eq!(key(ParaStyle { first_line_indent: f64::NAN, ..p.clone() }, None), Err("first_line_indent".into()));
+    let stop = TabStop { position: 1.0, align: TabAlign::Left, leader: String::new(), align_on: '.' };
+    assert_eq!(key(ParaStyle { tabs: vec![stop.clone(); TabStop::MAX_STOPS + 1], ..p.clone() }, None), Err("tabs".into()));
+    let far = TabStop { position: -1.0, ..stop.clone() };
+    assert_eq!(key(ParaStyle { tabs: vec![far.clone()], ..p.clone() }, None), Err("tabs.position".into()));
+    assert_eq!(ParaStyle { tabs: vec![far.clone()], ..p.clone() }.check_ranges(None, &[far], all), Ok(()), "a kept stop");
+    let hyphenation = HyphenationOptions { hyphen_limit: 99, ..HyphenationOptions::default() };
+    assert_eq!(key(ParaStyle { hyphenation, ..p.clone() }, None), Err("hyphenation.hyphen_limit".into()));
+    let reversed = JustificationOptions { word_spacing: [133.0, 100.0, 80.0], ..JustificationOptions::default() };
+    assert_eq!(key(p.clone(), Some(&reversed)), Err("justification.word_spacing".into()));
+}
+
+#[test]
+fn file_fonts_draw_type_only_while_its_text_is_the_files() {
+    use super::file_fonts::*;
+    use super::*;
+    // The hash is the same everywhere and in every version (saved files carry it).
+    assert_eq!(text_hash([""]), 0xcbf2_9ce4_8422_2325);
+    assert_eq!(text_hash(["Ham", "burg"]), text_hash(["Hamburg"]));
+    assert_ne!(text_hash(["Hamburg"]), text_hash(["Hamburh"]));
+    let font = FileFont { family: "Source Serif 9".into(), style: "Regular".into(), key: "k".into() };
+    let mut t = TextObject::point(Point::ZERO, "Ham", CharStyle::default());
+    t.runs.push(TextRun::new("burg", CharStyle::default()));
+    assert!(t.file_fonts_in_use().is_empty());
+    t.file_fonts = Some(Box::new(FileFonts::new(vec![font.clone()], "Hamburg")));
+    assert_eq!(t.file_fonts_in_use(), std::slice::from_ref(&font));
+    // Saved and read back.
+    let json = serde_json::to_string(&t).unwrap();
+    assert!(json.contains(r#""fileFonts":{"fonts":[{"family":"Source Serif 9","style":"Regular","key":"k"}]"#), "{json}");
+    assert_eq!(serde_json::from_str::<TextObject>(&json).unwrap(), t);
+    // Edited: none.
+    t.runs[1].text.push('s');
+    assert!(t.file_fonts_in_use().is_empty());
+    // A file's list past the cap: the first ones.
+    t.runs[1].text.pop();
+    t.file_fonts.as_mut().unwrap().fonts = vec![font; MAX_FILE_FONTS + 5];
+    assert_eq!(t.file_fonts_in_use().len(), MAX_FILE_FONTS);
+}

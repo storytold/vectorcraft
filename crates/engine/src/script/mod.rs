@@ -51,6 +51,7 @@
 pub mod console;
 pub mod dialogs;
 pub mod dollar;
+pub mod dom;
 pub mod include;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
@@ -71,6 +72,7 @@ use crate::{
 
 pub mod files;
 pub mod folder;
+pub mod startup;
 
 /// The most bytes of source a run takes, as a file or as `source`.
 pub const MAX_SOURCE_BYTES: usize = 8 << 20;
@@ -185,6 +187,7 @@ pub(crate) fn refused_text(id: &str) -> String {
 }
 
 /// A request to run a script.
+#[derive(Clone)]
 pub(crate) struct Request {
     /// The run's name; unless `name_given`, a `#script` line in the script replaces it.
     pub name: String,
@@ -799,6 +802,37 @@ struct Host {
     dollar: dollar::RunState,
     /// The run's `args`, which `vc.args` gives, and their size as `vc.args` charges it.
     args: RefCell<(Data, u64)>,
+    /// The run's state of the script object model (`app`).
+    dom: dom::State,
+    /// The documents open when the run began as the person last left them, each with its own file
+    /// and the file it was read from ([`crate::DocState::as_person_left`],
+    /// [`crate::cmd::links::LinkBase::of_files`]), until the run's first command takes the files
+    /// they link to from them ([`Host::linked`]).
+    run_docs: RefCell<Vec<RunDoc>>,
+    /// The files the documents open when the run began link to as the person left them
+    /// ([`crate::file_access::ScriptGate::linked`]).
+    linked: std::cell::OnceCell<crate::file_access::LinkedFiles>,
+}
+
+/// A document open when a run began, with its own file and the file it was read from.
+type RunDoc = (Arc<crate::Document>, Option<String>, Option<String>);
+
+impl Host {
+    /// The files the commands the run runs may read because the documents open when the run began
+    /// link to them, found once, from those documents as the person left them: a link a script's
+    /// command added or changed, in this run or an earlier one, and a document it opened, give it
+    /// no file to read.
+    fn linked(&self) -> crate::file_access::LinkedFiles {
+        self.linked
+            .get_or_init(|| {
+                let docs = std::mem::take(&mut *self.run_docs.borrow_mut());
+                let files = docs.iter().flat_map(|(d, path, from)| {
+                    crate::cmd::links::files_linked(d, crate::cmd::links::LinkBase::of_files(path.as_deref(), from.as_deref()))
+                });
+                crate::file_access::ScriptGate::real_files(files.collect::<Vec<_>>())
+            })
+            .clone()
+    }
 }
 
 /// A run's host calls by kind, as its report gives them in `hostCallCounts`.
@@ -1043,7 +1077,7 @@ impl Host {
         }
         let bridge = self.bridge.get().saturating_add(bytes);
         self.bridge.set(bridge);
-        if bridge > MAX_BRIDGE_BYTES {
+        if bridge > bridge_bytes() {
             return Err(self.over(OVER_BRIDGE));
         }
         let n = self.calls_this_slice.get() + 1;
@@ -1234,13 +1268,24 @@ fn note_ids(s: &mut Session) {
 fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value, u64, u64, Option<Savepoint>)> {
     raise_ids(s);
     let mutating = waits_for_tool_edit(id);
-    let save = mutating.then(|| Savepoint::take(s, id));
+    // Inside an object-model call's own savepoint ([`dom`]), that savepoint puts a failure back.
+    let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
     let before: Vec<(u64, Arc<crate::Document>, u64)> =
         if mutating { s.docs.iter().map(|d| (d.uid, d.doc.clone(), d.doc.peek_next_id())).collect() } else { Vec::new() };
     crate::file_access::start_recording_writes();
-    // The command reads and writes only where the script's own files may, and the open documents' files.
-    let gate = host.disk.borrow().gate(s.docs.iter().filter_map(|d| d.path.clone()).collect());
+    // The command reads and writes only where the script's own files may, and the files the person gave
+    // the open documents; it also reads the files the documents open when the run began link to, as the
+    // person left them. A document a script's command opened gives it no file.
+    let documents = s.docs.iter().filter_map(|d| d.as_person_left().and_then(|(_, path, _)| path.map(str::to_string))).collect();
+    let gate = host.disk.borrow().gate(documents, host.linked());
+    let was: Vec<(u64, RunDoc)> = s.docs.iter().map(|d| (d.uid, (d.doc.clone(), d.path.clone(), d.links_from.clone()))).collect();
     let r = crate::file_access::with_script_gate(gate, || s.execute(id, params));
+    // What the command opened, changed or gave another file is not as the person left it.
+    for st in &mut s.docs {
+        let prior = was.iter().find(|(uid, _)| *uid == st.uid);
+        st.note_script_command(prior.map(|(_, (doc, path, from))| (doc, path, from)));
+    }
+    drop(was);
     // A file a command wrote before it failed is on disk all the same.
     let mut written = host.written.borrow_mut();
     for path in crate::file_access::finish_recording_writes(r.is_ok()) {
@@ -1293,6 +1338,20 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
     let bytes = args.iter().map(data_size).sum();
     host.charge_call(bytes)?;
     bump(&host.counts.vc_run);
+    command(host, &id, &params)
+}
+
+/// Runs command `id` for the script as `vc.run` does, its call already charged: it joins the run's
+/// transaction, its growth is counted, and a command that fails, or whose result cannot cross to
+/// the script, is put back. → its result.
+fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, HostError> {
+    command_value(host, id, params).map(|(data, _)| data)
+}
+
+/// [`command`], with the command's result as it gave it as well as the script's copy of it.
+fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
+    let id = id.to_string();
+    let params = params.clone();
     let session = host.session.clone();
     let started = clock();
     let r = {
@@ -1328,7 +1387,7 @@ fn vc_run(host: &Rc<Host>, args: Vec<Data>) -> std::result::Result<Data, HostErr
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
-    crossed
+    crossed.map(|data| (data, value))
 }
 
 /// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits
@@ -1475,7 +1534,7 @@ fn eval_file(host: &Host, args: Vec<Data>) -> std::result::Result<Data, HostErro
         if f.line > 0 { host.placed(error, f.file, f.line, f.column) } else { error }
     })?;
     // A file without preprocessor lines is parsed here first, so its syntax error names its place.
-    let options = vectorcraft_js::Options { max_source_units: include::MAX_TOTAL_BYTES, ..vectorcraft_js::Options::default() };
+    let options = host.files.borrow().options();
     if let Err(e) = vectorcraft_js::parse(&expanded.source, &options) {
         host.files.borrow_mut().end_eval();
         let (_, file, line, column) = expanded.map.locate(e.line, e.column);
@@ -1564,10 +1623,10 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// `e`'s message, with what to do about a failure that comes from a script written for another
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
-    const HOST_OBJECTS: &[&str] = &["app", "Window", "BridgeTalk", "activeDocument", "documents"];
+    const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
     let message = &e.message;
-    let names_host_object =
-        message.strip_prefix("ReferenceError: ").is_some_and(|m| HOST_OBJECTS.iter().any(|o| m.split_whitespace().next() == Some(o)));
+    let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
+    let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));
     if e.kind == RunErrorKind::Thrown && !e.authored && names_host_object {
         format!("{message} (scripts here use the `vc` object; objects other applications give their scripts are not available)")
     } else {
@@ -1592,24 +1651,31 @@ fn preprocessor_error(f: include::Failure) -> (RunError, Option<Arc<str>>) {
 /// `e`, the error `realm` raised in the run of `host`, at the line and column of the file it is in,
 /// with that file's name unless it is the run's own script.
 fn located(host: &Host, realm: &Realm, e: &RunError) -> (RunError, Option<Arc<str>>) {
-    let map = |m: &include::SourceMap| {
-        let (index, file, line, column) = m.locate(e.line, e.column);
-        let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
-        (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, index, file)
-    };
     // An error `$.evalFile` raised for a file it could not run, and no script caught, is at that
     // file's place.
     if let Some((file, line, column)) = realm.error_mark().and_then(|m| host.eval_failures.borrow().get(m as usize).cloned()) {
         let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
         return (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, Some(file));
     }
+    placed(host, e, realm.error_source(), realm.error_tag())
+}
+
+/// `e`, raised at its line and column of the source `source` with tag `tag` ([`Realm::source_of`]
+/// and [`Realm::error_tag`]), at the line and column of the file it is in, with that file's name
+/// unless it is the run's own script.
+fn placed(host: &Host, e: &RunError, source: u32, tag: u32) -> (RunError, Option<Arc<str>>) {
+    let map = |m: &include::SourceMap| {
+        let (index, file, line, column) = m.locate(e.line, e.column);
+        let message = if e.kind == RunErrorKind::Syntax { relocated(&e.message, e.line, e.column, line, column) } else { e.message.clone() };
+        (RunError { kind: e.kind.clone(), message, line, column, authored: e.authored }, index, file)
+    };
     if e.line == 0 {
         return (e.clone(), None);
     }
     // An error in code from a source whose map is not at hand, such as code that `eval` compiled,
     // is given without a place.
     let unplaced = || (RunError { line: 0, column: 0, ..e.clone() }, None);
-    match realm.error_source() {
+    match source {
         0 => {
             let (e, index, file) = map(&host.script_map.borrow());
             (e, (index > 0).then_some(file))
@@ -1626,7 +1692,7 @@ fn located(host: &Host, realm: &Realm, e: &RunError) -> (RunError, Option<Arc<st
         // `$.evalFile` gave. A script given as text is named by that run's name.
         _ => {
             let kept = host.kept_maps.as_ref().map(|k| k.borrow());
-            match kept.as_ref().and_then(|k| k.get(realm.error_tag())) {
+            match kept.as_ref().and_then(|k| k.get(tag)) {
                 Some(kept) => {
                     let (e, index, file) = map(&kept.map);
                     let file = match &kept.script {
@@ -1652,9 +1718,10 @@ fn relocated(message: &str, old_line: u32, old_column: u32, line: u32, column: u
 }
 
 impl Session {
-    /// Is a script running? While one is, the commands that change anything are refused.
+    /// Is a script running, or a run `script.startup.run` queued waiting to start at the next
+    /// [`Self::script_pump`]? While one is, the commands that change anything are refused.
     pub fn script_running(&self) -> bool {
-        self.script_key.is_some()
+        self.script_key.is_some() || !self.script_queue.is_empty()
     }
 
     /// The named engine of the running script.
@@ -1867,9 +1934,10 @@ impl Session {
         }
     }
 
-    /// Asks the running script to stop; it is rolled back at the next slice. False with none running.
+    /// Asks the running script to stop; it is rolled back at the next slice. Between two runs
+    /// `script.startup.run` queued, the next one stops as it starts. False with none running.
     pub fn script_request_stop(&mut self) -> bool {
-        if self.script_key.is_none() {
+        if !self.script_running() {
             return false;
         }
         self.script_stop.set();
@@ -1877,9 +1945,16 @@ impl Session {
     }
 
     /// Stops the running script at once and puts everything back, with the report of a stopped run
-    /// ([`Self::script_report`]). False with none running.
+    /// ([`Self::script_report`]). Between two runs `script.startup.run` queued, the queued runs are
+    /// not started, and the report stays the last run's. False with none running or queued.
     pub fn script_abandon(&mut self) -> bool {
-        let Some(key) = self.script_key.take() else { return false };
+        // The runs queued after it are not started.
+        let queued = !self.script_queue.is_empty();
+        self.script_queue.clear();
+        self.script_queue_scope = None;
+        self.script_queue_then = None;
+        self.startup_ended();
+        let Some(key) = self.script_key.take() else { return queued };
         let Some(job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
             self.script_gone(key, console::Ending::Stopped);
             return true;
@@ -1909,6 +1984,16 @@ impl Session {
         self.script_stop.clear();
         self.reset_tool();
         cmd::compositefonts::sync(self);
+    }
+
+    /// A script named `name` that did not start because its file could not be read as a script:
+    /// the Script Console gets a run with a start line, `message` as its error and an end line.
+    pub(crate) fn note_unread(&mut self, name: &str, message: &str) {
+        self.script_runs += 1;
+        let name = console::line_name(name);
+        for entry in [console::Entry::Start, console::Entry::Error(format!("{name}: {message}")), console::Entry::End(console::Ending::Error)] {
+            self.script_console.push(console::ConsoleLine { run: self.script_runs, name: name.clone(), entry }, false);
+        }
     }
 
     /// A script can't start while a document holds a drag in progress or an undo group, which its
@@ -1967,11 +2052,20 @@ impl Session {
         // A realm made here gets the script extensions, `$` and the dialogs; a kept one has them
         // from its first run, and they act for the run that calls them.
         let fresh = realm.is_none();
-        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), ..Options::default() };
+        // A `.js` script reads ECMAScript 2015; `eval`, `Function`, includes and `$.evalFile` read
+        // code the way the script does. Its realm has `Promise`: a kept realm gets it at the first
+        // `.js` run that names it, and keeps it as it keeps its globals.
+        let es2015 = include::es2015_script(request.file.as_deref());
+        let options = Options { max_source_units: include::MAX_TOTAL_BYTES.saturating_mul(2), es2015, e4x: true, ..Options::default() };
         let strict = options.strict;
+        // A kept engine reads each run's code the way that run's script does.
         let mut realm = match realm {
             Some(mut realm) => {
                 realm.set_limits(limits);
+                realm.set_es2015(es2015);
+                if es2015 {
+                    realm.add_es2015();
+                }
                 realm
             }
             None => {
@@ -2040,6 +2134,15 @@ impl Session {
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
+            dom: dom::State::default(),
+            run_docs: RefCell::new(
+                self.docs
+                    .iter()
+                    .filter_map(DocState::as_person_left)
+                    .map(|(doc, path, from)| (doc.clone(), path.map(str::to_string), from.map(str::to_string)))
+                    .collect(),
+            ),
+            linked: std::cell::OnceCell::new(),
         });
         *link.borrow_mut() = Some(host.clone());
         let args = match to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0)) {
@@ -2065,6 +2168,7 @@ impl Session {
             Ok(expanded) => {
                 *host.script_map.borrow_mut() = expanded.map;
                 realm.set_strict_writes(expanded.strict == Some(true));
+                realm.set_script_name(Some(host.name.to_string()));
                 if fresh {
                     let l = link.clone();
                     realm.set_source_locator(Rc::new(move |tag, line| match current(&l) {
@@ -2073,9 +2177,11 @@ impl Session {
                     }));
                 }
                 (if fresh { realm.add_script_extensions() } else { Ok(()) })
+                    .and_then(|()| if fresh { realm.add_unit_values() } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { dom::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
                         let r = realm.start(&expanded.source);
@@ -2109,8 +2215,33 @@ impl Session {
     }
 
     /// Advances the running script by one slice. `None` while it is still running; otherwise the
-    /// run has ended: its report, or the error that ended it, with the documents put back.
+    /// run has ended: its report, or the error that ended it, with the documents put back. When
+    /// `script.startup.run` queued more runs, the next one starts at the pump after that, so the
+    /// ended run's report ([`Self::script_report`]) stays until then; a queued run that cannot start
+    /// is kept for [`Self::take_startup_failures`].
     pub fn script_pump(&mut self) -> Option<Result<Value>> {
+        if self.script_key.is_none() {
+            // A stop asked for between two runs stops the run that starts now, which clears it.
+            let stop = self.script_stop.is_set();
+            self.start_queued();
+            if stop && (self.script_key.is_some() || !self.script_queue.is_empty()) {
+                self.script_stop.set();
+            } else {
+                self.script_stop.clear();
+            }
+            return None;
+        }
+        // Held aside while the run ends, so that its commit does not see the queue as a running script.
+        let queue = std::mem::take(&mut self.script_queue);
+        let result = self.pump_one();
+        self.script_queue = queue;
+        let result = result?;
+        self.startup_ended();
+        Some(result)
+    }
+
+    /// [`Self::script_pump`] for the running script alone.
+    fn pump_one(&mut self) -> Option<Result<Value>> {
         let key = self.script_key.take()?;
         let Some(mut job) = JOBS.with(|jobs| jobs.borrow_mut().remove(&key.id)) else {
             self.script_gone(key, console::Ending::Internal);
@@ -2264,6 +2395,11 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
+        let rejections = rejections_report(host, &job.realm);
+        if let (false, Some(o)) = (rejections.is_empty(), report.as_object_mut()) {
+            o.insert("unhandledRejections".into(), Value::Array(rejections));
+            o.insert("unhandledRejectionCount".into(), json!(job.realm.unhandled_rejection_count()));
+        }
         close_run(self, host, &mut report, console::Ending::Finished);
         self.end_job(job, false);
         self.script_report = Some(report.clone());
@@ -2309,6 +2445,29 @@ const NO_RUN: &str = "this function's script run has ended";
 const DROP_MAIN: &str = "the main script engine is new for each run and is never kept, so it cannot be dropped";
 const NO_ENGINES_ON_WEB: &str = "named script engines (#targetengine) are not available on the web";
 const ENGINE_BUSY: &str = "the script engine is in use by another run";
+const UNHANDLED_REJECTION: &str = "unhandled promise rejection";
+const UNHANDLED_REJECTIONS: &str = "unhandled promise rejections";
+
+/// The promises `realm`'s run rejected and left without a handler, each with its reason and, when
+/// known, the line, column and file it was rejected at.
+fn rejections_report(host: &Host, realm: &Realm) -> Vec<Value> {
+    let mut out = Vec::new();
+    for r in realm.unhandled_rejections() {
+        let e = RunError { kind: RunErrorKind::Thrown, message: r.message.clone(), line: r.line, column: r.column, authored: r.authored };
+        let (e, file) = placed(host, &e, realm.source_of(r.tag), r.tag);
+        let mut o = json!({
+            "message": e.message,
+            "messageOrigin": if e.authored { "script" } else { "built-in" },
+            "line": e.line,
+            "column": e.column,
+        });
+        if let (Some(file), Some(map)) = (file, o.as_object_mut()) {
+            map.insert("file".into(), json!(&*file));
+        }
+        out.push(o);
+    }
+    out
+}
 
 /// The report of a run that failed; `file` is the included file the error is in.
 fn failure_report(name: &str, e: &RunError, file: Option<&str>, host: &Host, fuel_left: u64, fuel_used: u64) -> Value {
@@ -2388,6 +2547,18 @@ fn close_run(s: &mut Session, host: &Host, report: &mut Value, ending: console::
     }
     if report["ok"] == false {
         each_line(&error_text(&host.name, report), |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+    }
+    if let Some(rejections) = report["unhandledRejections"].as_array() {
+        for r in rejections {
+            let mut placed = r.clone();
+            placed["message"] = json!(format!("{UNHANDLED_REJECTION}: {}", r["message"].as_str().unwrap_or_default()));
+            each_line(&error_text(&host.name, &placed), |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+        }
+        let more = report["unhandledRejectionCount"].as_u64().unwrap_or(0).saturating_sub(rejections.len() as u64);
+        if more > 0 {
+            let text = format!("{}: {more} more {UNHANDLED_REJECTIONS}", host.name);
+            each_line(&text, |line, cut| line_to(s, host, console::Entry::Error(line), cut));
+        }
     }
     let timing = clock().is_some();
     let ms = millis(host.run_nanos.get());
@@ -2483,6 +2654,15 @@ fn growth_objects() -> u64 {
     GROWTH_OBJECTS
 }
 
+/// The data a run may pass to and from commands.
+fn bridge_bytes() -> u64 {
+    #[cfg(test)]
+    if let Some(n) = TEST_BRIDGE_BYTES.with(Cell::get) {
+        return n;
+    }
+    MAX_BRIDGE_BYTES
+}
+
 /// The limits of a command's result on its way to the script.
 fn result_limits() -> DataLimits {
     #[cfg(test)]
@@ -2500,6 +2680,8 @@ thread_local! {
     pub(crate) static PANIC_IN_SLICE: Cell<bool> = const { Cell::new(false) };
     /// Tests: the objects a run may add in place of [`GROWTH_OBJECTS`].
     pub(crate) static TEST_GROWTH: Cell<Option<u64>> = const { Cell::new(None) };
+    /// Tests: the data a run may pass to and from commands in place of [`MAX_BRIDGE_BYTES`].
+    pub(crate) static TEST_BRIDGE_BYTES: Cell<Option<u64>> = const { Cell::new(None) };
     /// Tests: the heap of a named engine in place of [`ENGINE_HEAP_BYTES`].
     pub(crate) static TEST_ENGINE_HEAP: Cell<Option<usize>> = const { Cell::new(None) };
     /// Tests: the bytes of source maps a named engine keeps, in place of [`KEPT_MAP_BYTES`].

@@ -4,7 +4,20 @@ use super::traits::{FaceKeys, FontTraits};
 use super::{Arc, GlyphId, HashMap, Location, LocationRef, MetadataProvider, Size, StringId};
 
 /// The most glyphs one [`outline_points`] lookup reads, composite components included.
-const MAX_OUTLINE_VISITS: usize = 65_536;
+pub(crate) const MAX_OUTLINE_VISITS: usize = 65_536;
+
+#[cfg(test)]
+thread_local! {
+    /// How many glyphs [`outline_points`] read on this thread ([`outline_glyphs_read`]).
+    static OUTLINE_GLYPHS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many glyphs [`outline_points`] lookups have read on this thread, composite components
+/// included.
+#[cfg(test)]
+pub(crate) fn outline_glyphs_read() -> usize {
+    OUTLINE_GLYPHS_READ.get()
+}
 
 /// Unhinted TrueType contour points in glyph order, including transformed composite components.
 /// A point cap, a depth bound and `visits`, the number of glyphs the whole lookup may still read,
@@ -20,6 +33,8 @@ fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize, visits
         return None;
     }
     *visits = visits.checked_sub(1)?;
+    #[cfg(test)]
+    OUTLINE_GLYPHS_READ.set(OUTLINE_GLYPHS_READ.get() + 1);
     let glyph = font.loca(None).ok()?.get(gid, &font.glyf().ok()?)?.into_glyph()?;
     match glyph {
         Glyph::Simple(simple) => {
@@ -210,6 +225,18 @@ pub struct FontFace {
     pub(super) char_list: std::sync::OnceLock<Arc<[(char, u32)]>>,
     /// [`Self::name_owner`]'s glyph names to characters, read once.
     pub(super) named_chars: std::sync::OnceLock<std::collections::HashMap<String, char>>,
+    /// [`Self::glyph_name`]'s names by glyph id, read once.
+    pub(super) glyph_names: std::sync::OnceLock<Vec<Option<Box<str>>>>,
+}
+
+impl vectorcraft_doc::FileFontFace for FontFace {
+    fn id(&self) -> u32 {
+        self.id
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.data()
+    }
 }
 
 /// Where the ideographic character face (ICF) lies inside the ideographic em box: its distance

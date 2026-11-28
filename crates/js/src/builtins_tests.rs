@@ -408,6 +408,21 @@ fn boolean_prototype_converts_booleans() {
 }
 
 #[test]
+fn the_boolean_constructor_converts_and_wraps() {
+    // Called as a function it gives ToBoolean of its argument (section 15.6.1).
+    truth("Boolean() === false && Boolean(0) === false && Boolean('') === false && Boolean(NaN) === false && Boolean(null) === false");
+    truth("Boolean(1) === true && Boolean('false') === true && Boolean({}) === true && Boolean(new Boolean(false)) === true");
+    truth("['', 'a', 0, 2].filter(Boolean).length === 2");
+    // With new it makes a Boolean object (section 15.6.2), which is truthy whatever it holds.
+    truth("var b = new Boolean(0); typeof b === 'object' && b.valueOf() === false && !!b && b instanceof Boolean");
+    assert_eq!(string("Object.prototype.toString.call(new Boolean(1)) + new Boolean('')"), "[object Boolean]false");
+    // The constructor and Boolean.prototype are linked, and true and false look methods up there.
+    truth("Boolean.prototype === Object.getPrototypeOf(true) && Boolean.prototype.constructor === Boolean && true.constructor === Boolean");
+    truth("Boolean.length === 1 && Object(false) instanceof Boolean");
+    truth("!Object.getOwnPropertyDescriptor(this, 'Boolean').enumerable && !Object.getOwnPropertyDescriptor(Boolean, 'prototype').writable");
+}
+
+#[test]
 fn array_methods_overwriting_elements_need_no_heap_for_new_ones() {
     // With the heap exactly at its limit, an array method's write over an existing element
     // succeeds, and a write that adds an element stops with the heap limit.
@@ -684,6 +699,10 @@ fn json_stringify_unwraps_number_string_and_boolean_objects() {
     assert_eq!(string("Object.prototype.valueOf = function () { return 9; }; JSON.stringify(Object(3))"), "3");
     assert_eq!(string("Object.getPrototypeOf(Object(1)).valueOf = function () { return 4; }; JSON.stringify(Object(3))"), "4");
     assert_eq!(string("Object.getPrototypeOf(Object('')).toString = function () { return 'q'; }; JSON.stringify(Object('abc'))"), "\"q\"");
+    // Once the own prototype's method is deleted, the lookup goes on to Object.prototype.
+    let over = "Object.prototype.toString = function () { return '7'; };";
+    assert_eq!(string(&format!("{over} delete String.prototype.toString; JSON.stringify(Object('abc'))")), "\"7\"");
+    assert_eq!(string(&format!("{over} delete Number.prototype.valueOf; delete Number.prototype.toString; JSON.stringify(Object(3))")), "7");
 }
 
 #[test]

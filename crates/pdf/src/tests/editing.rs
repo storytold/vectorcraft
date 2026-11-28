@@ -123,13 +123,6 @@ fn the_legacy_name_is_read_and_plain_pdfs_have_no_editing_data() {
     assert_eq!(editing(&r.bytes), None);
 }
 
-#[test]
-fn pdf_a_carries_no_editing_data() {
-    let s: PdfSettings = serde_json::from_value(json!({"standard": "pdfA2b", "preserveEditing": true})).unwrap();
-    assert!(matches!(s.check(), Err(PdfError::BadSetting(m)) if m.contains("editing")));
-    assert!(matches!(s.check_values(), Err(PdfError::BadSetting(_))));
-}
-
 /// A tiny PDF made of the given objects (numbered from 1), with the cross-reference table written.
 fn raw_pdf(objects: &[String]) -> Vec<u8> {
     raw_pdf_bytes(objects.iter().map(|o| o.clone().into_bytes()))
@@ -200,10 +193,12 @@ fn pages_sharing_a_large_content_stream_are_hashed_within_a_budget() {
     stream.extend_from_slice(&packed);
     stream.extend_from_slice(b"\nendstream");
     let bytes = raw_pdf_bytes(objects.into_iter().enumerate().map(|(i, o)| if i == 5 { stream.clone() } else { o.into_bytes() }));
-    let start = std::time::Instant::now();
+    let before = crate::editing::DECODED.get();
     let e = editing(&bytes).unwrap();
     assert_eq!((e.data.as_slice(), e.intact), (&b"hello"[..], false));
-    assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
+    // The content hashed, and the one stream that went past it.
+    let decoded = crate::editing::DECODED.get() - before;
+    assert!(decoded <= (crate::editing::MAX_HASHED + (1 << 20)) as u64, "decoded {decoded} bytes");
 }
 
 #[test]

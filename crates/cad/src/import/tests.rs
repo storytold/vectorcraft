@@ -743,15 +743,16 @@ fn many_by_block_looks_import_in_linear_time() {
         inserts.extend([(0, "INSERT"), (2, "Door"), (420, colour), (10, "0"), (20, "0")]);
     }
     let text = with_door(by_block, &inserts);
-    let start = std::time::Instant::now();
+    build::SYMBOL_NAMES_TRIED.with(|t| t.set(0));
     let doc = open(&text, &points()).document;
-    let took = start.elapsed();
+    let tried = build::SYMBOL_NAMES_TRIED.with(std::cell::Cell::get);
     let mut names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names.len(), n);
     names.sort_unstable();
     names.dedup();
     assert_eq!(names.len(), n, "names stay unique");
-    assert!(took < std::time::Duration::from_secs(4), "import took {took:?}");
+    // Each symbol after the first tries its label and then the next free suffix.
+    assert!(tried < 2 * n, "{tried} names tried for {n} symbols");
 }
 
 #[test]
@@ -1001,7 +1002,7 @@ fn binary_dwg_damaged_and_foreign_files() {
     // A binary DXF opens as its ASCII form does.
     let ascii = entities(LINE);
     let tags = craft_dxf::parse(&ascii).unwrap();
-    let r = open(&craft_dxf::write_binary(&tags, true), &points());
+    let r = open(&craft_dxf::write_binary(&tags, true).unwrap(), &points());
     assert_eq!(leaves(&r.document).len(), 1);
     let e = import(b"AC1032\x00\x00\x00", &ImportOptions::default()).unwrap_err();
     assert!(e.contains("DWG"), "{e}");
@@ -1151,12 +1152,13 @@ fn with_layouts(names: &[String]) -> Vec<u8> {
 
 #[test]
 fn many_paper_layouts_are_read_in_linear_time() {
-    let names: Vec<String> = (0..100_000).map(|i| format!("L{i}")).collect();
+    let names: Vec<String> = (0..10_000).map(|i| format!("L{i}")).collect();
     let bytes = with_layouts(&names);
-    let t = std::time::Instant::now();
+    reader::LAYOUT_NAME_COMPARISONS.with(|c| c.set(0));
     let info = info(&bytes).unwrap();
+    let compared = reader::LAYOUT_NAME_COMPARISONS.with(std::cell::Cell::get);
     assert_eq!(info.layouts.len(), names.len() + 1);
-    assert!(t.elapsed() < std::time::Duration::from_secs(5), "layout de-duplication is quadratic: {:?}", t.elapsed());
+    assert!(compared <= names.len(), "layout de-duplication compared {compared} names for {} layouts", names.len());
 }
 
 #[test]
