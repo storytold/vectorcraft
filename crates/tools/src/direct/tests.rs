@@ -3074,3 +3074,31 @@ fn select_behind_is_measured_once_for_a_point() {
     assert!(crate::select::selects_behind_at(&c, at));
     assert_eq!(MEASURED_PARTS.get() - before, 1, "measured for the first ask only");
 }
+
+/// With two selected groups whose anchors sit on the same point, the highlighted anchor is the one
+/// a press takes: the front group's, whatever order the groups were selected in.
+#[test]
+fn the_highlighted_anchor_of_two_selected_groups_is_the_one_a_press_takes() {
+    let mut d = vectorcraft_doc::Document::new(500.0, 500.0);
+    let l = d.layers[0].id;
+    let (back_path, back, front_path, front) = (d.alloc_id(), d.alloc_id(), d.alloc_id(), d.alloc_id());
+    let path = |id, x| {
+        std::sync::Arc::new(vectorcraft_doc::Node::path(
+            id,
+            vectorcraft_geom::shapes::rectangle(Rect::new(x, x, x + 100.0, x + 100.0)),
+            vectorcraft_doc::Appearance::default_art(),
+        ))
+    };
+    d.insert(Some(l), 0, vectorcraft_doc::Node::group(back, vec![path(back_path, 100.0)])).unwrap();
+    d.insert(Some(l), usize::MAX, vectorcraft_doc::Node::group(front, vec![path(front_path, 100.0)])).unwrap();
+    let p = paint();
+    let corner = Point::new(100.0, 100.0);
+    for order in [[back, front], [front, back]] {
+        let mut s = Selection::default();
+        s.set(order);
+        let c = cx(&d, &s, &p);
+        let pressed = hit_anchor(&c, corner, c.point_tol()).map(|(id, ..)| id);
+        assert_eq!(pressed, Some(front_path), "a press takes the front anchor (selected {order:?})");
+        assert_eq!(hovered_anchor(&c, corner), Some((front_path, corner)), "the front anchor is highlighted (selected {order:?})");
+    }
+}

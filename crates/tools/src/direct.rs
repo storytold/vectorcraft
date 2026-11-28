@@ -641,15 +641,14 @@ pub fn over_selected_part(cx: &ToolContext, p: Point) -> bool {
 }
 
 /// The editable paths of the selected objects and inside them (a selected group's members), with
-/// their control bounds: each selected object's paths topmost first, in selection order. The list
-/// is made once per document state and selection; a hover measures only the paths whose bounds it
-/// is near.
+/// their control bounds, topmost first across the whole document: the order [`hit_anchor`] tries
+/// them in. The list is made once per document state and selection; a hover measures only the
+/// paths whose bounds it is near.
 fn selected_part_boxes(cx: &ToolContext) -> std::sync::Arc<[(NodeId, vectorcraft_geom::Rect)]> {
     crate::select::selected_part_boxes(cx, || {
         let editable = cx.doc.editable();
         let mut v = vec![];
         for root in cx.selection.objects.iter().filter_map(|&id| cx.doc.node(id)) {
-            let from = v.len();
             walk_pickable_from(root, &mut |n| {
                 if editable(n.id)
                     && let Some(b) = editable_path(n).and_then(|pd| pd.control_bounds())
@@ -657,8 +656,21 @@ fn selected_part_boxes(cx: &ToolContext) -> std::sync::Arc<[(NodeId, vectorcraft
                     v.push((n.id, b));
                 }
             });
-            v[from..].reverse();
         }
+        // The paint order of every node, a Shaper Group's original shapes included (isolation can
+        // select them); the topmost path comes first.
+        fn walk_all(n: &Node, order: &mut std::collections::HashMap<NodeId, usize>) {
+            let i = order.len();
+            order.insert(n.id, i);
+            for c in n.children().into_iter().flatten() {
+                walk_all(c, order);
+            }
+        }
+        let mut order = std::collections::HashMap::new();
+        for l in &cx.doc.layers {
+            walk_all(l, &mut order);
+        }
+        v.sort_by_key(|(id, _)| std::cmp::Reverse(order.get(id).copied()));
         v.into()
     })
 }
