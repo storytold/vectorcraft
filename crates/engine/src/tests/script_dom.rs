@@ -46,7 +46,7 @@ fn app_documents_track_active_tab_and_new_document() {
     let out = log(
         &mut s,
         "var d = app.documents; vc.log(d.length); vc.log(app.activeDocument.width);\
-         app.activeDocument = d[0]; vc.log(app.activeDocument.width); vc.log(d[0].parent.typename);\
+         app.activeDocument = d[1]; vc.log(app.activeDocument.width); vc.log(d[0].parent.typename);\
          vc.log(d[5] === undefined); vc.log(app.activeDocument instanceof Document);\
          var n = d.add(DocumentColorSpace.CMYK, 50, 60, 2);\
          vc.log(d.length); vc.log(app.activeDocument.name === n.name); vc.log(n.documentColorSpace); vc.log(n.height);\
@@ -297,7 +297,7 @@ fn selection_assignment_is_atomic_across_invalid_items() {
     assert_eq!(s.active().unwrap().selection.objects, vec![a]);
     // An item of another document cannot be selected here.
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let e = failure(&mut s, "app.activeDocument.selection = app.documents[0].pageItems[0];");
+    let e = failure(&mut s, "app.activeDocument.selection = app.documents[1].pageItems[0];");
     assert!(e.contains("Cannot select"), "{e}");
 }
 
@@ -324,11 +324,42 @@ fn a_guide_path_is_not_selected_while_guides_are_locked() {
 fn an_inactive_document_changes_without_switching_tabs() {
     let (mut s, a, _) = doc();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    log(&mut s, "var d = app.documents[0]; d.pageItems[1].name = 'far'; d.selection = d.pageItems[0];");
+    log(&mut s, "var d = app.documents[1]; d.pageItems[1].name = 'far'; d.selection = d.pageItems[0];");
     assert_eq!(s.active_index(), Some(1));
     let first = &s.documents()[0];
     assert_eq!(first.doc.node(a).unwrap().name.as_deref(), Some("far"));
     assert_eq!(first.selection.objects.len(), 1);
+}
+
+#[test]
+fn documents_list_the_current_document_first_then_the_most_recently_current() {
+    let mut s = Session::new();
+    for _ in 0..3 {
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    }
+    let out = log(
+        &mut s,
+        "var t = {}, n = ['A', 'B', 'C'];\
+         for (var i = 0; i < 3; i++) t[app.documents[2 - i].name] = n[i];\
+         function order() { var r = []; for (var i = 0; i < app.documents.length; i++) r.push(t[app.documents[i].name]); return r.join(''); }\
+         var A = app.documents[2], B = app.documents[1], C = app.documents[0];\
+         vc.log(order());\
+         app.activeDocument = A; vc.log(order());\
+         app.activeDocument = B; vc.log(order());\
+         app.activeDocument = app.documents[2]; vc.log(order());\
+         A.pageItems[0].name = 'far'; vc.log(order());\
+         vc.log([app.documents[0] === app.activeDocument, app.documents.getByName(B.name) === B]);",
+    );
+    // A change to a document in the back leaves the order as it was.
+    assert_eq!(out, vec![json!("CBA"), json!("ACB"), json!("BAC"), json!("CBA"), json!("CBA"), json!([true, true])]);
+    // Closing a document in the back keeps the others in their order as the tabs shift.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("document.activate", &json!({"index": 2})).unwrap();
+    assert_eq!(s.front_order(), vec![2, 1, 0]);
+    s.close_document(0);
+    assert_eq!(s.front_order(), vec![1, 0]);
 }
 
 #[test]

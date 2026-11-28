@@ -18,7 +18,8 @@
 //! `pathItems[0]`. A collection read with a name, `pageItems["name"]`, gives the object `getByName`
 //! gives, and a script may name the application's members without `app.`, as
 //! <https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/> describes; here
-//! that holds for `activeDocument`, `documents` and `selection`.
+//! that holds for `activeDocument`, `documents` and `selection`. `documents[0]` is the active
+//! document, as the same page says.
 //!
 //! VectorCraft's own rules:
 //! - A document's selection lists the selected objects topmost first, as `pageItems` does, whatever
@@ -29,8 +30,8 @@
 //! - Assigning `activeDocument` or `selection` without `app.` assigns `app.activeDocument` or the
 //!   active document's selection. A top-level `var selection = ...` does the same and does
 //!   not make a variable of the script. Assigning `documents` keeps its value.
-//! - Collections list documents in tab order. The objectReferences page says `documents[0]` is
-//!   always the active document; VectorCraft does not follow that yet.
+//! - After `documents[0]`, documents are listed from the one active most recently to the one
+//!   active longest ago. A change a script makes to a document in the back does not move it.
 //! - `pageItems` lists every object, with the objects inside groups and compound paths after the
 //!   group or compound path, and leaves out layers and ruler guides. An index out of range gives
 //!   `undefined`; `index` and `getByName` throw `Not found` when nothing matches.
@@ -651,11 +652,11 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, before, layer) = {
+    let (index, active, before, layer, activated) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
         let st = &s.documents()[index];
-        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()))
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()), st.activated)
     };
     let switch = active != Some(index);
     if switch {
@@ -681,6 +682,13 @@ fn on_doc<T>(
         Some(a) if switch => command(h, "document.activate", &json!({"index": a})).map(drop),
         _ => Ok(()),
     };
+    // The switch for the change does not move the document up in `documents`.
+    if switch
+        && back.is_ok()
+        && let Some(st) = h.session.borrow_mut().document_mut(uid)
+    {
+        st.activated = activated;
+    }
     let v = r?;
     restored?;
     back?;
@@ -840,12 +848,17 @@ fn app_ref(_: &Host, _: &[Data]) -> Answer {
     Ok(host_ref("Application", &[]))
 }
 
+/// The open documents in the order `documents` lists them ([`Session::front_order`]).
+fn front_docs(s: &Session) -> impl Iterator<Item = &DocState> {
+    s.front_order().into_iter().map(|i| &s.documents()[i])
+}
+
 /// `documents[i]`, and `documents["name"]` as `getByName` reads it.
 fn docs_at(h: &Host, a: &[Data]) -> Answer {
     let s = h.session.borrow();
     let at = match arg(a, 1) {
-        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| s.documents().get(i)),
-        Data::String(name) => match s.documents().iter().find(|d| d.title() == *name) {
+        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| front_docs(&s).nth(i)),
+        Data::String(name) => match front_docs(&s).find(|d| d.title() == *name) {
             None if !probing(a) => return Err(HostError::Error(NOT_FOUND.into())),
             found => found,
         },
@@ -857,7 +870,7 @@ fn docs_at(h: &Host, a: &[Data]) -> Answer {
 fn docs_by_name(h: &Host, a: &[Data]) -> Answer {
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     let s = h.session.borrow();
-    let st = s.documents().iter().find(|d| d.title() == *name).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
+    let st = front_docs(&s).find(|d| d.title() == *name).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
     Ok(doc_ref(h, st.uid))
 }
 
