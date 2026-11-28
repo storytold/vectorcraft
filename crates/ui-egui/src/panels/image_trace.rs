@@ -14,21 +14,26 @@ use std::sync::Arc;
 // PLAN: assumed import paths of the framework items below: `craft::ui::primitives::IconId`,
 // `craft::ui::runtime::commands::{CommandState, CommandStates}`, `craft::ui::menu::PanelRow`,
 // `craft::ui::patterns::presets::*`, `crate::edits` (widgets-w13) and `crate::chrome::rank` (chrome-w16).
-use craft::behavior::IconId;
+use craft::behavior::{IconId, Metrics, Proposal, ScrollPos, Sense};
 use craft::keymap::CommandRef;
 use craft::ui::buttons::{Button, IconButton, SplitButton, SplitMenu, ToggleButton};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{
+    Bind, BindMut, Common, Component, Container, ContainerProps, Cx, Entry, Props as _, Role, Scroll, Show as _, ShowContainer as _, Sizing,
+};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::form::{Field, SliderField, SliderFieldLayout};
-use craft::ui::layout_components::Row;
+use craft::ui::layout::BodyLayout;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::menu::PanelRow;
 use craft::ui::patterns::presets::{
     NameCheck, NamedPresetEvent, NamedPresetRow, NamedPresetStyle, PickerField, PresetError, PresetPicker, PresetRow, PresetSource, PresetState,
 };
 use craft::ui::pickers::Select;
 use craft::ui::runtime::commands::{CommandState, CommandStates};
+use craft::ui::runtime::env::Env;
 use craft::ui::sections::Section;
+use craft::ui::style::{ComponentStyle, StyleCx};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{Node, NodeId, NodeKind, TraceView};
@@ -75,6 +80,9 @@ fn color_group<'a>(app: &VectorcraftApp, params: &'a Value) -> Option<&'a str> {
     rows::known_group(&rows::swatch_groups(app), params)
 }
 
+/// An object's open document, content generation and node id.
+type ObjectKey = (u64, u64, NodeId);
+
 /// Panel state: the preset name, the current parameters, the view and the last result's counts.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TraceUi {
@@ -88,13 +96,13 @@ pub(crate) struct TraceUi {
     /// The selected Image Trace object's stored settings last adopted (so edits in progress
     /// aren't overwritten until the object changes).
     synced: Value,
-    /// The document and object `synced` came from.
-    object: Option<(u64, NodeId)>,
+    /// The document contents and object `synced` came from.
+    object: Option<ObjectKey>,
     /// Preview was off at the panel's last frame.
     preview_off: bool,
-    /// The settings that wait for objects no longer selected, by document and object: the preset,
+    /// The settings that wait for objects no longer selected, by document contents and object: the preset,
     /// the parameters, and the object's stored settings they were changed from.
-    drafts: std::collections::HashMap<(u64, NodeId), (String, Value, Value)>,
+    drafts: std::collections::HashMap<ObjectKey, (String, Value, Value)>,
 }
 
 /// The Image Trace panel's run-only state: what it shows, and the view settings of its preset picker.
@@ -179,6 +187,8 @@ pub(crate) fn is_trace(n: &Node) -> bool {
 /// object (wherever it is in the selection).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Target {
+    /// Present even with nothing selected, so Revert can retire that document's old drafts.
+    document: Option<(u64, u64)>,
     /// The active document's uid and the object Trace acts on.
     object: Option<(u64, NodeId)>,
     /// The object is an Image Trace object.
@@ -190,6 +200,14 @@ pub(crate) struct Target {
     any_trace: bool,
 }
 
+impl Target {
+    fn object_key(&self) -> Option<ObjectKey> {
+        let (uid, node) = self.object?;
+        let (_, reverts) = self.document?;
+        Some((uid, reverts, node))
+    }
+}
+
 /// Whether any selected object is an Image Trace object.
 fn any_trace_selected(app: &VectorcraftApp) -> bool {
     app.session.active().is_some_and(|st| st.selection.objects.iter().any(|id| st.doc.node(*id).is_some_and(is_trace)))
@@ -199,13 +217,15 @@ fn any_trace_selected(app: &VectorcraftApp) -> bool {
 /// first selected non-traceable object's metadata. Release and Expand keep their own selection scope.
 fn find_target(app: &VectorcraftApp) -> Target {
     let Some(st) = app.session.active() else { return Target::default() };
+    let document = Some((st.uid, st.reverts));
     let any_trace = any_trace_selected(app);
     let node = vectorcraft_engine::cmd::image_trace_target(&app.session, &Value::Null)
         .ok()
         .and_then(|id| st.doc.node(id))
         .or_else(|| first_node(app).filter(|n| !is_trace(n) && !matches!(n.kind, NodeKind::Image(_))));
-    let Some(n) = node else { return Target { any_trace, ..Target::default() } };
+    let Some(n) = node else { return Target { document, any_trace, ..Target::default() } };
     Target {
+        document,
         object: Some((st.uid, n.id)),
         is_trace: is_trace(n),
         is_image: matches!(n.kind, NodeKind::Image(_)),
@@ -477,7 +497,7 @@ pub(crate) fn apply_ignore_color_sample(app: &mut VectorcraftApp, p: &Value) {
     let mut st = std::mem::take(&mut app.ui.image_trace_panel.shown);
     follow_preset_changes(app, &mut st, &list.presets);
     let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(0).collect();
-    sync_with_object(&mut st, t.stored.clone(), Some((s.doc, s.target)), &list.presets, &changes);
+    sync_with_object(&mut st, &t, &list.presets, &changes);
     st.params["ignoreColor"] = json!(color);
     st.preset = "Custom".into();
     let preview = app.ui.image_trace_preview;
@@ -619,10 +639,11 @@ fn trace(app: &mut VectorcraftApp, st: &mut TraceUi) {
 /// the next panel frame must still be recognized as a change, even when it returns to the previous
 /// settings.
 fn adopt(st: &mut TraceUi, target: &Target, r: &Value) {
+    discard_retired_drafts(st, target.document);
     st.info = Some((r["paths"].as_u64().unwrap_or(0), r["anchors"].as_u64().unwrap_or(0), r["colors"].as_u64().unwrap_or(0)));
     if let Some(stored) = &target.stored {
         st.synced = stored.clone();
-        st.object = target.object;
+        st.object = target.object_key();
     }
 }
 
@@ -673,10 +694,22 @@ fn listed_preset(name: &str, params: &Value, all: &[Preset], changes: &[&TracePr
     found.map_or_else(|| "Custom".into(), |p| p.0.clone())
 }
 
-/// Bring the panel's settings `st` in line with the selected object `object`, whose trace settings are `stored`,
+/// Drop only drafts for content that Revert replaced in the active document.
+fn discard_retired_drafts(st: &mut TraceUi, document: Option<(u64, u64)>) {
+    let Some((uid, reverts)) = document else { return };
+    st.drafts.retain(|(doc, generation, _), _| *doc != uid || *generation == reverts);
+    if st.object.is_some_and(|(doc, generation, _)| doc == uid && generation != reverts) {
+        st.object = None;
+        st.synced = Value::Null;
+    }
+}
+
+/// Bring the panel's settings `st` in line with the selected object's stored settings,
 /// with the presets `all` and the saved preset changes `changes` of this session (oldest first); whether the object
 /// came back with the settings that waited for it.
-fn sync_with_object(st: &mut TraceUi, stored: Option<Value>, object: Option<(u64, NodeId)>, all: &[Preset], changes: &[&TracePresetChange]) -> bool {
+fn sync_with_object(st: &mut TraceUi, target: &Target, all: &[Preset], changes: &[&TracePresetChange]) -> bool {
+    discard_retired_drafts(st, target.document);
+    let (stored, object) = (target.stored.clone(), target.object_key());
     let same = |a: &Value, b: &Value| a["preset"] == b["preset"] && a["params"] == b["params"];
     let mut restored = false;
     // Another object: the settings that wait for the one left are kept until it is selected again,
@@ -786,14 +819,142 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         st.preset = "Default".into();
         st.params = list.presets.first().map(|p| p.1.clone()).unwrap_or_default();
     }
-    let (is_trace, is_image, any_trace) = (t.is_trace, t.is_image, t.any_trace);
     // The saved preset changes since the last frame apply to the panel's settings before the selected object's
     // settings, which `sync_with_object` resolves against every change, are adopted.
     follow_preset_changes(app, &mut st, &list.presets);
     let restored = {
         let changes: Vec<&TracePresetChange> = app.session.trace_preset_changes_since(0).collect();
-        sync_with_object(&mut st, t.stored.clone(), t.object, &list.presets, &changes)
+        sync_with_object(&mut st, &t, &list.presets, &changes)
     };
+    let preview = app.ui.image_trace_preview;
+    let mut actions = (false, false, false);
+    let stack = Stack::new().label(tl!("Image Trace")).fill().scroll(Scroll::vertical());
+    let env = Env::of(ui);
+    let settings_row = env.tokens.size.control.md + env.tokens.space.gap.row;
+    let footer = Stack::new().id_salt("trace-footer-measure").measure_in(ui, Proposal::Width(ui.available_width()), |ui, _| {
+        show_footer(ui, preview, &t);
+    });
+    let compact_offset = ui.scope_id().with("trace-compact-offset");
+    let settings = if ui.available_height() >= footer.y + settings_row {
+        if !ui.is_sizing_pass() {
+            ui.ctx().data_mut(|data| data.remove::<ScrollPos>(compact_offset));
+        }
+        stack.footer(|ui, _| actions = show_footer(ui, preview, &t)).show(ui, |ui, _| show_settings(app, ui, &mut st, &list, &t))
+    } else {
+        // When the footer moves into the scroll area, start with its actions in view.
+        let before = ui.ctx().data(|data| data.get_temp(compact_offset)).unwrap_or_default();
+        let mut offset = before;
+        let shown = CompactSettings::new(Bind::bound(&mut offset)).show(ui, |ui, _| {
+            actions = show_actions(ui, preview, &t);
+            Divider::horizontal().show(ui);
+            show_settings(app, ui, &mut st, &list, &t)
+        });
+        if offset != before && !ui.is_sizing_pass() {
+            ui.ctx().data_mut(|data| data.insert_temp(compact_offset, offset));
+        }
+        shown
+    };
+    let (mut retrace, held) = settings.inner.unwrap_or_default();
+    let (preview_toggled, trace_clicked, expand_clicked) = actions;
+    if !ui.is_sizing_pass() {
+        hold_source(app, t.any_trace && held);
+    }
+    if preview_toggled {
+        run_reporting(app, "imageTrace.preview", json!({}));
+    }
+    if trace_clicked {
+        trace(app, &mut st);
+    }
+    if expand_clicked {
+        run_reporting(app, "imageTrace.expand", json!({}));
+    }
+    // Preview turned on (the checkbox, `imageTrace.preview` or `ui.set`): the selected object is
+    // traced with the settings that waited in the panel. With no Image Trace object selected, it is
+    // traced when it is selected again. An object whose settings waited while another object was
+    // selected is traced when it is selected again with Preview on.
+    let preview = app.ui.image_trace_preview;
+    retrace |= preview && (st.preview_off || restored) && t.is_trace && st.params != st.synced["params"];
+    if t.is_trace || !preview {
+        st.preview_off = !preview;
+    }
+    cancel_disabled_ignore_sampler(app, &st.params);
+    if retrace && t.is_trace && preview {
+        trace(app, &mut st);
+    }
+    app.ui.image_trace_panel.shown = st;
+}
+
+/// The very short layout needs a bound offset so returning to it shows the actions first.
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
+#[component(container, unregistered)]
+struct CompactSettings<'a> {
+    #[common]
+    common: Common,
+    #[container]
+    props: ContainerProps,
+    offset: Bind<'a, ScrollPos>,
+}
+
+impl<'a> CompactSettings<'a> {
+    fn new(offset: Bind<'a, ScrollPos>) -> Self {
+        let props = ContainerProps::new().sizing(Sizing::Fill).layout(BodyLayout::stack()).scroll(Scroll::vertical());
+        Self { common: Common::new(), props, offset }.label(tl!("Image Trace"))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, ComponentStyle)]
+struct CompactSettingsStyle {
+    #[style(metrics)]
+    metrics: Metrics,
+}
+
+impl Component for CompactSettings<'_> {
+    const ROLE: Role = Role::GROUP;
+    type Style = CompactSettingsStyle;
+    type Output = egui::Response;
+
+    fn style(_: &StyleCx<'_>, _: CompactSettingsStyleKey) -> CompactSettingsStyle {
+        CompactSettingsStyle { metrics: Metrics::new() }
+    }
+
+    fn sense(&self) -> Sense {
+        Sense::empty()
+    }
+
+    fn scroll(&mut self) -> Option<BindMut<'_, ScrollPos>> {
+        Some(self.offset.reborrow())
+    }
+
+    fn finish(self, cx: Cx<'_, Self>) -> egui::Response {
+        cx.response.clone()
+    }
+}
+
+impl Container for CompactSettings<'_> {}
+
+fn show_footer(ui: &mut Ui, preview: bool, target: &Target) -> (bool, bool, bool) {
+    Divider::horizontal().show(ui);
+    show_actions(ui, preview, target)
+}
+
+fn show_actions(ui: &mut Ui, preview: bool, target: &Target) -> (bool, bool, bool) {
+    let mut value = preview;
+    let mut trace_clicked = false;
+    let mut expand_clicked = false;
+    Row::new().wrap(true).show(ui, |ui, _| {
+        Checkbox::new(Bind::bound(&mut value)).label(tl!("Preview")).show(ui);
+        let can_trace = target.is_trace || target.is_image;
+        let mut trace_button = Button::new(tl!("Trace")).enabled(can_trace);
+        if !can_trace {
+            trace_button = trace_button.tooltip(tl!("Select an image to trace"));
+        }
+        trace_clicked = trace_button.show(ui).clicked();
+        expand_clicked = Button::new(tl!("Expand")).enabled(target.any_trace).show(ui).clicked();
+    });
+    (value != preview, trace_clicked, expand_clicked)
+}
+
+fn show_settings(app: &mut VectorcraftApp, ui: &mut Ui, st: &mut TraceUi, list: &PresetList, t: &Target) -> (bool, bool) {
     let mut retrace = false;
 
     // A preset button chooses its preset as the Preset row does; the button of the panel's
@@ -804,7 +965,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             let mut on = was;
             ToggleButton::new(label, Bind::bound(&mut on)).tooltip(preset_label(name)).show(ui);
             if on && !was {
-                retrace |= choose_preset(&mut st, &list.presets, name);
+                retrace |= choose_preset(st, &list.presets, name);
             }
         }
     });
@@ -824,7 +985,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     .show(ui);
     for event in preset_row.events {
         match event {
-            NamedPresetEvent::Apply(name) => retrace |= choose_preset(&mut st, &list.presets, &name),
+            NamedPresetEvent::Apply(name) => retrace |= choose_preset(st, &list.presets, &name),
             NamedPresetEvent::Create { name, .. } => run_reporting(app, "imageTrace.presets.save", json!({ "name": name, "params": st.params })),
             NamedPresetEvent::Rename { key, text, .. } => run_reporting(app, "imageTrace.presets.save", json!({ "name": key, "newName": text })),
             NamedPresetEvent::Delete(name) => run_reporting(app, "imageTrace.presets.delete", json!({ "name": name })),
@@ -845,21 +1006,25 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     Row::new().show(ui, |ui, _| {
         picked = view_pick(ui, st.view);
         let tip = tl!("Press and hold to view the source image");
-        held =
-            IconButton::new(IconId::new("eye")).label(tip).tooltip(tip).selected(app.ui.trace_hold_source.is_some()).enabled(any_trace).show(ui).held;
+        held = IconButton::new(IconId::new("eye"))
+            .label(tip)
+            .tooltip(tip)
+            .selected(app.ui.trace_hold_source.is_some())
+            .enabled(t.any_trace)
+            .show(ui)
+            .held;
     });
     if let Some(v) = picked {
         st.view = v;
-        if any_trace {
+        if t.any_trace {
             set_view(app, v);
         }
     }
-    hold_source(app, any_trace && held);
     split_row(app, ui);
 
     let data = RowsData::of(app);
     let main = rows::main_rows(ui, &mut st.params, &data, RowsHost::Panel);
-    let sampler = Sampler { enabled: is_trace || is_image, armed: app.ui.trace_ignore_sampler.is_some() };
+    let sampler = Sampler { enabled: t.is_trace || t.is_image, armed: app.ui.trace_ignore_sampler.is_some() };
     let advanced = Section::new(tl!("Advanced"))
         .open(Bind::bound(&mut app.ui.image_trace_advanced))
         .show(ui, |ui, _| rows::advanced_rows(ui, &mut st.params, &data, RowsHost::Panel, Some(sampler)))
@@ -880,7 +1045,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         cancel_ignore_sampler(app, true);
     }
 
-    Divider::horizontal().show(ui);
     if let Some((p, a, c)) = st.info {
         Text::new(crate::i18n::fmt(
             tl!("Paths: {paths}    Anchors: {anchors}    Colors: {colors}"),
@@ -889,43 +1053,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .shade(Shade::Muted)
         .show(ui);
     }
-    let (mut preview_toggled, mut trace_clicked, mut expand_clicked) = (false, false, false);
-    Row::new().show(ui, |ui, _| {
-        let preview = app.ui.image_trace_preview;
-        let mut value = preview;
-        Checkbox::new(Bind::bound(&mut value)).label(tl!("Preview")).show(ui);
-        preview_toggled = value != preview;
-        let can_trace = is_trace || is_image;
-        let mut trace_button = Button::new(tl!("Trace")).enabled(can_trace);
-        if !can_trace {
-            trace_button = trace_button.tooltip(tl!("Select an image to trace"));
-        }
-        trace_clicked = trace_button.show(ui).clicked();
-        expand_clicked = Button::new(tl!("Expand")).enabled(any_trace).show(ui).clicked();
-    });
-    if preview_toggled {
-        run_reporting(app, "imageTrace.preview", json!({}));
-    }
-    if trace_clicked {
-        trace(app, &mut st);
-    }
-    if expand_clicked {
-        run_reporting(app, "imageTrace.expand", json!({}));
-    }
-    // Preview turned on (the checkbox, `imageTrace.preview` or `ui.set`): the selected object is
-    // traced with the settings that waited in the panel. With no Image Trace object selected, it is
-    // traced when it is selected again. An object whose settings waited while another object was
-    // selected is traced when it is selected again with Preview on.
-    let preview = app.ui.image_trace_preview;
-    retrace |= preview && (st.preview_off || restored) && is_trace && st.params != st.synced["params"];
-    if is_trace || !preview {
-        st.preview_off = !preview;
-    }
-    cancel_disabled_ignore_sampler(app, &st.params);
-    if retrace && is_trace && preview {
-        trace(app, &mut st);
-    }
-    app.ui.image_trace_panel.shown = st;
+    (retrace, held)
 }
 
 /// The panel menu's rows: Release and Expand act on the selected Image Trace objects.

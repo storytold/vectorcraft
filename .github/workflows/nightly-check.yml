@@ -3,13 +3,14 @@ name: Nightly check
 # The app-side Nightly pieces, checked without a feed run: the Python suites that read the archive,
 # plist and signing scripts, the workflow contracts, and (on Windows) the packaging and signing
 # PowerShell suites. The producer itself is .github/workflows/nightly.yml; the Apple-silicon bundle
-# is built and verified by nightly-macos.yml behind the `full-ci` label.
+# is built and verified by nightly-macos.yml behind the `full-ci` label. The same job also runs the
+# suite for scripts/ci-clear-rolling-cache.py, which ci.yml's nightly cold run calls.
 on:
   push:
     branches: [main, release]
-    paths: [".github/workflows/nightly*.yml", "packaging/**", "apps/vectorcraft/**", "crates/ui-egui/src/os_window.rs"]
+    paths: [".github/workflows/nightly*.yml", "packaging/**", "apps/vectorcraft/**", "crates/ui-egui/src/os_window.rs", "scripts/ci-clear-rolling-cache*.py"]
   pull_request:
-    paths: [".github/workflows/nightly*.yml", "packaging/**", "apps/vectorcraft/**", "crates/ui-egui/src/os_window.rs"]
+    paths: [".github/workflows/nightly*.yml", "packaging/**", "apps/vectorcraft/**", "crates/ui-egui/src/os_window.rs", "scripts/ci-clear-rolling-cache*.py"]
   workflow_dispatch:
 
 permissions:
@@ -34,6 +35,8 @@ jobs:
           persist-credentials: false
       - name: Run the synthetic suites
         run: python3 packaging/nightly-tests.py
+      - name: Run the cold cache clear suite
+        run: python3 scripts/ci-clear-rolling-cache-tests.py
       - name: Parse every nightly shell script
         run: |
           set -euo pipefail

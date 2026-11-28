@@ -775,6 +775,8 @@ fn an_arc_drag_shows_the_protractor() {
     let protractors = |s: &mut Session| s.overlays(view()).iter().filter(|o| matches!(o, Overlay::Path { .. })).count();
     for (action, shown) in [("line", 0), ("continuousArc", 1), ("sharpArc", 1)] {
         key(&mut s, ToolKey::Escape);
+        // With the last path selected, a press on its anchors would edit it instead of drawing.
+        s.execute("select.set", &json!({"ids": []})).unwrap();
         s.set_tool_option_cmd(&json!({"tool": "quickPen", "key": "action", "value": "line"})).unwrap();
         click(&mut s, 100.0, 100.0);
         click(&mut s, 200.0, 100.0);
@@ -1371,4 +1373,336 @@ fn path_quick_pen_replaces_the_points_after_keep() {
     s.execute("path.quickPen", &json!({"id": id, "keep": 2, "pieces": [{"x": 200, "y": 0}]})).unwrap();
     let ends: Vec<Point> = only_path(&s).anchors.iter().map(|a| a.p).collect();
     assert_eq!(ends, [pt(0.0, 0.0), pt(100.0, 0.0), pt(200.0, 0.0)]);
+}
+
+/// A selected path drawn with `path.quickPen` from `start` through `pieces`, with the Quick Pen
+/// chosen and no path being drawn.
+fn selected_quick_pen_path(s: &mut Session, start: (f64, f64), pieces: Value) -> NodeId {
+    let r = s.execute("path.quickPen", &json!({"start": [start.0, start.1], "pieces": pieces})).unwrap();
+    let id = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    quick_pen(s);
+    id
+}
+
+fn points(s: &Session) -> Vec<Point> {
+    only_path(s).anchors.iter().map(|a| a.p).collect()
+}
+
+fn shift_click(s: &mut Session, x: f64, y: f64) {
+    let v = view();
+    let mods = Mods { shift: true, ..Mods::default() };
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent { mods, ..PointerEvent::new(kind, x, y) }, v).unwrap();
+    }
+}
+
+/// Is segment `i` of `sp` a circular arc: do its points a quarter and three quarters along lie on
+/// the circle through its ends and its middle?
+fn segment_is_circular(sp: &SubPath, i: usize) -> bool {
+    use vectorcraft_geom::ParamCurve;
+    let seg = sp.segment(i);
+    let (a, b, c) = (seg.eval(0.0), seg.eval(0.5), seg.eval(1.0));
+    let d = 2.0 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+    let sq = |p: Point| p.x * p.x + p.y * p.y;
+    let center = pt(
+        (sq(a) * (b.y - c.y) + sq(b) * (c.y - a.y) + sq(c) * (a.y - b.y)) / d,
+        (sq(a) * (c.x - b.x) + sq(b) * (a.x - c.x) + sq(c) * (b.x - a.x)) / d,
+    );
+    let r = center.distance(a);
+    [0.25, 0.75].iter().all(|&t| (seg.eval(t).distance(center) - r).abs() < r * 1e-3)
+}
+
+/// With no path being drawn, a drag on an anchor of the selected path moves that anchor alone, in
+/// one undo step: at the corner between a line and an arc, the line stays a line and the arc a
+/// circular arc.
+#[test]
+fn a_drag_on_an_anchor_moves_it_and_the_arc_stays_an_arc() {
+    let mut s = session();
+    selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100, "action": "sharpArc", "turn": 90}]));
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)]);
+    let undo = undo_steps(&s);
+    press(&mut s, &[(200.0, 100.0), (200.0, 80.0), (200.0, 50.0)]);
+    assert_eq!(undo_steps(&s), undo + 1);
+    let sp = only_path(&s);
+    assert_eq!(sp.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), [pt(100.0, 100.0), pt(200.0, 50.0), pt(300.0, 100.0)]);
+    assert!(sp.segment_is_line(0), "{:?}", sp.anchors);
+    assert!(!sp.segment_is_line(1) && segment_is_circular(&sp, 1), "{:?}", sp.anchors);
+    assert_eq!(paths(&s).len(), 1, "no new path");
+}
+
+/// A drag on a segment of the selected path moves that segment's two ends.
+#[test]
+fn a_drag_on_a_segment_moves_its_ends() {
+    let mut s = session();
+    selected_quick_pen_path(&mut s, (100.0, 300.0), json!([{"x": 300, "y": 300}, {"x": 300, "y": 400}]));
+    press(&mut s, &[(200.0, 300.0), (200.0, 280.0), (200.0, 250.0)]);
+    assert_eq!(points(&s), [pt(100.0, 250.0), pt(300.0, 250.0), pt(300.0, 400.0)]);
+    assert_eq!(paths(&s).len(), 1);
+}
+
+/// A drag that starts on an end of the selected open path moves that end; a click there still
+/// goes on drawing from it.
+#[test]
+fn a_drag_on_an_open_end_moves_it() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 300.0), json!([{"x": 300, "y": 300}]));
+    press(&mut s, &[(300.0, 300.0), (320.0, 320.0), (350.0, 350.0)]);
+    assert_eq!(points(&s), [pt(100.0, 300.0), pt(350.0, 350.0)]);
+    assert!(s.doc().unwrap().selection.partial(id).is_some(), "the dragged end is selected");
+    click(&mut s, 350.0, 350.0);
+    assert!(s.doc().unwrap().selection.partial(id).is_none(), "drawing goes on with the path selected whole");
+    click(&mut s, 350.0, 450.0);
+    assert_eq!(points(&s), [pt(100.0, 300.0), pt(350.0, 350.0), pt(350.0, 450.0)]);
+}
+
+/// A press let go past the drag distance moves what it holds even when no drag event went that
+/// far: an inner anchor moves, and an open end moves instead of going on drawing.
+#[test]
+fn a_release_past_the_drag_distance_moves_the_anchor() {
+    let mut s = session();
+    selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 102.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 150.0), v).unwrap();
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 150.0), pt(300.0, 100.0)]);
+    assert_eq!(undo_steps(&s), undo + 1);
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 200.0), v).unwrap();
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 150.0), pt(300.0, 200.0)]);
+    assert_eq!(undo_steps(&s), undo + 2);
+    assert_eq!(paths(&s).len(), 1, "no new path");
+}
+
+/// A drag on an anchor or a segment that comes back to where it started moves nothing and records
+/// no undo step.
+#[test]
+fn a_drag_back_to_its_start_records_no_undo_step() {
+    let mut s = session();
+    selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let undo = undo_steps(&s);
+    for at in [(200.0, 100.0), (250.0, 100.0)] {
+        press(&mut s, &[at, (at.0, at.1 + 50.0), at]);
+        assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)], "press at {at:?}");
+        assert_eq!(undo_steps(&s), undo, "press at {at:?}");
+    }
+    // Choosing another tool during such a drag records none either.
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 150.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 100.0), v).unwrap();
+    s.select_tool("selection", v).unwrap();
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)]);
+    assert_eq!(undo_steps(&s), undo);
+}
+
+/// When another command changes the selection while the press is down, neither a click nor a drag
+/// selects or moves the anchor the press found.
+#[test]
+fn a_selection_change_during_an_edit_press_stops_it() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let v = view();
+    for drag in [false, true] {
+        s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+        let undo = undo_steps(&s);
+        s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+        s.execute("select.none", &json!({})).unwrap();
+        let y = if drag { 150.0 } else { 100.0 };
+        if drag {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, y), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, y), v).unwrap();
+        assert!(s.doc().unwrap().selection.objects.is_empty(), "drag: {drag}");
+        assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 100.0), pt(300.0, 100.0)], "drag: {drag}");
+        assert_eq!(undo_steps(&s), undo, "drag: {drag}");
+    }
+}
+
+/// When another command edits the path while the press is down, neither a drag nor a release past
+/// the drag distance moves the anchor the press found.
+#[test]
+fn an_edit_during_an_edit_press_stops_the_move() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let v = view();
+    for (drag, x) in [(true, 90.0), (false, 80.0)] {
+        s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+        s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": x, "y": 90})).unwrap();
+        let undo = undo_steps(&s);
+        if drag {
+            s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 150.0), v).unwrap();
+        }
+        s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 150.0), v).unwrap();
+        assert_eq!(points(&s), [pt(x, 90.0), pt(200.0, 100.0), pt(300.0, 100.0)], "drag: {drag}");
+        assert_eq!(undo_steps(&s), undo, "drag: {drag}");
+    }
+}
+
+/// An edit made by another command during an anchor drag stays: the rest of the drag and the
+/// release move nothing more, and one undo step holds the move as last shown with the edit.
+#[test]
+fn an_edit_during_an_anchor_drag_stays() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let undo = undo_steps(&s);
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 150.0), v).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 90, "y": 90})).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 200.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 210.0), v).unwrap();
+    assert_eq!(points(&s), [pt(90.0, 90.0), pt(200.0, 150.0), pt(300.0, 100.0)], "the edit and the move as last shown");
+    assert_eq!(undo_steps(&s), undo + 1);
+    assert!(!s.in_interaction(), "the step is committed");
+    // Escape after such an edit keeps it too.
+    s.pointer(&PointerEvent::new(PointerKind::Down, 300.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 300.0, 150.0), v).unwrap();
+    s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 80, "y": 80})).unwrap();
+    key(&mut s, ToolKey::Escape);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 300.0, 200.0), v).unwrap();
+    assert_eq!(points(&s), [pt(80.0, 80.0), pt(200.0, 150.0), pt(300.0, 150.0)]);
+    assert!(!s.in_interaction(), "the step is committed");
+}
+
+/// When another command edits the path while a click is down, the click neither selects the
+/// anchor nor goes on drawing from the open end it found.
+#[test]
+fn an_edit_during_an_edit_click_does_nothing() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let v = view();
+    for (x, moved_y) in [(200.0, 90.0), (300.0, 80.0)] {
+        s.pointer(&PointerEvent::new(PointerKind::Down, x, 100.0), v).unwrap();
+        s.execute("path.moveAnchor", &json!({"id": id.0, "anchor": 0, "x": 100, "y": moved_y})).unwrap();
+        s.pointer(&PointerEvent::new(PointerKind::Up, x, 100.0), v).unwrap();
+        assert!(s.doc().unwrap().selection.partial(id).is_none(), "no anchor selected after a click at x = {x}");
+    }
+    // The open end was not taken up, so the next click starts a new path.
+    click(&mut s, 400.0, 200.0);
+    assert_eq!(paths(&s).len(), 2);
+}
+
+/// A click on an anchor selects it alone, Shift-click adds another, and Delete (`edit.clear`, the
+/// context menu's Delete) then removes both.
+#[test]
+fn clicks_select_anchors_for_delete() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}, {"x": 400, "y": 100}]));
+    let undo = undo_steps(&s);
+    click(&mut s, 200.0, 100.0);
+    let picked = |s: &Session| s.doc().unwrap().selection.partial(id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(picked(&s), [(0, 1)]);
+    shift_click(&mut s, 300.0, 100.0);
+    assert_eq!(picked(&s), [(0, 1), (0, 2)]);
+    shift_click(&mut s, 300.0, 100.0);
+    assert_eq!(picked(&s), [(0, 1)], "Shift-click takes it out again");
+    shift_click(&mut s, 300.0, 100.0);
+    assert_eq!(undo_steps(&s), undo, "selecting is no edit");
+    s.execute("edit.clear", &json!({})).unwrap();
+    let left: Vec<Point> = paths(&s).iter().flat_map(|(_, pd)| pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))).collect();
+    assert!(!left.contains(&pt(200.0, 100.0)) && !left.contains(&pt(300.0, 100.0)), "{left:?}");
+}
+
+/// The first Shift-click on an anchor of a path selected whole selects that anchor alone.
+#[test]
+fn a_first_shift_click_selects_the_anchor_alone() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    assert!(s.doc().unwrap().selection.partial(id).is_none(), "the path is selected whole");
+    shift_click(&mut s, 200.0, 100.0);
+    let picked = s.doc().unwrap().selection.partial(id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(picked, [(0, 1)]);
+}
+
+/// A drag on a segment moves its two ends alone, also when they are selected with another anchor.
+#[test]
+fn a_segment_drag_moves_only_its_ends() {
+    let mut s = session();
+    let pieces = json!([{"x": 300, "y": 300}, {"x": 300, "y": 400}, {"x": 100, "y": 400}, {"x": 100, "y": 500}]);
+    let id = selected_quick_pen_path(&mut s, (100.0, 300.0), pieces);
+    click(&mut s, 300.0, 300.0);
+    shift_click(&mut s, 300.0, 400.0);
+    shift_click(&mut s, 100.0, 400.0);
+    let picked = s.doc().unwrap().selection.partial(id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(picked, [(0, 1), (0, 2), (0, 3)]);
+    press(&mut s, &[(300.0, 350.0), (320.0, 350.0), (350.0, 350.0)]);
+    assert_eq!(points(&s), [pt(100.0, 300.0), pt(350.0, 300.0), pt(350.0, 400.0), pt(100.0, 400.0), pt(100.0, 500.0)]);
+    assert_eq!(paths(&s).len(), 1);
+}
+
+/// A drag on a segment whose two ends are already selected as anchors selects the segment, so
+/// Delete then cuts that connection and keeps both anchors.
+#[test]
+fn a_segment_drag_from_its_selected_ends_selects_the_segment() {
+    let mut s = session();
+    let pieces = json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}, {"x": 400, "y": 100}]);
+    let id = selected_quick_pen_path(&mut s, (100.0, 100.0), pieces);
+    click(&mut s, 200.0, 100.0);
+    shift_click(&mut s, 300.0, 100.0);
+    let picked = s.doc().unwrap().selection.partial(id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(picked, [(0, 1), (0, 2)]);
+    press(&mut s, &[(250.0, 100.0), (250.0, 120.0), (250.0, 150.0)]);
+    assert_eq!(points(&s), [pt(100.0, 100.0), pt(200.0, 150.0), pt(300.0, 150.0), pt(400.0, 100.0)]);
+    let segments = s.doc().unwrap().selection.segments.get(&id).cloned().unwrap_or_default().into_iter().collect::<Vec<_>>();
+    assert_eq!(segments, [(0, 1)], "the segment is selected");
+    s.execute("edit.clear", &json!({})).unwrap();
+    let left: Vec<Point> = paths(&s).iter().flat_map(|(_, pd)| pd.subpaths.iter().flat_map(|sp| sp.anchors.iter().map(|a| a.p))).collect();
+    for p in [pt(100.0, 100.0), pt(200.0, 150.0), pt(300.0, 150.0), pt(400.0, 100.0)] {
+        assert!(left.contains(&p), "{p:?} stays: {left:?}");
+    }
+}
+
+/// A click on an open end of another path, in front of the selected path, that lies on a segment
+/// of the selected path goes on drawing from that end.
+#[test]
+fn an_open_end_on_a_selected_segment_continues_its_path() {
+    let mut s = session();
+    let id = selected_quick_pen_path(&mut s, (100.0, 300.0), json!([{"x": 300, "y": 300}]));
+    let r = s.execute("shape.line", &json!({"x1": 200, "y1": 200, "x2": 200, "y2": 300})).unwrap();
+    let other = NodeId(r["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    click(&mut s, 200.0, 300.0);
+    click(&mut s, 250.0, 250.0);
+    let all = paths(&s);
+    assert_eq!(all.len(), 2, "no new path");
+    let ends: Vec<Point> = all.iter().find(|(id, _)| *id == other).unwrap().1.subpaths[0].anchors.iter().map(|a| a.p).collect();
+    assert_eq!(ends, [pt(200.0, 200.0), pt(200.0, 300.0), pt(250.0, 250.0)]);
+}
+
+/// Escape during a drag puts the anchor back, and the release then changes nothing.
+#[test]
+fn escape_takes_back_an_anchor_drag() {
+    let mut s = session();
+    selected_quick_pen_path(&mut s, (100.0, 100.0), json!([{"x": 200, "y": 100}, {"x": 300, "y": 100}]));
+    let (before, undo) = (points(&s), undo_steps(&s));
+    let v = view();
+    s.pointer(&PointerEvent::new(PointerKind::Down, 200.0, 100.0), v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Drag, 200.0, 150.0), v).unwrap();
+    assert_ne!(points(&s), before, "the drag previews");
+    key(&mut s, ToolKey::Escape);
+    s.pointer(&PointerEvent::new(PointerKind::Up, 200.0, 150.0), v).unwrap();
+    assert_eq!(points(&s), before);
+    assert_eq!(undo_steps(&s), undo);
+    assert_eq!(paths(&s).len(), 1);
+}
+
+/// While a path is being drawn, a press on one of its points adds a piece as before; the editing
+/// starts only after Escape ends the path.
+#[test]
+fn a_press_while_drawing_adds_a_piece() {
+    let mut s = session();
+    quick_pen(&mut s);
+    click(&mut s, 100.0, 100.0);
+    click(&mut s, 200.0, 100.0);
+    click(&mut s, 200.0, 200.0);
+    press(&mut s, &[(200.0, 100.0), (220.0, 90.0), (250.0, 80.0)]);
+    assert_eq!(points(&s).len(), 4, "a piece added");
+    key(&mut s, ToolKey::Escape);
+    press(&mut s, &[(200.0, 100.0), (200.0, 70.0), (200.0, 50.0)]);
+    let got = points(&s);
+    assert_eq!(got.len(), 4);
+    assert!(got[1].distance(pt(200.0, 50.0)) < 1e-9, "{got:?}");
 }

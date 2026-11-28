@@ -453,12 +453,17 @@ pub fn pathfinder_effect_options(s: &Session) -> effects::PathfinderEffectOption
     }
 }
 
+/// The effect an apply request names, including the older `id` parameter.
+pub(crate) fn requested_effect(p: &Value) -> Option<&str> {
+    str_param(p, "effect").or_else(|| str_param(p, "id"))
+}
+
 /// `effect.apply`: adds effect `effect` (or `id`) with `params`, its defaults filled in, to the
-/// targets' active item as one undo step. A 3D effect must fit each target, which takes only one;
-/// a Pathfinder effect on loose objects groups them first. → `{ids, index, item}`.
+/// targets' active item as one undo step. A 3D effect must fit each target, which takes only one.
+/// A Pathfinder effect on loose objects groups them first. → `{ids, index, item}`.
 pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "effect.apply";
-    let id = str_param(p, "effect").or_else(|| str_param(p, "id")).ok_or_else(|| bad(C, "missing `effect` id"))?;
+    let id = requested_effect(p).ok_or_else(|| bad(C, "missing `effect` id"))?;
     // An effect given as `id` names no objects: the targets are read with that `id` as null.
     let effect_as_id;
     let p = if str_param(p, "effect").is_none() {
@@ -509,11 +514,13 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
     let label = effects::effect_info(id).map(|e| e.label.trim_end_matches('…').to_string()).unwrap_or_default();
     aligned(p, C)?;
     if let Some(loose) = loose_for_pathfinder(s, p, id)? {
-        let gid = s.edit(&label, |d, sel| {
-            let gid = super::object::group_nodes(d, &loose)?;
-            d.node_mut(gid).ok_or(EngineError::NoNode(gid))?.appearance.effects.push(effect.clone());
-            sel.set([gid]);
-            Ok(gid)
+        let gid = s.edit_effect(id, |s| {
+            s.edit(&label, |d, sel| {
+                let gid = super::object::group_nodes(d, &loose)?;
+                d.node_mut(gid).ok_or(EngineError::NoNode(gid))?.appearance.effects.push(effect.clone());
+                sel.set([gid]);
+                Ok(gid)
+            })
         })?;
         return Ok(json!({ "ids": [gid.0], "index": 0, "item": null, "grouped": true }));
     }
@@ -544,9 +551,11 @@ pub(crate) fn apply(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    let ids = edit_effects(s, p, item, C, &label, "Apply Effect: select objects", APPENDED, |fx, _| {
-        fx.push(effect.clone());
-        true
+    let ids = s.edit_effect(id, |s| {
+        edit_effects(s, p, item, C, &label, "Apply Effect: select objects", APPENDED, |fx, _| {
+            fx.push(effect.clone());
+            true
+        })
     })?;
     // The item the effect landed on in the object whose row the item is (the first selected object
     // for the active item, which applies where it fits), and the effect's index in that object.
@@ -887,32 +896,37 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
-    let ids = edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), index, |fx, index| {
-        let Some(e) = fx.get_mut(index) else { return false };
-        if let Some(id) = &warp_id {
-            e.id.clone_from(id);
-        }
-        if let Some(to) = kind
-            && e.id != to
-        {
-            e.params = effects::three_d_params_as(&e.id, &e.params, to);
-            e.id = to.to_string();
-        }
-        if let (Value::Object(new), cur) = (effects::upgrade_params(&e.id, &params), &mut e.params) {
-            if !cur.is_object() {
-                *cur = effects::merged_params(&e.id, &Value::Null);
+    // The effect edited, when every target has one at `index` and all are the same: a dialog's
+    // preview names its step after it.
+    let one = edited.first().filter(|e| edited.len() == targets.len() && edited.iter().all(|other| other == *e)).cloned().unwrap_or_default();
+    let ids = s.edit_effect(&one, |s| {
+        edit_effects(s, p, item, C, "Effect Options", &format!("{C}: no effect at index {index}"), index, |fx, index| {
+            let Some(e) = fx.get_mut(index) else { return false };
+            if let Some(id) = &warp_id {
+                e.id.clone_from(id);
             }
-            // Earlier parameters (a Perspective strength, a light by azimuth and elevation) take
-            // their current form first, so the new values replace them and the rest is kept.
-            *cur = effects::upgrade_params(&e.id, cur);
-            if let Value::Object(m) = cur {
-                m.extend(new);
+            if let Some(to) = kind
+                && e.id != to
+            {
+                e.params = effects::three_d_params_as(&e.id, &e.params, to);
+                e.id = to.to_string();
             }
-        }
-        if let Some(v) = visible {
-            e.visible = v;
-        }
-        true
+            if let (Value::Object(new), cur) = (effects::upgrade_params(&e.id, &params), &mut e.params) {
+                if !cur.is_object() {
+                    *cur = effects::merged_params(&e.id, &Value::Null);
+                }
+                // Earlier parameters (a Perspective strength, a light by azimuth and elevation) take
+                // their current form first, so the new values replace them and the rest is kept.
+                *cur = effects::upgrade_params(&e.id, cur);
+                if let Value::Object(m) = cur {
+                    m.extend(new);
+                }
+            }
+            if let Some(v) = visible {
+                e.visible = v;
+            }
+            true
+        })
     })?;
     Ok(json!({ "ids": ids_json(&ids) }))
 }
