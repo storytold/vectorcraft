@@ -854,6 +854,27 @@ fn load_all_styles_loads_both_kinds_in_one_step() {
     assert_eq!(s.doc().unwrap().doc, before);
 }
 
+/// A file or `dataBase64` larger than 64 MB loads nothing and is not read past the limit.
+#[test]
+fn loading_refuses_a_file_larger_than_64_mb() {
+    let (mut s, _) = session_with_text("Title");
+    let dir = std::env::temp_dir().join(format!("vc-load-styles-big-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("Big.vectorcraft");
+    std::fs::File::create(&path).unwrap().set_len(MAX_LOAD_BYTES as u64 + 1).unwrap();
+    let before = s.doc().unwrap().doc.clone();
+    let r = s.execute("charStyle.load", &json!({"path": path.to_string_lossy()}));
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(r.as_ref().is_err_and(|e| e.to_string().contains("larger than 64 MB")), "{r:?}");
+    let b64 = "A".repeat(MAX_LOAD_BYTES / 3 * 4 + 8);
+    let r = s.execute("paraStyle.load", &json!({"dataBase64": b64}));
+    assert!(r.as_ref().is_err_and(|e| e.to_string().contains("larger than 64 MB")), "{r:?}");
+    let text = " ".repeat(MAX_LOAD_BYTES + 1);
+    let r = s.execute("textStyle.loadAll", &json!({"data": text}));
+    assert!(r.as_ref().is_err_and(|e| e.to_string().contains("larger than 64 MB")), "{r:?}");
+    assert_eq!(s.doc().unwrap().doc, before);
+}
+
 /// A loaded character style whose size, scale, leading, shift, warichu Line Gap, stroke width or
 /// miter limit, tracking, kerning or rotation is out of the range `charStyle.new` takes is skipped.
 #[test]

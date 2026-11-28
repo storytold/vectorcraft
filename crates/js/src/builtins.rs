@@ -578,15 +578,7 @@ fn object_value_of(interp: &mut Interp, this: Value, _: &[Value], _: bool) -> Js
 fn has_own_property(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let k = interp.to_prop_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some() || is_host_member_pk(interp, o, &k)?))
-}
-
-/// [`Interp::is_host_member`] for either kind of key: a Symbol never names a host member.
-fn is_host_member_pk(interp: &Interp, o: ObjId, k: &crate::symbol::PropKey) -> JsResult<bool> {
-    match k {
-        crate::symbol::PropKey::Str(name) => interp.is_host_member(o, name),
-        crate::symbol::PropKey::Sym(_) => Ok(false),
-    }
+    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some() || interp.is_host_member_pk(o, &k)?))
 }
 
 fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
@@ -605,7 +597,7 @@ fn is_prototype_of(interp: &mut Interp, this: Value, args: &[Value], _: bool) ->
 fn property_is_enumerable(interp: &mut Interp, this: Value, args: &[Value], _: bool) -> JsResult<Value> {
     let k = interp.to_prop_key(&arg(args, 0))?;
     let o = interp.to_object(&this)?;
-    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some_and(|p| p.enumerable()) || is_host_member_pk(interp, o, &k)?))
+    Ok(Value::Bool(interp.get_own_pk(o, &k)?.is_some_and(|p| p.enumerable()) || interp.is_host_member_pk(o, &k)?))
 }
 
 // ---- Function ----

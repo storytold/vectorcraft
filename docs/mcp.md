@@ -2894,6 +2894,84 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- `Document.textFrames` (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/) lists the document's type
+  objects in paint order, those inside groups included, with `length`, `[i]`, `index(key)`, `getByName(name)` and
+  `removeAll()`. `add()` makes empty point type at the origin and `pointText(anchor, orientation?)` at `anchor`, both
+  with `text.create`; `areaText(path, orientation?)` and `pathText(path, startTValue?, endTValue?, orientation?)` turn
+  a `PathItem` into area type or type on a path with `text.createInPath`, the orientation being a `TextOrientation`
+  value; a `startTValue`, `endTValue`, `baseFrame` or `postFix` that is given throws an error that says it is not
+  available yet. A `TextFrame`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/) is a page item with `kind` (`TextType.POINTTEXT`,
+  `AREATEXT` or `PATHTEXT`), `contents`, `orientation`, `textRange`, `characters`, `words`, `paragraphs`,
+  `createOutline()` (Type › Create Outlines, giving the group of outlines, or `null` when the type has nothing to
+  outline and the command removes it), `convertPointObjectToAreaObject()` and
+  `convertAreaObjectToPointObject()`. A `TextRange` (https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/) has
+  `contents`, `start`, `end`, `characterOffset` (the same as `start`), `length`, `parent` (its frame), `characters`,
+  `words`, `paragraphs`, `characterAttributes`, `paragraphAttributes`, `getParagraphLength()`, `getTextRunLength()` and
+  `remove()`, and the character attributes themselves. Character attributes are `size` (0.1 to 1296 pt), `leading` (0.1 to
+  5000 pt), `autoLeading`, `tracking` (-1000 to 10000), `baselineShift` (-1296 to 1296 pt), `horizontalScale` and
+  `verticalScale` (1 to 10000 percent), `rotation` (-360 to 360 degrees), `underline`, `strikeThrough` and `textFont`,
+  set with `text.setRangeStyle`; sizes are document points, as the Character panel shows them. Paragraph attributes are
+  `justification` (a `Justification` value, set with `text.setStyle`; the Auto alignment new type has reads as `LEFT`,
+  or `RIGHT` in a right-to-left paragraph, and setting a value replaces it), `firstLineIndent`, `leftIndent`, `rightIndent`,
+  `spaceBefore` and `spaceAfter` (-1296 to 1296 pt, set with `text.setFormat`). `app.textFonts`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextFonts/) lists every style of every family in the font menu, with
+  `length`, `[i]`, `index(key)` and `getByName(name)`, which takes a PostScript name or the family and style joined by a
+  space; a `TextFont` has `name` (its PostScript name), `family` and `style`. The enumerations `TextType`,
+  `TextOrientation` and `Justification` hold strings such as `"Justification.CENTER"`.
+  VectorCraft's own rules: offsets and lengths count UTF-16 code units, as a JavaScript string does, and an offset
+  inside a surrogate pair takes in its whole character; one item of `characters` is one code point. `contents` gives a
+  paragraph break as `\r` and a forced line break as `\u0003`, and takes `\r`, `\n` or `\r\n` for a paragraph break. A
+  word is a run of characters that are not white space; a range's `words` and `paragraphs` are the whole words and
+  paragraphs it touches, a paragraph's break belonging to it; the empty paragraph after a break at the end of the text
+  belongs only to an empty range there. A range keeps its place while the script edits the frame
+  through these objects: an edit before it moves it, an edit over one of its ends takes that end to the edge of the
+  edit's new text, so a range the edit covers holds the new text, and an insertion at one of its ends joins it. When a
+  member finds the frame's text different from the text these objects last saw, because `vc.run` or an undo changed
+  it, a range made before throws `Stale text range`, and so does its `typename`; a change that was reversed before
+  that read leaves the text as the range knew it, and the range keeps working. After `file.revert`, a range made
+  before throws `Stale text range` even when the file read back holds the same text. These objects keep a record of the
+  frame's last 100,000 edits, and a range made before an edit that is no longer in that record throws
+  `Stale text range` too. A character attribute
+  read on characters that differ gives the first one's value, and set on an empty range it changes nothing. Setting
+  `autoLeading` to false gives each character with auto leading the leading it is set with at that moment, from its
+  own size and its paragraph's auto leading percentage, with one `text.setRangeStyle` for each stretch of characters
+  that take the same leading; when one of those values is outside 0.1 to 5000 pt, it throws
+  and changes nothing. A paragraph attribute reads the first paragraph the range touches and sets every one of them. A value a range already
+  has runs no command; a `leading` set on characters with auto leading turns their auto leading off even when it equals
+  the auto leading. A bad value throws an error and changes nothing. Setting `textFont` sets the font, then throws
+  when `text.setRangeStyle` warns that the font is not available, or when Missing Glyph Protection keeps characters the
+  font has no glyph for in their font, giving how many. A `TextFont` from an earlier run throws
+  `Stale text font`. Members the help pages list that are not here, such as `TextFrame.lines`, `TextFrame.story` and
+  `TextRange.changeCaseTo`, throw an error that says they are not available yet, and `start`, `end`, `length` and
+  `orientation` cannot be set yet.
+- `Document.characterStyles` and `Document.paragraphStyles`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CharacterStyles/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/ParagraphStyles/) list the document's styles with `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add(name)` (`charStyle.new` or `paraStyle.new` with no attributes) and
+  `removeAll()` (`charStyle.delete` or `paraStyle.delete` of every style but the Normal style). A `CharacterStyle`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CharacterStyle/) has `name` (`charStyle.rename`), `parent`,
+  `characterAttributes`, `applyTo(text, clearingOverrides?)` (`charStyle.apply`) and `remove()` (`charStyle.delete`);
+  a `ParagraphStyle` (https://ai-scripting.docsforadobe.dev/jsobjref/ParagraphStyle/) has the same members with
+  `paragraphAttributes` and the `paraStyle` commands. A style's attributes are those of a text range's
+  `characterAttributes` and `paragraphAttributes`, with the same ranges, and setting one runs `charStyle.setAttrs` or
+  `paraStyle.setAttrs`. `TextRange.characterStyles` and `TextRange.paragraphStyles`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/TextRange/) list the styles the range's text is in, with `length`,
+  `[i]`, `index(key)` and `getByName(name)`. A script loads styles from another document with `vc.run` and
+  `charStyle.load`, `paraStyle.load` or `textStyle.loadAll`, from a file the script may read.
+  VectorCraft's own rules: a document's list starts with `[Normal Character Style]` or `[Normal Paragraph Style]`,
+  followed by the panel's order. A name is trimmed and must then have 1 to 256 characters and no control characters.
+  An attribute a style does not set reads `undefined`, and setting one changes text in the style where it had the
+  style's old value. `applyTo` takes a text range, a text frame or its characters, words or paragraphs, in the
+  style's document; a character style on an empty range inside text changes nothing, on empty text it styles the
+  text typed or set later, and a paragraph style styles every paragraph the text touches. `clearingOverrides` left
+  out is false. A range lists each style once, in the order
+  its text first uses it, the Normal style standing for text in no other style, and its lists cannot add or remove
+  styles. The Normal styles cannot be renamed or removed. A style object keeps naming its style after a rename made
+  through `name`; after the style is removed, renamed another way or its document closed or reverted, it throws
+  `Stale style`.
+  One run names at most 4,096 styles. `ParagraphStyle.characterAttributes` throws an error that says it is not
+  available yet.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
   with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
   `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page
@@ -14105,7 +14183,8 @@ uses, in panel order and never the Normal style, and the panel highlights them; 
 (Load Character Styles… and Load Paragraph Styles… in the panel menus, where `ui.loadCharStyles` and
 `ui.loadParaStyles` pick the file) copy the styles of that kind from another document VectorCraft opens (`path`, `data`
 or `dataBase64`), and `textStyle.loadAll` (Load All Styles…, `ui.loadAllStyles`) copies both kinds, each in one undo
-step. The swatches and patterns the styles paint with, the symbols and brushes those patterns use, and the styles of
+step. A file larger than 64 MB is refused without being read in full. The 64 MB limit also applies to `data` and to the
+decoded bytes of `dataBase64`; a `dataBase64` string too long to decode to 64 MB or less is refused before it is decoded. The swatches and patterns the styles paint with, the symbols and brushes those patterns use, and the styles of
 either kind that type in those patterns and symbols is set in, come along as Paste brings those of pasted type; a global or spot color whose name the document gives another color
 is the document's. A loaded style that is the same as the style of
 its name, or of its name with a number (`Body 2`), is not added again; any other is added under a free name. The

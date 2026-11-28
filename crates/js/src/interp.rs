@@ -4019,11 +4019,7 @@ impl Interp {
                 }
                 let Value::Object(o) = b else { return Err(self.type_error("the right side of 'in' is not an object")) };
                 let k = self.to_prop_key(a)?;
-                match &k {
-                    PropKey::Str(name) => self.has_property_indexed(*o, name),
-                    PropKey::Sym(_) => self.has_pk(*o, &k),
-                }
-                .map(Value::Bool)
+                self.has_pk_indexed(*o, &k).map(Value::Bool)
             }
         }
     }

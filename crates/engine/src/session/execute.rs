@@ -122,6 +122,9 @@ impl Session {
             self.execute_spec(spec, id, params)
         };
         self.reading = outer;
+        if self.script_in_run && self.depth > 0 && r.is_ok() {
+            crate::script::note_style_lists(self);
+        }
         r
     }
 

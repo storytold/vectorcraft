@@ -35,6 +35,7 @@ use std::rc::Rc;
 use crate::heap::{CONFIGURABLE, Class, ENUMERABLE, Func, Key, ObjId, Object, Prop, key};
 use crate::host::ArgRead;
 use crate::interp::{Abrupt, ErrorType, Interp, JsResult};
+use crate::symbol::PropKey;
 use crate::value::Value;
 use crate::{Data, HostError, HostFunction};
 
@@ -162,6 +163,22 @@ impl Interp {
             class = e.parent;
         }
         Ok(false)
+    }
+
+    /// [`Self::is_host_member`] for a property key. A Symbol names no host member.
+    pub(crate) fn is_host_member_pk(&self, id: ObjId, k: &PropKey) -> JsResult<bool> {
+        match k {
+            PropKey::Str(name) => self.is_host_member(id, name),
+            PropKey::Sym(_) => Ok(false),
+        }
+    }
+
+    /// [`Self::has_property_indexed`] for a property key. A Symbol does not go to the indexer.
+    pub(crate) fn has_pk_indexed(&mut self, id: ObjId, k: &PropKey) -> JsResult<bool> {
+        match k {
+            PropKey::Str(name) => self.has_property_indexed(id, name),
+            PropKey::Sym(_) => self.has_pk(id, k),
+        }
     }
 
     /// The [`Data`] for the object of a host class `id`, or `None` when it is not one.

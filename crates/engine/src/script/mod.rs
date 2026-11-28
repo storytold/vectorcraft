@@ -1267,6 +1267,7 @@ fn note_ids(s: &mut Session) {
 /// it, for a result that cannot cross to the script.
 fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value, u64, u64, Option<Savepoint>)> {
     raise_ids(s);
+    s.script_style_trail = StyleTrail::start(s);
     let mutating = waits_for_tool_edit(id);
     // Inside an object-model call's own savepoint ([`dom`]), that savepoint puts a failure back.
     let save = (mutating && !host.dom.saving()).then(|| Savepoint::take(s, id));
@@ -1314,6 +1315,7 @@ fn step(s: &mut Session, host: &Host, id: &str, params: &Value) -> Result<(Value
             Ok((v, objects, bytes, save))
         }
         Err(e) => {
+            s.script_style_trail = StyleTrail::default();
             if let Some(save) = save
                 && !save.restore(s)
             {
@@ -1387,7 +1389,74 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
+    // Style objects follow only a command that is kept.
+    if crossed.is_ok() {
+        dom::after_command(host);
+    } else {
+        session.borrow_mut().script_style_trail = StyleTrail::default();
+    }
     crossed.map(|data| (data, value))
+}
+
+/// A document's uid, revert count, and character and paragraph style lists.
+pub(crate) type StyleLists =
+    (u64, u64, vectorcraft_doc::Shared<Vec<vectorcraft_doc::TextStyleDef>>, vectorcraft_doc::Shared<Vec<vectorcraft_doc::TextStyleDef>>);
+
+/// What the steps of a command a script runs did to the documents' style lists
+/// ([`note_style_lists`]): each open document's lists as the last step left them, the styles a step
+/// removed or renamed (a document's uid, whether it is a paragraph style, and the name), and the
+/// documents a step reverted.
+#[derive(Default)]
+pub(crate) struct StyleTrail {
+    lists: Vec<StyleLists>,
+    pub(crate) gone: std::collections::HashSet<(u64, bool, String)>,
+    pub(crate) reverted: Vec<u64>,
+}
+
+impl StyleTrail {
+    /// A trail that starts from the documents' style lists now.
+    fn start(s: &Session) -> Self {
+        let lists = s.docs.iter().map(|st| (st.uid, st.reverts, st.doc.char_styles.clone(), st.doc.para_styles.clone())).collect();
+        StyleTrail { lists, ..Default::default() }
+    }
+}
+
+/// After a step of a batch a script runs: notes the styles the step removed or renamed and the
+/// documents it reverted, so the style objects see a style the batch removed and made again under
+/// its name as another style ([`dom::after_command`]). The trail keeps one copy of each open
+/// document's lists, however many steps change them.
+pub(crate) fn note_style_lists(s: &mut Session) {
+    let trail = &mut s.script_style_trail;
+    trail.lists.retain(|(uid, ..)| s.docs.iter().any(|d| d.uid == *uid));
+    for st in &s.docs {
+        let (c, p) = (&st.doc.char_styles, &st.doc.para_styles);
+        let Some(last) = trail.lists.iter_mut().find(|(uid, ..)| *uid == st.uid) else {
+            trail.lists.push((st.uid, st.reverts, c.clone(), p.clone()));
+            continue;
+        };
+        if last.1 != st.reverts {
+            if !trail.reverted.contains(&st.uid) {
+                trail.reverted.push(st.uid);
+            }
+        } else {
+            for (para, old, new) in [(false, &last.2, c), (true, &last.3, p)] {
+                if vectorcraft_doc::Shared::ptr_eq(old, new) {
+                    continue;
+                }
+                let names: std::collections::HashSet<&str> = new.iter().map(|d| d.name.as_str()).collect();
+                for d in old.iter().filter(|d| !names.contains(d.name.as_str())) {
+                    trail.gone.insert((st.uid, para, d.name.clone()));
+                }
+            }
+        }
+        *last = (st.uid, st.reverts, c.clone(), p.clone());
+    }
+}
+
+/// How many sets of style lists the steps of a batch keep ([`note_style_lists`]).
+#[cfg(test)]
+pub(crate) fn retained_style_lists(s: &Session) -> usize {
+    s.script_style_trail.lists.len()
 }
 
 /// A bounded snapshot of the active document, or `null` with none open. A snapshot past the limits

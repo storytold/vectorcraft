@@ -148,8 +148,11 @@ macro_rules! style_cmds {
     };
 }
 
+/// The largest document `charStyle.load`, `paraStyle.load` and `textStyle.loadAll` read, in bytes.
+pub const MAX_LOAD_BYTES: usize = 64 << 20;
+
 /// The params of `charStyle.load`, `paraStyle.load` and `textStyle.loadAll`.
-const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats) into this one, after its own, in one undo step, with the swatches and patterns they paint with, the symbols and brushes those patterns use, and the styles of either kind that type in those patterns and symbols is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new or paraStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names in the file]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}}); charStyle.load and paraStyle.load list only the styles of their own kind";
+const LOAD_PARAMS: &str = "{path? | data?: file text | dataBase64?, name?: file name (default: the path's)} copy the styles of this kind (textStyle.loadAll: character and paragraph styles) from a document VectorCraft opens (see document.formats; at most 64 MB) into this one, after its own, in one undo step, with the swatches and patterns they paint with, the symbols and brushes those patterns use, and the styles of either kind that type in those patterns and symbols is set in, as Paste brings those of pasted type (a global or spot color whose name this document gives another color is this document's). A style that is the same as the style here of its name, or of its name with a number (`Body 2`), isn't added again; any other is added under a free name (`Body 2`). The file's Normal styles aren't loaded, and a style whose attributes don't read or are out of the range charStyle.new or paraStyle.new takes, or whose name is empty, is skipped → {added: [names here], existing: [names already here], skipped: [names in the file]} (textStyle.loadAll: {charStyles: {…}, paraStyles: {…}}); charStyle.load and paraStyle.load list only the styles of their own kind";
 
 pub fn specs() -> Vec<CommandSpec> {
     let mut v = style_cmds!(
@@ -1217,12 +1220,17 @@ fn load(s: &mut Session, p: &Value, kinds: &[Kind]) -> Result<Value> {
         _ => "textStyle.loadAll".to_string(),
     };
     let path = str_param(p, "path");
-    let bytes = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
-        (Some(path), ..) => super::fileio::read_file(path)?,
-        (None, Some(text), _) => text.as_bytes().to_vec(),
-        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(c, "bad dataBase64"))?,
+    let too_large = || bad(c, format!("the file is larger than {} MB", MAX_LOAD_BYTES >> 20));
+    let bytes: std::borrow::Cow<[u8]> = match (path, str_param(p, "data"), str_param(p, "dataBase64")) {
+        (Some(path), ..) => super::fileio::read_file_head(path, MAX_LOAD_BYTES + 1)?.into(),
+        (None, Some(text), _) => text.as_bytes().into(),
+        (None, None, Some(b64)) if b64.len() > MAX_LOAD_BYTES / 3 * 4 + 4 => return Err(too_large()),
+        (None, None, Some(b64)) => vectorcraft_format::base64_decode(b64).ok_or_else(|| bad(c, "bad dataBase64"))?.into(),
         _ => return Err(bad(c, "give `path`, `data` or `dataBase64`")),
     };
+    if bytes.len() > MAX_LOAD_BYTES {
+        return Err(too_large());
+    }
     let file = str_param(p, "name").or(path).unwrap_or("Styles");
     let src = super::fileio::load(file, &bytes).map_err(|e| bad(c, e.to_string()))?;
     if src.preview_only {
