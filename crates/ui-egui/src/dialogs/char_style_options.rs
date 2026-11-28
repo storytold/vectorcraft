@@ -1165,7 +1165,8 @@ pub(crate) use style_dialog;
 pub(crate) struct CharStyleOptions {
     inner: HostedPropertiesDialog,
     opening: Arc<Opening>,
-    document: u64,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
 }
 
 impl CharStyleOptions {
@@ -1192,7 +1193,7 @@ pub(crate) struct Preview {
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     crate::panels::character::end_typing(app);
     let state = app.session.active().ok_or("no document open")?;
-    let (document, doc) = (state.uid, &state.doc);
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
     let def = doc.char_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no character style `{name}`"))?;
     let opening = Arc::new(Opening::new(name, def.attrs.clone(), &doc.setup, swatch_choices(doc)));
     let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening, document };
@@ -1245,14 +1246,15 @@ pub(crate) struct Refusals {
 }
 
 /// Runs one frame of the style options dialog `D` that opened on one document: previews and commits `command`
-/// (its undo label and id) only while that document is active and no other edit is active in it, refuses OK
-/// elsewhere with `refusals`, and at Cancel rolls back only the preview the dialog still owns. `preview` is the
-/// app's slot for the dialog's preview, `state` gives the opening document's uid and this frame's state, and
-/// `hosted` gives the hosted dialog that takes OK's answer.
+/// (its undo label and id) only while that document is active, has not been reverted since the dialog opened and
+/// has no other edit active in it, refuses OK elsewhere with `refusals`, and at Cancel rolls back only the preview
+/// the dialog still owns. `preview` is the app's slot for the dialog's preview, `state` gives the opening
+/// document's uid and revert count and this frame's state, and `hosted` gives the hosted dialog that takes OK's
+/// answer.
 pub(crate) fn pump_in_opening_document<D: StackDialog>(
     app: &mut VectorcraftApp,
     preview: fn(&mut VectorcraftApp) -> &mut Preview,
-    state: fn(&mut D) -> (u64, Frame),
+    state: fn(&mut D) -> ((u64, u64), Frame),
     hosted: fn(&mut D) -> &mut HostedPropertiesDialog,
     (label, command): (&str, &str),
     refusals: &Refusals,
@@ -1263,7 +1265,7 @@ pub(crate) fn pump_in_opening_document<D: StackDialog>(
     let owned = preview(app);
     let owns_interaction = owned.activation == active
         && owned.interaction_selection.as_ref().zip(interaction_selection.as_ref()).is_some_and(|(owned, current)| Arc::ptr_eq(owned, current));
-    let Some((document, frame)) = dialogs.with(|host| host.get_mut::<D>().map(state)) else {
+    let Some(((document, reverts), frame)) = dialogs.with(|host| host.get_mut::<D>().map(state)) else {
         if matches!(dialogs.with(|host| host.take::<D>()), Some(DialogResult::Cancel)) {
             let owned = std::mem::take(preview(app));
             if owns_interaction {
@@ -1272,7 +1274,8 @@ pub(crate) fn pump_in_opening_document<D: StackDialog>(
         }
         return;
     };
-    let done = if let Some(activation) = active.filter(|(uid, _)| *uid == document) {
+    let in_opening = app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == (document, reverts));
+    let done = if let Some(activation) = active.filter(|_| in_opening) {
         if interaction_selection.is_some() && !owns_interaction {
             frame.ok.then(|| Err(refusals.busy.into()))
         } else {
@@ -1285,7 +1288,13 @@ pub(crate) fn pump_in_opening_document<D: StackDialog>(
             answer
         }
     } else if frame.ok {
-        let why = if app.session.documents().iter().any(|doc| doc.uid == document) { refusals.elsewhere } else { refusals.closed };
+        let why = if app.session.active().is_some_and(|doc| doc.uid == document) {
+            "The document was reverted. Reopen this dialog to continue."
+        } else if app.session.documents().iter().any(|doc| doc.uid == document) {
+            refusals.elsewhere
+        } else {
+            refusals.closed
+        };
         Some(Err(why.into()))
     } else {
         None

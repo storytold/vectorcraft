@@ -412,6 +412,11 @@ impl Panel {
         self.fixture.tree().toggled_of(self.look(name).node)
     }
 
+    /// The kind of popup the control named `name` reports that it opens.
+    pub(crate) fn popup_kind(&self, name: &str) -> Option<craft::ui::contract::PopupKind> {
+        self.fixture.tree().has_popup_of(self.look(name).node)
+    }
+
     /// Whether the control named `name` has the focus.
     pub(crate) fn focused(&self, name: &str) -> bool {
         self.fixture.tree().focused_key() == self.look(name).node

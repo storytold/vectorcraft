@@ -488,7 +488,6 @@ const GROUPS: &[(&str, &str)] = &[
     ("ui.newLayer", "Window › Layers"),
     ("ui.newParaStyle", "Window › Paragraph Styles"),
     ("ui.newSwatch", "Window › Swatches"),
-    ("ui.pdfSummary.", "File"),
     ("ui.perspectivePlane", "View › Perspective Grid"),
     ("ui.perspectiveUserPreset1.", "View › Perspective Grid › One Point Perspective"),
     ("ui.perspectiveUserPreset2.", "View › Perspective Grid › Two Point Perspective"),
@@ -500,7 +499,6 @@ const GROUPS: &[(&str, &str)] = &[
     ("ui.relinkDialog", "Window › Links"),
     ("ui.rename", "Window › Layers"),
     ("ui.retype", "Window › Properties"),
-    ("ui.runInstalledScript", "File › Scripts"),
     ("ui.sampleScreenColor", "Color"),
     ("ui.savePdfDialog", "File"),
     ("ui.shortcutImportDialog", "Shortcuts"),
@@ -800,8 +798,9 @@ pub(crate) fn menu_target(id: &str) -> Option<(String, Value)> {
 /// Is `key` a command with no default shortcut that a key press can't run: no item of the menu
 /// bar runs it without params or with one set of params ([`menu_target`]), it opens no dialog when
 /// run without them (as the Variables panel's commands do), and it is a query, whose answer a key
-/// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a menu command whose params
-/// doc names a field a call must give (File › Document Setup › Units, `{units}`)?
+/// press drops (Select All Unused), a command of [`NEEDS_A_PARAM`], or a command whose params doc
+/// names a field a call must give, with a menu path (File › Document Setup › Units, `{units}`) or
+/// without one (Close Path, `{id}`)?
 pub(crate) fn needs_a_value(key: &str) -> bool {
     static KEYS: OnceLock<HashSet<&'static str>> = OnceLock::new();
     KEYS.get_or_init(|| {
@@ -811,7 +810,7 @@ pub(crate) fn needs_a_value(key: &str) -> bool {
                 c.shortcut.is_none()
                     && !a_menu_bar_item_runs(c.id, c.params)
                     && !crate::dialogs::variables::opens(c.id)
-                    && (!c.journal || NEEDS_A_PARAM.contains(&c.id) || (!c.menu.is_empty() && names_a_required_field(c.params)))
+                    && (!c.journal || NEEDS_A_PARAM.contains(&c.id) || names_a_required_field(c.params))
             })
             .map(|c| c.id)
             .collect()
@@ -828,6 +827,16 @@ fn a_menu_bar_item_runs(id: &str, params: &str) -> bool {
         || menu_target(id).is_some_and(|(target, _)| target != id || !names_a_required_field(params))
 }
 
+/// Is `id` a UI command that fails when it runs with no params: its params doc names a field a call
+/// must give, no item of the menu bar runs it ([`a_menu_bar_item_runs`]), and a key press does not
+/// run it on its own ([`ui_listed_on_its_own`])? `toolbar.addTool` needs a `tool`.
+pub(crate) fn ui_command_needs_params(id: &str) -> bool {
+    crate::menus::UI_COMMANDS
+        .iter()
+        .find(|c| c.0 == id)
+        .is_some_and(|c| names_a_required_field(c.3) && !a_menu_bar_item_runs(c.0, c.3) && !ui_listed_on_its_own(c.0, c.2, c.3))
+}
+
 /// Is engine command `c` listed in Edit › Keyboard Shortcuts whether or not an item of the menu bar
 /// runs it? A command with a menu path of its own is. One without (a panel menu item) is when a key
 /// alone can run it: it has a default key, or it is an undoable command, not an alias, whose params
@@ -838,9 +847,11 @@ fn listed_on_its_own(c: &vectorcraft_engine::CommandSpec) -> bool {
 
 /// Is UI command `id` (default key `sc`, params doc `params`) listed in Edit › Keyboard Shortcuts
 /// whether or not an item of the menu bar runs it? It is when it has a default key or a params doc
-/// of `{}` or `{path…}`, or is one of [`KEY_ONLY_UI`].
+/// of `{}` or `{path?…}`, where a call with no path picks a file, or is one of [`KEY_ONLY_UI`]. A
+/// params doc of `{path}` or `{path: …}` (Save Summary…, a Scripts folder script) needs a path, so a
+/// key press alone can't run it.
 fn ui_listed_on_its_own(id: &str, sc: &str, params: &str) -> bool {
-    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path") || KEY_ONLY_UI.contains(&id)
+    !sc.is_empty() || params.starts_with("{}") || params.starts_with("{path?") || KEY_ONLY_UI.contains(&id)
 }
 
 /// Does a menu bar item run the command with no params, so that it does what its label says and opens
@@ -2427,6 +2438,8 @@ mod tests {
     #[test]
     fn listed_commands_run_from_a_key_without_a_missing_param() {
         use vectorcraft_testkit::fixtures::Fixture;
+        // The View menu's proof commands change the whole process's proof view.
+        let _view = crate::testing::DefaultProofView::new();
         // These need a state the fixtures lack: text being edited, a pattern being edited, an
         // object linked to a graphic style, a plug-ins folder.
         let context = ["text.insertInline", "pattern.options", "graphicStyle.redefine", "plugin.reload"];
@@ -2448,6 +2461,23 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    /// A UI command whose params doc starts `{path}` or `{path: …}` needs a path, so it is neither
+    /// listed on its own nor offered as a button; one that starts `{path?` picks a file without one.
+    #[test]
+    fn a_ui_command_that_needs_a_path_is_not_run_without_one() {
+        for id in ["ui.pdfSummary.save", crate::scripts_menu::COMMAND] {
+            let (_, _, sc, params) = menus::UI_COMMANDS.iter().find(|c| c.0 == id).unwrap_or_else(|| panic!("{id} is a UI command"));
+            assert!(!ui_listed_on_its_own(id, sc, params), "{id} is not listed on its own");
+            assert!(ui_command_needs_params(id), "{id} needs a path");
+            assert!(!crate::palette::is_command(id), "{id} is not offered as a toolbar button");
+        }
+        for id in ["shortcuts.export", "file.open"] {
+            let (_, _, sc, params) = menus::UI_COMMANDS.iter().find(|c| c.0 == id).unwrap_or_else(|| panic!("{id} is a UI command"));
+            assert!(ui_listed_on_its_own(id, sc, params) || a_menu_bar_item_runs(id, params), "{id} runs without a path");
+            assert!(!ui_command_needs_params(id), "{id} picks a file without a path");
+        }
     }
 
     /// #2991: Enter Isolation Mode has no default key but runs on the selection, so it belongs in

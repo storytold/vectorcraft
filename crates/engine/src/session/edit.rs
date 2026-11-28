@@ -2,7 +2,7 @@ use super::{
     Arc, Document, EngineError, Interaction, LastTransform, NamedStep, NodeKind, Result, Selection, Session, TOO_DEEP, Value, cmd, deselect_hidden,
     doc_sane, objects_in_range,
 };
-use crate::doc_state::objects_only;
+use crate::doc_state::{kept_from, objects_only};
 
 impl Session {
     /// Run `f` on a mutable copy of the active document. Outside an interaction this records one
@@ -14,6 +14,9 @@ impl Session {
     fn edit_unwatched<T>(&mut self, label: &str, f: impl FnOnce(&mut Document, &mut Selection) -> Result<T>) -> Result<T> {
         if self.script_running() {
             return Err(EngineError::Busy);
+        }
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
         }
         // An edit made while typing (the Transform panel) is a step of its own: inside the typing
         // session, the next keystroke's preview would start again from before it (#1881).
@@ -237,17 +240,19 @@ impl Session {
         let new_art = st.selection.new_art.clone();
         let record = if st.selection_record().is_some() { st.selection_record.take() } else { None };
         f(&st.doc, &mut st.selection);
-        let added = objects_only(&st.selection) && st.selection.objects.starts_with(&before);
-        // Objects added to objects this checked in the same document, with Lock Guides as it was
-        // then and no art on a locked artboard to protect, are checked alone, by the rules `prune`
-        // and `deselect_hidden` apply to an object.
+        // Objects this checked in the same document, kept in their order, with Lock Guides as it
+        // was then and no art on a locked artboard to protect, need no check again: only the
+        // objects after them are checked, by the rules `prune` and `deselect_hidden` apply to an
+        // object.
         let settled = record.as_ref().is_some_and(|r| r.settled == Some(menu.guides_locked))
+            && objects_only(&st.selection)
             && st.selection.new_art.is_empty()
             && st.doc.new_art.get().is_empty()
             && !st.doc.artboards.iter().any(|a| a.locked);
-        if added && settled {
+        if settled {
             let doc = &st.doc;
-            let tail = st.selection.objects.split_off(before.len());
+            let (kept, _) = kept_from(&before, &st.selection.objects);
+            let tail = st.selection.objects.split_off(kept);
             st.selection.objects.extend(tail.into_iter().filter(|id| {
                 doc.node(*id).is_some_and(|n| !n.is_ruler_guide() && !(menu.guides_locked && matches!(n.kind, NodeKind::Path { guide: true, .. })))
             }));
@@ -513,6 +518,9 @@ impl Session {
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
         if self.script_running() {
             return Err(EngineError::Busy);
+        }
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
         }
         // Typing in progress is kept first: a drag or a dialog's preview would otherwise start
         // from the snapshot taken before the typing, and drop it (#1881).

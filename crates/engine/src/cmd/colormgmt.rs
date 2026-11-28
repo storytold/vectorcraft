@@ -593,10 +593,11 @@ fn mode_color(col: &Color, link: proof::Link, bases: &BTreeMap<String, Color>, c
 /// Put `d` in color `mode` and, with `convert`, convert every color of its art (opacity masks,
 /// effect colors and the series paints and label styles that graphs keep included), symbols,
 /// graph designs, pattern tiles (the tile that pattern editing's Cancel puts back included),
-/// graphic styles (their effects included), brushes (their art and a Hue Shift key color) and
-/// swatches through the color settings (`intent`, default: theirs) → how many colors of the art
-/// (opacity masks, effect colors and graphs' paints included), symbols, graph designs and pattern
-/// tiles changed; the colors of graphic styles and brushes convert without being counted. Gray
+/// graphic styles (their effects included), brushes (their art and a Hue Shift key color),
+/// character and paragraph styles (their fill and stroke) and swatches through the color settings
+/// (`intent`, default: theirs) → how many colors of the art (opacity masks, effect colors and
+/// graphs' paints included), symbols, graph designs and pattern tiles changed; the colors of
+/// graphic styles, brushes and text styles convert without being counted. Gray
 /// colors stay Gray (they print on the black plate in either mode); RGB grays are colors like any
 /// other and separate through the CMYK profile, unless `grays` puts them on the black plate
 /// ([`mode_converter`]). Lab colors
@@ -608,7 +609,10 @@ pub(crate) fn set_color_mode(d: &mut vectorcraft_doc::Document, mode: ColorMode,
     if !convert {
         return 0;
     }
-    convert_colors(d, &mode_converter(mode, intent, grays))
+    let conv = mode_converter(mode, intent, grays);
+    let changed = convert_colors(d, &conv);
+    convert_style_colors(d, &conv);
+    changed
 }
 
 /// Every color of `d` that [`set_color_mode`] converts, converted with `conv` → how many colors of

@@ -469,11 +469,11 @@ fn take() {
     }
 }
 
-/// Wait for the listing under way and take it in.
+/// Wait for the listing under way, however long it takes, and take it in.
 #[cfg(test)]
 pub(crate) fn wait() {
     if let Some(queue) = &saved().queue {
-        queue.finish(std::time::Duration::from_secs(10));
+        assert!(queue.finish(std::time::Duration::MAX), "the listing of the Proof Setups folder could not finish");
     }
     take();
 }

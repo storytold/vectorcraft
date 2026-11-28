@@ -75,6 +75,15 @@ fn substitute_warnings_follow_current_font_inventory() {
 impl VectorcraftApp {
     /// Run a UI or engine command by id. The single entry point for every frontend path.
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
+        // A plug-in run that holds the documents (the web's worker runs of a filter that calls
+        // commands) lets only its Cancel through, and the `plugin.run` that applies its output.
+        if crate::plugin_runs::holds_documents(self) && id != "plugin.cancelRuns" && !self.session.plugin_calls_end_with(id) {
+            return Err(vectorcraft_engine::EngineError::PluginBusy.to_string());
+        }
+        // On the web a plug-in command runs in a worker ([`crate::plugin_runs`]).
+        if crate::plugin_runs::routes(self, id) {
+            return crate::plugin_runs::start_command(self, id, params);
+        }
         self.beacon.command(id);
         let touch_workspace = self.session.prefs.touch_workspace;
         // A `prefs.reset` that ran straight on the session applies before this command can switch workspaces.
