@@ -165,6 +165,23 @@ fn screen_readers_read_and_set_the_opacity() {
     assert!((fill_opacity(&p.app()) - 0.24).abs() < 1e-6);
 }
 
+/// A hue given to a gray in the HSL or OKLCH rows stays after the row's opacity edit, as the wheel's
+/// HSB hue does.
+#[test]
+fn an_opacity_edit_keeps_the_hue_given_to_a_gray() {
+    for (rows, hue) in [("hsl", "HSL Hue"), ("oklch", "Hue")] {
+        let mut a = app();
+        a.run("paint.setFill", json!({"color": "#808080"})).unwrap();
+        a.run("ui.colorWheel", json!({"sliders": rows})).unwrap();
+        let mut p = Panel::new(a);
+        p.set(hue, 240.0);
+        assert_eq!(p.number(hue), Some(240.0), "{rows}: the gray takes the hue");
+        act(&mut p, AccessActionKind::SetValue(40.0));
+        assert!((fill_opacity(&p.app()) - 0.4).abs() < 1e-6, "{rows}: the opacity is set");
+        assert_eq!(p.number(hue), Some(240.0), "{rows}: the hue is kept");
+    }
+}
+
 /// The stroke proxy in front: the row sets the stroke item's opacity and leaves the fill's.
 #[test]
 fn with_the_stroke_in_front_the_row_sets_the_stroke() {

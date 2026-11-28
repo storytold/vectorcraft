@@ -278,6 +278,7 @@ fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> u
     if let Some(e) = n.extras_box() {
         b += ALLOC + size_of::<NodeExtras>();
         b += boxed(&e.mask) + boxed(&e.graph) + boxed(&e.shaper) + boxed(&e.attrs) + boxed(&e.slice) + boxed(&e.perspective);
+        b += e.attrs.as_deref().map_or(0, attrs_bytes);
         b += boxed(&e.dimension) + boxed(&e.live_paint_gaps) + boxed(&e.colorize);
         b += e
             .color_mask
@@ -408,6 +409,22 @@ fn swatches_bytes(s: &[Swatch]) -> usize {
     ALLOC + std::mem::size_of_val(s) + s.iter().map(|w| w.name.capacity() + paint_heap_bytes(&w.paint)).sum::<usize>()
 }
 
+/// The heap an object's attributes own: their text, data, events, classes, foreign attributes and
+/// tags.
+fn attrs_bytes(a: &crate::ObjectAttributes) -> usize {
+    let pairs = |v: &Vec<(String, String)>| vec_bytes(v) + v.iter().map(|(k, v)| k.capacity() + v.capacity()).sum::<usize>();
+    a.url.capacity()
+        + a.note.capacity()
+        + pairs(&a.data)
+        + pairs(&a.events)
+        + vec_bytes(&a.classes)
+        + a.classes.iter().map(String::capacity).sum::<usize>()
+        + vec_bytes(&a.foreign)
+        + a.foreign.iter().map(|f| f.ns.capacity() + f.prefix.capacity() + f.name.capacity() + f.value.capacity()).sum::<usize>()
+        + vec_bytes(&a.tags)
+        + a.tags.iter().map(|t| t.name.capacity() + t.value.capacity()).sum::<usize>()
+}
+
 /// A vector's buffer (not what its elements own).
 fn vec_bytes<T>(v: &Vec<T>) -> usize {
     if v.capacity() == 0 { 0 } else { ALLOC + v.capacity() * size_of::<T>() }
@@ -492,6 +509,21 @@ mod tests {
         }
         let per = before.retained_bytes(&after) / n;
         assert!((400..1200).contains(&per), "{per} bytes per moved rectangle");
+    }
+
+    /// An object's attributes count with their text: a version of a rectangle with a long tag and
+    /// a long note keeps both.
+    #[test]
+    fn tags_and_notes_count() {
+        let before = doc_with_rects(1);
+        let mut after = before.clone();
+        let id = after.layers[0].children().unwrap()[0].id;
+        after.node_mut(id).unwrap().edit_attrs(|a| {
+            a.note = "n".repeat(30_000);
+            a.tags.push(crate::ObjectTag { id: 1, name: "size".into(), value: "v".repeat(60_000) });
+        });
+        let bytes = after.retained_bytes(&before);
+        assert!(bytes >= 90_000, "{bytes} bytes for a rectangle with 90,000 bytes of attributes");
     }
 
     #[test]

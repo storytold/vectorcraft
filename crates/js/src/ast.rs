@@ -244,6 +244,12 @@ pub enum Expr {
     OptionalChain(ExprId),
     /// The object or function before `?.` in an [`Expr::OptionalChain`].
     Optional(ExprId),
+    /// `yield`, `yield expression` or (`delegate`) `yield* expression` in a generator function's
+    /// body (ECMA-262 2015 section 14.4).
+    Yield {
+        arg: Option<ExprId>,
+        delegate: bool,
+    },
 }
 
 /// A piece of a template literal's text between its substitutions.
@@ -440,6 +446,8 @@ pub struct Function {
     /// The function's code is strict mode code: its own directive prologue holds `"use strict"`,
     /// or the code around it is strict.
     pub strict: bool,
+    /// A generator function (`function*`, or `*name() {…}` in an object literal).
+    pub generator: bool,
     pub span: Span,
 }
 

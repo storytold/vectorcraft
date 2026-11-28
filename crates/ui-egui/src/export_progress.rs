@@ -1,7 +1,8 @@
 //! The progress window of the work that runs in the background: a Background Export (artboard by
 //! artboard, file by file for Export for Screens, as a share for an exporter plug-in that reports
 //! its progress, busy for one artboard and for formats made in one go), a Background Save, a
-//! heavy plug-in filter, an Image Trace, a file being opened and a file being read for Place. Each
+//! heavy plug-in filter, an Image Trace, a file being opened, a file being read for Place and
+//! Retype's search of the installed fonts. Each
 //! job table answers [`Shown`] for its first job the window shows; [`show`] draws the first
 //! table's window once its job has run [`DELAY`], with Cancel and, where the job can go on without
 //! it, Continue in Background.
@@ -53,6 +54,7 @@ fn first(app: &VectorcraftApp) -> Option<Shown> {
         .or_else(|| crate::trace_runs::shown(app))
         .or_else(|| crate::opening::shown(app))
         .or_else(|| crate::placing::shown(app))
+        .or_else(|| crate::retype_runs::shown(app))
 }
 
 /// Draws the progress window of the first job that has one, once it has run [`DELAY`] seconds and

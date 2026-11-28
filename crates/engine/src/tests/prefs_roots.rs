@@ -55,6 +55,8 @@ fn holds(v: &Value, path: &str) -> bool {
 
 #[test]
 fn prefs_commands_leave_out_folders_outside_the_read_root() {
+    // `prefs.set` and `prefs.reset` load the Additional Plug-ins Folder this session names.
+    let _folder = super::plugins::PREFS_FOLDER.lock().unwrap_or_else(|e| e.into_inner());
     let base = folder("get");
     let (inside, outside) = (text(&base.join("in").join("fonts")), text(&base.join("out")));
     let roots = AutomationRoots::new(&[&base.join("in")], &[]).unwrap();

@@ -706,3 +706,116 @@ fn colours_are_in_the_profiles_assigned_to_the_document() {
     assert!(r.warnings.iter().any(|w| w.contains("No Such Press")), "{:?}", r.warnings);
     assert!(icc_streams(&r.bytes) == [cms::icc_bytes(&working).unwrap().to_vec()]);
 }
+
+/// A 4 × 4 greyscale PNG of one level.
+fn grey_png(level: u8) -> Vec<u8> {
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![level; 16])
+        .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+}
+
+/// The CMYK document warning says what happens to its RGB images (#1242): with No conversion
+/// they are written in RGB, and it names the settings that write them in CMYK; with a CMYK
+/// destination they are converted. Grey images stay grey either way and aren't counted.
+#[test]
+fn the_cmyk_document_warning_says_whether_rgb_images_are_converted() {
+    let warning = |d: &Document, settings: Value| {
+        let r = pdf(d, settings);
+        let w: Vec<_> = r.warnings.iter().filter(|w| w.contains("this CMYK document")).cloned().collect();
+        assert!(w.len() <= 1, "{w:?}");
+        w.into_iter().next()
+    };
+    let mut d = image_doc(png([200, 30, 30]));
+    d.color_mode = ColorMode::Cmyk;
+
+    // No conversion: the image is written in RGB, and the warning doesn't say otherwise.
+    let kept = warning(&d, json!({})).unwrap();
+    assert!(kept.contains("1 RGB image") && kept.contains("written in RGB"), "{kept}");
+    assert!(!kept.contains("converted to CMYK"), "{kept}");
+    assert!(kept.contains("Convert to destination") && kept.contains("PDF/X-1a"), "{kept}");
+
+    // A CMYK destination converts it.
+    for settings in
+        [json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}}), json!({"standard": "pdfX1a", "compatibility": "1.3"})]
+    {
+        let converted = warning(&d, settings.clone()).unwrap();
+        assert!(converted.contains("1 RGB image") && converted.contains("converted to CMYK"), "{settings}: {converted}");
+        assert!(!converted.contains("written in RGB"), "{settings}: {converted}");
+    }
+
+    // A grey image is not an RGB image: nothing to warn about.
+    let mut grey = image_doc(grey_png(90));
+    grey.color_mode = ColorMode::Cmyk;
+    for settings in [json!({}), json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}})] {
+        assert_eq!(warning(&grey, settings.clone()), None, "{settings}");
+    }
+
+    // RGB colours keep their wording beside images kept in RGB.
+    let mut both = image_doc(png([200, 30, 30]));
+    both.color_mode = ColorMode::Cmyk;
+    let l = both.layers[0].id;
+    let n = Node::path(
+        both.alloc_id(),
+        shapes::rectangle(Rect::new(50.0, 50.0, 70.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::Rgb { r: 0.1, g: 0.1, b: 0.1 }), Paint::None, 0.0),
+    );
+    both.insert(Some(l), 1, n).unwrap();
+    let w = warning(&both, json!({})).unwrap();
+    assert!(w.contains("1 RGB colour") && w.contains("converted to CMYK") && w.contains("rich blacks"), "{w}");
+    assert!(w.contains("1 RGB image") && w.contains("written in RGB"), "{w}");
+}
+
+/// The CMYK document warning counts an RGB image by what is written: an image left out of the
+/// file is not counted, and one whose pixels can't be read for the conversion, and that is written
+/// as it is, is counted as written in RGB even with a CMYK destination.
+#[test]
+fn the_cmyk_document_warning_counts_only_rgb_images_that_are_written() {
+    let warning = |d: &Document, settings: Value| {
+        let r = pdf(d, settings);
+        let w: Vec<_> = r.warnings.iter().filter(|w| w.contains("this CMYK document")).cloned().collect();
+        assert!(w.len() <= 1, "{w:?}");
+        (w.into_iter().next(), String::from_utf8_lossy(&r.bytes).into_owned())
+    };
+    let to_cmyk = json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}});
+    let jpeg_doc = |bytes: Vec<u8>| {
+        let mut d = image_doc(vec![]);
+        d.images.insert("img".into(), ImageBlob::new("image/jpeg", bytes));
+        d.color_mode = ColorMode::Cmyk;
+        d
+    };
+    let mut jpeg = vec![];
+    let img = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([200, 30 * x as u8, 40 * y as u8]));
+    image::DynamicImage::ImageRgb8(img).write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+    // The start and length of the first segment with marker `m`.
+    let segment = |b: &[u8], m: u8| {
+        let p = b.windows(2).position(|w| w == [0xFF, m])?;
+        Some((p, 2 + usize::from(u16::from_be_bytes([*b.get(p + 2)?, *b.get(p + 3)?]))))
+    };
+
+    // Images that can't be read are left out, with or without a conversion: nothing to count.
+    // One whose bytes are no image at all, and a color JPEG cut off before its scan.
+    let mut unread = image_doc(vec![1, 2, 3]);
+    unread.color_mode = ColorMode::Cmyk;
+    let (sos, _) = segment(&jpeg, 0xDA).unwrap();
+    let cut = jpeg_doc([&jpeg[..sos], &[0xFF, 0xD9]].concat());
+    for (d, settings) in [(&unread, json!({})), (&unread, to_cmyk.clone()), (&cut, json!({})), (&cut, to_cmyk.clone())] {
+        let (w, text) = warning(d, settings.clone());
+        assert!(!text.contains("/Subtype/Image"), "{settings}: an image was written");
+        assert_eq!(w, None, "{settings}");
+    }
+
+    // A color JPEG without its Huffman tables: its pixels can't be decoded for the conversion,
+    // so its JPEG data is written as it is, in RGB.
+    let mut untabled = jpeg.clone();
+    while let Some((p, len)) = segment(&untabled, 0xC4) {
+        untabled.drain(p..p + len);
+    }
+    let (w, text) = warning(&jpeg_doc(untabled), to_cmyk);
+    assert!(
+        text.contains("/Subtype/Image") && text.contains("/DCTDecode") && !text.contains("/ColorSpace/DeviceCMYK"),
+        "the JPEG was not written as it is"
+    );
+    let w = w.unwrap();
+    assert!(w.contains("1 RGB image") && w.contains("written in RGB"), "{w}");
+    assert!(!w.contains("converted to CMYK"), "{w}");
+}

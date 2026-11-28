@@ -236,6 +236,35 @@ fn flat_triangles_stop_at_their_budget() {
 }
 
 #[test]
+fn an_inside_bevel_stays_inside_a_collapsing_convex_outline() {
+    for points in [
+        vec![Point::new(30.0, 26.0), Point::new(100.0, 26.0), Point::new(100.0, 28.0), Point::new(30.0, 28.0)],
+        vec![Point::new(0.0, 0.0), Point::new(56.0, 42.0), Point::new(55.6, 44.2), Point::new(-0.4, 2.2)],
+        vec![Point::new(0.0, 0.0), Point::new(6.0, 0.0), Point::new(3.0, 4.0)],
+    ] {
+        let mut path = BezPath::new();
+        path.move_to(points[0]);
+        for &point in &points[1..] {
+            path.line_to(point);
+        }
+        path.close_path();
+        let (path, bounds) = shape(&path);
+        let bevel = Bevel { shape: BevelShape::Cove, width: 4.3, height: 10.3, inside: true, ..Bevel::default() };
+        let options = Extrude { depth: 17.2, bevel: Some(bevel), ..Extrude::default() };
+        let solid = extrude_meshed(&path, FillRule::NonZero, bounds, options, front()).unwrap();
+        assert!(!solid.facets.is_empty());
+        for point in solid.facets.iter().flat_map(|facet| facet.contours.iter().flatten()) {
+            for (&a, &b) in points.iter().zip(points.iter().cycle().skip(1)) {
+                assert!((b - a).cross(*point - a) >= -1e-8, "{point:?} escaped {points:?}");
+            }
+        }
+        let mesh = solid.mesh().unwrap();
+        assert!(mesh.parts.contains(&MeshPart::Front), "the front cap has area");
+        assert!(closed(&mesh), "the cap and bands meet for {points:?}");
+    }
+}
+
+#[test]
 fn a_beveled_extrusion_stays_closed() {
     let mut b = BezPath::new();
     square(&mut b, 0.0, 0.0, 100.0, false);

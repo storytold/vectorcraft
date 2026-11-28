@@ -49,6 +49,7 @@ mod export_as;
 mod export_for_screens;
 pub(crate) mod export_host;
 pub mod eyedropper;
+pub mod failed_plugins;
 pub mod file_info;
 pub mod find_links;
 pub mod find_replace;
