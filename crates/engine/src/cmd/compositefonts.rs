@@ -27,7 +27,7 @@ pub const EXTS: &[&str] = &["vccomposite"];
 const EXPORT: &str = "type.compositeFonts.export";
 
 /// The largest file Import reads, in bytes.
-const MAX_FILE_BYTES: usize = 4 << 20;
+pub const MAX_FILE_BYTES: usize = 4 << 20;
 
 /// The keys a part may give.
 const PART_KEYS: [&str; 7] = ["font", "style", "size", "baseline", "hScale", "vScale", "scaleAtCenter"];
@@ -349,7 +349,12 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     let too_large = || bad(C, "the file is larger than 4 MB");
     let bytes = match given {
         (Some(path), None, None) if !path.trim().is_empty() => read_file_head(path, MAX_FILE_BYTES + 1)?,
-        (None, Some(text), None) => text.as_bytes().to_vec(),
+        (None, Some(text), None) => {
+            if text.len() > MAX_FILE_BYTES {
+                return Err(too_large());
+            }
+            text.as_bytes().to_vec()
+        }
         (None, None, Some(b64)) => {
             if b64.len() > MAX_FILE_BYTES / 3 * 4 + 4 {
                 return Err(too_large());

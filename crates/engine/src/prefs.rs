@@ -71,6 +71,10 @@ pub struct Prefs {
     pub show_tool_cards: bool,
     /// Other Script… warns before it runs a chosen script.
     pub show_external_script_warning: bool,
+    /// General › Run Startup Scripts: the `.jsx` files of the Startup Scripts folder run when the
+    /// app starts and before each script chosen from File › Scripts (`script.startup.run`). Off by
+    /// default.
+    pub run_startup_scripts: bool,
     pub anti_aliased_artwork: bool,
     pub select_same_tint_percent: bool,
     pub show_home_screen: bool,
@@ -511,6 +515,7 @@ impl Default for Prefs {
             show_tool_tips: true,
             show_tool_cards: false,
             show_external_script_warning: true,
+            run_startup_scripts: false,
             anti_aliased_artwork: true,
             select_same_tint_percent: false,
             show_home_screen: true,

@@ -39,10 +39,18 @@ pub static CURSOR_ICONS: AppIcons = AppIcons::new(
 
 /// Where the glyphs that start at the box's upper left have their tip, in the icon's 24-unit box.
 const TIP: Vec2 = Vec2::new(2.0, 2.0);
-/// The tip of the glyphs that point down-left (a pipette, a brush, a bucket, a knife).
-const LOWER_LEFT: Vec2 = Vec2::new(2.0, 22.0);
+/// The pipette's sampling tip, at the box's lower left.
+const PIPETTE_TIP: Vec2 = Vec2::new(2.0, 22.0);
 /// The middle of the Anchor Point caret's square.
 const CARET: Vec2 = Vec2::new(12.0, 6.0);
+/// The blade's point of the knife, at the box's upper right.
+const BLADE_POINT: Vec2 = Vec2::new(20.0, 4.0);
+/// The bottom of the drop below the paint bucket.
+const BUCKET_DROP: Vec2 = Vec2::new(20.0, 22.0);
+/// The bottom of the drop beside the Live Paint diamond.
+const DIAMOND_DROP: Vec2 = Vec2::new(20.0, 18.0);
+/// The middle of the brush's bristle edge, at its lower left.
+const BRISTLE_TIP: Vec2 = Vec2::new(6.0, 17.5);
 
 fn system(icon: CursorIcon) -> cb::Cursor {
     cb::Cursor::System(icon)
@@ -111,7 +119,7 @@ pub fn tool_cursor(c: Cursor) -> cb::Cursor {
         Cursor::HandGrab => system(CursorIcon::Grabbing),
         Cursor::ZoomIn => PaintedCursor::zoom(false).into(),
         Cursor::ZoomOut => PaintedCursor::zoom(true).into(),
-        Cursor::Eyedropper => tool("pipette", LOWER_LEFT, None),
+        Cursor::Eyedropper => tool("pipette", PIPETTE_TIP, None),
         Cursor::NotAllowed => system(CursorIcon::NotAllowed),
         Cursor::Busy => system(CursorIcon::Progress),
         Cursor::AddStop => badged(CursorBadge::Add),
@@ -136,10 +144,10 @@ pub fn tool_cursor(c: Cursor) -> cb::Cursor {
         Cursor::PencilContinue => marked(Crosshair, "cursor-mark-line-rising"),
         // Only the centre: the tool draws the tip's outline round it, at the zoom.
         Cursor::BlobBrush | Cursor::Eraser => PaintedCursor::circle(1.25).into(),
-        Cursor::Knife => tool("dc-knife", LOWER_LEFT, None),
-        Cursor::LivePaintBucket => tool("paint-bucket", LOWER_LEFT, None),
-        Cursor::LivePaintBucketFace => tool("dc-live-bucket", LOWER_LEFT, None),
-        Cursor::LivePaintBucketEdge => tool("paintbrush", LOWER_LEFT, None),
+        Cursor::Knife => tool("dc-knife", BLADE_POINT, None),
+        Cursor::LivePaintBucket => tool("paint-bucket", BUCKET_DROP, None),
+        Cursor::LivePaintBucketFace => tool("dc-live-bucket", DIAMOND_DROP, None),
+        Cursor::LivePaintBucketEdge => tool("paintbrush", BRISTLE_TIP, None),
         Cursor::LivePaintSelectFace => marked(Arrow, "cursor-mark-square"),
         Cursor::LivePaintSelectEdge => marked(Arrow, "cursor-mark-edge"),
         Cursor::LivePaintSelectOutside => marked(Arrow, "x"),

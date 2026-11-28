@@ -6127,6 +6127,14 @@ variable-list-end	{0}, {1}	{0} e {1}
 	The script asks to read and write a folder you choose, with everything in it.	O script pede para ler e gravar uma pasta que você escolher, com todo o seu conteúdo.
 	Allow Once	Permitir uma vez
 	Always Allow This Script	Sempre permitir este script
+	No script has kept file access.	Nenhum script manteve acesso a arquivos.
+	Read file	Ler arquivo
+	Read and write file	Ler e gravar arquivo
+	Read and write folder	Ler e gravar pasta
+	Revoke	Revogar
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revogar remove o acesso mantido para cada versão do script. O acesso a uma pasta abrange tudo o que ela contém.
+@msg	Script file access revoked	Acesso do script a arquivos revogado
+@msg	The script file access was already revoked	O acesso do script a arquivos já estava revogado
 	Deny	Negar
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Um script pode alterar os documentos abertos e gravar arquivos pelos comandos que executa. Execute apenas scripts em que você confia.
 	Do not show this warning again	Não mostrar este aviso novamente
@@ -6293,6 +6301,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` para a caixa de diálogo de arquivo de um script deve ser um destes: once, always, deny, stop
 @msg	choose a file or folder first, or deny	escolha primeiro um arquivo ou uma pasta, ou negue
 @msg	the script file permissions could not be saved: {e}	não foi possível salvar as permissões de arquivos dos scripts: {e}
+@msg	the script file permissions could not be read: {e}	não foi possível ler as permissões de arquivos dos scripts: {e}
 @msg	this script's file access can be allowed only once	o acesso a arquivos deste script só pode ser permitido uma vez
 @msg	Only the person at the keyboard can allow a script's file access	Somente a pessoa ao teclado pode permitir o acesso a arquivos de um script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Um script recebe no máximo 2.048 arquivos: os arquivos escolhidos depois deles foram deixados de fora
@@ -6774,6 +6783,8 @@ mark-style	Japanese	Japonesas
 	Variation	Variação
 	VectorCraft Default	Padrão do VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	CMYK Genérico do VectorCraft (tipo SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK Revestido do VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK Não Revestido do VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Amostras do VectorCraft (.vcswatches)
 	Vertical Area Type	Texto de Área Vertical
 	Vertical Type	Texto Vertical
@@ -7442,6 +7453,35 @@ axis	Y Axis	Eixo Y
 @msg	`inputs` lists `{shown}` twice	`inputs` lista `{shown}` duas vezes
 @msg	`inputs` needs `api` 2 or later	`inputs` exige `api` 2 ou posterior
 @msg	`inputs` needs the permission `doc.read`	`inputs` exige a permissão `doc.read`
+@msg	only a filter declares `writes`	somente um filtro declara `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` cita um tipo de objeto desconhecido `{shown}`: use type, image ou symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` lista `{shown}` duas vezes
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` lista `{shown}`, que `inputs` não lista
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` exige `api` {WRITES_API} ou posterior
+@msg	`writes` needs the permission `doc.write`	`writes` exige a permissão `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} não é texto, nem uma imagem, nem uma instância de símbolo
+@msg	the text of type given as `truncated` can't be changed	o texto de um objeto de texto fornecido como `truncated` não pode ser alterado
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	deve ser uma lista de no máximo {MAX_INPUT_RUNS} entradas
+@msg	type needs at least one run	o texto precisa de pelo menos um trecho
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bytes de texto (limite {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} parágrafos (limite {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	mais de {MAX_INPUT_TEXT_TOTAL} bytes de texto em toda a saída
+@msg	unknown key '{k}'	chave desconhecida '{k}'
+@msg	must be a list of 6 numbers	deve ser uma lista de 6 números
+@msg	a number is out of range (limit ±{MAX_COORD})	um número está fora do intervalo (limite ±{MAX_COORD})
+@msg	flattens the object to a line or a point	achata o objeto em uma linha ou um ponto
+@msg	an object flattened to a line or a point can't be placed again	um objeto achatado em uma linha ou um ponto não pode ser posicionado de novo
+@msg	must be a number from 0 to 1	deve ser um número de 0 a 1
+@msg	must be the name of a symbol	deve ser o nome de um símbolo
+@msg	'{shown}' is not a symbol in this document	'{shown}' não é um símbolo deste documento
+@msg	a run must be {{"text", "style", "inline"?}}	um trecho deve ser {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` contém o caractere de um gráfico em linha
+@msg	inline graphics can't be added, removed, reordered or changed	gráficos em linha não podem ser adicionados, removidos, reordenados nem alterados
+@msg	the characters of threaded type can't be changed	os caracteres de texto encadeado não podem ser alterados
+@msg	the characters of type with ruby can't be changed	os caracteres de texto com ruby não podem ser alterados
+@msg	expected {count} paragraph styles, one per paragraph	eram esperados {count} estilos de parágrafo, um por parágrafo
+@msg	the document has no Kinsoku set named '{shown}'	o documento não tem um conjunto Kinsoku chamado '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	deve ter 1-{MAX_FAMILY} caracteres imprimíveis
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Ler os objetos que recebe, e as configurações, as mesas de trabalho, as camadas e as amostras do documento
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` deve listar seções distintas: settings, artboards, layers ou swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` é para um filtro, ou um efeito dinâmico com `commands`, com `api` 3 ou posterior e a permissão `doc.read`
@@ -7452,6 +7492,21 @@ axis	Y Axis	Eixo Y
 @msg	time budget	orçamento de tempo
 @msg	memory budget (the selection is too large to hand over)	orçamento de memória (a seleção é grande demais para ser entregue)
 @msg	output size ({what} is {len} bytes, limit {max})	tamanho da saída ({what} tem {len} bytes, limite {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} linha {line}, coluna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	orçamento de memória
+@msg	call depth	profundidade de chamadas
+@msg	run(input, params) returned no output object	run(input, params) não retornou nenhum objeto de saída
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" precisa de `script`: o nome do arquivo .js do plug-in, ao lado do manifesto
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` deve ser o nome de um arquivo .js na pasta do manifesto: 1-128 bytes, sem pasta, sem `:`, sem começar com `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` é o texto do script, dado só no JSON que o dataBase64 de plugin.install recebe: um arquivo .vcplugin indica seu script em `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	o manifesto de um plug-in JavaScript indica `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" é para um filtro de objetos (`kind` "filter"), não para `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	um plug-in JavaScript não pode listar a permissão `{name}`: das permissões do host, ele pode listar `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	o manifesto de um módulo WebAssembly omite `runtime`: "js" é para um plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	um plug-in JavaScript não chama comandos
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) recebe dois números
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) recebe um nível, 0 (erro), 1 (aviso), 2 (informação) ou 3 (depuração), e uma string
 @msg	the plug-in's grant can't be removed from the plug-in store	a permissão do plug-in não pode ser removida do armazenamento de plug-ins
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a permissão `{shown}` está reservada para uma API de plug-in futura; este host não a concede
 @msg	unknown permission `{shown}`	permissão desconhecida `{shown}`
@@ -10876,6 +10931,11 @@ swatch	Yellow Green	Verde-amarelado
 	No objects are selected.	Nenhum objeto selecionado.
 	Open a document to mark its fold lines.	Abra um documento para marcar suas linhas de dobra.
 	Remove Fold Line Role	Remover Tipo de Linha
+	Fold Angle	Ângulo de Dobra
+	Set Fold Angle…	Definir Ângulo de Dobra…
+	Set Fold Angle	Definir Ângulo de Dobra
+	Reset Fold Angle	Redefinir Ângulo de Dobra
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	selecione uma linha de vinco, de meio-corte ou de perfuração que não esteja bloqueada nem oculta
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Mostra um cartão com o que uma ferramenta da barra e suas teclas fazem, no lugar da dica; requer Mostrar Dicas de Ferramenta.
 	Selects whole objects and groups to move, resize or rotate them.	Seleciona objetos e grupos inteiros para movê-los, redimensioná-los ou girá-los.
