@@ -9,6 +9,29 @@ use super::{
 use vectorcraft_doc::{ArrowAlign, Arrowhead};
 use vectorcraft_geom::PathData;
 
+#[cfg(test)]
+thread_local! {
+    /// The operand stack slots that `[` and `]` have looked at on this thread, to find the open
+    /// `[` or to take an array's items: their work.
+    static ARRAY_SLOTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// The point-to-segment distances [`draws_look_outline`] has worked out on this thread.
+    static OUTLINE_PAIRS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`ARRAY_SLOTS`] of this thread.
+#[cfg(test)]
+pub(crate) fn array_slots() -> u64 {
+    ARRAY_SLOTS.get()
+}
+
+/// Count `slots` that `[` or `]` looked at in [`ARRAY_SLOTS`]; nothing outside tests.
+fn array_slots_looked_at(slots: usize) {
+    #[cfg(test)]
+    ARRAY_SLOTS.set(ARRAY_SLOTS.get().saturating_add(u64::try_from(slots).unwrap_or(u64::MAX)));
+    #[cfg(not(test))]
+    let _ = slots;
+}
+
 impl<'a> Reader<'a> {
     // ---- operators -------------------------------------------------------------------------
 
@@ -16,11 +39,13 @@ impl<'a> Reader<'a> {
         // The innermost `[` still on the stack (the stack is cut back by operators).
         let mut at = self.stack.len();
         while let Some(m) = self.marks.pop() {
+            array_slots_looked_at(1);
             if matches!(self.stack.get(m), Some(V::Mark)) {
                 at = m;
                 break;
             }
         }
+        array_slots_looked_at(self.stack.len() - at);
         let items: Vec<V> = self.stack.split_off(at).into_iter().skip(1).collect();
         self.push(V::Arr(items))
     }
@@ -172,6 +197,7 @@ impl<'a> Reader<'a> {
             "[" => {
                 // Drop marks that operators have taken off, so `marks` is the open nesting.
                 while self.marks.last().is_some_and(|&m| !matches!(self.stack.get(m), Some(V::Mark))) {
+                    array_slots_looked_at(1);
                     self.marks.pop();
                 }
                 // Arrays nest as deep as their `[`s; dropping a deeper one would overflow the stack.
@@ -1635,7 +1661,13 @@ fn draws_look_outline(object: &Node, appearance: &Appearance, look: &Node) -> bo
     /// projection onto it) is taken from `budget`: `false` once that runs out.
     fn near(a: &[kurbo::Line], b: &[kurbo::Line], budget: &mut usize) -> bool {
         use kurbo::{ParamCurve, ParamCurveArclen, ParamCurveNearest};
-        let close = |p: kurbo::Point| b.iter().any(|t| t.nearest(p, 1e-6).distance_sq <= OUTLINE_POINT_LIMIT * OUTLINE_POINT_LIMIT);
+        let close = |p: kurbo::Point| {
+            b.iter().any(|t| {
+                #[cfg(test)]
+                OUTLINE_PAIRS.set(OUTLINE_PAIRS.get() + 1);
+                t.nearest(p, 1e-6).distance_sq <= OUTLINE_POINT_LIMIT * OUTLINE_POINT_LIMIT
+            })
+        };
         for s in a {
             let steps = (s.arclen(1e-6) / OUTLINE_SPACING).ceil();
             let steps = if steps.is_finite() && steps >= 1.0 { steps as usize } else { 1 };
@@ -2019,7 +2051,8 @@ mod tests {
 
     /// The outline check works from one budget for the object: a look of the outline drawn twice
     /// (a fill and a stroke) matches, one drawn thousands of times gives up and keeps the drawn
-    /// look instead of comparing every copy.
+    /// look instead of comparing every copy, having worked out no more distances than the budget
+    /// holds.
     #[test]
     fn the_outline_check_has_one_budget_for_the_object() {
         let zig = vectorcraft_doc::Effect {
@@ -2035,10 +2068,17 @@ mod tests {
             let drawn = (0..copies).map(|i| Arc::new(Node::path(NodeId(10 + i), outline.clone(), Appearance::default()))).collect();
             Node::group(NodeId(2), drawn)
         };
-        assert!(draws_look_outline(&object, &appearance, &look(2)));
-        let started = std::time::Instant::now();
-        assert!(!draws_look_outline(&object, &appearance, &look(5_000)));
-        assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+        // Whether the object draws `look`, and how many distances the check worked out.
+        let check = |look: &Node| {
+            let before = OUTLINE_PAIRS.get();
+            let drawn = draws_look_outline(&object, &appearance, look);
+            (drawn, OUTLINE_PAIRS.get() - before)
+        };
+        let (drawn, two) = check(&look(2));
+        assert!(drawn);
+        let (drawn, many) = check(&look(5_000));
+        assert!(many <= u64::try_from(MAX_OUTLINE_PAIRS).unwrap(), "5,000 copies: {many} distances; 2 copies: {two}");
+        assert!(!drawn);
     }
 
     /// The outline check reshapes the object as it is drawn, its effects working from its bounds
