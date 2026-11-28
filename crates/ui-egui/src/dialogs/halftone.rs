@@ -114,9 +114,6 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         app.effect_dialogs.halftone = Some(open);
         return;
     }
-    if !owns_preview(app) {
-        open.preview = LivePreview::default();
-    }
     let shown = app.dialogs().and_then(|host| {
         host.with(|h| {
             h.get_by_id::<HostedParamDialog>(open.id).map(|d| {

@@ -525,6 +525,23 @@ fn editing_character_style_clears_removed_size_without_losing_local_override() {
     assert_eq!((r[0].style.size, r[1].style.size), (15.0, 31.0));
 }
 
+/// A size a style starts to set reaches the text that had the size the style left it (Normal's,
+/// or the default when Normal itself is redefined), and not text with a size of its own.
+#[test]
+fn a_size_a_character_style_starts_to_set_keeps_local_overrides() {
+    for name in ["Body", NORMAL_CHAR] {
+        let (mut s, id) = session_with_text("One two");
+        if name != NORMAL_CHAR {
+            s.execute("charStyle.new", &json!({"name": name, "attrs": {}})).unwrap();
+            s.execute("charStyle.apply", &json!({"name": name, "id": id})).unwrap();
+        }
+        s.execute("text.setRangeStyle", &json!({"id": id, "start": 4, "end": 7, "size": 36.0})).unwrap();
+        s.execute("charStyle.setAttrs", &json!({"name": name, "attrs": {"size": 24.0}})).unwrap();
+        let r = runs(&s, id);
+        assert_eq!((r[0].style.size, r[1].style.size), (24.0, 36.0), "{name}");
+    }
+}
+
 #[test]
 fn replacing_character_style_attrs_clears_removed_size() {
     let (mut s, id) = session_with_text("Text");

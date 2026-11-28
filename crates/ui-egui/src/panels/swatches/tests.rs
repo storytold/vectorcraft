@@ -163,7 +163,8 @@ fn a_foreign_swatch_row_payload_cannot_move_or_replace_local_swatches() {
     let drag = rows_drag(&app, "Red", &["Red"]);
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let before = doc(&app);
-    assert!(!dnd::accepts(&drag, app.session.active().unwrap().uid));
+    let state = app.session.active().unwrap();
+    assert!(!dnd::accepts(&drag, state.uid, state.reverts));
     dropped_below(&mut app, drag.clone(), none());
     dropped(&mut app, drag, "Green", alt());
     assert_eq!(doc(&app).swatches, before.swatches);
@@ -171,7 +172,8 @@ fn a_foreign_swatch_row_payload_cannot_move_or_replace_local_swatches() {
 
 /// Art `ids` dragged off the canvas.
 fn art_drag(app: &VectorcraftApp, ids: Vec<vectorcraft_doc::NodeId>) -> PanelDrag {
-    PanelDrag::Art { document: app.session.active().map(|st| st.uid).unwrap_or_default(), ids }
+    let (document, reverts) = app.session.active().map_or((0, 0), |st| (st.uid, st.reverts));
+    PanelDrag::Art { document, reverts, ids }
 }
 
 /// The browser's reorder committing `names` before row `before` (a colour group: into it).

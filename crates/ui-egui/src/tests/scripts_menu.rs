@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use craft::host::{AppInfo, Host, ThreadJobs};
+use craft::host::{AppInfo, Host, ManualJobs, ThreadJobs};
 use craft::menu::Node;
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
@@ -32,9 +32,10 @@ fn folder(name: &str) -> vectorcraft_testkit::TempDir {
     dir
 }
 
-/// An app with a document whose Scripts folder is `dir`'s.
+/// An app with a document whose Scripts folder is `dir`'s, and whose folder listings take no time.
 fn app(dir: &std::path::Path) -> VectorcraftApp {
     let mut session = Session::new();
+    session.set_script_listing_clock(vectorcraft_engine::script::folder::Clock::Fixed(Duration::ZERO));
     session.attach_scripts_dir(dir.join("Scripts"));
     let mut app = VectorcraftApp::new(session, crate::Services::default());
     app.ui_ctx = Some(ctx());
@@ -259,13 +260,19 @@ fn a_script_that_left_the_folder_is_not_run_and_the_folder_is_read_again() {
 fn the_read_after_a_script_that_left_the_folder_asks_for_a_frame() {
     let dir = folder("gone-frame");
     let mut app = app(&dir);
+    // The reads' lanes wait until the test runs them, so the test knows when the read has ended.
+    let jobs = Arc::new(ManualJobs::new());
+    let held = crate::testing::ui_context();
+    Host::builder(AppInfo { id: "vectorcraft", name: "VectorCraft", version: "0" }).jobs(jobs.clone()).install(&held);
+    app.ui_ctx = Some(held.clone());
     let gone = write(&dir, "gone.js", DRAW);
-    read(&app);
+    scripts_menu::refresh(&app, &held);
+    scripts_menu::finish();
     std::fs::remove_file(&gone).unwrap();
     let (tx, frames) = std::sync::mpsc::channel();
     let test = std::thread::current().id();
     // The observer sees every request; the repaint callback drops one no sooner than the first read's, still pending.
-    ctx().set_repaint_observer(move |_| {
+    held.set_repaint_observer(move |_| {
         // The read's lane asks from a thread of its own.
         if std::thread::current().id() != test {
             let _ = tx.send(());
@@ -274,8 +281,10 @@ fn the_read_after_a_script_that_left_the_folder_asks_for_a_frame() {
     assert!(menus::run_ui_command(&mut app, scripts_menu::COMMAND, &json!({ "path": gone })).unwrap().is_err());
     // With the app's copy of the context dropped, only the queue's wake can still ask for a frame.
     app.ui_ctx = None;
-    let asked = frames.recv_timeout(Duration::from_secs(10));
-    ctx().set_repaint_observer(|_| {});
+    let lanes = Arc::clone(&jobs);
+    assert!(std::thread::spawn(move || lanes.run_all()).join().unwrap() > 0, "the read ran on a lane");
+    let asked = frames.try_recv();
+    held.set_repaint_observer(|_| {});
     assert_eq!(asked, Ok(()), "the finished read asks for a frame so an idle window takes it in");
     scripts_menu::finish();
     let _ = std::fs::remove_dir_all(dir);
@@ -302,6 +311,20 @@ fn the_menu_notes_a_listing_that_stopped_and_a_folder_it_cannot_read() {
     craft::menu::tidy(&mut laid);
     assert_eq!(shape(&laid), format!("({}), -, {FIXED}", scripts_menu::UNREADABLE));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_menu_listing_stops_when_the_sessions_clock_is_past_the_time_limit() {
+    let dir = folder("clock");
+    let mut app = app(&dir);
+    write(&dir, "a.js", "");
+    let late = vectorcraft_engine::script::folder::MAX_SCAN + Duration::from_millis(1);
+    app.session.set_script_listing_clock(vectorcraft_engine::script::folder::Clock::Fixed(late));
+    read(&app);
+    assert_eq!(shape(&scripts()), format!("({}), -, {FIXED}", scripts_menu::TRUNCATED));
+    app.session.set_script_listing_clock(vectorcraft_engine::script::folder::Clock::Fixed(Duration::ZERO));
+    read(&app);
+    assert_eq!(shape(&scripts()), format!("a, -, {FIXED}"));
 }
 
 #[test]
