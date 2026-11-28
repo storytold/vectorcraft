@@ -924,11 +924,19 @@ fn front_docs(s: &Session) -> impl Iterator<Item = &DocState> {
     s.front_order().into_iter().map(|i| &s.documents()[i])
 }
 
-/// `documents[i]`, and `documents["name"]` as `getByName` reads it.
+/// `documents[i]`, and `documents["name"]` as `getByName` reads it. A key that is the text of a
+/// number but not an array index, such as `-1` or `1.5`, reaches the indexer as a number and is
+/// looked up as that name, giving `undefined` when no document has it.
 fn docs_at(h: &Host, a: &[Data]) -> Answer {
     let s = h.session.borrow();
     let at = match arg(a, 1) {
-        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| front_docs(&s).nth(i)),
+        Data::Number(n) => match position(*n) {
+            Some(i) => front_docs(&s).nth(i),
+            None => {
+                let name = vectorcraft_js::number_to_string(*n);
+                front_docs(&s).find(|d| d.title() == name)
+            }
+        },
         Data::String(name) => match front_docs(&s).find(|d| d.title() == *name) {
             None if !probing(a) => return Err(HostError::Error(NOT_FOUND.into())),
             found => found,
@@ -948,10 +956,11 @@ fn docs_by_name(h: &Host, a: &[Data]) -> Answer {
 fn docs_index(h: &Host, a: &[Data]) -> Answer {
     match arg(a, 1) {
         Data::String(_) => docs_by_name(h, a),
-        Data::Number(_) => match docs_at(h, a)? {
-            Data::Undefined => Err(HostError::Error(NOT_FOUND.into())),
-            d => Ok(d),
-        },
+        Data::Number(n) => {
+            let s = h.session.borrow();
+            let st = position(*n).and_then(|i| front_docs(&s).nth(i)).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
+            Ok(doc_ref(h, st.uid))
+        }
         _ => Err(HostError::Type("give a name or an index".into())),
     }
 }
@@ -1620,27 +1629,49 @@ fn probing(a: &[Data]) -> bool {
     matches!(arg(a, 2), Data::Bool(true))
 }
 
-/// `pageItems[i]`, and `pageItems["name"]` as `getByName` reads it.
+/// The position an indexer key names when it is an array index, 0 to 2^32 - 2.
+fn position(n: f64) -> Option<usize> {
+    whole(n).filter(|i| *i < u64::from(u32::MAX)).and_then(|i| usize::try_from(i).ok())
+}
+
+/// `pageItems[i]`, and `pageItems["name"]` as `getByName` reads it. A key that is the text of a
+/// number but not an array index, such as `-1` or `1.5`, reaches the indexer as a number and is
+/// looked up as that name, giving `undefined` when no object has it.
 fn items_at(h: &Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
-    if let Data::String(_) = arg(a, 1) {
-        return match items_by_name(h, a) {
+    match arg(a, 1) {
+        Data::String(_) => match items_by_name(h, a) {
             Err(HostError::Error(e)) if e == NOT_FOUND && probing(a) => Ok(Data::Undefined),
             r => r,
-        };
+        },
+        Data::Number(n) => match position(*n) {
+            Some(i) => Ok(item_at(h, doc, i)),
+            None => match items_named(h, doc, &vectorcraft_js::number_to_string(*n)) {
+                Err(HostError::Error(e)) if e == NOT_FOUND => Ok(Data::Undefined),
+                r => r,
+            },
+        },
+        _ => Ok(Data::Undefined),
     }
-    let Data::Number(n) = arg(a, 1) else { return Ok(Data::Undefined) };
-    let Some(i) = whole(*n).and_then(|i| usize::try_from(i).ok()) else { return Ok(Data::Undefined) };
-    Ok(with_doc(h, doc, |_, st| page_items(h, st).get(i).map_or(Data::Undefined, |id| item_ref(h, st, *id))))
+}
+
+/// The object at position `i` of `pageItems`, or `undefined` past the end.
+fn item_at(h: &Host, doc: Doc, i: usize) -> Data {
+    with_doc(h, doc, |_, st| page_items(h, st).get(i).map_or(Data::Undefined, |id| item_ref(h, st, *id)))
 }
 
 fn items_by_name(h: &Host, a: &[Data]) -> Answer {
     let doc = items_doc(h, a)?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
+    items_named(h, doc, name)
+}
+
+/// The first object of `pageItems` named `name`, or `Not found`.
+fn items_named(h: &Host, doc: Doc, name: &str) -> Answer {
     with_doc(h, doc, |_, st| {
         let ids = page_items(h, st);
         h.charge_call(ids.len() as u64)?;
-        let id = ids.iter().find(|i| st.doc.node(**i).and_then(|n| n.name.as_deref()) == Some(name.as_str()));
+        let id = ids.iter().find(|i| st.doc.node(**i).and_then(|n| n.name.as_deref()) == Some(name));
         id.map(|id| item_ref(h, st, *id)).ok_or_else(|| HostError::Error(NOT_FOUND.into()))
     })
 }
@@ -1648,10 +1679,13 @@ fn items_by_name(h: &Host, a: &[Data]) -> Answer {
 fn items_index(h: &Host, a: &[Data]) -> Answer {
     match arg(a, 1) {
         Data::String(_) => items_by_name(h, a),
-        Data::Number(_) => match items_at(h, a)? {
-            Data::Undefined => Err(HostError::Error(NOT_FOUND.into())),
-            d => Ok(d),
-        },
+        Data::Number(n) => {
+            let doc = items_doc(h, a)?;
+            match position(*n).map(|i| item_at(h, doc, i)) {
+                None | Some(Data::Undefined) => Err(HostError::Error(NOT_FOUND.into())),
+                Some(d) => Ok(d),
+            }
+        }
         _ => Err(HostError::Type("give a name or an index".into())),
     }
 }

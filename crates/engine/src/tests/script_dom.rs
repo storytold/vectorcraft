@@ -1988,6 +1988,36 @@ fn a_collection_read_with_a_name_gives_the_named_object() {
     assert_eq!(out, vec![json!([true, "n", true, false, true]), json!([true, true, false]), json!(["Not found", "Not found"])]);
 }
 
+/// A collection read with a name that is the text of a number but not an array index, such as `-1`
+/// or `1.5`, gives the object of that name, and `undefined` when nothing has it; array indices stay
+/// positions, and `index` still takes a number as a position.
+#[test]
+fn a_collection_read_with_a_number_name_that_is_not_an_index_gives_the_named_object() {
+    let (mut s, a, b) = doc();
+    s.execute("object.setProps", &json!({"ids": [a.0], "name": "-1"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [b.0], "name": "NaN"})).unwrap();
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems, m = [];\
+         vc.log([p['-1'] === p.getByName('-1'), '-1' in p, p[-1] === p.getByName('-1'), p.NaN === p.getByName('NaN'), 'NaN' in p]);\
+         vc.log([p['1.5'] === undefined, '1.5' in p, p[0].name, p['1'].name]);\
+         try { p.index(-1); } catch (e) { m.push(e.message); }\
+         var t = new DocumentPreset(); t.title = '1.5'; var d = app.documents.addDocument('Print', t);\
+         var ds = app.documents; vc.log([ds['1.5'] === d, '1.5' in ds, ds[1.5] === d, ds['-1'] === undefined, '-1' in ds]);\
+         try { ds.index(1.5); } catch (e) { m.push(e.message); }\
+         vc.log(m);",
+    );
+    assert_eq!(
+        out,
+        vec![
+            json!([true, true, true, true, true]),
+            json!([true, false, "NaN", "-1"]),
+            json!([true, true, true, true, false]),
+            json!(["Not found", "Not found"]),
+        ]
+    );
+}
+
 /// `opacity`, `hidden`, `locked` and the position and size setters on an object in a hidden or
 /// locked layer throw and the run changes nothing, while its name and note still change; an object
 /// that is hidden or locked itself takes them.
