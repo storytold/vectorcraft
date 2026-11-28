@@ -760,6 +760,10 @@ fn path_closed(h: &super::Host, a: &[Data]) -> Answer {
 fn path_set_closed(h: &super::Host, a: &[Data]) -> Answer {
     let closed = boolean(arg(a, 1), "closed")?;
     let item = this_path(h, a)?;
+    // A path with no points has no subpath to keep the value in.
+    if closed && read_points(h, item, |subs| subs.is_empty())? {
+        return Err(HostError::Error("Cannot close a path that has no points".into()));
+    }
     edit_points_keeping(h, item, true, |subs| subs.iter_mut().for_each(|sp| sp.closed = closed))?;
     Ok(Data::Undefined)
 }

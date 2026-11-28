@@ -194,6 +194,15 @@ fn opening_a_path_deselects_its_closing_segment() {
 }
 
 #[test]
+fn closing_a_path_without_points_throws() {
+    let (mut s, _, _) = doc();
+    let e = failure(&mut s, "var p = app.activeDocument.pathItems.add(); p.closed = true;");
+    assert!(e.contains("Cannot close a path that has no points"), "{e}");
+    // Opening it stores nothing and is allowed.
+    log(&mut s, "var p = app.activeDocument.pathItems.add(); p.closed = false;");
+}
+
+#[test]
 fn set_anchors_with_other_anchor_counts_deselects_the_paths_anchors() {
     let (mut s, a, b) = doc();
     s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();

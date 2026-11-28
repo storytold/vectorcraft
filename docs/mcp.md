@@ -3001,6 +3001,7 @@ other files through `$`:
   `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one `path.setAnchors` before the
   script uses any other member or command, or the points of another path, and when the script ends; a path aligned
   to the pixel grid, or in an object that is, is written at each change, so its points read as the grid snaps them.
+  Setting `closed` to true on a path with no points throws `Cannot close a path that has no points`.
   Writing changes that added, removed or replaced points deselects the path's direct-selected anchors, even when the
   path ends with as many points as before; changes that only move points or handles, change a point's type or set
   `closed` keep them selected.
