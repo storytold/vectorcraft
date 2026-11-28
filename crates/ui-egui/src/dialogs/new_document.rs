@@ -1026,10 +1026,7 @@ mod tests {
         let landscape = bounds("Landscape", egui::accesskit::Role::RadioButton);
         let artboards = bounds("Artboards", egui::accesskit::Role::SpinButton);
         // Artboards follows Landscape on its line, or wraps below it when the column has no room for it.
-        assert!(
-            landscape.x1 <= artboards.x0 || landscape.y1 <= artboards.y0,
-            "Landscape {landscape:?} stays clear of Artboards {artboards:?}"
-        );
+        assert!(landscape.x1 <= artboards.x0 || landscape.y1 <= artboards.y0, "Landscape {landscape:?} stays clear of Artboards {artboards:?}");
         let group = bounds("Orientation", egui::accesskit::Role::RadioGroup);
         let mut drawn = Vec::new();
         out.shapes.iter().for_each(|s| texts(&s.shape, &mut drawn));
