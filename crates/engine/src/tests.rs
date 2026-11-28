@@ -94,6 +94,7 @@ mod interaction_commands;
 mod interactivity;
 mod interpolate_handles;
 mod intertwine;
+mod isolation_removed;
 mod journal;
 mod keyanchor;
 mod keyguide;

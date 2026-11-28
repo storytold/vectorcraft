@@ -445,6 +445,74 @@ fn button(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() }
 }
 
+#[test]
+fn a_canvas_art_drag_cannot_make_a_graphic_style_after_file_revert() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::runtime::drag;
+
+    struct SavedFile(std::path::PathBuf);
+    impl Drop for SavedFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn canvas_and_styles(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+        egui::Panel::top("audit-styles").exact_size(220.0).show(ui, |ui| crate::panels::graphic_styles::show(app, ui));
+        canvas::show(app, ui);
+    }
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = NodeId(app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    app.run("paint.setFill", json!({"color": "#ff0000", "ids": [id.0]})).unwrap();
+    app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+    let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-artwork-drop-revert-{}.vectorcraft", std::process::id())));
+    app.run("file.saveAs", json!({"path": path.0})).unwrap();
+    assert!(path.0.is_file());
+    app.run("paint.setFill", json!({"color": "#00ff00", "ids": [id.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.select_tool("selection");
+    let mut panel = Panel::new(app, canvas_and_styles);
+    let carry_to_style = |panel: &mut Panel| {
+        let at = panel.app().canvas_view().unwrap().to_screen(Point::new(100.0, 100.0));
+        let target = panel.rect("Drop Target").center();
+        panel.frame_with(vec![Event::PointerMoved(at), button(at, true)]);
+        panel.frame_with(vec![Event::PointerMoved(at + egui::vec2(20.0, 0.0))]);
+        assert!(panel.app().session.active().unwrap().interaction.is_some(), "the Selection tool starts a move");
+        panel.frame_with(vec![Event::PointerMoved(target)]);
+        panel.frame();
+        let carried = drag::active::<PanelDrag>(panel.ctx());
+        assert!(matches!(carried.as_deref(), Some(PanelDrag::Art { ids, .. }) if ids == &[id]), "the canvas starts the panel payload");
+        assert!(drag::mark(panel.ctx()).is_some(), "Graphic Styles accepts artwork dragged from the current contents");
+    };
+    carry_to_style(&mut panel);
+
+    let (uid, reverts) = {
+        let app = panel.app();
+        let state = app.session.active().unwrap();
+        (state.uid, state.reverts)
+    };
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    let styles = |app: &VectorcraftApp| app.session.active().unwrap().doc.graphic_styles.len();
+    let count = {
+        let app = panel.app();
+        let state = app.session.active().unwrap();
+        assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+        assert!(state.doc.node(id).is_some(), "the restored object keeps the same ID");
+        styles(&app)
+    };
+    panel.frame();
+    assert!(drag::mark(panel.ctx()).is_none());
+    panel.release();
+    assert_eq!(styles(&panel.app()), count, "a drag from discarded art cannot create a style from restored art");
+    carry_to_style(&mut panel);
+    panel.release();
+    assert_eq!(styles(&panel.app()), count + 1, "a fresh drag can still create a style from the restored artwork");
+}
+
 /// A Selection, Direct Selection or Group Selection move that leaves the canvas hands the art to the drag session
 /// with the ids the move started with, and the move waits where it was last.
 #[test]

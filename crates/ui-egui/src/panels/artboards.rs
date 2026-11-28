@@ -70,7 +70,7 @@ fn icon_button(ui: &mut Ui, icon: &'static str, label: &'static str, enabled: bo
 fn name_field(ui: &mut Ui, name: &str) -> Option<String> {
     let mut typed = None;
     Field::new(tl!("Name:")).id_salt("ab-name").show(ui, |ui, _| {
-        typed = TextField::new(tl!("Name:"), Bind::given(name.to_owned())).show(ui).events.landed().cloned();
+        typed = TextField::new(tl!("Name:"), Bind::given(name.to_owned())).show(ui).events.committed().cloned();
     });
     typed.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty() && n != name)
 }

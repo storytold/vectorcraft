@@ -1204,8 +1204,8 @@ nothing of any width or height, places nothing.
 ## Writing a plug-in in Rust
 
 [`crates/plugins/example`](../crates/plugins/example) is a complete object filter, **Desaturate**: it moves every
-colour of the selection towards grey, in each colour's own model, using `serde_json` (no imports, no WASI). Build it
-with:
+colour of the selection towards grey, in each colour's own model, using `serde_json` (no imports, no WASI). It hands
+each object back without its `path`, so the geometry stays exactly as it was. Build it with:
 
 ```sh
 rustup target add wasm32-unknown-unknown

@@ -491,15 +491,40 @@ fn write_atomic(_: &Path, _: &[u8]) -> std::io::Result<()> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
-/// [`DISABLED_LOCK`] in the plug-in store `dir`, locked until the file is dropped, waiting while
+/// A lock file this process locked, unlocked when it is dropped. A child process that any thread
+/// starts holds a copy of the file's handle until it runs its program, and the lock is only freed
+/// by closing every copy or by unlocking.
+pub(crate) struct LockedFile(std::fs::File);
+
+impl LockedFile {
+    /// `file`, which the caller has locked.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn new(file: std::fs::File) -> Self {
+        LockedFile(file)
+    }
+
+    /// The locked file.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn file(&self) -> &std::fs::File {
+        &self.0
+    }
+}
+
+impl Drop for LockedFile {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
+/// [`DISABLED_LOCK`] in the plug-in store `dir`, locked until it is dropped, waiting while
 /// another window or process holds it, or another handle in this process. The file is opened for
 /// reading and writing (a handle that only appends can't be locked on Windows) and is never
 /// replaced or removed, so that every window locks the same file.
 #[cfg(not(target_arch = "wasm32"))]
-fn lock_store(dir: &Path) -> std::io::Result<std::fs::File> {
+fn lock_store(dir: &Path) -> std::io::Result<LockedFile> {
     let file = open_store_lock(dir)?;
     match file.try_lock() {
-        Ok(()) => return Ok(file),
+        Ok(()) => return Ok(LockedFile::new(file)),
         Err(std::fs::TryLockError::WouldBlock) => {}
         Err(std::fs::TryLockError::Error(e)) => return Err(e),
     }
@@ -508,7 +533,7 @@ fn lock_store(dir: &Path) -> std::io::Result<std::fs::File> {
         waiting();
     }
     file.lock()?;
-    Ok(file)
+    Ok(LockedFile::new(file))
 }
 
 /// [`DISABLED_LOCK`] in `dir`, opened (and made, with the folder) but not locked.
@@ -520,10 +545,10 @@ fn open_store_lock(dir: &Path) -> std::io::Result<std::fs::File> {
 
 /// [`lock_store`] without waiting: `None` while another window or process holds the lock.
 #[cfg(not(target_arch = "wasm32"))]
-fn try_lock_store(dir: &Path) -> std::io::Result<Option<std::fs::File>> {
+fn try_lock_store(dir: &Path) -> std::io::Result<Option<LockedFile>> {
     let file = open_store_lock(dir)?;
     match file.try_lock() {
-        Ok(()) => Ok(Some(file)),
+        Ok(()) => Ok(Some(LockedFile::new(file))),
         Err(std::fs::TryLockError::WouldBlock) => Ok(None),
         Err(std::fs::TryLockError::Error(e)) => Err(e),
     }
@@ -531,13 +556,13 @@ fn try_lock_store(dir: &Path) -> std::io::Result<Option<std::fs::File>> {
 
 /// The browser has no folders to keep anything in.
 #[cfg(target_arch = "wasm32")]
-fn try_lock_store(_: &Path) -> std::io::Result<Option<std::fs::File>> {
+fn try_lock_store(_: &Path) -> std::io::Result<Option<LockedFile>> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
 /// The browser has no folders to keep anything in.
 #[cfg(target_arch = "wasm32")]
-fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
+fn lock_store(_: &Path) -> std::io::Result<LockedFile> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
@@ -548,13 +573,19 @@ fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
 pub(crate) struct StoreTurn {
     /// [`DISABLED_LOCK`], locked; `None` without a store, and for a load that goes ahead without
     /// a turn ([`Session::plugin_store_turn_for_load`]), which then writes nothing to the store.
-    lock: Option<std::fs::File>,
+    lock: Option<LockedFile>,
 }
 
 impl StoreTurn {
     /// A turn that isn't held, for a load that goes ahead without one: it writes nothing.
     pub(crate) fn unheld() -> Self {
         StoreTurn { lock: None }
+    }
+
+    /// Tests: the locked [`DISABLED_LOCK`], when the turn is held.
+    #[cfg(test)]
+    pub(crate) fn lock_file(&self) -> Option<&std::fs::File> {
+        self.lock.as_ref().map(LockedFile::file)
     }
 
     /// Whether the store may be written in this turn.
@@ -1838,7 +1869,7 @@ impl PluginStorage {
 
     /// A turn on the plug-in store ([`lock_store`]), taken before [`PLUGIN_DATA_LOCK`], so that a
     /// window or process changing the same settings or cache waits for this change.
-    fn turn(&self) -> Result<std::fs::File, StorageError> {
+    fn turn(&self) -> Result<LockedFile, StorageError> {
         lock_store(&self.root).map_err(|e| StorageError::Io(format!("{STORE_NOT_LOCKED}: {e}")))
     }
 

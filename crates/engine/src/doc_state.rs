@@ -69,6 +69,9 @@ pub struct DocState {
     pub recalled_selection: RecalledSelection,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
+    /// When the document last became the current one: a larger value is more recent
+    /// ([`Session::front_order`]). It is not saved.
+    pub(crate) activated: u64,
     /// How many times File → Revert replaced the document's content in its tab
     /// ([`Session::replace_document`]). Work started for the document (a file read for Place, a
     /// pasted bitmap) is dropped when this has changed by the time it finishes; edits do not
@@ -421,6 +424,7 @@ impl DocState {
             last_selection_cmd: None,
             recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            activated: 0,
             reverts: 0,
             history_restores: 0,
             opened_as_tab: true,
@@ -653,6 +657,32 @@ impl DocState {
             self.layer_rows = it.layer_rows;
             self.variables_highlight = it.variables_highlight;
             self.isolation = it.isolation;
+            self.revision += 1;
+        }
+    }
+    /// End isolation mode when the isolated object is no longer in the document (an edit deleted,
+    /// cut, ungrouped or replaced it, or Undo or Redo took it out, such as the clip group Draw
+    /// Inside made around it, #3705), rather than naming an id a later object may take. While
+    /// opacity mask, pattern or symbol editing is on, isolation goes back to that mode's editing
+    /// layer.
+    pub(crate) fn leave_isolation_if_gone(&mut self) {
+        if self.isolation.is_some_and(|i| self.doc.node(i).is_none()) {
+            let d = &self.doc;
+            let layer = d.mask_edit.map(|e| e.layer).or(d.pattern_edit.as_ref().map(|e| e.layer)).or(d.symbol_edit.as_ref().map(|e| e.layer));
+            self.isolation = layer.filter(|l| d.node(*l).is_some());
+            self.revision += 1;
+        }
+    }
+    /// After the document went back from `undone` to a state from when `before` was isolated (a
+    /// canceled undo group or undo scope, an interaction's next preview): `before` is isolated
+    /// again when the edits taken back had removed it.
+    pub(crate) fn restore_isolation(&mut self, before: Option<NodeId>, undone: &Document) {
+        if let Some(b) = before
+            && self.isolation != before
+            && undone.node(b).is_none()
+            && self.doc.node(b).is_some()
+        {
+            self.isolation = before;
             self.revision += 1;
         }
     }

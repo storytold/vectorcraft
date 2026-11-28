@@ -53,10 +53,10 @@ pub use dirs::{
     user_font_dirs,
 };
 use face::Instances;
-#[cfg(test)]
-pub(crate) use face::MAX_LIVE_INSTANCES;
 pub(crate) use face::PathAlignHeights;
 pub use face::{FALLBACK_FAMILY, FontFace, IcfMargins, OutlineFormat};
+#[cfg(test)]
+pub(crate) use face::{MAX_LIVE_INSTANCES, MAX_OUTLINE_VISITS, outline_glyphs_read};
 pub(crate) use glyph_pen::FlipPen;
 pub use gsub::{GlyphCategory, GlyphCategoryKind, GlyphOrigin, JoiningPosition, Substitution, SubstitutionKind};
 pub use installed::{InstalledFace, UnloadedFile};

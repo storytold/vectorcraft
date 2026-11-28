@@ -194,18 +194,31 @@ pub(super) fn clip_make(s: &mut Session, _: &Value) -> Result<Value> {
 
 pub(super) fn clip_release(s: &mut Session, _: &Value) -> Result<Value> {
     let ids = selected_roots(s)?;
-    // With no clip group selected, the document and its undo history stay as they are.
+    // With no clip group and no stray clipping path selected, the document and its undo history
+    // stay as they are.
     let d = &s.doc()?.doc;
-    if !ids.iter().any(|id| d.node(*id).is_some_and(Node::clips)) {
+    if !ids.iter().any(|id| d.node(*id).is_some_and(Node::clips) || stray_clipping_path(d, *id)) {
         return ok();
     }
     s.edit("Release Clipping Mask", |d, _| {
         for id in &ids {
+            if stray_clipping_path(d, *id)
+                && let Some(NodeKind::Path { clipping, .. }) = d.node_mut(*id).map(|n| &mut n.kind)
+            {
+                *clipping = false;
+            }
             release_clip(d, *id);
         }
         Ok(())
     })?;
     ok()
+}
+
+/// Whether `id` is a path marked as a clipping path that clips nothing: not the bottom child of a
+/// clip group or clipping layer. A paste made one before #9227; the path commands skip it.
+fn stray_clipping_path(d: &Document, id: NodeId) -> bool {
+    let marked = d.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Path { clipping: true, .. }));
+    marked && !d.position(id).is_some_and(|(parent, i, _)| i == 0 && parent.and_then(|p| d.node(p)).is_some_and(Node::clips))
 }
 
 /// Selects the clipping path (`mask`) or the clipped contents of every selected clip group (or of the

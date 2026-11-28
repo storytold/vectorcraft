@@ -1635,6 +1635,8 @@ fn signatures(path: &BezPath, all_ties: bool) -> Vec<Signature> {
             break;
         }
         tried += 1;
+        #[cfg(test)]
+        READINGS_TRIED.set(READINGS_TRIED.get() + 1);
         if let Some(sig) = sample(&cs, &starts, &pick, accuracy, SAMPLES) {
             out.push(sig);
         }
@@ -1716,6 +1718,12 @@ fn sample(cs: &[(Vec<PathSeg>, Vec<f64>)], starts: &[Vec<usize>], pick: &[usize]
         return None;
     }
     Some(Signature { contours: cs.len(), pts, centre, spread, invariant: spread / total, lens: lens_out })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many readings [`signatures`] tried on this thread, kept or not.
+    static READINGS_TRIED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The first reading of `path` (for tests).
@@ -1925,9 +1933,10 @@ mod tests {
             p.line_to((-r, r));
             p.close_path();
         }
-        let t0 = std::time::Instant::now();
+        let before = READINGS_TRIED.get();
         assert!(signatures(&p, true).is_empty());
-        assert!(t0.elapsed() < std::time::Duration::from_secs(5), "{:?}", t0.elapsed());
+        let tried = READINGS_TRIED.get() - before;
+        assert!(tried <= MAX_VARIANTS, "{tried} readings tried");
     }
 
     /// `p` flattened into lines `tol` from its curves, each contour started at its second point and
