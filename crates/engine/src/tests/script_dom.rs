@@ -1573,12 +1573,12 @@ fn prototype_changes_cannot_forge_a_page_item() {
     let (mut s, a, _) = doc();
     let out = log(
         &mut s,
-        "var f = Object.create(PathItem.prototype); var m = '';\
-         try { f.name = 'x'; } catch (e) { m = e.message; } vc.log(m);\
-         try { PathItem.prototype.name = 'y'; } catch (e) { m = e.message; } vc.log(m); PageItem = null; Document.prototype.pageItems = null;\
+        "var f = Object.create(PathItem.prototype);\
+         try { f.name = 'x'; vc.log('wrote'); } catch (e) { vc.log(e.message); }\
+         try { PathItem.prototype.name = 'y'; vc.log('wrote'); } catch (e) { vc.log(e.message); } PageItem = null; Document.prototype.pageItems = null;\
          vc.log(Object.isFrozen(PathItem.prototype) || !Object.isExtensible(PathItem.prototype));\
          vc.log(app.activeDocument.pageItems.length);\
-         try { new PathItem(); } catch (e) { m = e.name; } vc.log(m);",
+         try { new PathItem(); vc.log('made'); } catch (e) { vc.log(e.name); }",
     );
     assert_eq!(out, vec![json!("this is not a page item"), json!("this is not a page item"), json!(true), json!(2), json!("TypeError")]);
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().name, None);
