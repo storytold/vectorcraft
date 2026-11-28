@@ -222,6 +222,9 @@ pub struct Session {
     /// The Startup Scripts folder, whose scripts `script.startup.run` runs; `None`: no folder
     /// ([`Session::attach_startup_scripts_dir`]).
     startup_scripts_dir: Option<std::path::PathBuf>,
+    /// How listings of the Scripts and Startup Scripts folders measure their time
+    /// ([`Session::set_script_listing_clock`]).
+    script_listing_clock: script::folder::Clock,
     /// The folder of File Info's metadata templates; `None`: no folder
     /// ([`Session::attach_metadata_templates_dir`]).
     metadata_templates_dir: Option<std::path::PathBuf>,
