@@ -1229,9 +1229,13 @@ fn stroked_by(doc: &Document, id: NodeId) -> Option<(NodeId, &crate::Appearance,
 /// The box a path paints, its strokes included, measured along its own shape as
 /// [`crate::Node::visual_bounds`] measures a path: a member of a compound path is stroked with the
 /// compound path's strokes, with only the arrowheads the compound path paints on it. None for a
-/// node without a path or without anything drawn.
+/// node without a path or without anything drawn, and for a path made into a guide, which paints
+/// no strokes.
 fn painted_box(doc: &Document, id: NodeId) -> Option<vectorcraft_geom::Rect> {
     let n = doc.node(id)?;
+    if n.is_guide() {
+        return None;
+    }
     let path = n.path_data()?;
     let painter = painter(doc, id)?;
     let a = &painter.appearance;
