@@ -37,6 +37,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("Document.prototype.exportVariables", "app.activeDocument.exportVariables(f);", "filesWritten"),
     ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
     ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
     ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
@@ -173,6 +174,23 @@ const INSIDE: &[(&str, &str)] = &[
     ("", "ImageColorSpace RasterLinkState"),
     ("ImageColorSpace.", "CMYK DeviceN Grayscale Indexed LAB RGB Separation"),
     ("RasterLinkState.", "DATAFROMFILE DATAMODIFIED NODATA"),
+    // Variables and data sets. `importVariables` reads the library file it is given. `PageItem`'s
+    // `visibilityVariable` is in its row above.
+    ("", "Dataset Datasets Variable VariableKind Variables"),
+    ("VariableKind.", "GRAPH IMAGE TEXTUAL Unknown VISIBILITY"),
+    ("Variables.", "prototype"),
+    ("Variables.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Variable.", "prototype"),
+    ("Variable.prototype.", "constructor kind kind= name name= pageItems parent remove typename"),
+    ("Datasets.", "prototype"),
+    ("Datasets.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Dataset.", "prototype"),
+    ("Dataset.prototype.", "constructor display name name= parent remove typename update"),
+    ("Document.prototype.", "activeDataset activeDataset= dataSets importVariables variables variablesLocked variablesLocked="),
+    ("GraphItem.prototype.", "contentVariable contentVariable="),
+    ("PlacedItem.prototype.", "contentVariable contentVariable="),
+    ("RasterItem.prototype.", "contentVariable contentVariable="),
+    ("TextFrame.prototype.", "contentVariable contentVariable="),
 ];
 
 /// The classes the host adds with nothing but a prototype and its constructor: the page item types

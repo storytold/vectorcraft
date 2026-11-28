@@ -70,6 +70,20 @@ use crate::{DocState, Document, NodeId, NodeKind, Session};
 mod images;
 mod save_open;
 mod tags;
+mod variables;
+
+pub use variables::{MAX_HANDLES, STALE_DATASET, STALE_VARIABLE};
+
+/// What [`after_command`] compares with, taken before each command a script runs
+/// ([`variables::before_command`]).
+pub(super) fn before_command(h: &Host, id: &str) -> Option<(u64, Vec<crate::doc::DataSet>)> {
+    variables::before_command(h, id)
+}
+
+/// After each command a script runs ([`variables::after_command`]).
+pub(super) fn after_command(h: &Host, before: Option<(u64, Vec<crate::doc::DataSet>)>) {
+    variables::after_command(h, before);
+}
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -120,7 +134,8 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
 /// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
-/// open, and the settings of each `DocumentPreset` the run made.
+/// open, the settings of each `DocumentPreset` the run made, and the `Variable` and `Dataset`
+/// objects it gave out.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
@@ -132,6 +147,7 @@ pub(super) struct State {
     presets: RefCell<Vec<Vec<(String, Data)>>>,
     /// What the placed and raster items keep ([`images::State`]).
     images: images::State,
+    vars: variables::Handles,
 }
 
 impl State {
@@ -2230,6 +2246,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
+    variables::define_enums(realm)?;
     let l = link;
     let mut application = named(vec![
         ("typename", typename_of("Application")),
@@ -2294,6 +2311,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     );
     document.extend(save_open::document_members(l));
     document.extend(images::document_members(l));
+    document.extend(variables::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -2346,7 +2364,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "sliced",
             "uRL",
             "uuid",
-            "visibilityVariable",
             "wrapInside",
             "wrapOffset",
             "wrapped",
@@ -2359,10 +2376,14 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .into_iter()
         .map(|m| later(l, "PageItem", m)),
     );
+    page_item.extend(variables::page_item_members(l));
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().filter(|c| !images::CLASSES.contains(c)).map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(
+        ITEM_CLASSES.iter().filter(|c| !images::CLASSES.contains(c)).map(|c| class(c, Some("PageItem"), variables::item_members(l, c), None)),
+    );
     classes.extend(images::classes(l));
     classes.extend(save_open::classes(l));
+    classes.extend(variables::classes(l));
     classes.push(class(
         "Layer",
         None,

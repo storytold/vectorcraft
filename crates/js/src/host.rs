@@ -200,8 +200,8 @@ struct Reading {
     ancestors: Vec<ObjId>,
     path: Vec<Step>,
     function: Rc<str>,
-    /// Objects of host classes are read as [`crate::host_ref`] gives them, and a plain object
-    /// that has [`crate::HOST_REF_KEY`] is refused.
+    /// Objects of host classes are read as [`crate::host_ref`] gives them, a `File` as its path under
+    /// [`crate::FILE_REF_KEY`], and a plain object that has either key is refused.
     hosted: bool,
 }
 
