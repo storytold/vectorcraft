@@ -27,7 +27,7 @@ use craft::ui::contract::{
     Bind, CollectionEvent, Gap, LabelKind, MemoProps, Props as _, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, SideLabel, Sizing,
     clicked,
 };
-use craft::ui::display::Text;
+use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::list::{List, ListRow};
@@ -73,10 +73,12 @@ fn run(app: &mut VectorcraftApp, cmd: &str, params: Value) {
     }
 }
 
-/// The key a collection's last selection change set, if any: a click on a row or a tab.
+/// The key a collection's last pick chose, if any: a click on a row or a tab, a click on the row or tab already
+/// selected, or Enter on one.
 fn picked<K, E>(events: Vec<CollectionEvent<K, E>>) -> Option<K> {
     events.into_iter().rev().find_map(|event| match event {
         CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } => keys.into_iter().last(),
+        CollectionEvent::Picked { key, .. } | CollectionEvent::Activate(key) => Some(key),
         _ => None,
     })
 }
@@ -158,8 +160,6 @@ fn skill_list(app: &mut VectorcraftApp, ui: &mut Ui) {
     let rings: Vec<(&'static catalog::Skill, SkillRing)> =
         catalog::SKILLS.iter().map(|s| (s, SkillRing { done: progress.done(s), total: s.tutorials.len() })).collect();
     let source = keyed(&keys, |key: &&'static str| *key);
-    // PLAN: a single-select list keeps its last pick highlighted and reports no change when the same key is
-    // picked again; the keys differ between the levels, but the list is the framework's to reset on a new view.
     // A few skills: the list is as tall as its rows, so Reset progress shows under them.
     let out = List::new(tl!("Skills")).select(SelectMode::Single).natural_height(true).show_items(ui, &source, &mut |key, _| {
         let row = ListRow::new(*key);
@@ -221,8 +221,7 @@ fn steps(app: &mut VectorcraftApp, ui: &mut Ui, tutorial: &'static catalog::Tuto
             if let Some(next) = next {
                 marked = Some((i, next));
             }
-            // PLAN: the number should read in the muted ink; the caption role stands in until `Text` names it.
-            Text::new(format!("{}.", i + 1)).role(TypeRole::Caption).show(ui);
+            Text::new(format!("{}.", i + 1)).shade(Shade::Muted).show(ui);
             if step_text(ui, step) {
                 locate = step.tool;
             }

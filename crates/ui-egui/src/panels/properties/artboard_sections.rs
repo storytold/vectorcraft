@@ -48,7 +48,7 @@ pub(super) fn artboard_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
                     // The field shows the name as it is (names are never translated). A blank name is refused:
                     // the field shows the old one again.
                     let out = TextField::new(tl!("Name"), Bind::given(ab.name.clone())).show(ui);
-                    if let Some(text) = out.value() {
+                    if let Some(text) = out.events.committed() {
                         let name = text.trim();
                         if !name.is_empty() && name != ab.name {
                             app.run("artboard.setProps", json!({ "index": i, "name": name })).ok();
@@ -221,7 +221,7 @@ fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Opt
             let chip = PaintChip::new(name, Bind::given(paint), Srgba::rgb(0.0, 0.0, 0.0)).popover(false).show(ui);
             pick = chip.clicked.is_some();
             let list = Select::new(tl!("Fill"), Bind::given(current), &entries).placeholder(tl!("Custom")).show(ui);
-            match list.value().copied() {
+            match list.events.committed().copied() {
                 Some(k) if k < fills.len() => set = Some(fills[k]),
                 Some(_) => pick = true,
                 None => {}
@@ -236,5 +236,111 @@ fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Opt
     }
     if pick {
         app.run("ui.colorPicker", json!({ "artboard": i })).ok();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+
+    fn draw(app: &mut VectorcraftApp, ui: &mut Ui) {
+        crate::panels::properties::show(app, ui);
+        crate::tests::picks::dialogs(app, ui);
+    }
+
+    #[test]
+    fn artboard_name_keyboard_drafts_cancel_or_commit_once() {
+        for commit in [egui::Key::Enter, egui::Key::Tab] {
+            let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+            app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3, "colorMode": "rgb"})).unwrap();
+            app.select_tool("artboard");
+            artboards::select(&mut app, 0);
+            let mut panel = Panel::new(app, draw);
+            panel.room(egui::vec2(800.0, 900.0));
+            assert_eq!(artboards::picked(&panel.app(), 3), vec![0]);
+            let original = panel.app().session.active().unwrap().doc.clone();
+            let revision = panel.app().session.active().unwrap().revision;
+            let undo = panel.app().session.active().unwrap().history.undo.len();
+            let name = panel.value_role("Name", Role::TEXT_INPUT);
+
+            panel.click_role("Name", Role::TEXT_INPUT);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text("Discarded name");
+            assert_eq!(panel.value_role("Name", Role::TEXT_INPUT).as_deref(), Some("Discarded name"));
+            assert_eq!(panel.app().session.active().unwrap().doc, original, "typing only changes the field's draft");
+            panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+            assert_eq!(panel.value_role("Name", Role::TEXT_INPUT), name);
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(panel.app().session.active().unwrap().revision, revision);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+            panel.click_role("Name", Role::TEXT_INPUT);
+            panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+            panel.type_text("Renamed board");
+            panel.key(commit, egui::Modifiers::NONE);
+            let renamed = panel.app().session.active().unwrap().doc.clone();
+            assert_eq!(renamed.artboards[0].name, "Renamed board");
+            assert_eq!(&renamed.artboards[1..], &original.artboards[1..], "other artboards retain their names and properties");
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+            panel.app().run("edit.undo", json!({})).unwrap();
+            panel.frame();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
+    }
+
+    /// Proposing a Fill changes neither the backgrounds nor history. A committed choice applies
+    /// once to the selected artboards; Color Picker likewise opens only after a committed pick.
+    #[test]
+    fn artboard_fill_keyboard_proposals_wait_for_a_committed_choice() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3, "colorMode": "rgb"})).unwrap();
+        app.select_tool("artboard");
+        artboards::select(&mut app, 0);
+        app.session.set_tool_option("selected", &json!([0, 2]));
+        let mut panel = Panel::new(app, draw);
+        panel.room(egui::vec2(800.0, 900.0));
+        assert_eq!(artboards::picked(&panel.app(), 3), vec![0, 2]);
+        let original = panel.app().session.active().unwrap().doc.clone();
+        let revision = panel.app().session.active().unwrap().revision;
+        let undo = panel.app().session.active().unwrap().history.undo.len();
+        let fill = panel.value_role("Fill", Role::COMBO_BOX);
+        panel.click_role("Fill", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "a White proposal does not edit the backgrounds");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+        assert_eq!(panel.app().session.active().unwrap().revision, revision);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(panel.value_role("Fill", Role::COMBO_BOX), fill);
+
+        panel.click_role("Fill", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(
+            panel.app().session.active().unwrap().doc.artboards.iter().map(|artboard| artboard.color).collect::<Vec<_>>(),
+            vec![Some(Color::WHITE), None, Some(Color::WHITE)]
+        );
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+        panel.app().run("edit.undo", json!({})).unwrap();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+
+        let color_picker_open =
+            |panel: &Panel| panel.app().dialogs().unwrap().with(|host| host.get::<craft::color_ui::ui::ColorPickerDialog>().is_some());
+        panel.click_role("Fill", Role::COMBO_BOX);
+        panel.key(egui::Key::End, egui::Modifiers::NONE);
+        assert!(!color_picker_open(&panel), "a Color Picker proposal does not launch a dialog");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        assert!(!color_picker_open(&panel));
+        panel.click_role("Fill", Role::COMBO_BOX);
+        panel.key(egui::Key::End, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert!(color_picker_open(&panel));
+        panel.click("Cancel");
+        assert!(!color_picker_open(&panel));
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
     }
 }
