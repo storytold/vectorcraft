@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use craft::behavior::{IconId, Mixed};
+use craft::behavior::{ColumnWidth, IconId, Mixed};
 use craft::draw::ui::stroke::{self as draw, StrokeEditor, StrokeField, StrokeSections};
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
@@ -13,7 +13,8 @@ use craft::ui::choice::Segmented;
 use craft::ui::contract::{Bind, Entry, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel, Sizing, TooltipSpec};
 use craft::ui::display::Divider;
 use craft::ui::form::Field;
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Grid, Row};
+use craft::ui::list::ThumbAspect;
 use craft::ui::menu::PanelRow;
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
@@ -33,6 +34,12 @@ use super::{Live, character, current_stroke, live_run, stroke_mixed};
 use crate::VectorcraftApp;
 // PLAN: assumed `crate::edits::{apply_edits, EditPath}` (wg.A16).
 use crate::edits::{EditPath, apply_edits};
+
+/// The Arrowheads row's columns: the start and end heads share the width, and Swap keeps its own.
+const ARROWHEAD_COLUMNS: [ColumnWidth; 3] = [ColumnWidth::fill(1.0), ColumnWidth::fill(1.0), ColumnWidth::Content];
+
+/// The width and height ratio of an arrowhead picture on a closed Arrowheads field, which shows the picture alone.
+const ARROWHEAD_ASPECT: (u16, u16) = (2, 1);
 
 /// The key of [`StrokePanel::brushed`]: (document uid, revision, active Appearance row).
 type BrushedKey = (u64, u64, Option<usize>);
@@ -409,14 +416,14 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
         (st.and_then(|s| s.end_arrow.clone()), false, tl!("End arrowhead"), "endArrow"),
     ];
     Field::new(tl!("Arrowheads")).show(ui, |ui, _| {
-        // The two heads share the width the Swap button leaves; a field too narrow for all three puts Swap on a
-        // new line.
-        Row::new().fill_width().wrap(true).show(ui, |ui, _| {
+        // The two heads share the width the Swap button leaves, on one line.
+        Grid::new(&ARROWHEAD_COLUMNS).sizing(Sizing::FillWidth).show(ui, |ui, _| {
             for (head, start, label, key) in &heads {
                 let (start, key) = (*start, *key);
                 let out = Select::new(*label, Bind::given(head.clone()), &entries)
                     .picture(move |a, cx, rect| arrow_thumb(cx, rect, a.as_ref(), start))
-                    .sizing(Sizing::FillWidth)
+                    .picture_only()
+                    .picture_aspect(ThumbAspect::new(ARROWHEAD_ASPECT.0, ARROWHEAD_ASPECT.1))
                     .show(ui);
                 // A custom head goes with its art, as document.inspect reports it.
                 if let Some(a) = out.events.landed() {
@@ -432,20 +439,28 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
     let (arrow_align, has_head) = arrow_align_state(st);
     let scale = st.map_or((100.0, 100.0), |s| s.arrow_scale);
     let linked = app.ui.stroke_panel.scale_linked;
-    let out = LinkedFields::new(tl!("Scale"), Bind::given(Mixed::each([Some(scale.0), Some(scale.1)])), Bind::given(linked))
-        .mode(LinkMode::Equal)
-        .unit_kind(UnitKind::Percent)
+    let out = Field::new(tl!("Scale"))
         .enabled(has_head)
-        .show(ui);
-    if let Some(on) = out.link.landed() {
+        .show(ui, |ui, _| {
+            LinkedFields::new(tl!("Scale"), Bind::given(Mixed::each([Some(scale.0), Some(scale.1)])), Bind::given(linked))
+                .mode(LinkMode::Equal)
+                .unit_kind(UnitKind::Percent)
+                .enabled(has_head)
+                .show(ui)
+        })
+        .inner;
+    if let Some(on) = out.as_ref().and_then(|out| out.link.landed()) {
         app.ui.stroke_panel.scale_linked = *on;
     }
-    if let Some([a, b]) = out.edit.events.landed().map(|p| (*p).map(|m| m.same().copied().flatten())) {
+    if let Some([a, b]) = out.as_ref().and_then(|out| out.edit.events.landed()).map(|p| (*p).map(|m| m.same().copied().flatten())) {
         app.run("stroke.setAdvanced", json!({"arrowScale": [a.unwrap_or(scale.0), b.unwrap_or(scale.1)]})).ok();
     }
     let aligns: Vec<Entry<ArrowAlign>> = ARROW_ALIGN.iter().map(|(v, _, icon, tip)| Entry::new(*v, *tip).icon(IconId::new(icon))).collect();
-    let out = Segmented::new(tl!("Align"), Bind::given(arrow_align), &aligns).enabled(has_head).show(ui);
-    if let Some(v) = out.events.landed()
+    let out = Field::new(tl!("Align"))
+        .enabled(has_head)
+        .show(ui, |ui, _| Segmented::new(tl!("Align"), Bind::given(arrow_align), &aligns).enabled(has_head).show(ui))
+        .inner;
+    if let Some(v) = out.as_ref().and_then(|out| out.events.landed())
         && let Some((_, name, _, _)) = ARROW_ALIGN.iter().find(|(a, ..)| a == v)
     {
         set(app, json!({"arrowAlign": name}));

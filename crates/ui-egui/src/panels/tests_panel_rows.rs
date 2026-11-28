@@ -104,3 +104,45 @@ fn align_to_shares_the_distribute_spacing_line_inside_the_align_panel() {
     assert!((field.top()..=field.bottom()).contains(&to.center().y), "Align To at {to:?} is off the spacing field's line {field:?}");
     assert!(to.right() <= ROOM.x, "Align To at {to:?} runs past the panel");
 }
+
+#[test]
+fn the_swatches_footer_stays_inside_a_short_panel() {
+    let height = 400.0;
+    let mut panel = Panel::new(app_with_rect(), swatches::show);
+    panel.room(egui::vec2(ROOM.x, height)).frame();
+    // The swatch browser fills the room the footer leaves, so every footer action is in the panel.
+    for name in ["Show Swatch Kinds", "New Swatch", "New Color Group", "Delete Swatch"] {
+        let at = panel.rect(name);
+        assert!(at.bottom() <= height && at.top() >= 0.0, "{name} at {at:?} is outside the panel's {height} pt");
+    }
+}
+
+#[test]
+fn the_arrowhead_heads_and_swap_share_one_line_in_the_stroke_panel() {
+    let names = ["Start arrowhead", "End arrowhead", "Swap start and end arrowheads"];
+    let panel = floated(app_with_rect(), "stroke", "en", Place::Floating(340.0), &names);
+    let middles = panel.middles(&names);
+    let rects: Vec<&(String, egui::Rect)> = panel.nodes.iter().filter(|(name, _)| names.contains(&name.as_str())).collect();
+    assert!(middles.windows(2).all(|m| (m[0] - m[1]).abs() < 1.0), "{middles:?} {rects:?} in {:?}", panel.body);
+    assert!(panel.past_named(&names).is_empty(), "past the panel: {:?}", panel.past_named(&names));
+}
+
+#[test]
+fn the_arrowhead_scale_and_align_rows_show_their_labels() {
+    let mut panel = Panel::new(app_with_rect(), stroke::show);
+    let (shapes, _) = panel.paint_at(1.0);
+    let texts: Vec<(String, egui::Rect)> = shapes
+        .iter()
+        .filter_map(|s| match s {
+            egui::Shape::Text(t) => Some((t.galley.text().trim_end_matches(':').to_string(), t.visual_bounding_rect())),
+            _ => None,
+        })
+        .collect();
+    // Each label sits at the start of its row, before the row's controls.
+    for (label, control) in [("Scale", "Scale"), ("Align", "Align")] {
+        let field = panel.rect(control);
+        let shown =
+            texts.iter().find(|(text, at)| text == label && at.right() <= field.right() && (field.top()..=field.bottom()).contains(&at.center().y));
+        assert!(shown.is_some(), "no {label:?} label on its row at {field:?}; painted: {:?}", texts.iter().map(|t| &t.0).collect::<Vec<_>>());
+    }
+}
