@@ -602,6 +602,9 @@ pub struct SaveJob {
     stamped: Option<i64>,
     /// The artboards also saved to files of their own (`separateArtboards`).
     boards: Vec<usize>,
+    /// The client did not give the path: a file the file access refuses before anything is
+    /// written is named as [`super::access::naming_in_error`] names it ([`SaveJob::naming_refusals`]).
+    hides_paths: bool,
 }
 
 /// Writes the file at a path with what the filler it is given writes into it
@@ -963,12 +966,20 @@ fn job_for_stamped(s: &Session, st: &DocState, plan: SavePlan, stamped: Option<i
     };
     super::check_linked_scripts(cmd, plan.format.id, st, &checked)?;
     super::access::check_native_images(cmd, plan.format.id, &st.doc, crate::cmd::links::LinkBase::of(st), &checked)?;
-    Ok(SaveJob { plan, doc, params, snapshot, source: st.doc.clone(), stamped, boards })
+    Ok(SaveJob { plan, doc, params, snapshot, source: st.doc.clone(), stamped, boards, hides_paths: false })
 }
 
 impl SaveJob {
     pub fn plan(&self) -> &SavePlan {
         &self.plan
+    }
+
+    /// The job for a save whose path the client did not give: a file the file access refuses
+    /// before anything is written is named in the error as the request being served may see it
+    /// ([`super::access::naming_in_error`]).
+    pub(crate) fn naming_refusals(mut self) -> Self {
+        self.hides_paths = true;
+        self
     }
 
     /// The document when the job was made (what counts as saved once the file is written).
@@ -1075,9 +1086,10 @@ impl SaveJob {
         // the files.
         #[cfg(not(target_arch = "wasm32"))]
         if files.len() > 1
-            && let Some(e) = files.iter().find_map(|(p, _)| crate::file_access::check_write_unrecorded(p).err())
+            && let Some((p, e)) = files.iter().find_map(|(p, _)| crate::file_access::check_write_unrecorded(p).err().map(|e| (p, e)))
         {
-            return Err(crate::EngineError::Other(e));
+            let e = crate::EngineError::Other(e);
+            return Err(if self.hides_paths { super::access::naming_in_error(e, p) } else { e });
         }
         for (i, (p, bytes)) in files.iter().enumerate() {
             if i == 0 {
@@ -1239,9 +1251,10 @@ pub fn save_with(s: &mut Session, plan: SavePlan, write: impl FnMut(&str, &[u8])
 /// A save command: plan, then write with the file system (a native file as it is encoded).
 pub(crate) fn save(s: &mut Session, mode: SaveMode, p: &Value) -> Result<Value> {
     let plan = save_plan(s, mode, p)?;
-    let job = save_job(s, plan)?;
-    let uid = s.doc()?.uid;
     let given = str_param(p, "path").is_some_and(|g| !g.is_empty());
+    let job = save_job(s, plan)?;
+    let job = if given { job } else { job.naming_refusals() };
+    let uid = s.doc()?.uid;
     // Without a path, the files written are the document's own file and those beside it.
     let mut write = |path: &str, fill: &mut dyn FnMut(&mut dyn std::io::Write) -> std::io::Result<()>| {
         super::write_save_file_with(path, fill).map_err(|e| if given { e } else { super::access::naming_in_error(e, path) })
