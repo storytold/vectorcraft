@@ -79,9 +79,12 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
-         DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
-         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= Tag Tags ZOrderMethod",
+        "activeDocument activeDocument= app Application Brush Brushes ColorModel CoordinateSystem Document DocumentArtboardLayout \
+         DocumentColorSpace DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution \
+         DocumentTransparencyGrid documents Documents ElementPlacement GraphicStyle GraphicStyles Layer PageItem PageItems \
+         PathItem PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues RulerUnits selection selection= \
+         Spot SpotColorKind Spots StrokeCap StrokeJoin Swatch SwatchGroup SwatchGroups Swatches Symbol SymbolItem SymbolItems \
+         SymbolRegistrationPoint Symbols Tag Tags Transformation ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
@@ -102,10 +105,10 @@ const INSIDE: &[(&str, &str)] = &[
     ("Document.", "prototype"),
     (
         "Document.prototype.",
-        "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
-         typename views views= width",
+        "activeLayer activeLayer= artboards artboards= brushes close close= constructor convertCoordinate \
+         documentColorSpace gradients gradients= graphicStyles groupItems groupItems= height layers layers= name pageItems \
+         parent pathItems patterns patterns= rulerOrigin rulerOrigin= rulerUnits saveAs saveAs= selection selection= spots \
+         swatchGroups swatches symbolItems symbols tags textFrames textFrames= toString typename views views= width",
     ),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name toString typename"),
@@ -121,6 +124,54 @@ const INSIDE: &[(&str, &str)] = &[
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
+    ("PathItems.", "prototype"),
+    ("PathItems.prototype.", "add constructor ellipse getByName index length parent polygon rectangle removeAll roundedRectangle star typename"),
+    ("PathItem.", "prototype"),
+    (
+        "PathItem.prototype.",
+        "area clipping closed closed= constructor evenodd evenodd= fillColor fillColor= fillOverprint fillOverprint= filled \
+         filled= guides length pathPoints polarity polarity= resize resolution resolution= rotate selectedPathPoints \
+         selectedPathPoints= setEntirePath strokeCap strokeCap= strokeColor strokeColor= strokeDashOffset strokeDashOffset= \
+         strokeDashes strokeDashes= strokeJoin strokeJoin= strokeMiterLimit strokeMiterLimit= strokeOverprint strokeOverprint= \
+         strokeWidth strokeWidth= stroked stroked= translate",
+    ),
+    ("PathPoints.", "prototype"),
+    ("PathPoints.prototype.", "add constructor index length parent removeAll typename"),
+    ("PathPoint.", "prototype"),
+    (
+        "PathPoint.prototype.",
+        "anchor anchor= constructor leftDirection leftDirection= parent pointType pointType= remove rightDirection \
+         rightDirection= selected selected= typename",
+    ),
+    ("Swatches.", "prototype"),
+    ("Swatches.prototype.", "add constructor getByName getSelected index length parent removeAll typename"),
+    ("Swatch.", "prototype"),
+    ("Swatch.prototype.", "color color= constructor name name= parent remove typename"),
+    ("Spots.", "prototype"),
+    ("Spots.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Spot.", "prototype"),
+    ("Spot.prototype.", "color color= colorType colorType= constructor getInternalColor name name= parent remove spotKind typename"),
+    ("SwatchGroups.", "prototype"),
+    ("SwatchGroups.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("SwatchGroup.", "prototype"),
+    ("SwatchGroup.prototype.", "addSpot addSwatch constructor getAllSwatches name name= parent remove removeAll typename"),
+    ("Symbols.", "prototype"),
+    ("Symbols.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Symbol.", "prototype"),
+    ("Symbol.prototype.", "constructor duplicate name name= parent remove typename"),
+    ("SymbolItems.", "prototype"),
+    ("SymbolItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("SymbolItem.", "prototype"),
+    ("SymbolItem.prototype.", "constructor symbol symbol="),
+    ("GraphicStyles.", "prototype"),
+    ("GraphicStyles.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("GraphicStyle.", "prototype"),
+    ("GraphicStyle.prototype.", "applyTo constructor mergeTo name name= parent remove typename"),
+    ("Brushes.", "prototype"),
+    ("Brushes.prototype.", "constructor getByName index length parent typename"),
+    ("Brush.", "prototype"),
+    ("Brush.prototype.", "applyTo constructor name parent typename"),
+    ("ColorModel.", "PROCESS REGISTRATION SPOT"),
     ("Tags.", "prototype"),
     ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
     ("Tag.", "prototype"),
@@ -137,7 +188,19 @@ const INSIDE: &[(&str, &str)] = &[
          TransparencyGridNone TransparencyGridOrange TransparencyGridPurple TransparencyGridRed",
     ),
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
+    ("PathPointSelection.", "ANCHORPOINT LEFTDIRECTION LEFTRIGHTPOINT NOSELECTION RIGHTDIRECTION"),
+    ("PointType.", "CORNER SMOOTH"),
+    ("PolarityValues.", "NEGATIVE POSITIVE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
+    ("SpotColorKind.", "SPOTCMYK SPOTLAB SPOTRGB"),
+    ("StrokeCap.", "BUTTENDCAP PROJECTINGENDCAP ROUNDENDCAP"),
+    ("StrokeJoin.", "BEVELENDJOIN MITERENDJOIN ROUNDENDJOIN"),
+    (
+        "SymbolRegistrationPoint.",
+        "SYMBOLBOTTOMLEFTPOINT SYMBOLBOTTOMMIDDLEPOINT SYMBOLBOTTOMRIGHTPOINT SYMBOLCENTERPOINT SYMBOLMIDDLELEFTPOINT \
+         SYMBOLMIDDLERIGHTPOINT SYMBOLTOPLEFTPOINT SYMBOLTOPMIDDLEPOINT SYMBOLTOPRIGHTPOINT",
+    ),
+    ("Transformation.", "BOTTOM BOTTOMLEFT BOTTOMRIGHT CENTER DOCUMENTORIGIN LEFT RIGHT TOP TOPLEFT TOPRIGHT"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
     // Variables and data sets. `importVariables` reads the library file it is given. `PageItem`'s
     // `visibilityVariable` is in its row above.
@@ -158,9 +221,11 @@ const INSIDE: &[(&str, &str)] = &[
     ("TextFrame.prototype.", "contentVariable contentVariable="),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: the page item types.
-const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// other than `PathItem` and `SymbolItem`, and the color classes.
+const BARE_CLASSES: &str = "BlendItem CMYKColor CompoundPathItem EnvelopeItem GradientColor GraphItem GrayColor GroupItem \
+     IntertwineItem LabColor MeshItem NoColor PatternColor PlacedDocumentItem PlacedItem RGBColor RasterItem RepeatItem SpotColor \
+     TextFrame cmykColor";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

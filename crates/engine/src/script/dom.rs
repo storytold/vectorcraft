@@ -78,6 +78,9 @@ use vectorcraft_js::{
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod colors;
+mod paths;
+mod resources;
 mod tags;
 mod variables;
 
@@ -142,15 +145,22 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
-/// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
-/// open, the settings of each `DocumentPreset` the run made, with the size of the values they hold
-/// now and the most they may hold (the run's heap), and the `Variable` and `Dataset` objects it
-/// gave out.
+/// each kept while its document is unchanged, the point changes of a path not written yet, whether
+/// a call's own savepoint ([`atomically`]) is open, the settings of each `DocumentPreset` the run
+/// made, with the size of the values they hold now and the most they may hold (the run's heap), and
+/// the `Variable` and `Dataset` objects it gave out.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
+    /// The last list of a document's paths ([`paths`]), kept while that document is unchanged.
+    paths: RefCell<Option<ItemList>>,
+    /// A path and its subpaths with the point changes the run has made to it and not written yet
+    /// ([`flush`]).
+    pending: RefCell<Option<(Item, Vec<vectorcraft_geom::path::SubPath>)>>,
+    /// The swatches, symbols, styles and brushes the run's objects name ([`resources`]).
+    resources: RefCell<resources::Table>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
     preset_bytes: Cell<u64>,
@@ -193,6 +203,13 @@ fn atomically<T>(h: &Host, f: impl FnOnce(&Host) -> std::result::Result<T, HostE
         }
     }
     r
+}
+
+/// Makes the run's swatch, symbol, style and brush objects whose resource a `vc.run` command
+/// removed or renamed stale, so a new resource that takes the name later is not theirs. The check
+/// is charged to the run.
+pub(super) fn forget_removed(h: &Host) -> std::result::Result<(), HostError> {
+    resources::forget_removed(h)
 }
 
 /// A document's uid, the document as it was, and the ids of its page items then.
@@ -254,13 +271,32 @@ type Answer = std::result::Result<Data, HostError>;
 /// A member function: the run's host and the call's arguments, `this` first.
 type Member = fn(&Host, &[Data]) -> Answer;
 
+/// A member function that first writes the point changes waiting in [`State`] ([`flush`]).
 fn function(link: &Link, f: Member) -> HostFunction {
+    call(link, f, true)
+}
+
+/// A member function of the points of a path, which reads and adds to the point changes waiting in
+/// [`State`] instead of writing them first.
+fn point_function(link: &Link, f: Member) -> HostFunction {
+    call(link, f, false)
+}
+
+fn call(link: &Link, f: Member, flushing: bool) -> HostFunction {
     let l = link.clone();
     Rc::new(move |a: Vec<Data>| {
         let h = current(&l)?;
         h.charge_call(16 + a.iter().map(data_size).sum::<u64>())?;
+        if flushing {
+            flush(&h)?;
+        }
         f(&h, &a)
     })
+}
+
+/// Writes the point changes of a path that wait in [`State`] with one command ([`paths::flush`]).
+pub(super) fn flush(h: &Host) -> std::result::Result<(), HostError> {
+    paths::flush(h)
 }
 
 fn get(link: &Link, f: Member) -> HostMember {
@@ -273,6 +309,19 @@ fn property(link: &Link, g: Member, s: Member) -> HostMember {
 
 fn method(link: &Link, f: Member) -> HostMember {
     HostMember::Method(function(link, f))
+}
+
+/// [`get`], [`property`] and [`method`] for a member of the points of a path ([`point_function`]).
+fn point_get(link: &Link, f: Member) -> HostMember {
+    HostMember::Get(point_function(link, f))
+}
+
+fn point_property(link: &Link, g: Member, s: Member) -> HostMember {
+    HostMember::Property { get: point_function(link, g), set: point_function(link, s) }
+}
+
+fn point_method(link: &Link, f: Member) -> HostMember {
+    HostMember::Method(point_function(link, f))
 }
 
 /// A member of a class with what `reflect` tells of it.
@@ -290,8 +339,8 @@ fn returns(data_type: &str, arguments: &[(&str, &str)]) -> MemberInfo {
 }
 
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
-/// the check that a document or page item `this` is still there. `hasOwnProperty` is false for it,
-/// so a script that checks for the member first skips it, and `reflect` leaves it out.
+/// the check that a document, page item or path point `this` is still there. `hasOwnProperty` is
+/// false for it, so a script that checks for the member first skips it, and `reflect` leaves it out.
 fn later(link: &Link, class: &'static str, name: &'static str) -> Described {
     let message = format!("{class}.{name} is not available yet");
     let l = link.clone();
@@ -302,8 +351,11 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> Described {
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "PageItem" | "PathItem" => {
                 item_of(&h, arg(&a, 0))?;
+            }
+            "PathPoint" => {
+                paths::this_point(&h, &a)?;
             }
             _ => {}
         }
@@ -2357,6 +2409,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         realm.define_host_object(name, items)?;
     }
     variables::define_enums(realm)?;
+    paths::install_enums(realm)?;
+    resources::install_enums(realm)?;
     realm.define_host_classes(classes(link), vec![("app".into(), host_ref("Application", &[]))])?;
     let l = link;
     // The application's members a script may name without `app.`, assigned as `app.<member>` is.
@@ -2450,12 +2504,12 @@ fn classes(link: &Link) -> Vec<HostClass> {
         ),
         ("pageItems", get(l, doc_page_items), MemberInfo { collection: true, ..typed("PageItems") }),
         ("selection", property(l, doc_selection, doc_set_selection), typed("*")),
+        ("pathItems", get(l, paths::doc_path_items), MemberInfo { collection: true, ..typed("PathItems") }),
         ("toString", method(l, doc_to_string), returns("string", &[])),
     ]);
+    document.extend(resources::document_members(l));
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
-            .into_iter()
-            .map(|m| later(l, "Document", m)),
+        ["layers", "artboards", "groupItems", "textFrames", "views", "activeLayer", "saveAs", "close"].into_iter().map(|m| later(l, "Document", m)),
     );
     document.extend(variables::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags), MemberInfo { collection: true, ..typed("Tags") }));
@@ -2530,7 +2584,18 @@ fn classes(link: &Link) -> Vec<HostClass> {
     );
     page_item.extend(variables::page_item_members(l));
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), variables::item_members(l, c), None)));
+    classes.extend(ITEM_CLASSES.iter().map(|c| {
+        let mut members = match *c {
+            "PathItem" => paths::path_item_members(l),
+            "SymbolItem" => resources::symbol_item_members(l),
+            _ => Vec::new(),
+        };
+        members.extend(variables::item_members(l, c));
+        class(c, Some("PageItem"), members, None)
+    }));
+    classes.extend(paths::classes(l));
+    classes.extend(colors::classes(l));
+    classes.extend(resources::classes(l));
     classes.extend(variables::classes(l));
     classes.push(class(
         "Layer",

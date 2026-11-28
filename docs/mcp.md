@@ -2905,7 +2905,114 @@ other files through `$`:
   layer, a document or the application does not have does not keep the value; it does not throw, except in
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
-  themselves, such as a path's fill, are not defined yet and read as `undefined`.
+  themselves, such as a text frame's `contents`, are not defined yet and read as `undefined`.
+- `Document.pathItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/) lists the document's paths in the
+  order of `pageItems`, paths inside groups and compound paths included, with `length`, `[i]`, `index(key)`,
+  `getByName(name)`, `removeAll()`, `add()` (a path with no points, from `path.create`, painted as new art; when new
+  art has no fill and no stroke, the path has neither), and the shape creators
+  `rectangle(top, left, width, height, reversed?)`, `roundedRectangle(top, left, width, height, horizontalRadius = 15,
+  verticalRadius = 20, reversed?)`, `ellipse(top = 100, left = 100, width = 50, height = 100, reversed?, inscribed?)`,
+  `polygon(centerX = 200, centerY = 300, radius = 50, sides = 8, reversed?)` and `star(centerX = 200, centerY = 300,
+  radius = 50, innerRadius = 20, points = 5, reversed?)`, which run `shape.rectangle`, `path.create`,
+  `shape.ellipse`, `shape.polygon` and `shape.star` (and `path.reverse` for `reversed`) and paint the new path as new
+  art is painted. `add()` and the shape creators put the new path on top of the active layer whatever the drawing
+  mode, which stays as it was. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
+  `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
+  `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,
+  `strokeDashOffset`, `translate(deltaX?, deltaY?, ...)`, `rotate(angle, ..., rotateAbout?)` (counterclockwise for a
+  positive angle) and `resize(scaleX, scaleY, ..., changeLineWidths?, scaleAbout?)`. The geometry changes through
+  `path.setAnchors`, the fill and stroke through `paint.setFill` and `paint.setStroke`, the stroke options through
+  `stroke.set`, the fill rule through `path.setFillRule`, overprint through `object.setOverprint` and the transforms
+  through `object.move`, `object.rotate` and `object.scale`. Changes to the points of a path (`closed`,
+  `setEntirePath`, `pathPoints` and each `PathPoint`) are written together with one `path.setAnchors` before the
+  script uses any other member or command, or the points of another path, and when the script ends; a path aligned
+  to the pixel grid, or in an object that is, is written at each change, so its points read as the grid snaps them.
+  `pathPoints`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoints/) has `length`, `[i]`, `index(i)`, `add()` and
+  `removeAll()`, and each `PathPoint` (https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/) has `anchor`,
+  `leftDirection` (the handle into the point), `rightDirection` (the handle out of it), `pointType`, `parent` and
+  `remove()`. `new RGBColor()` (0 to 255), `new CMYKColor()` (0 to 100), `new GrayColor()` (0 to 100, 0 black and 100
+  white, as https://ai-scripting.docsforadobe.dev/jsobjref/GrayColor/ gives it), `new LabColor()` and `new NoColor()`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/NoColor/) make plain color objects; assigning a `NoColor` removes
+  the fill or stroke. The enumerations `PointType`, `PathPointSelection`, `StrokeCap`, `StrokeJoin`, `PolarityValues`
+  and `Transformation` hold strings such as `"StrokeCap.ROUNDENDCAP"`.
+  VectorCraft's own rules: a point's index counts across the path's subpaths; `closed` is true when every subpath is
+  closed, and assigning it opens or closes them all; `setEntirePath` takes at most 100,000 points and gives corner
+  points with no handles, keeping the path closed when it was; moving `anchor` leaves its handles where they are, and
+  `pointType` changes only the type; `PathPoints.add()` adds a corner point at the last point, or at `[0, 0]`; a point
+  whose index is past the end of its path throws `Stale path point`. Color components left out count as 0, `new
+  cmykColor()` makes a `CMYKColor`, `LabColor.l` is 0 to 100 and `a` and `b` are -128 to 128, and a component out of
+  range throws a `RangeError` when the color is assigned, with nothing changed. A component reads with the fewest
+  decimals, at least 4, that give the stored value back, so assigning a color read from a path leaves the path as it
+  was. Reading `fillColor` or `strokeColor` gives a new object each time, a `GradientColor`, `SpotColor` or `PatternColor` among them (a color linked to a
+  global or spot swatch reads as a `SpotColor` with its `tint`, and with its `spot` when the swatch is a spot color or
+  Registration). Assigning a `SpotColor` (https://ai-scripting.docsforadobe.dev/jsobjref/SpotColor/) links the fill or
+  stroke to its `spot`, a `Spot` of the path's document, at its `tint` (0 to 100; VectorCraft's own defaults are 100
+  for `new SpotColor()` and 0 for a color object without a `tint`), with `paint.setFill` or `paint.setStroke`. A `SpotColor` read from a color linked to a global process
+  swatch has no `spot` and does not name the swatch, so assigning it, or a `SpotColor` whose `spot` was never set,
+  throws an error that says `SpotColor.spot` must be a Spot, and the path keeps its paint. Assigning a `GradientColor` or `PatternColor` throws an error that says it is not available yet. `filled = true` on a path without a fill gives it the fill new
+  art gets (a color, gradient or pattern), or black when new art has none, and `stroked = true` does the same with the
+  stroke; a new-art gradient goes on the bounds of the path, or of the compound path or compound shape whose paint
+  it shows, and a new-art pattern with a placement of its own, or one missing from the document, throws an error.
+  `fillOverprint` and `strokeOverprint` read and change the top fill or stroke only. Sizes and
+  radii are finite and not negative, `sides` is a whole number from 3 to 1000, `points` one from 2 to 1000,
+  `strokeWidth` 0 to 1000 points (a `changeLineWidths` that would scale it past 1000 throws), `strokeDashes` at most
+  64 lengths that are not all 0 (`[]` or `{}` for a solid line), and `rotateAbout` and `scaleAbout` default to
+  `Transformation.CENTER`. A transform that leaves the path where it is, such as `rotate(360)` or
+  `resize(100, 100)`, checks its arguments and runs no command, on a path with no points too. The transforms take one setting for fill and stroke patterns, so `changeFillPatterns` and
+  `changeStrokePattern` given as different values throw an error, and `changeFillGradients` false and `ellipse` with
+  `inscribed` true throw an error that says they are not available yet. A change to the geometry or paint of a path
+  that is hidden or locked, or that is in a hidden or locked layer or group, throws `Cannot edit` with nothing
+  changed. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
+  shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
+  art, the active Fill or Stroke proxy and Recent Colors as they were. `selectedPathPoints`, `PathPoint.selected`,
+  `transform`, `polarity`, the gradient stops and the document's default paint are not available yet.
+- A `Document` also has `swatches`, `spots`, `swatchGroups`, `symbols`, `symbolItems`, `graphicStyles` and `brushes`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Swatches/, https://ai-scripting.docsforadobe.dev/jsobjref/Spots/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/SwatchGroups/, https://ai-scripting.docsforadobe.dev/jsobjref/Symbols/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/SymbolItems/, https://ai-scripting.docsforadobe.dev/jsobjref/GraphicStyles/
+  and https://ai-scripting.docsforadobe.dev/jsobjref/Brushes/). Each has `length`, `parent`, `[i]`, `index(key)` and
+  `getByName(name)`; all but `brushes` have `removeAll()`. `swatches.add()` and `spots.add()` run `swatch.new`,
+  `swatchGroups.add()` runs `swatch.newGroup`, `symbols.add(sourceArt, registrationPoint?)` runs `symbol.new` with
+  `keepArt: true` (the default point is `SymbolRegistrationPoint.SYMBOLCENTERPOINT`), and `symbolItems.add(symbol)`
+  runs `symbol.place`. `swatches.getSelected()` gives `[]`. A `Swatch` (https://ai-scripting.docsforadobe.dev/jsobjref/Swatch/)
+  has `name` and `color` (`swatch.edit`) and `remove()` (`swatch.delete`); the `color` of a spot swatch or of Registration reads as a
+  `SpotColor` with its `spot` and a `tint` of 100, and a tint of a spot as that `spot` at its `tint`. A `Spot` (https://ai-scripting.docsforadobe.dev/jsobjref/Spot/) has
+  `name`, `color`, `colorType`, `spotKind`, `getInternalColor()` and `remove()`. A `SwatchGroup`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/SwatchGroup/) has `name` (`swatch.renameGroup`), `addSwatch(swatch)`
+  and `addSpot(spot)` (`swatch.move`), `getAllSwatches()`, `remove()` and `removeAll()`. A `Symbol`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Symbol/) has `name` (`symbol.options`), `duplicate()`
+  (`symbol.duplicate`) and `remove()` (`symbol.delete`), and a `SymbolItem`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/SymbolItem/) adds `symbol` to the page item members, which
+  `symbol.replace` changes. A `GraphicStyle` (https://ai-scripting.docsforadobe.dev/jsobjref/GraphicStyle/) has `name`
+  (`graphicStyle.rename`), `applyTo(item)` and `mergeTo(item)` (`graphicStyle.apply`, with `add: true` for `mergeTo`)
+  and `remove()` (`graphicStyle.delete`). A `Brush` (https://ai-scripting.docsforadobe.dev/jsobjref/Brush/) has a
+  read-only `name` and `applyTo(item)` (`brush.apply`). The enumerations `SymbolRegistrationPoint`, `ColorModel` and
+  `SpotColorKind` hold strings such as `"ColorModel.SPOT"`.
+  VectorCraft's own rules: `swatches` lists None, Registration, the other ungrouped swatches and then each color
+  group's, and `swatchGroups` lists the color groups. `swatches.add()` saves the current fill (a color, gradient or
+  pattern) or black when the fill is None, and `spots.add()` the current fill, converted to the document's color
+  space unless it is Lab, or black when it is not a solid color. None and Registration cannot change or be removed,
+  and `removeAll()` keeps them; the Default Graphic Style cannot be renamed or removed, and
+  `graphicStyles.removeAll()` keeps it. A color group takes solid
+  colors only; `SwatchGroup.remove()` deletes the group with its swatches, and its `removeAll()` deletes the swatches
+  and keeps the group. `spots` lists Registration and the spot colors. A spot's color, set through `Spot.color` or
+  `Swatch.color`, takes an `RGBColor`, a `CMYKColor` or a `LabColor` in a document of either color space, and the spot
+  keeps that color space. This is VectorCraft's own rule: the Spot page says a color in another space than the
+  document's gives an error, and `spots.add()` follows the page by converting the fill. A process swatch's
+  `Swatch.color` stores an `RGBColor` in a CMYK document as CMYK. A spot's `colorType` reads
+  and takes only `ColorModel.SPOT` (`ColorModel.REGISTRATION` for Registration), a gray spot's `spotKind` is
+  `SpotColorKind.SPOTCMYK`, and `getInternalColor()` gives the
+  components on the color classes' scales. `symbols.add` leaves the source art as it is, and removing a symbol turns
+  its instances into plain art. `applyTo` and `mergeTo` take one page item of the same document that can be edited,
+  and `Brush.applyTo` a path that is not a guide, a clipping path or a path in a compound path; applying the brush a
+  path already draws runs no command. A name is 1 to 1,024 bytes, not blank, with no control characters, and a name a
+  swatch, spot or color group already has throws for any of the three. Renaming a resource through these objects keeps the object; after it is
+  removed, or renamed or deleted with `vc.run`, every member throws `Stale Swatch` (`Stale Spot`, `Stale SwatchGroup`,
+  `Stale Symbol`, `Stale GraphicStyle`, `Stale Brush`). A run holds at most 100,000 of these objects. An object of
+  another document throws `Cross-document placement is not available`. `Document.gradients`, `Document.patterns` and
+  assigning a `SpotColor` to a swatch's or spot's `color` are not available yet.
 - A `Document` also has `variables`, `dataSets`, `activeDataset`, `variablesLocked`, `importVariables(file)` and
   `exportVariables(file)` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/). `variables`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Variables/) and `dataSets`

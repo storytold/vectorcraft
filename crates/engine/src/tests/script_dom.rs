@@ -984,9 +984,11 @@ fn a_startup_preset_alone_gives_its_first_size() {
 #[test]
 fn page_item_members_not_built_yet_throw_on_read_and_assignment() {
     let (mut s, _, _) = doc();
-    for source in
-        ["app.activeDocument.pageItems[0].blendingMode;", "app.activeDocument.pageItems[0].uuid = 'x';", "app.activeDocument.pageItems[0].rotate(5);"]
-    {
+    for source in [
+        "app.activeDocument.pageItems[0].blendingMode;",
+        "app.activeDocument.pageItems[0].uuid = 'x';",
+        "app.activeDocument.pageItems[0].transform(5);",
+    ] {
         assert!(failure(&mut s, source).contains("is not available yet"), "{source}");
     }
     assert!(failure(&mut s, "app.activeDocument.layers = 1;").contains("Document.layers is not available yet"));
@@ -1857,7 +1859,7 @@ fn page_items_report_their_available_members_as_their_own() {
          vc.log([p.hasOwnProperty('opacity'), p.hasOwnProperty('typename'), p.hasOwnProperty('duplicate'),\
            Object.prototype.hasOwnProperty.call(p, 'name'), p.propertyIsEnumerable('opacity'), d.hasOwnProperty('selection'),\
            app.hasOwnProperty('activeDocument')]);\
-         vc.log([p.hasOwnProperty('blendingMode'), p.hasOwnProperty('rotate'), d.hasOwnProperty('layers'),\
+         vc.log([p.hasOwnProperty('blendingMode'), p.hasOwnProperty('transform'), d.hasOwnProperty('layers'),\
            p.hasOwnProperty('nosuch'), p.hasOwnProperty('hasOwnProperty'), p.hasOwnProperty('constructor')]);\
          vc.log([keys.indexOf('opacity') >= 0, keys.indexOf('typename') >= 0, keys.indexOf('duplicate'), keys.indexOf('blendingMode')]);",
     );
