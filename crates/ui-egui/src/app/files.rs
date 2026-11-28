@@ -1,25 +1,46 @@
 use super::{VectorcraftApp, io, place};
+use crate::services::Inbox;
+use craft::host::{Host, PendingPick, PickKind};
 
 impl VectorcraftApp {
-    /// A file dialog is open off the UI thread (a sheet on macOS, [`picks`]): what asked for it runs
-    /// again when it answers.
+    /// The oldest pick the file service has not answered, the one on screen.
+    fn pending_pick(&self) -> Option<PendingPick> {
+        Host::try_of_ctx(self.ui_ctx.as_ref()?)?.files().pending_pick()
+    }
+
+    /// A file dialog is open off the UI thread: what asked for it runs when it answers.
     pub fn file_dialog_open(&self) -> bool {
-        self.picks.is_waiting()
+        self.pending_pick().is_some()
     }
 
-    /// A file dialog is open as a sheet on the window ([`Services::dialogs_are_sheets`]): nothing
-    /// closes or quits until it answers.
+    /// A file dialog is open as a sheet on the window: nothing closes or quits until it answers.
     pub fn file_sheet_open(&self) -> bool {
-        self.services.dialogs_are_sheets && self.file_dialog_open()
+        self.pending_pick().is_some_and(|p| p.sheet)
     }
 
-    pub(super) fn drain_inbox(&mut self) {
-        let arrived: Vec<(String, Vec<u8>)> =
-            self.services.inbox.as_ref().map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default();
-        for (name, bytes) in arrived {
-            if let Err(e) = io::open_bytes(self, &name, &bytes, None) {
-                io::report_open_error(self, &name, &e);
-            }
+    /// The kind of dialog open (`ui.inspect`'s `fileDialog`).
+    pub(crate) fn file_dialog_kind(&self) -> Option<&'static str> {
+        let PendingPick { request, .. } = self.pending_pick()?;
+        Some(match request.kind {
+            _ if request.purpose == "place" => "place",
+            PickKind::Open | PickKind::OpenMany => "open",
+            PickKind::Save => "save",
+            PickKind::Folder => "folder",
+        })
+    }
+
+    pub(crate) fn drain_inbox(&mut self) {
+        if self.session.plugin_calls_open() {
+            return;
+        }
+        fn take(q: Option<&Inbox>) -> Vec<(String, Vec<u8>)> {
+            q.map(|q| std::mem::take(&mut *q.lock().unwrap_or_else(|e| e.into_inner()))).unwrap_or_default()
+        }
+        // The page's script is automation.
+        let mut arrived: Vec<_> = take(self.services.inbox.as_ref()).into_iter().map(|f| (f, false)).collect();
+        arrived.extend(take(self.services.page_inbox.as_ref()).into_iter().map(|f| (f, true)));
+        for ((name, bytes), automated) in arrived {
+            crate::file_asks::as_automated(self, automated, |app| io::open_bytes_reporting(app, &name, &bytes));
         }
         place::drain(self);
     }

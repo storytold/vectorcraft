@@ -216,7 +216,7 @@ fn the_journal_records_the_scale_options_used() {
     run(&mut s, "object.scale", json!({"sx": 150}));
     let (cmd, p) = s.journal.last().unwrap().clone();
     assert_eq!(cmd, "object.scale");
-    assert_eq!(p, json!({"sx": 150, "strokes": false, "corners": true}));
+    assert_eq!(p, json!({"sx": 150, "strokes": false, "corners": true, "basis": "box"}));
     // An explicit value stays; moves don't scale, so they record nothing.
     run(&mut s, "object.scale", json!({"sx": 150, "strokes": true}));
     assert_eq!(s.journal.last().unwrap().1["strokes"], json!(true));

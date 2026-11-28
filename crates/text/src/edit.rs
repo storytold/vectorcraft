@@ -214,6 +214,28 @@ pub fn next_char(s: &str, i: usize) -> usize {
     s[i..].chars().next().map(|c| i + c.len_utf8()).unwrap_or(s.len())
 }
 
+/// Does the character at byte `i` of `s` start a line by itself: the first character of the text,
+/// of a paragraph, or after a forced line break (U+2028)?
+pub fn starts_line(s: &str, i: usize) -> bool {
+    i == 0 || s.get(..i).is_some_and(|before| before.ends_with(['\n', '\u{2028}']))
+}
+
+/// The character whose kerning the Type tool's caret at byte `i` of `s` sets (the Kerning field,
+/// Alt+arrows, Reset Tracking and Kerning), and whether that kerning is the space before it
+/// ([`vectorcraft_doc::CharStyle::kerning_before`]) or after it
+/// ([`vectorcraft_doc::CharStyle::kerning`]). Inside a line it is the space after the character
+/// before the caret. At the start of a line ([`starts_line`]) no character on the line comes before
+/// the caret, so it is the space before the character after it (#5111). None at the start of an
+/// empty line, where no character follows either.
+pub fn caret_kerning_target(s: &str, i: usize) -> Option<(Range<usize>, bool)> {
+    let i = floor_char(s, i);
+    if !starts_line(s, i) {
+        return Some((prev_char(s, i)..i, false));
+    }
+    let c = s.get(i..)?.chars().next()?;
+    (c != '\n' && c != '\u{2028}').then(|| (i..i + c.len_utf8(), true))
+}
+
 /// The start of the grapheme cluster before `i` (Left arrow): a Thai consonant with its vowel and
 /// tone marks, an accented letter or an emoji sequence is passed over whole.
 pub fn prev_cluster(s: &str, i: usize) -> usize {

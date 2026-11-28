@@ -2,11 +2,12 @@
 //! the previous frame reprojected to the current view. A second worker renders a low-resolution
 //! frame for the parts that frame does not reach (`canvas::fill_uncovered`). Light documents
 //! render synchronously so edits never lag behind overlays, after a first frame that renders here
-//! too: the UI thread waits for it only briefly (`canvas::FIRST_FRAME_GRACE`).
+//! too: the UI thread waits for it only briefly (`canvas::raster::FIRST_FRAME_GRACE`).
 
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
+use craft::platform::clock::monotonic_ms;
 use vectorcraft_doc::Document;
 use vectorcraft_engine::file_access::ScopeHandle;
 use vectorcraft_geom::Affine;
@@ -24,6 +25,18 @@ pub struct Job {
     /// The automation roots in force where the job was made: the render reads linked files under
     /// them, as it would on that thread.
     pub scope: ScopeHandle,
+    /// The document's deferred live-effect plug-in stages and first-view budget: the render runs
+    /// inside their view ([`vectorcraft_plugins::deferred::Deferrals::view`]).
+    pub effects: vectorcraft_plugins::deferred::Deferrals,
+    /// The render may copy pixels from the worker's last frame ([`crate::canvas::render_job`]).
+    /// Off: it renders the whole frame.
+    pub may_copy: bool,
+    /// The worker may keep the frame for its next frame to copy from
+    /// ([`crate::canvas::render_job`]). Off: the worker holds no frame after this one.
+    pub may_keep: bool,
+    /// The display profile the finished frame is converted into ([`crate::display_profile`]).
+    /// The frame the worker keeps stays sRGB.
+    pub display: Option<Arc<craft::color_ui::display::DisplayTransform>>,
 }
 
 pub struct Done {
@@ -35,6 +48,21 @@ pub struct Done {
     pub ms: f64,
     /// [`vectorcraft_render::FrameStats::moved`] of the frame.
     pub moved: usize,
+    /// The frame holds pixels copied from the worker's last frame ([`crate::canvas::render_job`]),
+    /// and `ms` is the time of the copy and of the parts rendered.
+    pub reused: bool,
+    /// The frame drew art in a way that depends on its size
+    /// ([`vectorcraft_render::FrameStats::view_sized`]): a part of it drawn on its own may differ.
+    pub view_sized: bool,
+}
+
+/// Render `job` as the worker thread does: inside the job's automation roots and deferred
+/// effects, with the worker's renderer `r` and its last frame `kept`.
+pub(crate) fn render(r: &mut Renderer, kept: &mut Option<crate::canvas::KeptFrame>, job: Job) -> Done {
+    let t0 = monotonic_ms();
+    let frame = job.scope.clone().run(|| job.effects.view(|| crate::canvas::render_job(r, kept, &job)));
+    let ms = monotonic_ms() - t0;
+    Done { key: job.key, doc: job.doc, opts: job.opts, img: frame.img, ms, moved: frame.moved, reused: frame.reused, view_sized: frame.view_sized }
 }
 
 pub struct Worker {
@@ -55,15 +83,13 @@ impl Worker {
             .name("vectorcraft-render".into())
             .spawn(move || {
                 let mut r = Renderer::new();
+                let mut kept = None;
                 while let Ok(mut job) = jobs.recv() {
                     // Skip stale jobs: only the newest matters.
                     while let Ok(newer) = jobs.try_recv() {
                         job = newer;
                     }
-                    let t0 = crate::now_ms();
-                    let img = job.scope.clone().run(|| r.render(&job.doc, job.w, job.h, job.view, &job.opts));
-                    if done_tx.send(Done { key: job.key, doc: job.doc, opts: job.opts, img, ms: crate::now_ms() - t0, moved: r.stats.moved }).is_err()
-                    {
+                    if done_tx.send(render(&mut r, &mut kept, job)).is_err() {
                         break;
                     }
                     ctx.request_repaint();

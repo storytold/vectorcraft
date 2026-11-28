@@ -81,8 +81,13 @@ fn form_resource_scopes_keep_scanned_overprint_in_step_with_interpretation() {
 }
 
 pub(crate) fn text_pdf(content: &str) -> Vec<u8> {
+    text_pdf_with("/ca 0.25 /CA 0.75", content)
+}
+
+/// [`text_pdf`] with graphics state `/G` set by `state` (its entries, such as `/ca 0.5 /CA 0.5`).
+pub(crate) fn text_pdf_with(state: &str, content: &str) -> Vec<u8> {
     page(
-        "/Font << /F1 5 0 R >> /ExtGState << /G << /ca 0.25 /CA 0.75 >> >>",
+        &format!("/Font << /F1 5 0 R >> /ExtGState << /G << {state} >> >>"),
         content.as_bytes(),
         &[
             b"<< /Type /Font /Subtype /TrueType /BaseFont /Inter-Regular /Encoding /WinAnsiEncoding /FirstChar 65 /LastChar 67 /Widths [600 600 600] /FontDescriptor 6 0 R >>".to_vec(),

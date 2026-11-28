@@ -6,9 +6,10 @@
 //!
 //! Differences from the desktop app:
 //! - no TCP control server (browsers can't listen on sockets);
-//! - File → Open uses the browser file picker; bytes arrive asynchronously through
-//!   `Services::inbox`;
+//! - File → Open uses the browser file picker, through the host's file service (`BrowserFiles`);
 //! - Save / Export trigger a browser download;
+//! - plug-ins are checked when installed, and filters run, in Web Workers of their own
+//!   (`plugin_workers`, the `vectorcraft-plugin-worker` build), so a plug-in never runs on the page;
 //! - dropped files are read asynchronously by `web::WebShell` and delivered through the inbox;
 //! - pen and finger input is read from Pointer Events by `pencil` (Apple Pencil pressure and
 //!   hover, palm rejection, fingers navigate once a pen has been seen, the pen's eraser end
@@ -25,10 +26,12 @@ mod api;
 mod fonts;
 #[cfg(any(target_arch = "wasm32", test))]
 mod keys;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", test))]
 mod locks;
 #[cfg(any(target_arch = "wasm32", test))]
 mod pencil;
+#[cfg(target_arch = "wasm32")]
+mod plugin_workers;
 #[cfg(any(target_arch = "wasm32", test))]
 mod saved_files;
 #[cfg(target_arch = "wasm32")]

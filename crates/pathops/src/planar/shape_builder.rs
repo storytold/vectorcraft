@@ -274,6 +274,8 @@ pub fn run_around(piece: &SubPath, stops: &[Point], at: Point, tol: f64) -> Opti
 /// The point of `sp` nearest `p`, as a parameter `segment + t`, with its distance.
 fn nearest_u(sp: &SubPath, p: Point) -> Option<(f64, f64)> {
     use kurbo::ParamCurveNearest;
+    #[cfg(test)]
+    super::index::note_work(sp.segment_count());
     (0..sp.segment_count())
         .map(|k| {
             let n = sp.segment(k).nearest(p, 1e-9);

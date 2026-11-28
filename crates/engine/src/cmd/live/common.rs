@@ -1,7 +1,9 @@
+use std::collections::HashSet;
+
 use super::mesh::whole;
 use super::{
     Arc, BlendEase, BlendEaseType, BlendOrientation, BlendSpacing, Document, EngineError, Node, NodeId, NodeKind, Result, Selection, Session, Value,
-    bad, check_numbers, has_selection, json, named_ids, selected_roots, str_param, switch_or,
+    bad, check_numbers, has_selection, json, named_ids, selected_roots, switch_or, text_param,
 };
 
 pub(super) fn ids_json(ids: &[NodeId]) -> Value {
@@ -20,34 +22,43 @@ pub(super) fn roots_param(s: &Session, p: &Value) -> Result<Vec<NodeId>> {
         let mut sel = Selection::default();
         sel.set(ids.iter().copied().filter(|id| st.doc.node(*id).is_some_and(|n| !n.is_layer())));
         let ordered = sel.in_paint_order(&st.doc);
+        let given: HashSet<NodeId> = ordered.iter().copied().collect();
         // Drop ids nested inside other given ids.
         return Ok(ordered
             .iter()
             .copied()
             .filter(|id| {
                 let anc = st.doc.ancestry(*id).unwrap_or_default();
-                !anc[..anc.len().saturating_sub(1)].iter().any(|a| ordered.contains(a))
+                !anc[..anc.len().saturating_sub(1)].iter().any(|a| given.contains(a))
             })
             .collect());
     }
     selected_roots(s)
 }
 
-/// Selected nodes of a kind (the selection itself or an ancestor).
+/// Selected nodes of a kind (the selection itself or an ancestor). None while an object of a
+/// dynamic symbol instance's art is selected.
 pub(super) fn selected_of(s: &Session, pred: fn(&Node) -> bool) -> Vec<NodeId> {
-    let Some(st) = s.active() else { return vec![] };
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return vec![] };
+    let mut find = st.doc.nearest_finder();
+    let mut seen = HashSet::new();
     let mut out = vec![];
     for id in &st.selection.objects {
-        for a in st.doc.ancestry(*id).unwrap_or_default().into_iter().rev() {
-            if st.doc.node(a).is_some_and(pred) {
-                if !out.contains(&a) {
-                    out.push(a);
-                }
-                break;
-            }
+        if let Some(n) = find.nearest(*id, pred)
+            && seen.insert(n.id)
+        {
+            out.push(n.id);
         }
     }
     out
+}
+
+/// Whether some selected object's node of a kind ([`selected_of`]) passes `test`; stops at the
+/// first one that does.
+pub(super) fn any_selected_of(s: &Session, pred: fn(&Node) -> bool, test: impl Fn(&Node) -> bool) -> bool {
+    let Some(st) = s.active().filter(|st| st.selection.symbol_part.is_none()) else { return false };
+    let mut find = st.doc.nearest_finder();
+    st.selection.objects.iter().any(|id| find.nearest(*id, pred).is_some_and(&test))
 }
 
 pub(super) fn is_blend(n: &Node) -> bool {
@@ -64,17 +75,20 @@ pub(super) fn is_mesh(n: &Node) -> bool {
 
 pub(super) fn has_blend(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
-    if selected_of(s, is_blend).is_empty() { Err("select a blend".into()) } else { Ok(()) }
+    crate::cmd::edit::no_symbol_part(s)?;
+    if any_selected_of(s, is_blend, |_| true) { Ok(()) } else { Err("select a blend".into()) }
 }
 
 pub(super) fn has_envelope(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
-    if selected_of(s, is_envelope).is_empty() { Err("select an envelope".into()) } else { Ok(()) }
+    crate::cmd::edit::no_symbol_part(s)?;
+    if any_selected_of(s, is_envelope, |_| true) { Ok(()) } else { Err("select an envelope".into()) }
 }
 
 pub(super) fn has_mesh(s: &Session) -> std::result::Result<(), String> {
     has_selection(s)?;
-    if selected_of(s, is_mesh).is_empty() { Err("select a gradient mesh".into()) } else { Ok(()) }
+    crate::cmd::edit::no_symbol_part(s)?;
+    if any_selected_of(s, is_mesh, |_| true) { Ok(()) } else { Err("select a gradient mesh".into()) }
 }
 
 /// Wrap `roots` (paint order) into a new node built by `make`, placed where the topmost root was.
@@ -124,8 +138,11 @@ pub(super) fn spacing_param(p: &Value, cmd: &str, current: BlendSpacing) -> Resu
     let smooth = switch_or(p, "smooth", false, cmd)?;
     let num = |k: &str| p.get(k).and_then(Value::as_f64);
     let steps = |k: &str, n: f64| whole(n, k, cmd).map(|n| BlendSpacing::Steps(n as u32));
-    let mode = str_param(p, "spacing");
+    let mode = text_param(p, "spacing", cmd)?;
     let value = num("value");
+    if mode.is_none() && value.is_some() {
+        return Err(bad(cmd, "`value` needs `spacing` (steps|distance)"));
+    }
     let sp = match mode {
         Some("smooth") | Some("smoothColor") => BlendSpacing::SmoothColor,
         Some("steps") => match value {
@@ -153,11 +170,15 @@ pub(super) fn spacing_param(p: &Value, cmd: &str, current: BlendSpacing) -> Resu
     }
 }
 
-pub(super) fn orientation_param(p: &Value, current: BlendOrientation) -> BlendOrientation {
-    match str_param(p, "orientation") {
-        Some("path") | Some("alignToPath") => BlendOrientation::AlignToPath,
-        Some("page") | Some("alignToPage") => BlendOrientation::AlignToPage,
-        _ => current,
+/// `orientation`: `page` or `path`; missing or null keeps `current`, and any other value is an error.
+pub(super) fn orientation_param(p: &Value, cmd: &str, current: BlendOrientation) -> Result<BlendOrientation> {
+    match p.get("orientation").filter(|v| !v.is_null()) {
+        None => Ok(current),
+        Some(v) => match v.as_str() {
+            Some("path") | Some("alignToPath") => Ok(BlendOrientation::AlignToPath),
+            Some("page") | Some("alignToPage") => Ok(BlendOrientation::AlignToPage),
+            _ => Err(bad(cmd, "orientation must be page or path")),
+        },
     }
 }
 

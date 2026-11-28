@@ -72,8 +72,8 @@ fn check(r: &mut Renderer, d: &Document, id: NodeId, what: &str) {
     let k = r.kept.get(&id).unwrap_or_else(|| panic!("{what}: its path kept"));
     assert!(std::ptr::eq(Arc::as_ptr(&k.node), n), "{what}: its path kept");
     // The subpaths kept are those of the path measured whole, each run holds from one segment to
-    // twice the segments of a run, and the boxes and miter tips kept, run by run, are those
-    // measured again from the path.
+    // twice the segments of a run, and the boxes and miter tips kept, run by run, and the control
+    // box are those measured again from the path.
     let whole = crate::kept_paths::KeptPath::new(&Arc::new(n.clone()), 0).unwrap();
     let (layout, fresh) = (k.layout(), whole.layout());
     assert!(layout.iter().map(|l| l.0).eq(fresh.iter().map(|l| l.0)), "{what}: the same subpaths as the path measured whole");
@@ -83,6 +83,7 @@ fn check(r: &mut Renderer, d: &Document, id: NodeId, what: &str) {
     }
     let (runs, again, _) = k.runs();
     assert!(runs == again, "{what}: the same boxes and tips as measured again");
+    assert_eq!(k.control_box(), k.path.control_box(), "{what}: the same control box as measured again");
 }
 
 /// Check `d` as [`check`] does, then the document before the edit (undone) and `d` again (redone).
@@ -139,7 +140,7 @@ fn a_long_path_draws_and_culls_after_each_edit_as_when_its_path_is_made_again() 
         }),
         ("that anchor moved off it", |p| moved(&mut p.subpaths[0].anchors[1535], Vec2::new(5.0, 5.0))),
         ("a doubled anchor moved off its twin", |p| moved(&mut p.subpaths[0].anchors[1536], Vec2::new(0.0, -12.0))),
-        ("1,200 anchors moved", |p| p.subpaths[0].anchors[..1200].iter_mut().for_each(|a| moved(a, Vec2::new(2.0, 1.0)))),
+        ("1,200 anchors moved", |p| p.subpaths[0].anchors.iter_mut().take(1200).for_each(|a| moved(a, Vec2::new(2.0, 1.0)))),
         ("an anchor added", |p| _ = p.subpaths[0].insert_anchor(1520, 0.5)),
         ("an anchor deleted", |p| _ = p.subpaths[0].anchors.remove(1521)),
         ("the subpath closed", |p| p.subpaths[0].closed = true),
@@ -453,7 +454,7 @@ fn random_edit(g: &mut Seeded, p: &mut PathData) -> String {
             match g.below(3) {
                 0 => moved(&mut sp.anchors[at], Vec2::new(g.offset(30), g.offset(30))),
                 1 => sp.anchors[at].h_out = sp.anchors[at].p + Vec2::new(g.offset(10), g.offset(10)),
-                _ => sp.anchors[at..].iter_mut().take(n / 10).for_each(|a| moved(a, Vec2::new(1.0, -1.0))),
+                _ => sp.anchors.iter_mut().skip(at).take(n / 10).for_each(|a| moved(a, Vec2::new(1.0, -1.0))),
             }
             format!("anchors moved at {at} of subpath {s} of {n}")
         }
@@ -463,7 +464,7 @@ fn random_edit(g: &mut Seeded, p: &mut PathData) -> String {
 
 /// Bring `k` up to date with `n` and check that it holds what [`KeptPath::new`] makes from `n`:
 /// the same path elements and subpaths, runs that hold each subpath's segments, the boxes and miter
-/// tips of `st` measured again over its runs, and the same bounds and tips in all.
+/// tips of `st` measured again over its runs, and the same bounds, tips and control box in all.
 fn same_as_made_again(k: &mut crate::kept_paths::KeptPath, n: &Arc<Node>, st: &StrokeLayer, what: &str) {
     assert!(k.update(n), "{what}: brought up to date");
     let mut fresh = crate::kept_paths::KeptPath::new(n, 0).unwrap_or_else(|| panic!("{what}: kept"));
@@ -478,13 +479,14 @@ fn same_as_made_again(k: &mut crate::kept_paths::KeptPath, n: &Arc<Node>, st: &S
     assert!(runs == again, "{what}: the same boxes and tips as measured again");
     assert_eq!(k.geometric(), fresh.geometric(), "{what}: the same bounds");
     assert_eq!(k.tips(st), fresh.tips(st), "{what}: the same miter tips");
+    assert_eq!(k.control_box(), fresh.path.control_box(), "{what}: the same control box");
 }
 
 #[test]
 fn random_edits_of_a_long_path_keep_what_making_its_path_again_makes() {
     let st = stroke(6.0, LineJoin::Miter, LineCap::Butt);
     let mut g = Seeded(5744);
-    let closed = |sp: SubPath| SubPath::new(sp.anchors, true);
+    let closed = |sp: SubPath| SubPath::of(sp.anchors, true);
     let path = PathData::new(vec![
         zigzag(2, 11_990.0),
         closed(zigzag(3, 12_000.0)),
@@ -515,7 +517,7 @@ fn random_edits_of_a_long_compound_path_keep_what_making_its_path_again_makes() 
         Arc::new(Node::path(NodeId(ids.get()), p, Appearance::default()))
     };
     let children = vec![
-        member(PathData::new(vec![SubPath::new(zigzag(3, 11_990.0).anchors, true), zigzag(5, 12_010.0)])),
+        member(PathData::new(vec![SubPath::of(zigzag(3, 11_990.0).anchors, true), zigzag(5, 12_010.0)])),
         member(PathData::single(zigzag(3000, 0.0))),
         member(PathData::single(ring(40, Point::new(12_000.0, 15.0), 30.0))),
         member(PathData::single(zigzag(2, 12_020.0))),
@@ -577,4 +579,28 @@ fn moving_one_anchor_of_a_long_path_changes_its_kept_path_in_place() {
     moved(&mut path_of(&mut d, id).subpaths[0].anchors[1500], Vec2::new(0.0, 40.0));
     check(&mut r, &d, id, "one anchor moved");
     assert_eq!(kept(&r), before, "the kept path changed in place");
+}
+
+#[test]
+fn a_long_path_is_drawn_without_measuring_all_of_its_control_points_in_each_frame() {
+    let mut d = Document::new(1000.0, 1000.0);
+    let n = Node::path(d.alloc_id(), PathData::single(zigzag(3000, 0.0)), look(vec![stroke(6.0, LineJoin::Miter, LineCap::Butt)]));
+    let id = add(&mut d, n);
+    let empty = {
+        let mut e = d.clone();
+        Arc::make_mut(&mut e.layers[0]).children_mut().unwrap().clear();
+        render(&mut Renderer::new(), &e).pixels
+    };
+    let measured = || crate::renderer::CONTROL_BOXES_MEASURED.with(std::cell::Cell::get);
+    let before = measured();
+    let mut r = Renderer::new();
+    assert!(render(&mut r, &d).pixels != empty, "the path is drawn");
+    render(&mut r, &d);
+    moved(&mut path_of(&mut d, id).subpaths[0].anchors[1500], Vec2::new(0.0, 40.0));
+    check(&mut r, &d, id, "one anchor moved");
+    assert_eq!(measured(), before, "drawn from the control box kept with its path");
+    // An anchor far past what the rasterizer takes still leaves the path undrawn.
+    path_of(&mut d, id).subpaths[0].anchors[1500] = corner(12_000.0, 1e11);
+    assert!(render(&mut r, &d).pixels == empty, "an anchor 1e11 pt away: undrawn");
+    assert_eq!(measured(), before, "drawn from the control box kept with its path");
 }

@@ -2,7 +2,7 @@ use super::build::MADE;
 use super::{AppearanceItem, Arc, BTreeSet, BlendMode, Document, Node, NodeId, NodeKind, PathData, Point, Rect, ai, slot_of};
 
 /// The notes that say the import left out something the file has (see [`is_loss`]).
-pub(super) const TEXT_LEFT_OUT: &str = "text objects on hidden layers or hidden objects couldn't be read, so they are left out";
+pub(super) const TEXT_LEFT_OUT: &str = "text objects whose type couldn't be read from the file's text document or its page are left out";
 
 /// The same for a file without a page to take shown type from.
 pub(super) const TYPE_LEFT_OUT: &str = "text objects of kinds VectorCraft doesn't read from the file's text document yet are left out";
@@ -29,6 +29,7 @@ pub fn is_loss(note: &str) -> bool {
     note.ends_with(TEXT_LEFT_OUT)
         || note.ends_with(TYPE_LEFT_OUT)
         || note.ends_with("they came in as the page's art")
+        || note.starts_with(ai::WARPED_TYPE_DRAWN)
         || note == PAGE_TYPE_LEFT_OUT
         || note == PAGE_TYPE_UNCHECKED
         || [ART_LEFT_OUT, LAYERS_UNREAD, DREW_DIFFERENTLY, crate::import::graphics::TOO_MUCH, crate::import::graphics::FAR_AWAY]
@@ -229,7 +230,8 @@ pub(super) enum Content {
     /// Text objects (with the strokes round them) of the page.
     Page(Vec<Arc<Node>>),
     /// A text object made from the file's text document, where it draws on the document (when it
-    /// shows), and whether the page has type where it is.
+    /// shows), and whether it is kept without being weighed against the page: the page has type
+    /// where it is, or it draws nothing (an empty frame of a blank story).
     Made(Box<Node>, Option<Rect>, bool),
     /// Nothing the file lets this read.
     Empty,
@@ -445,7 +447,21 @@ pub(super) fn letters(s: &str) -> String {
 /// the page draws a right-to-left paragraph's words in the order they show (" 120.5 mm " as
 /// "mm 120.5"), its text object keeps them in the order they are typed.
 pub(super) fn words(s: &str) -> Vec<String> {
-    s.split_whitespace().map(letters).filter(|w| !w.is_empty()).collect()
+    word_pieces(s).map(letters).filter(|w| !w.is_empty()).collect()
+}
+
+/// The words of `s`, split at spaces and at private-use characters too. The page's type names a
+/// font's ligature glyph that has no character of its own (`uniE028`, the Adobe Glyph List
+/// specification's `uniXXXX` names: <https://github.com/adobe-type-tools/agl-specification>) by a
+/// private-use character, where its text object has the letters ("Qual\u{E028}y" for
+/// "Quality"): what is around it is compared, each piece as a word.
+pub(super) fn word_pieces(s: &str) -> impl Iterator<Item = &str> {
+    s.split(|c: char| c.is_whitespace() || private_use(c)).filter(|w| !w.is_empty())
+}
+
+/// Is `c` in one of Unicode's private use areas (Unicode Standard §23.5)?
+fn private_use(c: char) -> bool {
+    matches!(u32::from(c), 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD)
 }
 
 /// Does `n` hold type that is where `story` lays one of its lines out: the line, or a piece of it
@@ -594,9 +610,63 @@ pub(super) fn extent(parts: &[Arc<Node>]) -> Option<Rect> {
     parts.iter().filter_map(|n| n.visual_bounds()).reduce(|a, b| a.union(b))
 }
 
+/// Where a text object draws: its visual box, point type that has no layout laid out first, in
+/// the fonts the import has ([`vectorcraft_text::FontDb::global`]), so the box depends on which
+/// fonts are installed, as the opened document's does. Any point type without a layout is laid
+/// out, not only type made from the file's text document, which is the type that has none during
+/// the import (the page's own type is measured when it is read). Without a layout the box of point
+/// type is an estimate that runs right from its anchor
+/// ([`vectorcraft_doc::TextObject::estimate_bounds`]): beside where right-aligned type draws, over
+/// one half of centered type, across vertical type, and as wide as an average font would set it,
+/// which can be wider than the type is. The node keeps no layout: the document's type is measured
+/// when it opens. Any other object's box is its visual box.
+///
+/// `made_only` matches made type with the page's type by this box; `plan` doesn't match by it yet.
+/// The page comparison's type areas use it for every file's layers, those `plan` fills included.
+pub(super) fn drawn_box(node: &Node) -> Option<Rect> {
+    if let NodeKind::Text(t) = &node.kind
+        && matches!(t.kind, vectorcraft_doc::TextKind::Point)
+        && t.cached_bounds.is_none()
+    {
+        let mut laid = node.clone();
+        if let NodeKind::Text(t) = &mut laid.kind {
+            t.cached_bounds = Some(vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t).bounds);
+        }
+        return laid.visual_bounds();
+    }
+    node.visual_bounds()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Made point type's box is where its alignment and orientation draw it: right-aligned type
+    /// before its anchor, centered type round it, vertical type down from it. Its node keeps no
+    /// layout.
+    #[test]
+    fn made_point_type_s_box_is_where_its_alignment_and_orientation_draw_it() {
+        use vectorcraft_doc::{CharStyle, Justify, TextObject};
+        let anchor = 300.0;
+        let boxed = |justify: Justify, vertical: bool| {
+            let mut t = TextObject::point(Point::new(anchor, 200.0), "Wide heading", CharStyle { size: 40.0, ..CharStyle::default() });
+            t.para.justify = justify;
+            for p in t.para_styles_mut() {
+                p.justify = justify;
+            }
+            t.vertical = vertical;
+            let node = Node::new(NodeId(1), NodeKind::Text(Box::new(t)));
+            let b = drawn_box(&node).unwrap();
+            assert!(matches!(&node.kind, NodeKind::Text(t) if t.cached_bounds.is_none()));
+            b
+        };
+        let (left, right, centered, down) =
+            (boxed(Justify::Left, false), boxed(Justify::Right, false), boxed(Justify::Center, false), boxed(Justify::Left, true));
+        assert!(left.x0 > anchor - 20.0 && left.width() > 100.0, "{left:?}");
+        assert!(right.x1 < anchor + 20.0 && (right.width() - left.width()).abs() < 1.0, "{right:?}");
+        assert!((centered.center().x - anchor).abs() < 20.0 && (centered.width() - left.width()).abs() < 1.0, "{centered:?}");
+        assert!(down.height() > 2.0 * down.width() && down.height() > 100.0, "{down:?}");
+    }
 
     /// Past the limits, the slots of type that looks draw go, in groups too, and other slots stay.
     #[test]

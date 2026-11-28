@@ -441,6 +441,225 @@ fn offset_open_path_whose_ends_meet_grows_the_shape() {
     assert_eq!(path_of(&s, r[0]).0.subpaths.len(), 1);
 }
 
+/// The ids of the objects in the first layer, back to front.
+fn first_layer(s: &Session) -> Vec<NodeId> {
+    s.doc().unwrap().doc.layers[0].children().unwrap().iter().map(|n| n.id).collect()
+}
+
+/// Offset Path of several objects at once: each result goes directly above its object and takes
+/// the next ids in the objects' order, a group gives a group of its paths' offsets with their
+/// styles, a compound path gives a compound path, an inset that leaves nothing and type give
+/// nothing, and one undo gives the objects back.
+#[test]
+fn offset_path_of_several_objects_keeps_their_order() {
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 20.0, 20.0);
+    let b = rect(&mut s, 40.0, 0.0, 10.0, 10.0);
+    let c = rect(&mut s, 60.0, 0.0, 10.0, 10.0);
+    set_fill(&mut s, b, Color::rgb(1.0, 0.0, 0.0));
+    set_fill(&mut s, c, Color::rgb(0.0, 0.0, 1.0));
+    s.execute("select.set", &json!({"ids": [b.0, c.0]})).unwrap();
+    let g = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let tiny = rect(&mut s, 100.0, 0.0, 4.0, 4.0);
+    let outer = rect(&mut s, 200.0, 0.0, 40.0, 40.0);
+    let inner = rect(&mut s, 210.0, 10.0, 20.0, 20.0);
+    s.execute("select.set", &json!({"ids": [outer.0, inner.0]})).unwrap();
+    let cp = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let t = NodeId(s.execute("text.create", &json!({"x": 300, "y": 10, "text": "Hi"})).unwrap()["id"].as_u64().unwrap());
+    let before = first_layer(&s);
+    assert_eq!(before, [a, g, tiny, cp, t]);
+    let first = s.doc().unwrap().doc.peek_next_id();
+    s.execute("select.set", &json!({"ids": [a.0, g.0, tiny.0, cp.0, t.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": -3, "joins": "miter"})).unwrap());
+    // a's offset, then b's and c's and their group, then the compound path and its two subpaths.
+    assert_eq!(r, [NodeId(first), NodeId(first + 3), NodeId(first + 4)]);
+    assert_eq!(first_layer(&s), [a, r[0], g, r[1], tiny, cp, r[2], t]);
+    assert_eq!(s.doc().unwrap().selection.objects, r);
+    assert!(close(bounds(&s, r[0]), Rect::new(3.0, 3.0, 17.0, 17.0), 1e-2), "{:?}", bounds(&s, r[0]));
+    let group = node(&s, r[1]);
+    assert!(matches!(group.kind, NodeKind::Group { .. }), "{:?}", group.kind);
+    let kids = group.children().unwrap();
+    assert_eq!(kids.iter().map(|k| k.id).collect::<Vec<_>>(), [NodeId(first + 1), NodeId(first + 2)]);
+    assert_eq!(kids[0].appearance.fill_paint(), Paint::solid(Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(kids[1].appearance.fill_paint(), Paint::solid(Color::rgb(0.0, 0.0, 1.0)));
+    let rings = node(&s, r[2]);
+    assert!(matches!(rings.kind, NodeKind::Compound { .. }), "{:?}", rings.kind);
+    assert!(close(bounds(&s, r[2]), Rect::new(203.0, 3.0, 237.0, 37.0), 1e-2), "{:?}", bounds(&s, r[2]));
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first_layer(&s), before);
+}
+
+/// Offset Path works out the offsets of several paths on more than one thread, and gives the
+/// results in the paths' order.
+#[test]
+fn offset_path_works_on_several_threads_in_order() {
+    let seen = std::sync::Mutex::new(vec![]);
+    let items: Vec<usize> = (0..8).collect();
+    let work = |i: &usize| {
+        if let Ok(mut seen) = seen.lock() {
+            seen.push(std::thread::current().id());
+        }
+        i * 2
+    };
+    let (out, used) = crate::cmd::pathops::ordered_map(&items, 4, work, |_| false);
+    assert_eq!(out, (0..8).map(|i| Some(i * 2)).collect::<Vec<_>>());
+    assert_eq!(used, 4);
+    let threads: std::collections::HashSet<_> = seen.into_inner().unwrap().into_iter().collect();
+    assert_eq!(threads.len(), 4);
+    // A count just past the threads still uses every thread.
+    let (out, used) = crate::cmd::pathops::ordered_map(&items[..5], 4, |i| i * 2, |_| false);
+    assert_eq!(out, (0..5).map(|i| Some(i * 2)).collect::<Vec<_>>());
+    assert_eq!(used, 4);
+    // One item, or one thread, is worked on here.
+    let (out, used) = crate::cmd::pathops::ordered_map(&items[..1], 4, |i| i * 2, |_| false);
+    assert_eq!((out, used), (vec![Some(0)], 1));
+    let (out, used) = crate::cmd::pathops::ordered_map(&items, 1, |i| i * 2, |_| false);
+    assert_eq!(used, 1);
+    assert_eq!(out.len(), 8);
+}
+
+/// Once a result stops the work (an offset that fails), the paths after it are left out, and every
+/// path before it has its result, so the first failure in the paths' order is the one reported.
+#[test]
+fn offset_path_stops_after_the_first_failure() {
+    let items: Vec<usize> = (0..8).collect();
+    let (out, _) = crate::cmd::pathops::ordered_map(&items, 1, |i| *i, |r| *r == 2 || *r == 5);
+    assert_eq!(out, [Some(0), Some(1), Some(2), None, None, None, None, None]);
+    for threads in [2, 4, 8] {
+        let (out, _) = crate::cmd::pathops::ordered_map(&items, threads, |i| *i, |r| *r == 2 || *r == 5);
+        assert_eq!(out[..3], [Some(0), Some(1), Some(2)], "{threads} threads");
+        let first = out.iter().position(|r| r.is_some_and(|r| r == 2 || r == 5));
+        assert_eq!(first, Some(2), "{threads} threads");
+    }
+}
+
+/// A straight line, closed as the Shape Modes close open paths, encloses no area, so it does not
+/// change the result's shape: Unite, Minus Front, Exclude and Minus Back still give the 100 pt square's area
+/// (with a line in a group selected beside it, the group's square too), and the reply carries a
+/// warning that names Outline Stroke, as it does with the line in a compound path or in a group
+/// selected alone; where the line leaves nothing (Intersect, the backmost object in Minus Front, or
+/// the frontmost in Minus Back), the error names it, and where the other objects leave nothing
+/// anyway, a flat closed path included, it doesn't. An open evenodd square traced twice is the same. An open path
+/// that encloses an area once closed (a bow tie whose lobes cancel in signed area included), closed
+/// shapes alone, and Divide, where a line cuts, give no warning (#7849).
+#[test]
+fn shape_modes_report_lines_that_enclose_no_area() {
+    use crate::cmd::SHAPE_MODE_OPEN_PATH_NO_AREA;
+    fn id_of(v: Value) -> NodeId {
+        NodeId(v["id"].as_u64().unwrap())
+    }
+    fn line_of(s: &mut Session) -> NodeId {
+        id_of(s.execute("shape.line", &json!({"x1": 20, "y1": 50, "x2": 80, "y2": 50})).unwrap())
+    }
+    fn vee_of(s: &mut Session) -> NodeId {
+        let anchors = json!([{"x": 20, "y": 50}, {"x": 50, "y": 150}, {"x": 80, "y": 50}]);
+        id_of(s.execute("path.create", &json!({ "anchors": anchors })).unwrap())
+    }
+    fn bow_tie_of(s: &mut Session) -> NodeId {
+        let anchors = json!([{"x": 20, "y": 120}, {"x": 80, "y": 180}, {"x": 80, "y": 120}, {"x": 20, "y": 180}]);
+        id_of(s.execute("path.create", &json!({ "anchors": anchors })).unwrap())
+    }
+    fn twice_around_of(s: &mut Session) -> NodeId {
+        let d = "M20 20 L80 20 L80 80 L20 80 L20 20 L80 20 L80 80 L20 80";
+        let id = id_of(s.execute("path.create", &json!({ "d": d })).unwrap());
+        s.execute("path.setFillRule", &json!({"rule": "evenOdd"})).unwrap();
+        id
+    }
+    fn grouped_line_of(s: &mut Session) -> NodeId {
+        let ids = [line_of(s), rect(s, 200.0, 0.0, 100.0, 100.0)];
+        s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        id_of(s.execute("object.group", &json!({})).unwrap())
+    }
+    fn compound_line_of(s: &mut Session) -> NodeId {
+        let ids = [line_of(s), rect(s, 200.0, 0.0, 100.0, 100.0)];
+        s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+        id_of(s.execute("object.compoundPath.make", &json!({})).unwrap())
+    }
+    fn square_of(s: &mut Session) -> NodeId {
+        rect(s, 50.0, 0.0, 100.0, 100.0)
+    }
+    type Build = fn(&mut Session) -> NodeId;
+    // (case, command, the other object, whether it goes behind the 100 pt square, warned, area drawn)
+    type Case = (&'static str, &'static str, Build, bool, bool, Option<f64>);
+    let cases: [Case; 12] = [
+        ("a line", "unite", line_of, false, true, Some(10_000.0)),
+        ("a line in front", "minusFront", line_of, false, true, Some(10_000.0)),
+        ("a line", "exclude", line_of, false, true, Some(10_000.0)),
+        ("a line behind", "minusBack", line_of, true, true, Some(10_000.0)),
+        ("an open evenodd square traced twice", "unite", twice_around_of, false, true, Some(10_000.0)),
+        ("a group of a line and a square", "unite", grouped_line_of, false, true, Some(20_000.0)),
+        ("a compound path of a line and a square", "unite", compound_line_of, false, true, Some(20_000.0)),
+        ("an open path that encloses an area", "unite", vee_of, false, false, None),
+        ("an open bow tie, whose signed area is zero", "unite", bow_tie_of, false, false, None),
+        ("a square", "unite", square_of, false, false, Some(15_000.0)),
+        ("a square", "minusFront", square_of, false, false, Some(5_000.0)),
+        ("a line, dividing", "divide", line_of, false, false, None),
+    ];
+    for (what, op, build, behind, warned, want) in cases {
+        let mut s = session();
+        let (back, front) = if behind {
+            let other = build(&mut s);
+            (other, rect(&mut s, 0.0, 0.0, 100.0, 100.0))
+        } else {
+            let sq = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            (sq, build(&mut s))
+        };
+        s.execute("select.set", &json!({"ids": [back.0, front.0]})).unwrap();
+        let r = s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap_or_else(|e| panic!("{what}, {op}: {e}"));
+        let warning = r.get("warning").and_then(Value::as_str);
+        assert_eq!(warning, warned.then_some(SHAPE_MODE_OPEN_PATH_NO_AREA), "{what}, {op}: {r}");
+        if let Some(want) = want {
+            let got = area_of(&s, ids(&r)[0]);
+            assert!((got - want).abs() < 1.0, "{what}, {op}: area {got}, want {want}");
+        }
+    }
+    // A group of a line and a square selected alone: its members are the shapes, and the line warns.
+    let mut s = session();
+    let group = grouped_line_of(&mut s);
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    let r = s.execute("object.pathfinder.unite", &json!({})).unwrap();
+    assert_eq!(r.get("warning").and_then(Value::as_str), Some(SHAPE_MODE_OPEN_PATH_NO_AREA), "{r}");
+    let got = area_of(&s, ids(&r)[0]);
+    assert!((got - 10_000.0).abs() < 1.0, "a group alone: area {got}");
+    // A line that leaves nothing (Intersect, the backmost object in Minus Front, or the frontmost in
+    // Minus Back) gives an error that names it; two squares that don't meet give the plain one.
+    // (command, the other object, whether it goes behind the square, whether the error names the line)
+    let cases: [(&str, Build, bool, bool); 4] = [
+        ("intersect", line_of, false, true),
+        ("minusFront", line_of, true, true),
+        ("minusBack", line_of, false, true),
+        ("intersect", |s| rect(s, 300.0, 0.0, 50.0, 50.0), false, false),
+    ];
+    for (op, build, behind, named) in cases {
+        let mut s = session();
+        let (back, front) = if behind {
+            let other = build(&mut s);
+            (other, rect(&mut s, 0.0, 0.0, 100.0, 100.0))
+        } else {
+            let sq = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+            (sq, build(&mut s))
+        };
+        s.execute("select.set", &json!({"ids": [back.0, front.0]})).unwrap();
+        let e = s.execute(&format!("object.pathfinder.{op}"), &json!({})).unwrap_err().to_string();
+        assert!(e.contains("produced an empty result"), "{op}: {e}");
+        assert_eq!(e.contains("Outline Stroke"), named, "{op}: {e}");
+    }
+    // Two squares that don't meet leave Intersect empty whatever a line beside them does.
+    let mut s = session();
+    let objects = [rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 300.0, 0.0, 50.0, 50.0), line_of(&mut s)];
+    s.execute("select.set", &json!({"ids": objects.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("produced an empty result") && !e.contains("Outline Stroke"), "{e}");
+    // A closed path without area (a flat one) leaves Intersect empty with or without the line, so
+    // the error is the plain one.
+    let mut s = session();
+    let flat = id_of(s.execute("path.create", &json!({"d": "M50 0 L50 100 Z"})).unwrap());
+    let objects = [rect(&mut s, 0.0, 0.0, 100.0, 100.0), flat, line_of(&mut s)];
+    s.execute("select.set", &json!({"ids": objects.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    let e = s.execute("object.pathfinder.intersect", &json!({})).unwrap_err().to_string();
+    assert!(e.contains("produced an empty result") && !e.contains("Outline Stroke"), "a flat closed path: {e}");
+}
+
 #[test]
 fn outline_stroke_of_line() {
     let mut s = session();
@@ -656,13 +875,13 @@ fn simplify_refreshes_changed_path_selection_and_undo() {
     let kept = NodeId(s.execute("path.create", &json!({"anchors": [{"x": 350, "y": 180}]})).unwrap()["id"].as_u64().unwrap());
     let unrelated = rect(&mut s, 400.0, 200.0, 40.0, 30.0);
     s.edit("selection fixture", |d, sel| {
-        d.guides.push(vectorcraft_doc::Guide::new(true, 30.0));
+        let guide = d.add_ruler_guide(&vectorcraft_doc::Guide::new(true, 30.0));
         sel.set([kept, id]);
         sel.anchors.insert(id, [(0, 19)].into_iter().collect());
         sel.anchors.insert(kept, [(0, 0)].into_iter().collect());
         sel.key = Some(kept);
         sel.target = Some(id);
-        sel.guides.push(0);
+        sel.guides.push(guide);
         Ok(())
     })
     .unwrap();
@@ -781,7 +1000,7 @@ fn split_into_grid_options() {
         rect(&mut s, 10.0, 20.0, 110.0, 50.0);
         let r = s.execute("object.path.splitIntoGrid", &p).unwrap();
         let cells: Vec<Rect> = ids(&r).iter().map(|id| bounds(&s, *id)).collect();
-        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.guides.iter().map(|g| (g.vertical, g.pos)).collect();
+        let guides: Vec<(bool, f64)> = s.doc().unwrap().doc.ruler_guides().iter().map(|g| (g.vertical, g.pos)).collect();
         assert_eq!(r["guides"], guides.len());
         (cells, guides)
     };
@@ -812,13 +1031,16 @@ fn split_into_grid_options() {
     assert!(close(bounds(&s, r[0]), Rect::new(0.0, 0.0, 40.0, 60.0), 1e-9) && close(bounds(&s, r[1]), Rect::new(60.0, 0.0, 100.0, 60.0), 1e-9));
     let st = s.doc().unwrap();
     assert!(r.iter().all(|id| node(&s, *id).appearance == node(&s, r[0]).appearance) && st.doc.node(back).is_none() && st.doc.node(front).is_none());
-    assert_eq!(st.doc.layers[0].children().unwrap().iter().map(|n| n.id).collect::<Vec<_>>(), [kept, r[0], r[1]], "above the path left alone");
+    let art: Vec<NodeId> = st.doc.layers[0].children().unwrap().iter().filter(|n| !n.is_ruler_guide()).map(|n| n.id).collect();
+    assert_eq!(art, [kept, r[0], r[1]], "above the path left alone");
+    let children = st.doc.layers[0].children().unwrap();
+    assert!(children.len() == 9 && children[3..].iter().all(|n| n.is_ruler_guide()), "the six guides are above the art");
     assert_eq!(st.selection.objects, r);
-    assert!(st.doc.guides.iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
+    assert!(st.doc.ruler_guides().iter().all(|g| g.layer == Some(st.doc.layers[0].id)));
     assert_eq!(st.history.undo.len(), undo + 1);
     s.execute("edit.undo", &json!({})).unwrap();
     let st = s.doc().unwrap();
-    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.guides.is_empty());
+    assert!(st.doc.node(back).is_some() && st.doc.node(front).is_some() && st.doc.ruler_guides().is_empty());
     // A grid with no room for its gutters is refused and changes nothing.
     assert!(s.execute("object.path.splitIntoGrid", &json!({"columns": 4, "gutter": 50})).is_err());
     assert!(s.execute("object.path.splitIntoGrid", &json!({"width": -5})).is_err());
@@ -842,6 +1064,169 @@ fn clean_up_removes_junk() {
     let d = &s.doc().unwrap().doc;
     assert!(d.node(keep).is_some());
     assert!(d.node(unpainted).is_none() && d.node(stray).is_none() && d.node(empty).is_none());
+}
+
+/// A page-sized square under a ring (a compound path with a square hole), nothing selected.
+fn art_and_ring(s: &mut Session) -> (NodeId, NodeId) {
+    let art = rect(s, 0.0, 0.0, 100.0, 100.0);
+    let (outer, inner) = (rect(s, 10.0, 10.0, 80.0, 80.0), rect(s, 35.0, 35.0, 30.0, 30.0));
+    s.execute("select.set", &json!({"ids": [inner.0]})).unwrap();
+    s.execute("path.reverse", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [outer.0, inner.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let ring = s.doc().unwrap().selection.objects[0];
+    s.execute("select.none", &json!({})).unwrap();
+    (art, ring)
+}
+
+fn one_anchor_path(s: &mut Session) -> NodeId {
+    NodeId(s.execute("path.create", &json!({"anchors": [{"x": 5, "y": 5}]})).unwrap()["id"].as_u64().unwrap())
+}
+
+fn clip_group(s: &mut Session, ids: &[NodeId]) -> NodeId {
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap())
+}
+
+fn clip_path_of(s: &Session, id: NodeId) -> vectorcraft_doc::Node {
+    let n = node(s, id);
+    assert!(n.clips(), "{id:?} still clips");
+    (*n.children().unwrap()[0]).clone()
+}
+
+/// Unpainted Objects leaves a clipping layer's clipping path, which has no paint of its own.
+#[test]
+fn clean_up_keeps_a_layers_clipping_path() {
+    let mut s = session();
+    let (art, ring) = art_and_ring(&mut s);
+    let layer = s.doc().unwrap().current_layer().unwrap();
+    assert!(s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap()["clip"].as_bool().unwrap());
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], 0);
+    assert_eq!(clip_path_of(&s, layer).id, ring);
+    assert!(s.doc().unwrap().doc.node(art).is_some());
+}
+
+/// Stray Points leaves the one-anchor members of a compound path used as a clipping path.
+#[test]
+fn clean_up_keeps_the_members_of_a_compound_clipping_path() {
+    let mut s = session();
+    let (art, ring) = art_and_ring(&mut s);
+    let stray = one_anchor_path(&mut s);
+    let g = clip_group(&mut s, &[art, ring]);
+    s.edit("t", |d, _| {
+        let n = d.remove(stray)?;
+        d.children_mut(Some(ring))?.push(n);
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], 0);
+    let clip = clip_path_of(&s, g);
+    assert_eq!(clip.id, ring);
+    assert!(clip.children().unwrap().iter().any(|c| c.id == stray));
+}
+
+/// No option removes a member of a group used as a clipping path, or empty type used as one.
+#[test]
+fn clean_up_keeps_a_group_or_type_used_as_a_clipping_path() {
+    let mut s = session();
+    let art = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let top = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    let g = clip_group(&mut s, &[art, top]);
+    let unpainted = rect(&mut s, 20.0, 20.0, 10.0, 10.0);
+    let stray = one_anchor_path(&mut s);
+    let empty = NodeId(s.execute("text.create", &json!({"x": 10, "y": 10, "text": ""})).unwrap()["id"].as_u64().unwrap());
+    let inner = s
+        .edit("t", |d, _| {
+            d.node_mut(unpainted).unwrap().appearance = Appearance::basic(Paint::None, Paint::None, 1.0).into();
+            let members = [top, unpainted, stray, empty].map(|id| d.remove(id)).into_iter().collect::<std::result::Result<Vec<_>, _>>()?;
+            let inner = d.alloc_id();
+            d.children_mut(Some(g))?.insert(0, std::sync::Arc::new(vectorcraft_doc::Node::group(inner, members)));
+            Ok(inner)
+        })
+        .unwrap();
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], 0);
+    let clip = clip_path_of(&s, g);
+    assert_eq!(clip.id, inner);
+    assert_eq!(clip.children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), [top, unpainted, stray, empty]);
+    // Type of spaces on top of a clip group clips by nothing, and still stays its clipping path.
+    let art = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    let blank = NodeId(s.execute("text.create", &json!({"x": 210, "y": 10, "text": "  "})).unwrap()["id"].as_u64().unwrap());
+    let g = clip_group(&mut s, &[art, blank]);
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], 0);
+    assert_eq!(clip_path_of(&s, g).id, blank);
+}
+
+/// Offset Path, Simplify, Split Into Grid and Clean Up refuse a param of the wrong type with an
+/// error naming the param, and leave the document, the selection and the undo history as they were.
+/// Null keeps a param's default, and a distance still takes a string with a unit.
+#[test]
+fn path_commands_refuse_a_param_of_the_wrong_type() {
+    let mut s = session();
+    let a = rect(&mut s, 100.0, 100.0, 50.0, 40.0);
+    s.execute("path.create", &json!({"anchors": [{"x": 5, "y": 5}]})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let state = |s: &Session| {
+        let st = s.doc().unwrap();
+        (st.doc.clone(), st.selection.objects.clone(), st.history.undo.len())
+    };
+    let before = state(&s);
+    let number = |k: &str, v: &str| format!("`{k}` must be a number, not {v}");
+    let switch = |k: &str| format!("`{k}` must be true or false");
+    for (cmd, p, want) in [
+        ("object.path.offsetPath", json!({"offset": true}), number("offset", "true")),
+        ("object.path.offsetPath", json!({"offset": "wide"}), number("offset", "\"wide\"")),
+        ("object.path.offsetPath", json!({"offset": "10abc"}), number("offset", "\"10abc\"")),
+        ("object.path.offsetPath", json!({"offset": 5, "miterLimit": "4x"}), number("miterLimit", "\"4x\"")),
+        ("object.path.offsetPath", json!({"offset": 5, "joins": 3}), "`joins` must be a string".to_string()),
+        ("object.path.offsetPath", json!({"offset": 5, "joins": "pointy"}), "`joins` must be one of miter, round, bevel".to_string()),
+        ("object.path.offsetPath", json!({"offset": 5, "miterLimit": [4]}), number("miterLimit", "[4]")),
+        ("object.path.simplify", json!({"auto": "true"}), switch("auto")),
+        ("object.path.simplify", json!({"level": false}), number("level", "false")),
+        ("object.path.simplify", json!({"level": 50, "tolerance": {}}), number("tolerance", "{}")),
+        ("object.path.simplify", json!({"cornerAngle": "sharp"}), number("cornerAngle", "\"sharp\"")),
+        ("object.path.simplify", json!({"straightLines": 1}), switch("straightLines")),
+        ("object.path.simplify", json!({"wholePaths": "no"}), switch("wholePaths")),
+        ("object.path.splitIntoGrid", json!({"rows": "many"}), number("rows", "\"many\"")),
+        ("object.path.splitIntoGrid", json!({"columns": true}), number("columns", "true")),
+        ("object.path.splitIntoGrid", json!({"gutter": false}), number("gutter", "false")),
+        ("object.path.splitIntoGrid", json!({"rowGutter": 2, "gutter": "x"}), number("gutter", "\"x\"")),
+        ("object.path.splitIntoGrid", json!({"height": 5, "totalHeight": [1]}), number("totalHeight", "[1]")),
+        ("object.path.splitIntoGrid", json!({"width": "wide"}), number("width", "\"wide\"")),
+        ("object.path.splitIntoGrid", json!({"columnGutter": true}), number("columnGutter", "true")),
+        ("object.path.splitIntoGrid", json!({"totalWidth": {}}), number("totalWidth", "{}")),
+        ("object.path.splitIntoGrid", json!({"rowGutter": "a"}), number("rowGutter", "\"a\"")),
+        ("object.path.splitIntoGrid", json!({"addGuides": "yes"}), switch("addGuides")),
+        ("object.path.cleanUp", json!({"strayPoints": "false"}), switch("strayPoints")),
+        ("object.path.cleanUp", json!({"unpaintedObjects": 0}), switch("unpaintedObjects")),
+        ("object.path.cleanUp", json!({"emptyTextPaths": "no"}), switch("emptyTextPaths")),
+    ] {
+        let r = s.execute(cmd, &p);
+        assert!(matches!(&r, Err(EngineError::BadParams { msg, .. }) if *msg == want), "{cmd} {p}: {r:?}");
+        assert!(state(&s) == before, "{cmd} {p} changed the document, the selection or the undo history");
+    }
+    // Null takes the default: a 10 pt offset with mitered joins.
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": null, "joins": null, "miterLimit": null})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(90.0, 90.0, 160.0, 150.0), 1e-2), "{:?}", bounds(&s, r[0]));
+    // A distance with a unit, and a join named in capitals.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.1 in", "joins": "Bevel"})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
+    // A product with a unit, which the offset used to refuse: 0.05x2 in is 0.1 in.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.offsetPath", &json!({"offset": "0.05x2 in", "joins": "Bevel"})).unwrap());
+    assert!(close(bounds(&s, r[0]), Rect::new(92.8, 92.8, 157.2, 147.2), 1e-2), "{:?}", bounds(&s, r[0]));
+    // Null switches keep Clean Up's defaults, which remove the stray point.
+    let r = s.execute("object.path.cleanUp", &json!({"strayPoints": null, "unpaintedObjects": null, "emptyTextPaths": null})).unwrap();
+    assert_eq!(r["removed"], 1);
+    // Split Into Grid with null counts and a gutter with a unit: two by two, 0.5 in apart.
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let r = ids(&s.execute("object.path.splitIntoGrid", &json!({"rows": null, "columns": null, "gutter": "0.5 in", "addGuides": null})).unwrap());
+    assert_eq!(r.len(), 4);
+    assert!(close(bounds(&s, r[0]), Rect::new(100.0, 100.0, 107.0, 102.0), 1e-9), "{:?}", bounds(&s, r[0]));
 }
 
 #[test]
@@ -881,6 +1266,107 @@ fn create_outlines_matches_text_bounds() {
     assert_eq!(s.doc().unwrap().selection.objects, r);
     s.execute("edit.undo", &json!({})).unwrap();
     assert!(s.doc().unwrap().doc.node(t).is_some());
+}
+
+/// The type object's own fills and strokes (not its characters') become paths of its whole outline,
+/// with ids of their own: those below the Characters row under the glyph paths, the others over
+/// them, in their order. The group keeps no appearance of its own, and Undo brings the type back.
+#[test]
+fn create_outlines_keeps_the_objects_own_fills_and_strokes() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    for (cmd, p) in [
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("appearance.addStroke", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 1, "color": "#0000ff", "weight": 5})),
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 2, "color": "#00ff00", "opacity": 50})),
+        // The red fill paints below the characters; the stroke and the green fill over them.
+        ("appearance.moveItem", json!({"from": "contents", "to": 1})),
+    ] {
+        s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+    }
+    let own = node(&s, t).appearance.items.clone();
+    assert_eq!(own.len(), 3);
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert!(g.appearance.items.is_empty(), "the group paints nothing of its own");
+    let ch = g.children().unwrap();
+    assert_eq!(ch.len(), 4, "a path below, the two glyphs, a path above");
+    let (first, last) = (&ch[0], &ch[3]);
+    assert_eq!(first.appearance.items, own[..1], "the item below the characters");
+    assert_eq!(last.appearance.items, own[1..], "the items over them, in their order");
+    for c in [first, last] {
+        assert!(matches!(c.kind, NodeKind::Path { .. }), "{:?}", c.kind);
+        assert!(c.id != t && c.id != g.id, "a fresh id");
+    }
+    assert!(first.id != last.id);
+    for c in &ch[1..3] {
+        assert_eq!(c.appearance.fill_paint(), Paint::solid(Color::BLACK), "the characters keep their own paint");
+    }
+    // The whole-outline paths cover both glyphs.
+    let glyphs = ch[1].geometric_bounds().unwrap().union(ch[2].geometric_bounds().unwrap());
+    assert!(close(first.geometric_bounds().unwrap(), glyphs, 1e-6), "{:?} vs {glyphs:?}", first.geometric_bounds());
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(node(&s, t).appearance.items, own, "one undo step brings the type back");
+}
+
+/// The type object's own effects go on the group once, in their order, with their settings and a
+/// hidden one still hidden; a fill's own effect stays on its path of the whole outline, and no
+/// glyph or whole-outline path takes the object's effects. Undo brings the type back with them.
+#[test]
+fn create_outlines_keeps_the_objects_own_effects_on_the_group() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    for (cmd, p) in [
+        ("appearance.addFill", json!({"target": "object"})),
+        ("appearance.setItem", json!({"index": 0, "color": "#ff0000"})),
+        ("effect.apply", json!({"effect": "path.offsetPath", "params": {"offset": 2}, "item": 0})),
+        ("effect.apply", json!({"effect": "stylize.dropShadow", "params": {"x": 7, "y": 3, "blur": 0, "opacity": 60}, "item": null})),
+        ("effect.apply", json!({"effect": "distort.transform", "params": {"rotate": 15}, "item": null})),
+        ("effect.setParams", json!({"index": 1, "visible": false, "item": null})),
+    ] {
+        s.execute(cmd, &p).unwrap_or_else(|e| panic!("{cmd} {p}: {e}"));
+    }
+    let own: Appearance = (*node(&s, t).appearance).clone();
+    let ids_of = |fx: &[vectorcraft_doc::Effect]| fx.iter().map(|e| (e.id.clone(), e.visible)).collect::<Vec<_>>();
+    assert_eq!(ids_of(&own.effects), [("stylize.dropShadow".to_string(), true), ("distort.transform".to_string(), false)]);
+    assert_eq!(ids_of(own.items[0].effects()), [("path.offsetPath".to_string(), true)]);
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert_eq!(g.appearance.effects, own.effects, "the group holds the object's effects as they were");
+    let ch = g.children().unwrap();
+    assert!(ch.iter().all(|c| c.appearance.effects.is_empty()), "no piece takes the object's effects");
+    let rows: Vec<_> = ch.iter().filter(|c| c.appearance.items == own.items).collect();
+    assert_eq!(rows.len(), 1, "one path of the whole outline paints the object's fill");
+    assert_eq!(rows[0].appearance.items[0].effects(), own.items[0].effects(), "the fill keeps its own effect");
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(*node(&s, t).appearance, own, "one undo step brings the type back with its effects");
+}
+
+/// The group takes the type object's opacity, blend mode, Isolate Blending, Opacity & Mask Define
+/// Knockout Shape and opacity mask.
+#[test]
+fn create_outlines_keeps_the_objects_transparency_and_opacity_mask() {
+    let mut s = session();
+    let t = text(&mut s, "Hi", 64.0);
+    let m = rect(&mut s, 0.0, 0.0, 40.0, 80.0);
+    s.execute("select.set", &json!({"ids": [t.0, m.0]})).unwrap();
+    s.execute("transparency.makeOpacityMask", &json!({})).unwrap();
+    let p = json!({"ids": [t.0], "opacity": 70, "blend": "multiply", "isolate": true, "knockoutShape": true});
+    s.execute("transparency.set", &p).unwrap();
+    let before = node(&s, t);
+    assert!(before.extras().mask.is_some(), "the type has a mask");
+    let look = |n: &vectorcraft_doc::Node| (n.opacity, n.blend, n.isolate, n.knockout_shape);
+    assert_eq!(look(&before), (0.7, vectorcraft_color::BlendMode::Multiply, true, true));
+    s.execute("select.set", &json!({"ids": [t.0]})).unwrap();
+    let r = ids(&s.execute("type.createOutlines", &json!({})).unwrap());
+    let g = node(&s, r[0]);
+    assert_eq!(look(&g), look(&before));
+    assert_eq!(g.extras().mask, before.extras().mask, "the group keeps the type's opacity mask");
 }
 
 /// Colour bitmap glyphs (emoji) become embedded images where they sat; glyphs showing one image
@@ -1344,11 +1830,17 @@ fn pathfinder_options_round_trip_and_refuse_bad_values() {
     assert_eq!(s.execute("prefs.get", &json!({"key": "pathfinder"})).unwrap(), set);
     let mm = s.execute("object.pathfinder.options", &json!({"precision": "1 mm"})).unwrap()["precision"].as_f64().unwrap();
     assert!((mm - 72.0 / 25.4).abs() < 1e-9, "a length with a unit: {mm}");
+    for (given, want) in [("10 pt", 10.0), ("0.25", 0.25)] {
+        let r = s.execute("object.pathfinder.options", &json!({"precision": given})).unwrap();
+        assert_eq!(r["precision"], json!(want), "{given}");
+    }
     s.execute("object.pathfinder.options", &json!({"precision": 0.5})).unwrap();
     for bad in [
         json!({"precision": 0}),
         json!({"precision": 11}),
         json!({"precision": "x"}),
+        json!({"precision": "1abc"}),
+        json!({"precision": "0.5 extra"}),
         json!({"precision": -1}),
         json!({"removeRedundantPoints": "yes"}),
         json!({"removeUnpainted": 1}),
@@ -1513,6 +2005,208 @@ fn pathfinder_journal_entries_replay_with_the_options_they_used() {
     assert_eq!(doc(&replay), doc(&s));
     // Options given as params are checked as object.pathfinder.options checks them.
     assert!(s.execute("object.pathfinder.divide", &json!({"precision": 20})).is_err());
+}
+
+/// The leaf objects of `n`, in paint order.
+fn leaves_of(n: &vectorcraft_doc::Node, out: &mut Vec<vectorcraft_doc::Node>) {
+    match n.children() {
+        Some(children) => children.iter().for_each(|c| leaves_of(c, out)),
+        None => out.push(n.clone()),
+    }
+}
+
+/// Apply the live Pathfinder effect `effect` with `params` to the selection, then expand its
+/// appearance: the objects it draws.
+fn live_pieces(s: &mut Session, effect: &str, params: Value) -> Vec<vectorcraft_doc::Node> {
+    let g = ids(&s.execute("effect.apply", &json!({"effect": effect, "params": params})).unwrap())[0];
+    s.execute("effect.expandAppearance", &json!({"ids": [g.0]})).unwrap();
+    let mut out = vec![];
+    leaves_of(&node(s, g), &mut out);
+    out
+}
+
+/// The parameters of the first effect of the selected object.
+fn first_effect_params(s: &Session) -> Value {
+    let st = s.doc().unwrap();
+    st.doc.node(st.selection.objects[0]).unwrap().appearance.effects[0].params.clone()
+}
+
+/// A Pathfinder effect keeps the Pathfinder Options in force when it is applied, those its params
+/// give aside, and its journal entry carries them.
+#[test]
+fn a_pathfinder_effect_keeps_the_options_in_force_when_applied() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("object.pathfinder.options", &json!({"precision": 1, "removeRedundantPoints": true, "removeUnpainted": true})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.divide"})).unwrap();
+    let all = json!({"precision": 1.0, "removeRedundantPoints": true, "removeUnpainted": true});
+    assert_eq!(first_effect_params(&s), all);
+    assert_eq!(s.journal.last().unwrap().1["params"], all, "the journal entry gives the options it used");
+    s.execute("effect.apply", &json!({"effect": "pathfinder.softMix", "params": {"precision": 0.5}})).unwrap();
+    let st = s.doc().unwrap();
+    let mix = &st.doc.node(st.selection.objects[0]).unwrap().appearance.effects[1].params;
+    assert_eq!(mix, &json!({"mixingRate": 50.0, "precision": 0.5, "removeRedundantPoints": true, "removeUnpainted": true}));
+}
+
+/// A Pathfinder effect given some of its options in `params` journals every option it used, so
+/// replaying the journal with other preferences gives the same effect and art.
+#[test]
+fn a_pathfinder_effect_given_some_options_journals_every_option_it_used() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 99.5, "width": 100, "height": 50})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.prefs.pathfinder = PathfinderOptions { precision: 1.0, remove_redundant_points: true, remove_unpainted: true };
+    s.execute("effect.apply", &json!({"effect": "pathfinder.divide", "params": {"precision": 0.25}})).unwrap();
+    let all = json!({"precision": 0.25, "removeRedundantPoints": true, "removeUnpainted": true});
+    assert_eq!(first_effect_params(&s), all);
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["params"]), ("effect.apply", &all), "the journal entry gives every option the effect used");
+    let mut replay = Session::new();
+    for (id, p) in &s.journal {
+        replay.execute(id, p).unwrap();
+    }
+    assert_eq!(replay.prefs.pathfinder, PathfinderOptions::default());
+    let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    assert_eq!(doc(&replay), doc(&s));
+}
+
+/// A live Pathfinder effect evaluates with its own options as the panel's operations do with
+/// Pathfinder Options: a precision of 1 pt drops a 0.5 pt overlap, Divide leaves out an unfilled
+/// object's pieces, and Remove Redundant Points drops an anchor that shapes nothing.
+#[test]
+fn a_pathfinder_effect_evaluates_with_its_own_options() {
+    for (precision, faces) in [(0.01, 3), (1.0, 2)] {
+        let mut s = session();
+        let a = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        let b = rect(&mut s, 0.0, 99.5, 100.0, 100.0);
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        assert_eq!(live_pieces(&mut s, "pathfinder.divide", json!({"precision": precision})).len(), faces, "precision {precision}");
+    }
+    for on in [false, true] {
+        let mut s = session();
+        filled_and_unfilled(&mut s);
+        let divided = live_pieces(&mut s, "pathfinder.divide", json!({"removeUnpainted": on}));
+        let unfilled = divided.iter().filter(|n| n.appearance.fill_paint().is_none()).count();
+        assert_eq!((unfilled, divided.len() - unfilled), (if on { 0 } else { 2 }, 1), "removeUnpainted {on}");
+    }
+    for on in [false, true] {
+        let mut s = session();
+        let pts = [(0.0, 0.0), (50.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+        let anchors: Vec<Value> = pts.iter().map(|(x, y)| json!({"x": x, "y": y})).collect();
+        let a = NodeId(s.execute("path.create", &json!({"anchors": anchors, "closed": true})).unwrap()["id"].as_u64().unwrap());
+        let b = rect(&mut s, 20.0, 20.0, 60.0, 60.0);
+        s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+        let united = live_pieces(&mut s, "pathfinder.add", json!({"removeRedundantPoints": on}));
+        let count = united[0].path_data().unwrap().anchor_count();
+        assert!(if on { count == 4 } else { count > 4 }, "removeRedundantPoints {on}: {count} anchors");
+    }
+}
+
+/// An effect saved before Pathfinder effects kept their own options draws as one given their
+/// defaults, so older documents look as they did.
+#[test]
+fn a_pathfinder_effect_saved_without_options_draws_as_before() {
+    let draw = |params: Value| {
+        let mut s = session();
+        filled_and_unfilled(&mut s);
+        let g = ids(&s.execute("effect.apply", &json!({"effect": "pathfinder.divide"})).unwrap())[0];
+        s.edit("t", |d, _| {
+            d.node_mut(g).unwrap().appearance.effects[0].params = params;
+            Ok(())
+        })
+        .unwrap();
+        s.execute("effect.expandAppearance", &json!({"ids": [g.0]})).unwrap();
+        serde_json::to_value(node(&s, g)).unwrap()
+    };
+    assert_eq!(draw(json!({})), draw(json!({"precision": 0.01, "removeRedundantPoints": false, "removeUnpainted": false})));
+}
+
+/// `effect.setParams` edits a Pathfinder effect's options as one undo step, records none for the
+/// values it already evaluates with, and refuses values out of range or of the wrong type.
+#[test]
+fn pathfinder_effect_options_edit_as_one_step_and_refuse_bad_values() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.add"})).unwrap();
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    let before = steps(&s);
+    let same = s.execute("effect.setParams", &json!({"index": 0, "params": {"precision": 0.01, "removeUnpainted": false}})).unwrap();
+    assert_eq!((same, steps(&s)), (json!({"ids": []}), before), "the values it has: no step");
+    // An effect saved without options evaluates with the defaults: given them, it is unchanged.
+    let g = s.doc().unwrap().selection.objects[0];
+    s.edit("t", |d, _| {
+        d.node_mut(g).unwrap().appearance.effects[0].params = json!({});
+        Ok(())
+    })
+    .unwrap();
+    let before = steps(&s);
+    let defaults = json!({"index": 0, "params": {"precision": 0.01, "removeRedundantPoints": false, "removeUnpainted": false}});
+    assert_eq!(s.execute("effect.setParams", &defaults).unwrap(), json!({"ids": []}));
+    assert_eq!(steps(&s), before);
+    s.execute("effect.setParams", &json!({"index": 0, "params": {"precision": 2, "removeRedundantPoints": true}})).unwrap();
+    assert_eq!(steps(&s), before + 1, "one step");
+    assert_eq!(first_effect_params(&s), json!({"precision": 2, "removeRedundantPoints": true}));
+    let kept = doc(&s);
+    for bad in [
+        json!({"precision": 0}),
+        json!({"precision": 11}),
+        json!({"precision": "1 pt"}),
+        json!({"precision": null}),
+        json!({"removeRedundantPoints": "yes"}),
+        json!({"removeUnpainted": 1}),
+    ] {
+        assert!(s.execute("effect.setParams", &json!({"index": 0, "params": bad})).is_err(), "setParams {bad}");
+        assert!(s.execute("effect.apply", &json!({"effect": "pathfinder.trim", "params": bad})).is_err(), "apply {bad}");
+        assert_eq!(doc(&s), kept, "{bad} changes nothing");
+    }
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first_effect_params(&s), json!({}), "undo restores the options");
+}
+
+/// A precision that Scale Strokes & Effects took past the range evaluates at its bound, and setting
+/// the bound is still an edit: a later scale then starts from the value set.
+#[test]
+fn a_precision_set_after_a_scale_past_its_range_is_kept() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.add", "params": {"precision": 8}})).unwrap();
+    let precision = |s: &Session| first_effect_params(s)["precision"].as_f64();
+    s.execute("object.scale", &json!({"sx": 200, "strokes": true})).unwrap();
+    assert_eq!(precision(&s), Some(16.0));
+    let steps = s.doc().unwrap().history.undo.len();
+    let out = s.execute("effect.setParams", &json!({"index": 0, "params": {"precision": 10}})).unwrap();
+    assert_ne!(out, json!({"ids": []}), "an edit");
+    assert_eq!((precision(&s), s.doc().unwrap().history.undo.len()), (Some(10.0), steps + 1));
+    s.execute("object.scale", &json!({"sx": 50, "strokes": true})).unwrap();
+    assert_eq!(precision(&s), Some(5.0));
+    // The value it stores is still no edit.
+    let steps = s.doc().unwrap().history.undo.len();
+    assert_eq!(s.execute("effect.setParams", &json!({"index": 0, "params": {"precision": 5}})).unwrap(), json!({"ids": []}));
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps);
+}
+
+/// Soft Mix's Mixing Rate is compared by value: 50 over a stored 50.0 records no undo step, and 51
+/// is an edit.
+#[test]
+fn a_soft_mix_rate_set_to_its_value_records_no_step() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 0.0, 0.0, 100.0, 100.0), rect(&mut s, 50.0, 50.0, 100.0, 100.0));
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("effect.apply", &json!({"effect": "pathfinder.softMix", "params": {"mixingRate": 50.0}})).unwrap();
+    assert_eq!(first_effect_params(&s)["mixingRate"], json!(50.0));
+    let steps = |s: &Session| s.doc().unwrap().history.undo.len();
+    let before = steps(&s);
+    assert_eq!(s.execute("effect.setParams", &json!({"index": 0, "params": {"mixingRate": 50}})).unwrap(), json!({"ids": []}));
+    assert_eq!((first_effect_params(&s)["mixingRate"].clone(), steps(&s)), (json!(50.0), before), "50 over 50.0: no step");
+    assert_ne!(s.execute("effect.setParams", &json!({"index": 0, "params": {"mixingRate": 51}})).unwrap(), json!({"ids": []}));
+    assert_eq!((first_effect_params(&s)["mixingRate"].clone(), steps(&s)), (json!(51), before + 1), "51 is an edit");
 }
 
 /// A single group containing multiple overlapping paths is accepted by Crop.

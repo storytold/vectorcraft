@@ -1,16 +1,89 @@
 use super::containers::close;
 use super::document::TEXT_SLOT;
+use super::raster::{self, Limits, Shape};
 use super::types::{
-    FLIP, Frame, IMAGE_TOO_LARGE, Kind, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS, MAX_SIDE, NON_NATIVE_ART,
-    NON_NATIVE_ART_UNREAD, Place,
+    EPS_MIME, FLIP, Frame, GState, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE,
+    MAX_POINTS, MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedEps, PlacedPage, PlacedTail,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
-    NodeId, NodeKind, Obj, OpacityMask, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
+    NodeId, NodeKind, Obj, OpacityMask, PageBox, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
 };
-use vectorcraft_doc::links::missing_placeholder;
+use vectorcraft_doc::PlacedDocument;
+use vectorcraft_doc::links::{hash_bytes, missing_placeholder};
+use vectorcraft_doc::placed_document::key_for;
+use vectorcraft_pdf::is_postscript;
+
+/// Open-check results by content and nesting depth: the remaining depth changes their warnings.
+type EpsChecks = Vec<((String, usize), Option<Vec<String>>)>;
+
+/// The most open-check results kept during one outer check; no file bytes are retained.
+const MAX_EPS_CHECKS: usize = 64;
+
+std::thread_local! {
+    /// How many included EPS files [`readable_eps`] is reading inside one another on this thread.
+    static READING_EPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Checks completed during this thread's outer check, including files that do not read.
+    static EPS_CHECKS: std::cell::RefCell<EpsChecks> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// An included EPS file being read by [`readable_eps`] ([`READING_EPS`]): the count goes down when
+/// this goes.
+struct ReadingEps;
+
+impl ReadingEps {
+    /// `None` when 8 are being read.
+    fn enter() -> Option<Self> {
+        READING_EPS.with(|d| (d.get() < 8).then(|| d.set(d.get() + 1))).map(|()| Self)
+    }
+}
+
+impl Drop for ReadingEps {
+    fn drop(&mut self) {
+        READING_EPS.with(|d| d.set(d.get().saturating_sub(1)));
+        if READING_EPS.with(std::cell::Cell::get) == 0 {
+            EPS_CHECKS.with_borrow_mut(Vec::clear);
+        }
+    }
+}
+
+/// The warnings of reading `bytes` as an EPS file, the way a placed document's art is read from
+/// them (art left out after an operator that isn't read, for one); `None` when they don't read.
+/// Past 8 included files read inside one another they count as readable without warnings; drawing
+/// reads a bounded number of them in turn. The check uses previews for placed documents, so
+/// drawing does not start another chain of checks inside this one. Repeated structural reads
+/// share completed checks at the same depth until the outer check ends.
+fn readable_eps(bytes: &[u8]) -> Option<Vec<String>> {
+    let key = (hash_bytes(bytes), READING_EPS.with(std::cell::Cell::get));
+    if let Some(warnings) = EPS_CHECKS.with_borrow(|c| c.iter().find(|(k, _)| *k == key).map(|(_, warnings)| warnings.clone())) {
+        return warnings;
+    }
+    let Some(_reading) = ReadingEps::enter() else { return Some(vec![]) };
+    #[cfg(any(test, feature = "work-count"))]
+    crate::INCLUDED_EPS_READS.with(|n| n.set(n.get() + 1));
+    let warnings = vectorcraft_doc::placed_document::with_previews(|| {
+        crate::import_names(bytes, true, false, crate::NameEncoding::default()).ok().map(|r| r.warnings)
+    });
+    EPS_CHECKS.with_borrow_mut(|c| {
+        if c.len() >= MAX_EPS_CHECKS {
+            c.remove(0);
+        }
+        c.push((key, warnings.clone()));
+    });
+    warnings
+}
 
 impl<'a> Reader<'a> {
+    /// Do the bytes `eps` of an included EPS file read ([`readable_eps`])? When they do, what reading
+    /// them warns of is a warning of this file's too.
+    fn read_included(&mut self, eps: &[u8]) -> bool {
+        let Some(warnings) = readable_eps(eps) else { return false };
+        for w in warnings {
+            self.warn(&format!("a placed EPS file: {w}"));
+        }
+        true
+    }
+
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
     pub(super) fn text_slot(&mut self, o: &Obj) -> Result<(), String> {
         if self.pattern.is_some() {
@@ -216,29 +289,21 @@ impl<'a> Reader<'a> {
         // A gradient instance's paint replaces the missing pattern.
         let unread = (fill && self.pending_unread_fill && fill_paint.is_none()) || (stroke && self.pending_unread_stroke && stroke_paint.is_none());
         let mut items = Vec::new();
-        if fill && !clip {
-            items.push(AppearanceItem::Fill(FillLayer {
-                overprint: gs.overprint_fill,
-                ..FillLayer::new(fill_paint.clone().unwrap_or(gs.fill.clone()))
-            }));
+        // A clipping path keeps its fill and its stroke: its fill paints under the art it clips and its stroke over it
+        // (`Node::clip_paint`), as the file's PDF part draws them.
+        if fill {
+            items.push(AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(fill_paint.unwrap_or(gs.fill.clone())) }));
         }
-        // A clipping path keeps its stroke, which paints over the art it clips.
         if stroke {
-            let mut st = StrokeLayer::new(stroke_paint.unwrap_or(gs.stroke.clone()), gs.line_width());
-            st.cap = gs.cap;
-            st.join = gs.join;
-            st.miter_limit = gs.miter;
-            st.dash = gs.dash.clone();
-            st.overprint = gs.overprint_stroke;
+            let st = self.stroke_layer(stroke_paint.unwrap_or(gs.stroke.clone()), &gs);
             items.push(AppearanceItem::Stroke(st));
         }
         let kind = NodeKind::Path { path, rule: gs.rule, live: None, clipping: clip, guide };
         let mut node = self.new_node(kind, &gs);
-        // A ruler guide is written as a straight `(N) *` guide path on its layer.
+        // A ruler guide is written as a straight `(N) *` guide path on its layer, shown or hidden.
         if guide
             && op == "N"
             && !hidden
-            && !gs.hidden
             && !clip
             && self.pattern.is_none()
             && matches!(self.frames.last(), Some(Frame { kind: Kind::Layer(_), .. }))
@@ -254,23 +319,6 @@ impl<'a> Reader<'a> {
         if clip && let Some(f) = self.frames.last_mut() {
             f.clips.push(f.children.len());
         }
-        // A clipping path's fill is painted too, under the art it clips, as the file's PDF part draws it.
-        let painted = clip && fill && !matches!(gs.fill, Paint::None);
-        let copy = painted.then(|| {
-            let mut copy = node.clone();
-            copy.id = self.doc.alloc_id();
-            if let NodeKind::Path { clipping, .. } = &mut copy.kind {
-                *clipping = false;
-            }
-            let paint = fill_paint.clone().unwrap_or_else(|| gs.fill.clone());
-            copy.appearance = Appearance {
-                items: vec![AppearanceItem::Fill(FillLayer { overprint: gs.overprint_fill, ..FillLayer::new(paint) })],
-                ..Appearance::default()
-            }
-            .into();
-            copy
-        });
-        // The note and Show Center are the path's, not its painted copy's.
         node.edit_attrs(|a| {
             a.note = gs.note.clone().unwrap_or_default();
             a.show_center = gs.show_center;
@@ -297,11 +345,19 @@ impl<'a> Reader<'a> {
                 }
             }
         }
-        if let Some(copy) = copy {
-            self.clip_fills.insert(copy.id);
-            self.add(copy, hidden)?;
-        }
         Ok(())
+    }
+
+    /// A gradient mesh's `X#` entry `vals`. In a symbol's art, corners are in the space an image's
+    /// matrix is in there; a mesh there in a file that doesn't say where the canvas is is unread.
+    pub(super) fn mesh_entry(&mut self, vals: &[V]) {
+        let to_doc = self.image_space();
+        if let Some((m, _)) = self.mesh.as_mut() {
+            match to_doc {
+                Some(to_doc) => m.entry(vals, to_doc),
+                None => m.unread = true,
+            }
+        }
     }
 
     /// `/End X!`: the gradient mesh read, as one object.
@@ -342,41 +398,51 @@ impl<'a> Reader<'a> {
         Ok(())
     }
 
-    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state. A clipping path
-    /// takes the stroke itself, not the painted copy of its fill.
+    /// Stroke the path just painted (a gradient-filled one, `1 BB` or `2 BB`) with the stroke's state.
     pub(super) fn stroke_last(&mut self) {
         let gs = self.gs.clone();
         if !self.after_object {
             return;
         }
-        let Some(kids) = self.frames.last_mut().map(|f| &mut f.children) else { return };
-        let Some(mut at) = kids.len().checked_sub(1) else { return };
-        if kids.get(at).is_some_and(|n| self.clip_fills.contains(&n.id)) && at > 0 {
-            at -= 1;
-        }
-        let Some(n) = kids.get_mut(at) else { return };
+        let Some(n) = self.frames.last_mut().and_then(|f| f.children.last_mut()) else { return };
         if !matches!(n.kind, NodeKind::Path { .. }) || n.appearance.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(_))) {
             return;
         }
-        let mut st = StrokeLayer::new(gs.stroke.clone(), gs.line_width());
-        st.cap = gs.cap;
-        st.join = gs.join;
-        st.miter_limit = gs.miter;
-        st.dash = gs.dash.clone();
-        st.overprint = gs.overprint_stroke;
+        let st = self.stroke_layer(gs.stroke.clone(), &gs);
+        let Some(n) = self.frames.last_mut().and_then(|f| f.children.last_mut()) else { return };
         let mut a = (*n.appearance).clone();
         a.items.push(AppearanceItem::Stroke(st));
         n.appearance = a.into();
     }
 
+    /// A stroke of `paint` with graphics state `gs`'s weight, caps, joins, miter limit, dashes and
+    /// overprint, its weight and dashes at the scale the art is read at ([`Self::space_scale`]).
+    fn stroke_layer(&mut self, paint: Paint, gs: &GState) -> StrokeLayer {
+        let k = self.space_scale();
+        let mut st = StrokeLayer::new(paint, gs.line_width() * k);
+        st.cap = gs.cap;
+        st.join = gs.join;
+        st.miter_limit = gs.miter;
+        st.dash = gs.dash.clone().map(|mut d| {
+            d.scale(k);
+            d
+        });
+        st.overprint = gs.overprint_stroke;
+        st
+    }
+
     pub(super) fn set_instance(&mut self, i: &Instance) {
         let mut to_doc = self.space();
         // In a pattern's definition a gradient's `Xm` and `Bm` are written y down about the canvas point of art space's
-        // origin, as the file's PDF part draws them; in a symbol's, as the instances in its art are.
+        // origin, as the file's PDF part draws them; in a symbol's, as the instances in its art are, an envelope's
+        // contents' included (which `space` moves alone).
         if (self.pattern.is_some() || self.symbol.is_some())
             && i.has_matrix()
             && let Some(t) = self.template
         {
+            if self.pattern.is_none() && !self.envelope_blocks.is_empty() {
+                to_doc = Affine::IDENTITY;
+            }
             let (cx, cy) = ((t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0);
             to_doc *= Affine::new([1.0, 0.0, 0.0, -1.0, CANVAS_CENTRE - cx, CANVAS_CENTRE + cy]);
         }
@@ -397,15 +463,18 @@ impl<'a> Reader<'a> {
 
     // ---- images ----------------------------------------------------------------------------
 
-    /// The samples after `XI`, its operands on the stack.
-    pub(super) fn image(&mut self, data: &[u8]) -> Result<(), String> {
+    /// The samples after `XI`, its operands on the stack; `hidden` when they are on `%_` lines.
+    pub(super) fn image(&mut self, data: &[u8], hidden: bool) -> Result<(), String> {
         let vals = self.operands();
         // Operands that came before an `XI` on their own line.
         let vals = match self.raster.as_mut().and_then(|r| r.operands.take()) {
             Some(before) if !vals.iter().any(|v| matches!(v, V::Arr(_))) => before,
             _ => vals,
         };
-        self.image_from(vals, data)
+        self.image_hidden = hidden;
+        let read = self.image_from(vals, data, false);
+        self.image_hidden = false;
+        read
     }
 
     /// The matrix and the numbers of an image's operands (`[a b c d tx ty] llx lly urx ury w h bits
@@ -439,8 +508,22 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// An image of operands `vals` and samples `data`.
-    pub(super) fn image_from(&mut self, vals: Vec<V>, data: &[u8]) -> Result<(), String> {
+    /// The bytes of samples (colour and alpha) that the image of `XI` operands `vals` reads: 0 when
+    /// it isn't read (operands missing, or past the hard limits).
+    pub(super) fn sample_bytes(&self, vals: &[V]) -> usize {
+        let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
+        let n = Self::nums(vals);
+        let [_, _, _, _, w, h, bits, kind, alpha, ..] = n.as_slice() else { return 0 };
+        let shape = Shape { w: *w as u64, h: *h as u64, channels: channels(&space, *kind) as u64, bits: *bits as u64, alpha: *alpha > 0.0 };
+        match (shape.step(&Limits::get()), shape.lens()) {
+            (Some(_), Some((colour, alpha))) => usize::try_from(colour + alpha).unwrap_or(0),
+            _ => 0,
+        }
+    }
+
+    /// An image of operands `vals` and samples `data` (`decoded`: bytes already, whatever the
+    /// operands say).
+    pub(super) fn image_from(&mut self, vals: Vec<V>, data: &[u8], decoded: bool) -> Result<(), String> {
         // A file `XG` named before this image isn't the file of a later `XF`.
         self.image_link = None;
         let space = self.raster.as_ref().and_then(|r| r.space.clone()).unwrap_or_default();
@@ -455,41 +538,66 @@ impl<'a> Reader<'a> {
         // ImageMask 1: the image is transparent and takes a color (version 7 specification §8.1).
         let image_mask = rest.first() == Some(&1.0);
         let (w, h) = (*w as u64, *h as u64);
-        if w.saturating_mul(h) > MAX_PIXELS {
-            self.image_left_out(IMAGE_TOO_LARGE);
-            return Ok(());
-        }
         if w == 0 || h == 0 || ![1.0, 8.0].contains(bits) {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         }
-        let channels: usize = match space.as_str() {
-            "DeviceGray" => 1,
-            "DeviceCMYK" => 4,
-            "DeviceRGB" => 3,
-            _ => match *kind as i64 {
-                1 => 1,
-                4 => 4,
-                _ => 3,
-            },
+        let channels = channels(&space, *kind);
+        // The size is checked before anything is decoded or allocated.
+        let shape = Shape { w, h, channels: channels as u64, bits: *bits as u64, alpha: *alpha > 0.0 };
+        let (Some(k), Some((need, alpha_len))) = (shape.step(&Limits::for_channels(channels)), shape.lens()) else {
+            return self.too_large_image(&m, w, h);
         };
-        let decoded;
-        let data = if *binary == 0.0 {
-            let digits: Vec<u8> = data.iter().copied().filter(|b| b.is_ascii_hexdigit()).collect();
-            decoded = crate::import::lex::hex_decode(&digits).unwrap_or_default();
-            decoded.as_slice()
+        // Within the limits, these fit in memory (see `Limits::bytes`).
+        let (need, alpha_len) = (need as usize, alpha_len as usize);
+        let hex;
+        let data = if *binary == 0.0 && !decoded {
+            let (max, mut half) = (need + alpha_len, None);
+            let mut out = Vec::with_capacity(max.min(data.len() / 2));
+            raster::push_hex(&mut out, &mut half, data, max);
+            raster::end_hex(&mut out, half, max);
+            hex = out;
+            hex.as_slice()
         } else {
             data
         };
-        let row = if *bits == 1.0 { (w as usize * channels).div_ceil(8) } else { w as usize * channels };
-        let need = row.saturating_mul(h as usize);
+        let row = shape.row().unwrap_or(0) as usize;
         // An alpha channel follows the colour samples, one byte a pixel.
-        let alpha_len = if *alpha > 0.0 { (w * h) as usize } else { 0 };
         let (Some(samples), opacity) = (data.get(..need), data.get(need..need.saturating_add(alpha_len))) else {
             self.image_left_out("an image whose data is cut short was left out");
             return Ok(());
         };
         let opacity = opacity.filter(|_| alpha_len > 0);
+        // An image in one ink's Separation space (`XC`): its samples are the ink's tints, the most
+        // at 100 % (255, or a set bit). It comes in as a grayscale image of them, black at 100 %,
+        // that the ink colorizes, as a Separation image opens from a PDF; its alpha channel
+        // becomes its opacity mask.
+        let ink = if channels == 1 && !image_mask { self.raster.as_mut().and_then(|r| r.ink.take()) } else { None };
+        let inverted;
+        let samples = if ink.is_some() {
+            inverted = samples.iter().map(|b| !b).collect::<Vec<u8>>();
+            inverted.as_slice()
+        } else {
+            samples
+        };
+        let ink = ink.map(|(paint, named)| {
+            // Its colour counts toward the document's colour model, as a fill's does (Registration
+            // says nothing of it).
+            let registration = matches!(&paint, Paint::Solid { swatch: Some(s), .. } if s == vectorcraft_color::swatch::REGISTRATION);
+            match paint.color().filter(|_| !registration) {
+                Some(vectorcraft_color::Color::Rgb { .. }) => self.rgb_colors += 1,
+                Some(vectorcraft_color::Color::Cmyk { .. }) => self.cmyk_colors += 1,
+                _ => {}
+            }
+            self.spots.extend(named);
+            paint
+        });
+        let gray1 = *bits == 1.0 && channels == 1 && opacity.is_none();
+        if k > 1 || w * h > raster::SMALL || (gray1 && !image_mask) {
+            // An image mask keeps the color that colorizes it, an ink image its ink.
+            let colorize = if image_mask && channels == 1 && *bits == 1.0 { Some(self.mask_paint()) } else { ink };
+            return self.large_image(samples, opacity, shape, k, &m, colorize);
+        }
         // CMYK samples keep their ink amounts as a CMYK TIFF, as the PDF importer keeps a CMYK
         // image's, and an alpha channel that hides part of the image becomes its opacity mask.
         if channels == 4
@@ -499,7 +607,11 @@ impl<'a> Reader<'a> {
             return self.add_raster(blob, opacity, &m, (w as u32, h as u32), None);
         }
         if image_mask && channels == 1 && *bits == 1.0 {
-            return self.colorized_raster(samples, row, opacity, &m, (w as u32, h as u32));
+            let paint = self.mask_paint();
+            return self.colorized_raster(samples, (row, 1), opacity, &m, (w as u32, h as u32), paint);
+        }
+        if let Some(paint) = ink {
+            return self.colorized_raster(samples, (row, *bits as u8), opacity, &m, (w as u32, h as u32), paint);
         }
         let mut rgba = Vec::with_capacity((w * h * 4) as usize);
         for y in 0..h as usize {
@@ -526,37 +638,51 @@ impl<'a> Reader<'a> {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], a]);
             }
         }
-        let Some(img) = image::RgbaImage::from_raw(w as u32, h as u32, rgba) else {
+        let Ok(img) = craft_image_codecs::Image::from_raw(
+            w as u32,
+            h as u32,
+            craft_image_codecs::ChannelLayout::Rgba,
+            craft_image_codecs::SampleType::U8,
+            rgba,
+        ) else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
         };
-        let mut png = vec![];
-        if img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).is_err() {
+        let Ok(png) = craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()) else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
-        }
+        };
         self.add_raster(ImageBlob::new("image/png", png), None, &m, (w as u32, h as u32), None)
     }
 
-    /// A 1-bit gray image whose ImageMask is 1 (`samples`, `row` bytes a row): a grayscale image
-    /// colorized with the fill color. Its 0 bits, which open black with ImageMask 0, take that color,
-    /// and its 1 bits are transparent. A fill that isn't a solid color colorizes it black.
-    fn colorized_raster(&mut self, samples: &[u8], row: usize, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32)) -> Result<(), String> {
+    /// A one-channel image (`samples` of `bits` bits, `row` bytes a row) as a grayscale image
+    /// colorized with `paint`: a 1-bit gray image whose ImageMask is 1, with the fill color (its 0
+    /// bits, which open black with ImageMask 0, take that color, and its 1 bits are transparent; a
+    /// fill that isn't a solid color colorizes it black), or an ink's tints, inverted, with the ink.
+    fn colorized_raster(
+        &mut self,
+        samples: &[u8],
+        (row, bits): (usize, u8),
+        alpha: Option<&[u8]>,
+        m: &[f64],
+        (w, h): (u32, u32),
+        paint: Paint,
+    ) -> Result<(), String> {
         let mut gray = Vec::with_capacity(w as usize * h as usize);
         for y in 0..h as usize {
             let line = samples.get(y * row..(y + 1) * row).unwrap_or_default();
             for x in 0..w as usize {
-                let v = line.get(x / 8).map_or(0, |b| ((b >> (7 - x % 8)) & 1) * 255);
+                let v = if bits == 1 { line.get(x / 8).map_or(0, |b| ((b >> (7 - x % 8)) & 1) * 255) } else { line.get(x).copied().unwrap_or(0) };
                 gray.push(v);
             }
         }
-        let mut png = vec![];
-        let written = image::GrayImage::from_raw(w, h, gray).map(|img| img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png));
-        if !matches!(written, Some(Ok(()))) {
+        let written = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, gray)
+            .ok()
+            .and_then(|img| craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok());
+        let Some(png) = written else {
             self.image_left_out("an image VectorCraft can't read was left out");
             return Ok(());
-        }
-        let paint = self.mask_paint();
+        };
         self.add_raster(ImageBlob::new("image/png", png), alpha, m, (w, h), Some(paint))
     }
 
@@ -607,7 +733,7 @@ impl<'a> Reader<'a> {
         };
         // The placeholder is all the document has of the file: what a missing link shows.
         let bytes = Arc::new(png);
-        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() };
         let key = linked_key(&blob, &path);
         self.doc.images.entry(key.clone()).or_insert(blob);
         self.warn(LINKED_PLACEHOLDERS);
@@ -623,9 +749,75 @@ impl<'a> Reader<'a> {
         self.add_image_colorized(im, None, colorize, hidden)
     }
 
+    /// An image of `s` past [`raster::SMALL`] pixels, or reduced by the step `k`, or 1-bit gray:
+    /// 1-bit gray at full size is a 1-bit PNG of its rows as they are; other images keep their
+    /// channels a byte each (gray or RGB in a PNG with the alpha channel, CMYK in a TIFF with the
+    /// alpha channel as its opacity mask), averaged over blocks of `k` × `k` pixels. The matrix
+    /// `m` places the image where its full size would be.
+    fn large_image(&mut self, samples: &[u8], opacity: Option<&[u8]>, s: Shape, k: u64, m: &[f64], colorize: Option<Paint>) -> Result<(), String> {
+        let (ow, oh) = (s.w.div_ceil(k) as u32, s.h.div_ceil(k) as u32);
+        if k == 1 && s.bits == 1 && s.channels == 1 && opacity.is_none() {
+            let Some(png) = raster::gray1_png(samples, ow, oh, s.row().unwrap_or(0) as usize) else {
+                return self.too_large_image(m, s.w, s.h);
+            };
+            return self.add_raster(ImageBlob::new("image/png", png), None, m, (ow, oh), colorize);
+        }
+        let cmyk = s.channels == 4;
+        // A colorized image's alpha channel becomes its opacity mask, as at its full size: a
+        // grayscale image whose pixels have alpha takes only a spot color, black or white.
+        let inline = !cmyk && colorize.is_none();
+        let (pixels, mask) = raster::reduce(samples, opacity, s, k, inline);
+        let blob = if cmyk {
+            Inks::new(ow, oh, pixels).and_then(|i| ImageBlob::cmyk_tiff(&i))
+        } else {
+            let layout = match (s.channels, inline && opacity.is_some()) {
+                (1, false) => craft_image_codecs::ChannelLayout::Gray,
+                (1, true) => craft_image_codecs::ChannelLayout::GrayA,
+                (_, false) => craft_image_codecs::ChannelLayout::Rgb,
+                (_, true) => craft_image_codecs::ChannelLayout::Rgba,
+            };
+            craft_image_codecs::Image::from_raw(ow, oh, layout, craft_image_codecs::SampleType::U8, pixels)
+                .ok()
+                .and_then(|img| craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok())
+                .map(|png| ImageBlob::new("image/png", png))
+        };
+        // One that can't be encoded is left to the page's art, as one past the hard limits.
+        let Some(blob) = blob else {
+            return self.too_large_image(m, s.w, s.h);
+        };
+        // Each pixel as read stands for a block of the full size's.
+        let (sx, sy) = (s.w as f64 / f64::from(ow), s.h as f64 / f64::from(oh));
+        let m: Vec<f64> = match m {
+            [a, b, c, d, tx, ty] => vec![a * sx, b * sx, c * sy, d * sy, *tx, *ty],
+            other => other.to_vec(),
+        };
+        if k > 1 {
+            self.warn(&format!("an embedded image of {} × {} pixels was reduced to {ow} × {oh} pixels to keep the layers", s.w, s.h));
+        }
+        self.add_raster(blob, mask.as_deref(), &m, (ow, oh), colorize)
+    }
+
+    /// An image of `w` × `h` pixels past the hard limits, which matrix `m` maps into art space: a
+    /// box for the page's art to replace ([`Reader::unread_box`]), or, without page art, left out
+    /// with a note.
+    fn too_large_image(&mut self, m: &[f64], w: u64, h: u64) -> Result<(), String> {
+        if !self.page_art {
+            self.image_left_out(IMAGE_TOO_LARGE);
+            return Ok(());
+        }
+        let [a, b, c, d, tx, ty] = m else {
+            self.image_left_out("an image VectorCraft can't read was left out");
+            return Ok(());
+        };
+        let xf = self.space() * Affine::new([*a, *b, *c, *d, *tx, *ty]) * FLIP;
+        let bounds = xf.transform_rect_bbox(Rect::new(0.0, 0.0, w as f64, h as f64));
+        self.unread_box(LARGE_IMAGES, bounds, false).map(|_| ())
+    }
+
     /// Add the image `blob` (`w` × `h` pixels), which the matrix `m` maps into art space, with
     /// `alpha` (its alpha channel, one byte a pixel) as its opacity mask when it hides part of the
-    /// image, and `colorize` as the color that colorizes it.
+    /// image, and `colorize` as the color that colorizes it. It is on `%_` lines when its samples
+    /// are ([`Self::image`]).
     fn add_raster(&mut self, blob: ImageBlob, alpha: Option<&[u8]>, m: &[f64], (w, h): (u32, u32), colorize: Option<Paint>) -> Result<(), String> {
         // The matrix is an art-space matrix (y up) applied to the pixels with their rows running
         // downwards, (u, -v): pixels → (u, -v) → art space. Flipping the matrix's result instead
@@ -647,7 +839,8 @@ impl<'a> Reader<'a> {
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
         let im = ImageObject { key, width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
-        self.add_image_colorized(im, mask, colorize, false)
+        // An image on `%_` lines is the copy of a styled object, as the other objects there are.
+        self.add_image_colorized(im, mask, colorize, self.image_hidden)
     }
 
     /// An image that isn't read is left out, with `warning`; in a symbol's art, the symbol isn't
@@ -674,8 +867,10 @@ impl<'a> Reader<'a> {
         if alpha.iter().all(|v| *v == 255) {
             return None;
         }
-        let mut png = Vec::new();
-        image::GrayImage::from_raw(w, h, alpha.to_vec())?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+        let raw =
+            craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, alpha.to_vec())
+                .ok()?;
+        let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
         let blob = ImageBlob::new("image/png", png);
         let key = blob.content_key();
         self.doc.images.entry(key.clone()).or_insert(blob);
@@ -697,7 +892,8 @@ impl<'a> Reader<'a> {
     }
 
     /// Add an image object with the state's transparency, `mask` as its opacity mask and
-    /// `colorize` as the color that colorizes it.
+    /// `colorize` as the color that colorizes it, which overprints while the fill overprint (`O`)
+    /// in force is on.
     fn add_image_colorized(&mut self, im: ImageObject, mask: Option<OpacityMask>, colorize: Option<Paint>, hidden: bool) -> Result<(), String> {
         let gs = self.gs.clone();
         let mut node = self.new_node(NodeKind::Image(Box::new(im)), &gs);
@@ -705,6 +901,7 @@ impl<'a> Reader<'a> {
         node.blend = gs.blend;
         node.knockout_shape = gs.knockout_shape;
         node.extras_mut().mask = mask.map(Box::new);
+        node.extras_mut().colorize_overprint = colorize.is_some() && gs.overprint_fill;
         node.extras_mut().colorize = colorize.map(Box::new);
         self.add(node, hidden)?;
         self.image_tail = self.after_object;
@@ -712,8 +909,9 @@ impl<'a> Reader<'a> {
     }
 
     /// `~`: the placed file read since `%AI5_BeginPlace` becomes a linked image in its place that
-    /// shows the preview the data keeps of it, as a linked image whose file is missing does. One
-    /// without a preview, a path or a matrix isn't read.
+    /// shows the preview the data keeps of it, as a linked image whose file is missing does. An EPS
+    /// file whose bytes the data includes becomes a placed document of them ([`Self::placed_eps`]).
+    /// One without a preview or those bytes, a path or a matrix isn't read.
     pub(super) fn end_place(&mut self, hidden: bool) -> Result<(), String> {
         // Where a symbol's art puts a placed file's pixels isn't known.
         if self.symbol.is_some() {
@@ -721,10 +919,42 @@ impl<'a> Reader<'a> {
             self.left_out_of_symbol();
             return Ok(());
         }
+        let mut deferred = None;
         let (m, b, path, png, w, h, folder) = match self.place.take() {
             Some(Place { broken: true, .. }) => {
                 self.unreadable("placed files", hidden);
                 return Ok(());
+            }
+            Some(Place { matrix: Some(m), bounds: Some(b), path, document: Some(eps), preview, folder, .. })
+                // A file without a bounding box of its own has its art read on a page of another
+                // size, which the placed box can't be matched to.
+                // One named `.ai` or `.ait` is read with the artboard its header gives rather than
+                // its bounding box, so it isn't read either. Bytes that don't read as an EPS file
+                // leave it as a placed file without them: its preview, or an unread one.
+                if !path.is_empty()
+                    && !ai_named(&path)
+                    && is_postscript(&eps)
+                    // A native document's artboard, rather than its bounding box, frames what the loader reads.
+                    && !native_eps(&eps)
+                    && crate::dcs::read(&eps).is_none()
+                    && sane(b)
+                    && b.width() > 0.0
+                    && b.height() > 0.0
+                    && eps_box(&eps).is_some()
+                    && self.read_included(&eps) =>
+            {
+                let Some((placed, blob)) = self.placed_eps(m, path.clone(), eps, folder.clone(), hidden) else { return Ok(()) };
+                if let Some((png, w, h)) = preview {
+                    // No image variable binds pattern or brush art, which a reader of its own
+                    // reads: there the placed document goes in at once.
+                    if self.pattern.is_some() {
+                        return self.add_placed_eps(placed, blob, hidden);
+                    }
+                    deferred = Some((placed, blob));
+                    (m, b, path, png, w, h, folder)
+                } else {
+                    return self.add_placed_eps(placed, blob, hidden);
+                }
             }
             Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)), folder, .. }) if !path.is_empty() => {
                 (m, b, path, png, w, h, folder)
@@ -776,23 +1006,124 @@ impl<'a> Reader<'a> {
             .filter(|a| a.as_coeffs().iter().all(|v| v.is_finite()));
         let xf = self.space() * m * over_file;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            // An included EPS file is still read when its preview can't be placed.
+            if let Some((placed, blob)) = deferred {
+                return self.add_placed_eps(placed, blob, hidden);
+            }
             self.unreadable("placed files", hidden);
             return Ok(());
         }
         // The preview is all the document has of the file: what a missing link shows.
         let bytes = Arc::new(png);
-        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes) };
+        let blob = ImageBlob { mime: "image/png".into(), bytes: bytes.clone(), proxy: Some(bytes), file_font: Default::default() };
         let key = linked_key(&blob, &path);
+        let fresh = !self.doc.images.contains_key(&key);
         self.doc.images.entry(key.clone()).or_insert(blob);
-        self.warn(LINKED_PREVIEWS);
+        // An included EPS file shows its preview only when an image variable binds it, which the
+        // importer notes then.
+        if deferred.is_none() {
+            self.warn(LINKED_PREVIEWS);
+        }
+        let id = NodeId(self.doc.peek_next_id());
         if let Some(shift) = elsewhere
             && self.placed_elsewhere.len() < MAX_PLACED_ELSEWHERE
         {
-            self.placed_elsewhere.push((NodeId(self.doc.peek_next_id()), shift));
+            self.placed_elsewhere.push((id, shift));
         }
+        // One waits at each depth: a placed file in another's opacity mask doesn't take the place of the outer one.
+        // An outer one waiting shares its blob with this one now: it no longer has it alone.
+        let depth = self.frames.len();
+        self.placed_tails.retain(|t| t.depth < depth);
+        for t in self.placed_tails.iter_mut().filter(|t| t.key == key) {
+            t.fresh = false;
+        }
+        self.placed_tails.push(PlacedTail { id, key: key.clone(), size: (b.width(), b.height()), fresh, depth });
         let mut link = LinkInfo::new(path);
         link.relative = folder.and_then(|f| relative_path(&f, link.name()));
-        self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(link), placement: Default::default(), pixels: None }, hidden)
+        self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(link), placement: Default::default(), pixels: None }, hidden)?;
+        if let Some((placed, blob)) = deferred {
+            self.placed_eps.push(PlacedEps { id, placed, blob });
+        }
+        Ok(())
+    }
+
+    /// The dictionary `o` after the placed file just read: with a page or a box in it, that file is
+    /// a page of a PDF or `.ai` file. Its image keeps the preview under a key of its own for that
+    /// page and box, so that it doesn't share one with an image of another page of the file.
+    pub(super) fn placed_page(&mut self, o: &Obj) {
+        // The dictionaries of art read inside the placed file's own (its opacity mask's) are not its.
+        let depth = self.frames.len();
+        self.placed_tails.retain(|t| t.depth <= depth);
+        if self.placed_tails.last().is_none_or(|t| t.depth != depth) {
+            return;
+        }
+        let Some(tail) = self.placed_tails.pop() else { return };
+        let (page, crop) = (o.get(PLACED_PAGE).map(|_| o.nums(PLACED_PAGE)), o.get(PLACED_CROP).map(|_| o.nums(PLACED_CROP)));
+        // A placed document's box runs from (0, 0) to a positive size: a box written backward stays a linked image.
+        if (page.is_none() && crop.is_none()) || !(tail.size.0 > 0.0 && tail.size.1 > 0.0) {
+            return;
+        }
+        // An entry that is there but not a number leaves a linked image, as an unknown number does.
+        let page = page.map_or(Some(1), |v| v.first().copied().and_then(placed_page_number));
+        let crop = crop.map_or(Some((false, PageBox::Crop)), |v| v.first().copied().and_then(placed_crop));
+        let (Some(page), Some((bounding, page_box))) = (page, crop) else { return };
+        let Some(NodeKind::Image(im)) = self.last_object().filter(|n| n.id == tail.id).map(|n| &mut n.kind) else { return };
+        let old = im.key.clone();
+        let key = key_for(&old, page, bounding, page_box);
+        im.key.clone_from(&key);
+        let blob = if tail.fresh { self.doc.images.remove(&old) } else { self.doc.images.get(&old).cloned() };
+        if let Some(blob) = blob {
+            self.doc.images.entry(key).or_insert(blob);
+        }
+        self.placed_pages.push(PlacedPage { id: tail.id, page, bounding, page_box, size: tail.size });
+    }
+
+    /// The placed EPS file at `path` whose bytes `eps` the data includes, its box (in its own space,
+    /// y up: the bounding box its comments give, [`eps_box`], which its art is read in) taken into
+    /// art space by `m`: a placed document showing that box, which keeps the bytes and draws them
+    /// whether or not its file is found. Its link has the size and hash of those bytes, so a file
+    /// found unchanged isn't reported as modified. The placed document has no preview, so a save
+    /// keeps the bytes. Not read without that box.
+    fn placed_eps(&mut self, m: Affine, path: String, eps: Vec<u8>, folder: Option<String>, hidden: bool) -> Option<(PlacedDocument, ImageBlob)> {
+        let Some(b) = eps_box(&eps) else {
+            self.unreadable("placed files", hidden);
+            return None;
+        };
+        // The placed document's box runs down from the file's top left corner.
+        let xf = self.space() * m * Affine::new([1.0, 0.0, 0.0, -1.0, b.x0, b.y1]);
+        if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            self.unreadable("placed files", hidden);
+            return None;
+        }
+        let hash = hash_bytes(&eps);
+        let key = key_for(&hash, 1, false, PageBox::Crop);
+        let mut link = LinkInfo::new(path);
+        link.relative = folder.and_then(|f| relative_path(&f, link.name()));
+        (link.page, link.size, link.hash) = (Some(1), u64::try_from(eps.len()).ok(), Some(hash));
+        let blob = ImageBlob { mime: EPS_MIME.into(), bytes: Arc::new(eps), proxy: None, file_font: Default::default() };
+        let placed = PlacedDocument {
+            link,
+            key,
+            bounding: false,
+            page_box: PageBox::Crop,
+            width: b.width(),
+            height: b.height(),
+            xf,
+            placement: Default::default(),
+        };
+        Some((placed, blob))
+    }
+
+    /// `placed` ([`Self::placed_eps`]) added as an object, its bytes `blob` kept under its key.
+    /// Placements of the same bytes share one blob.
+    fn add_placed_eps(&mut self, placed: PlacedDocument, blob: ImageBlob, hidden: bool) -> Result<(), String> {
+        self.doc.images.entry(placed.key.clone()).or_insert(blob);
+        let gs = self.gs.clone();
+        let mut node = self.new_node(NodeKind::PlacedDocument(Box::new(placed)), &gs);
+        node.opacity = gs.opacity;
+        node.blend = gs.blend;
+        node.knockout_shape = gs.knockout_shape;
+        self.add(node, hidden)
     }
 
     pub(super) fn warn(&mut self, w: &str) {
@@ -891,9 +1222,88 @@ pub(super) fn preview_png(data: &[u8]) -> Option<(Vec<u8>, u32, u32)> {
             rgba.extend_from_slice(&[straight(r), straight(g), straight(b), a]);
         }
     }
-    let mut png = vec![];
-    image::RgbaImage::from_raw(width, height, rgba)?.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
+    let raw =
+        craft_image_codecs::Image::from_raw(width, height, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, rgba).ok()?;
+    let png = craft_image_codecs::encode(&raw, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
     Some((png, width, height))
+}
+
+/// The page a placed file's dictionary names: a whole number from 1.
+fn placed_page_number(v: f64) -> Option<u32> {
+    (v.fract() == 0.0 && v >= 1.0 && v <= f64::from(u32::MAX)).then_some(v as u32)
+}
+
+/// The box a placed file's dictionary names: whether the art's bounds are shown, and the box of
+/// the page otherwise.
+fn placed_crop(v: f64) -> Option<(bool, PageBox)> {
+    match v {
+        0.0 => Some((false, PageBox::Art)),
+        1.0 => Some((false, PageBox::Crop)),
+        2.0 => Some((false, PageBox::Trim)),
+        3.0 => Some((false, PageBox::Bleed)),
+        4.0 => Some((false, PageBox::Media)),
+        5.0 => Some((true, PageBox::Crop)),
+        _ => None,
+    }
+}
+
+/// The bytes of a placed file the data includes (`doc`: between the `%%BeginDocument:` line and
+/// the `%%EndDocument` one), as the file has them: on `%_` lines (`hidden`) without the `%_` that
+/// starts each line, then without a line end the data adds before `%%EndDocument` after the file's
+/// own last one. A single line end at the end is the file's own. The line end added is `sep`, the
+/// one the data ends its `%%BeginDocument:` line with, when the bytes end with it; otherwise the
+/// last line end they end with. An LF `sep` after a CR isn't taken apart from it when the file's
+/// first line ends with CRLF: that CRLF is one line end of the file's.
+pub(super) fn included_document(doc: &[u8], hidden: bool, sep: Option<&[u8]>) -> Vec<u8> {
+    let mut out = if hidden { unhidden(doc) } else { doc.to_vec() };
+    let eol = |b: &[u8]| b.ends_with(b"\r") || b.ends_with(b"\n");
+    let first_eol = out.iter().position(|&b| b == b'\r' || b == b'\n').and_then(|i| out.get(i..i + 2));
+    let crlf_file = first_eol == Some(b"\r\n") && out.ends_with(b"\r\n");
+    let added = sep
+        .filter(|s| out.ends_with(s) && !(crlf_file && *s == b"\n"))
+        .or_else(|| [&b"\r\n"[..], b"\r", b"\n"].into_iter().find(|e| out.ends_with(e)))
+        .map(|e| out.len() - e.len());
+    if let Some(n) = added.filter(|&n| out.get(..n).is_some_and(eol)) {
+        out.truncate(n);
+    }
+    out
+}
+
+/// The bounding box an EPS file's comments give (`%%HiResBoundingBox` when it has one), in its
+/// own space; `None` without one, or when it is empty or out of range.
+fn eps_box(eps: &[u8]) -> Option<Rect> {
+    let [x0, y0, x1, y1] = crate::import::bounding_box(eps)?;
+    Some(Rect::new(x0, y0, x1, y1)).filter(|r| sane(*r) && r.width() > 0.0 && r.height() > 0.0)
+}
+
+/// Does `eps` have a native document's begin comment line, without reading that document?
+fn native_eps(eps: &[u8]) -> bool {
+    eps.split(|b| *b == b'\r' || *b == b'\n')
+        .any(|line| line.strip_prefix(crate::BEGIN_DATA.as_bytes()).is_some_and(|name| name.trim_ascii() == crate::NATIVE.as_bytes()))
+}
+
+/// Does the file name at the end of `path` (`/` or `\` separators) end in `.ai` or `.ait`, any case?
+fn ai_named(path: &str) -> bool {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    name.rsplit_once('.').is_some_and(|(_, ext)| ext.eq_ignore_ascii_case("ai") || ext.eq_ignore_ascii_case("ait"))
+}
+
+/// `doc` without the `%_` that starts each of its lines.
+fn unhidden(doc: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(doc.len());
+    let mut line_start = true;
+    let mut i = 0;
+    while let Some(&b) = doc.get(i) {
+        if line_start && doc.get(i..i + 2) == Some(b"%_") {
+            i += 2;
+            line_start = false;
+            continue;
+        }
+        out.push(b);
+        line_start = b == b'\r' || b == b'\n';
+        i += 1;
+    }
+    out
 }
 
 /// A placed file's path relative to the document's folder (`/` separators): its relative `folder`
@@ -946,11 +1356,58 @@ fn cmyk_rgb([c, m, y, k]: [u8; 4]) -> [u8; 3] {
     [rgb[0], rgb[1], rgb[2]]
 }
 
+/// The colour channels of an image in the colour space `space` (`XN`), else of image type `kind`.
+fn channels(space: &str, kind: f64) -> usize {
+    match space {
+        "DeviceGray" => 1,
+        "DeviceCMYK" => 4,
+        "DeviceRGB" => 3,
+        _ => match kind as i64 {
+            1 => 1,
+            4 => 4,
+            _ => 3,
+        },
+    }
+}
+
 /// `a`, `a and b`, `a, b and c`.
 pub(crate) fn join_and(items: &[&str]) -> String {
     match items {
         [] => String::new(),
         [one] => (*one).to_string(),
         [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ReadingEps, readable_eps};
+
+    /// Check results keep their warnings and failures, respect depth, and expire with the outer check.
+    #[test]
+    fn included_eps_checks_keep_the_depth_limit_and_expire() {
+        let eps = b"%!PS\n%%BoundingBox: 0 0 60 60\n%%EndComments\n1 0 0 setrgbcolor 0 0 60 60 rectfill nosuchoperator\n%%EOF\n";
+        {
+            let _outer = ReadingEps::enter().unwrap();
+            let warnings = readable_eps(eps).unwrap();
+            assert!(!warnings.is_empty(), "a partly read file still passes, with warnings");
+            let reads = crate::included_eps_reads();
+            assert_eq!(readable_eps(eps).unwrap(), warnings);
+            assert_eq!(crate::included_eps_reads(), reads, "the repeated check did not parse again");
+            let limits: Vec<_> = std::iter::from_fn(ReadingEps::enter).collect();
+            assert!(!limits.is_empty());
+            assert!(readable_eps(eps).unwrap().is_empty(), "past the depth limit, warnings are not read");
+            drop(limits);
+            assert_eq!(readable_eps(eps).unwrap(), warnings, "the deeper check did not replace the cached warnings");
+            let broken = b"%!PS\n%%BoundingBox: 0 0 60 60\n%%EndComments\n0 0 60 60 nosuchoperator\n%%EOF\n";
+            assert!(readable_eps(broken).is_none());
+            let reads = crate::included_eps_reads();
+            assert!(readable_eps(broken).is_none());
+            assert_eq!(crate::included_eps_reads(), reads, "a repeated failed check did not parse again");
+        }
+        let _outer = ReadingEps::enter().unwrap();
+        let reads = crate::included_eps_reads();
+        assert!(readable_eps(eps).is_some());
+        assert!(crate::included_eps_reads() > reads, "the outer check's results were discarded");
     }
 }

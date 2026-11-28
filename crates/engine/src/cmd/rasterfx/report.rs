@@ -66,11 +66,13 @@ impl FlattenReport {
         lowest
             .into_iter()
             .map(|r| {
-                let name = r.name.map(|name| format!(" ({name})")).unwrap_or_default();
-                format!(
-                    "raster effects on object {}{name}: requested {:.1} ppi, achieved {:.1} ppi due to the 64 million pixel cap",
-                    r.id.0, self.requested_ppi, r.achieved_ppi
-                )
+                // The id and the name are one value of the message, so a catalog can match it.
+                let object = match r.name {
+                    Some(name) => format!("{} ({name})", r.id.0),
+                    None => r.id.0.to_string(),
+                };
+                let (requested, achieved) = (self.requested_ppi, r.achieved_ppi);
+                format!("raster effects on object {object}: requested {requested:.1} ppi, achieved {achieved:.1} ppi due to the 64 million pixel cap")
             })
             .collect()
     }
@@ -126,5 +128,24 @@ mod tests {
         let warnings = report.warnings();
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains(&format!("object {}", original.id.0)), "{:?}", warnings);
+    }
+
+    #[test]
+    fn a_warning_names_the_object_by_its_id_and_its_name() {
+        let mut doc = Document::new(100.0, 100.0);
+        doc.raster_effects_ppi = 300.0;
+        let mut named = Node::group(NodeId(7), vec![]);
+        named.name = Some("Logo".into());
+        let unnamed = Node::group(NodeId(8), vec![]);
+        let mut report = FlattenReport::new(Which::All, &doc);
+        report.record(&named, &image(72.0));
+        report.record(&unnamed, &image(150.0));
+        assert_eq!(
+            report.warnings(),
+            [
+                "raster effects on object 7 (Logo): requested 300.0 ppi, achieved 72.0 ppi due to the 64 million pixel cap",
+                "raster effects on object 8: requested 300.0 ppi, achieved 150.0 ppi due to the 64 million pixel cap",
+            ]
+        );
     }
 }

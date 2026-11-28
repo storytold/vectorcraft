@@ -199,7 +199,8 @@ pub fn visible_faces(faces: &[Face]) -> Result<Vec<VisibleFace>, String> {
     }) {
         return Err("Revolve visibility requires finite projected faces".into());
     }
-    let all = faces.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>();
+    let outlines = faces.iter().filter_map(|f| f.outline.as_ref()).flat_map(|o| o.subpaths.iter().flat_map(|s| s.anchors.iter().map(|a| a.p)));
+    let all = faces.iter().flat_map(|f| f.points.iter().copied()).chain(outlines).collect::<Vec<_>>();
     let total = bounds(&all);
     if total.width() <= 0.0 || total.height() <= 0.0 {
         return Ok(vec![]);
@@ -222,7 +223,9 @@ pub fn visible_faces(faces: &[Face]) -> Result<Vec<VisibleFace>, String> {
         if pieces.is_empty() {
             continue;
         }
-        let source_bounds = bounds(&face.points);
+        // A face drawn as several contours, such as a cut side of a partial sweep, reaches past its
+        // own polygon: look for covers over all of its pieces.
+        let source_bounds = pieces.iter().map(|p| p.bounds).reduce(|a, b| a.union(b)).unwrap_or_else(|| bounds(&face.points));
         let mut fragments: Vec<_> = pieces.iter().map(|p| p.points.clone()).collect();
         let mut clipped = false;
         'covers: for tile in index.tiles(source_bounds) {
@@ -293,6 +296,7 @@ mod tests {
         Face {
             points: vec![Point::new(rect.x0, rect.y0), Point::new(rect.x1, rect.y0), Point::new(rect.x1, rect.y1), Point::new(rect.x0, rect.y1)],
             depth: brightness,
+            normal: [0.0, 0.0, 1.0],
             brightness,
             gradient: None,
             illumination: [brightness; 3],
@@ -301,6 +305,8 @@ mod tests {
             outline: None,
             cap: false,
             visibility_pieces: None,
+            surface: None,
+            plane: None,
         }
     }
 

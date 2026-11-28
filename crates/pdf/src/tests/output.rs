@@ -1,11 +1,10 @@
 //! Save PDF › Output: colours converted to the destination (or their numbers preserved), ICC
 //! profiles tagging them, images converted too, and the output intent and Trapped entries.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier, Stream};
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::object::{Array, Dict, Name, ObjectIdentifier, Stream};
 use serde_json::{Value, json};
 use vectorcraft_color::cms::{self, Cms, ColorSettings, DEVICE_CMYK, GENERIC_CMYK, SRGB};
 use vectorcraft_color::{Color, Gradient, GradientKind, GradientMethod, GradientPaint, GradientStop, Paint, Swatch};
@@ -161,6 +160,36 @@ fn spot_alternates_and_device_n_gradient_inks_are_written_as_the_document_holds_
     assert!(text.contains("/C0[0 0 0.75]/C1[0.75 0.04 0]"), "the stops' C75, K4 and 75% Gold are written as they are");
 }
 
+#[test]
+fn blend_steps_between_spot_gradients_with_process_plates_print_both_inks() {
+    let stop = |offset: f32, tint: f32, plates: Option<[f32; 4]>| {
+        let mut s = GradientStop::new(offset, Color::cmyk(0.0, 0.2, 0.8, 0.1).tinted(tint));
+        s.swatch = Some("Gold".into());
+        s.tint = tint;
+        s.plates = plates;
+        s
+    };
+    let gradient = |tint: f32, plates: Option<[f32; 4]>| {
+        Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(GradientKind::Linear, vec![stop(0.0, tint, plates), stop(1.0, tint, plates)]))))
+    };
+    let step_pdf = |a: &Paint, b: &Paint| {
+        let mut d = doc(ColorMode::Cmyk, &[]);
+        d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+        let step = vectorcraft_doc::blend::lerp_paint(a, b, 0.5);
+        let l = d.layers[0].id;
+        let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 30.0)), Appearance::basic(step, Paint::None, 0.0));
+        d.insert(Some(l), 0, n).unwrap();
+        String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned()
+    };
+    // The middle step prints 60% Gold over 30% Cyan, in one DeviceN shading of both inks.
+    let text = step_pdf(&gradient(0.2, Some([0.2, 0.0, 0.0, 0.0])), &gradient(1.0, Some([0.4, 0.0, 0.0, 0.0])));
+    assert!(text.contains("[/DeviceN[/Cyan/Gold]"), "{text}");
+    assert!(text.contains("/C0[0.3 0.6]/C1[0.3 0.6]"), "{text}");
+    // Without plates the step is a Separation shading of Gold alone.
+    let text = step_pdf(&gradient(0.2, None), &gradient(1.0, None));
+    assert!(!text.contains("/DeviceN") && text.contains("[/Separation/Gold/"), "{text}");
+}
+
 /// A spot swatch's Separation space with alternate C0 M20 Y80 K10 under `colorant` (a PDF name).
 fn gold_separation(colorant: &str) -> String {
     format!("[/Separation{colorant}/DeviceCMYK<</FunctionType 2/Domain[0 1]/Range[0 1 0 1 0 1 0 1]/C0[0 0 0 0]/C1[0 0.2 0.8 0.1]/N 1>>]")
@@ -278,6 +307,60 @@ fn spot_gradients_keep_a_trace_of_process_ink_at_a_light_stop() {
     }
 }
 
+/// [`gold_gradient_pdf`] with spot swatch "Leaf" (C100 Y100) in the document too.
+fn gold_and_leaf_gradient_pdf(stops: Vec<GradientStop>, perceptual: bool) -> String {
+    let mut d = doc(ColorMode::Cmyk, &[]);
+    d.swatches.push(Swatch { name: "Gold".into(), paint: Paint::solid(Color::cmyk(0.0, 0.2, 0.8, 0.1)), global: true, spot: true });
+    d.swatches.push(Swatch { name: "Leaf".into(), paint: Paint::solid(Color::cmyk(1.0, 0.0, 1.0, 0.0)), global: true, spot: true });
+    let mut g = Gradient::new(GradientKind::Linear, stops);
+    if perceptual {
+        g.method = GradientMethod::Perceptual;
+    }
+    let paint = Paint::Gradient(Box::new(GradientPaint::new(g)));
+    let l = d.layers[0].id;
+    let n = Node::path(d.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 110.0, 30.0)), Appearance::basic(paint, Paint::None, 0.0));
+    d.insert(Some(l), 0, n).unwrap();
+    String::from_utf8_lossy(&export(&d, &PdfOptions::uncompressed()).unwrap()).into_owned()
+}
+
+#[test]
+fn gradients_name_only_the_spot_inks_of_stops_that_color_what_draws() {
+    let black = |offset: f32, opacity: f32| GradientStop { opacity, ..GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 1.0)) };
+    let paper = |offset: f32| GradientStop::new(offset, Color::cmyk(0.0, 0.0, 0.0, 0.0));
+    let leaf = |offset: f32, tint: f32| {
+        let mut s = GradientStop::new(offset, Color::cmyk(1.0, 0.0, 1.0, 0.0).tinted(tint));
+        s.swatch = Some("Leaf".into());
+        s.tint = tint;
+        s
+    };
+    let clear_gold = GradientStop { opacity: 0.0, ..gold_stop(0.4, 1.0) };
+    for perceptual in [false, true] {
+        // Gold in a stretch where every stop is clear, and Gold out of order, where the stops at 0
+        // and 0.8 cover the stretches next to it: Gold colors nothing, so no Gold plate.
+        let clear = vec![black(0.0, 1.0), black(0.2, 0.0), clear_gold.clone(), black(0.6, 0.0), black(1.0, 1.0)];
+        let out_of_order = vec![black(0.0, 1.0), black(0.8, 1.0), gold_stop(0.2, 1.0), black(0.4, 1.0), black(1.0, 1.0)];
+        // Gold at a tint of 0 prints no Gold ink.
+        let no_tint = vec![gold_stop(0.0, 0.0), black(1.0, 1.0)];
+        for (what, stops) in [("clear", clear), ("out of order", out_of_order), ("tint 0", no_tint)] {
+            let text = gold_gradient_pdf(stops, perceptual);
+            assert!(!text.contains("/Gold"), "{what}, perceptual {perceptual}: {text}");
+            assert!(!text.contains("/DeviceN") && !text.contains("/Separation"), "{what}, perceptual {perceptual}: {text}");
+        }
+        // Without the Gold stop out of order, Leaf's tints over paper are a Separation shading.
+        let leaf_only = vec![leaf(0.0, 1.0), leaf(0.8, 0.5), gold_stop(0.2, 1.0), paper(0.4), paper(1.0)];
+        let text = gold_and_leaf_gradient_pdf(leaf_only, perceptual);
+        assert!(text.contains("[/Separation/Leaf/") && !text.contains("/Gold") && !text.contains("/DeviceN"), "perceptual {perceptual}: {text}");
+        // A clear Gold stop next to an opaque one colors the stretch between them.
+        let text = gold_gradient_pdf(vec![black(0.0, 1.0), clear_gold.clone(), black(1.0, 1.0)], perceptual);
+        assert!(text.contains("[/DeviceN[/Black/Gold]"), "perceptual {perceptual}: {text}");
+    }
+    // Gold at a tint of 0 over a 30% cyan plate (a DeviceN gradient read from a PDF) keeps its
+    // process plate in the same space.
+    let plated = GradientStop { plates: Some([0.3, 0.0, 0.0, 0.0]), ..gold_stop(1.0, 0.0) };
+    let text = gold_gradient_pdf(vec![GradientStop::new(0.0, Color::cmyk(0.3, 0.0, 0.0, 0.0)), plated], false);
+    assert!(text.contains("[/DeviceN[/Cyan/Gold]"), "{text}");
+}
+
 #[test]
 fn converting_to_rgb_turns_cmyk_into_rg() {
     let ink = Color::cmyk(0.0, 1.0, 1.0, 0.0);
@@ -291,11 +374,12 @@ fn converting_to_rgb_turns_cmyk_into_rg() {
 fn an_unknown_destination_is_refused() {
     let d = doc(ColorMode::Rgb, &[Color::BLACK]);
     let set: PdfSettings = serde_json::from_value(json!({"output": {"conversion": "destination", "destination": "No Such Press"}})).unwrap();
-    assert!(matches!(set.check(), Err(PdfError::BadSetting(m)) if m.contains("No Such Press")));
+    let profiles = ActiveProfiles::default();
+    assert!(matches!(set.check(&profiles), Err(e) if e.message.contains("No Such Press")));
     assert!(export(&d, &PdfOptions { settings: set, ..Default::default() }).is_err());
     // Not converting, the destination doesn't matter.
     let set: PdfSettings = serde_json::from_value(json!({"output": {"destination": "No Such Press"}})).unwrap();
-    assert_eq!(set.check(), Ok(()));
+    assert!(set.check(&profiles).is_ok());
 }
 
 #[test]
@@ -345,11 +429,9 @@ fn tagged_cmyk_documents_blend_in_the_cmyk_profile_space() {
 
 /// A 4 × 4 PNG of one colour.
 fn png(rgb: [u8; 3]) -> Vec<u8> {
-    let mut out = Vec::new();
-    image::DynamicImage::from(image::RgbImage::from_pixel(4, 4, image::Rgb(rgb)))
-        .write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, rgb.repeat(16))
         .unwrap();
-    out
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
 }
 
 fn image_doc(bytes: Vec<u8>) -> Document {
@@ -367,7 +449,26 @@ fn image_doc(bytes: Vec<u8>) -> Document {
 fn first_pixel(bytes: &[u8]) -> [u8; 3] {
     let back = import(bytes).unwrap();
     let blob = back.images.values().next().unwrap();
-    image::load_from_memory(&blob.bytes).unwrap().to_rgb8().get_pixel(0, 0).0
+    craft_image_codecs::decode(&blob.bytes)
+        .map(|__cimg| {
+            let (__w, __h) = __cimg.dimensions();
+            match (__cimg.layout(), __cimg.sample_type()) {
+                (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                    image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                }
+                _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+            }
+        })
+        .unwrap()
+        .to_rgb8()
+        .get_pixel(0, 0)
+        .0
 }
 
 #[test]
@@ -425,7 +526,7 @@ fn the_output_intent_embeds_its_profile_and_trapped_is_written() {
         assert!(r.warnings.is_empty(), "{:?}", r.warnings);
         output_intent(&r.bytes, password, |oi| {
             assert_eq!(oi.get::<Name<'_>>(b"S").unwrap().as_ref(), b"GTS_PDFX");
-            let text = |k: &[u8]| oi.get::<craft_pdf::syntax::object::String<'_>>(k).map(|s| s.as_bytes().to_vec());
+            let text = |k: &[u8]| oi.get::<craft::pdf::syntax::object::String<'_>>(k).map(|s| s.as_bytes().to_vec());
             assert_eq!(text(b"OutputCondition").unwrap(), b"Coated (press)");
             assert_eq!(text(b"RegistryName").unwrap(), b"http://example.com");
             // Non-ASCII text is UTF-16 with its byte order mark.
@@ -463,7 +564,7 @@ fn pdf_a_keeps_its_own_output_intent() {
     let r = pdf(&d, json!({"standard": "pdfA2b", "output": {"outputIntent": GENERIC_CMYK, "trapped": true}}));
     let text = String::from_utf8_lossy(&r.bytes);
     assert!(text.contains("GTS_PDFA1") && !text.contains("GTS_PDFX") && !text.contains("/Trapped"));
-    assert!(r.warnings.iter().any(|w| w.contains("PDF/A")), "{:?}", r.warnings);
+    assert!(r.setting_notes.iter().any(|w| w.contains("PDF/A")), "{:?}", r.setting_notes);
 }
 
 #[test]
@@ -491,39 +592,96 @@ fn standard_pdf(d: &Document, settings: Value) -> ExportReport {
     export_with_report(d, &PdfOptions { settings, created: Some(1_700_000_000), ..Default::default() }).unwrap()
 }
 
+/// The output intent's profile, decoded, of `bytes`.
+fn intent_profile(bytes: &[u8]) -> Vec<u8> {
+    let mut out = vec![];
+    output_intent(bytes, None, |oi| out = oi.get::<Stream<'_>>(b"DestOutputProfile").unwrap().decoded().unwrap().into_owned());
+    out
+}
+
+/// CMYK colors in the profile of a CMYK output intent are DeviceCMYK, which the output intent
+/// describes: no ICC-based CMYK space carries the same profile, and it is embedded once (#1954).
 #[test]
-fn a_profile_that_tags_colours_and_is_the_output_intent_is_embedded_once() {
-    let d = doc(ColorMode::Cmyk, &[Color::cmyk(0.1, 0.2, 0.3, 0.4)]);
+fn cmyk_colors_in_the_output_intents_profile_are_device_cmyk() {
+    let ink = [0.1, 0.2, 0.3, 0.4];
+    let d = doc(ColorMode::Cmyk, &[Color::cmyk(ink[0], ink[1], ink[2], ink[3])]);
     let working = cms::active_settings().cmyk;
     let icc = cms::icc_bytes(&working).unwrap();
     for set in [
         json!({"standard": "pdfX4"}),
         json!({"standard": "pdfX4", "output": {"outputIntent": working}}),
-        // PDF/X-3 and PDF/X-4 always tag their colours: `profiles` doesn't apply.
         json!({"standard": "pdfX4", "output": {"profiles": "none", "outputIntent": working}}),
         json!({"standard": "pdfX3"}),
-        json!({"output": {"profiles": "all", "outputIntent": working}}),
     ] {
         let r = standard_pdf(&d, set.clone());
-        let streams = icc_streams(&r.bytes);
-        assert_eq!(streams.len(), 1, "{set}: ICC profile streams");
-        assert!(streams[0] == *icc, "{set}: the working CMYK profile");
-        assert!(colours(&r.bytes).iter().all(|c| c.0 == "scn"), "{set}: tagged colours");
-        output_intent(&r.bytes, None, |oi| assert_eq!(oi.get::<Stream<'_>>(b"DestOutputProfile").unwrap().decoded().unwrap().as_ref(), &*icc));
+        assert!(r.warnings.is_empty(), "{set}: {:?}", r.warnings);
+        assert!(icc_streams(&r.bytes) == [icc.to_vec()], "{set}: the working CMYK profile, once");
+        assert!(icc_profiles(&r.bytes).is_empty(), "{set}: no ICC-based color space");
+        let c = colours(&r.bytes);
+        assert!(c.len() == 1 && c[0].0 == "k" && close(&c[0].1, &ink), "{set}: DeviceCMYK, the numbers kept: {c:?}");
+        assert!(intent_profile(&r.bytes) == *icc, "{set}");
     }
-    // Another output intent profile is its own stream.
+    // Another output intent's profile: CMYK colors keep their own, and both are embedded.
+    let other = cms::icc_bytes(DEVICE_CMYK).unwrap();
     let r = standard_pdf(&d, json!({"standard": "pdfX4", "output": {"outputIntent": DEVICE_CMYK}}));
     assert_eq!(icc_streams(&r.bytes).len(), 2);
-    output_intent(&r.bytes, None, |oi| {
-        assert_eq!(oi.get::<Stream<'_>>(b"DestOutputProfile").unwrap().decoded().unwrap().as_ref(), &*cms::icc_bytes(DEVICE_CMYK).unwrap())
-    });
+    assert!(icc_profiles(&r.bytes) == [(4, icc.to_vec())]);
+    assert!(colours(&r.bytes).iter().all(|c| c.0 == "scn"), "{:?}", colours(&r.bytes));
+    assert!(intent_profile(&r.bytes) == *other);
+    // With `none`, every CMYK color is DeviceCMYK, in the output intent's profile.
+    for standard in ["pdfX3", "pdfX4"] {
+        let set = json!({"standard": standard, "output": {"profiles": "none", "outputIntent": DEVICE_CMYK}});
+        let r = standard_pdf(&d, set.clone());
+        assert!(icc_streams(&r.bytes) == [other.to_vec()], "{set}");
+        let c = colours(&r.bytes);
+        assert!(c.len() == 1 && c[0].0 == "k" && close(&c[0].1, &ink), "{set}: {c:?}");
+    }
+    // With `none`, colors converted to a CMYK destination of another profile keep its tag: they
+    // are in the destination's profile, not the output intent's.
+    let set = json!({"standard": "pdfX4", "output": {"profiles": "none", "conversion": "destination", "destination": DEVICE_CMYK, "outputIntent": working}});
+    let r = standard_pdf(&d, set.clone());
+    assert!(icc_profiles(&r.bytes) == [(4, other.to_vec())], "{set}");
+    assert!(colours(&r.bytes).iter().all(|c| c.0 == "scn"), "{set}: {:?}", colours(&r.bytes));
+    assert!(intent_profile(&r.bytes) == *icc, "{set}");
+    // Without a standard, `all` tags CMYK colors, with an output intent of their profile or none.
+    for set in [json!({"output": {"profiles": "all"}}), json!({"output": {"profiles": "all", "outputIntent": working}})] {
+        let r = standard_pdf(&d, set.clone());
+        assert!(icc_profiles(&r.bytes) == [(4, icc.to_vec())], "{set}");
+        assert!(colours(&r.bytes).iter().all(|c| c.0 == "scn"), "{set}: {:?}", colours(&r.bytes));
+    }
+}
+
+/// Next to DeviceCMYK colors, RGB colors stay ICC-based (a CMYK output intent leaves no room for
+/// DeviceRGB), and transparency groups of a CMYK document blend in DeviceCMYK.
+#[test]
+fn rgb_stays_tagged_and_groups_blend_in_device_cmyk_beside_device_cmyk_colors() {
+    let d = doc(ColorMode::Rgb, &[Color::rgb(0.2, 0.4, 0.6), Color::cmyk(0.1, 0.2, 0.3, 0.4)]);
+    for set in [json!({"standard": "pdfX4"}), json!({"standard": "pdfX4", "output": {"profiles": "none"}})] {
+        let r = standard_pdf(&d, set.clone());
+        let ops: Vec<String> = colours(&r.bytes).into_iter().map(|c| c.0).collect();
+        assert_eq!(ops, ["scn", "k"], "{set}");
+        let n: Vec<i32> = icc_profiles(&r.bytes).iter().map(|p| p.0).collect();
+        assert_eq!(n, [3], "{set}: sRGB only");
+    }
+    let mut d = doc(ColorMode::Cmyk, &[Color::cmyk(1.0, 0.0, 0.0, 0.0)]);
+    let mut n = Node::path(
+        d.alloc_id(),
+        shapes::rectangle(Rect::new(20.0, 20.0, 60.0, 60.0)),
+        Appearance::basic(Paint::solid(Color::cmyk(0.0, 1.0, 0.0, 0.0)), Paint::None, 0.0),
+    );
+    n.opacity = 0.5;
+    let l = d.layers[0].id;
+    d.insert(Some(l), 1, n).unwrap();
+    let r = standard_pdf(&d, json!({"standard": "pdfX4"}));
+    let text = String::from_utf8_lossy(&r.bytes);
+    let groups: Vec<&str> = text.split("/Group<<").skip(1).map(|g| g.split(">>").next().unwrap()).collect();
+    assert!(!groups.is_empty() && groups.iter().all(|g| g.contains("/CS/DeviceCMYK")), "{groups:?}");
 }
 
 /// The profiles assigned to a document (Edit › Assign Profile) are its colour spaces whatever the
 /// working spaces of the session that exports it: a document opened again in a new session,
-/// which starts with the default working spaces, keeps its profiles. Its CMYK colours are tagged
-/// with its CMYK profile, which is also the PDF/X output intent, and its RGB colours separate
-/// through it.
+/// which starts with the default working spaces, keeps its profiles. Its CMYK profile is the PDF/X
+/// output intent, whose DeviceCMYK colors are in it, and its RGB colours separate through it.
 #[test]
 fn colours_are_in_the_profiles_assigned_to_the_document() {
     let working = cms::active_settings().cmyk;
@@ -535,16 +693,129 @@ fn colours_are_in_the_profiles_assigned_to_the_document() {
     let r = standard_pdf(&d, json!({"standard": "pdfX4"}));
     assert!(!r.warnings.iter().any(|w| w.contains("profile")), "{:?}", r.warnings);
     let own = cms::icc_bytes(DEVICE_CMYK).unwrap();
-    assert!(icc_streams(&r.bytes) == [own.to_vec()], "tagged with the document's CMYK profile, not the working one");
+    assert!(icc_streams(&r.bytes) == [own.to_vec()], "the document's CMYK profile, not the working one");
     output_intent(&r.bytes, None, |oi| assert_eq!(oi.get::<Stream<'_>>(b"DestOutputProfile").unwrap().decoded().unwrap().as_ref(), &*own));
     let c = colours(&r.bytes);
-    assert!(c[0].0 == "scn" && close(&c[0].1, &[0.1, 0.2, 0.3, 0.4]), "CMYK keeps its numbers: {c:?}");
+    assert!(c[0].0 == "k" && close(&c[0].1, &[0.1, 0.2, 0.3, 0.4]), "CMYK keeps its numbers: {c:?}");
     let separated = to_cmyk(DEVICE_CMYK).to_cmyk(&grey, intent);
     assert!(!close(&separated, &cms::active().to_cmyk(&grey, intent)), "the two profiles separate grey differently");
-    assert!(c[1].0 == "scn" && close(&c[1].1, &separated), "RGB separated through the document's profile: {c:?} vs {separated:?}");
+    assert!(c[1].0 == "k" && close(&c[1].1, &separated), "RGB separated through the document's profile: {c:?} vs {separated:?}");
     // A profile that isn't available leaves the working space, with a warning.
     d.color_profiles.cmyk = Some("No Such Press".into());
     let r = standard_pdf(&d, json!({"standard": "pdfX4"}));
     assert!(r.warnings.iter().any(|w| w.contains("No Such Press")), "{:?}", r.warnings);
     assert!(icc_streams(&r.bytes) == [cms::icc_bytes(&working).unwrap().to_vec()]);
+}
+
+/// A 4 × 4 greyscale PNG of one level.
+fn grey_png(level: u8) -> Vec<u8> {
+    let img = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, vec![level; 16])
+        .unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+}
+
+/// The CMYK document warning says what happens to its RGB images (#1242): with No conversion
+/// they are written in RGB, and it names the settings that write them in CMYK; with a CMYK
+/// destination they are converted. Grey images stay grey either way and aren't counted.
+#[test]
+fn the_cmyk_document_warning_says_whether_rgb_images_are_converted() {
+    let warning = |d: &Document, settings: Value| {
+        let r = pdf(d, settings);
+        let w: Vec<_> = r.warnings.iter().filter(|w| w.contains("this CMYK document")).cloned().collect();
+        assert!(w.len() <= 1, "{w:?}");
+        w.into_iter().next()
+    };
+    let mut d = image_doc(png([200, 30, 30]));
+    d.color_mode = ColorMode::Cmyk;
+
+    // No conversion: the image is written in RGB, and the warning doesn't say otherwise.
+    let kept = warning(&d, json!({})).unwrap();
+    assert!(kept.contains("1 RGB image") && kept.contains("written in RGB"), "{kept}");
+    assert!(!kept.contains("converted to CMYK"), "{kept}");
+    assert!(kept.contains("Convert to destination") && kept.contains("PDF/X-1a"), "{kept}");
+
+    // A CMYK destination converts it.
+    for settings in
+        [json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}}), json!({"standard": "pdfX1a", "compatibility": "1.3"})]
+    {
+        let converted = warning(&d, settings.clone()).unwrap();
+        assert!(converted.contains("1 RGB image") && converted.contains("converted to CMYK"), "{settings}: {converted}");
+        assert!(!converted.contains("written in RGB"), "{settings}: {converted}");
+    }
+
+    // A grey image is not an RGB image: nothing to warn about.
+    let mut grey = image_doc(grey_png(90));
+    grey.color_mode = ColorMode::Cmyk;
+    for settings in [json!({}), json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}})] {
+        assert_eq!(warning(&grey, settings.clone()), None, "{settings}");
+    }
+
+    // RGB colours keep their wording beside images kept in RGB.
+    let mut both = image_doc(png([200, 30, 30]));
+    both.color_mode = ColorMode::Cmyk;
+    let l = both.layers[0].id;
+    let n = Node::path(
+        both.alloc_id(),
+        shapes::rectangle(Rect::new(50.0, 50.0, 70.0, 70.0)),
+        Appearance::basic(Paint::solid(Color::Rgb { r: 0.1, g: 0.1, b: 0.1 }), Paint::None, 0.0),
+    );
+    both.insert(Some(l), 1, n).unwrap();
+    let w = warning(&both, json!({})).unwrap();
+    assert!(w.contains("1 RGB colour") && w.contains("converted to CMYK") && w.contains("rich blacks"), "{w}");
+    assert!(w.contains("1 RGB image") && w.contains("written in RGB"), "{w}");
+}
+
+/// The CMYK document warning counts an RGB image by what is written: an image left out of the
+/// file is not counted, and one whose pixels can't be read for the conversion, and that is written
+/// as it is, is counted as written in RGB even with a CMYK destination.
+#[test]
+fn the_cmyk_document_warning_counts_only_rgb_images_that_are_written() {
+    let warning = |d: &Document, settings: Value| {
+        let r = pdf(d, settings);
+        let w: Vec<_> = r.warnings.iter().filter(|w| w.contains("this CMYK document")).cloned().collect();
+        assert!(w.len() <= 1, "{w:?}");
+        (w.into_iter().next(), String::from_utf8_lossy(&r.bytes).into_owned())
+    };
+    let to_cmyk = json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}});
+    let jpeg_doc = |bytes: Vec<u8>| {
+        let mut d = image_doc(vec![]);
+        d.images.insert("img".into(), ImageBlob::new("image/jpeg", bytes));
+        d.color_mode = ColorMode::Cmyk;
+        d
+    };
+    let mut jpeg = vec![];
+    let img = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([200, 30 * x as u8, 40 * y as u8]));
+    image::DynamicImage::ImageRgb8(img).write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+    // The start and length of the first segment with marker `m`.
+    let segment = |b: &[u8], m: u8| {
+        let p = b.windows(2).position(|w| w == [0xFF, m])?;
+        Some((p, 2 + usize::from(u16::from_be_bytes([*b.get(p + 2)?, *b.get(p + 3)?]))))
+    };
+
+    // Images that can't be read are left out, with or without a conversion: nothing to count.
+    // One whose bytes are no image at all, and a color JPEG cut off before its scan.
+    let mut unread = image_doc(vec![1, 2, 3]);
+    unread.color_mode = ColorMode::Cmyk;
+    let (sos, _) = segment(&jpeg, 0xDA).unwrap();
+    let cut = jpeg_doc([&jpeg[..sos], &[0xFF, 0xD9]].concat());
+    for (d, settings) in [(&unread, json!({})), (&unread, to_cmyk.clone()), (&cut, json!({})), (&cut, to_cmyk.clone())] {
+        let (w, text) = warning(d, settings.clone());
+        assert!(!text.contains("/Subtype/Image"), "{settings}: an image was written");
+        assert_eq!(w, None, "{settings}");
+    }
+
+    // A color JPEG without its Huffman tables: its pixels can't be decoded for the conversion,
+    // so its JPEG data is written as it is, in RGB.
+    let mut untabled = jpeg.clone();
+    while let Some((p, len)) = segment(&untabled, 0xC4) {
+        untabled.drain(p..p + len);
+    }
+    let (w, text) = warning(&jpeg_doc(untabled), to_cmyk);
+    assert!(
+        text.contains("/Subtype/Image") && text.contains("/DCTDecode") && !text.contains("/ColorSpace/DeviceCMYK"),
+        "the JPEG was not written as it is"
+    );
+    let w = w.unwrap();
+    assert!(w.contains("1 RGB image") && w.contains("written in RGB"), "{w}");
+    assert!(!w.contains("converted to CMYK"), "{w}");
 }

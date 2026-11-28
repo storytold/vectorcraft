@@ -6,6 +6,7 @@ use kurbo::{Affine, BezPath, CubicBez, ParamCurve, ParamCurveExtrema, ParamCurve
 use serde::{Deserialize, Serialize};
 
 use crate::EPS;
+use crate::anchors::Anchors;
 
 /// Fill rule for paths and compound paths.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -157,13 +158,79 @@ impl Anchor {
             let dir = p - pos;
             let l = dir.hypot();
             if l > 1e-9 {
-                *other = p + dir * (len / l);
+                let turned = p + dir * (len / l);
+                if turned.is_finite() {
+                    *other = turned;
+                } else {
+                    // Long handles overflow the squares above: measure with `f64::hypot` and scale
+                    // the unit direction, leaving the handle where it is if that is not finite.
+                    let (v, l) = (*other - p, dir.x.hypot(dir.y));
+                    let turned = p + (dir / l) * v.x.hypot(v.y);
+                    if turned.is_finite() {
+                        *other = turned;
+                    }
+                }
             }
         }
+    }
+    /// Place the end of the outgoing (`out`) or incoming handle at `pos` and make the anchor smooth:
+    /// the other handle turns to lie in line with it on the far side of the anchor, at its own
+    /// length. A retracted other handle is pulled out to the moved handle's length when `pull_out`
+    /// and stays retracted otherwise. A handle placed on the anchor, or where the turned handle's
+    /// end would not be a finite point, gives no direction: it is placed, and the other handle and
+    /// the anchor's kind stay as they are.
+    pub fn link_handle(&mut self, out: bool, pos: Point, pull_out: bool) {
+        let p = self.p;
+        let (moved, other) = if out { (&mut self.h_out, &mut self.h_in) } else { (&mut self.h_in, &mut self.h_out) };
+        *moved = pos;
+        // `f64::hypot` keeps long handles from overflowing the square of their length.
+        let dir = p - pos;
+        let l = dir.x.hypot(dir.y);
+        if !(l > EPS && l.is_finite()) {
+            return;
+        }
+        let v = *other - p;
+        let len = v.x.hypot(v.y);
+        let len = if len > EPS {
+            len
+        } else if pull_out {
+            l
+        } else {
+            0.0
+        };
+        if len > 0.0 {
+            // The unit direction first, so a short handle does not overflow the scale factor.
+            let turned = p + (dir / l) * len;
+            if !turned.is_finite() {
+                return;
+            }
+            *other = turned;
+        }
+        self.kind = AnchorKind::Smooth;
     }
     /// Swap handles (used when reversing path direction).
     pub fn reversed(&self) -> Self {
         Self { p: self.p, h_in: self.h_out, h_out: self.h_in, kind: self.kind }
+    }
+    /// Make the anchor smooth between the points `prev` and `next` (its own point for a missing
+    /// one): handles in line with them, each a third of the way to that side's point. A smooth
+    /// anchor with both handles keeps them. False, with no change, when the two points give no
+    /// direction. [`SubPath::smooth_anchor`] calls it with the anchor's neighbors.
+    pub fn smooth_between(&mut self, prev: Option<Point>, next: Option<Point>) -> bool {
+        if self.kind == AnchorKind::Smooth && self.has_in() && self.has_out() {
+            return true;
+        }
+        let (pp, nn) = (prev.unwrap_or(self.p), next.unwrap_or(self.p));
+        let dir = nn - pp;
+        let l = dir.hypot();
+        if l <= 1e-9 {
+            return false;
+        }
+        let u = dir / l;
+        self.h_in = self.p - u * (self.p.distance(pp) / 3.0);
+        self.h_out = self.p + u * (self.p.distance(nn) / 3.0);
+        self.kind = AnchorKind::Smooth;
+        true
     }
     /// Remove both handles (convert to a sharp corner).
     pub fn retract(&mut self) {
@@ -204,15 +271,15 @@ pub fn with_anchor_budget<T>(max: usize, f: impl FnOnce() -> T) -> T {
 }
 
 /// A subpath's anchors read within [`with_anchor_budget`].
-fn anchors_within<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Anchor>, D::Error> {
+fn anchors_within<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Anchors, D::Error> {
     struct V;
     impl<'de> serde::de::Visitor<'de> for V {
-        type Value = Vec<Anchor>;
+        type Value = Anchors;
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             f.write_str("a list of anchors")
         }
-        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Vec<Anchor>, A::Error> {
-            let mut out = Vec::new();
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Anchors, A::Error> {
+            let mut out = Anchors::new();
             while let Some(anchor) = a.next_element::<Anchor>()? {
                 if let Some(left) = ANCHORS_LEFT.get() {
                     let left = left
@@ -228,22 +295,41 @@ fn anchors_within<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Anchor>,
     d.deserialize_seq(V)
 }
 
+thread_local! {
+    /// [`measured_segments`] of this thread.
+    static MEASURED_SEGMENTS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many segments [`PathData::bounds`] has measured on this thread.
+pub fn measured_segments() -> u64 {
+    MEASURED_SEGMENTS.get()
+}
+
 /// An open or closed run of anchors.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SubPath {
     #[serde(deserialize_with = "anchors_within")]
-    pub anchors: Vec<Anchor>,
+    pub anchors: Anchors,
     #[serde(default)]
     pub closed: bool,
 }
 
 impl SubPath {
     pub fn new(anchors: Vec<Anchor>, closed: bool) -> Self {
+        Self { anchors: anchors.into(), closed }
+    }
+    /// A subpath of `anchors`, sharing their chunks.
+    pub fn of(anchors: Anchors, closed: bool) -> Self {
         Self { anchors, closed }
     }
     /// Polyline from points.
     pub fn polyline(points: &[Point], closed: bool) -> Self {
         Self { anchors: points.iter().map(|&p| Anchor::corner(p)).collect(), closed }
+    }
+    /// Whether anchor `ai` has a segment on its outgoing (`out`) or incoming side.
+    pub fn has_segment(&self, ai: usize, out: bool) -> bool {
+        let n = self.anchors.len();
+        ai < n && n > 1 && (self.closed || if out { ai + 1 < n } else { ai > 0 })
     }
     /// Number of segments (a closed path has one more, back to the start).
     pub fn segment_count(&self) -> usize {
@@ -358,6 +444,59 @@ impl SubPath {
         }
         true
     }
+    /// Bend segment `seg` as the arrow keys do: its anchors stay and its handles go where
+    /// [`Self::nudged_handles`] puts them. A handle that keeps its direction leaves a smooth anchor
+    /// smooth; one that flips or grows out of its anchor makes it a corner, so the segment beside
+    /// it stays as it is. False, with nothing changed, when the bend changes nothing.
+    pub fn nudge_segment(&mut self, seg: usize, dv: kurbo::Vec2) -> bool {
+        let Some((h_out, h_in)) = self.nudged_handles(seg, dv) else { return false };
+        let n = self.anchors.len();
+        // Turned when the new handle doesn't point the way the old one did.
+        let turned = |a: &Anchor, old: Point, new: Point| (old - a.p).dot(new - a.p) <= 0.0;
+        if let Some(a) = self.anchors.get_mut(seg % n)
+            && h_out != a.h_out
+        {
+            let independent = turned(a, a.h_out, h_out);
+            a.set_handle(true, h_out, independent);
+        }
+        if let Some(b) = self.anchors.get_mut((seg + 1) % n)
+            && h_in != b.h_in
+        {
+            let independent = turned(b, b.h_in, h_in);
+            b.set_handle(false, h_in, independent);
+        }
+        true
+    }
+    /// The outgoing handle at the start and the incoming one at the end that segment `seg` gets
+    /// from the arrow keys' step `dv`. Each handle keeps its direction and changes length in
+    /// proportion to `dv` projected onto that direction, so the curve bulges toward `dv`: the
+    /// middle of the curve moves by `dv`'s length along `dv`, or less when the handles point
+    /// mostly across it. A handle can shrink through its anchor and come out the other way. A
+    /// retracted handle takes the direction from its anchor to the other handle's end. `None` when
+    /// there is no such segment, it is a straight line, or both handles are at right angles to
+    /// `dv`, so nothing changes.
+    pub fn nudged_handles(&self, seg: usize, dv: kurbo::Vec2) -> Option<(Point, Point)> {
+        if seg >= self.segment_count() || self.segment_is_line(seg) {
+            return None;
+        }
+        let c = self.segment(seg);
+        let direction = |anchor: Point, handle: Point, other: Point| {
+            let dir = if handle.distance(anchor) > EPS { handle - anchor } else { other - anchor };
+            let len = dir.hypot();
+            if len > EPS { dir / len } else { kurbo::Vec2::ZERO }
+        };
+        let (u0, u1) = (direction(c.p0, c.p1, c.p2), direction(c.p3, c.p2, c.p1));
+        let (d0, d1) = (dv.dot(u0), dv.dot(u1));
+        // Handles that change by k·d0 and k·d1 move the middle B(1/2) by 3/8·k·(d0·u0 + d1·u1),
+        // whose part along dv is 3/8·k·(d0² + d1²)/|dv|: one |dv| for k = 8/3·|dv|²/(d0² + d1²),
+        // kept to at most 8/3 so that handles nearly across dv don't grow without bound.
+        let sum = d0 * d0 + d1 * d1;
+        if sum <= EPS * EPS {
+            return None;
+        }
+        let k = 8.0 / 3.0 * (dv.hypot2() / sum).min(1.0);
+        Some((c.p1 + u0 * (k * d0), c.p2 + u1 * (k * d1)))
+    }
 
     /// Split segment `seg` at parameter `t`, inserting a new anchor. Returns the new anchor index.
     pub fn insert_anchor(&mut self, seg: usize, t: f64) -> usize {
@@ -398,21 +537,7 @@ impl SubPath {
         };
         let at = |j: Option<usize>| j.and_then(|j| self.anchors.get(j)).map(|a| a.p);
         let (prev, next) = (at(prev), at(next));
-        let Some(a) = self.anchors.get_mut(i) else { return false };
-        if a.kind == AnchorKind::Smooth && a.has_in() && a.has_out() {
-            return true;
-        }
-        let (pp, nn) = (prev.unwrap_or(a.p), next.unwrap_or(a.p));
-        let dir = nn - pp;
-        let l = dir.hypot();
-        if l <= 1e-9 {
-            return false;
-        }
-        let u = dir / l;
-        a.h_in = a.p - u * (a.p.distance(pp) / 3.0);
-        a.h_out = a.p + u * (a.p.distance(nn) / 3.0);
-        a.kind = AnchorKind::Smooth;
-        true
+        self.anchors.get_mut(i).is_some_and(|a| a.smooth_between(prev, next))
     }
     /// Cut at the anchors `at`: each becomes the end of one open piece and the start of the next,
     /// its handle off each piece retracted (the shape doesn't change). A closed subpath opens at
@@ -426,7 +551,7 @@ impl SubPath {
         let (run, cuts): (Vec<Anchor>, BTreeSet<usize>) = if self.closed {
             (self.anchors.iter().cycle().skip(first).take(n + 1).copied().collect(), cuts.map(|c| (c + n - first) % n).chain([n]).collect())
         } else {
-            (self.anchors.clone(), cuts.collect())
+            (self.anchors.to_vec(), cuts.collect())
         };
         let mut pieces = vec![];
         let mut cur: Vec<Anchor> = vec![];
@@ -495,11 +620,11 @@ impl PathData {
                     {
                         subpaths.push(sp);
                     }
-                    cur = Some(SubPath { anchors: vec![Anchor::corner(p)], closed: false });
+                    cur = Some(SubPath::new(vec![Anchor::corner(p)], false));
                     last = p;
                 }
                 PathEl::LineTo(p) => {
-                    let sp = cur.get_or_insert_with(|| SubPath { anchors: vec![Anchor::corner(last)], closed: false });
+                    let sp = cur.get_or_insert_with(|| SubPath::new(vec![Anchor::corner(last)], false));
                     sp.anchors.push(Anchor::corner(p));
                     last = p;
                 }
@@ -548,9 +673,9 @@ impl PathData {
     /// segment with a control point that is not finite or past `f64::MAX / 16` in x or y is measured
     /// by its control points.
     ///
-    /// Walks the segments in place, without building the path: the same segments in the same order,
-    /// so the result is bit for bit `curve_bounds(&self.to_bezpath())` (a path of lone anchors, with
-    /// no segment, is `Rect::ZERO`, as there).
+    /// Walks the segments in place, without building the path: the same segments in the same order
+    /// as `curve_bounds(&self.to_bezpath())`. A subpath of one anchor has no segment, and the box
+    /// also holds that anchor's point, so a path of lone anchors measures the box around them.
     pub fn bounds(&self) -> Option<Rect> {
         if self.is_empty() {
             return None;
@@ -560,8 +685,27 @@ impl PathData {
         {
             return Some(Rect::from_points(a.p, a.p));
         }
+        Some(self.measured(|_| true).unwrap_or_default())
+    }
+    /// The box of what a stroke along the path draws, before the stroke's own reach: its segments,
+    /// as in [`PathData::bounds`], and the lone anchors a stroke draws. A lone anchor of an open
+    /// subpath draws nothing. A lone anchor of a closed subpath draws a dot when `dots` is set, as
+    /// a round or projecting cap does, and nothing otherwise. `None` when the path draws nothing.
+    pub fn drawn_bounds(&self, dots: bool) -> Option<Rect> {
+        self.measured(|sp| dots && sp.closed)
+    }
+    /// The box of the segments and of the lone anchors of the subpaths `lone` keeps.
+    fn measured(&self, lone: impl Fn(&SubPath) -> bool) -> Option<Rect> {
         let mut bbox: Option<Rect> = None;
         for sp in &self.subpaths {
+            if sp.segment_count() == 0
+                && lone(sp)
+                && let Some(a) = sp.anchors.first()
+            {
+                let lone = Rect::from_points(a.p, a.p);
+                bbox = Some(bbox.map_or(lone, |bb| bb.union(lone)));
+            }
+            MEASURED_SEGMENTS.set(MEASURED_SEGMENTS.get().saturating_add(sp.segment_count() as u64));
             for i in 0..sp.segment_count() {
                 let c = sp.segment(i);
                 // `to_bezpath_into` writes a line where neither handle is out, else a cubic.
@@ -578,7 +722,7 @@ impl PathData {
                 bbox = Some(bbox.map_or(seg, |bb| bb.union(seg)));
             }
         }
-        Some(bbox.unwrap_or_default())
+        bbox
     }
     /// Bounds including control handles (used for quick culling).
     pub fn control_bounds(&self) -> Option<Rect> {
@@ -688,7 +832,8 @@ fn box_gap(c: &CubicBez, p: Point) -> Option<f64> {
 const MEASURE_LIMIT: f64 = 1e9;
 
 /// The length of `seg` to `accuracy`; 0 for a segment whose control points are not finite or past
-/// [`MEASURE_LIMIT`].
+/// [`MEASURE_LIMIT`], and 0 when the measurement is not finite (kurbo gives NaN for a quadratic
+/// segment whose three points coincide).
 pub fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
     let ok = |p: Point| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= MEASURE_LIMIT && p.y.abs() <= MEASURE_LIMIT;
     let fits = match seg {
@@ -696,7 +841,11 @@ pub fn measured_arclen(seg: &PathSeg, accuracy: f64) -> f64 {
         PathSeg::Quad(q) => ok(q.p0) && ok(q.p1) && ok(q.p2),
         PathSeg::Cubic(c) => ok(c.p0) && ok(c.p1) && ok(c.p2) && ok(c.p3),
     };
-    if fits { kurbo::ParamCurveArclen::arclen(seg, accuracy) } else { 0.0 }
+    if !fits {
+        return 0.0;
+    }
+    let len = kurbo::ParamCurveArclen::arclen(seg, accuracy);
+    if len.is_finite() { len } else { 0.0 }
 }
 
 /// The largest x or y, in size, of a segment's control points for which [`segment_bounds`]
@@ -710,6 +859,58 @@ const EXTREMA_LIMIT: f64 = f64::MAX / 16.0;
 /// does.
 pub fn curve_bounds(path: &BezPath) -> Rect {
     path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb)).unwrap_or_default()
+}
+
+/// The box of what a stroke along `path` draws before the stroke's own reach, as
+/// [`PathData::drawn_bounds`] measures the path it stands for: the box of its segments, as in
+/// [`curve_bounds`], and with `dots` the point of each closed subpath that has no segment, which a
+/// round or projecting cap draws as a dot. `None` when the path draws nothing.
+pub fn drawn_curve_bounds(path: &BezPath, dots: bool) -> Option<Rect> {
+    let mut bbox = path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb));
+    if !dots {
+        return bbox;
+    }
+    let els = path.elements();
+    for (r, closed) in crate::bez::subpaths(path) {
+        if closed
+            && kurbo::segments(els[r.clone()].iter().copied()).next().is_none()
+            && let Some(p) = els[r.start].end_point()
+        {
+            let dot = Rect::from_points(p, p);
+            bbox = Some(bbox.map_or(dot, |bb| bb.union(dot)));
+        }
+    }
+    bbox
+}
+
+/// The box [`PathData::bounds`] measures for the path `path` stands for: its segments, as in
+/// [`curve_bounds`], and the point of each subpath that has no segment, a lone anchor, open or
+/// closed. `None` for a path with no elements.
+pub fn anchored_curve_bounds(path: &BezPath) -> Option<Rect> {
+    let mut bbox = path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb));
+    let mut add = |p: Point| {
+        let lone = Rect::from_points(p, p);
+        bbox = Some(bbox.map_or(lone, |bb| bb.union(lone)));
+    };
+    // The start of the current subpath while it has no segment. A `ClosePath` straight after the
+    // `MoveTo` adds no segment, unless the point is NaN (kurbo then closes with a line of its own,
+    // which `segments` measured).
+    let mut lone = None;
+    for el in path.elements() {
+        match el {
+            PathEl::MoveTo(p) => {
+                if let Some(q) = lone.replace(*p) {
+                    add(q);
+                }
+            }
+            PathEl::ClosePath => {}
+            _ => lone = None,
+        }
+    }
+    if let Some(q) = lone {
+        add(q);
+    }
+    bbox
 }
 
 /// The box of `seg` as kurbo's `bounding_box` measures it (its start, end and extrema), except
@@ -730,7 +931,7 @@ pub fn segment_bounds(seg: PathSeg) -> Rect {
 }
 
 fn push_curve(cur: &mut Option<SubPath>, last: Point, c1: Point, c2: Point, p: Point) {
-    let sp = cur.get_or_insert_with(|| SubPath { anchors: vec![Anchor::corner(last)], closed: false });
+    let sp = cur.get_or_insert_with(|| SubPath::new(vec![Anchor::corner(last)], false));
     if let Some(a) = sp.anchors.last_mut() {
         a.h_out = c1;
     }
@@ -742,7 +943,8 @@ mod tests {
     use super::*;
 
     /// `bounds` walks the anchors in place: bit for bit what the kurbo path it stands for gives,
-    /// for lines, curves, open and closed subpaths, lone anchors and empty subpaths.
+    /// joined with the point of each lone anchor, for lines, curves, open and closed subpaths, lone
+    /// anchors and empty subpaths.
     #[test]
     fn bounds_match_the_bezpath_bit_for_bit() {
         use proptest::prelude::*;
@@ -750,11 +952,10 @@ mod tests {
             if pd.is_empty() {
                 return None;
             }
-            if pd.anchor_count() == 1 {
-                let a = pd.subpaths.iter().find_map(|s| s.anchors.first())?;
-                return Some(Rect::from_points(a.p, a.p));
-            }
-            Some(curve_bounds(&pd.to_bezpath()))
+            let bp = pd.to_bezpath();
+            let segments = bp.segments().next().is_some().then(|| curve_bounds(&bp));
+            let lone = pd.subpaths.iter().filter(|s| s.segment_count() == 0).filter_map(|s| s.anchors.first()).map(|a| Rect::from_points(a.p, a.p));
+            lone.chain(segments).reduce(|bb, r| bb.union(r))
         }
         let bits = |r: Option<Rect>| r.map(|r| [r.x0, r.y0, r.x1, r.y1].map(f64::to_bits));
         let coord = || prop_oneof![(-1e3f64..1e3), Just(0.0), Just(1e-300), Just(-7.25)];
@@ -767,11 +968,29 @@ mod tests {
         let path = proptest::collection::vec(sub, 0..4).prop_map(PathData::new);
         proptest!(ProptestConfig::with_cases(2000), |(pd in path)| {
             prop_assert_eq!(bits(pd.bounds()), bits(reference(&pd)));
+            // The kurbo path the anchors stand for draws and measures the same boxes.
+            for dots in [false, true] {
+                prop_assert_eq!(bits(drawn_curve_bounds(&pd.to_bezpath(), dots)), bits(pd.drawn_bounds(dots)));
+            }
+            prop_assert_eq!(bits(anchored_curve_bounds(&pd.to_bezpath())), bits(pd.bounds()));
         });
-        // Two lone anchors: no segment, as the path has none.
+        // Two lone anchors: the path has no segment, and the box spans the two points.
         let lone = PathData::new(vec![SubPath::polyline(&[Point::new(5.0, 5.0)], false), SubPath::polyline(&[Point::new(9.0, 1.0)], true)]);
-        assert_eq!(lone.bounds(), Some(Rect::ZERO));
+        assert_eq!(lone.bounds(), Some(Rect::new(5.0, 1.0, 9.0, 5.0)));
         assert_eq!(bits(lone.bounds()), bits(reference(&lone)));
+        // A lone anchor beside a segment widens the segment's box to reach it.
+        let line = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(4.0, 2.0)], false);
+        let beside = PathData::new(vec![line.clone(), SubPath::polyline(&[Point::new(20.0, -3.0)], false)]);
+        let segment_only = PathData::single(line).bounds().unwrap_or_default();
+        let both = beside.bounds().unwrap_or_default();
+        assert!(both.x1 >= 20.0 && both.y0 <= -3.0, "{both:?} leaves out the lone anchor at (20, -3)");
+        assert_eq!(both.union(segment_only), both, "{both:?} leaves out part of the segment's box {segment_only:?}");
+        // What a stroke draws leaves out the open lone anchor, and a closed one without dots.
+        assert_eq!(beside.drawn_bounds(true), Some(segment_only), "an open lone anchor draws nothing");
+        let dot = PathData::new(vec![beside.subpaths[0].clone(), SubPath::polyline(&[Point::new(20.0, -3.0)], true)]);
+        assert_eq!(dot.drawn_bounds(true), dot.bounds(), "a closed lone anchor draws a dot");
+        assert_eq!(dot.drawn_bounds(false), Some(segment_only), "without dots, a closed lone anchor draws nothing");
+        assert_eq!(lone.drawn_bounds(false), None, "lone anchors alone draw nothing");
         // A NaN anchor differs from itself: kurbo closes such a subpath with a line of its own.
         let nan = Point::new(f64::NAN, 1.0);
         let closed = |pts: &[Point]| SubPath::polyline(pts, true);
@@ -780,7 +999,14 @@ mod tests {
             PathData::new(vec![closed(&[nan, Point::new(3.0, 4.0), Point::new(6.0, 1.0)])]),
         ] {
             assert_eq!(bits(pd.bounds()), bits(reference(&pd)));
+            assert_eq!(bits(anchored_curve_bounds(&pd.to_bezpath())), bits(pd.bounds()));
         }
+        // kurbo's own box leaves out the lone anchor, and measures a path of one anchor at the origin.
+        assert_eq!(anchored_curve_bounds(&beside.to_bezpath()), beside.bounds());
+        assert_ne!(Some(beside.to_bezpath().bounding_box()), beside.bounds());
+        let one = PathData::single(SubPath::polyline(&[Point::new(7.0, 8.0)], false));
+        assert_eq!(anchored_curve_bounds(&one.to_bezpath()), Some(Rect::new(7.0, 8.0, 7.0, 8.0)));
+        assert_eq!(anchored_curve_bounds(&BezPath::new()), None);
     }
 
     fn square() -> PathData {
@@ -1056,11 +1282,93 @@ mod tests {
         assert!((square().length() - 40.0).abs() < 1e-6);
     }
 
+    /// A quadratic segment whose three points coincide measures 0, not NaN; quadratic segments
+    /// with only two points together, and an ordinary one, keep kurbo's length.
+    #[test]
+    fn measured_arclen_of_a_quad_whose_points_coincide_is_zero() {
+        let quad = |a: (f64, f64), b: (f64, f64), c: (f64, f64)| PathSeg::Quad(kurbo::QuadBez::new(a, b, c));
+        assert_eq!(measured_arclen(&quad((5.0, 5.0), (5.0, 5.0), (5.0, 5.0)), 1e-6), 0.0);
+        assert_eq!(measured_arclen(&quad((0.0, 0.0), (0.0, 0.0), (0.0, 0.0)), 1e-3), 0.0);
+        assert!((measured_arclen(&quad((0.0, 0.0), (0.0, 0.0), (10.0, 0.0)), 1e-6) - 10.0).abs() < 1e-6);
+        assert!((measured_arclen(&quad((0.0, 0.0), (10.0, 0.0), (0.0, 0.0)), 1e-6) - 10.0).abs() < 1e-6);
+        let ordinary = quad((0.0, 0.0), (10.0, 0.0), (10.0, 10.0));
+        assert_eq!(measured_arclen(&ordinary, 1e-6), kurbo::ParamCurveArclen::arclen(&ordinary, 1e-6));
+    }
+
     #[test]
     fn serde_roundtrip() {
         let p = square();
         let s = serde_json::to_string(&p).unwrap();
         let back: PathData = serde_json::from_str(&s).unwrap();
         assert_eq!(p, back);
+    }
+
+    /// `link_handle` makes a corner smooth: the other handle turns onto the far side of the anchor
+    /// at its own length; a retracted one is pulled out to the moved handle's length only when
+    /// asked, and a handle placed on the anchor changes nothing else.
+    #[test]
+    fn link_handle_makes_a_corner_smooth_keeping_the_other_length() {
+        let p = Point::new(10.0, 10.0);
+        let mut a = Anchor { p, h_in: Point::new(10.0, 0.0), h_out: Point::new(13.0, 10.0), kind: AnchorKind::Corner };
+        a.link_handle(true, Point::new(14.0, 13.0), false);
+        assert_eq!(a.kind, AnchorKind::Smooth);
+        assert_eq!(a.h_out, Point::new(14.0, 13.0));
+        // The in handle keeps its length of 10, opposite the out handle's direction (4, 3) / 5.
+        assert!(a.h_in.distance(Point::new(2.0, 4.0)) < 1e-9, "{:?}", a.h_in);
+
+        let retracted = Anchor { p, h_in: p, h_out: Point::new(13.0, 10.0), kind: AnchorKind::Corner };
+        let mut pulled = retracted;
+        pulled.link_handle(true, Point::new(13.0, 14.0), true);
+        assert_eq!((pulled.kind, pulled.h_in), (AnchorKind::Smooth, Point::new(7.0, 6.0)));
+        let mut kept = retracted;
+        kept.link_handle(true, Point::new(13.0, 14.0), false);
+        assert_eq!((kept.kind, kept.h_in), (AnchorKind::Smooth, p));
+
+        let mut on_anchor = Anchor { p, h_in: Point::new(10.0, 0.0), h_out: Point::new(13.0, 10.0), kind: AnchorKind::Corner };
+        on_anchor.link_handle(false, p, true);
+        assert_eq!(on_anchor, Anchor { p, h_in: p, h_out: Point::new(13.0, 10.0), kind: AnchorKind::Corner });
+
+        // A handle so far away that its distance overflows leaves the other handle finite.
+        let far = Point::new(1.7e308, 1.7e308);
+        let mut overflow = retracted;
+        overflow.link_handle(true, far, true);
+        assert_eq!(overflow, Anchor { p, h_in: p, h_out: far, kind: AnchorKind::Corner });
+        // A very long other handle turned by a very short one stays finite, at its own length.
+        let mut long = Anchor { p: Point::ZERO, h_in: Point::new(1e308, 0.0), h_out: Point::ZERO, kind: AnchorKind::Corner };
+        long.link_handle(true, Point::new(0.0, 1e-8), false);
+        assert_eq!((long.kind, long.h_in), (AnchorKind::Smooth, Point::new(0.0, -1e308)));
+        // One whose turned end would leave the finite range is left where it is.
+        let edge = Point::new(-1.5e308, 0.0);
+        let mut beyond = Anchor { p: edge, h_in: Point::new(1.5e308, 0.0), h_out: edge, kind: AnchorKind::Corner };
+        beyond.link_handle(true, Point::new(-1.5e308 + 1e300, 0.0), false);
+        assert_eq!((beyond.kind, beyond.h_in), (AnchorKind::Corner, Point::new(1.5e308, 0.0)));
+    }
+
+    /// `set_handle` on a smooth anchor turns a very long other handle without overflowing, and
+    /// leaves it where it is when its turned end would not be a finite point.
+    #[test]
+    fn set_handle_on_a_smooth_anchor_keeps_long_handles_finite() {
+        let mut long = Anchor { p: Point::ZERO, h_in: Point::new(-1e308, 0.0), h_out: Point::new(1.0, 0.0), kind: AnchorKind::Smooth };
+        long.set_handle(true, Point::new(0.0, 1e-8), false);
+        assert_eq!(long.h_in, Point::new(0.0, -1e308));
+        let edge = Point::new(-1.5e308, 0.0);
+        let mut beyond = Anchor { p: edge, h_in: Point::new(-1.6e308, 0.0), h_out: Point::new(1.5e308, 0.0), kind: AnchorKind::Smooth };
+        beyond.set_handle(false, Point::new(-1.5e308 + 1e300, 0.0), false);
+        assert_eq!(beyond.h_out, Point::new(1.5e308, 0.0));
+    }
+
+    /// `has_segment` sees a segment on each side of an inner anchor, none past an open path's ends,
+    /// and both sides on a closed path of two anchors or more.
+    #[test]
+    fn has_segment_follows_the_open_ends() {
+        let pts = [Point::ZERO, Point::new(10.0, 0.0), Point::new(10.0, 10.0)];
+        let open = SubPath::polyline(&pts, false);
+        assert!(!open.has_segment(0, false) && open.has_segment(0, true));
+        assert!(open.has_segment(1, false) && open.has_segment(1, true));
+        assert!(open.has_segment(2, false) && !open.has_segment(2, true));
+        assert!(!open.has_segment(3, false));
+        let closed = SubPath::polyline(&pts, true);
+        assert!(closed.has_segment(0, false) && closed.has_segment(2, true));
+        assert!(!SubPath::polyline(&pts[..1], true).has_segment(0, true));
     }
 }

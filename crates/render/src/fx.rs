@@ -64,22 +64,29 @@ use crate::{Frame, Renderer, blend_mode, fill_rule, paint};
 mod bounds;
 mod entries;
 mod pixels;
+mod placement;
 mod predicates;
 mod raster;
 mod renderer;
 
+pub use placement::pinned_appearance_for_geometry_edit;
+
 #[cfg(test)]
 pub(crate) use bounds::visual_bounds;
-pub(crate) use bounds::{cull_bounds, drawn_outline, painted_reach, path_cull_bounds};
+pub(crate) use bounds::{
+    brushed_cull_bounds, cull_bounds, drawn_outline, drawn_outlines, painted_brush_width, painted_cull_bounds, painted_reach, path_cull_bounds,
+    rasterize_stage, three_d_art_bounds, with_own_raster_reach,
+};
 #[cfg(test)]
 pub(crate) use entries::Drawn;
-pub(crate) use entries::{DocInputs, FxGeom, Reads, ShadowEntry};
+pub(crate) use entries::{DocInputs, FxGeom, Inputs, Kept, Reads, ShadowEntry};
+pub(crate) use pixels::paint_names;
 pub(crate) use predicates::{has_fx, has_object_fx};
-pub(crate) use raster::PixelEntry;
 #[cfg(test)]
 pub(crate) use raster::RASTERIZED;
 #[cfg(test)]
-use raster::{DRAG_PIXEL_BUDGET, PIXEL_BUDGET, drag_scale, filter_region, filter_region_within, pan_margin};
+use raster::{DRAG_PIXEL_BUDGET, drag_scale, filter_region, filter_region_within, pan_margin};
+pub(crate) use raster::{PIXEL_BUDGET, PixelEntry, linear_key};
 
 #[cfg(test)]
 mod tests;

@@ -138,7 +138,7 @@ fn knockout_settings_round_trip_and_old_bools_load() {
 }
 
 #[test]
-fn pdf_and_svg_write_knockout_groups_as_masks() {
+fn pdf_writes_knockout_groups_and_svg_writes_them_as_masks() {
     let mut s = session();
     let g = knockout_group(&mut s);
     let plain = s.doc().unwrap().doc.clone();
@@ -149,10 +149,11 @@ fn pdf_and_svg_write_knockout_groups_as_masks() {
     let r = pdf(&plain);
     assert!(!String::from_utf8_lossy(&r.bytes).contains("/SMask") && r.warnings.is_empty());
     let r = pdf(&ko);
-    let text = String::from_utf8_lossy(&r.bytes);
-    // The lower rectangle is drawn through a luminosity mask made of the upper one's alpha.
-    assert!(text.contains("/Luminosity") && text.contains("/Alpha"), "soft masks");
-    assert!(r.warnings.iter().any(|w| w.contains("knockout")), "{:?}", r.warnings);
+    let text = String::from_utf8_lossy(&r.bytes).replace(' ', "");
+    // The rectangles knock out the area they paint: a PDF knockout group, without soft masks.
+    assert_eq!(text.matches("/Ktrue").count(), 1, "a knockout group");
+    assert!(!text.contains("/Luminosity"), "no soft masks");
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
 
     let svg = |d: &Document| vectorcraft_svg::export(d, &Default::default());
     assert!(!svg(&plain).contains("knockout"));
@@ -173,5 +174,5 @@ fn pdf_and_svg_write_knockout_groups_as_masks() {
     assert!(svg(&page).contains("isolation"));
     page.page_knockout = true;
     assert_eq!(svg(&page).matches("mask=\"url(#knockout-").count(), 1, "the layer is neutral: its objects knock each other out");
-    assert!(String::from_utf8_lossy(&pdf(&page).bytes).contains("/Luminosity"));
+    assert!(String::from_utf8_lossy(&pdf(&page).bytes).replace(' ', "").contains("/Ktrue"));
 }

@@ -12,8 +12,12 @@
 //! as its own app, which replaces a stale file. Nothing received is ever run.
 //!
 //! Runs that start many apps side by side (`--control`, `VECTORCRAFT_NO_PREFS`) neither forward
-//! nor listen, and `--new-instance` opens a launch's files in an app of its own. macOS hands files
-//! opened from Finder to the running app itself (`open_documents`), so this is off there.
+//! nor listen, and neither does a `--safe-mode` launch, which opens its files in an app of its own
+//! and leaves later launches to start theirs with plug-ins. `--new-instance` opens a launch's files
+//! in an app of its own. An app that stays in Safe Mode after the choice about a stopped plug-in
+//! stops listening ([`resign`]), and files later launches handed it before then open in a new app
+//! with plug-ins ([`take_for_frame`]). macOS hands files opened from Finder to the running app itself
+//! (`open_documents`), so this is off there.
 
 use std::fs::{self, OpenOptions};
 use std::hash::{BuildHasher as _, RandomState};
@@ -25,7 +29,8 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use super::prefs::{prefs_enabled, prefs_path};
+use super::prefs::prefs_enabled;
+use super::prefs_dir::prefs_dir;
 
 /// The endpoint file, next to the preferences.
 const FILE_NAME: &str = "instance.json";
@@ -41,8 +46,21 @@ const SERVER_TIMEOUT: Duration = Duration::from_secs(2);
 /// How long a launch waits on the primary: longer than a launch served before it can take.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// How long each side of a hand-over waits on the other.
+#[derive(Clone, Copy)]
+struct Timeouts {
+    connect: Duration,
+    server: Duration,
+    client: Duration,
+}
+
+/// The waits a launch and the running app use.
+const TIMEOUTS: Timeouts = Timeouts { connect: CONNECT_TIMEOUT, server: SERVER_TIMEOUT, client: CLIENT_TIMEOUT };
+
 /// Paths handed over by later launches that the UI hasn't opened yet.
 static PENDING: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// This app while it is the one later launches hand their files to ([`hold`]).
+static HELD: Mutex<Option<Primary>> = Mutex::new(None);
 /// The UI to wake when files arrive (unset until the window exists; the first frame opens them).
 static UI: OnceLock<egui::Context> = OnceLock::new();
 
@@ -56,21 +74,44 @@ pub enum Start {
 
 /// Hand `files` to the app already running, or become the app later launches hand theirs to.
 /// `automation`: started with `--control`.
-pub fn start(automation: bool, new_instance: bool, files: &[String]) -> Start {
+pub fn start(automation: bool, new_instance: bool, safe_mode: bool, files: &[String]) -> Start {
     if automation || !prefs_enabled() {
         return Start::Running(None);
     }
-    let Some(path) = prefs_path().and_then(|p| Some(p.parent()?.join(FILE_NAME))) else { return Start::Running(None) };
+    let Some(path) = prefs_dir().map(|dir| dir.join(FILE_NAME)) else { return Start::Running(None) };
+    start_at(&path, TIMEOUTS, new_instance, safe_mode, files)
+}
+
+/// [`start`] with the endpoint file `path` and the waits `timeouts`. A launch with `--new-instance` or `--safe-mode` keeps
+/// its files and runs as its own app: a running app would open them with its plug-ins loaded. A
+/// `--safe-mode` launch never becomes the app later launches hand their files to, which would open
+/// them without plug-ins.
+fn start_at(path: &Path, timeouts: Timeouts, new_instance: bool, safe_mode: bool, files: &[String]) -> Start {
+    if safe_mode {
+        return Start::Running(None);
+    }
     // With nothing to hand over, the same exchange only asks whether an app is running.
     let send: &[String] = if new_instance { &[] } else { files };
-    match forward(&path, send) {
+    match forward(path, timeouts, send) {
         Ok(()) if send.is_empty() => Start::Running(None),
         Ok(()) => Start::Forwarded,
         Err(e) => {
             log::debug!("no running VectorCraft to hand files to ({e})");
-            Start::Running(listen(&path, queue))
+            Start::Running(listen(path, timeouts, queue))
         }
     }
+}
+
+/// Keep `primary` ([`start`]'s) until [`resign`].
+pub fn hold(primary: Option<Primary>) {
+    *HELD.lock().unwrap_or_else(PoisonError::into_inner) = primary;
+}
+
+/// Later launches start their own app from now on: the endpoint file goes. The app calls it when
+/// its window is gone, and when it stays in Safe Mode after the choice about a stopped plug-in.
+pub fn resign() {
+    let primary = HELD.lock().unwrap_or_else(PoisonError::into_inner).take();
+    drop(primary);
 }
 
 /// Wake `ctx` when files arrive from later launches.
@@ -82,6 +123,44 @@ pub fn set_ui(ctx: &egui::Context) {
 /// The paths later launches handed over since the last call.
 pub fn take() -> Vec<String> {
     std::mem::take(&mut *PENDING.lock().unwrap_or_else(PoisonError::into_inner))
+}
+
+/// The paths later launches handed over since the last call, to open in this app. An app that
+/// stays in Safe Mode (`safe_mode`) resigns and hands them to a new app with plug-ins (`launch`,
+/// [`launch_with_plug_ins`] in the app) instead: they arrived while it was the primary, before the
+/// choice about a stopped plug-in ended in Safe Mode, or just before it resigned. When `launch`
+/// fails (logged), they open here.
+pub fn take_for_frame(safe_mode: bool, launch: impl FnOnce(&[String]) -> io::Result<()>) -> Vec<String> {
+    let files = take();
+    if !safe_mode {
+        return files;
+    }
+    // First, so the new app becomes the primary instead of handing the files back.
+    resign();
+    if files.is_empty() {
+        return files;
+    }
+    match launch(&files) {
+        Ok(()) => Vec::new(),
+        Err(e) => {
+            log::warn!("couldn't start VectorCraft with plug-ins for the files another launch opened: {e}");
+            files
+        }
+    }
+}
+
+/// Start this program again, with plug-ins, on `files`.
+pub fn launch_with_plug_ins(files: &[String]) -> io::Result<()> {
+    app_with_plug_ins(&std::env::current_exe()?, files).spawn().map(drop)
+}
+
+/// The command [`launch_with_plug_ins`] runs: `exe -- files…`, so a file whose name starts with '-'
+/// stays a file. A nightly launch hands its profile on first (`launch_profile::child_args`), or the
+/// child would refuse to start without one.
+fn app_with_plug_ins(exe: &Path, files: &[String]) -> std::process::Command {
+    let mut command = std::process::Command::new(exe);
+    command.args(super::launch_profile::child_args(files));
+    command
 }
 
 fn queue(files: Vec<String>) {
@@ -127,12 +206,12 @@ fn read_endpoint(path: &Path) -> Option<Endpoint> {
 
 /// Hand `files` (made absolute against this launch's folder) to the app recorded at `path`; `Ok`
 /// once it acknowledged them.
-fn forward(path: &Path, files: &[String]) -> io::Result<()> {
+fn forward(path: &Path, timeouts: Timeouts, files: &[String]) -> io::Result<()> {
     let endpoint = read_endpoint(path).ok_or_else(|| invalid("no endpoint file"))?;
     let files = files.iter().map(|f| std::path::absolute(f).map(|p| p.to_string_lossy().into_owned())).collect::<io::Result<Vec<_>>>()?;
-    let stream = TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, endpoint.port).into(), CONNECT_TIMEOUT)?;
-    stream.set_read_timeout(Some(CLIENT_TIMEOUT))?;
-    stream.set_write_timeout(Some(CLIENT_TIMEOUT))?;
+    let stream = TcpStream::connect_timeout(&(Ipv4Addr::LOCALHOST, endpoint.port).into(), timeouts.connect)?;
+    stream.set_read_timeout(Some(timeouts.client))?;
+    stream.set_write_timeout(Some(timeouts.client))?;
     // The token and the paths go only to a listener that knows the greeting.
     if !same(read_message(&stream)?.get("hello"), &endpoint.hello) {
         return Err(invalid("the listener isn't VectorCraft"));
@@ -146,11 +225,11 @@ fn forward(path: &Path, files: &[String]) -> io::Result<()> {
 
 /// Listen for later launches and record this app at `path`; each launch's files go to `deliver`.
 /// `None` when that fails (logged): the app then runs on its own, as before.
-fn listen(path: &Path, deliver: impl Fn(Vec<String>) + Send + 'static) -> Option<Primary> {
-    try_listen(path, deliver).inspect_err(|e| log::warn!("files opened while VectorCraft runs will open in another window: {e}")).ok()
+fn listen(path: &Path, timeouts: Timeouts, deliver: impl Fn(Vec<String>) + Send + 'static) -> Option<Primary> {
+    try_listen(path, timeouts, deliver).inspect_err(|e| log::warn!("files opened while VectorCraft runs will open in another window: {e}")).ok()
 }
 
-fn try_listen(path: &Path, deliver: impl Fn(Vec<String>) + Send + 'static) -> io::Result<Primary> {
+fn try_listen(path: &Path, timeouts: Timeouts, deliver: impl Fn(Vec<String>) + Send + 'static) -> io::Result<Primary> {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
     let port = listener.local_addr()?.port();
     let (token, hello) = random_tokens();
@@ -159,7 +238,7 @@ fn try_listen(path: &Path, deliver: impl Fn(Vec<String>) + Send + 'static) -> io
     let primary = Primary { path: path.to_path_buf(), token: token.clone() };
     std::thread::Builder::new().name("open-files-listener".into()).spawn(move || {
         for stream in listener.incoming() {
-            match stream.and_then(|s| receive(&s, &hello, &token)) {
+            match stream.and_then(|s| receive(&s, timeouts.server, &hello, &token)) {
                 Ok(files) if files.is_empty() => {}
                 Ok(files) => deliver(files),
                 Err(e) => {
@@ -173,10 +252,11 @@ fn try_listen(path: &Path, deliver: impl Fn(Vec<String>) + Send + 'static) -> io
     Ok(primary)
 }
 
-/// Serve one launch: greet it, check its token, keep the paths that are existing files.
-fn receive(stream: &TcpStream, hello: &str, token: &str) -> io::Result<Vec<String>> {
-    stream.set_read_timeout(Some(SERVER_TIMEOUT))?;
-    stream.set_write_timeout(Some(SERVER_TIMEOUT))?;
+/// Serve one launch, waiting on it at most `timeout`: greet it, check its token, keep the paths
+/// that are existing files.
+fn receive(stream: &TcpStream, timeout: Duration, hello: &str, token: &str) -> io::Result<Vec<String>> {
+    stream.set_read_timeout(Some(timeout))?;
+    stream.set_write_timeout(Some(timeout))?;
     write_message(stream, &json!({ "hello": hello }))?;
     let message = read_message(stream)?;
     if !same(message.get("token"), token) {
@@ -263,6 +343,13 @@ mod tests {
 
     use super::*;
 
+    /// Held by the tests that use the process-wide [`HELD`] and [`PENDING`], one at a time.
+    static GLOBALS: Mutex<()> = Mutex::new(());
+
+    fn globals() -> std::sync::MutexGuard<'static, ()> {
+        GLOBALS.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     struct TestDir(tempfile::TempDir);
 
     impl std::ops::Deref for TestDir {
@@ -282,17 +369,38 @@ mod tests {
         (dir.path().join(FILE_NAME), TestDir(dir), file)
     }
 
+    /// Stops a test that hangs. A hand-over on a busy machine still ends long before it, so no
+    /// result depends on how long a step takes.
+    const HANG_GUARD: Duration = Duration::from_secs(60);
+    /// The waits both sides get in the tests.
+    const PATIENT: Timeouts = Timeouts { connect: HANG_GUARD, server: HANG_GUARD, client: HANG_GUARD };
+
     fn primary(path: &Path) -> (Primary, mpsc::Receiver<Vec<String>>) {
         let (tx, rx) = mpsc::channel();
-        let primary = listen(path, move |files| tx.send(files).unwrap()).unwrap();
+        let primary = listen(path, PATIENT, move |files| tx.send(files).unwrap()).unwrap();
         (primary, rx)
+    }
+
+    /// The next files the app delivered. The app delivers them after it acknowledges the launch,
+    /// so this waits for them.
+    fn delivered(rx: &mpsc::Receiver<Vec<String>>) -> Vec<String> {
+        rx.recv_timeout(HANG_GUARD).unwrap_or_else(|e| panic!("the app delivered no files: {e}"))
+    }
+
+    /// `result` is an error from the other side, not a wait that ran out.
+    fn refused<T>(result: io::Result<T>) -> bool {
+        result.is_err_and(|e| {
+            assert!(!matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut), "a wait ran out instead: {e}");
+            true
+        })
     }
 
     /// Connects as a launch would and sends `message` after the greeting; what came back.
     fn send_raw(path: &Path, message: &[u8]) -> io::Result<Value> {
         let endpoint = read_endpoint(path).unwrap();
         let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, endpoint.port)).unwrap();
-        stream.set_read_timeout(Some(CLIENT_TIMEOUT)).unwrap();
+        stream.set_read_timeout(Some(HANG_GUARD)).unwrap();
+        stream.set_write_timeout(Some(HANG_GUARD)).unwrap();
         assert!(same(read_message(&stream).unwrap().get("hello"), &endpoint.hello));
         (&stream).write_all(message)?;
         read_message(&stream)
@@ -303,14 +411,80 @@ mod tests {
         let (path, dir, file) = folder("forward");
         let (primary, rx) = primary(&path);
         let missing = dir.join("missing.svg").to_string_lossy().into_owned();
-        forward(&path, &[file.clone(), missing]).unwrap();
-        assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), std::slice::from_ref(&file), "the missing file is left out");
+        forward(&path, PATIENT, &[file.clone(), missing]).unwrap();
+        assert_eq!(delivered(&rx), std::slice::from_ref(&file), "the missing file is left out");
         // An empty list only asks whether the app runs: nothing is delivered.
-        forward(&path, &[]).unwrap();
-        forward(&path, std::slice::from_ref(&file)).unwrap();
-        assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
+        forward(&path, PATIENT, &[]).unwrap();
+        forward(&path, PATIENT, std::slice::from_ref(&file)).unwrap();
+        assert_eq!(delivered(&rx), [file]);
         drop(primary);
         assert!(!path.exists(), "the endpoint file goes with the app");
+    }
+
+    #[test]
+    fn a_new_instance_or_safe_mode_launch_keeps_its_files() {
+        let (path, _dir, file) = folder("own");
+        let (primary, rx) = primary(&path);
+        for (new_instance, safe_mode) in [(true, false), (false, true)] {
+            let start = start_at(&path, PATIENT, new_instance, safe_mode, std::slice::from_ref(&file));
+            assert!(matches!(start, Start::Running(None)), "runs as its own app (new instance {new_instance}, Safe Mode {safe_mode})");
+        }
+        assert!(matches!(start_at(&path, PATIENT, false, false, std::slice::from_ref(&file)), Start::Forwarded));
+        assert_eq!(delivered(&rx), std::slice::from_ref(&file));
+        assert!(rx.try_recv().is_err(), "only the plain launch handed its file over");
+        drop(primary);
+    }
+
+    #[test]
+    fn a_safe_mode_launch_leaves_later_launches_their_own_app() {
+        let _globals = globals();
+        let (path, _dir, file) = folder("safe-mode-alone");
+        // With no app running, a Safe Mode launch runs without listening.
+        assert!(matches!(start_at(&path, PATIENT, false, true, std::slice::from_ref(&file)), Start::Running(None)));
+        assert!(!path.exists(), "a Safe Mode launch records no endpoint");
+        // A plain launch after it starts its own app and takes later launches' files.
+        let Start::Running(Some(primary)) = start_at(&path, PATIENT, false, false, std::slice::from_ref(&file)) else {
+            panic!("the plain launch runs and listens")
+        };
+        assert!(path.exists());
+        // An app that stays in Safe Mode after the choice gives that up.
+        hold(Some(primary));
+        resign();
+        assert!(!path.exists(), "the endpoint file goes with resign");
+    }
+
+    #[test]
+    fn files_handed_to_an_app_staying_in_safe_mode_go_to_a_new_app_with_plug_ins() {
+        let _globals = globals();
+        // Nothing left over from a test that failed.
+        resign();
+        drop(take());
+        let (path, _dir, file) = folder("safe-mode-later");
+        let Start::Running(Some(primary)) = start_at(&path, PATIENT, false, false, &[]) else { panic!("the first launch listens") };
+        hold(Some(primary));
+        // A later launch handed its file over while the choice about a stopped plug-in was up.
+        queue(vec![file.clone()]);
+        let mut launched = Vec::new();
+        let here = take_for_frame(true, |files| {
+            launched = files.to_vec();
+            Ok(())
+        });
+        assert!(here.is_empty(), "nothing opens in the Safe Mode app");
+        assert_eq!(launched, std::slice::from_ref(&file), "a new app with plug-ins opens it");
+        assert!(!path.exists(), "the app resigned before starting the new one");
+        // When the new app can't start, the file opens here rather than being lost.
+        queue(vec![file.clone()]);
+        assert_eq!(take_for_frame(true, |_| Err(io::Error::other("no program"))), std::slice::from_ref(&file));
+        // An app with plug-ins opens what it is handed.
+        queue(vec![file.clone()]);
+        assert_eq!(take_for_frame(false, |_| panic!("no new app")), [file]);
+    }
+
+    #[test]
+    fn the_new_app_takes_every_name_as_a_file() {
+        let command = app_with_plug_ins(Path::new("vectorcraft"), &["-a.svg".to_owned(), "b.svg".to_owned()]);
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args, ["--", "-a.svg", "b.svg"]);
     }
 
     #[test]
@@ -319,17 +493,18 @@ mod tests {
         let (_primary, rx) = primary(&path);
         let token = read_endpoint(&path).unwrap().token;
         let wrong = format!("{}\n", json!({ "token": "0".repeat(token.len()), "files": [file] }));
-        assert!(send_raw(&path, wrong.as_bytes()).is_err());
-        assert!(send_raw(&path, b"not json\n").is_err());
-        assert!(send_raw(&path, &vec![b'a'; MAX_MESSAGE as usize + 10]).is_err());
+        assert!(refused(send_raw(&path, wrong.as_bytes())));
+        assert!(refused(send_raw(&path, b"not json\n")));
+        assert!(refused(send_raw(&path, &vec![b'a'; MAX_MESSAGE as usize + 10])));
         let many = format!("{}\n", json!({ "token": token, "files": vec![file.clone(); MAX_FILES + 1] }));
-        assert!(send_raw(&path, many.as_bytes()).is_err());
+        assert!(refused(send_raw(&path, many.as_bytes())));
         let relative = format!("{}\n", json!({ "token": token, "files": ["a b.svg", 7] }));
         assert_eq!(send_raw(&path, relative.as_bytes()).unwrap(), json!({ "ok": true }));
         assert!(rx.try_recv().is_err(), "nothing was delivered");
-        // The listener still serves a launch with the right token.
-        forward(&path, std::slice::from_ref(&file)).unwrap();
-        assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
+        // The listener still serves a launch with the right token. It serves launches in turn, so
+        // anything delivered for the messages above would come before this file.
+        forward(&path, PATIENT, std::slice::from_ref(&file)).unwrap();
+        assert_eq!(delivered(&rx), [file]);
     }
 
     #[test]
@@ -342,27 +517,28 @@ mod tests {
         let port = gone.local_addr().unwrap().port();
         write_endpoint(&path, &json!({ "port": port, "token": "t", "hello": "h" })).unwrap();
         let closed = std::thread::spawn(move || drop(gone.accept()));
-        assert!(forward(&path, std::slice::from_ref(&file)).is_err());
+        assert!(refused(forward(&path, PATIENT, std::slice::from_ref(&file))));
         closed.join().unwrap();
-        // A listener that doesn't know the greeting gets neither the token nor the paths.
+        // A listener that doesn't know the greeting gets neither the token nor the paths: the
+        // launch closes the connection instead.
         let impostor = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = impostor.local_addr().unwrap().port();
         write_endpoint(&path, &json!({ "port": port, "token": "t", "hello": "h" })).unwrap();
         let heard = std::thread::spawn(move || {
             let (stream, _) = impostor.accept().unwrap();
             write_message(&stream, &json!({ "hello": "x" })).unwrap();
-            stream.set_read_timeout(Some(CLIENT_TIMEOUT)).unwrap();
-            read_message(&stream).ok()
+            stream.set_read_timeout(Some(HANG_GUARD)).unwrap();
+            read_message(&stream)
         });
-        assert!(forward(&path, std::slice::from_ref(&file)).is_err());
-        assert!(heard.join().unwrap().is_none());
+        assert!(refused(forward(&path, PATIENT, std::slice::from_ref(&file))));
+        assert!(refused(heard.join().unwrap()));
         // Garbage in the file is no endpoint either.
         fs::write(&path, b"\xff not json").unwrap();
-        assert!(forward(&path, std::slice::from_ref(&file)).is_err());
+        assert!(refused(forward(&path, PATIENT, std::slice::from_ref(&file))));
         // A new primary replaces the stale file.
         let (_primary, rx) = primary(&path);
-        forward(&path, std::slice::from_ref(&file)).unwrap();
-        assert_eq!(rx.recv_timeout(CLIENT_TIMEOUT).unwrap(), [file]);
+        forward(&path, PATIENT, std::slice::from_ref(&file)).unwrap();
+        assert_eq!(delivered(&rx), [file]);
     }
 
     #[test]

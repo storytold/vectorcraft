@@ -8,7 +8,8 @@
 //!   next layers: a clipping group in each layer, read by [`masks`].
 //! - Ruler guides: a straight `(N) *` guide path, directly on a layer, that runs across the whole
 //!   canvas (16,383 points around the template box's centre) or from edge to edge of one artboard
-//!   is a ruler guide on that layer ([`Document::guides`]); other guide paths stay paths.
+//!   is a ruler guide on that layer ([`Document::guides`]), shown or hidden, with the path's name,
+//!   lock and visibility; other guide paths stay paths.
 //! - Groups `u` … `U`, compound paths `*u` … `*U`, clipping groups `q` … `Q` (the path painted
 //!   with `W` clips); a group's transparency and name follow its end. A wraparound group `*w` …
 //!   `*W` (version 7 specification §15.4.2) is a group whose objects other than its type wrap
@@ -20,9 +21,10 @@
 //! - State: hidden `Xw`, locked `A`, transparency `mode opacity isolate knockout shape Xy`.
 //! - Names: an `/ArtDictionary` after an object, its `AI10_ArtUID` the name's XML id.
 //! - Artboards: the `ArtboardArray` of the `/Document` dictionary, with each one's display
-//!   options, else `%AI3_Cropmarks`, else the art size around the template box's centre
-//!   (`%AI3_TemplateBox`, `%%TemplateBox` in older files), else (a file in the legacy format
-//!   another app wrote) the bounding box.
+//!   options, else `%AI3_Cropmarks`, else the art size (`%AI5_ArtSize`; VectorCraft's own default,
+//!   US Letter, in a `.ai` of versions 3 and 4, which don't give it) around the template box's center (`%AI3_TemplateBox`,
+//!   `%%TemplateBox` in older files), which the version 7 specification (§2.2) puts at the
+//!   artboard's center, else (a file in the legacy format another app wrote) the bounding box.
 //! - Document settings: Document Raster Effects Settings from the `/Document` dictionary's
 //!   `AI Auto Rasterize`; the author from the header's `%%For`; swatches for the custom colors of
 //!   `%%CMYKCustomColor` and `%%RGBCustomColor` that the document has none of.
@@ -34,7 +36,9 @@
 //! - Images: `%AI5_BeginRaster`, the colour space `XN`, `[matrix] bounds w h bits type alpha …`
 //!   and the samples after `XI`. 8-bit CMYK samples keep their ink amounts in a CMYK TIFF, and
 //!   an alpha channel that hides part of such an image becomes its opacity mask; other samples
-//!   become an RGBA PNG.
+//!   become an RGBA PNG. Images larger than 2^25 pixels keep their samples' channels (1-bit gray as
+//!   a 1-bit PNG), and are averaged down past a target size ([`raster`]); past the hard limits, one
+//!   is a box that the page's art replaces when there is a page ([`read_over_page`]).
 //! - Linked images in the version 7 form (§8.2, §8.3): `(path) modified XG`, then `XF` with the
 //!   operands `XI` takes and no samples. Each is a linked image of that file showing a placeholder
 //!   over the image's place until its file is found. An `XF` without a file name before it, or
@@ -46,11 +50,20 @@
 //!   box is as large as the file has pixels; the matrix takes them into art space from the canvas
 //!   (y down, its centre the template box's), where they start at the point of art space's origin,
 //!   the first row the top one. Each is a linked image showing the preview until its file is found.
+//!   The dictionary after a placed PDF or `.ai` file has the page shown, from 1, in
+//!   `AI11 PlacedPDFPageIndex` and its box in `AI11 PlacedPDFCropTo` (0 Art, 1 Crop, 2 Trim, 3 Bleed,
+//!   4 Media, 5 Bounding Box): each is a placed document of that page and box, showing the preview
+//!   until its file is found. A value outside those leaves it a linked image.
 //!   The version 7 form (§16) has no `%AI5_BeginPlace`: `[matrix] llx lly urx ury (path)` and
 //!   `` ` ``, then `%%IncludeFile:` or the file between `%%BeginDocument:` and `%%EndDocument`,
 //!   then `~`; its box is the file's `%%BoundingBox`. Newer files have three more numbers before
-//!   the path. Operands of any other shape, a second `` ` `` before `~` or an included document
-//!   that doesn't end leave the placed file unread.
+//!   the path. A placed EPS file whose bytes are included between `%%BeginDocument:` and
+//!   `%%EndDocument` (DSC 3.0 p. 68) is a placed document that keeps those bytes and draws them,
+//!   its file found or not; its box is the
+//!   file's bounding box, which the matrix takes from the file's own space (y up) into art space,
+//!   as in the version 7 form.
+//!   Operands of any other shape, a second `` ` `` before `~` or an included document that
+//!   doesn't end leave the placed file unread.
 //! - Art with an appearance the format can't write as plain art (several fills or strokes,
 //!   effects, brushes) comes first as that look, drawn (a group, or an image where an effect
 //!   rasterizes it), then the object itself on `%_`
@@ -72,7 +85,8 @@
 //!
 //! - Graphs (version 7 specification §17): `%_Gs`, the graph's data and settings on `%_` lines,
 //!   its drawn art as ordinary groups, paths and type (each object followed by `%_… Go`), `%_GS`.
-//!   The drawn art is read; the data and settings are left out, with a note.
+//!   The drawn art is read as it is. Its group keeps the data and settings when they read whole
+//!   ([`graph`]); otherwise they are left out, with a note.
 //!
 //! - Swatches: the palette (`%AI5_BeginPalette`), read by [`super::palette`], replaces the
 //!   default swatches.
@@ -88,14 +102,18 @@
 //!   have is the object's own appearance, not a link.
 //!
 //! - Symbols: `%AI14_BeginSymbol` (or `%AI10_`), `(name)`, `0 A 0 Xw 0 Ae`, the art (in the
-//!   symbol's space, y down), a dictionary whose `AI13PatternRegistrationType` is the registration
+//!   symbol's space, y down; an image's matrix and a gradient mesh's corners in the canvas's space
+//!   turned y up about art space's origin there, an envelope's contents in its dictionary in the
+//!   canvas's space, y down), a dictionary whose `AI13PatternRegistrationType` is the registration
 //!   point (1 to 9, from the top left, row by row), `%AI10_EndSymbol`; each is read by a reader of
 //!   its own into the document's symbols. `%AI24_BeginSymbolList` (or `%AI10_`) lists their names
 //!   in the Symbols panel's order. An instance: `/SymbolInstance : (name) /SymbolRef , a b c d tx
 //!   ty /RTransformMatrix ;`, the matrix taking the symbol's art to art space; in a symbol's art,
 //!   it takes it to art space about the canvas point of art space's origin, as a pattern's
-//!   gradients are. Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after
-//!   it.
+//!   gradients are. Files of versions 10 to 13 write `a b c d tx ty /TransformMatrix` instead,
+//!   the matrix taking the symbol's art to the canvas (y down, art space's origin at the canvas
+//!   point the template box gives); in a symbol's art, it takes the art to that symbol's space.
+//!   Its hide and lock come before it (`Xw`, `A`) and its transparency (`Xy`) after it.
 //!
 //! Sections the reader doesn't need (styles, filters) are skipped; type, instances of symbols it
 //! can't read, fills with a pattern it can't read, placed files without a preview and operators
@@ -111,15 +129,15 @@ use vectorcraft_color::swatch::Swatch;
 use vectorcraft_color::{BlendMode, Paint};
 use vectorcraft_doc::cmyk::Inks;
 use vectorcraft_doc::{
-    Appearance, AppearanceItem, Artboard, ColorMode, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor, LineCap, LineJoin,
-    LinkInfo, Node, NodeId, NodeKind, OpacityMask, PatternDef, StrokeLayer, Unit,
+    Appearance, AppearanceItem, Artboard, ColorMode, CustomArrowhead, Dash, Document, FillLayer, ImageBlob, ImageObject, Knockout, LayerColor,
+    LineCap, LineJoin, LinkInfo, Node, NodeId, NodeKind, OpacityMask, PageBox, PatternDef, StrokeLayer, Unit,
 };
 use vectorcraft_geom::{AnchorKind, FillRule, PathData};
 
 use super::super::ate::CANVAS_CENTRE;
 use super::super::graphics::HAIRLINE;
 use super::lex::{Lexer, Tok};
-use super::obj::{self, Obj, V};
+use super::obj::{self, NameEncoding, Obj, V};
 use super::paint::{self, Global, GradientDef, Instance, Named, ShownNames};
 use crate::ps;
 
@@ -127,23 +145,43 @@ mod art;
 mod containers;
 mod directives;
 mod document;
+mod graph;
 mod masks;
 mod on_path;
 mod ops;
+mod raster;
 mod types;
 
 pub(crate) use art::join_and;
-use art::preview_png;
-pub use document::{BindingRef, Brushes, PaletteSwatches, VariableRead, artboards, bindings_note, brushes, graphic_styles, palette, variables};
+use art::{included_document, preview_png};
+pub use document::{
+    BindingRef, Brushes, PaletteSwatches, Symbols, VariableRead, active_artboard, artboards, bindings_note, brushes, graphic_styles, palette,
+    symbols, variables,
+};
 pub(crate) use document::{slot_frame, slot_of};
-pub use types::IMAGE_TOO_LARGE;
-use types::{BLEND_BUDGET, FLIP, Frame, GState, Graph, Kind, PatternHead, PendingEnvelope, Place, Raster, SymbolHead};
+use graph::Graph;
+#[cfg(test)]
+pub(crate) use on_path::on_path_measured;
+#[cfg(test)]
+pub(crate) use ops::array_slots;
+pub(crate) use ops::{ParsedStyle, parse_art_style, parsed_moves_with, parsed_type_color, read_parsed_style, read_style_list};
+#[cfg(test)]
+pub(crate) use raster::with_image_limits;
+pub(crate) use types::BLEND_BUDGET;
+pub(crate) use types::LINKED_PREVIEWS;
+pub(crate) use types::MAX_NODES;
+use types::{BrushArtColors, FLIP, Frame, GState, Kind, MAX_PLACED_DOCUMENT, PatternHead, PendingEnvelope, Place, PlacedTail, Raster, SymbolHead};
 #[cfg(test)]
 pub use types::{GRAPH_PLAIN, GRAPH_UNENDED, LINKED_PLACEHOLDERS, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, VERSIONED_UNENDED};
+pub use types::{PlacedEps, PlacedPage};
 pub(super) use types::{blend_mode, blend_name};
 
 #[path = "legacy_text.rs"]
 mod legacy_text;
+
+// The `.ai` writer defines symbols as this reader keeps them.
+pub(crate) use directives::symbol_art_member;
+pub(crate) use types::MAX_SYMBOLS;
 
 /// What the editing data holds: the document of its art, and where its art space is.
 #[derive(Debug)]
@@ -167,6 +205,10 @@ pub struct Structure {
     pub unread_elsewhere: Vec<(NodeId, Rect)>,
     /// The names of text objects, by their slot's id.
     pub slot_names: HashMap<NodeId, String>,
+    /// The clipping groups whose type clips them, by the group's id: the text slot of that type,
+    /// the group's last object ([`Reader::end_container`]). Once the slot holds its type, the type
+    /// clips the group ([`clip_by_type`]).
+    pub type_clips: HashMap<NodeId, NodeId>,
     /// Where the drawn looks lay that objects read with their art style took the place of (the
     /// document's coordinates): the page draws Illustrator's rendering of those styles there.
     pub restyled: Vec<Rect>,
@@ -178,13 +220,27 @@ pub struct Structure {
     /// move, in its pixels, that places them there (the corner of the box they are written with,
     /// in place of the canvas point of art space's origin).
     pub placed_elsewhere: Vec<(NodeId, Affine)>,
+    /// The placed files that are pages of PDF or `.ai` files.
+    pub placed_pages: Vec<PlacedPage>,
+    /// Included EPS files whose previews wait for variable binding before conversion.
+    pub placed_eps: Vec<PlacedEps>,
     /// The live envelopes read from the editing data, by id, with the drawn art each took the place
     /// of: the importer puts that art back when the layers with the envelopes don't draw as the page.
     pub envelopes_drawn: Vec<(NodeId, Node)>,
+    /// The warped text objects, checked against their drawn looks once their type is laid out.
+    pub warped_type: super::envelope::WarpedType,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
+    /// The paints the text document's characters take in place of their own colors, by the name
+    /// of the art style that gives each: the styles that are one paint, a pattern this read,
+    /// placed in the document, or a color linked to its swatch at its tint (see
+    /// `ate::Texts::with_paints`).
+    pub text_paints: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
+    /// The data's symbols are at their own size, whatever its scale: VectorCraft wrote it (its
+    /// `%%Creator` is [`crate::ai_editing::CREATOR_TEXT`]).
+    pub symbols_own_size: bool,
     /// The objects by their XML id (`AI10_ArtUID`), a text object by its slot's id: `None` for an
     /// id two objects have.
     pub xml_ids: HashMap<String, Option<NodeId>>,
@@ -216,23 +272,69 @@ pub(super) fn remember_xml_id(xml_ids: &mut HashMap<String, Option<NodeId>>, byt
     }
 }
 
+/// [`read_in`], names that aren't UTF-8 read as Windows-1252.
+#[cfg(test)]
+pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
+    read_in(data, large_canvas, NameEncoding::default())
+}
+
 /// Read the structure of the editing data `data`, applying the file's `%AI24_LargeCanvasScale` only
 /// when `large_canvas` is set: an EPS's page is drawn at the full size, but a `.ai`'s PDF part may
-/// keep the reduced one, which the PDF import reads as it is (#2031).
-pub fn read(data: &[u8], large_canvas: bool) -> Result<Structure, String> {
-    let mut r = Reader::with_names(data);
-    r.large_canvas = large_canvas.then_some(1.0);
+/// keep the reduced one, which the PDF import reads as it is (#2031). Names that aren't UTF-8
+/// (layers, objects, artboards, colors, gradients, patterns, graphic styles, swatches, brushes,
+/// symbols, variables and data sets) are read in `names`, each with a warning.
+pub fn read_in(data: &[u8], large_canvas: bool, names: NameEncoding) -> Result<Structure, String> {
+    read_with(data, large_canvas, false, names)
+}
+
+/// [`read_in`] for a file whose page art replaces the objects the reader doesn't read (see
+/// [`Reader::unread_box`]): an image past the hard limits ([`raster::Limits`]) is then such an
+/// object, where [`read_in`] leaves it out with a note.
+pub(crate) fn read_over_page(data: &[u8], large_canvas: bool, names: NameEncoding) -> Result<Structure, String> {
+    read_with(data, large_canvas, true, names)
+}
+
+/// [`read_in`] (or [`read_over_page`] when `page_art`) for the program of a `.ai` in the legacy
+/// format: one of versions 3 and 4 that has a template box but no art size has a US Letter
+/// artboard ([`Reader::sized_board`]).
+pub(crate) fn read_program(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+    let mut r = Reader::with_names(data, names);
+    r.legacy_ai = true;
+    r.read_as(large_canvas, page_art)
+}
+
+fn read_with(data: &[u8], large_canvas: bool, page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+    Reader::with_names(data, names).read_as(large_canvas, page_art)
+}
+
+impl Reader<'_> {
+    /// The structure read, the declared large canvas scale applied when `large_canvas`, the page's
+    /// art replacing the objects not read when `page_art` ([`read_over_page`]).
+    fn read_as(mut self, large_canvas: bool, page_art: bool) -> Result<Structure, String> {
+        self.large_canvas = large_canvas.then_some(1.0);
+        self.page_art = page_art;
+        self.run()?;
+        self.finish()
+    }
+}
+
+/// How many objects [`read`] counts against [`MAX_NODES`] in the editing data `data`.
+#[cfg(test)]
+pub(crate) fn objects_read(data: &[u8]) -> Result<usize, String> {
+    let mut r = Reader::with_names(data, NameEncoding::default());
     r.run()?;
-    r.finish()
+    Ok(r.nodes)
 }
 
 /// [`read`] for editing data kept apart from the program `ps` it came with (an EPS's private
 /// data): the program's header gives the author and the custom colors the editing data's header
-/// doesn't.
-pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structure, String> {
-    let header = Reader::header_of(ps);
-    let mut r = Reader::with_names(data);
+/// doesn't. `page_art`: as [`read_over_page`] reads a file. `names`: the encoding of names that
+/// aren't UTF-8.
+pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8], page_art: bool, names: NameEncoding) -> Result<Structure, String> {
+    let header = Reader::header_of(ps, names);
+    let mut r = Reader::with_names(data, names);
     r.large_canvas = large_canvas.then_some(1.0);
+    r.page_art = page_art;
     // The program's custom colors have swatches of their names, which no gradient or pattern takes.
     for n in &header.custom_colors {
         r.global_names.reserve(&n.name);
@@ -249,8 +351,8 @@ pub fn read_beside(data: &[u8], large_canvas: bool, ps: &[u8]) -> Result<Structu
 /// and patterns. Names come only from what the reader reads: not from the alternates of versioned
 /// content, the prolog, resources, sections it skips (such as symbols and the text document) or
 /// what follows the trailer. The palette the reader keeps is the last one outside those and the
-/// sections it reads on their own.
-fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
+/// sections it reads on their own. Names that aren't UTF-8 are read in `encoding`.
+fn swatch_names(data: &[u8], encoding: NameEncoding) -> (ShownNames, Option<&[u8]>) {
     /// The sections the reader reads on their own whose definitions and colors it keeps.
     const READ_APART: &[&str] = &["BeginPattern", "BeginBrushPattern", "BeginPluginObject", "BeginArtStyles", "BeginArtStyleList"];
     /// Whether the marker `m` ends what began with `begin` and ends with `end`, `depth` of its kind
@@ -268,7 +370,9 @@ fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
     }
     let mut names = ShownNames::default();
     names.reserve(vectorcraft_color::swatch::REGISTRATION);
-    let mut colors = paint::ColorNames::default();
+    // The reader reads these names again, and keeps the notes on them.
+    let mut decoder = obj::Names::new(encoding);
+    let mut colors = paint::ColorNames::new(encoding);
     let mut lex = Lexer::new(data);
     // What the reader skips wherever it is (the marker of one of its kind nested in it, its end
     // marker, how many are open inside it, and where reading goes on when it doesn't end), the
@@ -343,7 +447,7 @@ fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
             // A palette's names are those of the palette kept, as the palette reads them.
             _ if skip.is_some() || palette_at.is_some() || section.is_some_and(|s| !s.3) => continue,
             Tok::Str(s) | Tok::Hex(s) if std::mem::take(&mut head) => {
-                let text = obj::text(s);
+                let text = decoder.bytes(s);
                 if !text.contains('\n') {
                     names.reserve(&text);
                 }
@@ -353,7 +457,7 @@ fn swatch_names(data: &[u8]) -> (ShownNames, Option<&[u8]>) {
         colors.token(t.tok);
     }
     colors.gradients.iter().filter(|n| !n.contains('\n')).for_each(|n| names.reserve(n));
-    let palette = palette.map(super::palette::palette).unwrap_or_default();
+    let palette = palette.map(|p| super::palette::palette(p, &mut decoder)).unwrap_or_default();
     if palette.is_empty() {
         for mode in [ColorMode::Rgb, ColorMode::Cmyk] {
             let (swatches, groups) = vectorcraft_color::default_swatches(mode.model());
@@ -376,9 +480,13 @@ struct BrushesKept {
     read: (usize, usize),
     /// Which of [`Reader::brush_drafts`] are kept as brushes.
     kept: Vec<bool>,
-    /// The art an Art brush draws as the file does.
-    bending: HashSet<String>,
+    /// The art an Art brush draws as the file does, with its length.
+    bending: HashMap<String, f64>,
 }
+
+/// What the pages the art may be compared with are worked out from: the move into the document,
+/// the number of artboards, the first artboard and the art's bounding box.
+type PageSources = (Option<Affine>, usize, Option<Rect>, Option<Rect>);
 
 struct Reader<'a> {
     lex: Lexer<'a>,
@@ -425,10 +533,16 @@ struct Reader<'a> {
     /// a global process colour, so these make swatches only for names no colour operator defines.
     stop_spots: Vec<Named>,
     raster: Option<Raster>,
+    /// The samples of the image being read are on `%_` lines (`%_%%BeginData`): it is the copy of
+    /// a styled object there, as the other objects on those lines are.
+    image_hidden: bool,
     /// The file `XG` names for the image after it (`XF`), until an image is read.
     image_link: Option<String>,
     /// The placed file being read (`%AI5_BeginPlace` … `~`).
     place: Option<Place>,
+    /// The placed files just read, until the dictionary after each: at most one for each depth of
+    /// frames, the innermost last.
+    placed_tails: Vec<PlacedTail>,
     /// The last object read is the last child of the innermost frame, and nothing started since.
     after_object: bool,
     /// The last object read is an image, and only the operators that end its raster (`XH`, `Xr`,
@@ -447,6 +561,10 @@ struct Reader<'a> {
     symbol_bounds: HashMap<String, Rect>,
     /// The symbols read, by their name in the file → their name in the document.
     symbol_names: HashMap<String, String>,
+    /// The heads of the arrowhead symbols the art styles' strokes name, by the symbol's name in
+    /// the file (`None`: not a symbol read, or not one read as a head), read with the styles
+    /// ([`Reader::read_arrowheads`]).
+    arrowheads: HashMap<String, Option<Arc<CustomArrowhead>>>,
     /// The names the symbols read have in the document, and for each name read more than once,
     /// the number its next copy is tried with.
     symbol_taken: HashSet<String>,
@@ -491,12 +609,31 @@ struct Reader<'a> {
     blend_budget: usize,
     /// The group on `%_` lines an envelope's dictionary just took (see [`Reader::drop_envelope_art`]).
     envelope_art: Option<Node>,
+    /// The envelope dictionaries whose `AIDeformArtKey` block (`X=` … `X+`) is being read, as how
+    /// many frames were open with each one innermost, innermost last. The block's art is art: a
+    /// dictionary in it is read as it is in a container ([`Reader::end_obj`]).
+    envelope_blocks: Vec<usize>,
     /// Envelopes waiting for their drawn art, innermost last.
     envelopes: Vec<PendingEnvelope>,
-    /// How many more envelopes this import may draw to check ([`super::envelope::drawn_alike`]).
+    /// How many more envelopes and warped text objects this import may draw to check
+    /// ([`super::envelope::drawn_alike`]).
     envelope_checks: usize,
     /// How far the live envelopes read so far draw from their drawn art ([`super::envelope::Spent`]).
     envelope_spent: super::envelope::Spent,
+    /// [`Self::pages_in_doc`] as last worked out, with what it was worked out from.
+    page_cache: Option<(PageSources, Arc<[Rect]>)>,
+    /// How many more strokes with dashes aligned to corners this import may draw to check
+    /// ([`super::MAX_DASH_CHECKS`]).
+    dash_checks: usize,
+    /// Whether this reader reads only what comes before the first layer (swatches, brushes, styles,
+    /// symbols) for a file whose layers another reader reads: it makes no more checks once it
+    /// reaches the layers, so it spends none of theirs.
+    defs_only: bool,
+    /// The text objects read with a Warp ([`super::envelope::WarpedType`]).
+    warped_type: Vec<super::envelope::WarpedLook>,
+    /// The envelopes of type read with their drawn art, settled once the type is laid out
+    /// ([`super::envelope::TypedEnvelope`]).
+    typed_envelopes: Vec<super::envelope::TypedEnvelope>,
     /// The live envelopes made so far and the drawn art each took the place of
     /// ([`Structure::envelopes_drawn`]).
     envelopes_drawn: Vec<(NodeId, Node)>,
@@ -513,7 +650,8 @@ struct Reader<'a> {
     /// The state a layer's last group or compound path had before an `Xy` right after its end,
     /// which is the layer's instead when the layer's own `7 () XW` follows.
     container_undo: Option<(f32, BlendMode, bool, Knockout, bool)>,
-    /// Painted copies of clipping paths that have a fill (drawn under what they clip).
+    /// The fills of compound clipping paths whose subpaths paint differently, as compound paths of their own (drawn
+    /// under what they clip).
     clip_fills: HashSet<NodeId>,
     /// Groups closed as an object's drawn look (`9 () XW`).
     looks: HashSet<NodeId>,
@@ -524,6 +662,10 @@ struct Reader<'a> {
     compound_groups: HashSet<NodeId>,
     /// Groups of a text object and its look (see [`Self::style_marker`]), which aren't a look.
     text_looks: HashSet<NodeId>,
+    /// Objects followed by samples of the pen (`(…) Xt n XD`), which aren't read: such an object
+    /// whose style has a Calligraphic brush that varies with the pen keeps its drawn look (see
+    /// [`Self::style_marker`]).
+    pen_samples: HashSet<NodeId>,
     /// The gradient mesh being read (`/Mesh X!` … `/End X!`), and whether it started on a `%_` line.
     mesh: Option<(super::mesh::MeshReader, bool)>,
     /// The art styles (`%AI9_BeginArtStyles`), by name.
@@ -541,6 +683,10 @@ struct Reader<'a> {
     placeholders: Vec<Rect>,
     /// See [`Structure::placed_elsewhere`].
     placed_elsewhere: Vec<(NodeId, Affine)>,
+    /// See [`Structure::placed_pages`].
+    placed_pages: Vec<PlacedPage>,
+    /// See [`Structure::placed_eps`].
+    placed_eps: Vec<PlacedEps>,
     unread_elsewhere: Vec<(NodeId, Rect)>,
     /// CMYK samples converted, by value.
     cmyk_cache: HashMap<[u8; 4], [u8; 3]>,
@@ -552,6 +698,8 @@ struct Reader<'a> {
     obj_hidden: bool,
     /// The names of text objects, by their slot's id.
     slot_names: HashMap<NodeId, String>,
+    /// [`Structure::type_clips`].
+    type_clips: HashMap<NodeId, NodeId>,
     /// [`Structure::xml_ids`].
     xml_ids: HashMap<String, Option<NodeId>>,
     /// The bytes of the ids in `xml_ids`.
@@ -559,12 +707,21 @@ struct Reader<'a> {
     /// The artboard's size and centre in files without artboards or crop marks.
     art_size: Option<(f64, f64)>,
     template_center: Option<(f64, f64)>,
+    /// The data is the program of a `.ai` in the legacy format ([`read_program`]), not an EPS's:
+    /// without an art size, its artboard can be US Letter ([`Reader::sized_board`]).
+    legacy_ai: bool,
+    /// The header has `%AI5_FileFormat`, which files of version 5 and later write.
+    file_format: bool,
     /// `%AI24_LargeCanvasScale`: a Large Canvas document's editing data is written at 1/N scale
     /// (see [`Reader::ensure_space`]); 1 (no scaling) when the file doesn't declare one, `None`
     /// when the declared factor is not applied ([`read`]).
     large_canvas: Option<f64>,
+    /// The file has page art to replace the objects that aren't read ([`read_over_page`]).
+    page_art: bool,
     /// The declared `%AI24_LargeCanvasScale` (1 without one), applied or not.
     canvas_scale: f64,
+    /// [`Structure::symbols_own_size`], from the header's `%%Creator`.
+    symbols_own_size: bool,
     /// `%AI5_RulerUnits` from the header (Illustrator 7 spec table 3, plus centimeters and pixels).
     ruler_units: Option<u8>,
     /// This reader reads a pattern's definition (see [`Reader::define_pattern`]).
@@ -577,6 +734,8 @@ struct Reader<'a> {
     /// The legacy text object being read (`To` … `TO`), and the modal type attributes.
     text: Option<legacy_text::LegacyText>,
     type_state: legacy_text::TypeState,
+    /// How names that aren't UTF-8 are read, and the notes on them.
+    names: obj::Names,
     /// The file has brush objects (the brush manager's order or a brush).
     brush_objects: bool,
     /// The brush manager's order.
@@ -585,13 +744,15 @@ struct Reader<'a> {
     brush_drafts: Vec<super::brush::BrushDraft>,
     /// The art of the brushes (`%AI8_BeginBrushPattern`), by name.
     brush_art: HashMap<String, Node>,
+    /// The colors of the art in [`Reader::brush_art`], by name.
+    brush_art_colors: HashMap<String, BrushArtColors>,
     /// The brush art sections read so far, repeated names included.
     brush_art_sections: usize,
     /// What the brushes and brush art read so far give a brushed stroke.
     brushes_kept: BrushesKept,
     /// Brush objects that weren't read.
     brushes_unread: usize,
-    /// The graph being read (see [`Reader::graph_record`]).
+    /// The graph being read (see [`graph`]).
     graph: Option<Graph>,
     /// The multi-layer mask being read (`Mb` … `MB`), which goes on past a layer's end.
     multi_mask: Option<masks::MultiMask>,
@@ -609,21 +770,59 @@ pub(crate) fn is_look_slot(name: Option<&str>) -> bool {
     name == Some(document::LOOK_SLOT)
 }
 
+/// Make the clipping groups of [`Structure::type_clips`] in `n` and its groups clip by their type,
+/// once their slots are filled: where a group's slot became one text object (`typed` gives its id by
+/// the slot's) that is still the group's last object, that text object moves to the front as its
+/// clipping path, and `clipping` is called on it. Where the slot was left empty or became several
+/// objects, the group stays as read, unclipped. How many groups clip.
+pub(crate) fn clip_by_type(
+    n: &mut Node,
+    clips: &HashMap<NodeId, NodeId>,
+    typed: &impl Fn(NodeId) -> Option<NodeId>,
+    clipping: &mut impl FnMut(&mut Node),
+) -> usize {
+    if clips.is_empty() || matches!(n.kind, NodeKind::Compound { .. }) {
+        return 0;
+    }
+    let mut made = 0;
+    if let Some(children) = n.children_mut() {
+        for c in children.iter_mut().filter(|c| c.children().is_some_and(|k| !k.is_empty())) {
+            made += clip_by_type(Arc::make_mut(c), clips, typed, clipping);
+        }
+    }
+    let Some(text) = clips.get(&n.id).and_then(|slot| typed(*slot)) else { return made };
+    if let NodeKind::Group { children, clip } = &mut n.kind
+        && !*clip
+        && children.last().is_some_and(|last| last.id == text && matches!(last.kind, NodeKind::Text(_)))
+        && let Some(mut last) = children.pop()
+    {
+        clipping(Arc::make_mut(&mut last));
+        children.insert(0, last);
+        *clip = true;
+        made += 1;
+    }
+    made
+}
+
 impl<'a> Reader<'a> {
     /// A reader of the editing data `data` as a whole, with the names its gradients and patterns
     /// get in the document and its art styles found first ([`swatch_names`]): the symbols defined
-    /// before the art styles section use them too.
-    fn with_names(data: &'a [u8]) -> Self {
+    /// before the art styles section use them too. Names that aren't UTF-8 are read in `encoding`.
+    fn with_names(data: &'a [u8], encoding: NameEncoding) -> Self {
         let mut r = Self::new(data);
-        let (names, styles) = swatch_names(data);
+        r.names = obj::Names::new(encoding);
+        let (names, styles) = swatch_names(data, encoding);
         r.global_names = names;
         if let Some(section) = styles {
-            r.styles = super::style::art_styles(section);
+            r.styles = super::style::art_styles_in(section, &mut r.names);
         }
         r
     }
 
     fn new(data: &'a [u8]) -> Self {
+        // An envelope's saved margins and its check against its drawn art measure type by its
+        // glyphs, as the app maps it.
+        vectorcraft_text::register_envelope_ink();
         let mut doc = Document::new(1.0, 1.0);
         doc.layers.clear();
         Self {
@@ -656,6 +855,7 @@ impl<'a> Reader<'a> {
             spots: Vec::new(),
             stop_spots: Vec::new(),
             raster: None,
+            image_hidden: false,
             image_link: None,
             place: None,
             foreign_data: None,
@@ -668,6 +868,7 @@ impl<'a> Reader<'a> {
             unread: Vec::new(),
             symbol_bounds: HashMap::new(),
             symbol_names: HashMap::new(),
+            arrowheads: HashMap::new(),
             symbol_taken: HashSet::new(),
             symbol_suffix: HashMap::new(),
             symbol_art_bounds: HashMap::new(),
@@ -692,15 +893,22 @@ impl<'a> Reader<'a> {
             blend_record: None,
             blend_budget: BLEND_BUDGET,
             envelope_art: None,
+            envelope_blocks: Vec::new(),
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
+            page_cache: None,
+            dash_checks: super::MAX_DASH_CHECKS,
+            defs_only: false,
+            warped_type: Vec::new(),
+            typed_envelopes: Vec::new(),
             envelopes_drawn: Vec::new(),
             clip_fills: HashSet::new(),
             looks: HashSet::new(),
             ruler_guides: HashMap::new(),
             compound_groups: HashSet::new(),
             text_looks: HashSet::new(),
+            pen_samples: HashSet::new(),
             group_ended: false,
             mesh_ended: false,
             layer_state: None,
@@ -713,34 +921,53 @@ impl<'a> Reader<'a> {
             restyled: vec![],
             placeholders: vec![],
             placed_elsewhere: vec![],
+            placed_pages: vec![],
+            placed_eps: vec![],
+            placed_tails: vec![],
             unread_elsewhere: vec![],
             mesh: None,
             cmyk_cache: HashMap::new(),
             done: false,
             obj_hidden: false,
             slot_names: HashMap::new(),
+            type_clips: HashMap::new(),
             xml_ids: HashMap::new(),
             xml_id_bytes: 0,
             art_size: None,
             template_center: None,
+            legacy_ai: false,
+            file_format: false,
             large_canvas: None,
+            page_art: false,
             canvas_scale: 1.0,
+            symbols_own_size: false,
             ruler_units: None,
             pattern: None,
             pattern_tiles: HashMap::new(),
             v7_patterns: HashSet::new(),
             text: None,
             type_state: legacy_text::TypeState::default(),
+            names: obj::Names::default(),
             brush_objects: false,
             brush_order: None,
             brush_drafts: Vec::new(),
             brush_art: HashMap::new(),
+            brush_art_colors: HashMap::new(),
             brush_art_sections: 0,
             brushes_kept: BrushesKept::default(),
             brushes_unread: 0,
             graph: None,
             multi_mask: None,
         }
+    }
+
+    /// The line end just before `doc`, an included document the lexer has just read: the one that
+    /// ends its `%%BeginDocument:` line. `None` when `doc` isn't in the data read so far.
+    fn line_end_before(&self, doc: &[u8]) -> Option<&'static [u8]> {
+        let read = self.lex.slice(0, self.lex.offset());
+        let at = doc.as_ptr().addr().checked_sub(read.as_ptr().addr())?;
+        let before = read.get(..at)?;
+        [&b"\r\n"[..], b"\r", b"\n"].into_iter().find(|e| before.ends_with(e))
     }
 
     fn run(&mut self) -> Result<(), String> {
@@ -759,17 +986,20 @@ impl<'a> Reader<'a> {
                     self.op(w, hidden)?;
                 }
                 Tok::Comment(c) => self.comment(c, hidden)?,
-                Tok::Data(d) => self.image(d)?,
+                Tok::Data(d) => self.image(d, hidden)?,
                 Tok::Preview(d) => {
                     if let Some(p) = self.place.as_mut() {
                         p.preview = preview_png(d);
                     }
                 }
-                // A placed file's document, included whole: its art isn't read here. When no
-                // `%%EndDocument` ends it, the placed file isn't read.
+                // A placed file's document, included whole: its art isn't read here, its bytes are
+                // kept for the placed file. When no `%%EndDocument` ends it, the placed file isn't
+                // read.
                 Tok::Document(d) => {
+                    let sep = d.and_then(|d| self.line_end_before(d));
                     if let Some(p) = self.place.as_mut() {
                         p.broken |= d.is_none();
+                        p.document = d.filter(|d| d.len() <= MAX_PLACED_DOCUMENT).map(|d| included_document(d, hidden, sep));
                     }
                 }
             }

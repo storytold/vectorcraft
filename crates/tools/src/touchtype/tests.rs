@@ -388,6 +388,60 @@ fn the_box_of_a_character_drawn_with_two_glyphs_holds_both() {
     }
 }
 
+/// A character of type on an open path that is not drawn, because it falls before the path's
+/// start, has no box, so the tool shows no handles for it; a drawn character of the same type has
+/// one.
+#[test]
+fn a_character_before_an_open_paths_start_has_no_box() {
+    let mut d = Document::new(600.0, 500.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    let mut text = TextObject::point(Point::ZERO, "Type", CharStyle { size: 40.0, ..Default::default() });
+    let line =
+        vectorcraft_geom::PathData::new(vec![vectorcraft_geom::SubPath::polyline(&[Point::new(100.0, 200.0), Point::new(500.0, 200.0)], false)]);
+    text.kind = vectorcraft_doc::TextKind::OnPath { path: line, start: -0.05, end: None };
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(text.clone())))).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let p = paint();
+    let cx = cx(&d, &s, &p);
+    let lay = vectorcraft_text::layout(FontDb::global(), &text);
+    assert!(lay.glyphs[0].off_path && !lay.glyphs[1].off_path, "the T is before the path's start, the y is on it");
+    assert!(char_box(&text, &lay, 0).is_none());
+    assert!(TouchTypeTool { target: Some((id, 0)), ..Default::default() }.current(&cx).is_none());
+    assert!(TouchTypeTool { target: Some((id, 1)), ..Default::default() }.current(&cx).is_some());
+    // An All Caps ß is two glyphs: with the first before the path's start and the second drawn, the
+    // character has the second's box.
+    let mut caps = text.clone();
+    caps.runs = vec![vectorcraft_doc::TextRun::new("ße", CharStyle { size: 40.0, all_caps: true, ..Default::default() })];
+    if let vectorcraft_doc::TextKind::OnPath { start, .. } = &mut caps.kind {
+        *start = 0.0;
+    }
+    let adv = vectorcraft_text::layout(FontDb::global(), &caps).glyphs[0].advance;
+    if let vectorcraft_doc::TextKind::OnPath { start, .. } = &mut caps.kind {
+        *start = -1.2 * adv / 400.0;
+    }
+    let mut d = Document::new(600.0, 500.0);
+    let l = d.layers[0].id;
+    let id = d.alloc_id();
+    d.insert(Some(l), 0, Node::new(id, NodeKind::Text(Box::new(caps.clone())))).unwrap();
+    let mut s = Selection::default();
+    s.add(id);
+    let cx = crate::testutil::cx(&d, &s, &p);
+    let lay = vectorcraft_text::layout(FontDb::global(), &caps);
+    assert!(lay.glyphs[0].byte == 0 && lay.glyphs[1].byte == 0 && lay.glyphs[0].off_path && !lay.glyphs[1].off_path);
+    let t = TouchTypeTool { target: Some((id, 0)), ..Default::default() };
+    let (_, _, b) = t.current(&cx).expect("the ß has a box");
+    assert!((b.pen - lay.glyphs[1].xf * Point::ZERO).hypot() < 1e-9, "{:?}", b.pen);
+    // A press on its drawn glyph, on the path, starts a drag of it.
+    let q = glyph_quad(&lay.glyphs[1]).unwrap();
+    let at = Point::new(q[0].midpoint(q[2]).x, 200.0);
+    assert!(in_quad(&q, at), "{at:?} {q:?}");
+    let mut t = TouchTypeTool::default();
+    let acts = drag(&mut t, &cx, at, at + Vec2::new(0.0, -5.0));
+    assert_eq!(preview(&acts[1])["start"], 0, "{:?}", acts[1]);
+}
+
 /// A glyph skewed by its transform (the Skew effect of type on a path) keeps its own box.
 #[test]
 fn a_skewed_glyph_keeps_its_own_box() {
@@ -416,6 +470,7 @@ fn the_tool_is_made_by_its_id() {
 
 #[test]
 fn touch_type_rtl_middle_character_can_drag_and_nudge_along_its_line() {
+    let _inputs = crate::testutil::changing_layout_inputs();
     use vectorcraft_text::test_fonts::{RIGHT_TO_LEFT_OPTICAL_FAMILY, right_to_left_optical_font};
 
     // The process-wide database deduplicates the same synthetic face across tests.

@@ -141,9 +141,9 @@ pub(crate) fn follow(
                 read.insert(path.clone(), (status, Some(file)));
                 let (text, _) = crate::decode(&b);
                 let mut tallies = Acc::new(limits);
-                let text = analyze::unescaped(text, &mut tallies);
+                let (text, _) = analyze::unescaped(text, &mut tallies);
                 let declared = analyze::declarations(&text, &mut tallies);
-                let scan = analyze::scan(&text, &declared, Some(&path), Rc::clone(&inc.paths), known, &mut tallies);
+                let scan = analyze::scan(&text, &declared, &[], Some(&path), Rc::clone(&inc.paths), known, &mut tallies);
                 acc.steps = acc.steps.saturating_add(tallies.steps);
                 known.add(scan.known, limits.entries);
                 checked.push(ReadFile { path: path.clone(), bytes: b, paths: Rc::clone(&inc.paths) });

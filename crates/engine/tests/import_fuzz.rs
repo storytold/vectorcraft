@@ -1,13 +1,16 @@
-//! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF and DXF input,
-//! mutated raster images (Photoshop documents among them) placed with File → Place, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
-//! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets other apps save as text (`.kys`), and native files (compressed, damaged, saved for older versions),
+//! Untrusted files never crash the app: garbage, truncated, mutated and hostile SVG, PDF, DXF and HP-GL input,
+//! mutated raster images (Photoshop documents and JPEG XL images among them) placed with File → Place, Photoshop documents' slices (damaged or cut short) opened and placed, and swatch (`.vcswatches`, `.gpl`, `.ase`), graphic style (`.vcstyles`), flattener preset
+//! (`.vcflattener`) and export preset (`.vcexportpresets`) libraries, shortcut sets and action sets other apps save as text (`.kys`, `.aia`), and native files (compressed, damaged, saved for older versions),
 //! must load as an error or as a document that then renders and exports, without a panic; nor may
 //! bitmaps, PDF and text pasted from other apps, nor EMF and WMF pictures (damaged files, records
-//! of every kind with random contents) opened, placed or pasted, nor EPS and PostScript files
+//! of every kind with random contents) opened, placed or pasted, nor PICT pictures (damaged files,
+//! opcodes with random contents) opened or placed, nor EPS and PostScript files
 //! (damaged ones, hostile programs) read by the PostScript interpreter, nor the editing data of
 //! Illustrator EPS and `.ai` files (the layers they carry, damaged or hostile), nor Affinity documents
-//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor the
-//! font files a folder search reads (damaged fonts, collections whose headers give any count of
+//! (mutated object streams, archives and indexed PNG previews, hostile image dimensions), nor
+//! `.cdr` drawings (mutated and cut short, plain, compressed and packaged, opened and placed),
+//! nor `.cmx` files (mutated, cut short and garbage after the header, opened and placed),
+//! nor the font files a folder search reads (damaged fonts, collections whose headers give any count of
 //! faces), nor scripts written for the reference app checked without running them (garbage,
 //! generated script text and mutated scripts).
 //!
@@ -36,7 +39,41 @@ fn config() -> ProptestConfig {
 fn affinity_preview_sample() -> Vec<u8> {
     let im = image::RgbaImage::from_pixel(2, 1, image::Rgba([220, 40, 60, 255]));
     let mut png = Vec::new();
-    im.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    {
+        let __dyn: image::DynamicImage = im.into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| png.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut b = vec![0; 72];
     b[..4].copy_from_slice(vectorcraft_affinity::MAGIC);
     b[4..6].copy_from_slice(&12u16.to_le_bytes());
@@ -265,6 +302,181 @@ proptest! {
             assert!(no_panic(s.execute("file.place.queue", &json!({"files":[p]}))).is_err());
         });
         prop_assert!(r.is_ok(), "Affinity placement panicked: {:?}", r.err());
+    }
+}
+
+// ---------- .cdr drawings ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn cdr_mutated_drawings_render_and_export(
+        version in prop::sample::select(vec![300u16, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300]),
+        compress: bool,
+        features: bool,
+        cut in 12usize..8192,
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        // The feature sample adds a style table, a clipping container and a lens to the shapes.
+        let compress = compress && version >= 700;
+        let mut bytes =
+            if features { craft_cdr::synth::feature_sample(version, compress) } else { craft_cdr::synth::sample(version, compress) };
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        bytes.truncate(cut);
+        survive("CDR drawing", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR drawing placement panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cdr_mutated_packages_render_and_export(
+        version in prop::sample::select(vec![1400u16, 1500, 1600, 2000, 2700]),
+        cut in prop::option::of(22usize..16384),
+        edits in prop::collection::vec((any::<usize>(), 0usize..8192, any::<u8>()), 0..24),
+    ) {
+        // The members are edited before they are zipped, so that the edits reach the drawing
+        // rather than stop at the CRC-32; the archive may then be cut short.
+        let mut members = if version < 1600 {
+            vec![craft_cdr::synth::Member { name: "content/riffData.cdr".into(), data: craft_cdr::synth::sample(version, true), deflate: false }]
+        } else {
+            let mut body = vec![craft_cdr::synth::chunk(b"vrsn", version.to_le_bytes().to_vec())];
+            body.extend(craft_cdr::synth::sample_content(version));
+            craft_cdr::synth::package16_members(version, &body, false, &[])
+        };
+        for (m, at, b) in edits {
+            let k = m % members.len();
+            let data = &mut members[k].data;
+            if !data.is_empty() {
+                let n = data.len();
+                data[at % n] = b;
+            }
+        }
+        let mut bytes = craft_cdr::synth::zip(&members, b"");
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CDR package", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR package placement panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cdr_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend(((4 + tail.len()) as u32).to_le_bytes());
+        bytes.extend(b"CDRB");
+        bytes.extend(tail);
+        survive("CDR garbage", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CDR placement panicked: {:?}", r.err());
+    }
+
+    // Drawings of versions 1 and 2 are not RIFF files: a header of offsets, then records.
+    #[test]
+    fn cdr_mutated_wl_drawings_render_and_export(
+        marker in prop::sample::select(vec![b'e', b'l', b'm']),
+        cut in prop::option::of(0usize..1024),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = craft_cdr::synth::wl_sample(marker);
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CDR drawing of version 1 or 2", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "placing a CDR drawing of version 1 or 2 panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cdr_garbage_after_a_wl_header_opens_and_places_without_panicking(
+        marker in prop::sample::select(vec![b'e', b'l', b'm']),
+        tail in prop::collection::vec(any::<u8>(), 0..2048),
+    ) {
+        // Offsets that fit the file, so the garbage is walked as records.
+        let mut bytes = vec![b'W', b'L', marker, 0];
+        bytes.extend(28u32.to_le_bytes());
+        bytes.extend(28u32.to_le_bytes());
+        bytes.extend((28 + tail.len() as u32).to_le_bytes());
+        bytes.extend([0; 12]);
+        bytes.extend(tail);
+        survive("CDR garbage of version 1 or 2", || vectorcraft_engine::cmd::fileio::load("x.cdr", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cdr", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "placing CDR garbage of version 1 or 2 panicked: {:?}", r.err());
+    }
+}
+
+// ---------- .cmx files ----------
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn cmx_mutated_files_render_and_export(
+        cut in prop::option::of(12usize..4096),
+        edits in prop::collection::vec((0usize..8192, any::<u8>()), 0..24),
+    ) {
+        let mut bytes = craft_cdr::synth_cmx::sample();
+        let n = bytes.len();
+        for (at, b) in edits { bytes[at % n] = b; }
+        if let Some(cut) = cut {
+            bytes.truncate(cut);
+        }
+        survive("CMX file", || vectorcraft_engine::cmd::fileio::load("x.cmx", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cmx", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
+    }
+
+    #[test]
+    fn cmx_garbage_opens_and_places_without_panicking(tail in prop::collection::vec(any::<u8>(), 0..2048)) {
+        // A 32-bit header, so the garbage is walked as chunks, tables and instructions.
+        let mut bytes = b"RIFF".to_vec();
+        let cont = craft_cdr::synth_cmx::cont(b'4', 1e-7);
+        bytes.extend(((4 + cont.len() + tail.len()) as u32).to_le_bytes());
+        bytes.extend(b"CMX1");
+        bytes.extend(cont);
+        bytes.extend(tail);
+        survive("CMX garbage", || vectorcraft_engine::cmd::fileio::load("x.cmx", &bytes).ok().map(|l| l.doc))?;
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width":100,"height":100})).unwrap();
+            let p = json!({"name":"x.cmx", "dataBase64":vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "CMX placement panicked: {:?}", r.err());
     }
 }
 
@@ -663,6 +875,49 @@ proptest! {
         survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
     }
 
+    /// Style sheets of descendant, child, sibling and `:not()` selectors over nested groups and the
+    /// `<use>` copies of a rectangle inside them, in an SVG and in an SVG image it shows: the import
+    /// measures their matching before its own cascade and the SVG reader run.
+    #[test]
+    fn svg_hostile_selectors_over_copies_never_panic(
+        sheet in r#"([a-z.#:()>+* ]{1,24}\{fill:red\} ?){1,6}"#,
+        depth in 1usize..12,
+        copies in 0usize..4,
+    ) {
+        let groups = format!("{}<rect id=\"r\" class=\"a\" width=\"1\" height=\"1\"/>{}", "<g class=\"a\">".repeat(depth), "</g>".repeat(depth));
+        let inner = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\"><style>{sheet}</style>{groups}{}</svg>",
+            "<use href=\"#r\"/>".repeat(copies)
+        );
+        let image = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\"><image href=\"data:image/svg+xml;base64,{}\" width=\"4\" height=\"4\"/></svg>",
+            vectorcraft_svg::base64_encode(inner.as_bytes())
+        );
+        for svg in [inner, image] {
+            survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
+        }
+    }
+
+    /// Clip paths made of text, of `<use>` elements showing text, and of both with shapes, each with
+    /// hostile attributes, clipping art that may clip by them in turn.
+    #[test]
+    fn svg_text_clip_paths_never_panic(
+        text in prop::collection::vec(arb_svg_attr(), 0..5),
+        used in prop::collection::vec(arb_svg_attr(), 0..5),
+        clip in prop::collection::vec(arb_svg_attr(), 0..3),
+        body in prop::collection::vec(arb_svg_element(1), 0..3),
+    ) {
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"><defs><text id=\"t\" font-size=\"20\"{}>ab<tspan dy=\"3\">c</tspan></text></defs><clipPath id=\"e\"{}><text y=\"30\"{}>Clip<tspan x=\"5\" y=\"60\">it</tspan></text><use href=\"#t\"{}/><rect width=\"5\" height=\"5\"/></clipPath><clipPath id=\"f\" clip-path=\"url(#e)\"><use xlink:href=\"#t\" x=\"9\"/></clipPath><rect width=\"90\" height=\"90\" clip-path=\"url(#e)\"/><g clip-path=\"url(#f)\">{}</g></svg>",
+            text.concat(),
+            clip.concat(),
+            text.concat(),
+            used.concat(),
+            body.concat()
+        );
+        survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
+    }
+
     #[test]
     fn svg_mutated_export_never_panics(
         cut in 0usize..20_000,
@@ -711,7 +966,9 @@ fn pdf_of(objs: &[Vec<u8>]) -> Vec<u8> {
 
 /// A file filling thousands of paths with function-based shadings, each a long PostScript
 /// calculator function of fine stripes, opens in bounded time: each shading is read once, and all
-/// of them within one budget of function evaluations per import (#3621 review).
+/// of them within one budget of function evaluations per import (#3621 review). One shading
+/// filling 5,000 paths takes no more evaluations than filling one, and twenty no more than the
+/// budget.
 #[test]
 fn pdf_many_paths_filled_with_long_function_shadings_open_in_bounded_time() {
     let shadings = 20;
@@ -726,13 +983,21 @@ fn pdf_many_paths_filled_with_long_function_shadings_open_in_bounded_time() {
                 .into_bytes()
         })
         .collect();
-    let content: String = (0..5000).map(|i| format!("/Pattern cs /P{} scn {} {} 2 2 re f\n", i % shadings, i % 100 * 2, i / 100 * 2)).collect();
-    let pdf = handmade_pdf_with(&content, &format!("<< /Pattern << {patterns}>> >>"), "[0 0 200 100]", &functions);
-    let start = std::time::Instant::now();
-    let d = vectorcraft_pdf::import(&pdf).unwrap();
-    let took = start.elapsed();
-    assert!(!d.layers.is_empty());
-    assert!(took < std::time::Duration::from_secs(30), "took {took:?}");
+    // The evaluations an import of a file filling `paths` paths with the first `used` shadings takes.
+    let evaluations = |used: usize, paths: usize| {
+        let content: String = (0..paths).map(|i| format!("/Pattern cs /P{} scn {} {} 2 2 re f\n", i % used, i % 100 * 2, i / 100 * 2)).collect();
+        let pdf = handmade_pdf_with(&content, &format!("<< /Pattern << {patterns}>> >>"), "[0 0 200 100]", &functions);
+        let before = vectorcraft_pdf::function_evaluations_of(&pdf);
+        let d = vectorcraft_pdf::import(&pdf).unwrap();
+        assert!(!d.layers.is_empty());
+        vectorcraft_pdf::function_evaluations_of(&pdf) - before
+    };
+    let limit = vectorcraft_pdf::function_evaluation_limit();
+    let (one, one_many) = (evaluations(1, 1), evaluations(1, 5000));
+    assert!(one > 0 && one < limit, "one path: {one} evaluations, the budget {limit}");
+    assert!(one_many <= one, "one shading: 5,000 paths took {one_many} evaluations, one path {one}");
+    let all = evaluations(shadings, 5000);
+    assert!(all <= limit, "{shadings} shadings: {all} evaluations, the budget {limit}");
 }
 
 /// One content-stream operation with junk operands.
@@ -1148,6 +1413,42 @@ fn styles(what: &str, data: &str) -> Result<(), TestCaseError> {
     })
 }
 
+/// A document with type and a character and a paragraph style, saved as pretty native text: what
+/// Load All Styles reads.
+fn saved_text_styles() -> String {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        let mut s = vectorcraft_engine::Session::new();
+        s.execute("file.new", &json!({"width": 200, "height": 100})).unwrap();
+        s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Styled"})).unwrap();
+        s.execute("charStyle.new", &json!({"name": "Lead", "attrs": {"size": 30, "tracking": 50, "underline": true, "leading": 36}})).unwrap();
+        s.execute("paraStyle.new", &json!({"name": "Centered", "attrs": {"justify": "Center", "space_after": 6, "hyphenate": true}})).unwrap();
+        let options = vectorcraft_format::SaveOptions { version: 2, pretty: true, ..vectorcraft_format::SaveOptions::default() };
+        let text = String::from_utf8(vectorcraft_format::save_with(&s.doc().unwrap().doc, &options).unwrap()).unwrap();
+        // Undamaged, it loads both styles.
+        let r = rich_session().execute("textStyle.loadAll", &json!({"data": text, "name": "fuzz.vectorcraft"})).unwrap();
+        assert_eq!((&r["charStyles"]["added"], &r["paraStyles"]["added"]), (&json!(["Lead"]), &json!(["Centered"])));
+        text
+    })
+    .clone()
+}
+
+/// Native file text `data`'s styles loaded into the rich document by Load All Styles, and each
+/// style it added applied to all of its type.
+fn text_styles(what: &str, data: &str) -> Result<(), TestCaseError> {
+    survive(what, || {
+        let mut s = rich_session();
+        let r = no_panic(s.execute("textStyle.loadAll", &json!({"data": data, "name": "fuzz.vectorcraft"}))).ok()?;
+        let _ = no_panic(s.execute("select.all", &json!({})));
+        for (list, kind) in [("charStyles", "charStyle"), ("paraStyles", "paraStyle")] {
+            for name in r[list]["added"].as_array().into_iter().flatten() {
+                let _ = no_panic(s.execute(&format!("{kind}.apply"), &json!({"name": name})));
+            }
+        }
+        Some((*s.doc().ok()?.doc).clone())
+    })
+}
+
 /// Libraries panel library file `data` imported, then each kind's first item used on the rich
 /// document, moved into its first group and next to its kind's last item, a colour and the
 /// selection added into that group next to the first ones, the group moved and deleted and the
@@ -1310,6 +1611,11 @@ proptest! {
     fn mutated_style_libraries_never_panic(cut in 0usize..20_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
         let text = saved("graphicStyle.saveLibrary", json!({}));
         styles("mutated style library", &mutate_text(&text, cut, &edits))?;
+    }
+
+    #[test]
+    fn mutated_text_style_files_never_panic(cut in 0usize..20_000, edits in prop::collection::vec(arb_edit(), 0..10)) {
+        text_styles("mutated text styles", &mutate_text(&saved_text_styles(), cut, &edits))?;
     }
 
     #[test]
@@ -1576,18 +1882,144 @@ fn shortcut_sets_past_the_caps_are_truncated() {
     }
 }
 
+// ---------- action sets ----------
+
+/// Action set `bytes` read with `actionSet.read`: an error, or a set within the caps.
+fn action_set(bytes: &[u8]) -> Result<(), TestCaseError> {
+    let read = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": "fuzz.aia"});
+    if let Ok(r) = no_panic(vectorcraft_engine::Session::new().execute("actionSet.read", &read)) {
+        let actions = r["actions"].as_array().cloned().unwrap_or_default();
+        prop_assert!(actions.len() <= 1000);
+        prop_assert!(actions.iter().all(|a| a["steps"].as_array().map_or(0, Vec::len) <= 10_000));
+        prop_assert!(actions.iter().map(|a| a["steps"].as_array().map_or(0, Vec::len)).sum::<usize>() <= 100_000);
+        prop_assert!(r["unread"].as_array().map_or(0, Vec::len) <= 1000);
+        let steps = || actions.iter().flat_map(|a| a["steps"].as_array().cloned().unwrap_or_default());
+        prop_assert!(steps().all(|s| s["values"].as_array().map_or(0, Vec::len) as u64 <= s["params"].as_u64().unwrap_or(0)));
+        prop_assert!(steps().map(|s| s["values"].as_array().map_or(0, Vec::len)).sum::<usize>() <= 100_000);
+    }
+    Ok(())
+}
+
+/// A token of a text action set: a block or field name, a number of any size and sign, text in
+/// parentheses (unclosed, nested or escaped too), bracketed or angled hexadecimal, a brace, a line
+/// end, NUL or bytes that aren't UTF-8.
+fn arb_aia_token() -> impl Strategy<Value = Vec<u8>> {
+    prop_oneof![
+        prop::sample::select(vec![
+            "/action-1",
+            "/event-2",
+            "/parameter-1",
+            "/name",
+            "/internalName",
+            "/localizedName",
+            "/isOn",
+            "/value",
+            "/key",
+            "/type",
+            "/x",
+            "/version",
+        ])
+        .prop_map(|t| t.as_bytes().to_vec()),
+        any::<i64>().prop_map(|n| n.to_string().into_bytes()),
+        Just(b"99999999999999999999999".to_vec()),
+        "[a-z ()\\\\]{0,12}".prop_map(|t| format!("({t})").into_bytes()),
+        prop::sample::select(vec!["(", ")", "\\", "[ 2 4142 ]", "[ 3 41 4", "[ 1 zz ]", "[", "]", "< 2 0a0b >", "<", ">", "2.5"])
+            .prop_map(|t| t.as_bytes().to_vec()),
+        prop::sample::select(vec!["[ 2 c328 ]", "(ustring)", "(boolean)"]).prop_map(|t| t.as_bytes().to_vec()),
+        prop::sample::select(vec!["{", "}", "\r\n", "\r", "\n"]).prop_map(|t| t.as_bytes().to_vec()),
+        prop::sample::select(vec![vec![0u8], vec![0xFF, 0xFE], vec![0xC3]]),
+    ]
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn action_set_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..600), head in any::<bool>()) {
+        let mut data = if head { b"/version 3 ".to_vec() } else { vec![] };
+        data.extend(bytes);
+        action_set(&data)?;
+    }
+
+    #[test]
+    fn hostile_action_sets_never_panic(tokens in prop::collection::vec(arb_aia_token(), 0..200), sep in prop::sample::select(vec![" ", "", "\t"])) {
+        let mut data = b"/version 3".to_vec();
+        for t in tokens {
+            data.extend(sep.as_bytes());
+            data.extend(t);
+        }
+        action_set(&data)?;
+    }
+}
+
+/// An action set past any cap (nesting, actions, steps, name length, file size) is read up to it
+/// and marked truncated.
+#[test]
+fn action_sets_past_the_caps_are_truncated() {
+    let read = |text: String| vectorcraft_engine::Session::new().execute("actionSet.read", &json!({ "data": text })).unwrap();
+    let deep = format!("/version 3 /action-1 {{ {} }}", "/x { ".repeat(40));
+    let actions = format!("/version 3 {}", "/action-1 { } ".repeat(1001));
+    let steps = format!("/version 3 /action-1 {{ {} }}", "/event-1 { } ".repeat(10_001));
+    let action = format!("/action-1 {{ {} }} ", "/event-1 { } ".repeat(10_000));
+    let all_steps = format!("/version 3 {}", action.repeat(11));
+    let long = format!("/version 3 /name [ 2000 {} ]", "6e".repeat(2000));
+    let big = format!("/version 3 /action-1 {{ }} {}", " ".repeat(8 << 20));
+    let uncapped: Vec<&str> = [("deep", deep), ("actions", actions), ("steps", steps), ("long", long), ("big", big)]
+        .into_iter()
+        .filter(|(_, text)| read(text.clone())["truncated"] != true)
+        .map(|(name, _)| name)
+        .collect();
+    assert!(uncapped.is_empty(), "{uncapped:?}");
+    let r = read(all_steps);
+    assert_eq!(r["truncated"], true);
+    assert_eq!(r["actions"].as_array().unwrap().iter().map(|a| a["steps"].as_array().unwrap().len()).sum::<usize>(), 100_000);
+}
+
 /// A small image of each raster format Place reads, with resolution metadata where it has some.
 fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
     let img = image::RgbImage::from_pixel(5, 3, image::Rgb([200, 40, 10]));
     let mut out = vec![];
     for (name, f) in [
-        ("a.png", image::ImageFormat::Png),
-        ("a.jpg", image::ImageFormat::Jpeg),
-        ("a.tif", image::ImageFormat::Tiff),
-        ("a.bmp", image::ImageFormat::Bmp),
+        ("a.png", craft_image_codecs::Format::Png),
+        ("a.jpg", craft_image_codecs::Format::Jpeg),
+        ("a.tif", craft_image_codecs::Format::Tiff),
+        ("a.bmp", craft_image_codecs::Format::Bmp),
     ] {
         let mut b = vec![];
-        img.write_to(&mut std::io::Cursor::new(&mut b), f).unwrap();
+        {
+            let __dyn: image::DynamicImage = img.clone().into();
+            let (__w, __h) = (__dyn.width(), __dyn.height());
+            let (__layout, __sample, __raw) = match __dyn {
+                image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+                image::DynamicImage::ImageLuma16(b) => (
+                    craft_image_codecs::ChannelLayout::Gray,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageLumaA16(b) => (
+                    craft_image_codecs::ChannelLayout::GrayA,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgb16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgb,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                image::DynamicImage::ImageRgba16(b) => (
+                    craft_image_codecs::ChannelLayout::Rgba,
+                    craft_image_codecs::SampleType::U16,
+                    b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+                ),
+                other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+            };
+            let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+            craft_image_codecs::encode(&__cimg, f, &craft_image_codecs::EncodeOptions::default()).map(|__b| b.extend_from_slice(&__b))
+        }
+        .unwrap();
         out.push((name, b));
     }
     out[0].1 = vectorcraft_engine::cmd::fileio::ppi::with_png_resolution(&out[0].1, (300.0, 150.0));
@@ -1615,6 +2047,33 @@ fn raster_samples() -> Vec<(&'static str, Vec<u8>)> {
     psb.extend((0..8).flat_map(|_| 2u32.to_be_bytes()));
     psb.extend((0..8u8).flat_map(|v| [0xfe, v * 30]));
     out.push(("a.psb", psb));
+    // JPEG XL: an 8-bit RGBA codestream, and a 16-bit gray one in the container.
+    use craft_jxl::{EncodeOptions, ImageRef, Layout, Samples};
+    let opts = EncodeOptions { lossless: true, ..EncodeOptions::default() };
+    let rgba: Vec<u8> = (0..60).map(|i| (i * 17) as u8).collect();
+    out.push((
+        "a.jxl",
+        craft_jxl::encode(
+            &ImageRef { width: 5, height: 3, layout: Layout::Rgba, samples: Samples::U8(&rgba) },
+            opts,
+            &craft_jxl::Metadata::default(),
+        )
+        .unwrap(),
+    ));
+    let gray_u16: Vec<u16> = (0..15).map(|i| u16::from_ne_bytes([(i * 2 * 41) as u8, ((i * 2 + 1) * 41) as u8])).collect();
+    let gray = craft_jxl::encode(
+        &ImageRef { width: 5, height: 3, layout: Layout::Gray, samples: Samples::U16(&gray_u16) },
+        opts,
+        &craft_jxl::Metadata::default(),
+    )
+    .unwrap();
+    let mut boxed = vec![0, 0, 0, 0x0c, b'J', b'X', b'L', b' ', 0x0d, 0x0a, 0x87, 0x0a];
+    boxed.extend(20u32.to_be_bytes());
+    boxed.extend(b"ftypjxl \0\0\0\0jxl ");
+    boxed.extend((8 + gray.len() as u32).to_be_bytes());
+    boxed.extend(b"jxlc");
+    boxed.extend(gray);
+    out.push(("b.jxl", boxed));
     out
 }
 
@@ -1642,6 +2101,372 @@ proptest! {
             let _ = no_panic(s.execute("file.place", &p));
         });
         prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
+    }
+
+    /// Mutated copies of the PSD and PSB samples never crash opening them with their layers, hidden
+    /// ones too: the PSD's layer records, channel lengths and data, and the PSB's layer count.
+    /// (Masks, clipping and groups are covered by `tests_psdlayers::damaged_layers_never_panic`, and
+    /// Invert, Threshold and Posterize layers by `tests_psdlayers::damaged_adjustment_layers_never_panic`.)
+    /// Neither does `document.psdInfo`, nor placing them with their layers as objects.
+    #[test]
+    fn mutated_layered_psds_open_without_panics(which in 6usize..8, cut in 0usize..1_000_000, edits in prop::collection::vec((0usize..1_000_000, any::<u8>()), 0..12)) {
+        let (name, mut bytes) = raster_samples().swap_remove(which);
+        let len = bytes.len();
+        for (at, b) in edits {
+            if let Some(x) = bytes.get_mut(at % len) {
+                *x = b;
+            }
+        }
+        bytes.truncate((cut % (len + 1)).max(8));
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "hiddenLayers": true});
+            let _ = no_panic(s.execute("document.open", &p));
+            let _ = no_panic(s.execute("document.psdInfo", &p));
+            let _ = no_panic(s.execute("file.new", &json!({})));
+            let p = json!({"name": name, "dataBase64": vectorcraft_format::base64_encode(&bytes), "layers": true, "hiddenLayers": true});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "{name}: panicked: {:?}", r.err());
+    }
+}
+
+/// A 4 × 2 pixel RGB PSD file whose clipping path resource (2999) names its saved path "P"
+/// (resource 2000): a closed subpath of a linked and two unlinked knots, an open subpath, and the
+/// initial fill record saying the fill starts with all pixels.
+fn clipped_psd() -> Vec<u8> {
+    let record = |selector: u16, body: &[i32]| {
+        let mut r = selector.to_be_bytes().to_vec();
+        r.extend(body.iter().flat_map(|v| v.to_be_bytes()));
+        r.resize(26, 0);
+        r
+    };
+    let one = 1 << 24;
+    let mut path = record(6, &[]);
+    path.extend(record(8, &[1 << 16]));
+    path.extend(record(0, &[3 << 16]));
+    path.extend(record(1, &[0, 0, 0, one / 2, 0, one]));
+    path.extend(record(2, &[one, one, one, one, one, one]));
+    path.extend(record(2, &[one, 0, one, 0, one, 0]));
+    path.extend(record(3, &[2 << 16]));
+    path.extend(record(5, &[-one, -one, 0, 0, 2 * one, 2 * one]));
+    path.extend(record(4, &[one / 4, one / 4, one / 4, one / 4, one / 4, one / 4]));
+    let mut res = b"8BIM\x07\xd0\x01P".to_vec();
+    res.extend((path.len() as u32).to_be_bytes());
+    res.extend(path);
+    res.extend(b"8BIM\x0b\xb7\0\0");
+    res.extend(8u32.to_be_bytes());
+    res.extend([1, b'P', 0, 0, 0, 0, 0, 0]);
+    let mut f = b"8BPS\0\x01\0\0\0\0\0\0\0\x03\0\0\0\x02\0\0\0\x04\0\x08\0\x03".to_vec();
+    f.extend([0; 4]);
+    f.extend((res.len() as u32).to_be_bytes());
+    f.extend(res);
+    f.extend([0; 4]);
+    f.extend([0, 0]);
+    f.extend((0..24u8).map(|v| v * 10));
+    f
+}
+
+#[test]
+fn the_clipped_psd_sample_places_in_a_clip_group() {
+    let path = vectorcraft_engine::cmd::fileio::psdread::clipping_path(&clipped_psd()).unwrap();
+    assert_eq!(path.subpaths.iter().map(|s| (s.anchors.len(), s.closed)).collect::<Vec<_>>(), [(4, true), (3, true), (2, false)]);
+    let mut s = vectorcraft_engine::Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "c.psd", "dataBase64": vectorcraft_format::base64_encode(&clipped_psd())})).unwrap();
+    assert!(r["image"].is_u64(), "{r}");
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated copies of a PSD file with a clipping path (its resources: the path records, their
+    /// selectors, counts and points, and the names) never crash reading the path, placing the file
+    /// or opening its merged image.
+    #[test]
+    fn mutated_psd_clipping_paths_never_panic(cut in 0usize..1000, edits in prop::collection::vec((0usize..300, any::<u8>()), 0..12)) {
+        let mut bytes = clipped_psd();
+        let len = bytes.len();
+        for (at, b) in edits {
+            if let Some(x) = bytes.get_mut(at % len) {
+                *x = b;
+            }
+        }
+        bytes.truncate((cut % (len + 1)).max(8));
+        let r = catch_quiet(|| {
+            let _ = vectorcraft_engine::cmd::fileio::psdread::clipping_path(&bytes);
+            let mut s = vectorcraft_engine::Session::new();
+            s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+            let p = json!({"name": "c.psd", "dataBase64": vectorcraft_format::base64_encode(&bytes), "thumbnail": 8});
+            let _ = no_panic(s.execute("file.place", &p));
+            let _ = no_panic(s.execute("document.open", &json!({"name": "c.psd", "dataBase64": vectorcraft_format::base64_encode(&bytes), "layers": false})));
+        });
+        prop_assert!(r.is_ok(), "panicked: {:?}", r.err());
+    }
+}
+
+// ---------- PSD slices ----------
+
+/// A Unicode string as a PSD file stores it: a count of UTF-16 units, then the units.
+fn psd_unicode(s: &str) -> Vec<u8> {
+    let units: Vec<u16> = s.encode_utf16().collect();
+    let mut b = (units.len() as u32).to_be_bytes().to_vec();
+    b.extend(units.iter().flat_map(|u| u.to_be_bytes()));
+    b
+}
+
+/// A descriptor key or class ID: length 0 and its four characters, or its length and its characters.
+fn psd_key(k: &str) -> Vec<u8> {
+    let mut b = if k.len() == 4 { 0u32 } else { k.len() as u32 }.to_be_bytes().to_vec();
+    b.extend(k.as_bytes());
+    b
+}
+
+/// A descriptor's class (an empty name and the ID `null`), then the count of its items.
+fn psd_class(count: usize) -> Vec<u8> {
+    let mut b = psd_unicode("");
+    b.extend(psd_key("null"));
+    b.extend((count as u32).to_be_bytes());
+    b
+}
+
+/// A descriptor of `items`, each a key and a typed value.
+fn psd_descriptor(items: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    let mut b = psd_class(items.len());
+    for (k, v) in items {
+        b.extend(psd_key(k));
+        b.extend(v);
+    }
+    b
+}
+
+/// A typed descriptor value: its four-character type, then `body`.
+fn psd_value(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
+    [kind.as_slice(), body].concat()
+}
+
+fn psd_long(v: i32) -> Vec<u8> {
+    psd_value(b"long", &v.to_be_bytes())
+}
+
+fn psd_text(t: &str) -> Vec<u8> {
+    psd_value(b"TEXT", &psd_unicode(t))
+}
+
+fn psd_enum(kind: &str, v: &str) -> Vec<u8> {
+    psd_value(b"enum", &[psd_key(kind), psd_key(v)].concat())
+}
+
+/// A bounds object: left, top, right and bottom (px), stored top, left, bottom, right.
+fn psd_bounds([l, t, r, b]: [i32; 4]) -> Vec<u8> {
+    psd_value(b"Objc", &psd_descriptor(&[("Top ", psd_long(t)), ("Left", psd_long(l)), ("Btom", psd_long(b)), ("Rght", psd_long(r))]))
+}
+
+/// The slices of the samples: origin (0: generated automatically, 1: follows a layer, 2: made by
+/// the user), name, and left, top, right and bottom on the 12 × 10 px canvas. Two come in; the
+/// automatic one between them is left out.
+const PSD_SLICES: [(u32, &str, [i32; 4]); 3] = [(2, "a", [1, 2, 5, 6]), (0, "auto", [0, 0, 12, 1]), (1, "b", [6, 3, 11, 9])];
+
+/// The data of an image resource 1050 holding [`PSD_SLICES`].
+struct SliceSample {
+    version: u32,
+    data: Vec<u8>,
+    /// Where the slice count starts in `data`.
+    count_at: usize,
+}
+
+/// Version 6: the bounds of all the slices, the group's name, the count and one record per slice.
+/// The first record is followed by a Photoshop 7 descriptor (version 16) with a nested object, which
+/// the reader reads past to the second record.
+fn psd_slices_v6() -> SliceSample {
+    let mut b = 6u32.to_be_bytes().to_vec();
+    b.extend([0i32, 0, 10, 12].iter().flat_map(|v| v.to_be_bytes()));
+    b.extend(psd_unicode("group"));
+    let count_at = b.len();
+    b.extend((PSD_SLICES.len() as u32).to_be_bytes());
+    for (i, (origin, name, rect)) in PSD_SLICES.iter().enumerate() {
+        // The ID, the group ID and the origin; a slice that follows a layer gives the layer's ID.
+        b.extend((i as u32 + 1).to_be_bytes());
+        b.extend(0u32.to_be_bytes());
+        b.extend(origin.to_be_bytes());
+        if *origin == 1 {
+            b.extend(4u32.to_be_bytes());
+        }
+        b.extend(psd_unicode(name));
+        // An Image slice: its rectangle, link, target, message, alternative text, plain cell text,
+        // alignment and background color (alpha, red, green, blue).
+        b.extend(1u32.to_be_bytes());
+        b.extend(rect.iter().flat_map(|v| v.to_be_bytes()));
+        for t in ["https://example.com/", "_blank", "", "alt"] {
+            b.extend(psd_unicode(t));
+        }
+        b.push(0);
+        b.extend(psd_unicode(""));
+        b.extend([0u8; 8]);
+        b.extend([255, 10, 20, 30]);
+        if i == 0 {
+            b.extend(16u32.to_be_bytes());
+            let color = psd_value(b"Objc", &psd_descriptor(&[("Rd  ", psd_value(b"doub", &128f64.to_be_bytes()))]));
+            b.extend(psd_descriptor(&[("topOutset", psd_long(0)), ("bgColor", color)]));
+        }
+    }
+    SliceSample { version: 6, data: b, count_at }
+}
+
+/// Versions 7 and 8: a version 16 descriptor with the slices' bounds, base name and `slices` list,
+/// each slice an object with a nested bounds and background color object.
+fn psd_slices_descriptor(version: u32) -> SliceSample {
+    let mut b = version.to_be_bytes().to_vec();
+    b.extend(16u32.to_be_bytes());
+    b.extend(psd_class(3));
+    b.extend(psd_key("bounds"));
+    b.extend(psd_bounds([0, 0, 12, 10]));
+    b.extend(psd_key("baseName"));
+    b.extend(psd_text("sheet"));
+    b.extend(psd_key("slices"));
+    b.extend(b"VlLs");
+    let count_at = b.len();
+    b.extend((PSD_SLICES.len() as u32).to_be_bytes());
+    for (i, (origin, name, rect)) in PSD_SLICES.iter().enumerate() {
+        let origin = match origin {
+            0 => "autoGenerated",
+            1 => "layerGenerated",
+            _ => "userGenerated",
+        };
+        let doub = |v: f64| psd_value(b"doub", &v.to_be_bytes());
+        let color = psd_value(b"Objc", &psd_descriptor(&[("Rd  ", doub(10.0)), ("Grn ", doub(20.0)), ("Bl  ", doub(30.0))]));
+        b.extend(psd_value(
+            b"Objc",
+            &psd_descriptor(&[
+                ("sliceID", psd_long(i as i32 + 1)),
+                ("groupID", psd_long(0)),
+                ("origin", psd_enum("ESliceOrigin", origin)),
+                ("Type", psd_enum("ESliceType", "Img ")),
+                ("bounds", psd_bounds(*rect)),
+                ("Nm  ", psd_text(name)),
+                ("url", psd_text("https://example.com/")),
+                ("bgColorType", psd_enum("ESliceBGColorType", "Clr ")),
+                ("bgColor", color),
+            ]),
+        ));
+    }
+    SliceSample { version, data: b, count_at }
+}
+
+/// Resource 1050 in versions 6, 7 and 8.
+fn psd_slice_samples() -> Vec<SliceSample> {
+    vec![psd_slices_v6(), psd_slices_descriptor(7), psd_slices_descriptor(8)]
+}
+
+/// A flat 12 × 10 px RGB PSD file whose one image resource is 1050 holding `data`, and where
+/// `data` lies in it.
+fn sliced_psd(data: &[u8]) -> (Vec<u8>, std::ops::Range<usize>) {
+    // The signature, version 1, reserved bytes, 3 channels, 10 rows, 12 columns, 8 bits, RGB, and
+    // no color mode data.
+    let mut f = b"8BPS\0\x01\0\0\0\0\0\0\0\x03".to_vec();
+    f.extend(10u32.to_be_bytes());
+    f.extend(12u32.to_be_bytes());
+    f.extend([0, 8, 0, 3]);
+    f.extend([0; 4]);
+    let mut block = b"8BIM".to_vec();
+    block.extend(1050u16.to_be_bytes());
+    block.extend([0, 0]);
+    block.extend((data.len() as u32).to_be_bytes());
+    let start = f.len() + 4 + block.len();
+    block.extend(data);
+    block.resize(block.len().next_multiple_of(2), 0);
+    f.extend((block.len() as u32).to_be_bytes());
+    f.extend(block);
+    // No layer and mask information, then the merged image, raw.
+    f.extend([0; 4]);
+    f.extend([0, 0]);
+    f.extend((0..360u32).map(|v| (v * 7) as u8));
+    (f, start..start + data.len())
+}
+
+/// PSD file `f` opened (the names of the document's slices, and the open's warnings), counted by
+/// `document.psdInfo`, and placed embedded in a new document (the count of the slices it brings in).
+fn sliced_psd_imports(f: &[u8]) -> (Vec<String>, Value, Value, usize) {
+    let mut s = vectorcraft_engine::Session::new();
+    let p = json!({"name": "sheet.psd", "dataBase64": vectorcraft_format::base64_encode(f)});
+    let r = s.execute("document.open", &p).unwrap();
+    let names = s.doc().unwrap().doc.slices.iter().map(|x| x.options.name.clone()).collect();
+    let info = s.execute("document.psdInfo", &p).unwrap();
+    s.execute("file.new", &json!({})).unwrap();
+    let placed = s.execute("file.place", &json!({"name": "sheet.psd", "dataBase64": vectorcraft_format::base64_encode(f), "link": false})).unwrap();
+    (names, r["warnings"].clone(), info["slices"].clone(), placed["slices"].as_array().map_or(0, Vec::len))
+}
+
+/// Each sample reaches the slice reader: its two user slices open and place, without a warning,
+/// and `document.psdInfo` counts them; the automatic one is left out.
+#[test]
+fn the_sliced_psd_samples_bring_in_their_user_slices() {
+    for sample in psd_slice_samples() {
+        let (names, warnings, info, placed) = sliced_psd_imports(&sliced_psd(&sample.data).0);
+        assert_eq!(names, ["a", "b"], "version {}: {warnings}", sample.version);
+        assert_eq!(warnings.as_array().map_or(0, Vec::len), 0, "version {}: {warnings}", sample.version);
+        assert_eq!((info, placed), (json!(2), 2), "version {}", sample.version);
+    }
+}
+
+/// A slice count past the 10,000 read, or one larger than the slices stored, and resource data cut
+/// short, open and place the file without its slices, with a warning, and `document.psdInfo`
+/// counts none.
+#[test]
+fn sliced_psd_samples_with_huge_counts_or_cut_short_come_in_without_their_slices() {
+    for sample in psd_slice_samples() {
+        let mut damaged = vec![];
+        for count in [10_001u32, 0x7fff_ffff, u32::MAX] {
+            let mut d = sample.data.clone();
+            d[sample.count_at..sample.count_at + 4].copy_from_slice(&count.to_be_bytes());
+            damaged.push((format!("count {count}"), d));
+        }
+        damaged.push(("one byte short".into(), sample.data[..sample.data.len() - 1].to_vec()));
+        damaged.push(("cut in the count".into(), sample.data[..sample.count_at + 2].to_vec()));
+        for (what, d) in damaged {
+            let (names, warnings, info, placed) = sliced_psd_imports(&sliced_psd(&d).0);
+            let warned = warnings.as_array().is_some_and(|w| w.iter().any(|w| w.as_str().is_some_and(|w| w.contains("the slices can't be read"))));
+            assert!(warned, "version {}, {what}: {warnings}", sample.version);
+            assert_eq!((names.len(), info, placed), (0, json!(0), 0), "version {}, {what}", sample.version);
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated copies of the slice samples never crash opening the file, `document.psdInfo` or
+    /// placing it embedded: the resource's data mutated, then kept whole, cut short with the
+    /// resource's length saying so, or with the file cut short in the resource's block.
+    #[test]
+    fn mutated_psd_slices_never_panic(which in 0usize..3, mode in 0u8..3, cut in any::<usize>(), edits in prop::collection::vec((any::<usize>(), any::<u8>()), 0..12)) {
+        let SliceSample { version, mut data, .. } = psd_slice_samples().swap_remove(which);
+        let len = data.len();
+        for (at, b) in edits {
+            data[at % len] = b;
+        }
+        let bytes = match mode {
+            0 => sliced_psd(&data).0,
+            1 => {
+                data.truncate(cut % (len + 1));
+                sliced_psd(&data).0
+            }
+            _ => {
+                let (mut f, at) = sliced_psd(&data);
+                f.truncate(at.start - 12 + cut % (len + 13));
+                f
+            }
+        };
+        let r = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let p = json!({"name": "sheet.psd", "dataBase64": vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("document.open", &p));
+            let _ = no_panic(s.execute("document.psdInfo", &p));
+            let _ = no_panic(s.execute("file.new", &json!({})));
+            let p = json!({"name": "sheet.psd", "dataBase64": vectorcraft_format::base64_encode(&bytes), "link": false});
+            let _ = no_panic(s.execute("file.place", &p));
+        });
+        prop_assert!(r.is_ok(), "version {version}, mode {mode}: panicked: {:?}", r.err());
     }
 }
 
@@ -1699,7 +2524,41 @@ proptest! {
 /// and a 32-bit one with an extension area.
 fn targa_samples() -> Vec<(&'static str, Vec<u8>)> {
     let mut rle = vec![];
-    image::RgbImage::from_pixel(5, 3, image::Rgb([200, 40, 10])).write_to(&mut std::io::Cursor::new(&mut rle), image::ImageFormat::Tga).unwrap();
+    {
+        let __dyn: image::DynamicImage = (image::RgbImage::from_pixel(5, 3, image::Rgb([200, 40, 10]))).into();
+        let (__w, __h) = (__dyn.width(), __dyn.height());
+        let (__layout, __sample, __raw) = match __dyn {
+            image::DynamicImage::ImageLuma8(b) => (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLumaA8(b) => (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgb8(b) => (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageRgba8(b) => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, b.into_raw()),
+            image::DynamicImage::ImageLuma16(b) => (
+                craft_image_codecs::ChannelLayout::Gray,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageLumaA16(b) => (
+                craft_image_codecs::ChannelLayout::GrayA,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgb16(b) => (
+                craft_image_codecs::ChannelLayout::Rgb,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            image::DynamicImage::ImageRgba16(b) => (
+                craft_image_codecs::ChannelLayout::Rgba,
+                craft_image_codecs::SampleType::U16,
+                b.into_raw().into_iter().flat_map(|s| s.to_ne_bytes()).collect(),
+            ),
+            other => (craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, other.into_rgba8().into_raw()),
+        };
+        let __cimg = craft_image_codecs::Image::from_raw(__w, __h, __layout, __sample, __raw).unwrap();
+        craft_image_codecs::encode(&__cimg, craft_image_codecs::Format::Tga, &craft_image_codecs::EncodeOptions::default())
+            .map(|__b| rle.extend_from_slice(&__b))
+    }
+    .unwrap();
     let mut s = rich_session();
     let r = s.execute("document.export", &json!({"format": "tga", "depth": 16, "ppi": 2})).unwrap();
     let export = vectorcraft_format::base64_decode(r["dataBase64"].as_str().unwrap()).unwrap();
@@ -1890,6 +2749,33 @@ proptest! {
             let _ = no_panic(s.execute("file.place", &params));
         });
         prop_assert!(result.is_ok(), "{name}: panicked: {:?}", result.err());
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// Mutated HEIF boxes and HEVC data must return errors rather than unwind.
+    #[test]
+    fn mutated_heif_files_do_not_panic(which in 0usize..4, cut in 0usize..1300, edits in prop::collection::vec((0usize..1300, any::<u8>()), 0..8)) {
+        let mut bytes = match which {
+            0 => include_bytes!("fixtures/heif/quadrants.heic").to_vec(),
+            1 => include_bytes!("fixtures/heif/quadrants-alpha.heic").to_vec(),
+            2 => include_bytes!("fixtures/heif/quadrants-grid.heic").to_vec(),
+            // Its stream's VUI gives the color description.
+            _ => include_bytes!("fixtures/heif/tones-p3-icc-only.heic").to_vec(),
+        };
+        for (at, byte) in edits {
+            if let Some(slot) = bytes.get_mut(at) { *slot = byte; }
+        }
+        bytes.truncate(cut);
+        let result = catch_quiet(|| {
+            let mut s = vectorcraft_engine::Session::new();
+            let params = json!({"name": "a.heic", "dataBase64": vectorcraft_format::base64_encode(&bytes)});
+            let _ = no_panic(s.execute("document.open", &params));
+            let _ = no_panic(s.execute("file.place", &params));
+        });
+        prop_assert!(result.is_ok(), "a.heic: panicked: {:?}", result.err());
     }
 }
 
@@ -2190,6 +3076,32 @@ proptest! {
         paste_from_elsewhere("clipboard.importEps", json!({"dataBase64": vectorcraft_format::base64_encode(ps.as_bytes())}))?;
     }
 
+    /// Any bytes read by `readhexstring` or `readline` into strings of any length, from the
+    /// program's own file, through a filter decoded when first read, or from a file being run:
+    /// read as data, or as an error.
+    #[test]
+    fn eps_readhexstring_and_readline_data_never_panic(
+        data in prop::collection::vec(prop::sample::select(vec![b'0', b'9', b'a', b'F', b'g', b' ', b'\t', b'\r', b'\n', b'>', b'%', b'(', 0u8, 0xff]), 0..300),
+        len in 0usize..40,
+        line in any::<bool>(),
+        source in 0usize..3,
+    ) {
+        let op = if line { "readline" } else { "readhexstring" };
+        let file = if source == 1 { "currentfile /ASCIIHexDecode filter" } else { "currentfile" };
+        let reads = format!("/s {len} string def /f {file} def 30 {{ f s {op} pop pop }} repeat");
+        let mut bytes = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n".to_vec();
+        if source == 2 {
+            bytes.extend_from_slice(format!("currentfile 0 (endstream) /SubFileDecode filter cvx exec\n{reads}\n").as_bytes());
+            bytes.extend_from_slice(&data);
+            bytes.extend_from_slice(b"\nendstream\nshowpage\n");
+        } else {
+            bytes.extend_from_slice(format!("{reads}\n").as_bytes());
+            bytes.extend_from_slice(&data);
+            bytes.extend_from_slice(b"\nshowpage\n");
+        }
+        survive("readhexstring and readline data", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
     /// Damaged or hostile CMYK images (a CMYK JPEG, an image with a key color): read as images,
     /// or as an error.
     #[test]
@@ -2226,6 +3138,111 @@ proptest! {
         );
         survive("TIFF-predicted EPS images", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
     }
+
+    /// Damaged or hostile TrueType data in a Type 42 font that a composite font shows (its table
+    /// directory and its glyphs), any glyph index: drawn, measured and outlined, or left out.
+    #[test]
+    fn eps_type42_glyphs_never_panic(
+        head in prop::collection::vec((0usize..2048, any::<u8>()), 0..12),
+        body in prop::collection::vec((0usize..TYPE42_FONT.len(), any::<u8>()), 0..12),
+        gid in 0u32..70_000,
+    ) {
+        let mut font = TYPE42_FONT.to_vec();
+        for (at, b) in head.into_iter().chain(body) {
+            if let Some(x) = font.get_mut(at) {
+                *x = b;
+            }
+        }
+        let text = type42_composite_eps(&font, gid);
+        survive("damaged Type 42 glyphs", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
+    }
+
+    /// CID-keyed fonts with hostile CMaps (codespace ranges of any length, mappings past them)
+    /// and Type 0 CIDFonts with damaged binary data (offset table, charstrings, subroutine table,
+    /// any FDBytes and GDBytes), shown with any bytes: drawn, measured and outlined, or refused.
+    #[test]
+    fn eps_cid_fonts_never_panic(
+        space in prop::collection::vec((prop::collection::vec(any::<u8>(), 0..6), prop::collection::vec(any::<u8>(), 0..6)), 0..4),
+        cids in prop::collection::vec((prop::collection::vec(any::<u8>(), 1..5), any::<u16>()), 0..6),
+        data in prop::collection::vec(any::<u8>(), 0..200),
+        fd_bytes in 0u8..6,
+        gd_bytes in 0u8..6,
+        len_iv in -2i8..8,
+        shown in prop::collection::vec(any::<u8>(), 0..24),
+    ) {
+        let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let ranges: String = space.iter().map(|(lo, hi)| format!("<{}> <{}>\n", hex(lo), hex(hi))).collect();
+        let maps: String = cids.iter().map(|(c, cid)| format!("<{}> <{}> {cid}\n", hex(c), hex(c))).collect();
+        let text = format!(
+            "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n\
+             /CIDInit /ProcSet findresource begin 20 dict begin /CIDFontName /F def /CIDFontType 0 def\n\
+             /FDArray [4 dict begin /FontMatrix [0.001 0 0 0.001 0 0] def /Private 4 dict dup begin /lenIV {len_iv} def\n\
+             /SubrMapOffset 3 def /SDBytes 2 def /SubrCount 4 def end def currentdict end] def\n\
+             /CIDMapOffset 0 def /FDBytes {fd_bytes} def /GDBytes {gd_bytes} def /CIDCount 40 def\n\
+             (Hex) {} StartData\n{}\n\
+             /CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /M def\n\
+             {} begincodespacerange\n{ranges}endcodespacerange\n{} begincidrange\n{maps}endcidrange\n\
+             endcmap CMapName currentdict /CMap defineresource pop end end\n\
+             /C /M [/F] composefont 40 scalefont setfont 10 20 moveto <{}> show <{}> stringwidth pop pop\n\
+             10 60 moveto <{}> true charpath fill\nshowpage\n%%EOF\n",
+            data.len(), hex(&data), space.len(), cids.len(), hex(&shown), hex(&shown), hex(&shown)
+        );
+        survive("hostile CID-keyed fonts", || vectorcraft_eps::import(text.as_bytes()).ok().map(|r| r.document))?;
+    }
+
+    /// Embedded Type 1 fonts whose encrypted part is damaged or hostile (any bytes, binary or
+    /// hexadecimal), shown, measured and outlined: drawn, or left out.
+    #[test]
+    fn eps_type1_programs_never_panic(
+        part in prop::collection::vec(any::<u8>(), 0..400),
+        hex in any::<bool>(),
+        shown in prop::collection::vec(any::<u8>(), 0..12),
+    ) {
+        let hexed = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+        // Bytes that would end the part early are left out, as `cleartomark` ends it.
+        let part: Vec<u8> = part.into_iter().filter(|b| *b != b'c').collect();
+        let mut bytes = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n\
+            12 dict begin /FontName /T1 def /FontType 1 def /FontMatrix [0.001 0 0 0.001 0 0] def /FontBBox [0 0 1000 1000] def\n\
+            /Encoding StandardEncoding def currentdict end currentfile eexec\n"
+            .to_vec();
+        if hex {
+            bytes.extend(hexed(&part).into_bytes());
+        } else {
+            bytes.extend(part);
+        }
+        bytes.extend(format!("\n{}\ncleartomark\n/T1 findfont 40 scalefont setfont 10 20 moveto <{}> show <{}> stringwidth pop pop\n\
+            10 60 moveto <{}> true charpath fill\nshowpage\n%%EOF\n", "0".repeat(512), hexed(&shown), hexed(&shown), hexed(&shown)).into_bytes());
+        survive("hostile Type 1 programs", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+}
+
+/// The TrueType font [`type42_composite_eps`] carries.
+const TYPE42_FONT: &[u8] = include_bytes!("../../../assets/fonts/SourceSans3-Regular.ttf");
+
+/// An EPS showing glyph `gid` of TrueType font `font` through a Type 42 font and a composite font
+/// over it, and measuring and outlining it.
+fn type42_composite_eps(font: &[u8], gid: u32) -> String {
+    let sfnts: String = font.chunks(32_000).map(|c| format!("<{}>\n", c.iter().map(|b| format!("{b:02x}")).collect::<String>())).collect();
+    format!(
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n\
+         10 dict begin /FontName /T42 def /FontType 42 def /FontMatrix [1 0 0 1 0 0] def /FontBBox [0 0 1 1] def /PaintType 0 def\n\
+         /Encoding 256 array def 0 1 255 {{ Encoding exch /.notdef put }} for Encoding 1 /c01 put\n\
+         /CharStrings 2 dict def CharStrings begin /.notdef 0 def /c01 {gid} def end /sfnts [\n{sfnts}] def FontName currentdict end definefont pop\n\
+         16 dict begin /FontName /Comp def /FontType 0 def /FontMatrix [1 0 0 1 0 0] def /FMapType 2 def /Encoding [0] def\n\
+         /FDepVector [/T42 findfont] def FontName currentdict end definefont pop\n\
+         /Comp findfont 40 scalefont setfont 10 20 moveto (\\000\\001\\000\\001) show (\\000\\001) stringwidth pop pop\n\
+         10 60 moveto (\\000\\001) true charpath fill\nshowpage\n%%EOF\n"
+    )
+}
+
+/// [`type42_composite_eps`] as it is: the glyph draws as filled outlines, not as type.
+#[test]
+fn the_type42_fixture_draws_its_glyphs() {
+    let r = vectorcraft_eps::import(type42_composite_eps(TYPE42_FONT, 9).as_bytes()).unwrap();
+    assert!(r.warnings.is_empty() && !r.preview, "{:?}", r.warnings);
+    let mut kinds = vec![];
+    r.document.walk(|n| kinds.push(n.kind_label()));
+    assert!(!kinds.contains(&"Text") && kinds.iter().filter(|k| **k == "Path").count() >= 3, "{kinds:?}");
 }
 
 /// An EPS with two 8 × 3 CCITT fax images that the PostScript interpreter reads, coded by hand from
@@ -2256,7 +3273,24 @@ fn the_ccitt_images_fixture_reads_both_images() {
     let mut found = vec![];
     d.walk(|n| {
         if let vectorcraft_doc::NodeKind::Image(im) = &n.kind {
-            let px = image::load_from_memory(&d.images[&im.key].bytes).unwrap().to_rgba8();
+            let px = craft_image_codecs::decode(&d.images[&im.key].bytes)
+                .map(|__cimg| {
+                    let (__w, __h) = __cimg.dimensions();
+                    match (__cimg.layout(), __cimg.sample_type()) {
+                        (craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::GrayA, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        (craft_image_codecs::ChannelLayout::Rgb, craft_image_codecs::SampleType::U8) => {
+                            image::DynamicImage::ImageRgb8(image::RgbImage::from_raw(__w, __h, __cimg.into_data()).unwrap())
+                        }
+                        _ => image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(__w, __h, __cimg.to_rgba8()).unwrap()),
+                    }
+                })
+                .unwrap()
+                .to_rgba8();
             found.push(px.pixels().map(shade).collect::<String>());
         }
     });
@@ -2313,7 +3347,7 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             "gsave", "grestore", "save", "restore", "concat", "translate", "scale", "rotate", "setlinewidth", "setdash", "setgray",
             "setrgbcolor", "setcmykcolor", "sethsbcolor", "setcolorspace", "setcolor", "setpattern", "makepattern", "shfill", "arc", "arcn",
             "arct", "arcto", "rectfill", "rectclip", "rectstroke", "image", "imagemask", "colorimage", "currentfile", "filter",
-            "readhexstring", "readstring", "show", "stringwidth", "charpath", "findfont", "scalefont", "makefont", "setfont", "selectfont",
+            "readhexstring", "readstring", "readline", "show", "stringwidth", "charpath", "findfont", "scalefont", "makefont", "setfont", "selectfont",
             "def", "bind", "load", "dup", "exch", "pop", "roll", "index", "copy", "for", "repeat", "loop", "exit", "if", "ifelse", "exec",
             "stopped", "begin", "end", "dict", "array", "string", "get", "put", "getinterval", "putinterval", "aload", "astore", "forall",
             "[", "]", "<<", ">>", "{", "}", "matrix", "currentmatrix", "setmatrix", "transform", "itransform", "invertmatrix", "pathbbox",
@@ -2365,7 +3399,10 @@ fn arb_ps_token() -> impl Strategy<Value = String> {
             // Local VM restored: dictionary changes undone, saves restored twice.
             "/a 1 def save /a 2 def", "restore", "save dup restore", "1 dict save exch /k 1 put", "cachestatus", "/n 0 def save /n n 1 add store",
             // Executable strings and keys other than names (PLRM 3rd ed., `cvx`, `load`).
-            "(>>) cvx", "(1 2 add) cvx exec", "(x) cvx dup exec", "0 load", "1 { } def", "(mark) cvx cvlit"
+            "(>>) cvx", "(1 2 add) cvx exec", "(x) cvx dup exec", "0 load", "1 { } def", "(mark) cvx cvlit",
+            // CID-keyed fonts found by name over predefined CMaps, horizontal and vertical.
+            "/Ryumin-Light-90ms-RKSJ-H", "/Ryumin-Light-EUC-V", "/Ryumin-Light-H", "/GBT-EUC-H", "/KSCms-UHC-V", "/UniJIS-UTF16-V",
+            "[/Ryumin-Light]", "composefont", "<93fa967b8540fd0d41>", "<c7d1a4a4467c>"
         ])
         .prop_map(str::to_string),
     ]
@@ -2583,9 +3620,9 @@ fn arb_body() -> impl Strategy<Value = Vec<u8>> {
 }
 
 /// WMF record functions VectorCraft reads, and one it doesn't.
-const WMF_FUNCTIONS: [u16; 33] = [
+const WMF_FUNCTIONS: [u16; 35] = [
     0x0324, 0x0325, 0x0538, 0x041B, 0x0418, 0x061C, 0x0817, 0x081A, 0x0830, 0x0416, 0x0415, 0x02FA, 0x02FC, 0x02FB, 0x012D, 0x01F0, 0x0521, 0x0A32,
-    0x0F43, 0x0B41, 0x0940, 0x061D, 0x0213, 0x0214, 0x001E, 0x0127, 0x0106, 0x0209, 0x012E, 0x00F7, 0x01F9, 0x0142, 0x0999,
+    0x0F43, 0x0B41, 0x0940, 0x061D, 0x0213, 0x0214, 0x001E, 0x0127, 0x0106, 0x0209, 0x012E, 0x00F7, 0x01F9, 0x0142, 0x0103, 0x0104, 0x0999,
 ];
 
 proptest! {
@@ -2613,8 +3650,206 @@ proptest! {
     }
 
     #[test]
+    fn random_headerless_wmf_records_never_panic(records in prop::collection::vec((prop::sample::select(WMF_FUNCTIONS.to_vec()), arb_body()), 0..32)) {
+        // Without the placeable header, the map and mix modes the records set decide the scale.
+        survive_metafile("headerless WMF records", "x.wmf", &wmf_of(&records)[22..])?;
+    }
+
+    #[test]
+    fn random_emf_plus_records_never_panic(records in prop::collection::vec((0x4001u16..0x403B, any::<u16>(), arb_body()), 0..32)) {
+        // One comment of EMF+ records (type, flags, data) after an EmfPlusHeader.
+        let mut plus = vec![];
+        let header = (0x4001u16, 0u16, [0xDBC0_1002u32, 0, 96, 96].iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>());
+        for (kind, flags, data) in std::iter::once(&header).chain(&records) {
+            plus.extend(kind.to_le_bytes());
+            plus.extend(flags.to_le_bytes());
+            plus.extend((12 + data.len() as u32).to_le_bytes());
+            plus.extend((data.len() as u32).to_le_bytes());
+            plus.extend(data);
+        }
+        let mut comment = (4 + plus.len() as u32).to_le_bytes().to_vec();
+        comment.extend(b"EMF+");
+        comment.extend(plus);
+        survive_metafile("EMF+ records", "x.emf", &emf_of(&[(70, comment)]))?;
+    }
+
+    #[test]
     fn pasted_metafiles_never_panic(which in 0usize..2, cut in 0usize..200_000, edits in prop::collection::vec((0usize..200_000, any::<u8>()), 0..12)) {
         paste_from_elsewhere("clipboard.importEmf", json!({"dataBase64": mutated_b64(metafile_samples()[which].clone(), cut, &edits)}))?;
+    }
+}
+
+// ---------- PICT pictures: opened and placed ----------
+
+fn be16(v: &[i16]) -> Vec<u8> {
+    v.iter().flat_map(|x| x.to_be_bytes()).collect()
+}
+
+/// A version 2 PICT file of a 200 × 100 pt frame holding `ops`, each padded to an even length.
+fn pict_of(ops: &[(u16, Vec<u8>)]) -> Vec<u8> {
+    let mut b = vec![0; 512];
+    b.extend(be16(&[0, 0, 0, 100, 200]));
+    b.extend([0x00, 0x11, 0x02, 0xFF, 0x0C, 0x00]);
+    b.extend(be16(&[-1, 0]));
+    b.extend([0; 20]);
+    for (op, data) in ops {
+        b.extend(op.to_be_bytes());
+        b.extend(data);
+        if b.len() % 2 == 1 {
+            b.push(0);
+        }
+    }
+    b.extend([0x00, 0xFF]);
+    b
+}
+
+/// A picture with shapes, a region, text, a pattern and a packed pixel map.
+fn pict_sample() -> Vec<u8> {
+    let region = [be16(&[36, 0, 0, 20, 20]), be16(&[0, 0, 20, 0x7FFF, 10, 10, 20, 0x7FFF, 20, 0, 10, 0x7FFF, 0x7FFF])].concat();
+    let table = be16(&[0, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, -1]);
+    let pixmap = [
+        be16(&[0x8008u16 as i16, 0, 0, 2, 8]),
+        be16(&[0, 0, 0, 0, 72, 0, 72, 0, 0, 8, 1, 8, 0, 0, 0, 0, 0, 0]),
+        table,
+        be16(&[0, 0, 2, 8, 10, 20, 14, 36, 0]),
+        vec![2, 0xF9, 0, 9, 7, 1, 0, 1, 0, 1, 0, 1, 0],
+    ]
+    .concat();
+    pict_of(&[
+        (0x1A, be16(&[-1, 0, 0])),
+        (0x07, be16(&[2, 2])),
+        (0x31, be16(&[10, 20, 50, 80])),
+        (0x30, be16(&[10, 20, 50, 80])),
+        (0x0B, be16(&[8, 8])),
+        (0x41, be16(&[0, 100, 40, 160])),
+        (0x51, be16(&[50, 100, 90, 160])),
+        (0x61, be16(&[0, 0, 60, 60, 30, 120])),
+        (0x71, be16(&[22, 0, 0, 40, 40, 0, 0, 40, 40, 0, 40])),
+        (0x81, region.clone()),
+        (0x01, region),
+        (0x20, be16(&[70, 10, 70, 190])),
+        (0x21, be16(&[90, 100])),
+        (0x0A, vec![0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55]),
+        (0x34, be16(&[0, 0, 10, 10])),
+        (0x2C, [be16(&[9, 3]), vec![6], b"Geneva".to_vec()].concat()),
+        (0x0D, be16(&[12])),
+        (0x28, [be16(&[80, 10]), vec![3], b"abc".to_vec()].concat()),
+        (0x98, pixmap),
+    ])
+}
+
+/// The sample the mutations start from opens with art and an image.
+#[test]
+fn the_pict_sample_opens() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.pct", &pict_sample()).unwrap();
+    assert_eq!(l.format.id, "pict");
+    let (mut paths, mut images, mut texts) = (0, 0, 0);
+    l.doc.walk(|n| match n.kind {
+        vectorcraft_doc::NodeKind::Path { .. } => paths += 1,
+        vectorcraft_doc::NodeKind::Image(_) => images += 1,
+        vectorcraft_doc::NodeKind::Text(_) => texts += 1,
+        _ => {}
+    });
+    assert!(paths > 8 && images == 1 && texts == 1, "{paths} paths, {images} images, {texts} texts, warnings {:?}", l.warnings);
+}
+
+/// PICT opcodes VectorCraft reads, and reserved ones it skips.
+const PICT_OPS: [u16; 40] = [
+    0x01, 0x03, 0x04, 0x07, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x12, 0x13, 0x14, 0x1A, 0x1B, 0x20, 0x21, 0x22, 0x23, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x30,
+    0x31, 0x38, 0x41, 0x51, 0x61, 0x71, 0x81, 0x90, 0x91, 0x98, 0x99, 0x9A, 0x9B, 0xA1, 0x8200, 0x0024,
+];
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn mutated_pict_pictures_never_panic(cut in 0usize..4096, edits in prop::collection::vec((0usize..4096, any::<u8>()), 0..16)) {
+        let mut bytes = pict_sample();
+        let n = bytes.len();
+        for &(at, b) in &edits {
+            bytes[512 + at % (n - 512)] = b;
+        }
+        bytes.truncate(cut.max(512));
+        survive_metafile("mutated PICT", "x.pct", &bytes)?;
+    }
+
+    #[test]
+    fn random_pict_opcodes_never_panic(ops in prop::collection::vec((prop::sample::select(PICT_OPS.to_vec()), arb_body()), 0..32)) {
+        survive_metafile("PICT opcodes", "x.pct", &pict_of(&ops))?;
+    }
+}
+
+// ---------- HP-GL plot files: opened and placed ----------
+
+/// A plot file with every kind of instruction the reader plays, printer escapes around it.
+const HPGL_SAMPLE: &[u8] = b"\x1b%-12345X@PJL ENTER LANGUAGE=HPGL2\r\n\x1bE\x1b%0BIN;BP1,\"job\";CO\"sample\";NP16;PC9,10,20,30;CR0,100,0,100,0,100;\
+SP1;PW0.5;WU0;LA1,4,2,4,3,7;LT2,5,1;PA0,0;PD1000,0,1000,1000;PU;LT;PR;PD-500,0,0,-500;PA2000,2000;CI300,5;AA2000,2500,120;AR0,100,-90;\
+AT2500,2500,3000,2000;RT100,100,200,0;BZ0,100,100,100,100,0;BR10,10,20,10,30,0;UL3,1,2,1;LT-3,2;EA3000,3000;ER100,-100;FT10,40;RA3500,3500;\
+RR200,200;WG400,30,120;EW-400,0,360;PM0;PD4000,4000,4500,4000,4500,4500;PM1;PU4100,4100;PD4200,4100,4200,4200;PM2;FP1;EP;FT3,10,45;FP;\
+IP0,0,10160,7620;SC0,100,0,100,1,20,80;PU10,10;PD20,20;SC0,10,0,10,2;PD5,5;SC;RO90;PD100,100;RO;IR10,10,90,90;IW0,0,5000,5000;\
+DT*,1;LBlabel*SMx;PA0,0;SM;PE:\xc1<=\xbf\xc0\xc2\xc2;LB\x03PG;\x1b%0A\x1b*r1A\x1b*b4W\x01\x02\x03\x04\x1b*rC\x1b%1BPD1,1;\x1b%-12345X";
+
+/// The sample the mutations start from opens as a plot with art.
+#[test]
+fn the_hpgl_sample_opens() {
+    let l = vectorcraft_engine::cmd::fileio::load("x.plt", HPGL_SAMPLE).unwrap();
+    assert_eq!(l.format.id, "hpgl");
+    let mut paths = 0;
+    l.doc.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
+    assert!(paths > 15, "{paths} paths, warnings {:?}", l.warnings);
+}
+
+/// A wedge drawn with the adaptive line type `LT-1` and a near-zero radius (a case the fuzz test
+/// found) opens and places without a panic.
+#[test]
+fn an_adaptive_line_type_wedge_of_almost_no_radius_opens() {
+    survive_metafile("HP-GL tiny adaptive wedge", "x.plt", b"IN;SP1;LT-1;EW0.000001,0,0;").unwrap();
+}
+
+/// A random instruction: a mnemonic the reader plays (or one it doesn't) with hostile numbers.
+fn arb_hpgl_instruction() -> impl Strategy<Value = String> {
+    let op = prop::sample::select(vec![
+        "IN", "DF", "PU", "PD", "PA", "PR", "SP", "PW", "WU", "NP", "PC", "CR", "LT", "UL", "LA", "FT", "SC", "IP", "IR", "RO", "CI", "AA", "AR",
+        "AT", "RT", "BZ", "BR", "EA", "ER", "RA", "RR", "EW", "WG", "PM", "FP", "EP", "LB", "DT", "SM", "CO", "PG", "IW", "PE", "ZZ",
+    ]);
+    let number = prop_oneof![
+        Just("0".to_string()),
+        Just("-1".to_string()),
+        (-3000i32..3000).prop_map(|v| v.to_string()),
+        Just("99999999999999999999999".to_string()),
+        Just("0.000001".to_string()),
+        Just("32767".to_string()),
+        Just("-32768".to_string()),
+        Just("360".to_string()),
+    ];
+    (op, prop::collection::vec(number, 0..8)).prop_map(|(o, n)| format!("{o}{};", n.join(",")))
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    #[test]
+    fn random_hpgl_instructions_never_panic(instructions in prop::collection::vec(arb_hpgl_instruction(), 0..40)) {
+        let bytes = format!("IN;SP1;{}", instructions.concat()).into_bytes();
+        survive_metafile("HP-GL instructions", "x.plt", &bytes)?;
+    }
+
+    #[test]
+    fn mutated_hpgl_files_never_panic(cut in 0usize..1200, edits in prop::collection::vec((0usize..1200, any::<u8>()), 0..16)) {
+        let mut bytes = HPGL_SAMPLE.to_vec();
+        let n = bytes.len();
+        for &(at, b) in &edits {
+            bytes[at % n] = b;
+        }
+        bytes.truncate(cut.max(4));
+        survive_metafile("mutated HP-GL", "x.plt", &bytes)?;
+    }
+
+    #[test]
+    fn hpgl_garbage_never_panics(bytes in prop::collection::vec(any::<u8>(), 0..400)) {
+        let mut b = b"IN;SP1;PD".to_vec();
+        b.extend(bytes);
+        survive_metafile("HP-GL garbage", "x.hpgl", &b)?;
     }
 }
 
@@ -2778,6 +4013,83 @@ fn editing_text() -> String {
         // A layer's own state block after its last compound path.
         layer("Two", 0, &format!("{}\n*u\n{}\n{}\n*U\n1 0.6 1 2 1 Xy\n0 0 Xd\n7 () XW", square(80), square(84), square(88)))
     )
+}
+
+/// The range of [`ai_written_meshes_never_panic`]'s cuts and edits: past the end of [`meshes_text`].
+const MESHES_FUZZ_CHARS: usize = 24_000;
+
+/// The editing data VectorCraft writes for a document with two gradient meshes: 2 × 3 patches whose
+/// rows of points are RGB, CMYK and gray, at half opacity and named; a 1 × 1 mesh with a point at
+/// 40% opacity; and an instance of a symbol whose art is a 2 × 1 mesh.
+fn meshes_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        use vectorcraft_color::Color;
+        use vectorcraft_doc::live::{GradientMesh, MeshPoint, grid_points, smooth_handles};
+        use vectorcraft_doc::{Node, NodeKind};
+        use vectorcraft_geom::Rect;
+        let mesh = |r: Rect, rows: u32, cols: u32, color: &dyn Fn(usize) -> Color| {
+            let pts = grid_points(r, rows, cols);
+            let handles = smooth_handles(rows, cols, &pts);
+            let width = cols as usize + 1;
+            let points = pts
+                .iter()
+                .zip(handles)
+                .enumerate()
+                .map(|(i, (p, h))| MeshPoint { p: *p, color: color(i / width), opacity: 1.0, handles: h })
+                .collect();
+            GradientMesh { rows, cols, points }
+        };
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let sheet = mesh(Rect::new(20.0, 20.0, 200.0, 120.0), 2, 3, &|row| match row {
+            0 => Color::rgb(1.0, 0.5, 0.0),
+            1 => Color::cmyk(0.1, 0.6, 0.2, 0.05),
+            _ => Color::gray(0.4),
+        });
+        let mut sheet = Node::new(doc.alloc_id(), NodeKind::Mesh(sheet));
+        (sheet.name, sheet.opacity) = (Some("Sheet".into()), 0.5);
+        doc.insert(Some(layer), usize::MAX, sheet).unwrap();
+        let mut small = mesh(Rect::new(220.0, 20.0, 280.0, 80.0), 1, 1, &|row| Color::rgb(0.0, 0.3, 0.3 + 0.5 * row as f32));
+        small.points[1].opacity = 0.4;
+        let small = Node::new(doc.alloc_id(), NodeKind::Mesh(small));
+        doc.insert(Some(layer), usize::MAX, small).unwrap();
+        let patch = mesh(Rect::new(0.0, 0.0, 40.0, 30.0), 2, 1, &|row| Color::rgb(0.2 * row as f32, 0.6, 0.1));
+        let patch = Node::new(doc.alloc_id(), NodeKind::Mesh(patch));
+        doc.symbols.push(vectorcraft_doc::Symbol { dynamic: false, name: "Patch".into(), art: std::sync::Arc::new(patch) });
+        let instance =
+            Node::new(doc.alloc_id(), NodeKind::SymbolInstance { symbol: "Patch".into(), xf: vectorcraft_geom::Affine::translate((20.0, 140.0)) });
+        doc.insert(Some(layer), usize::MAX, instance).unwrap();
+        let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
+        String::from_utf8(out.program).unwrap()
+    })
+}
+
+/// The data [`ai_written_meshes_never_panic`] damages, as it is, opens with both meshes, the symbol
+/// with its mesh and its instance, and the property's cuts and edits reach all of it.
+#[test]
+fn the_written_meshes_fuzz_data_opens_as_meshes() {
+    use vectorcraft_doc::NodeKind;
+    let text = meshes_text();
+    assert!(text.chars().count() < MESHES_FUZZ_CHARS, "{}", text.chars().count());
+    for mark in ["%AI14_BeginSymbol", "%AI5_BeginLayer", "/Mesh X!", "%_[2 3] /Size X#", "%_/DeviceCMYK /CS X#", "/End X!", "/SymbolInstance :"] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
+    }
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+    let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let art = d.layers[0].children().unwrap();
+    let kinds: Vec<&str> = art
+        .iter()
+        .map(|n| match n.kind {
+            NodeKind::Mesh(_) => "mesh",
+            NodeKind::SymbolInstance { .. } => "instance",
+            _ => "other",
+        })
+        .collect();
+    assert_eq!(kinds, ["mesh", "mesh", "instance"], "{warnings:?}");
+    let patch = d.symbols.iter().find(|s| s.name == "Patch").map(|s| &s.art.kind);
+    assert!(matches!(patch, Some(NodeKind::Mesh(_))), "{patch:?}");
 }
 
 fn zstd(text: &str) -> Vec<u8> {
@@ -2945,11 +4257,17 @@ fn the_vertical_fixture_reads_as_vertical_type() {
     l.doc.walk(|n| {
         if let vectorcraft_doc::NodeKind::Text(t) = &n.kind {
             let tcy: Vec<&str> = t.runs.iter().filter(|r| r.style.tate_chu_yoko).map(|r| r.text.as_str()).collect();
-            found.push((t.plain_text(), t.vertical, tcy.join("|")));
+            let roman: Vec<&str> = t.runs.iter().filter(|r| r.style.standard_vertical_roman).map(|r| r.text.as_str()).collect();
+            found.push((t.plain_text(), t.vertical, tcy.join("|"), roman.join("|")));
         }
     });
-    let want = [("Day 12\nnext", true, "12"), ("Vertical area type wraps", true, ""), ("On a path", true, "On a path")];
-    assert_eq!(found, want.map(|(a, b, c)| (a.to_string(), b, c.to_string())), "{:?}", l.warnings);
+    // Key 35 at 1 in the defaults: Standard Vertical Roman Alignment, except where a run has 3 or 2.
+    let want = [
+        ("Day 12\nnext", true, "12", "Day "),
+        ("Vertical area type wraps", true, "", "Vertical area type wraps"),
+        ("On a path", true, "On a path", ""),
+    ];
+    assert_eq!(found, want.map(|(a, b, c, d)| (a.to_string(), b, c.to_string(), d.to_string())), "{:?}", l.warnings);
 }
 
 /// The text objects of [`frames_document_text`]: story 0 in its two frames, story 1 in its one (a
@@ -3015,6 +4333,50 @@ fn text_editing_of(document: &str, objects: &str) -> String {
 
 /// Area Type Options as an area frame's data may keep them: rows, columns, gutters and the first
 /// baseline, and keys besides, each with a value of any kind, in or out of range.
+/// A paragraph's attributes as a text document might keep them: an alignment (key 0), auto leading
+/// (7), hyphenation options (10 to 15) and tab stops (30) of any value or type, the stops a list of
+/// any length whose entries may be anything.
+fn arb_paragraph_attributes() -> impl Strategy<Value = String> {
+    let values = prop::sample::select(vec![
+        "0",
+        "1",
+        "2",
+        "3",
+        "6",
+        "7",
+        "-1",
+        "2.5",
+        "1e400",
+        "-1e400",
+        "NaN",
+        "inf",
+        "1e9",
+        "(x)",
+        "true",
+        "false",
+        "/nil",
+        "[ 1 ]",
+        "<< /0 1 >>",
+    ]);
+    let keys = prop::sample::select(vec!["0", "7", "10", "11", "12", "13", "14", "15"]);
+    let stop = (values.clone(), values.clone(), 0usize..3).prop_map(|(at, align, shape)| match shape {
+        0 => format!("<< /0 {at} /1 {align} >>"),
+        1 => format!("<< /1 {align} >>"),
+        _ => at.to_string(),
+    });
+    let tabs = (prop::collection::vec(stop, 0..40), 0usize..4).prop_map(|(stops, shape)| match shape {
+        0 => format!("/30 << /0 [ {} ] >>", stops.join(" ")),
+        1 => "/30 << /0 7 >>".to_string(),
+        2 => "/30 [ 1 2 ]".to_string(),
+        _ => String::new(),
+    });
+    (prop::collection::vec((keys, values), 0..8), tabs).prop_map(|(kv, tabs)| {
+        let mut attrs: Vec<String> = kv.iter().map(|(k, v)| format!("/{k} {v}")).collect();
+        attrs.push(tabs);
+        attrs.join(" ")
+    })
+}
+
 fn arb_area_options() -> impl Strategy<Value = String> {
     let keys = prop::sample::select(vec!["3", "4", "5", "7", "8", "10", "13", "14"]);
     let values = prop::sample::select(vec![
@@ -3041,6 +4403,36 @@ fn arb_area_options() -> impl Strategy<Value = String> {
         "<< /1 30 >>",
     ]);
     prop::collection::vec((keys, values), 0..8).prop_map(|kv| kv.iter().map(|(k, v)| format!("/{k} {v}")).collect::<Vec<_>>().join(" "))
+}
+
+/// Type on a Path Options as a frame might keep them at key 11: nothing, a value that isn't a
+/// dictionary, or a dictionary of codes and flags of any value or type.
+fn arb_path_options() -> impl Strategy<Value = String> {
+    let keys = prop::sample::select(vec!["0", "1", "2", "3", "4", "6", "7", "18", "22"]);
+    let values = prop::sample::select(vec![
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "-1",
+        "2.5",
+        "1e400",
+        "NaN",
+        "inf",
+        "(x)",
+        "true",
+        "false",
+        "/Name",
+        "[ 1 ]",
+        "<< /0 1 >>",
+    ]);
+    (prop::collection::vec((keys, values), 0..6), 0usize..3).prop_map(|(kv, shape)| match shape {
+        0 => format!("/11 << {} >>", kv.iter().map(|(k, v)| format!("/{k} {v}")).collect::<Vec<_>>().join(" ")),
+        1 => "/11 3".to_string(),
+        _ => String::new(),
+    })
 }
 
 /// A text document of `kinds.len()` stories, story `i` in frame `i` of kind `kinds[i]` (0 point type,
@@ -3145,6 +4537,23 @@ fn the_shown_stories_fixture_opens_with_its_layers() {
     assert!(texts.iter().all(|t| t.contains('\u{2028}') && t.contains('\n')), "{texts:?}");
 }
 
+/// The fuzzed editing data with its layer, pattern and global colour named in code page 949 opens
+/// with those names, read in that encoding, from its layers.
+#[test]
+fn the_editing_fixture_reads_names_in_a_legacy_encoding() {
+    // 레이어 1, then 빨강.
+    let text = editing_text()
+        .replace("(One) Ln", r"(\267\271\300\314\276\356 1) Ln")
+        .replace("(Dots)", r"(\273\241\260\255)")
+        .replace("(Black global)", r"(\273\241\260\255 global)");
+    let bytes = editing_eps(&text);
+    let r = vectorcraft_eps::import_names(&bytes, true, true, vectorcraft_eps::NameEncoding::Korean).unwrap();
+    let names: Vec<_> = r.document.layers.iter().map(|l| l.name.clone().unwrap_or_default()).collect();
+    assert_eq!(names, ["레이어 1", "Two"], "{:?}", r.warnings);
+    assert!(r.document.pattern("빨강").is_some(), "{:?}", r.warnings);
+    assert!(r.document.swatch("빨강 global").is_some_and(|s| s.global), "{:?}", r.warnings);
+}
+
 proptest! {
     #![proptest_config(config())]
 
@@ -3192,6 +4601,30 @@ proptest! {
         survive(".ai text frames with hostile area options", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// The same text document with hostile paragraph attributes: an alignment, auto leading,
+    /// hyphenation options and tab stops of any value, type or size.
+    #[test]
+    fn text_frames_with_hostile_paragraph_attributes_never_panic(attrs in arb_paragraph_attributes()) {
+        let text = frames_document_text().replace("/5 << /0 2 /1 4 /2 6 >>", &format!("/5 << /1 4 /2 6 {attrs} >>"));
+        let editing = text_editing_of(&text, FRAME_OBJECTS);
+        let bytes = editing_eps(&editing);
+        survive("EPS text frames with hostile paragraph attributes", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
+        survive(".ai text frames with hostile paragraph attributes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// The type on a path of the same text document with hostile Type on a Path Options, opened as
+    /// an EPS document and as a `.ai`'s editing data.
+    #[test]
+    fn text_frames_with_hostile_path_options_never_panic(options in arb_path_options()) {
+        let text = frames_document_text().replacen("/6 [ 0.5 2.0 ]", &format!("/6 [ 0.5 2.0 ] {options}"), 1);
+        let editing = text_editing_of(&text, FRAME_OBJECTS);
+        let bytes = editing_eps(&editing);
+        survive("EPS text frames with hostile path options", || vectorcraft_engine::cmd::fileio::load("x.eps", &bytes).ok().map(|l| l.doc))?;
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing)].concat();
+        survive(".ai text frames with hostile path options", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// The same for vertical type and Tate-chu-yoko runs: orientations and baseline directions of
     /// any value, type or size.
     #[test]
@@ -3207,6 +4640,26 @@ proptest! {
         let text = mutate_text(&editing_text(), cut, &edits);
         let bytes = editing_eps(&text);
         survive("mutated EPS editing data", || vectorcraft_eps::import(&bytes).ok().map(|r| r.document))?;
+    }
+
+    /// Names of any bytes (a layer's, a pattern's, a global colour's) read in any legacy name
+    /// encoding: each byte written as an octal escape, so every code page sees bytes it doesn't
+    /// define, cut sequences and UTF-8 alike.
+    #[test]
+    fn eps_editing_data_names_in_any_encoding_never_panic(
+        name in prop::collection::vec(any::<u8>(), 0..24),
+        encoding in prop::sample::select(vectorcraft_eps::NameEncoding::LABELS.to_vec()),
+    ) {
+        let escaped: String = name.iter().map(|b| format!("\\{b:03o}")).collect();
+        let text = editing_text()
+            .replace("(One) Ln", &format!("({escaped}) Ln"))
+            .replace("(Dots)", &format!("({escaped})"))
+            .replace("(Black global)", &format!("({escaped} global)"));
+        let bytes = editing_eps(&text);
+        let encoding = vectorcraft_eps::NameEncoding::from_label(encoding).unwrap();
+        survive("EPS editing data names in a legacy encoding", || {
+            vectorcraft_eps::import_names(&bytes, true, false, encoding).ok().map(|r| r.document)
+        })?;
     }
 
     /// A `.ai` whose envelopes are damaged or hostile: any kind, warp style, options word,
@@ -3246,6 +4699,40 @@ proptest! {
         survive("hostile .ai envelope", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// A `.ai` whose warped type is damaged or hostile: any warp style and settings, on the object or
+    /// on a fill, a look that reaches far away or holds type of its own, the text cut short.
+    #[test]
+    fn ai_warped_type_never_panics(
+        style in prop::sample::select(vec![0i64, 1, 8, 15, 16, -3, i64::MAX]),
+        bend in prop::sample::select(vec!["0.5", "0", "1", "-1", "2", "1e308", "-1e308", "nan"]),
+        distort in prop::sample::select(vec!["0", "0.4", "-1", "1e308", "nan"]),
+        reach in prop::sample::select(vec!["90", "16000", "1e7", "1e308", "-1e308", "nan"]),
+        on_fill in any::<bool>(),
+        look_type in any::<bool>(),
+        objects in 1usize..4,
+        cut in 0usize..3_000,
+        edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['0', '9', '-', ' ', '\n', '(', ')', '/', ':', ';', ',', '[', ']', '%', '_', 'X', 'u', 'U'])), 0..8),
+    ) {
+        let basic = |name: &str, body: &str| format!("/BasicFilter :\n({name}) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{body}; /Dict ;\n /Part ,\n");
+        let chain = |kids: &[String]| format!("/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{};\n /Part ,\n", kids.concat());
+        let fill = basic("Fill Style Filter", "/FillStyle : 0 O\n0 1 1 0 1 0 0 Xa\n0 1 0 0 0 Xy\n0 1 Xd\n/Def ;\n (FillStyle) ,\n");
+        let warp = basic("Adobe Deform", &format!("{style} /Int (DeformStyle) ,\n{bend} /Real (DeformValue) ,\n{distort} /Real (DeformHoriz) ,\n{distort} /Real (DeformVert) ,\n0 /Bool (Rotate) ,\n"));
+        let root = if on_fill {
+            let stack = format!("/CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n{}{};\n /Part ,\n", chain(&[warp, fill]), basic("Conduit Filter", ""));
+            chain(&[stack])
+        } else {
+            chain(&[fill, warp])
+        };
+        let styles = format!("%AI9_BeginArtStyles\n/KnownStyle :\n(Warped) /Name ,\n/ActiveStyle :\n{root}%AI9_EndArtStyles\n");
+        let slot = if look_type { "/AI11Text :\n1 /FreeUndo ,\n0 /FrameIndex ,\n0 /StoryIndex ,\n;\n" } else { "" };
+        let object = format!(
+            "u\n{slot}0 1 1 0 1 0 0 Xa\n10 10 m\n{reach} 10 L\n{reach} {reach} L\n10 90 L\nf\nU\n9 () XW\n%_/AI11Text :\n%_0 /FreeUndo ,\n%_0 /FrameIndex ,\n%_0 /StoryIndex ,\n%_;\n1 (Warped) XW\n"
+        );
+        let data = mutate_text(&text_editing_of(&vertical_document_text(), &(styles + &object.repeat(objects))), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("hostile .ai warped type", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
     /// A `.ai` whose editing data is damaged or hostile.
     #[test]
     fn ai_editing_data_never_panics(cut in 0usize..3_000, edits in prop::collection::vec((0usize..3_000, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', '[', ']', '%', 'q', 'Q', 'W', 'u', 'U', 'L', 'l', 'c', 'C', 'v', 'V', 'y', 'Y', 'k', 'x'])), 0..12), damage in prop::collection::vec((0usize..4_000, any::<u8>()), 0..4)) {
@@ -3258,6 +4745,34 @@ proptest! {
             }
         }
         survive("mutated .ai editing data", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// A `.ai` whose gradient meshes, as the writer writes them, are damaged: the record's type,
+    /// size, places, color spaces and corners on `%_` lines, its `/Mesh X!` and `/End X!`, and the
+    /// mesh's transparency and name, cut short or edited.
+    #[test]
+    fn ai_written_meshes_never_panic(cut in 0usize..MESHES_FUZZ_CHARS, edits in prop::collection::vec((0usize..MESHES_FUZZ_CHARS, prop::sample::select(vec!['0', '1', '2', '9', '-', '.', 'e', ' ', '\n', '[', ']', '(', ')', '/', '%', '_', 'X', '!', '#', 'N', 'P', 'E'])), 0..12)) {
+        let text = mutate_text(meshes_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai meshes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai meshes, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, true, 1.0).0))?;
+    }
+
+    /// The active artboard that a restored `.ai` opens on, read from damaged or hostile editing data.
+    #[test]
+    fn ai_active_artboard_never_panics(cut in 0usize..600, edits in prop::collection::vec((0usize..600, prop::sample::select(vec!['0', '9', '-', ' ', '\n', '/', ':', ';', ',', '%', '_'])), 0..12)) {
+        let board = |x: u32| format!("%_/Dictionary :\n%_{x} 100 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{} 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n", x + 100);
+        let text = format!(
+            "%AI9_BeginDocumentData\n%_/Document :\n%_/Dictionary :\n%_/Array :\n{}{}%_; (ArtboardArray) ,\n%_1 /Int (CropAreaActive) ,\n%_; /Recorded ,\n%_;\n%AI9_EndDocumentData\n",
+            board(0),
+            board(150)
+        );
+        let private = mutate_text(&text, cut, &edits).into_bytes();
+        survive("hostile CropAreaActive", || {
+            let mut doc = Document::new(100.0, 100.0);
+            doc.opened_artboard = vectorcraft_eps::ai_opened_artboard(&private, &doc);
+            Some(doc)
+        })?;
     }
 
     /// A `.ai` whose PDF part can't be read (#4366), its private data damaged or hostile, under
@@ -3285,7 +4800,8 @@ proptest! {
         })?;
         match opened {
             Some(Ok(editing)) => prop_assert!(editing),
-            Some(Err(e)) => prop_assert_eq!(Some(e), page_error),
+            // The page's error, followed by why the editing data couldn't be read when it says.
+            Some(Err(e)) => prop_assert!(page_error.as_deref().is_some_and(|p| e == p || e.starts_with(&format!("{p}; its editing data couldn't be read either ("))), "{e}"),
             None => {}
         }
     }
@@ -3329,6 +4845,26 @@ proptest! {
         let data = mutate_text(&ai::editing_data(100.0, 100.0, &format!("{gradient}{}", ai::layer("L", &art))), cut, &edits);
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
         survive("hostile .ai line widths", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// A `.ai` whose legacy type is set in a CJK composite font (a predefined CMap the reader
+    /// carries, one it reads through another, one it decodes byte by byte, a Unicode CMap, or a
+    /// name that only looks like one), with any bytes in its strings.
+    #[test]
+    fn ai_legacy_type_in_cjk_fonts_never_panics(
+        cmap in prop::sample::select(vec![
+            "83pv-RKSJ-H", "90ms-RKSJ-V", "90pv-RKSJ-V", "H", "V", "EUC-H", "GBK2K-H", "CNS-EUC-V", "KSCpc-EUC-H", "KSCms-UHC-HW-V",
+            "78-RKSJ-H", "GB-H", "KSC-V", "HKdlb-B5-H", "GBT-H", "UniJIS-UCS2-H", "UniGB-UTF8-V", "UniKS-UTF32-H", "UniAKR-UTF16-H",
+            "Identity-H", "UniFoo-UTF8-H", "-H", "RKSJ",
+        ]),
+        strings in prop::collection::vec(prop::collection::vec(any::<u8>(), 0..24), 1..4),
+    ) {
+        use vectorcraft_testkit::ai;
+        let tx: String = strings.iter().map(|s| format!("({}) Tx\n", s.iter().map(|b| format!("\\{b:03o}")).collect::<String>())).collect();
+        let art = format!("0 To\n1 0 0 1 10 50 0 Tp\nTP\n0 Tr\n/_Test-W3-{cmap} 9 Tf\n{tx}(\\r) TX\nTO\n");
+        let data = ai::editing_data(100.0, 100.0, &ai::layer("L", &art));
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&data)].concat();
+        survive("legacy type in CJK fonts", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
     /// A `.ai` whose pattern definition (a marked tile box, a gradient placed by `Bg`'s matrix) and
@@ -3391,7 +4927,8 @@ proptest! {
                       %_/ArtDictionary :\n%_/Mask :\n%_X=\n%_0 g\n%_0 0 m\n%_5 0 l\n%_5 -5 l\n%_f\n%_X+\n%_ (Art) ,\n%_; (AI9_Mask) ,\n%_/XMLUID : (Photo) ; (AI10_ArtUID) ,\n%_;\n%_\n";
         let place = "%AI5_BeginPlace\n%%FileType: 1\n[1 0 0 -1 -8000 8000] 8000 8000 8002 8001 4 4 0\n(/tmp/p.png)`\n%%IncludeFile:/tmp/p.png\n\
                      %AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n()\n%AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n\
-                     %AI17_Begin_Content_if_version_gt:24 5\n%AI26_BeginPlacedObjectPreview\n2 1 8 32 17 @@\n%AI26_EndPlacedObjectPreview\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n";
+                     %AI17_Begin_Content_if_version_gt:24 5\n%AI26_BeginPlacedObjectPreview\n2 1 8 32 17 @@\n%AI26_EndPlacedObjectPreview\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n\
+                     %_/ArtDictionary :\n%_2 /Int (AI11 PlacedPDFPageIndex) ,\n%_4 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n";
         let text = ai::editing_data(100.0, 100.0, &ai::layer("L", &format!("{raster}{place}")));
         let samples: &[u8] = &[255, 0, 0, 0, 0, 255, 128, 0];
         let preview: &[u8] = &[255, 255, 0, 0, 0, 0, 0, 0];
@@ -3411,6 +4948,37 @@ proptest! {
         data.truncate(cut.min(data.len()));
         let private = [b"%AI24_ZStandard_Data".as_slice(), &ruzstd::encoding::compress_to_vec(data.as_slice(), ruzstd::encoding::CompressionLevel::Fastest)].concat();
         survive("hostile .ai images and placed files", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
+    }
+
+    /// A `.ai` whose placed EPS files have their bytes included between `%%BeginDocument:` and
+    /// `%%EndDocument` (one on `%_` lines, one with a nested document and counted data in it),
+    /// damaged, opened and drawn: their bytes are read as an EPS file when drawn.
+    #[test]
+    fn ai_placed_eps_files_with_included_bytes_never_panic(
+        cut in 0usize..4_000,
+        edits in prop::collection::vec((0usize..4_000, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '[', ']', '%', '_', '`', '~', 'E', 'D'])), 0..12),
+    ) {
+        use vectorcraft_testkit::ai;
+        let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 40\n%%EndComments\n0 0 1 setrgbcolor\n0 0 60 40 rectfill\n%%EOF\n";
+        let nested = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 9 9\n%%BeginDocument: c.eps\nnewpath\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n%%EOF\n";
+        let place = |path: &str, matrix: &str, doc: &str| {
+            format!(
+                "%AI5_BeginPlace\n%%FileType: 0\n{matrix} 0 0 60 40 4 4 0\n({path})`\n%%BeginDocument: {path}\n{doc}\n%%EndDocument\n\
+                 %AI17_Begin_Content_if_version_gt:24 12\n%AI28_BeginPlacedRelativePath\n(src/)\n%AI28_EndPlacedRelativePath\n%AI17_Alternate_Content\n%AI17_End_Versioned_Content\n~\n%AI5_EndPlace\n"
+            )
+        };
+        let hidden: String = place("/tmp/b.eps", "[1 0 0 1 20 20]", eps).lines().map(|l| format!("%_{l}\n")).collect();
+        let body = format!("{}{hidden}{}", place("/tmp/a.eps", "[1 0 0 1 20 20]", eps), place("/tmp/c.eps", "[1 0 0 1 0 0]", nested));
+        let fixture = ai::editing_data(200.0, 100.0, &ai::layer("L", &body));
+        // A session reads placed documents' files when they are drawn.
+        let _ = vectorcraft_engine::Session::new();
+        let whole = vectorcraft_engine::cmd::fileio::load("x.ai", &ai::ai(fixture.as_bytes(), "0 0 1 rg 20 20 60 40 re f"));
+        let mut placed = 0;
+        whole.iter().for_each(|l| l.doc.visit_placed(|_, _| placed += 1));
+        prop_assert!(placed == 3 && fixture.len() < 4_000, "{placed} placed documents, {} bytes: {:?}", fixture.len(), whole.map(|l| l.warnings));
+        let text = mutate_text(&fixture, cut, &edits);
+        let file = ai::ai(text.as_bytes(), "0 0 1 rg 20 20 60 40 re f");
+        survive("hostile .ai placed EPS files with included bytes", || vectorcraft_engine::cmd::fileio::load("x.ai", &file).ok().map(|l| l.doc))?;
     }
 
     /// A `.ai` whose type (point type turned, vertical type, area type, threaded area type and type
@@ -3610,6 +5178,66 @@ proptest! {
         survive("style library in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 
+    /// Graphic style libraries whose styles are one paint (`/SimpleStyle`): any paint operators in
+    /// any order, with any operands or none, `Xd` missing or repeated, and the paint left open. The
+    /// library is also loaded in the Graphic Style Libraries panel and its styles applied to artwork.
+    #[test]
+    fn ai_style_libraries_of_one_paint_styles_never_panic(
+        // Each operator, and whether it is a paint operator rather than any text.
+        ops in prop::collection::vec(prop_oneof![
+            prop::sample::select(vec![
+                "0 R", "0 O", "0 1 1 0 K", "1 0 0 0 k", "0 0 0 0 1 0 0 Xa", "0 0 0 0 1 0 0 XA", "0.5 G", "0 g", "K", "Xa",
+                "0 J 0 j 2 w 10 M []0 d", "-1 w", "1e400 w", "0 M", "[3 -1]0 d", "[]0 d",
+                "1 0 Xd", "0 1 Xd", "1 1 Xd", "0 0 Xd", "1 Xd", "Xd", "0 1 0 0 0 Xy", "1 0.5 1 1 0 Xy", "Xy",
+                "0 Bb", "1 Bb", "2 (Sky) 0 0 0 100 1 0 0 1 0 0 Bg", "2 (Sky) 0 0 1e400 100 1 0 0 1 0 0 Bg", "2 (Dusk) 0 0 0 100 1 0 0 1 0 0 Bg",
+                "0 BB", "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p",
+                "(Dots) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] P", "0 XR",
+            ]).prop_map(|op| (op.to_string(), true)),
+            "[ -~]{0,12}".prop_map(|text| (text, false)),
+        ], 0..12),
+        closed in any::<bool>(),
+    ) {
+        use vectorcraft_testkit::ai;
+        let close = if closed { "/Paint ;\n/Def ;\n" } else { "" };
+        // C, a red 2 pt stroke, comes first, so that it reads whatever A holds. The file defines the
+        // gradient Sky, which a gradient paint of A may name.
+        let header = format!(
+            "%AI5_BeginGradient: (Sky)\n(Sky) 0 2 Bd\n[\n%_0 0 0 0 0 1 0 2 1 6 50 0 Bs\n%_0 0 0 0 1 1 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n\
+             %AI9_BeginArtStyles\n/KnownStyle :\n(C) /Name ,\n/SimpleStyle :\n0 R\n0 1 1 0 K\n2 w\n1 0 Xd\n/Paint ;\n/Def ;\n\
+             /KnownStyle :\n(A) /Name ,\n/SimpleStyle :\n{}\n{close}/KnownStyle :\n(B) /Name ,\n/SimpleStyle :\n1 0 Xd\n/Paint ;\n/Def ;\n\
+             %AI9_EndArtStyles\n%AI9_BeginArtStyleList\n(A)\n(B)\n(C)\n%AI9_EndArtStyleList\n",
+            ops.iter().map(|(op, _)| op.as_str()).collect::<Vec<_>>().join("\n")
+        );
+        let library = ai::editing_data(200.0, 100.0, &header);
+        survive("one-paint style library", || Some(vectorcraft_eps::layered_ai(library.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let file = ai::ai(library.as_bytes(), ai::page_pdf());
+        // How many objects C's look reached, what applying it answered, and whether that look is
+        // C's red 2 pt stroke with no fill.
+        let (mut styled, mut applied, mut red_stroke) = (0, Value::Null, false);
+        survive("one-paint styles applied", || {
+            let mut s = rich_session();
+            let p = json!({"dataBase64": vectorcraft_format::base64_encode(&file), "name": "fuzz.ai"});
+            let library = no_panic(s.execute("graphicStyle.loadLibrary", &p)).ok()?["library"].clone();
+            no_panic(s.execute("select.all", &json!({}))).ok()?;
+            // Every style is added and the first one, A when it reads, applied; then C is applied.
+            let _ = no_panic(s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "apply": true})));
+            applied = no_panic(s.execute("graphicStyle.addFromLibrary", &json!({"library": library, "names": ["C"], "apply": true}))).ok()?;
+            let d = (*s.doc().ok()?.doc).clone();
+            if let Some(look) = applied["applied"].as_str().and_then(|name| d.graphic_style(name)).map(|g| &g.appearance) {
+                let strokes = look.items.iter().filter(|i| matches!(i, vectorcraft_doc::AppearanceItem::Stroke(_))).count();
+                red_stroke = look.fill().is_none()
+                    && strokes == 1
+                    && look.stroke().is_some_and(|s| (s.paint.color(), s.width) == (Some(vectorcraft_color::Color::cmyk(0.0, 1.0, 1.0, 0.0)), 2.0));
+                d.walk(|n| styled += usize::from(n.appearance == *look));
+            }
+            Some(d)
+        })?;
+        // Text that isn't a paint operator can leave a string or a comment open over the style list.
+        if ops.iter().all(|(_, paint)| *paint) {
+            prop_assert!(applied["applied"].is_string() && red_stroke && styled > 0, "the stroke style wasn't applied: {applied}");
+        }
+    }
+
     /// Objects on Path records of any shape: ids in any order, repeated or missing, any number of
     /// objects, pivots and angles out of range or not finite, spacings, order tags that disagree,
     /// groups nested or cut short, and versioned content left open.
@@ -3644,9 +5272,23 @@ proptest! {
         survive("mutated .ai Art brushed path", || Some(vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0))?;
     }
 
+    /// [`styled_definitions_text`] (objects with an art style in a pattern's art and in a brush's
+    /// art), damaged or hostile.
+    #[test]
+    fn ai_styled_definitions_never_panic(cut in 0usize..2_400, edits in prop::collection::vec((0usize..2_400, prop::sample::select(vec!['0', '1', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U', 'X', 'W', 'E'])), 0..12)) {
+        let text = mutate_text(&styled_definitions_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai styled definitions", || {
+            let d = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, false, 1.0).0;
+            let _ = vectorcraft_brush::library(&d);
+            Some(d)
+        })?;
+    }
+
     /// Brush objects of every kind with any parameters, the brush manager's order with any names,
-    /// and brush art sections nested or cut short: read with the layers, or as a library without
-    /// them, the brushes kept within their ranges.
+    /// and brush art sections nested or cut short, their art alone or in a group after a frame of
+    /// any corners, painted or not, open or closed, the group ended or not: read with the layers,
+    /// or as a library without them, the brushes kept within their ranges.
     #[test]
     fn ai_brushes_never_panic(
         kind in 0usize..7,
@@ -3655,6 +5297,7 @@ proptest! {
         nest in 0usize..6,
         cut in any::<bool>(),
         layers in any::<bool>(),
+        frame in prop::option::of((prop::collection::vec(prop_oneof![arb_num(), Just("0".to_string()), Just("4".to_string())], 4), prop::sample::select(vec!["n", "N", "f", "S"]), any::<bool>())),
     ) {
         use vectorcraft_testkit::ai;
         let kinds = ["Adobe Calligraphic Brush Tool", "Adobe Scatter Brush Tool", "Adobe ArtOnPath Brush Tool", "Adobe PatternOnPath Brush Tool", "Adobe dBrush Brush Tool", "Adobe Brush Manager Order", "Other"];
@@ -3668,7 +5311,14 @@ proptest! {
         for _ in 0..nest {
             art.push_str("%AI8_BeginBrushPattern\n(A)\n");
         }
-        art.push_str("0 g\n0 0 m\n4 0 L\n4 4 L\nf\n");
+        match &frame {
+            Some((c, op, ended)) => {
+                let (x0, y0, x1, y1) = (&c[0], &c[1], &c[2], &c[3]);
+                let end = if *ended { "U\n" } else { "" };
+                art.push_str(&format!("u\n{x0} {y0} m\n{x1} {y0} L\n{x1} {y1} L\n{x0} {y1} L\n{x0} {y0} L\n{op}\n0 g\n0 0 m\n4 0 L\n4 4 L\nf\n{end}"));
+            }
+            None => art.push_str("0 g\n0 0 m\n4 0 L\n4 4 L\nf\n"),
+        }
         for _ in 0..nest.saturating_sub(usize::from(cut)) {
             art.push_str("%AI8_EndBrushPattern\n");
         }
@@ -3690,7 +5340,290 @@ proptest! {
         let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
         survive("mutated .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
         survive("mutated .ai symbols, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+        // The same symbols as files of versions 10 to 13 place them, by a `TransformMatrix`.
+        let older = mutate_text(&older_symbols_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&older)].concat();
+        survive("mutated older .ai symbols", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        // A symbol library: the same symbols and list, no layers.
+        let library = mutate_text(&symbol_library_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&library)].concat();
+        survive("mutated .ai symbol library", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = vectorcraft_testkit::ai::eps(library.as_bytes(), vectorcraft_testkit::ai::page_ps());
+        survive("mutated symbol library in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
+
+    /// A `.ai` whose art styles, as the writer writes them, are damaged: the styles, the style
+    /// list, a styled object's drawn look, the object on `%_` lines and its `1 (style) XW`, cut
+    /// short or edited.
+    #[test]
+    fn ai_written_styles_never_panic(cut in 0usize..STYLES_FUZZ_CHARS, edits in prop::collection::vec((0usize..STYLES_FUZZ_CHARS, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U', 'X', 'W'])), 0..12)) {
+        let text = mutate_text(styles_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai art styles", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai art styles, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
+
+    /// A `.ai` whose brushes, as the writer writes them, are damaged: the brush art with its frame,
+    /// the brush manager's order, the brushes' parameters, a brushed path's style and its object, cut
+    /// short or edited.
+    #[test]
+    fn ai_written_brushes_never_panic(cut in 0usize..BRUSHES_FUZZ_CHARS, edits in prop::collection::vec((0usize..BRUSHES_FUZZ_CHARS, prop::sample::select(vec!['0', '1', '9', '-', '.', ' ', '\n', '(', ')', '/', ':', ';', ',', '%', '_', 'u', 'U', 'n', 'X', 'W'])), 0..12)) {
+        let text = mutate_text(brushes_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai brushes", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai brushes, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0).0))?;
+    }
+
+    /// A `.ai` whose blends, as the writer writes them, are damaged: the keys and spine on `%_`
+    /// lines with their dictionaries, the drawn steps, the record's `XP` and its hex, and the
+    /// blend's transparency, cut short or edited.
+    #[test]
+    fn ai_written_blends_never_panic(cut in 0usize..BLENDS_FUZZ_CHARS, edits in prop::collection::vec((0usize..BLENDS_FUZZ_CHARS, prop::sample::select(vec!['0', '1', '2', '8', '9', 'A', 'F', '-', '.', ' ', '\n', '(', ')', '/', ',', ';', '%', '_', 'u', 'U', 'K', 'S', 'X', 'P'])), 0..12)) {
+        let text = mutate_text(blends_text(), cut, &edits);
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+        survive("mutated .ai blends", || Some(vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, false, 1.0).0))?;
+        survive("mutated .ai blends, trusted", || Some(vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, true, 1.0).0))?;
+    }
+}
+
+/// The range of [`ai_written_blends_never_panic`]'s cuts and edits: past the end of [`blends_text`].
+const BLENDS_FUZZ_CHARS: usize = 24_000;
+
+/// The editing data VectorCraft writes for a document with two blends: red to blue squares with
+/// three steps and no spine of its own, at half opacity; and three squares 25 pt apart on a spine
+/// edited on the canvas, aligned to the path.
+fn blends_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        use std::sync::Arc;
+        use vectorcraft_color::{Color, Paint};
+        use vectorcraft_doc::live::{BlendOrientation, BlendSpacing, BlendSpec};
+        use vectorcraft_doc::{Appearance, Node, NodeKind};
+        use vectorcraft_geom::{PathData, Point, Rect, SubPath, shapes};
+        let mut doc = Document::new(300.0, 200.0);
+        let layer = doc.layers[0].id;
+        let square = |doc: &mut Document, x: f64, y: f64, c: Color| {
+            Arc::new(Node::path(
+                doc.alloc_id(),
+                shapes::rectangle(Rect::new(x, y, x + 20.0, y + 20.0)),
+                Appearance::basic(Paint::solid(c), Paint::None, 0.0),
+            ))
+        };
+        let (red, blue, green) = (Color::rgb(1.0, 0.0, 0.0), Color::rgb(0.0, 0.0, 1.0), Color::rgb(0.0, 1.0, 0.0));
+        let keys = vec![square(&mut doc, 20.0, 20.0, red), square(&mut doc, 120.0, 20.0, blue)];
+        let mut fade = Node::new(
+            doc.alloc_id(),
+            NodeKind::Blend { children: keys, spec: Box::new(BlendSpec { spacing: BlendSpacing::Steps(3), ..BlendSpec::default() }) },
+        );
+        fade.opacity = 0.5;
+        doc.insert(Some(layer), usize::MAX, fade).unwrap();
+        let keys = vec![square(&mut doc, 20.0, 80.0, red), square(&mut doc, 120.0, 80.0, blue), square(&mut doc, 170.0, 80.0, green)];
+        let centers: Vec<Point> = [30.0, 130.0, 180.0].iter().map(|x| Point::new(*x, 90.0)).collect();
+        let spec = BlendSpec {
+            spacing: BlendSpacing::Distance(25.0),
+            orientation: BlendOrientation::AlignToPath,
+            spine: Some(PathData::single(SubPath::polyline(&centers, false))),
+            key_anchors: vec![0, 1, 2],
+            ..BlendSpec::default()
+        };
+        let path = Node::new(doc.alloc_id(), NodeKind::Blend { children: keys, spec: Box::new(spec) });
+        doc.insert(Some(layer), usize::MAX, path).unwrap();
+        let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
+        String::from_utf8(out.program).unwrap()
+    })
+}
+
+/// The data [`ai_written_blends_never_panic`] damages, as it is, opens with both blends live, and
+/// the property's cuts and edits reach all of it.
+#[test]
+fn the_written_blends_fuzz_data_opens_live() {
+    use vectorcraft_doc::NodeKind;
+    let text = blends_text();
+    assert!(text.chars().count() < BLENDS_FUZZ_CHARS, "{}", text.chars().count());
+    for mark in ["%AI5_BeginLayer", "%_(K) /String (ShapeBlendPathType) ,", "%_(S) /String (ShapeBlendPathType) ,", "1 0 92 XP", "1 0 116 XP"] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
+    }
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+    let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(300.0, 200.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(art.iter().map(|n| matches!(n.kind, NodeKind::Blend { .. })).collect::<Vec<_>>(), [true, true], "{warnings:?}");
+}
+
+/// The range of [`ai_written_styles_never_panic`]'s cuts and edits: past the end of [`styles_text`].
+const STYLES_FUZZ_CHARS: usize = 64_000;
+
+/// The editing data VectorCraft writes for a document with a drop shadow on a path, a gradient fill
+/// and a width profile on others, a stroked even-odd path with an opacity mask, Pathfinder › Add on
+/// a group and a graphic style of its own with effects on one of its fills.
+fn styles_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        use vectorcraft_color::{Color, Gradient, GradientKind, GradientPaint, GradientStop, Paint};
+        use vectorcraft_doc::{Appearance, AppearanceItem, FillLayer, GraphicStyle, Node, NodeKind, OpacityMask, StrokeLayer, WidthProfile};
+        use vectorcraft_geom::{FillRule, Rect, shapes};
+        let mut doc = Document::new(200.0, 100.0);
+        let layer = doc.layers[0].id;
+        let fx = |id: &str| vectorcraft_render::effects::new_effect(id, &json!({})).unwrap();
+        let mut ap = Appearance::basic(Paint::solid(Color::BLACK), Paint::solid(Color::WHITE), 2.0);
+        ap.effects = vec![fx("stylize.dropShadow")];
+        let shaded = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 10.0, 50.0, 40.0)), ap.clone());
+        doc.insert(Some(layer), usize::MAX, shaded).unwrap();
+        let ramp = Gradient::new(GradientKind::Linear, vec![GradientStop::new(0.0, Color::WHITE), GradientStop::new(1.0, Color::BLACK)]);
+        let mut graded = Appearance::basic(Paint::Gradient(Box::new(GradientPaint::new(ramp))), Paint::None, 0.0);
+        graded.effects = vec![fx("stylize.outerGlow")];
+        let n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(10.0, 50.0, 50.0, 90.0)), graded);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let mut tapered = StrokeLayer::new(Paint::solid(Color::BLACK), 4.0);
+        tapered.profile = Some(WidthProfile { points: vec![(0.0, 1.0, 0.5), (1.0, 0.0, 1.0)] });
+        let profiled = Appearance { items: vec![AppearanceItem::Stroke(tapered)], effects: vec![fx("stylize.roundCorners")], contents_index: None };
+        let n = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 10.0, 150.0, 40.0)), profiled);
+        doc.insert(Some(layer), usize::MAX, n).unwrap();
+        let mut stroked = Appearance::basic(Paint::None, Paint::solid(Color::WHITE), 2.0);
+        stroked.effects = vec![fx("stylize.dropShadow")];
+        let mut odd = Node::path(doc.alloc_id(), shapes::rectangle(Rect::new(100.0, 50.0, 150.0, 90.0)), stroked);
+        if let NodeKind::Path { rule, .. } = &mut odd.kind {
+            *rule = FillRule::EvenOdd;
+        }
+        let mask_art = Node::path(
+            doc.alloc_id(),
+            shapes::rectangle(Rect::new(100.0, 50.0, 150.0, 70.0)),
+            Appearance::basic(Paint::solid(Color::gray(0.0)), Paint::None, 0.0),
+        );
+        odd.extras_mut().mask = Some(Box::new(OpacityMask::new(mask_art, false)));
+        doc.insert(Some(layer), usize::MAX, odd).unwrap();
+        let square = |doc: &mut Document, x: f64| {
+            Node::path(
+                doc.alloc_id(),
+                shapes::rectangle(Rect::new(x, 50.0, x + 30.0, 80.0)),
+                Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0),
+            )
+        };
+        let (a, b) = (square(&mut doc, 60.0), square(&mut doc, 80.0));
+        let mut merged = Node::group(doc.alloc_id(), vec![std::sync::Arc::new(a), std::sync::Arc::new(b)]);
+        merged.appearance = Appearance { effects: vec![fx("pathfinder.add")], ..Appearance::default() }.into();
+        doc.insert(Some(layer), usize::MAX, merged).unwrap();
+        doc.graphic_styles.push(GraphicStyle::new("Shaded", ap));
+        let chained = FillLayer { opacity: 0.5, effects: vec![fx("distort.twist")], ..FillLayer::new(Paint::solid(Color::WHITE)) };
+        let chained = Appearance { items: vec![AppearanceItem::Fill(chained)], ..Appearance::default() };
+        doc.graphic_styles.push(GraphicStyle::new("Chained", chained));
+        let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
+        String::from_utf8(out.program).unwrap()
+    })
+}
+
+/// The data [`ai_written_styles_never_panic`] damages, as it is, opens with its styles live, and the
+/// property's cuts and edits reach all of it.
+#[test]
+fn the_written_styles_fuzz_data_opens_live() {
+    let text = styles_text();
+    assert!(text.chars().count() < STYLES_FUZZ_CHARS, "{}", text.chars().count());
+    for mark in [
+        "%AI9_BeginArtStyles",
+        "%AI9_BeginArtStyleList",
+        "%AI5_BeginLayer",
+        "\n6 () XW",
+        "\n1 (Anon",
+        "(BSLeftWidthsArray)",
+        "0 /Bool (UseEvenOdd)",
+        "(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/BasicFilter",
+        "Bb",
+    ] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
+    }
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+    let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let art = d.layers[0].children().unwrap();
+    assert_eq!(art.iter().map(|n| n.appearance.effects.len()).collect::<Vec<_>>(), [1, 1, 1, 1, 1]);
+    assert!(d.graphic_style("Shaded").is_some() && d.graphic_style("Chained").is_some());
+}
+
+/// [`symbols_text`] without its layer: a symbol library.
+fn symbol_library_text() -> String {
+    let full = symbols_text();
+    match (full.find("%AI5_BeginLayer"), full.find("%AI5_EndLayer--\n")) {
+        (Some(a), Some(b)) if a < b => format!("{}{}", &full[..a], &full[b + "%AI5_EndLayer--\n".len()..]),
+        _ => full,
+    }
+}
+
+/// The library [`ai_symbols_never_panic`] damages, as it is, opens with its symbols.
+#[test]
+fn the_symbol_library_fuzz_data_opens_with_its_symbols() {
+    let text = symbol_library_text();
+    assert!(!text.contains("%AI5_BeginLayer"));
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&text)].concat();
+    let (doc, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, false, 1.0);
+    assert!(!layered, "{warnings:?}");
+    let names: Vec<&str> = doc.symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["S2", "S1"], "{warnings:?}");
+}
+
+/// The range of [`ai_written_brushes_never_panic`]'s cuts and edits: past the end of [`brushes_text`].
+const BRUSHES_FUZZ_CHARS: usize = 48_000;
+
+/// The editing data VectorCraft writes for a document whose brushes are a Calligraphic brush, a
+/// Scatter brush in Tints and an Art brush in Tints (each art a wide block over a narrow one), with a
+/// path drawn with the Calligraphic brush and one with the Art brush.
+fn brushes_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| {
+        use std::sync::Arc;
+        use vectorcraft_brush::{ArtBrush, Brush, BrushKind, Calligraphic, Colorization, Scatter, Variation};
+        use vectorcraft_color::{Color, Paint};
+        use vectorcraft_doc::{Appearance, Node, NodeId};
+        use vectorcraft_geom::{Rect, shapes};
+        let block = |id: u64, r: Rect| {
+            Arc::new(Node::path(NodeId(id), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)))
+        };
+        let art = || Node::group(NodeId(1), vec![block(2, Rect::new(0.0, 0.0, 40.0, 4.0)), block(3, Rect::new(0.0, 4.0, 10.0, 8.0))]);
+        let nib = Calligraphic {
+            angle: 30.0,
+            roundness: 40.0,
+            size: 6.0,
+            variation: [20.0, 10.0, 2.0],
+            modes: Some([Variation::Rotation, Variation::Fixed, Variation::Pressure]),
+        };
+        let lib = [
+            Brush { name: "Nib".into(), kind: BrushKind::Calligraphic(nib) },
+            Brush { name: "Spray".into(), kind: BrushKind::Scatter(Scatter { art: art(), colorization: Colorization::Tints, ..Scatter::default() }) },
+            Brush { name: "Ribbon".into(), kind: BrushKind::Art(ArtBrush { art: art(), colorization: Colorization::Tints, ..ArtBrush::default() }) },
+        ];
+        let mut doc = Document::new(200.0, 100.0);
+        vectorcraft_brush::store(&mut doc, &lib);
+        let layer = doc.layers[0].id;
+        for (brush, y) in [("Nib", 30.0), ("Ribbon", 70.0)] {
+            let mut line = Node::path(
+                doc.alloc_id(),
+                shapes::line((10.0, y).into(), (190.0, y).into()),
+                Appearance::basic(Paint::None, Paint::solid(Color::rgb(1.0, 0.0, 0.0)), 1.0),
+            );
+            line.appearance.stroke_mut().unwrap().brush = Some(brush.into());
+            doc.insert(Some(layer), usize::MAX, line).unwrap();
+        }
+        let out = vectorcraft_eps::export_ai_editing(&doc, &vectorcraft_eps::AiEditingOptions::default()).unwrap();
+        String::from_utf8(out.program).unwrap()
+    })
+}
+
+/// The data [`ai_written_brushes_never_panic`] damages, as it is, opens with its brushes and its
+/// brushed paths live, and the property's cuts and edits reach all of it.
+#[test]
+fn the_written_brushes_fuzz_data_opens_live() {
+    let text = brushes_text();
+    assert!(text.chars().count() < BRUSHES_FUZZ_CHARS, "{}", text.chars().count());
+    for mark in ["%AI8_BeginBrushPattern", "%AI8_BeginPluginObject", "%AI9_BeginArtStyles", "/GObjRef :", "%AI5_BeginLayer", "\n1 (Anon"] {
+        assert!(text.replace("\r\n", "\n").contains(mark), "{mark}");
+    }
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+    let (d, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
+    assert!(layered, "{warnings:?}");
+    let names: Vec<String> = vectorcraft_brush::library(&d).into_iter().map(|b| b.name).collect();
+    assert_eq!(names, ["Nib", "Spray", "Ribbon"]);
+    let art = d.layers[0].children().unwrap();
+    let brushes: Vec<Option<&str>> = art.iter().map(|n| n.appearance.stroke().and_then(|s| s.brush.as_deref())).collect();
+    assert_eq!(brushes, [Some("Nib"), Some("Ribbon")]);
 }
 
 /// Editing data with symbols (S2's art holds an instance of S1, F's holds non-native art), the
@@ -3740,6 +5673,53 @@ fn the_symbols_fuzz_data_opens_live() {
     assert_eq!(instances, 3);
 }
 
+/// [`symbols_text`] with its instances placed by a `TransformMatrix`, as files of versions 10 to
+/// 13 write them. Art space's origin is at canvas (8091, 8242), from the template box: on the page
+/// the matrix takes the symbol's art to the canvas (y down), and in S2's art to S2's space.
+fn older_symbols_text() -> String {
+    let mut text = symbols_text();
+    for (newer, older) in [
+        ("1 0 0 -1 -8081 8237 /RTransformMatrix", "1 0 0 1 10 5 /TransformMatrix"),
+        ("1 0 0 -1 20 50 /RTransformMatrix", "1 0 0 1 8111 8192 /TransformMatrix"),
+        ("2 0 0 -2 100 50 /RTransformMatrix", "2 0 0 2 8191 8192 /TransformMatrix"),
+        ("1 0 0 -1 20 20 /RTransformMatrix", "1 0 0 1 8111 8222 /TransformMatrix"),
+    ] {
+        assert!(text.contains(newer), "{newer}");
+        text = text.replace(newer, older);
+    }
+    text
+}
+
+/// The older data [`ai_symbols_never_panic`] damages, as it is, opens with its instances live and
+/// placed as [`symbols_text`] places them, on the page and in S2's art.
+#[test]
+fn the_older_symbols_fuzz_data_opens_live() {
+    use vectorcraft_doc::{Node, NodeKind};
+    fn xfs(n: &Node, out: &mut Vec<[f64; 6]>) {
+        match &n.kind {
+            NodeKind::SymbolInstance { xf, .. } => out.push(xf.as_coeffs()),
+            _ => n.children().into_iter().flatten().for_each(|c| xfs(c, out)),
+        }
+    }
+    let open = |text: &str| {
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(text)].concat();
+        let (doc, warnings, layered) = vectorcraft_eps::layered_ai(&private, Document::new(200.0, 100.0), vec![], false, true, 1.0);
+        assert!(layered, "{warnings:?}");
+        let (mut page, mut nested) = (vec![], vec![]);
+        doc.layers.iter().for_each(|l| xfs(l, &mut page));
+        let s2 = doc.symbols.iter().find(|s| s.name == "S2").expect("S2");
+        xfs(&s2.art, &mut nested);
+        (page, nested)
+    };
+    let text = older_symbols_text();
+    assert!(!text.contains("/RTransformMatrix"));
+    let (older, newer) = (open(&text), open(&symbols_text()));
+    assert_eq!((older.0.len(), older.1.len()), (3, 1));
+    let same = |a: &[[f64; 6]], b: &[[f64; 6]]| a.len() == b.len() && a.iter().flatten().zip(b.iter().flatten()).all(|(x, y)| (x - y).abs() < 1e-9);
+    assert!(same(&older.0, &newer.0), "{older:?} {newer:?}");
+    assert!(same(&older.1, &newer.1), "{older:?} {newer:?}");
+}
+
 /// Symbols the reader must stop at: sections that don't end, references and matrices it can't
 /// use, definitions nested deeper than it reads, and symbols that hold each other.
 #[test]
@@ -3783,6 +5763,9 @@ fn ai_symbol_limits_never_panic() {
             ai::layer("L", &inst("(S1)", "1 0 0 -1 20 50"))
         ),
         format!("{}{}", def("S1", &inst("(S2)", "1 0 0 -1 0 0")), def("S2", &inst("(S1)", "1 0 0 -1 0 0"))),
+        // Symbol libraries without layers: definitions nested too deep and a long chain.
+        nested,
+        chain,
     ];
     for body in cases {
         let data = ai::editing_data(200.0, 100.0, &body).replacen("%%EndComments", "%AI3_TemplateBox: 100.5 50.5 100.5 50.5\n%%EndComments", 1);
@@ -3835,6 +5818,44 @@ fn the_art_brushed_fuzz_data_opens_live() {
     let (doc, warnings, _) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
     let n = doc.layers.first().and_then(|l| l.children()).and_then(|c| c.first()).unwrap_or_else(|| panic!("{warnings:?}"));
     assert_eq!(n.appearance.stroke().and_then(|s| s.brush.as_deref()), Some("R"), "{warnings:?} {n:?}");
+}
+
+/// Editing data with an art style (a blue fill and a drop shadow), a pattern, a pattern in the
+/// version 7 form (its tile string) and a Scatter brush's art each holding a square with its drawn
+/// look and that style, and a path filled with the first pattern.
+fn styled_definitions_text() -> String {
+    use vectorcraft_testkit::ai;
+    let style = "%AI9_BeginArtStyles\n/KnownStyle :\n(S) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+                 /BasicFilter :\n(Fill Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/FillStyle : 0 O\n0 0 0 0 0 0 1 Xa\n0 1 Xd\n/Def ;\n (FillStyle) ,\n; /Dict ;\n /Part ,\n\
+                 /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n\
+                 /BasicFilter :\n(Adobe Drop Shadow) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n1 /Int (blnd) ,\n0.75 /Real (opac) ,\n5 /Real (blur) ,\n\
+                 0 /Int (csrc) ,\n/FillStyle : 0 O\n0 0 0 1 0 0 0 Xa\n0 1 Xd\n/Def ;\n (sclr) ,\n3 /Real (horz) ,\n4 /Real (vert) ,\n; /Dict ;\n /Part ,\n;\n%AI9_EndArtStyles\n";
+    let square = "0 Ae\nu\n1 0 0 0 0 0 0 Xa\n0 0 m\n10 0 L\n10 10 L\n0 10 L\nf\nU\n%_0 0 m\n%_10 0 L\n%_10 10 L\n%_0 10 L\n%_f\n1 (S) XW\n";
+    let pattern = format!("%AI3_BeginPattern: (P)\n(P) 0 0 10 10\n0 A\n0 Xw\n{square}E\n%AI3_EndPattern\n");
+    let tile = square.replace('\n', "\r");
+    let legacy = format!("%AI3_BeginPattern: (Q)\n(Q) 0 0 20 20 [\n%AI3_Tile\n(0 O 0 R 0 0 0 1 k 0 0 0 1 K) @\n(\r{tile}) &\n] E\n%AI3_EndPattern\n");
+    let art = format!("%AI8_BeginBrushPattern\n(D)\n0 A\n{square}%AI8_EndBrushPattern\n");
+    let object = "%AI8_BeginPluginObject\n(Adobe Scatter Brush Tool)\n(B)\n(2 /D/ 5 1 0 0 / 0 0.5 1.5 1) -\n( 1.2 2 0 -0.25 0.25 2 -45 30 1 1 0) .\n%AI8_EndPluginObject\n";
+    let path = format!("(P) 0 0 1 1 0 0 0 0 0 [1 0 0 1 0 0] p\n{}f\n", ai::rect(20.0, 20.0, 80.0, 80.0));
+    ai::editing_data(100.0, 100.0, &format!("{style}{pattern}{legacy}{art}{object}{}", ai::layer("L", &path)))
+}
+
+/// The data [`ai_styled_definitions_never_panic`] damages, as it is, opens with the patterns' and
+/// the brush's squares live.
+#[test]
+fn the_styled_definitions_fuzz_data_opens_live() {
+    let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&styled_definitions_text())].concat();
+    // Trusted: the empty page it is read beside isn't compared with its art.
+    let (doc, warnings, _) = vectorcraft_eps::layered_ai(&private, Document::new(100.0, 100.0), vec![], false, true, 1.0);
+    let live = |n: &vectorcraft_doc::Node| matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. }) && n.appearance.effects.len() == 1;
+    for name in ["P", "Q"] {
+        let tile = doc.pattern(name).map(|p| p.art.clone()).unwrap_or_else(|| panic!("{name}: {warnings:?}"));
+        assert!(tile.len() == 1 && live(&tile[0]), "{name}: {warnings:?} {tile:?}");
+    }
+    let lib = vectorcraft_brush::library(&doc);
+    let brush = lib.iter().find(|b| b.name == "B").unwrap_or_else(|| panic!("{warnings:?}"));
+    assert!(matches!(brush.art().as_slice(), [n] if live(n)), "{warnings:?} {brush:?}");
 }
 
 /// The ids of the objects of an Objects on Path group in the fuzz cases.
@@ -4323,6 +6344,8 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "1e308 Ty",
             "1 TY",
             "(x) TY",
+            "3 Tg",
+            "1e308 Tg",
             "1 1 1e308 -1e308 4e9 Th",
             "1 1 (2) 3 4 Th",
             "36 2 Xb",
@@ -4350,6 +6373,16 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%AI5_BeginRaster\n",
             "\n%AI5_EndRaster\n",
             "\n%%BeginData: 12\rXI\n",
+            // Image operands past 2^25 pixels, of odd 1-bit rows, and past the hard limits: as
+            // many pixels as a u32 side allows, more samples than the bytes allowed, sizes that
+            // overflow when multiplied out, and a matrix that maps the box to nothing.
+            "[1 0 0 1 0 0] 0 0 6000 6000 6000 6000 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 17 13 17 13 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 65536 32769 1 1 0 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 23171 23171 8 4 1 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 4294967295 4294967295 8 4 1 0 1 0 4 4 0 0 ",
+            "[1 0 0 1 0 0] 0 0 9 9 1e308 1e308 8 3 1 0 0 0 4 4 0 0 ",
+            "[0 0 0 0 0 0] 0 0 9 9 46341 46341 1 1 0 0 1 0 4 4 0 0 ",
             "\n%%EndData\n",
             "\n%AI5_BeginGradient: (G)\n",
             "\n%AI14_BeginSymbol\n",
@@ -4367,6 +6400,9 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%AI26_EndPlacedObjectPreview\n",
             "[1 0 0 -1 0 0] 0 0 2 1 4 4 0 (a.png) `",
             "[1e308 0 0 1e308 0 0] 0 0 -1e308 1e308 4 4 0 (a.png) `",
+            "\n%_/ArtDictionary :\n%_2 /Int (AI11 PlacedPDFPageIndex) ,\n%_4 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n",
+            "\n%_/ArtDictionary :\n%_-1e308 /Real (AI11 PlacedPDFPageIndex) ,\n%_99 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n",
+            "\n%_/ArtDictionary :\n%_(2) /String (AI11 PlacedPDFPageIndex) ,\n%_5 /Int (AI11 PlacedPDFCropTo) ,\n%_;\n%_\n",
             "\n%AI28_BeginPlacedRelativePath\n",
             "\n%AI28_BeginPlacedRelativePath\n(src/)\n%AI28_EndPlacedRelativePath\n",
             "\n%AI28_BeginPlacedRelativePath\n(..\\\\..\\\\art\\\\)\n%AI28_EndPlacedRelativePath\n",
@@ -4385,6 +6421,12 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "\n%%BeginData: 14 Binary Bytes\n",
             "\n%%BeginBinary: 99999999999\n",
             "\n%%BeginData: 3 Hex Lines\n",
+            // A placed EPS file's bytes included in the data: one drawn, one with a box it can't
+            // take, one on `%_` lines.
+            "\n%%BeginDocument: a.eps\n%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 9 9\n0 0 1 setrgbcolor 0 0 9 9 rectfill\n%%EndDocument\n",
+            "\n%%BeginDocument: a.eps\n%!PS\n%%BoundingBox: 0 0 1e308 -5\n%%EndDocument\n",
+            "\n%_%%BeginDocument: a.eps\n%_%!PS\n%_0 0 9 9 rectfill\n%_%%EndDocument\n",
+            "[1 0 0 1 0 0] 0 0 1e308 1e308 4 4 0 (a.eps) `",
             "\n%AI5_EndPlace\n",
             "Xm",
             "50 -50 -100 -100 5000 -2000 Xm",
@@ -4443,6 +6485,13 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "(Fill Style Filter) 0 0 /Filter ,",
             "(Adobe Outer Glow) 1 0 /Filter ,",
             "(Adobe Drop Shadow) 1 0 /Filter ,",
+            "(PSAdapter_plugin_BsRl) 1 0 /Filter ,",
+            "/Binary : /ASCII85Decode ,",
+            "/Binary : /ASCII85Decode ,\n%!!!!\"z~>\n; (data) ,",
+            "\n%zzzz~>\n",
+            "; (data) ,",
+            "8 /Int (dataSize) ,",
+            "8 /Real (dataSize) ,",
             "(Adobe Pathfinder) 1 0 /Filter ,",
             "0 /Int (Command) ,",
             "0.5 /Real (Mix) ,",
@@ -4532,6 +6581,9 @@ fn arb_ai_token() -> impl Strategy<Value = String> {
             "-9 /Real (CornerRadius) ,",
             "1 /Bool (Absolute) ,",
             "-0.5 /Real ,",
+            "0.5 /Real ,",
+            "1 /Real ,",
+            "1e308 /Real ,",
             "1.5 /Real ,",
             "-2 /Real ,",
             "; (BSLeftWidthsArray) ,",
@@ -4952,6 +7004,53 @@ proptest! {
             survive(what, || vectorcraft_engine::cmd::fileio::load("x.eps", &file).ok().map(|l| l.doc))?;
         }
     }
+
+    /// A filter-gallery effect's settings block in an art style: fields of any key, marker, type and
+    /// value, objects nested in objects, any version and `dataSize`, and its ASCII85 lines damaged or cut.
+    #[test]
+    fn ai_filter_gallery_settings_never_panic(
+        fields in prop::collection::vec(arb_settings_field(), 0..8),
+        inner in prop::collection::vec(arb_settings_field(), 0..4),
+        nesting in 0usize..4,
+        version in prop_oneof![Just(1u32), any::<u32>()],
+        size in prop_oneof![Just(None), any::<i64>().prop_map(Some)],
+        cut in 0usize..600,
+        edits in prop::collection::vec((0usize..600, prop::sample::select(vec!['%', '~', '>', 'z', 'v', '!', 'u', '\n', ';', ' '])), 0..6),
+    ) {
+        use vectorcraft_testkit::ai;
+        let object = |body: Vec<u8>| [&b"Objc"[..], &0x8000_0000u32.to_be_bytes(), b"Clss", &(body.len() as u32 + 4).to_be_bytes(), &1u32.to_be_bytes(), &body].concat();
+        let mut nested = inner.concat();
+        for _ in 0..nesting {
+            nested = object(nested);
+        }
+        let data = [version.to_be_bytes().to_vec(), fields.concat(), nested].concat();
+        let lines: String = ascii85(&data).as_bytes().chunks(60).map(|c| format!("%{}\n", String::from_utf8_lossy(c))).collect();
+        let size = size.unwrap_or(data.len() as i64);
+        let block = mutate_text(&format!("/Binary : /ASCII85Decode ,\n{lines}; (data) ,\n{size} /Int (dataSize) ,\n"), cut, &edits);
+        let styles = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(R) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(PSAdapter_plugin_BsRl) 1 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n{block}; /Dict ;\n /Part ,\n;\n%AI9_EndArtStyles\n"
+        );
+        let hidden = ai::rect(0.0, 0.0, 10.0, 10.0).replace('\n', "\n%_");
+        let art = format!("0 Ae\nu\n0 1 1 0 1 0 0 Xa\n{}f\nU\n%_{hidden}f\n1 (R) XW\n", ai::rect(0.0, 0.0, 10.0, 10.0));
+        let data = ai::editing_data(200.0, 100.0, &format!("{styles}{}", ai::layer("L", &art)));
+        survive("filter-gallery settings", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("filter-gallery settings in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
+    }
+}
+
+/// A field of a filter-gallery settings descriptor: a key, a marker, a type and a value, each one
+/// that is read or anything else.
+fn arb_settings_field() -> impl Strategy<Value = Vec<u8>> {
+    let key = prop_oneof![prop::sample::select(vec![*b"GEfk", *b"Dtl ", *b"Smth", *b"LghD", *b"Xtra"]), any::<[u8; 4]>()];
+    let marker = prop_oneof![Just(0u32), Just(0x2000), Just(0x8000_0000), any::<u32>()];
+    let kind = prop_oneof![prop::sample::select(vec![*b"long", *b"doub", *b"bool", *b"LghD", *b"GEft"]), any::<[u8; 4]>()];
+    let value = prop_oneof![
+        prop::sample::select(vec![b"LDBt".to_vec(), b"BsRl".to_vec(), 8i32.to_be_bytes().to_vec(), vec![1], f64::NAN.to_be_bytes().to_vec()]),
+        prop::collection::vec(any::<u8>(), 0..12),
+    ];
+    (key, marker, kind, value).prop_map(|(k, m, t, v)| [&k[..], &m.to_be_bytes(), &t, &v].concat())
 }
 
 // ---------- font files a folder search reads ----------
@@ -5038,7 +7137,8 @@ fn findme_wanted() -> vectorcraft_text::WantedFonts {
 
 /// Whether reading `bytes` as a font file a search reads panics.
 fn search_reads(what: &str, bytes: &[u8]) -> Result<Vec<usize>, TestCaseError> {
-    let path = vectorcraft_testkit::temp_dir("font-search-fuzz").join(format!("{:?}.ttc", std::thread::current().id()));
+    let dir = vectorcraft_testkit::TempDir::new("font-search-fuzz");
+    let path = dir.join("font.ttc");
     std::fs::write(&path, bytes).unwrap();
     catch_quiet(|| findme_wanted().provided_by(&path)).map_err(|e| TestCaseError::fail(format!("{what}: a search reading the file panicked: {e}")))
 }
@@ -5663,7 +7763,8 @@ fn pdf_streams_the_reader_would_fail_on_are_refused() {
 
 /// A page drawing a thousand times one form that decodes to 64 MiB (of spaces, then a square):
 /// each drawing reads the form again, so the import stops at the page's form content instead of
-/// decoding 64 GB (#3569, which hung).
+/// decoding 64 GB (#3569, which hung). The scan walks no more than the page's limit and the form
+/// that passes it.
 #[test]
 fn pdf_a_huge_form_drawn_over_and_over_is_refused_in_bounded_time() {
     use std::io::Write as _;
@@ -5671,14 +7772,17 @@ fn pdf_a_huge_form_drawn_over_and_over_is_refused_in_bounded_time() {
     for _ in 0..64 {
         e.write_all(&[b' '; 1 << 20]).unwrap();
     }
-    e.write_all(b"0 0 5 5 re f").unwrap();
+    let square = b"0 0 5 5 re f";
+    e.write_all(square).unwrap();
     let form = packed_as_is(FORM, &e.finish().unwrap());
     let bytes = pdf_with(&"/F Do ".repeat(1000), "<< /XObject << /F 5 0 R >> >>", &[form]);
-    let start = std::time::Instant::now();
+    let before = vectorcraft_pdf::form_content_of(&bytes);
     let e = vectorcraft_engine::cmd::fileio::load("repeated.pdf", &bytes).err().map(|e| e.to_string());
-    let took = start.elapsed();
+    let walked = vectorcraft_pdf::form_content_of(&bytes) - before;
+    let one_form = (64 << 20) + square.len();
+    assert!(walked > 0, "the page's scan reads the form");
+    assert!(walked <= vectorcraft_pdf::form_content_limit() + one_form, "{walked} bytes of form content walked");
     assert!(e.as_deref().is_some_and(|e| e.contains("no document was imported")), "{e:?}");
-    assert!(took < std::time::Duration::from_secs(60), "took {took:?}");
 }
 
 // A large file the reader would fail on says which stream (#4366): an image with its size in
@@ -6304,21 +8408,30 @@ fn ai_private(layer_art: &str) -> Vec<u8> {
 }
 
 /// A blend of many steps doesn't stall the import: one within the limits (a thousand steps between
-/// two keys) is checked and made live quickly, one past them keeps its drawn steps without being
-/// laid out.
+/// two keys) is checked and made live with no more measuring per object than a blend of three
+/// steps, one past them keeps its drawn steps without being laid out.
 #[test]
 fn large_ai_blends_import_in_bounded_time() {
-    for (steps, live) in [(3, true), (998, true), (1_500, false)] {
+    // The objects laid out and the laid objects measured against drawn steps, reading `steps`.
+    let work = |steps: usize, live: bool| {
         let private = ai_private(&blend_text(steps));
-        let started = std::time::Instant::now();
+        let before = vectorcraft_eps::blend_work();
         let (doc, notes, read) = vectorcraft_eps::layered_ai(&private, Document::new(4000.0, 200.0), vec![], false, true, 1.0);
+        let after = vectorcraft_eps::blend_work();
         assert!(read, "{steps} steps: read from the layers ({notes:?})");
-        let took = started.elapsed();
-        assert!(took < std::time::Duration::from_secs(30), "{steps} steps took {took:?}");
         let mut blends = 0;
         doc.walk(|n| blends += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Blend { .. })));
         assert_eq!(blends == 1, live, "{steps} steps: live {live}");
-    }
+        (after.0 - before.0, after.1 - before.1)
+    };
+    let (small_laid, small_measured) = work(3, true);
+    let (laid, measured) = work(998, true);
+    assert!(small_laid > 0 && laid > small_laid, "laid out: {small_laid} for 3 steps, {laid} for 998");
+    assert!(
+        measured * small_laid <= 2 * small_measured * laid,
+        "998 steps: {measured} measured for {laid} laid out; 3 steps: {small_measured} for {small_laid}"
+    );
+    assert_eq!(work(1_500, false), (0, 0), "a blend past the limits isn't laid out");
 }
 
 proptest! {
@@ -6381,5 +8494,83 @@ proptest! {
         prop_assert_eq!(paths, 1, "{:?}", notes);
         prop_assert!(notes.iter().any(|n| n.contains("graphs come in as plain art")), "{:?}", notes);
         prop_assert!(!notes.iter().any(|n| n.contains("art this can't read")), "the records aren't art: {:?}", notes);
+    }
+}
+
+/// A graph in `.ai` editing data whose records read whole (version 7 specification, appendix A), of
+/// a table `rows` × `cols` (its label row and column included): a series group tagged by its
+/// column, and the axes on the plot's edges.
+fn live_graph_text(rows: &str, cols: &str) -> String {
+    format!(
+        "%_Gs\n%_10 90 110 10 Gb\n%_5 0 0 14 0 1 0 0 6 44 Gy\n%_10 2 0 0 90 80 0 Gd\n\
+         %_1 () Ga\n%_0 13 0 0 0 0 0 () GA\n%_2 () Ga\n%_0 14 0 0 0 0 0 () GA\n%_4 () Ga\n%_0 14 0 0 0 0 0 () GA\n\
+         %_{rows} {cols} 1 1 Gz\n%_() Gc (East) Gc (Q1) Gc 5 Gc GC\n\
+         u\nu\n0 0 0 1 k\n20 10 m\n20 50 L\n40 50 L\n40 10 L\nf\nU\n%_2 1 0 0 Go\nu\n0 0 0 1 K\n10 90 m\n10 10 L\n110 10 L\nS\nU\nU\n%_GS\n"
+    )
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A `.ai` graph that reads whole, then cut or damaged, or with a table of any size (zero, past
+    /// the limits, past what memory holds), never panics, and its drawn art always comes in.
+    #[test]
+    fn ai_live_graph_never_panics(cut in 0usize..800, edits in prop::collection::vec((0usize..800, prop::sample::select(vec!['0', '9', '-', '.', ' ', '\n', '(', ')', '/', '%', '_', 'G', 'c', 'C', 'o', 's', 'S', 'u', 'U'])), 0..12), rows in prop_oneof![Just(2u64), 0u64..20_000, Just(u64::MAX)], cols in prop_oneof![Just(2u64), 0u64..400, Just(4_000_000_000u64)]) {
+        let text = mutate_text(&live_graph_text("2", "2"), cut, &edits);
+        survive("mutated live .ai graph", || Some(vectorcraft_eps::layered_ai(&ai_private(&text), Document::new(100.0, 100.0), vec![], false, true, 1.0).0))?;
+        let sized = live_graph_text(&rows.to_string(), &cols.to_string());
+        let (doc, notes, read) = vectorcraft_eps::layered_ai(&ai_private(&sized), Document::new(4000.0, 200.0), vec![], false, true, 1.0);
+        prop_assert!(read, "{:?}", notes);
+        let mut paths = 0;
+        doc.walk(|n| paths += usize::from(matches!(n.kind, vectorcraft_doc::NodeKind::Path { .. })));
+        prop_assert_eq!(paths, 2, "{:?}", notes);
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
+
+    /// A stroke's arrowheads (#8188): its arrowhead entries with any scale of any kind, naming a
+    /// symbol the file defines, one it doesn't or one named in Chinese, the symbol's art any run of
+    /// paths (frames, samples of the line, heads, open and closed, filled, stroked or neither), at
+    /// any weight, the style section cut anywhere, the line drawn as any look. Read as a `.ai` and
+    /// as an EPS, then rendered.
+    #[test]
+    fn ai_arrowhead_strokes_never_panic(
+        scale in prop_oneof![arb_num(), Just("50".to_string())],
+        kind in prop::sample::select(vec!["Real", "Int", "Bool"]),
+        named in prop::sample::select(vec!["W", "Missing", "\u{6954}"]),
+        both in any::<bool>(),
+        art in prop::collection::vec(prop::sample::select(vec![
+            "-10 5 m\n10 5 L\n10 -5 L\n-10 -5 L\nn\n",
+            "0 G\n1 w\n-9 0 m\n4 0 l\nS\n",
+            "0 G\n0.5 w\n-9 0 m\n4 0 l\nS\n",
+            "0 g\n2 3 m\n8 0 l\n2 -3 l\nf\n",
+            "0 G\n1 w\n2 3 m\n8 0 l\n2 -3 l\nS\n",
+            "0 g\n1e300 0 m\n-1e300 1 l\nf\n",
+            "0 g\n0 0 m\n0 0 l\nf\n",
+        ]), 0..6),
+        width in arb_num(),
+        cut in 0usize..2000,
+        look in prop::sample::select(vec!["0 G\n2 w\n0 50 m\n96 50 l\nS\n0 g\n94 53 m\n100 50 l\n94 47 l\nf\n", "0 G\n2 w\n0 50 m\n100 50 l\nS\n", ""]),
+    ) {
+        use vectorcraft_testkit::ai;
+        let symbol = format!("%AI5_Begin_NonPrinting\n%AI14_BeginSymbol\n(W)\n0 A\n0 Xw\n0 Ae\nu\n{}U\n%AI10_EndSymbol\n%AI5_End_NonPrinting--\n", art.concat());
+        let start = if both { format!("{scale} /{kind} (BSArrowBeginScale) ,\n/GObjRef : ({named}) /SymbolArt ; (BSArrowBeginSymbol) ,\n") } else { String::new() };
+        let styles = format!(
+            "%AI9_BeginArtStyles\n/KnownStyle :\n(Arrowed) /Name ,\n/ActiveStyle :\n/CompoundFilter :\n(Chain Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /CompoundFilter :\n(Stack Style Filter) 0 0 /Filter ,\n1 /Visible ,\n\
+             /BasicFilter :\n(Stroke Style Filter) 0 0 /Filter ,\n1 /Visible ,\n/Dictionary : /NotRecorded ,\n/Dictionary : /NotRecorded ,\n\
+             {start}{scale} /{kind} (BSArrowEndScale) ,\n/GObjRef : ({named}) /SymbolArt ; (BSArrowEndSymbol) ,\n; (kAIBeautifulStrokesParamsDictKey) ,\n\
+             /StrokeStyle : 0 R\n0 0 0 1 0 0 0 XA\n0 J 0 j {width} w 10 M []0 d\n0 XR\n1 0 Xd\n/Def ;\n (StrokeStyle) ,\n; /Dict ;\n /Part ,\n\
+             /BasicFilter :\n(Conduit Filter) 0 0 /Filter ,\n1 /Visible ,\n;\n /Part ,\n;\n /Part ,\n;\n%AI9_EndArtStyles\n\
+             %AI9_BeginArtStyleList\n(Arrowed)\n%AI9_EndArtStyleList\n"
+        );
+        let styles: String = styles.chars().take(cut).collect();
+        let line = format!("0 Ae\nu\n{look}U\n%_0 50 m\n%_100 50 L\n%_N\n1 (Arrowed) XW\n");
+        let data = ai::editing_data(200.0, 100.0, &format!("{symbol}{styles}{}", ai::layer("L", &line)));
+        survive("arrowhead strokes", || Some(vectorcraft_eps::layered_ai(data.as_bytes(), Document::new(200.0, 100.0), vec![], false, false, 1.0).0))?;
+        let eps = ai::eps(data.as_bytes(), ai::page_ps());
+        survive("arrowhead strokes in an EPS", || vectorcraft_engine::cmd::fileio::load("x.eps", &eps).ok().map(|l| l.doc))?;
     }
 }

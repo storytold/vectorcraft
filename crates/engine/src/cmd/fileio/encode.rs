@@ -2,11 +2,13 @@
 //! (unknown keys are ignored, so one params object can carry the options of several formats).
 
 use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use vectorcraft_doc::{Artboard, Document};
+use vectorcraft_doc::{Artboard, Document, Node, NodeKind, SYMBOL_SIZES, SymbolOverride};
 use vectorcraft_geom::Rect;
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::jpeg::{self, JpegOptions};
@@ -74,16 +76,102 @@ pub struct Encoded {
     pub linked: Vec<vectorcraft_svg::LinkedImage>,
     /// Image maps, each written beside its image under the image's name (raster `imageMap`).
     pub maps: Vec<imagemap::Map>,
-    /// The encoder's warnings (features approximated or left out, options not applied yet).
+    /// The encoder's warnings: what the file leaves out of the document or writes differently
+    /// ([`NoteKind::Loss`]).
     pub warnings: Vec<String>,
+    /// The encoder's notes on the options: options not applied yet or applied another way, and
+    /// what an option turns off ([`NoteKind::Setting`]). A reply gives them after the warnings
+    /// ([`Self::notes`]).
+    pub setting_notes: Vec<String>,
     /// What joins the file's stem and the artboard name when there is a file per artboard
     /// (default `-`; EPS uses `_`, as the reference app names them).
     pub joiner: Option<&'static str>,
 }
 
+/// What a note an export gives with its file is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoteKind {
+    /// Something of the document (its art, type, layers or artboards) that the file leaves out or
+    /// that reaches it changed: the format, its version or a limit can't hold it, or the export
+    /// couldn't write it.
+    Loss,
+    /// An option the export didn't apply or applied another way while the art reaches the file as
+    /// it looks, or something left out because an option turns it off.
+    Setting,
+}
+
+/// A note an export gives with its file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Note {
+    /// What the note is about.
+    pub kind: NoteKind,
+    /// The note, in English.
+    pub text: String,
+}
+
+impl Note {
+    /// A note about what the file loses ([`NoteKind::Loss`]).
+    pub fn loss(text: impl Into<String>) -> Self {
+        Self { kind: NoteKind::Loss, text: text.into() }
+    }
+
+    /// A note on the options ([`NoteKind::Setting`]).
+    pub fn setting(text: impl Into<String>) -> Self {
+        Self { kind: NoteKind::Setting, text: text.into() }
+    }
+}
+
+/// The texts of `notes` in the order a reply gives them: the losses first, then the notes on the
+/// options, each kind in the order given (the status bar names the first).
+pub fn note_texts(notes: &[Note]) -> Vec<String> {
+    let of = |kind| notes.iter().filter(move |n| n.kind == kind).map(|n| n.text.clone());
+    of(NoteKind::Loss).chain(of(NoteKind::Setting)).collect()
+}
+
+/// Add `note` to `notes` unless a note with its text is there already.
+pub(super) fn add_note(notes: &mut Vec<Note>, note: Note) {
+    if !notes.iter().any(|n| n.text == note.text) {
+        notes.push(note);
+    }
+}
+
 impl Encoded {
     pub(super) fn one(bytes: Vec<u8>) -> Self {
         Self { files: vec![(None, bytes)], ..Self::default() }
+    }
+
+    /// The file `bytes` with `notes`, each in the list of its kind, in the order given.
+    pub(super) fn one_with_notes(bytes: Vec<u8>, notes: Vec<Note>) -> Self {
+        let mut enc = Self::one(bytes);
+        for n in notes {
+            match n.kind {
+                NoteKind::Loss => enc.warnings.push(n.text),
+                NoteKind::Setting => enc.setting_notes.push(n.text),
+            }
+        }
+        enc
+    }
+
+    /// Add each of `texts` to [`Self::setting_notes`] unless a note with its text is there already.
+    pub(super) fn add_setting_notes(&mut self, texts: impl IntoIterator<Item = String>) {
+        for t in texts {
+            if !self.warnings.contains(&t) && !self.setting_notes.contains(&t) {
+                self.setting_notes.push(t);
+            }
+        }
+    }
+
+    /// Every note with its kind: the warnings, then the notes on the options that aren't also
+    /// warnings.
+    pub fn kinded_notes(&self) -> Vec<Note> {
+        let settings = self.setting_notes.iter().filter(|t| !self.warnings.contains(t)).map(Note::setting);
+        self.warnings.iter().map(Note::loss).chain(settings).collect()
+    }
+
+    /// The notes' texts in the order a reply gives them ([`note_texts`]): the warnings, then the
+    /// notes on the options, each once.
+    pub fn notes(&self) -> Vec<String> {
+        note_texts(&self.kinded_notes())
     }
 
     /// Every file to write for the destination `path` (a path or a file name): the file itself
@@ -128,13 +216,14 @@ impl Encoded {
         out
     }
 
-    /// The one file and the warnings, when the export wrote nothing else.
-    fn single(self, f: &Format) -> Result<(Vec<u8>, Vec<String>)> {
+    /// The one file and the notes, when the export wrote nothing else.
+    fn single(self, f: &Format) -> Result<(Vec<u8>, Vec<Note>)> {
         if !self.linked.is_empty() || !self.maps.is_empty() {
             return Err(bad(C, format!("{} with linked images or an image map writes several files: use document.export", f.label)));
         }
+        let notes = self.kinded_notes();
         match <[_; 1]>::try_from(self.files) {
-            Ok([(_, bytes)]) => Ok((bytes, self.warnings)),
+            Ok([(_, bytes)]) => Ok((bytes, notes)),
             Err(_) => Err(bad(C, format!("{} writes one file per artboard here: use document.export, or name one artboard", f.label))),
         }
     }
@@ -152,7 +241,8 @@ struct RasterOptions {
     width: Option<f64>,
     /// The height of each file in pixels (wins over `ppi` and `scale`).
     height: Option<f64>,
-    quality: Option<u8>,
+    /// JPEG and lossy WebP quality, read by [`RasterOptions::quality`].
+    quality: Option<Value>,
     background: Option<Value>,
     anti_alias: Option<String>,
     interlaced: Option<bool>,
@@ -166,6 +256,11 @@ struct RasterOptions {
     dither: Option<String>,
     dither_amount: Option<u8>,
     transparency: Option<bool>,
+    /// GIF and PNG-8 with `transparency`: none, diffusion, pattern or noise, read by
+    /// [`RasterOptions::transparency_dither`] (other formats do not check it).
+    transparency_dither: Option<Value>,
+    /// The diffusion transparency dither's strength, 0–100, read as `transparency_dither` is.
+    transparency_dither_amount: Option<Value>,
     matte: Option<Value>,
     lossless: Option<bool>,
     lzw: Option<bool>,
@@ -179,6 +274,8 @@ struct RasterOptions {
     /// PSD: Write Layers.
     layers: Option<bool>,
     max_editability: Option<bool>,
+    /// PSD: Preserve Text Editability (with layers).
+    preserve_text: Option<bool>,
     hidden_layers: Option<bool>,
     /// Appearance of Black › Printing / Exporting (`prefs.blackOutput`); agents can set it here too.
     rich_black: Option<bool>,
@@ -190,6 +287,39 @@ fn clamped_ppi(ppi: f64) -> f64 {
 }
 
 impl RasterOptions {
+    /// `quality` as given: `None` when absent or null, else a whole number 0–255 (JPEG caps it at
+    /// 100; WebP refuses more than 100), or an error naming it.
+    fn quality(&self) -> Result<Option<u8>> {
+        match &self.quality {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => v
+                .as_u64()
+                .and_then(|q| u8::try_from(q).ok())
+                .map(Some)
+                .ok_or_else(|| bad(C, format!("quality must be a whole number from 0 to 100, not {v}"))),
+        }
+    }
+
+    /// GIF and PNG-8: `transparencyDither` (absent: none, which cuts at half opacity, not
+    /// `Dither`'s own default) and `transparencyDitherAmount` (0–100, default 100), or an error.
+    fn transparency_dither(&self) -> Result<(Dither, u8)> {
+        const IDS: &str = "none, diffusion, pattern or noise";
+        let method = match &self.transparency_dither {
+            None | Some(Value::Null) => PaletteOptions::default().transparency_dither,
+            Some(Value::String(s)) => parse(Some(s), Dither::from_id, "transparencyDither", IDS)?,
+            Some(v) => return Err(bad(C, format!("transparencyDither must be {IDS}, not {v}"))),
+        };
+        let amount = match &self.transparency_dither_amount {
+            None | Some(Value::Null) => 100,
+            Some(v) => v
+                .as_u64()
+                .filter(|n| *n <= 100)
+                .and_then(|n| u8::try_from(n).ok())
+                .ok_or_else(|| bad(C, format!("transparencyDitherAmount must be a whole number from 0 to 100, not {v}")))?,
+        };
+        Ok((method, amount))
+    }
+
     /// The pixel size each file is scaled to: `width`, else `height`; `None` when neither is set.
     fn pixel_size(&self) -> Result<Option<ScreenSize>> {
         let checked = |key: &str, n: f64| {
@@ -220,7 +350,8 @@ impl RasterOptions {
             },
             anti_alias: self.anti_alias.as_deref().map(anti_alias).transpose().map_err(|e| bad(C, e))?.unwrap_or_default(),
             interlaced: self.interlaced.unwrap_or(false),
-            quality: self.quality.unwrap_or(90).min(100),
+            quality: self.quality()?.unwrap_or(90).min(100),
+            webp_lossless: self.lossless.unwrap_or(true),
             jpeg: JpegOptions {
                 color_model,
                 method: parse(self.method.as_deref(), jpeg::Method::from_id, "method", "baseline, optimized or progressive")?,
@@ -242,6 +373,7 @@ impl RasterOptions {
                     Some(v) => background(v).map_err(|e| bad(C, format!("matte: {e}")))?,
                     None => Some([255; 3]),
                 },
+                ..PaletteOptions::default()
             },
             tiff: TiffOptions {
                 color_model,
@@ -261,6 +393,7 @@ impl RasterOptions {
                 color_model,
                 layers: self.layers.unwrap_or(true),
                 max_editability: self.max_editability.unwrap_or(false),
+                preserve_text: self.preserve_text.unwrap_or(false),
                 hidden_layers: self.hidden_layers.unwrap_or(false),
                 embed_icc,
             },
@@ -285,6 +418,7 @@ fn check_options(format: RasterFormat, o: &RasterExportOptions) -> Result<()> {
     let r = match format {
         RasterFormat::Bmp if model == jpeg::ColorModel::Cmyk => Err("BMP files are RGB or grayscale: colorModel rgb or gray".to_string()),
         RasterFormat::Tga if model != jpeg::ColorModel::Rgb => Err("Targa files are RGB: colorModel rgb".to_string()),
+        RasterFormat::Psd if o.psd.preserve_text && !o.psd.layers => Err("preserveText writes type layers: it needs layers: true".to_string()),
         RasterFormat::Bmp => o.bmp.check(),
         RasterFormat::Tga => o.tga.check(),
         _ => Ok(()),
@@ -321,20 +455,456 @@ pub(crate) fn anti_alias(id: &str) -> std::result::Result<AntiAlias, String> {
 
 /// The `useArtboards` param of a PDF, AI, DXF or raster export (SVG has its own): `true` writes every
 /// chosen artboard (default all), `false` the bounds of the visible art instead, absent one
-/// artboard (raster, DXF) or the chosen pages (PDF, AI).
-fn use_artboards(p: &Value) -> Result<Option<bool>> {
+/// artboard (raster, DXF) or the chosen pages (PDF, AI). Errors name the command `cmd`.
+pub(super) fn use_artboards(cmd: &str, p: &Value) -> Result<Option<bool>> {
     match p.get("useArtboards") {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Bool(b)) => Ok(Some(*b)),
-        Some(v) => Err(bad(C, format!("useArtboards must be true or false, not {v}"))),
+        Some(v) => Err(bad(cmd, format!("useArtboards must be true or false, not {v}"))),
     }
+}
+
+/// With `useArtboards: false` in `p`: `doc` without its opacity-mask or symbol editing layer and
+/// with one artboard, the bounds of its visible art, and `p` without the artboard choice. `None`
+/// when `useArtboards` is absent, null or true. The objects that `left_out` picks (layers or
+/// objects the format leaves out, see [`hidden_nodes`]) are not measured, and a document with no
+/// other visible art is refused.
+pub(super) fn art_page(cmd: &str, doc: &Document, p: &Value, left_out: impl Fn(&Node) -> bool) -> Result<Option<(Document, Value)>> {
+    if use_artboards(cmd, p)? != Some(false) {
+        return Ok(None);
+    }
+    let doc = &*doc.without_edit_modes();
+    let bounds = bounds_without(doc, &left_out).ok_or_else(|| bad(cmd, "nothing to export: the document has no visible art"))?;
+    let mut q = super::export::without_artboards(p);
+    if let Some(o) = q.as_object_mut() {
+        o.remove("useArtboards");
+    }
+    Ok(Some((single_artboard(doc, bounds, "Art"), q)))
+}
+
+/// The bounds of the visible art of `doc` that a `format` file of the art's bounds draws, as
+/// [`art_page`] measures it with that format's default options: for HP-GL without what a plot
+/// leaves out ([`vectorcraft_cad::hpgl::write::plots_nothing`]), for other formats all of it (the
+/// non-printing layers a PDF leaves out depend on options chosen after the save panel). `None`
+/// when there is none, which such an export refuses.
+pub fn export_art_bounds(doc: &Document, format: &str) -> Option<Rect> {
+    let doc = &*doc.without_edit_modes();
+    bounds_without(doc, &|n| format == "hpgl" && vectorcraft_cad::hpgl::write::plots_nothing(doc, n))
+}
+
+/// The bounds of the visible art of `doc` with the objects that `left_out` picks hidden
+/// ([`hidden_nodes`]) and the ones in the art of the symbols that instances show taken out
+/// ([`without_nodes`]: symbol art is measured with its hidden objects). An instance of a symbol
+/// whose art is all picked or hidden is hidden too. The drawn instances of a dynamic symbol that
+/// make the same appearance changes to its art are measured on a copy of the symbol of their own,
+/// in which each object is judged with those changes ([`as_drawn`]); the objects taken out of
+/// a dynamic symbol's art leave empty groups in their places, by which instances find the objects
+/// they change. Each copy keeps its symbol's 9-slice guides and natural size. An instance whose art
+/// goes through 9-slice guides at any depth is measured as its art placed through them
+/// ([`placed_instances`]), with the objects `left_out` picks hidden after placing: the guides cut
+/// the box of the whole art. Where an instance stays one, the art of a symbol with 9-slice guides,
+/// and of the symbols whose instances are in that art at any depth ([`sliced_art`]), is measured
+/// whole.
+fn bounds_without(doc: &Document, left_out: &dyn Fn(&Node) -> bool) -> Option<Rect> {
+    // The symbols instances show (the first of each name).
+    let mut names = HashSet::new();
+    let shown: Vec<usize> = doc.symbols.iter().enumerate().filter(|(_, s)| names.insert(s.name.as_str())).map(|(i, _)| i).collect();
+    // The sets of appearance changes the drawn instances of each dynamic symbol make to its art;
+    // `None` for a symbol with more than `MAX_ART_COPIES`, which is measured whole.
+    let mut sets: HashMap<&str, Option<Vec<Vec<&SymbolOverride>>>> =
+        shown.iter().filter_map(|i| doc.symbols.get(*i)).filter(|s| s.dynamic).map(|s| (s.name.as_str(), Some(Vec::new()))).collect();
+    if !sets.is_empty() {
+        let mut walked = HashSet::new();
+        for l in &doc.layers {
+            drawn_changes(doc, l, left_out, true, &mut walked, &mut sets);
+        }
+    }
+    // Each set of changes gets a copy of its symbol, appended after the symbols, which the instances
+    // that make those changes show instead.
+    let variant = |symbol: &str, n: &Node| -> Option<String> {
+        let k = sets.get(symbol)?.as_ref()?.iter().position(|c| *c == own_changes(n))?;
+        Some(format!("{symbol}\u{0}{k}"))
+    };
+    let mut copies: Vec<(usize, &[&SymbolOverride])> = Vec::new();
+    let remapped_doc = sets.values().flatten().any(|v| !v.is_empty()).then(|| {
+        let mut d = doc.clone();
+        for l in &mut d.layers {
+            if let Some(n) = remapped(l, &variant) {
+                *l = n;
+            }
+        }
+        for s in &mut d.symbols {
+            if let Some(n) = remapped(&s.art, &variant) {
+                s.art = n;
+            }
+        }
+        for i in &shown {
+            let Some(s) = d.symbols.get(*i).cloned() else { continue };
+            for (k, c) in sets.get(s.name.as_str()).into_iter().flatten().flatten().enumerate() {
+                copies.push((d.symbols.len(), c.as_slice()));
+                let name = format!("{}\u{0}{k}", s.name);
+                copy_placement(&mut d, &s.name, &name);
+                d.symbols.push(vectorcraft_doc::Symbol { name, ..s.clone() });
+            }
+        }
+        d
+    });
+    let src = remapped_doc.as_ref().unwrap_or(doc);
+    let whole = sliced_art(src);
+    // The symbols to measure with the changes their instances make (`None` for a static symbol),
+    // without the dynamic symbols measured whole.
+    let entries: Vec<(usize, Option<&[&SymbolOverride]>)> = shown
+        .iter()
+        .filter_map(|i| src.symbols.get(*i).map(|s| (*i, s)))
+        .filter(|(_, s)| !s.dynamic || sets.get(s.name.as_str()).is_some_and(Option::is_some))
+        .map(|(i, s)| (i, s.dynamic.then_some(&[][..])))
+        .chain(copies.iter().map(|(i, c)| (*i, Some(*c))))
+        .collect();
+    // The symbols whose art `left_out` leaves nothing of, those that only hold instances of such
+    // symbols included.
+    let mut empty: HashSet<&str> = HashSet::new();
+    while let Some(s) = entries.iter().find_map(|(i, c)| {
+        src.symbols.get(*i).filter(|s| !empty.contains(s.name.as_str()) && all_left_out(&s.art, left_out, &empty, *c, &mut Vec::new()))
+    }) {
+        empty.insert(&s.name);
+    }
+    let left_out =
+        &|n: &Node| left_out(n) || matches!(&n.kind, NodeKind::SymbolInstance { symbol, .. } if empty.contains(symbol.as_str()) && !has_effects(n));
+    // The instances whose art goes through 9-slice guides, at any depth, are measured as their art
+    // placed by those guides without the objects `left_out` picks, and without a clip group that
+    // holds only such objects.
+    let layers = hidden_nodes(&src.layers, left_out);
+    let placing = holding(src, &whole);
+    let layers = if placing.is_empty() {
+        layers
+    } else {
+        let picked = &|n: &Node| {
+            left_out(n) || matches!(n.kind, NodeKind::Group { clip: true, .. }) && all_left_out(n, left_out, &empty, None, &mut Vec::new())
+        };
+        let mut budget = 0;
+        let from = layers.as_deref().unwrap_or(&src.layers);
+        Some(from.iter().map(|l| placed_instances(src, l, &placing, picked, &mut budget, 0).unwrap_or_else(|| l.clone())).collect())
+    };
+    let symbols: Vec<(usize, Arc<Node>)> = entries
+        .iter()
+        .filter_map(|(i, c)| {
+            let s = src.symbols.get(*i).filter(|s| !empty.contains(s.name.as_str()) && !whole.contains(s.name.as_str()))?;
+            without_nodes(&s.art, left_out, *c, &mut Vec::new()).map(|art| (*i, art))
+        })
+        .collect();
+    if layers.is_none() && symbols.is_empty() {
+        return vectorcraft_render::encode::art_bounds(src);
+    }
+    let mut d = remapped_doc.unwrap_or_else(|| doc.clone());
+    if let Some(layers) = layers {
+        d.layers = layers;
+    }
+    for (i, art) in symbols {
+        if let Some(s) = d.symbols.get_mut(i) {
+            s.art = art;
+        }
+    }
+    vectorcraft_render::encode::art_bounds(&d)
+}
+
+/// Give symbol `to` of `d` the 9-slice guides and the natural size that symbol `from` has.
+fn copy_placement(d: &mut Document, from: &str, to: &str) {
+    if let Some(guides) = d.symbol_nine_slice(from) {
+        d.set_symbol_nine_slice(to, Some(guides));
+    }
+    if let Some(size) = d.unknown.get(SYMBOL_SIZES).and_then(|m| m.get(from)).cloned()
+        && let Some(sizes) = d.unknown.get_mut(SYMBOL_SIZES).and_then(Value::as_object_mut)
+    {
+        sizes.insert(to.to_string(), size);
+    }
+}
+
+/// The names of the symbols of `doc` with 9-slice guides, and of the symbols whose instances are in
+/// the art of those at any depth.
+fn sliced_art(doc: &Document) -> HashSet<&str> {
+    let mut arts: HashMap<&str, &Arc<Node>> = HashMap::new();
+    for s in &doc.symbols {
+        arts.entry(s.name.as_str()).or_insert(&s.art);
+    }
+    let mut todo: Vec<&str> = arts.keys().copied().filter(|name| doc.symbol_nine_slice(name).is_some()).collect();
+    let mut found = HashSet::new();
+    while let Some(name) = todo.pop() {
+        if !found.insert(name) {
+            continue;
+        }
+        if let Some(&art) = arts.get(name) {
+            art.walk(&mut |n| {
+                if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                    todo.push(symbol.as_str());
+                }
+            });
+        }
+    }
+    found
+}
+
+/// The names of the symbols of `doc` in `sliced`, and of the symbols whose art holds an instance of
+/// one of those at any depth.
+fn holding<'a>(doc: &'a Document, sliced: &HashSet<&'a str>) -> HashSet<&'a str> {
+    let mut held_by: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut seen = HashSet::new();
+    for s in doc.symbols.iter().filter(|s| seen.insert(s.name.as_str())) {
+        s.art.walk(&mut |n| {
+            if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+                held_by.entry(symbol.as_str()).or_default().push(s.name.as_str());
+            }
+        });
+    }
+    let mut found = HashSet::new();
+    let mut todo: Vec<&str> = sliced.iter().copied().collect();
+    while let Some(name) = todo.pop() {
+        if found.insert(name) {
+            todo.extend(held_by.get(name).into_iter().flatten().copied());
+        }
+    }
+    found
+}
+
+/// The most instances deep [`placed_instances`] places symbol art.
+const MAX_PLACED_DEPTH: usize = 32;
+
+/// `n` with each instance of the `placing` symbols in it, and in its layers and groups at any depth,
+/// made a group with the instance's appearance that holds the instance's art (with its changes and
+/// stain) as `doc` places it, through the symbol's 9-slice guides when it has them, without the
+/// objects `picked` picks ([`without_nodes`]; hidden when it picks the whole art); `None` when `n`
+/// holds no such instance, or is hidden. An instance on a perspective grid, one
+/// [`MAX_PLACED_DEPTH`] instances deep, one in another kind of object (a blend, for example), and
+/// one whose art would take the objects placed in all (`budget`) past
+/// [`vectorcraft_doc::MAX_SYMBOL_NODES`] stay instances.
+/// Their symbols' art is measured whole, as taking objects out of it would change the box the
+/// guides cut, and the page can come out larger than the plot.
+fn placed_instances(
+    doc: &Document,
+    n: &Arc<Node>,
+    placing: &HashSet<&str>,
+    picked: &dyn Fn(&Node) -> bool,
+    budget: &mut u64,
+    depth: usize,
+) -> Option<Arc<Node>> {
+    // Hidden art is not plotted, and placing it would take from the budget of the art that is.
+    if !n.visible {
+        return None;
+    }
+    match &n.kind {
+        NodeKind::SymbolInstance { symbol, xf } => {
+            if !placing.contains(symbol.as_str()) || depth >= MAX_PLACED_DEPTH || n.projection().is_some() {
+                return None;
+            }
+            let sym = doc.symbols.iter().find(|s| s.name == *symbol)?;
+            let art = vectorcraft_doc::symbol_overrides::instance_art(&sym.art, n);
+            let most = doc.symbol_slice_map(symbol, *xf).map_or(art.count_with_masks() as u64, |m| m.most_placed(&art, doc));
+            if budget.saturating_add(most) > vectorcraft_doc::MAX_SYMBOL_NODES {
+                return None;
+            }
+            let art = Arc::new(doc.place_symbol_art(symbol, &art, *xf)?);
+            *budget = budget.saturating_add(art.count_with_masks() as u64);
+            let art = placed_instances(doc, &art, placing, picked, budget, depth + 1).unwrap_or(art);
+            let art = if picked(&art) {
+                let mut hidden = (*art).clone();
+                hidden.visible = false;
+                Arc::new(hidden)
+            } else {
+                without_nodes(&art, picked, None, &mut Vec::new()).unwrap_or(art)
+            };
+            let mut g = (**n).clone();
+            g.kind = NodeKind::Group { children: vec![art], clip: false };
+            Some(Arc::new(g))
+        }
+        NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => {
+            let mut out: Option<Vec<Arc<Node>>> = None;
+            for (i, c) in children.iter().enumerate() {
+                if let Some(new) = placed_instances(doc, c, placing, picked, budget, depth)
+                    && let Some(slot) = out.get_or_insert_with(|| children.clone()).get_mut(i)
+                {
+                    *slot = new;
+                }
+            }
+            out.map(|c| {
+                let mut m = (**n).clone();
+                if let Some(children) = m.children_mut() {
+                    *children = c;
+                }
+                Arc::new(m)
+            })
+        }
+        _ => None,
+    }
+}
+
+/// The appearance changes instance `n` makes to its symbol's art, without those that change nothing.
+fn own_changes(n: &Node) -> Vec<&SymbolOverride> {
+    n.extras().symbol_overrides.iter().filter(|o| !o.is_empty()).collect()
+}
+
+/// `n` with each instance at any depth that `variant` gives another symbol (from the instance's
+/// symbol and the instance) made an instance of that symbol; `None` when none is.
+fn remapped(n: &Arc<Node>, variant: &dyn Fn(&str, &Node) -> Option<String>) -> Option<Arc<Node>> {
+    if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+        let name = variant(symbol, n)?;
+        let mut m = (**n).clone();
+        if let NodeKind::SymbolInstance { symbol, .. } = &mut m.kind {
+            *symbol = name;
+        }
+        return Some(Arc::new(m));
+    }
+    let children = n.children()?;
+    let mut out: Option<Vec<Arc<Node>>> = None;
+    for (i, c) in children.iter().enumerate() {
+        if let Some(new) = remapped(c, variant)
+            && let Some(slot) = out.get_or_insert_with(|| children.clone()).get_mut(i)
+        {
+            *slot = new;
+        }
+    }
+    out.map(|c| {
+        let mut m = (**n).clone();
+        if let Some(children) = m.children_mut() {
+            *children = c;
+        }
+        Arc::new(m)
+    })
+}
+
+/// Whether `n` is hidden, picked by `left_out`, an instance of one of the `empty` symbols, or a
+/// layer or a group holding only such objects (its clipping path among them when it clips). A
+/// Shaper group, or a layer, group or instance with effects, fills or strokes of its own, is none
+/// of these unless it is hidden or picked. In the art of a dynamic symbol (`changed`, the changes
+/// an instance makes to it; `n` is at place `at`), each object is judged with those changes
+/// ([`as_drawn`]).
+fn all_left_out(n: &Node, left_out: &dyn Fn(&Node) -> bool, empty: &HashSet<&str>, changed: Option<&[&SymbolOverride]>, at: &mut Vec<u32>) -> bool {
+    let m = as_drawn(n, changed, at);
+    !n.visible
+        || left_out(&m)
+        || !has_effects(&m)
+            && n.extras().shaper.is_none()
+            && match &n.kind {
+                NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } => children.iter().enumerate().all(|(i, c)| {
+                    at.push(i as u32);
+                    let out = all_left_out(c, left_out, empty, changed, at);
+                    at.pop();
+                    out
+                }),
+                NodeKind::SymbolInstance { symbol, .. } => empty.contains(symbol.as_str()),
+                _ => false,
+            }
+}
+
+/// Add the sets of appearance changes that the instances in `n` and its subtree make to the art of
+/// the symbols `sets` names, each set once, and those of the instances in the art of the symbols the
+/// instances show (`walked`, the symbols already looked in). With `hidden` (in a layer), the
+/// instances that are hidden or that `left_out` picks, and those in such an object, are left out.
+/// In symbol art every instance counts, since an instance of the symbol can change the objects
+/// that hold it. A symbol with more than [`MAX_ART_COPIES`] sets gets `None`.
+fn drawn_changes<'a>(
+    doc: &'a Document,
+    n: &'a Node,
+    left_out: &dyn Fn(&Node) -> bool,
+    hidden: bool,
+    walked: &mut HashSet<&'a str>,
+    sets: &mut HashMap<&'a str, Option<Vec<Vec<&'a SymbolOverride>>>>,
+) {
+    if hidden && (!n.visible || left_out(n)) {
+        return;
+    }
+    if let NodeKind::SymbolInstance { symbol, .. } = &n.kind {
+        let changes = own_changes(n);
+        if let Some(entry) = sets.get_mut(symbol.as_str())
+            && !changes.is_empty()
+        {
+            let full = match entry {
+                Some(list) if !list.contains(&changes) && list.len() < MAX_ART_COPIES => {
+                    list.push(changes);
+                    false
+                }
+                Some(list) => !list.contains(&changes),
+                None => false,
+            };
+            if full {
+                *entry = None;
+            }
+        }
+        if walked.insert(symbol.as_str())
+            && let Some(s) = doc.symbols.iter().find(|s| s.name == *symbol)
+        {
+            drawn_changes(doc, &s.art, left_out, false, walked, sets);
+        }
+    }
+    for c in n.children().into_iter().flatten() {
+        drawn_changes(doc, c, left_out, hidden, walked, sets);
+    }
+}
+
+/// The most copies of one dynamic symbol's art [`bounds_without`] measures, one for each set of
+/// appearance changes its instances make; a symbol whose instances make more sets is measured whole.
+const MAX_ART_COPIES: usize = 64;
+
+/// `n`, the object at place `at` of a symbol's art, with the appearance changes `changed` that an
+/// instance makes to it applied in their order; `n` itself for the art of a symbol that is not
+/// dynamic (`changed` is `None`) and when no change names `at`.
+fn as_drawn<'a>(n: &'a Node, changed: Option<&[&SymbolOverride]>, at: &[u32]) -> Cow<'a, Node> {
+    let here: Vec<SymbolOverride> =
+        changed.into_iter().flatten().filter(|o| o.path == at).map(|o| SymbolOverride { path: Vec::new(), ..(*o).clone() }).collect();
+    if here.is_empty() {
+        return Cow::Borrowed(n);
+    }
+    let mut m = n.clone();
+    vectorcraft_doc::symbol_overrides::apply(&mut m, &here);
+    Cow::Owned(m)
+}
+
+/// Whether `n` has a visible effect, fill or stroke of its own, which the objects it holds can
+/// take part in.
+fn has_effects(n: &Node) -> bool {
+    n.appearance.effects.iter().any(|e| e.visible) || n.appearance.items.iter().any(|i| i.visible())
+}
+
+/// `n` without the objects that `left_out` picks in it, when it is a layer or a group, and in the
+/// layers and groups in it at any depth; `None` when it picks none of them. A clipping layer or
+/// group keeps its clipping path, its first object, and a Shaper group and a layer or group with
+/// effects, fills or strokes of its own keep all they hold. In the art of a dynamic symbol
+/// (`changed`, the changes an instance makes to it, as for [`all_left_out`]; `n` is at place
+/// `at`), each object is judged with those changes ([`as_drawn`]), and an object taken out leaves
+/// an empty group in its place.
+fn without_nodes(n: &Arc<Node>, left_out: &dyn Fn(&Node) -> bool, changed: Option<&[&SymbolOverride]>, at: &mut Vec<u32>) -> Option<Arc<Node>> {
+    let (NodeKind::Layer { children, clip, .. } | NodeKind::Group { children, clip }) = &n.kind else { return None };
+    if has_effects(&as_drawn(n, changed, at)) || n.extras().shaper.is_some() {
+        return None;
+    }
+    let mut taken = false;
+    let kept: Vec<Arc<Node>> = children
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            at.push(i as u32);
+            let out = if left_out(&as_drawn(c, changed, at)) && !(*clip && i == 0) {
+                taken = true;
+                changed.map(|_| Arc::new(Node::group(c.id, Vec::new())))
+            } else {
+                Some(without_nodes(c, left_out, changed, at).inspect(|_| taken = true).unwrap_or_else(|| c.clone()))
+            };
+            at.pop();
+            out
+        })
+        .collect();
+    taken.then(|| {
+        let mut new = (**n).clone();
+        if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &mut new.kind {
+            *children = kept;
+        }
+        Arc::new(new)
+    })
 }
 
 /// The `rect` param of a raster export: `[x, y, width, height]` in points, y down. `None` when
 /// absent; an error when it is not four finite numbers with a positive size, when the format isn't
 /// a raster one, or when it comes with an artboard choice (`rect` is the area, so those would
 /// contradict it). The image size limits are checked with the scale, as for an artboard.
-fn page_rect(f: &Format, p: &Value) -> Result<Option<Rect>> {
+pub(super) fn page_rect(f: &Format, p: &Value) -> Result<Option<Rect>> {
     let v = match p.get("rect") {
         None | Some(Value::Null) => return Ok(None),
         Some(v) => v,
@@ -373,8 +943,38 @@ pub(crate) fn with_single_artboard(mut d: Document, rect: Rect, name: &str) -> D
         show_video_safe_areas: false,
         video_ruler_pixel_aspect_ratio: 1.0,
         color: None,
+        guide_label: None,
     }];
     d
+}
+
+/// `nodes` with the visible objects that `left_out` picks hidden, in layers, sublayers and groups
+/// that don't clip, at any depth (what an object it picks holds is not looked at); `None` when it
+/// picks none of them. Clipping layers are looked in too, as their sublayers can be picked.
+pub(super) fn hidden_nodes(nodes: &[Arc<Node>], left_out: &dyn Fn(&Node) -> bool) -> Option<Vec<Arc<Node>>> {
+    let mut out: Option<Vec<Arc<Node>>> = None;
+    for (i, l) in nodes.iter().enumerate() {
+        let new = if left_out(l) {
+            l.visible.then(|| {
+                let mut n = (**l).clone();
+                n.visible = false;
+                Arc::new(n)
+            })
+        } else {
+            let (NodeKind::Layer { children, .. } | NodeKind::Group { children, clip: false }) = &l.kind else { continue };
+            hidden_nodes(children, left_out).map(|c| {
+                let mut n = (**l).clone();
+                if let NodeKind::Layer { children, .. } | NodeKind::Group { children, .. } = &mut n.kind {
+                    *children = c;
+                }
+                Arc::new(n)
+            })
+        };
+        if let Some(slot) = new.and_then(|new| Some((out.get_or_insert_with(|| nodes.to_vec()).get_mut(i)?, new))) {
+            *slot.0 = slot.1;
+        }
+    }
+    out
 }
 
 fn boards<T>(r: std::result::Result<T, String>) -> Result<T> {
@@ -418,8 +1018,14 @@ pub fn encode(doc: &Document, format: &str, p: &Value) -> Result<Vec<u8>> {
 
 /// Like [`encode`], also returning the encoder's warnings (PDF and SVG: options not applied yet,
 /// features approximated or left out; every format that draws type: fonts written in the fallback
-/// font; PDF, EPS, SVG, EMF, WMF and the raster formats: type that doesn't fit its frame).
+/// font; PDF, EPS, SVG, EMF, WMF and the raster formats: type that doesn't fit its frame), what
+/// the file loses first ([`note_texts`]).
 pub fn encode_with_warnings(doc: &Document, format: &str, p: &Value) -> Result<(Vec<u8>, Vec<String>)> {
+    encode_with_notes(doc, format, p).map(|(bytes, notes)| (bytes, note_texts(&notes)))
+}
+
+/// Like [`encode_with_warnings`], with each note's kind ([`Encoded::kinded_notes`]).
+pub fn encode_with_notes(doc: &Document, format: &str, p: &Value) -> Result<(Vec<u8>, Vec<Note>)> {
     let f = super::writable(C, Some(format), None)?;
     let enc = encode_all(doc, f.id, p)?;
     // The error for a version 7 .ai of several artboards names the legacy .ai.
@@ -463,7 +1069,7 @@ fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
     }
     // Formats that draw type: missing fonts come out in the fallback font (PDF and SVG say so
     // themselves: SVG only when it outlines or embeds fonts).
-    if (f.raster || matches!(f.id, "eps" | "emf" | "wmf"))
+    if (f.raster || matches!(f.id, "eps" | "emf" | "wmf" | "hpgl" | "cmx"))
         && let Some(w) = crate::cmd::fonts::substitution_warning(doc)
     {
         enc.warnings.push(w);
@@ -473,12 +1079,14 @@ fn encode_all_of(doc: &Document, format: &str, p: &Value) -> Result<Encoded> {
 
 /// The file exporter plug-in `plugin` writes of `doc` in its format `f`
 /// ([`vectorcraft_plugins::export`]). The plug-in is given the native file's JSON
-/// ([`vectorcraft_format::json_part`]) and `p`'s `params`, for the file `p`'s `path` names (else
-/// one named after the document) with that path's extension when the plug-in lists it, else its
-/// first. Its warnings come back with the file.
+/// ([`vectorcraft_format::json_part`]), without an Export for Screens folder outside the read roots
+/// ([`super::access::with_readable_settings_folder`]), and `p`'s `params`, for the file `p`'s `path`
+/// names (else one named after the document) with that path's extension when the plug-in lists it,
+/// else its first. Its warnings come back with the file, as losses (the plug-in gives them no kind).
 fn plugin_file(doc: &Document, plugin: &vectorcraft_plugins::Plugin, f: &Format, p: &Value) -> Result<Encoded> {
     use vectorcraft_plugins::{Error, export};
-    let doc = &*doc.without_edit_modes();
+    let doc = doc.without_edit_modes();
+    let doc = &*super::access::with_readable_settings_folder(&doc);
     let file = vectorcraft_format::save_with(doc, &vectorcraft_format::SaveOptions::default()).map_err(|e| EngineError::Other(e.to_string()))?;
     let path = p.get("path").and_then(Value::as_str);
     let listed = path.map(super::extension).and_then(|e| f.extensions.iter().copied().find(|x| *x == e));
@@ -502,7 +1110,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
     let doc = &*doc.without_edit_modes();
     let n = doc.artboards.len();
     // SVG reads its own `useArtboards` (an SVG option).
-    let use_artboards = if f.raster || matches!(f.id, "pdf" | "ai" | "dxf" | "emf" | "wmf") { use_artboards(p)? } else { None };
+    let use_artboards = if f.raster || matches!(f.id, "pdf" | "ai" | "dxf" | "emf" | "wmf" | "hpgl" | "cmx") { use_artboards(C, p)? } else { None };
     // `rect`: that area of the page, as if it were the only artboard (the document is not changed).
     if let Some(rect) = page_rect(f, p)? {
         let mut q = super::export::without_artboards(p);
@@ -512,13 +1120,25 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
         }
         return encode_files(&single_artboard(doc, rect, "Rect"), f, &q);
     }
-    if use_artboards == Some(false) {
-        let bounds = vectorcraft_render::encode::art_bounds(doc).ok_or_else(|| bad(C, "nothing to export: the document has no visible art"))?;
-        let mut q = super::export::without_artboards(p);
-        if let Some(o) = q.as_object_mut() {
-            o.remove("useArtboards");
-        }
-        return encode_files(&single_artboard(doc, bounds, "Art"), f, &q);
+    // A PDF of the art's bounds carries no editing data (it would replace the artboards).
+    if use_artboards == Some(false)
+        && f.id == "pdf"
+        && let Some((bytes, notes)) = super::pdf::encode_art_page(C, doc, p)?
+    {
+        return Ok(Encoded::one_with_notes(bytes, notes));
+    }
+    // So does a `.ai` file of the art's bounds (a legacy version 7 `.ai` file has none to leave out).
+    if use_artboards == Some(false)
+        && f.id == "ai"
+        && let Some(enc) = super::save::encode_ai_art_page(C, f, doc, p)?
+    {
+        return Ok(enc);
+    }
+    let left_out = |n: &Node| f.id == "hpgl" && vectorcraft_cad::hpgl::write::plots_nothing(doc, n);
+    if use_artboards == Some(false)
+        && let Some((art, q)) = art_page(C, doc, p, left_out)?
+    {
+        return encode_files(&art, f, &q);
     }
     let bytes = match f.id {
         "vectorcraft" => super::native::encode(C, f, doc, p)?,
@@ -535,10 +1155,12 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
         "eps" => return super::eps::encode(doc, p),
         "emf" => return super::metafile::encode(doc, p, use_artboards, vectorcraft_metafile::Kind::Emf),
         "wmf" => return super::metafile::encode(doc, p, use_artboards, vectorcraft_metafile::Kind::Wmf),
+        "hpgl" => return super::hpgl::encode(doc, p, use_artboards),
+        "cmx" => return super::cmx::encode(doc, f, p, use_artboards),
         "ai" => return super::save::encode_ai(C, f, doc, p),
         "pdf" => {
-            let (bytes, warnings) = super::pdf::encode(C, doc, p)?;
-            return Ok(Encoded { warnings, ..Encoded::one(bytes) });
+            let (bytes, notes) = super::pdf::encode(C, doc, p)?;
+            return Ok(Encoded::one_with_notes(bytes, notes));
         }
         "png" | "jpg" | "webp" | "gif" | "png8" | "tiff" | "bmp" | "tga" | "psd" => {
             let o: RasterOptions = options(f, p)?;
@@ -558,6 +1180,14 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 "psd" => RasterFormat::Psd,
                 _ => RasterFormat::WebP,
             };
+            if format == RasterFormat::WebP
+                && let Some(q) = o.quality()?.filter(|q| *q > 100)
+            {
+                return Err(bad(C, format!("quality {q}: WebP quality is 0–100")));
+            }
+            if matches!(format, RasterFormat::Gif | RasterFormat::Png8) {
+                (settings.palette.transparency_dither, settings.palette.transparency_dither_amount) = o.transparency_dither()?;
+            }
             check_options(format, &settings)?;
             // Use Artboards: one file per chosen artboard (default all); else the one chosen.
             let chosen = match use_artboards {
@@ -590,7 +1220,7 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
                 let bytes = renderer.export_region(doc, region, format, &settings).map_err(EngineError::Other)?;
                 // File Info as PNG text chunks.
                 let bytes = if matches!(format, RasterFormat::Png | RasterFormat::Png8) {
-                    vectorcraft_render::encode::png::with_text(bytes, &doc.metadata.png_text(&doc.title))
+                    vectorcraft_render::encode::png::with_text(bytes, &doc.metadata.png_text(doc.info_title()))
                 } else {
                     bytes
                 };
@@ -604,9 +1234,6 @@ fn encode_files(doc: &Document, f: &Format, p: &Value) -> Result<Encoded> {
             }
             let regions: Vec<Rect> = enc.files.iter().filter_map(|(b, _)| b.and_then(|b| doc.artboards.get(b))).map(|a| a.rect).collect();
             enc.warnings.extend(crate::cmd::fonts::export_overflow_warning(doc, &doc.layers, Some(&regions)));
-            if format == RasterFormat::WebP && o.lossless == Some(false) {
-                enc.warnings.push("lossy WebP isn't available yet: the file is lossless (exact, but larger)".into());
-            }
             return Ok(enc);
         }
         _ => return Err(bad(C, format!("no encoder for {} yet", f.label))),

@@ -606,18 +606,23 @@ fn shape_builder_stays_quick_up_to_its_cap() {
         .collect();
     let mut s = vec![Shape::new(PathData::single(SubPath::polyline(&ring, true)), FillRule::NonZero, 0)];
     // Closed paths alone are swept for the gaps they enclose.
-    let started = std::time::Instant::now();
+    let started = work_done();
     assert_eq!(shape_builder(&s, false).regions.len(), 1, "the ring encloses no gap");
-    assert!(started.elapsed().as_secs_f64() < 5.0, "{:?}", started.elapsed());
+    // Reads of indexed items stay in proportion to the ring. Scanning the ring for each edge's
+    // source would read about `n` items per edge.
+    let most = 64 * n as u64;
+    let work = work_done() - started;
+    assert!(work <= most, "{work} reads");
     for k in 0..4 {
         let y = -60.0 + 40.0 * f64::from(k);
         s.push(line((-150.0, y), (150.0, y + 7.0), 1));
     }
-    let started = std::time::Instant::now();
+    let started = work_done();
     let BuilderArrangement { regions, lines, .. } = shape_builder(&s, false);
     assert!(regions.len() >= 5, "the ring cut in five bands at least (the waves make pockets)");
     assert!(lines.len() >= 12, "{}", lines.len());
-    assert!(started.elapsed().as_secs_f64() < 5.0, "{:?}", started.elapsed());
+    let work = work_done() - started;
+    assert!(work <= most, "{work} reads");
     // Past the cap, only the filled areas count.
     s.push(line((0.0, 0.0), (1.0, 1.0), 2));
     s[0].path.subpaths[0].anchors.extend((0..16).map(|k| vectorcraft_geom::Anchor::corner(Point::new(100.0, f64::from(k)))));
@@ -731,6 +736,19 @@ fn rect_index_reads_a_diagonal_hatch_only_near_the_point() {
     assert_eq!(index.at(Point::new(333.3, 0.0), 0.1).count(), 10);
     assert_eq!(index.at(Point::new(1000.0, 0.0), 0.1).count(), 10);
     assert_eq!(index.at(Point::new(-5.0, 0.0), 0.1).count(), 0);
+}
+
+#[test]
+fn rect_index_counts_each_entry_it_reads() {
+    // Ten collinear lines filed under each of the 10 cells along them: a lookup 300 pt either side
+    // reads every line from each of the cells it spans, more than once per line.
+    let line = PathSeg::Line(kurbo::Line::new((0.0, 0.0), (1000.0, 0.0)));
+    let items: Vec<_> = (0..10).map(|k| (line.bounding_box(), (line, k))).collect();
+    let index = RectIndex::with_footprint(items, |r, (s, _), cell| segment_footprint(r, s, cell));
+    let started = work_done();
+    assert_eq!(index.at(Point::new(500.0, 0.0), 300.0).count(), 10);
+    let work = work_done() - started;
+    assert!(work >= 50, "{work} reads");
 }
 
 /// The grid's memory stays linear in the item count: pieces of one segment falling in the same
@@ -966,12 +984,13 @@ fn run_around_a_ring_of_4000_sides_measures_only_the_stops_it_reaches() {
         .collect();
     let ring = poly(&pts, true);
     let stops: Vec<Point> = ring.anchors.iter().map(|a| a.p).collect();
-    let start = std::time::Instant::now();
+    let started = work_done();
     for k in (0..n).step_by(200) {
         let run = run_around(&ring, &stops, ring.segment(k).eval(0.5), 1e-3).expect("a side");
         assert_eq!(ends(&run), (stops[k], stops[(k + 1) % n]), "side {k}");
     }
-    assert!(start.elapsed().as_secs_f64() < 5.0, "20 runs took {:?}", start.elapsed());
+    let work = work_done() - started;
+    assert!(work <= 1_000_000, "20 runs made {work} searches");
 }
 
 /// Proptest shrank a failure of `pieces_cut_out_of_their_inputs` to this input with linesweeper
@@ -1095,10 +1114,11 @@ fn many_lines_stay_quick() {
             line((50.0 + 80.0 * t.cos(), 50.0 + 80.0 * t.sin()), (50.0 - 80.0 * (t + 1.1).cos(), 50.0 - 80.0 * (t + 1.1).sin()), 0)
         })
         .collect();
-    let started = std::time::Instant::now();
+    let started = work_done();
     let (faces, _) = live_paint(&lines);
     assert!(faces.len() > 500, "{}", faces.len());
-    assert!(started.elapsed().as_secs_f64() < 5.0, "{:?}", started.elapsed());
+    let work = work_done() - started;
+    assert!(work <= 150_000, "{work} reads");
 }
 
 #[test]

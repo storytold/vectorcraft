@@ -4,27 +4,35 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::{AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject};
+use vectorcraft_doc::{
+    Appearance, AppearanceItem, AreaFit, Document, Justify, Node, NodeId, NodeKind, RubyAlign, RubyPosition, RubySpan, TextObject,
+};
 use vectorcraft_geom::{Affine, PathData, Vec2};
 
 use super::edit::selected_roots;
-use super::pathops::{len_param, num_param, shape_node};
+use super::pathops::{length_given, number_given, shape_node};
 use super::{
-    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, id_param, index, number_or, ok,
-    str_param, switch_or, targets,
+    CommandSpec, EngineError, Result, Session, bad, check_numbers, cmd, color_value, f64_req, has_doc, has_selection, index, index_opt, number_or,
+    object_param, ok, switch_or, targets, text_param,
 };
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        cmd!("type.orientation.vertical", "Vertical", ["Type", "Orientation"], None, "{ids?|id?} set vertical writing", has_selection, |s, p| {
-            orientation(s, p, true)
-        }),
+        cmd!(
+            "type.orientation.vertical",
+            "Vertical",
+            ["Type", "Orientation"],
+            None,
+            "{ids?|id?} set vertical writing for the selected type and every frame of its threads; no undo step when every object is already vertical → {vertical, ids}",
+            has_selection,
+            |s, p| orientation(s, p, true)
+        ),
         cmd!(
             "type.orientation.horizontal",
             "Horizontal",
             ["Type", "Orientation"],
             None,
-            "{ids?|id?} set horizontal writing",
+            "{ids?|id?} set horizontal writing for the selected type and every frame of its threads; no undo step when every object is already horizontal → {vertical, ids}",
             has_selection,
             |s, p| orientation(s, p, false)
         ),
@@ -33,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Outlines",
             ["Type"],
             Some("Cmd+Shift+O"),
-            "{} convert the selected text to groups of compound paths (one per glyph); a frame of threaded text leaves its thread with the text it shows → {ids}",
+            "{} convert the selected text to groups of compound paths (one per glyph); on type scaled unevenly, sheared or flattened, each glyph's stroke becomes a filled path over it, shaped as the canvas strokes it; the type object's own fills and strokes (not its characters') go on paths of its whole outline, below or above the glyphs as its Characters row places them; the group keeps the object's transparency, opacity mask and effects, once; a frame of threaded text leaves its thread with the text it shows; a dimension whose label is outlined becomes a plain group of its art → {ids}",
             has_selection,
             create_outlines
         ),
@@ -51,7 +59,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Optical Margin Alignment",
             ["Type"],
             None,
-            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered → {on, ids}",
+            "{ids?|id?, on?: bool} turn Optical Margin Alignment on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting): in every paragraph of point and area type, quotation marks, hyphens, full stops and commas at a line's start or end hang wholly outside the margin there; asterisks, tildes, ellipses, en and em dashes, colons and semicolons hang by half; and A, V, W, Y, v, w and y hang by a tenth of their advance; a left-aligned line hangs at its left margin, a right-aligned line hangs at its right margin, and centered and justified lines hang at both; Auto aligns a right-to-left line at its right; type on a path hangs at the start bracket when its line is placed there, hangs at the end bracket when the line is placed there, and hangs at both when it is centered; no undo step when every object already has the setting → {on, ids}",
             has_selection,
             optical_margin_alignment
         ),
@@ -60,7 +68,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "System Layout",
             [],
             None,
-            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting → {on}",
+            "{on?: bool} turn System Layout on or off for the document (on omitted: the opposite of the document's setting) and every text object in it. On, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. Off (the default, and what a document from before it reads as), spacing uses fractions of a point. New point, area and path type inherits the document's setting. No undo step when the document and every text object already have the setting → {on}",
             has_doc,
             system_layout
         ),
@@ -69,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Fractional Widths",
             [],
             None,
-            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters → {on, ids}",
+            "{ids?|id?, on?: bool} turn Fractional Widths on or off for the selected type and every frame of its threads (on omitted: the opposite of the first object's setting). On (the default, and what a document from before it reads as), spacing between characters uses fractions of a point. Off, each character that takes any space advances by a whole number of points, at least one, so small type does not run together; a character with no width stays at none. The setting is the whole type object, not a range of characters. No undo step when every object already has the setting → {on, ids}",
             has_selection,
             fractional_widths
         ),
@@ -78,7 +86,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Text",
             [],
             None,
-            "{id?|ids?, text} replace the contents of text objects (keeps the first run's style) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
+            "{id?|ids?, text} replace the contents of text objects (keeps the first run's style); no undo step when no object changes (each already has the text in one style, every paragraph with the first one's attributes, and no ruby) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits)}",
             has_doc,
             set_text
         ),
@@ -87,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|fixed, firstBaselineMin?: pt, verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText, fitMinPercent?: 10..100, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit (none given: query) → the first object's options, plus overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
+            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|emBoxHeight|fixed (emBoxHeight: the top of the first line's ideographic em box, the largest on the line, touches the top of the type area inside the inset), firstBaselineMin?: pt (the least distance from that top to the first baseline; with fixed, the distance), verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error; a leading change on the text also sets lineGap, as type.dynamicText says) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
             has_selection,
             area_options
         ),
@@ -96,7 +104,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reshape Type Area",
             [],
             None,
-            "{id, anchors: [[subpath, anchor]…], dx, dy} or {items: [{id, anchors}…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge, or the frame anchors its marquee selected, and the arrow keys nudging those); with items, every listed frame moves in one step",
+            "{id, anchors: [[subpath, anchor]…], dx, dy} or {items: [{id, anchors}…], dx, dy} move anchors of area type's frame (the type area) by dx, dy points, with their handles; the text reflows at its size, through its thread too (what Direct Selection does dragging a frame corner or edge, or the frame anchors its marquee selected, and the arrow keys nudging those); with items, every listed frame moves in one step; no undo step when no frame changes (dx and dy both 0)",
             has_doc,
             reshape_area
         ),
@@ -105,16 +113,25 @@ pub fn specs() -> Vec<CommandSpec> {
             "Reshape Type Path",
             [],
             None,
-            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of type on a path's path by dx, dy points, with their handles; the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging an anchor of the path)",
+            "{id, anchors: [[subpath, anchor]…], dx, dy} move anchors of type on a path's path by dx, dy points, with their handles; the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging an anchor of the path); no undo step when the path does not change (dx and dy both 0)",
             has_doc,
             reshape_path
+        ),
+        cmd!(
+            "text.setPathHandle",
+            "Move Type Path Handle",
+            [],
+            None,
+            "{id, subpath?, anchor, which: \"in\"|\"out\", x, y, independent?: bool, symmetric?: bool} move a direction handle of an anchor of type on a path's path to (x, y), as path.setHandle moves a path's (independent: that side only, the anchor becomes a corner; symmetric: mirror the other handle about the anchor without changing its kind, except at an open end of the path; independent and symmetric cannot both be true; both default false); the start and end brackets keep their fractions of the path and the text reflows along it (what Direct Selection does dragging a handle of the path); no undo step when the handle is already there and the path does not change",
+            has_doc,
+            set_path_handle
         ),
         cmd!(
             "text.fitHeadline",
             "Fit Headline",
             ["Type"],
             None,
-            "{ids?|id?} track the first line of area type so it fills the frame width → {tracking}",
+            "{ids?|id?} track the first line of area type so it fills the frame width; no undo step when the first line already has that tracking → {tracking}",
             has_selection,
             fit_headline
         ),
@@ -123,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt, leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", …] OpenType, featureChanges?: [\"tnum\", \"-onum\", …] (OpenType features turned on, or with - off, on top of each character's own; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", keepLineGap?: bool = false (true: Dynamic Text (Block) keeps the frame's line gap, as Reset Panel does), tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; \"hkna\" is H or V Style, kana in the font's forms for the writing direction, shaped as `vkna` in vertical type, and \"ital\" is Roman Italics, half-width alphanumerics in the font's italic forms, both on or off only), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; on area type with Dynamic Text (Block) on, a leading change sets the frame's line gap (text.areaOptions lineGap) to the new leading less the size of the first character changed, within -1296..1296 pt, so every line spreads or tightens by the change, unless keepLineGap is true; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -132,30 +149,38 @@ pub fn specs() -> Vec<CommandSpec> {
             "Ruby…",
             [],
             None,
-            "{ids?|id?, start?: byte, end?: byte, text?: reading, position?: above|below (vertical type: right|left), align?: start|center|end, size?: 1–100 (percent of the base text's size, default 50), overhang?: bool (default true), remove?: bool} set the ruby (furigana) over the selected text's bytes in `start..end` (without them: all its text): the reading over the base characters, above them in horizontal type and right of them in vertical type; `remove` takes the ruby off the range instead → {ids, ruby: [{start, end, text, position, align, sizePercent, overhang}…] (the first object's ruby)}",
+            "{ids?|id?, start?: byte, end?: byte, text?: reading, position?: above|below (vertical type: right|left), align?: start|center|end, size?: 1–100 (percent of the base text's size, default 50), overhang?: bool (default true), remove?: bool} set the ruby (furigana) over the selected text's bytes in `start..end` (without them: all its text): the reading over the base characters, above them in horizontal type and right of them in vertical type; `remove` takes the ruby off the range instead; no undo step when the ruby does not change (the same reading and options again, or `remove` where there is none) → {ids, ruby: [{start, end, text, position, align, sizePercent, overhang}…] (the first object's ruby)}",
             has_selection,
             ruby
         ),
     ]
 }
 
+/// Type › Type Orientation: set vertical or horizontal writing on every selected text object and
+/// every frame of their threads, in one undo step (none when nothing changes).
 fn orientation(s: &mut Session, p: &Value, vertical: bool) -> Result<Value> {
-    let ids = text_targets(s, p, "Text Orientation")?;
-    s.edit("Text Orientation", |d, _| {
+    let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Text Orientation")?);
+    // When every object already has the orientation, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Text Orientation", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.vertical = vertical;
-            refresh_bounds(t);
+            if t.vertical != vertical {
+                t.vertical = vertical;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"vertical": vertical, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Type › Optical Margin Alignment: set `on` (without it, the opposite of the first object's
-/// setting) on every selected text object and every frame of their threads, in one undo step.
+/// setting) on every selected text object and every frame of their threads, in one undo step
+/// (none when nothing changes).
 fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Optical Margin Alignment")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
@@ -163,29 +188,38 @@ fn optical_margin_alignment(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let on = switch_or(p, "on", !first.unwrap_or(false), "type.opticalMarginAlignment")?;
-    s.edit("Optical Margin Alignment", |d, _| {
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Optical Margin Alignment", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.optical_margin = on;
-            refresh_bounds(t);
+            if t.optical_margin != on {
+                t.optical_margin = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Character panel menu › System Layout: set `on` (without it, the opposite of the document's
-/// setting) on the document and every text object, in one undo step. Off is the default.
+/// setting) on the document and every text object, in one undo step (none when nothing changes).
+/// Off is the default.
 fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
     let current = s.doc()?.doc.setup.system_layout;
     let on = switch_or(p, "on", !current, "type.systemLayout")?;
-    s.edit("System Layout", |d, _| {
+    // When the document and every text object already have the setting, the document and its undo
+    // history stay as they are.
+    super::colorcmds::edit_if_changed(s, "System Layout", |_, d| {
+        let mut changed = d.setup.system_layout != on;
         d.setup.system_layout = on;
         let mut ids = vec![];
         d.walk(|n| {
-            if matches!(n.kind, NodeKind::Text(_)) {
+            if matches!(&n.kind, NodeKind::Text(t) if t.system_layout != on) {
                 ids.push(n.id);
             }
         });
@@ -195,15 +229,16 @@ fn system_layout(s: &mut Session, p: &Value) -> Result<Value> {
             };
             t.system_layout = on;
             refresh_bounds(t);
+            changed = true;
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({ "on": on }))
 }
 
 /// Character panel menu › Fractional Widths: set `on` (without it, the opposite of the first
 /// object's setting) on every selected text object and every frame of their threads, in one undo
-/// step. On is the default.
+/// step (none when nothing changes). On is the default.
 fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
     let ids = super::threads::with_threads(&s.doc()?.doc, &text_targets(s, p, "Fractional Widths")?);
     let first = ids.first().and_then(|id| match s.doc().ok()?.doc.node(*id).map(|n| &n.kind) {
@@ -211,37 +246,42 @@ fn fractional_widths(s: &mut Session, p: &Value) -> Result<Value> {
         _ => None,
     });
     let on = switch_or(p, "on", !first.unwrap_or(true), "type.fractionalWidths")?;
-    s.edit("Fractional Widths", |d, _| {
+    // When every object already has the setting, the document and its undo history stay as they are.
+    super::colorcmds::edit_if_changed(s, "Fractional Widths", |_, d| {
+        let mut changed = false;
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
             };
-            t.fractional_widths = on;
-            refresh_bounds(t);
+            if t.fractional_widths != on {
+                t.fractional_widths = on;
+                refresh_bounds(t);
+                changed = true;
+            }
         }
-        Ok(())
+        Ok(((), changed))
     })?;
     Ok(json!({"on": on, "ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()}))
 }
 
 /// Type › Ruby: set or remove the ruby (furigana) over a byte range of the selected type in one
-/// undo step. Without `start`/`end` the range is all the text; a new reading replaces the ruby
-/// over the range. The reply lists the first object's ruby (start/end in bytes of its plain text).
+/// undo step (none when nothing changes). Without `start`/`end` the range is all the text; a new
+/// reading replaces the ruby over the range. The reply lists the first object's ruby (start/end in bytes of its plain text).
 fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "type.ruby";
     let ids = text_targets(s, p, C)?;
     let range = TextRange::parse(p, C)?;
     let remove = switch_or(p, "remove", false, C)?;
-    let reading = str_param(p, "text").map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
+    let reading = text_param(p, "text", C)?.map(str::trim).filter(|t| !t.is_empty()).map(str::to_string);
     if !remove && reading.is_none() {
         return Err(bad(C, "give `text` (the reading) or `remove`"));
     }
-    let position = match str_param(p, "position").map(str::to_ascii_lowercase).as_deref() {
+    let position = match text_param(p, "position", C)?.map(str::to_ascii_lowercase).as_deref() {
         None | Some("above") | Some("right") => RubyPosition::Above,
         Some("below") | Some("left") => RubyPosition::Below,
         Some(_) => return Err(bad(C, "`position` is above or below")),
     };
-    let align = match str_param(p, "align").map(str::to_ascii_lowercase).as_deref() {
+    let align = match text_param(p, "align", C)?.map(str::to_ascii_lowercase).as_deref() {
         None | Some("center") | Some("centre") => RubyAlign::Center,
         Some("start") | Some("left") | Some("top") => RubyAlign::Start,
         Some("end") | Some("right") | Some("bottom") => RubyAlign::End,
@@ -253,7 +293,8 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let overhang = switch_or(p, "overhang", true, C)?;
     let mut first: Option<Value> = None;
-    s.edit("Ruby", |d, _| {
+    // The same reading again, or a removal where there is no ruby, is no undo step.
+    edit_if_nodes_changed(s, "Ruby", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else {
                 return Err(EngineError::NoNode(*id));
@@ -280,22 +321,74 @@ fn ruby(s: &mut Session, p: &Value) -> Result<Value> {
                 first = Some(serde_json::to_value(&t.ruby).unwrap_or(Value::Null));
             }
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>(), "ruby": first.unwrap_or(Value::Null)}))
 }
 
 /// Recompute the layout caches (bounds and baselines) after a text edit. Every engine text edit ends here (typing
 /// through `text.editRange` too), inside its `Session::edit`, so this is where Auto Size area type
-/// ([`vectorcraft_doc::AreaFit::AutoHeight`]) fits its frame to the text: part of the same undo
-/// step as the edit.
+/// ([`vectorcraft_doc::AreaFit::AutoHeight`]) fits its frame to the text, and Dynamic Text's Block
+/// (`dynamic_text` on area type, [`block::block_fit`]) sizes each line to the frame: part of the
+/// same undo step as the edit.
 pub(crate) fn refresh_bounds(t: &mut TextObject) {
     // Edits that changed the paragraph count keep one paragraph style per paragraph.
     t.normalize_paras();
+    block::block_fit(t);
+    refresh_fitted(t);
+}
+
+/// The part of [`refresh_bounds`] after Block has fitted the lines.
+fn refresh_fitted(t: &mut TextObject) {
     auto_height(t);
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
     t.cached_baselines = lay.baselines();
+    t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
+}
+
+/// [`refresh_bounds`] after a change that set the leading of the character at `at` to `leading`
+/// (in text space; None: Auto): on area type with Block on the change goes to the frame's line gap
+/// ([`block::leading_to_line_gap`]), and the lines are fitted again only when the gap changed.
+pub(crate) fn refresh_with_leading(t: &mut TextObject, at: usize, leading: Option<f64>) {
+    if block::leading_to_line_gap(t, at, leading) {
+        refresh_fitted(t);
+    } else {
+        refresh_bounds(t);
+    }
+}
+
+/// The first character a style change over `a..b` of `t` reaches, with both ends on character
+/// boundaries as [`vectorcraft_text::edit::style_range`] sets them; None when the range styles no
+/// character (empty, or inside one character, in text that is not empty).
+pub(crate) fn styled_start(t: &TextObject, a: usize, b: usize) -> Option<usize> {
+    let plain = t.plain_text();
+    let (a, b) = (vectorcraft_text::edit::floor_char(&plain, a), vectorcraft_text::edit::floor_char(&plain, b));
+    (a != b || plain.is_empty()).then_some(a.min(b))
+}
+
+/// [`refresh_with_leading`] with the leading the character at `at` was just given (a character
+/// style, Text Tweaker).
+pub(crate) fn refresh_with_given_leading(t: &mut TextObject, at: usize) {
+    if block::given_leading_to_line_gap(t, at) {
+        refresh_fitted(t);
+    } else {
+        refresh_bounds(t);
+    }
+}
+
+/// [`refresh_bounds`] for a document that is opening: the first frame takes the layout
+/// ([`vectorcraft_text::take_kept_layout`]) instead of laying the object out again.
+pub(crate) fn refresh_bounds_for_first_frame(t: &mut TextObject) {
+    t.normalize_paras();
+    block::block_fit(t);
+    auto_height(t);
+    let stamp = vectorcraft_text::LayoutStamp::now();
+    let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
+    t.cached_bounds = Some(lay.bounds);
+    t.cached_baselines = lay.baselines();
+    t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
+    vectorcraft_text::keep_layout(t, stamp, lay);
 }
 
 /// The text-space bounds of area type's frame, when Auto Size can fit it: a rectangle (one
@@ -432,7 +525,7 @@ fn columns_hold(lines: &[vectorcraft_text::LineInfo], cols: usize, y0: f64, inse
 /// Transform panel and hit testing would fall back to [`TextObject::estimate_bounds`] (a rough
 /// 0.55 em per character) until the text is edited — the box comes up short and alignment looks off.
 pub(crate) fn refresh_bounds_of(d: &mut Document, ids: &[NodeId]) {
-    for id in text_ids(d, ids) {
+    for id in text_ids_where(d, ids, |t| t.cached_bounds.is_none()) {
         if let Some(NodeKind::Text(t)) = d.node_mut(id).map(|n| &mut n.kind)
             && t.cached_bounds.is_none()
         {
@@ -498,11 +591,22 @@ fn overflow_note(ids: &[NodeId], left_out: &str) -> Option<String> {
 
 /// Text objects among `ids` and their descendants.
 fn text_ids(d: &Document, ids: &[NodeId]) -> Vec<NodeId> {
+    text_ids_where(d, ids, |_| true)
+}
+
+/// The text objects among `ids` and their descendants that `keep` accepts, each once, in the order
+/// they are found. All of `ids` are looked up in one walk of the tree.
+fn text_ids_where(d: &Document, ids: &[NodeId], keep: impl Fn(&TextObject) -> bool) -> Vec<NodeId> {
+    let paths = d.index_paths(ids.iter().copied());
+    let mut seen = std::collections::HashSet::new();
     let mut out = vec![];
     for id in ids {
-        if let Some(n) = d.node(*id) {
+        if let Some(n) = paths.get(id).and_then(|p| d.node_at(p)) {
             n.walk(&mut |c| {
-                if matches!(c.kind, NodeKind::Text(_)) && !out.contains(&c.id) {
+                if let NodeKind::Text(t) = &c.kind
+                    && keep(t)
+                    && seen.insert(c.id)
+                {
                     out.push(c.id);
                 }
             });
@@ -547,6 +651,30 @@ fn scale_text_attributes(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>(), "changed": changed }))
 }
 
+/// A path (or compound path) of `outline`, a piece of type `t`'s outline in text space, painted as
+/// run `run` and placed in the document as the canvas paints it ([`paint_type_piece`]: unplaced
+/// gradients fitted to `bounds`, the layout's bounds, stroke weights scaled by the type's
+/// transform), followed by a path (or compound path) filled with the run's stroke when the type's
+/// transform is not a similarity; empty when the piece has no path.
+fn type_piece(d: &mut Document, t: &TextObject, bounds: kurbo::Rect, run: usize, outline: &kurbo::BezPath) -> Vec<Node> {
+    let path = PathData::from_bezpath(outline);
+    if path.is_empty() {
+        return vec![];
+    }
+    let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
+    let mut node = shape_node(d, path, None);
+    let stroke = vectorcraft_render::effects::paint_type_piece(&mut node, &st, bounds, t.xf);
+    let mut out = vec![node];
+    if let Some(s) = stroke
+        && let Some(path) = s.path_data()
+    {
+        let mut filled = shape_node(d, path.clone(), None);
+        filled.appearance = s.appearance.clone();
+        out.push(filled);
+    }
+    out
+}
+
 fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
     let roots = selected_roots(s)?;
     let ids = s.edit("Create Outlines", |d, sel| {
@@ -554,6 +682,10 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
         if texts.is_empty() {
             return Err(EngineError::Other("Create Outlines: select text objects".into()));
         }
+        // Outlining a graph's labels does not move or scale its plot at the next redraw.
+        let graphs = super::graph::graphs_holding(d, &texts);
+        let before = (!super::dimension::reached(d, &roots).is_empty()).then(|| d.clone());
+        let ended = super::dimension::end_links(d, &roots);
         let mut new_sel: Vec<NodeId> = roots.iter().copied().filter(|r| !texts.contains(r)).collect();
         let mut out = vec![];
         let threaded = super::threads::frames(d);
@@ -587,14 +719,7 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
                         children.push(Arc::new(d.reid(&art)));
                         break 'glyph;
                     }
-                    let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
-                    if path.is_empty() {
-                        break 'glyph;
-                    }
-                    let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                    let mut node = shape_node(d, path, None);
-                    node.appearance = st.appearance().into();
-                    children.push(Arc::new(node));
+                    children.extend(type_piece(d, t, lay.bounds, g.run, &g.outline).into_iter().map(Arc::new));
                 }
                 run_end.insert(g.run, children.len());
             }
@@ -603,16 +728,9 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             // nothing there either).
             let mut ruby: Vec<(usize, Arc<Node>)> = vec![];
             for g in &lay.ruby {
-                let path = PathData::from_bezpath(&g.outline).transformed(t.xf);
-                if path.is_empty() {
-                    continue;
-                }
-                let st = t.runs.get(g.run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                let mut node = shape_node(d, path, None);
-                node.appearance = st.appearance().into();
                 // After the glyphs of its run and of the runs before it.
                 let at = run_end.range(..=g.run).map(|(_, end)| *end).max().unwrap_or(0);
-                ruby.push((at, Arc::new(node)));
+                ruby.extend(type_piece(d, t, lay.bounds, g.run, &g.outline).into_iter().map(|node| (at, Arc::new(node))));
             }
             ruby.sort_by_key(|(at, _)| *at);
             let mut ruby = ruby.into_iter().peekable();
@@ -625,35 +743,77 @@ fn create_outlines(s: &mut Session, _: &Value) -> Result<Value> {
             }
             placed.extend(ruby.map(|(_, r)| r));
             let mut children = placed;
+            // The whole outline the object's own fills and strokes paint: every glyph, ruby glyph
+            // and bar, as the canvas paints them.
+            let mut all = kurbo::BezPath::new();
+            for g in lay.glyphs.iter().chain(&lay.ruby) {
+                all.extend(g.outline.iter());
+            }
             // Underline and strikethrough bars become paths of their run's paint too (#847).
             for (run, bar) in vectorcraft_text::decorations(&lay, vectorcraft_text::FontDb::global(), t) {
-                let st = t.runs.get(run).map(|r| r.style.clone()).unwrap_or_else(|| t.first_style());
-                let mut node = shape_node(d, PathData::from_bezpath(&bar).transformed(t.xf), None);
-                node.appearance = st.appearance().into();
-                children.push(Arc::new(node));
+                all.extend(bar.iter());
+                children.extend(type_piece(d, t, lay.bounds, run, &bar).into_iter().map(Arc::new));
+            }
+            // The object's own fills and strokes (not its characters') paint the whole outline:
+            // those below the Characters row under the characters, the others over them, with
+            // their unplaced gradients fixed to the layout's bounds in the document.
+            let all = PathData::from_bezpath(&all).transformed(t.xf);
+            if !n.appearance.items.is_empty() && !all.is_empty() {
+                let (below, above) = n.appearance.split_contents();
+                let tb = t.xf.transform_rect_bbox(lay.bounds);
+                let mut whole = |items: &[AppearanceItem]| {
+                    let mut ap = Appearance { items: items.to_vec(), ..Default::default() };
+                    ap.pin_gradients(tb);
+                    Arc::new(Node::path(d.alloc_id(), all.clone(), ap))
+                };
+                if !below.is_empty() {
+                    children.insert(0, whole(below));
+                }
+                if !above.is_empty() {
+                    children.push(whole(above));
+                }
             }
             let (par, idx, _) = d.position(tid).ok_or(EngineError::NoNode(tid))?;
             d.remove(tid)?;
             if children.is_empty() {
                 continue;
             }
+            // The group takes the object's name, transparency, opacity mask and effects, which
+            // apply to the type as a whole: once, not to each glyph. It is marked as type's
+            // outlines, so geometry effects move its placed gradients with the whole outline, as
+            // they do on the type.
             let gid = d.alloc_id();
-            let mut g = Node::group(gid, children);
-            g.opacity = n.opacity;
-            g.blend = n.blend;
-            g.name = n.name.clone();
+            let mut g = super::flatten::carry(&n, Node::group(gid, children));
+            g.extras_mut().type_outlines = true;
             d.insert(par, idx, g)?;
             out.push(gid);
             if roots.contains(&tid) {
                 new_sel.push(gid);
             }
         }
+        if let Some(before) = &before {
+            super::dimension::restore_unchanged(before, d, ended);
+        }
         // Outlined frames of threaded text leave their threads with the text they show.
         super::threads::leave_threads(d, &threaded);
+        super::graph::keep_placed(d, &graphs);
         sel.set(new_sel);
         Ok(out)
     })?;
     Ok(json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }))
+}
+
+/// [`Session::edit`] for a type command that may set what the type already has: `f` runs on a
+/// copy of the document, and it becomes an undo step only when one of the objects `ids` differs
+/// afterwards or `f` returns true for a change of its own elsewhere (a graph's kept label styles).
+/// When nothing changed, the document, its undo and redo steps and its saved state stay as they
+/// were. Only the objects are compared, not the whole document, whose embedded images can be large.
+fn edit_if_nodes_changed<T>(s: &mut Session, label: &str, ids: &[NodeId], f: impl FnOnce(&mut Document) -> Result<(T, bool)>) -> Result<T> {
+    super::colorcmds::edit_if_changed(s, label, |before, d| {
+        let (v, other) = f(d)?;
+        let changed = other || ids.iter().any(|id| before.node(*id) != d.node(*id));
+        Ok((v, changed))
+    })
 }
 
 pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<NodeId>> {
@@ -663,6 +823,20 @@ pub(crate) fn text_targets(s: &Session, p: &Value, cmd: &str) -> Result<Vec<Node
         return Err(bad(cmd, "no text objects selected"));
     }
     Ok(t)
+}
+
+/// The type sizes a command takes, in points.
+pub(crate) const TYPE_SIZES: (f64, f64) = (0.1, 1296.0);
+
+/// A type size `size` that a command was given: an error naming the range when it is outside
+/// [`TYPE_SIZES`].
+pub(crate) fn given_type_size(size: f64, cmd: &str) -> Result<f64> {
+    let (lo, hi) = TYPE_SIZES;
+    if !(lo..=hi).contains(&size) {
+        let key = "size";
+        return Err(bad(cmd, format!("`{key}` must be from {lo} to {hi}")));
+    }
+    Ok(size)
 }
 
 /// Clamp in the units shown to the user, then compensate the text's affine. Clamping
@@ -734,9 +908,10 @@ pub(crate) fn style_chars(t: &mut TextObject, range: Option<TextRange>, mut f: i
 }
 
 fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
-    let text = str_param(p, "text").ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
+    let text = text_param(p, "text", "text.setText")?.ok_or_else(|| bad("text.setText", "missing `text`"))?.to_string();
     let ids = text_targets(s, p, "text.setText")?;
-    s.edit("Typing", |d, _| {
+    // The text the type already has is no undo step.
+    edit_if_nodes_changed(s, "Typing", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let style = t.first_style();
@@ -747,7 +922,7 @@ fn set_text(s: &mut Session, p: &Value) -> Result<Value> {
             t.ruby.clear();
             refresh_bounds(t);
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() })))
 }
@@ -768,19 +943,18 @@ pub(crate) fn justify_param(v: &str) -> Option<Justify> {
 
 fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.setStyle";
-    let font = str_param(p, "font").map(str::to_string);
-    let style = str_param(p, "style").map(str::to_string);
-    let size = len_param(p, "size");
-    if size.is_some_and(|v| v <= 0.0) {
-        return Err(bad(C, "size must be positive"));
-    }
+    let font = text_param(p, "font", C)?.map(str::to_string);
+    let style = text_param(p, "style", C)?.map(str::to_string);
+    let size = length_given(p, "size", C)?.map(|v| given_type_size(v, C)).transpose()?;
     let leading = match p.get("leading") {
         None | Some(Value::Null) => None,
         Some(Value::String(a)) if a.eq_ignore_ascii_case("auto") => Some(None),
-        Some(_) => Some(Some(len_param(p, "leading").ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0))),
+        Some(_) => {
+            Some(Some(length_given(p, "leading", C).ok().flatten().ok_or_else(|| bad(C, "leading must be a number or \"auto\""))?.clamp(0.1, 5000.0)))
+        }
     };
-    let tracking = num_param(p, "tracking");
-    let justify = match str_param(p, "justify") {
+    let tracking = number_given(p, "tracking", C)?;
+    let justify = match text_param(p, "justify", C)? {
         Some(j) => Some(justify_param(j).ok_or_else(|| bad(C, "justify must be auto|left|center|right|justifyAll"))?),
         None => None,
     };
@@ -816,12 +990,14 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, "nothing to change"));
     }
+    let keep_line_gap = switch_or(p, "keepLineGap", false, C)?;
     let range = TextRange::parse(p, C)?;
     let ids = text_targets(s, p, C)?;
     let protect = s.prefs.missing_glyph_protection && (font.is_some() || style.is_some());
     // The fonts the styled characters are set in, for the warning.
     let mut set = std::collections::BTreeSet::new();
-    s.edit("Character", |d, _| {
+    // Attributes the characters already have are no undo step.
+    edit_if_nodes_changed(s, "Character", &ids, |d| {
         for id in &ids {
             let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
             let size = size.map(|v| local_type_value(t, v, (0.1, 1296.0), false, C)).transpose()?;
@@ -886,18 +1062,36 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                         super::textedit::unprotected_runs(&t.runs, a, b, &kept)
                     }
                 };
-                set.extend(styled.iter().map(|r| super::fonts::font_of(&r.style)));
+                set.extend(styled.iter().flat_map(super::fonts::run_fonts));
             }
             if let Some(j) = justify {
                 let span = para_span(range, t);
                 t.edit_paras(span, |pa| pa.justify = j);
             }
-            refresh_bounds(t);
+            // With Block on, the leading goes to the frame's line gap; an empty range styles nothing.
+            let changed = leading.filter(|_| !keep_line_gap).and_then(|l| {
+                range.map_or(Some(0), |r| Some(r.bytes(t)).filter(|(a, b)| a < b).and_then(|(a, b)| styled_start(t, a, b))).map(|at| (at, l))
+            });
+            match changed {
+                Some((at, l)) => refresh_with_leading(t, at, l),
+                None => refresh_bounds(t),
+            }
         }
         // Graph labels keep a change made to all of their text through the graph being drawn again (sizes as given,
         // not in a scaled label's own units).
+        let mut labels_changed = false;
         if range.is_none() {
-            super::graph::capture_label_styles(d, &ids, &|st| {
+            let gives_character = font.is_some()
+                || style.is_some()
+                || size.is_some()
+                || leading.is_some()
+                || tracking.is_some()
+                || fill.is_some()
+                || stroke.is_some()
+                || !stroke_weight.is_empty()
+                || features.is_some()
+                || feature_changes.as_ref().is_some_and(|c| !c.is_empty());
+            let change = |st: &mut vectorcraft_doc::CharStyle| {
                 if let Some(f) = &font {
                     st.font_family = f.clone();
                     st.font_version = None;
@@ -938,9 +1132,15 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 if let Some(c) = &feature_changes {
                     st.features = super::textedit::change_features(&st.features, c);
                 }
-            });
+            };
+            // A command that gives character attributes keeps the style even when they equal the labels' own.
+            labels_changed = if gives_character {
+                super::graph::capture_label_styles_given(d, &ids, &change)
+            } else {
+                super::graph::capture_label_styles(d, &ids, &change)
+            };
         }
-        Ok(())
+        Ok(((), labels_changed))
     })?;
     let mut out = with_overflow(s, &ids, json!({ "ids": ids.iter().map(|i| i.0).collect::<Vec<_>>() }));
     if let Some(w) = super::fonts::set_font_warning(set) {
@@ -977,7 +1177,7 @@ pub(crate) fn reshape_area_with(t: &mut TextObject, f: impl FnOnce(&mut TextObje
 }
 
 /// Area type's text, if `n` is area type.
-fn area_text(n: Option<&Node>) -> Option<&TextObject> {
+pub(crate) fn area_text(n: Option<&Node>) -> Option<&TextObject> {
     match n.map(|n| &n.kind) {
         Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::Area { .. }) => Some(t),
         _ => None,
@@ -1010,10 +1210,15 @@ fn size_area(t: &mut TextObject, w: Option<f64>, h: Option<f64>) -> bool {
     reshape_area_with(t, |t| t.transform_area(a))
 }
 
-/// The fit `p` asks for (`fit`: none|autoHeight|shrinkText or `{"shrinkText": {"minPercent"}}`,
-/// `fitMinPercent`), starting from `cur`. None when `p` sets neither (or only `fitMinPercent`
-/// while the fit isn't Shrink Text).
-pub(crate) fn fit_param(p: &Value, cur: AreaFit, c: &str) -> Result<Option<AreaFit>> {
+/// A fit `p` asks for: the Area Type Options fit, and whether Dynamic Text's Block
+/// ([`TextObject::dynamic_text`]) is on. Block's fit is [`AreaFit::None`]: it replaces Auto Size
+/// and Shrink Text to Fit.
+pub(crate) type FitChoice = (AreaFit, bool);
+
+/// The fit `p` asks for (`fit`: none|autoHeight|shrinkText|block or `{"shrinkText": {"minPercent"}}`,
+/// `fitMinPercent`), starting from `cur` (`block`: Block is on). None when `p` sets neither (or only
+/// `fitMinPercent` while the fit isn't Shrink Text).
+pub(crate) fn fit_param(p: &Value, cur: AreaFit, block: bool, c: &str) -> Result<Option<FitChoice>> {
     check_numbers(p, &["fitMinPercent"], c)?;
     let min = p.get("fitMinPercent").and_then(Value::as_f64);
     let cur_min = match cur {
@@ -1022,21 +1227,48 @@ pub(crate) fn fit_param(p: &Value, cur: AreaFit, c: &str) -> Result<Option<AreaF
     };
     let fit = match p.get("fit") {
         None | Some(Value::Null) => match (cur, min) {
-            (AreaFit::ShrinkText { .. }, Some(m)) => AreaFit::ShrinkText { min_percent: m },
+            (AreaFit::ShrinkText { .. }, Some(m)) if !block => AreaFit::ShrinkText { min_percent: m },
             _ => return Ok(None),
         },
+        Some(Value::String(id)) if is_block_id(id) => return Ok(Some((AreaFit::None, true))),
         Some(Value::String(id)) => {
-            AreaFit::parse(id, min.or(cur_min)).ok_or_else(|| bad(c, format!("fit must be none|autoHeight|shrinkText, got {id}")))?
+            AreaFit::parse(id, min.or(cur_min)).ok_or_else(|| bad(c, format!("fit must be none|autoHeight|shrinkText|block, got {id}")))?
         }
         Some(v) => match serde_json::from_value::<AreaFit>(v.clone()).map_err(|e| bad(c, format!("bad fit: {e}")))? {
             AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: min.unwrap_or(min_percent) },
             f => f,
         },
     };
-    Ok(Some(match fit {
-        AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: AreaFit::clamp_percent(min_percent) },
-        f => f,
-    }))
+    Ok(Some((
+        match fit {
+            AreaFit::ShrinkText { min_percent } => AreaFit::ShrinkText { min_percent: AreaFit::clamp_percent(min_percent) },
+            f => f,
+        },
+        false,
+    )))
+}
+
+/// Whether a `fit` id names Dynamic Text's Block (case, spaces, dashes and underscores ignored).
+fn is_block_id(id: &str) -> bool {
+    matches!(id.to_ascii_lowercase().replace([' ', '-', '_'], "").as_str(), "block" | "dynamictext")
+}
+
+/// The `fit` id area type reports: `block` while Dynamic Text's Block is on, else its fit's.
+pub(crate) fn fit_id(t: &TextObject) -> &'static str {
+    if t.dynamic_text { "block" } else { t.area.fit.id() }
+}
+
+/// Dynamic Text's Block gaps `p` gives: `wordGap` (% of a word space, 0..1000) and `lineGap` (pt,
+/// -1296..1296). A value that is not a number, or is outside its range, is an error.
+pub(crate) fn block_gaps(p: &Value, c: &str) -> Result<(Option<f64>, Option<f64>)> {
+    let gap = |key: &str, (lo, hi): (f64, f64)| -> Result<Option<f64>> {
+        match number_given(p, key, c)? {
+            Some(v) if !(v.is_finite() && (lo..=hi).contains(&v)) => Err(bad(c, format!("`{key}` must be from {lo} to {hi}, not {v}"))),
+            v => Ok(v),
+        }
+    };
+    use vectorcraft_doc::AreaOptions as O;
+    Ok((gap("wordGap", O::WORD_GAP)?, gap("lineGap", O::LINE_GAP)?))
 }
 
 /// Area type's options as `text.areaOptions` reports them: the Area Type Options with `fit` as
@@ -1046,7 +1278,7 @@ pub(crate) fn area_options_json(t: &TextObject) -> Result<Value> {
     let mut v = serde_json::to_value(&t.area).map_err(|e| EngineError::Other(e.to_string()))?;
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     if let Some(o) = v.as_object_mut() {
-        o.insert("fit".into(), json!(t.area.fit.id()));
+        o.insert("fit".into(), json!(fit_id(t)));
         o.insert("flow".into(), json!(t.area.flow));
         // The gutter between rows, the gutter's when the rows have none of their own.
         o.insert("rowGutter".into(), json!(t.area.row_gutter.unwrap_or(t.area.gutter)));
@@ -1055,6 +1287,9 @@ pub(crate) fn area_options_json(t: &TextObject) -> Result<Value> {
             _ => AreaFit::DEFAULT_MIN_PERCENT,
         };
         o.insert("fitMinPercent".into(), json!(min));
+        let (word_gap, line_gap) = t.area.block_gaps();
+        o.insert("wordGap".into(), json!(word_gap));
+        o.insert("lineGap".into(), json!(line_gap));
         if let Some((w, h, _)) = area_size(t) {
             o.insert("width".into(), json!(w));
             o.insert("height".into(), json!(h));
@@ -1083,8 +1318,9 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     // Checked once up front (its errors don't depend on the frame); each frame resolves `fit`
     // against its own setting below.
     let cur = area_text(s.doc()?.doc.node(first)).map(|t| t.area.clone()).unwrap_or_default();
-    fit_param(p, cur.fit, C)?;
-    let fit_given = p.get("fit").is_some_and(|v| !v.is_null()) || p.get("fitMinPercent").is_some_and(|v| !v.is_null());
+    fit_param(p, cur.fit, false, C)?;
+    let (word_gap, line_gap) = block_gaps(p, C)?;
+    let fit_given = ["fit", "fitMinPercent", "wordGap", "lineGap"].iter().any(|k| p.get(*k).is_some_and(|v| !v.is_null()));
     let size = |k: &str| p.get(k).and_then(Value::as_f64).filter(|x| x.is_finite()).map(|x| x.clamp(1.0, 100_000.0));
     let (w, h) = (size("width"), size("height"));
     let given: Vec<(&String, &Value)> = p.as_object().into_iter().flatten().filter(|(k, _)| AREA_KEYS.contains(&k.as_str())).collect();
@@ -1093,7 +1329,7 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
     }
     // Each area type takes the options given over its own (#3759): setting one option on several
     // frames leaves their other options as they were.
-    let merged = |own: &vectorcraft_doc::AreaOptions| -> Result<vectorcraft_doc::AreaOptions> {
+    let merged = |own: &vectorcraft_doc::AreaOptions, block: bool| -> Result<(vectorcraft_doc::AreaOptions, bool)> {
         let mut v = serde_json::to_value(own).map_err(|e| EngineError::Other(e.to_string()))?;
         if let Some(o) = v.as_object_mut() {
             for (k, val) in &given {
@@ -1113,17 +1349,29 @@ fn area_options(s: &mut Session, p: &Value) -> Result<Value> {
         opts.inset = finite(opts.inset).clamp(0.0, 10_000.0);
         opts.first_baseline_min = finite(opts.first_baseline_min).clamp(0.0, 10_000.0);
         // Each frame's fit from its own (`fitMinPercent` alone changes only Shrink Text frames).
-        opts.fit = fit_param(p, own.fit, C)?.unwrap_or(own.fit);
-        Ok(opts)
+        let (fit, block) = fit_param(p, own.fit, block, C)?.unwrap_or((own.fit, block));
+        opts.fit = fit;
+        opts.word_gap = word_gap.unwrap_or(own.word_gap);
+        opts.line_gap = line_gap.unwrap_or(own.line_gap);
+        Ok((opts, block))
     };
     let d = &s.doc()?.doc;
-    let planned: Vec<(NodeId, vectorcraft_doc::AreaOptions)> = ids
+    let planned: Vec<(NodeId, (vectorcraft_doc::AreaOptions, bool))> = ids
         .iter()
-        .filter_map(|id| area_text(d.node(*id)).map(|t| (*id, &t.area)))
-        .map(|(id, own)| merged(own).map(|o| (id, o)))
+        .filter_map(|id| area_text(d.node(*id)).map(|t| (*id, t)))
+        .map(|(id, t)| merged(&t.area, t.dynamic_text).map(|o| (id, o)))
         .collect::<Result<_>>()?;
-    let apply = |t: &mut TextObject, opts: &vectorcraft_doc::AreaOptions| {
+    // Dynamic Text's Block is refused for threaded frames, as `type.dynamicText` refuses it.
+    let threads = super::threads::ThreadIndex::of(d);
+    let frames: Vec<String> = planned.iter().filter(|(id, (_, block))| *block && threads.threaded(*id)).map(|(id, _)| id.0.to_string()).collect();
+    if !frames.is_empty() {
+        let frames = frames.join(", ");
+        return Err(bad(C, format!("area type in a thread cannot use Dynamic Text: {frames}")));
+    }
+    let apply = |t: &mut TextObject, (opts, block): &(vectorcraft_doc::AreaOptions, bool)| {
         t.area = opts.clone();
+        // Block off keeps the sizes it wrote into the characters.
+        t.dynamic_text = *block;
         // Auto Size sets the height (Illustrator's dialog turns the Height field off).
         let h = if opts.fit == AreaFit::AutoHeight { None } else { h };
         // A resized frame has laid its text out again; otherwise the new options do here.
@@ -1173,7 +1421,7 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let mut items = Vec::with_capacity(raw.len());
     for it in raw {
-        let id = id_param(it, "id").ok_or_else(|| bad(C, "missing id"))?;
+        let id = object_param(it, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
         let mut refs = super::select::checked_refs(it.get("anchors"), C)?;
         refs.sort_unstable();
         refs.dedup();
@@ -1190,21 +1438,23 @@ fn reshape_area(s: &mut Session, p: &Value) -> Result<Value> {
         items.push((id, refs));
     }
     let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
-    s.edit("Reshape Type Area", |doc, _| {
+    // Anchors moved by no distance are no undo step.
+    let ids: Vec<NodeId> = items.iter().map(|(id, _)| *id).collect();
+    edit_if_nodes_changed(s, "Reshape Type Area", &ids, |doc| {
         for (id, refs) in &items {
             let Some(NodeKind::Text(t)) = doc.node_mut(*id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(*id)) };
             if !reshape_area_with(t, |t| t.move_area_anchors(refs, d)) {
                 return Err(bad(C, "no such frame anchor, or the frame would reach past the canvas"));
             }
         }
-        Ok(())
+        Ok(((), false))
     })?;
     ok()
 }
 
 fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "text.reshapePath";
-    let id = id_param(p, "id").ok_or_else(|| bad(C, "missing id"))?;
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
     let mut refs = super::select::checked_refs(p.get("anchors"), C)?;
     refs.sort_unstable();
     refs.dedup();
@@ -1217,7 +1467,8 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
     if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
         return Err(bad(C, "not type on a path outside perspective"));
     }
-    s.edit("Reshape Type Path", |doc, _| {
+    // Anchors moved by no distance are no undo step.
+    edit_if_nodes_changed(s, "Reshape Type Path", &[id], |doc| {
         let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
         let before = t.kind.clone();
         let within = |t: &TextObject| {
@@ -1228,13 +1479,55 @@ fn reshape_path(s: &mut Session, p: &Value) -> Result<Value> {
             return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
         }
         refresh_bounds(t);
-        Ok(())
+        Ok(((), false))
+    })?;
+    ok()
+}
+
+fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "text.setPathHandle";
+    let id = object_param(p, "id", C)?.ok_or_else(|| bad(C, "missing id"))?;
+    let si = super::draw2::usize_opt(p, "subpath", C)?.unwrap_or(0);
+    let ai = index_opt(p, "anchor", C)?.ok_or_else(|| bad(C, "missing anchor"))?;
+    let out = super::object::choice(p, C, "which", &["in", "out"])? != Some("in");
+    let pos = vectorcraft_geom::Point::new(f64_req(p, "x", C)?, f64_req(p, "y", C)?);
+    let independent = switch_or(p, "independent", false, C)?;
+    let symmetric = switch_or(p, "symmetric", false, C)?;
+    if symmetric && independent {
+        return Err(bad(C, "`independent` and `symmetric` cannot both be true"));
+    }
+    let node = s.doc()?.doc.node(id);
+    let on_path = matches!(node.map(|n| &n.kind), Some(NodeKind::Text(t)) if matches!(t.kind, vectorcraft_doc::TextKind::OnPath { .. }));
+    if !on_path || node.is_some_and(|n| n.extras().perspective.is_some()) {
+        return Err(bad(C, "not type on a path outside perspective"));
+    }
+    // A handle moved to where it is is no undo step.
+    edit_if_nodes_changed(s, "Reshape Type Path", &[id], |doc| {
+        let Some(NodeKind::Text(t)) = doc.node_mut(id).map(|n| &mut n.kind) else { return Err(EngineError::NoNode(id)) };
+        let before = t.kind.clone();
+        let within = |t: &TextObject| {
+            t.type_path().and_then(|p| p.bounds()).is_some_and(|b| [b.x0, b.y0, b.x1, b.y1].iter().all(|v| v.abs() <= crate::MAX_COORD))
+        };
+        if !(t.set_path_handle_with_symmetry((si, ai), out, pos, independent, symmetric) && within(t)) {
+            t.kind = before;
+            return Err(bad(C, "no such path anchor, or the path would reach past the canvas"));
+        }
+        refresh_bounds(t);
+        Ok(((), false))
     })?;
     ok()
 }
 
 #[cfg(test)]
 mod area_tests;
+mod block;
+pub(super) use block::SIZES as BLOCK_SIZES;
+pub(super) use block::fit_metrics as block_fit_metrics;
+pub(crate) use block::needed_room;
+#[cfg(test)]
+mod block_tests;
+#[cfg(test)]
+mod noop_tests;
 
 /// Width of the first line and of the space it can fill, with `tracking` on the first paragraph.
 /// The third value is where the first line ends in the plain text.
@@ -1246,7 +1539,7 @@ fn headline_fit(t: &TextObject, tracking: f64) -> Option<(f64, f64, usize)> {
     let cell = lay.frames.first()?;
     let line = lay.lines.first()?;
     let para = t.para_at(0);
-    let avail = cell.width() - 2.0 * t.area.inset - para.left_indent - para.right_indent;
+    let avail = cell.width() - 2.0 * t.area.inset - para.laid_out_left_indent() - para.right_indent;
     Some((line.x1 - line.x0, avail, line.end))
 }
 
@@ -1276,7 +1569,9 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
         plans.push((*id, (lo * 10.0).floor() / 10.0));
     }
     let first = plans.first().map(|p| p.1).ok_or_else(|| bad(C, "select area type whose first line can fit its frame"))?;
-    s.edit("Fit Headline", |d, _| {
+    // A headline that already has its fitted tracking is no undo step.
+    let fitted: Vec<NodeId> = plans.iter().map(|(id, _)| *id).collect();
+    edit_if_nodes_changed(s, "Fit Headline", &fitted, |d| {
         for (id, tr) in &plans {
             if let Some(NodeKind::Text(t)) = d.node_mut(*id).map(|n| &mut n.kind) {
                 let end = t.plain_text().find('\n').unwrap_or(usize::MAX).min(vectorcraft_text::edit::runs_len(&t.runs));
@@ -1284,7 +1579,7 @@ fn fit_headline(s: &mut Session, p: &Value) -> Result<Value> {
                 refresh_bounds(t);
             }
         }
-        Ok(())
+        Ok(((), false))
     })?;
     Ok(json!({ "tracking": first }))
 }
