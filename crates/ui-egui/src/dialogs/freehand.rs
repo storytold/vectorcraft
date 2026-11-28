@@ -168,8 +168,10 @@ fn tip_row(ui: &mut Ui, fields: &mut DialogFields, least: f64) -> Response {
         let _ = TipEllipse::new(tl!("Tip"), Bind::bound(&mut tip)).least_roundness(least).show(ui);
         dabs(ui, tip);
     });
-    if tip != start {
+    if tip.degrees != start.degrees {
         fields.set("angle", FieldValue::Number(tip.degrees.round()));
+    }
+    if tip.roundness != start.roundness {
         fields.set("roundness", FieldValue::Number((tip.roundness * 100.0).round()));
     }
     shown.output
