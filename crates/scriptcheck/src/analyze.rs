@@ -272,6 +272,65 @@ struct Assign {
     after_new: bool,
 }
 
+/// `name = {`: an object literal assigned to a variable.
+struct ObjectValue {
+    name: String,
+    /// The bracket depth inside its `{`.
+    depth: usize,
+    /// The document methods writing a file that it defines with a single function expression as the
+    /// key's whole value, a bit each ([`Analyzer::writers`]).
+    bits: u8,
+    /// It is the value of the first name a `var` statement declares, and the statement is directly
+    /// in a function body or the global code, not in a block and not after `if (…)`, `else`, `do` or
+    /// a loop's parentheses: only then does the variable hold `bits` after it.
+    whole: bool,
+    /// The bit of the method whose value is being read, and how far that value has been read.
+    value: Option<(u8, Value)>,
+}
+
+/// How far the value of an object literal's key that names a document method writing a file has been
+/// read, by the tokens directly inside the literal's braces.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Value {
+    /// `function`.
+    Function,
+    /// The function expression's name.
+    Name,
+    /// The `(` of its parameters.
+    Params,
+    /// The `{` of its body: the value is the function expression when `,` or the literal's `}` comes
+    /// next.
+    Body,
+    /// Anything else, or anything after the body.
+    Other,
+}
+
+impl ObjectValue {
+    /// `t`, a token directly inside the literal's braces: a `,` or the closing `}` ends the value
+    /// being read, and gives the literal the method only when the value is a single function
+    /// expression (`function () {} && d.saveAs`, `function () {}(f)` and `function () {}.call` give
+    /// it nothing).
+    fn step(&mut self, t: &Sig) {
+        let Some((bit, value)) = self.value else { return };
+        if t.is(",") || t.is("}") {
+            if value == Value::Body {
+                self.bits |= bit;
+            } else {
+                self.bits &= !bit;
+            }
+            self.value = None;
+            return;
+        }
+        let next = match value {
+            Value::Function if t.kind == T::Ident => Value::Name,
+            Value::Function | Value::Name if t.is("(") => Value::Params,
+            Value::Params if t.is("{") => Value::Body,
+            _ => Value::Other,
+        };
+        self.value = Some((bit, next));
+    }
+}
+
 /// What a value the check follows holds: a member chain, or a File or Folder object (`folder` when it
 /// is a Folder object whatever the path names: [`Operand::file_step`]).
 enum Held {
@@ -502,6 +561,8 @@ struct Saved {
     shadowed: Option<bool>,
     /// It was a platform name the script had a meaning of its own for.
     own: bool,
+    /// What it held in [`Analyzer::writers`], 0 for nothing.
+    writer: u8,
 }
 
 /// The open brackets and their lines, up to [`crate::Limits::nesting`]; the brackets past that are
@@ -573,6 +634,19 @@ struct Analyzer<'s, 'a, 'l> {
     maybe_files: HashSet<String>,
     /// `maybe_files` ran out of room: no variable counts as holding a Folder object.
     maybe_files_full: bool,
+    /// The variables holding an object literal of the script's own that defines a method named as a
+    /// document method that writes a file (`{saveAs: …}`), each with a bit per method it defines (bit
+    /// `i` for `catalog::DOM_FILE_WRITES[i]`): a call of that method on them writes nothing.
+    writers: HashMap<String, u8>,
+    /// The object literals being assigned to a variable, the innermost last, up to
+    /// [`crate::Limits::nesting`] of them.
+    objects: Vec<ObjectValue>,
+    /// An object literal whose `}` the last token was, with the methods it defines: the variable
+    /// holds them when the next token ends the `var` statement's value.
+    closed: Option<(String, u8)>,
+    /// What the receiver before the last `[` read defines in [`Analyzer::writers`], 0 for a receiver
+    /// that is not such a variable.
+    index_receiver: u8,
     /// This file or what the scan started with gives names values the analysis doesn't read
     /// ([`Declared::unsure`]): no object counts as a Folder object whatever the path names.
     unsure: bool,
@@ -649,6 +723,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             // property of the global object.
             maybe_files: known.files.difference(&known.folders).chain(declared.rebound.iter()).cloned().collect(),
             maybe_files_full: false,
+            writers: HashMap::new(),
+            objects: vec![],
+            closed: None,
+            index_receiver: 0,
             unsure: known.unsure || declared.unsure,
             own_names: HashSet::new(),
             scopes: vec![],
@@ -733,6 +811,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         // `t` ends, holds the value, or nothing the check follows, before `t` starts a member chain or
         // closes a function body.
         self.settle_groups(&t);
+        self.settle_literal(&t);
         // A line break ends a `var` statement when it is outside the statement's brackets, and the
         // tokens on either side of it don't go on with the expression.
         if t.nl && self.var_depth == Some(self.depth()) && !goes_on_after(self.h[0]) && !goes_on_with(&t) {
@@ -755,6 +834,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.group_step(&t, started, before);
         self.paren_step(&t, before);
         self.assignment(&t, started);
+        self.object_key(&t, before);
         self.features(&t);
         self.newer(&t);
         self.module_check(&t);
@@ -854,6 +934,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn bind(&mut self, name: String, path: String) {
         self.files.remove(&name);
         self.folders.remove(&name);
+        self.writers.remove(&name);
         if self.bound.contains_key(&name) || self.acc.room(self.bound.len()) {
             self.bound.insert(name, path);
         }
@@ -863,6 +944,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     fn hold_file(&mut self, name: String, folder: bool) {
         self.bound.remove(&name);
         self.folders.remove(&name);
+        self.writers.remove(&name);
         if !folder && !self.maybe_files.contains(&name) {
             if self.acc.room(self.maybe_files.len()) {
                 self.maybe_files.insert(name.clone());
@@ -986,6 +1068,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             local: false,
             shadowed,
             own: self.own_names.contains(name),
+            writer: self.writers.get(name).copied().unwrap_or(0),
         }
     }
 
@@ -1019,6 +1102,14 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             self.own_names.insert(name.clone());
         } else {
             self.own_names.remove(&name);
+        }
+        // An outer variable the body assigned keeps only the methods it still has: the body may have
+        // given it another value.
+        let writer = if saved.local { saved.writer } else { saved.writer & self.writers.get(&name).copied().unwrap_or(0) };
+        if writer != 0 {
+            self.writers.insert(name.clone(), writer);
+        } else {
+            self.writers.remove(&name);
         }
         if let Some(hidden) = saved.shadowed
             && let Some(i) = catalog::DOM_ROOTS.iter().position(|r| *r == name)
@@ -1069,6 +1160,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.bound.remove(name);
         self.files.remove(name);
         self.folders.remove(name);
+        self.writers.remove(name);
         self.hide_root(name);
     }
 
@@ -1262,6 +1354,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             local: false,
             shadowed: catalog::DOM_ROOTS.contains(&name).then_some(true),
             own: platform_name(name),
+            writer: 0,
         };
         let outside = std::mem::replace(&mut c.saved, empty);
         if let Some(scope) = self.scopes.last_mut() {
@@ -1285,6 +1378,19 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 self.start_value(a.name, Operand::Done(Held::File { folder: false }));
             } else if !a.after_new && t.is("(") {
                 self.start_group(a.name);
+            } else if !a.after_new && t.is("{") {
+                // An object literal: its keys are read at the depth inside its `{` ([`Self::object_key`]).
+                self.unbind(&a.name);
+                let [_, _, declaration, before] = self.h;
+                let depth = self.depth();
+                let body = self.scopes.last().map_or(0, |s| s.depth);
+                let starts = before.is_none()
+                    || [";", "{", "}"].iter().any(|p| is(before, p))
+                    || (declaration.is_some_and(|d| d.nl) && !is(before, ")") && !word(before, "else") && !word(before, "do"));
+                let whole = word(declaration, "var") && starts && depth.checked_sub(1) == Some(body);
+                if self.objects.len() < self.acc.limits.nesting {
+                    self.objects.push(ObjectValue { name: a.name, depth, bits: 0, whole, value: None });
+                }
             } else {
                 self.unbind(&a.name);
             }
@@ -1321,6 +1427,51 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             Some((name, false)) => self.unbind(name),
             None => {}
         }
+    }
+
+    /// The variable of the [`ObjectValue::whole`] literal whose `}` the token before `t` was joins
+    /// [`Analyzer::writers`] when `t` ends the value (`;`, `,` or a line break). It is read before `t`
+    /// closes a function body, so a literal given to the body's own variable stays inside the body.
+    fn settle_literal(&mut self, t: &Sig<'s>) {
+        if let Some((name, bits)) = self.closed.take()
+            && (t.is(";") || t.is(",") || (t.nl && !goes_on_with(t)))
+            && (self.writers.contains_key(&name) || self.acc.room(self.writers.len()))
+        {
+            self.writers.insert(name, bits);
+        }
+    }
+
+    /// `t` in an object literal assigned to a variable, `before` the bracket depth before `t`: a single
+    /// function expression directly inside its braces as the whole value of a key that names a
+    /// document method writing a file (`{saveAs: function … {…}, …}`, `{'exportFile': function … {…}}`)
+    /// counts the method for the literal, and any other value of that key (`{saveAs: d.saveAs}`,
+    /// `{saveAs: function () {} && d.saveAs}`) takes it out again ([`ObjectValue::step`]). A closing
+    /// brace ends the literals it closes. The variable joins [`Analyzer::writers`] only after the
+    /// literal ([`Analyzer::settle_literal`]), so a call inside the literal, and a value that goes on
+    /// (`{…} && d`), see the variable as it was.
+    fn object_key(&mut self, t: &Sig<'s>, before: usize) {
+        if let Some(o) = self.objects.last_mut().filter(|o| o.depth == before) {
+            o.step(t);
+        }
+        let depth = self.depth();
+        while let Some(o) = self.objects.pop_if(|o| o.depth > depth) {
+            if o.whole && o.bits != 0 && o.depth == depth.saturating_add(1) {
+                self.closed = Some((o.name, o.bits));
+            }
+        }
+        let [h0, h1, h2, _] = self.h;
+        if !is(h0, ":") || !(is(h2, "{") || is(h2, ",")) {
+            return;
+        }
+        let key = match h1 {
+            Some(k) if k.kind == T::Ident => Cow::Borrowed(k.text),
+            Some(k) if k.kind == T::Str => Cow::Owned(unquote(k.text, 32)),
+            _ => return,
+        };
+        let Some(i) = catalog::DOM_FILE_WRITES.iter().position(|m| *m == key.as_ref()) else { return };
+        // A value that starts with a bracket has opened it already: the key is at the depth before it.
+        let Some(o) = self.objects.last_mut().filter(|o| o.depth == before) else { return };
+        o.value = Some((1 << i, if t.word("function") { Value::Function } else { Value::Other }));
     }
 
     /// The variable that `t` changes to a number or a string, nothing the check follows, and whether

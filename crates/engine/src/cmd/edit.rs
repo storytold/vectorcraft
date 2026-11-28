@@ -39,6 +39,15 @@ pub fn specs() -> Vec<CommandSpec> {
             has_doc,
             doc_move
         ),
+        cmd!(
+            "document.setSaved",
+            "Set Saved State",
+            [],
+            None,
+            "{index?: the document (default: the current one), saved: true or false} records the document as saved (true: Close asks nothing until the next edit) or as having unsaved changes (false), without saving it or adding an undo step; a document already in that state is left as it is",
+            has_doc,
+            doc_set_saved
+        ),
         cmd!(query "document.inspect", "Inspect Document", [], None, "{depth?, childLimit?, ids?: [id…] (list just these nodes, of any level, in this order, under `nodes` in place of `layers`; an unknown id is an error; at most 10000), kind?: panel label such as Layer; Group; Path; Type or Image (exact, ignoring case; list every such node under `nodes`, each with `path`, its ancestor ids with the layer first, searching the subtrees of `ids` when given), limit?: at most this many entries of the list, offset?: entries skipped first (default 0; with `ids`, `kind`, `limit` or `offset` the reply adds `total`, the entries before paging)} → path (the document's file; null when automation read roots are in force and the file is outside them), layer tree (each node: id, name, kind, visible, locked, bounds, opacity (0–1) and opacityPct (0–100 %, the scale object.setProps takes) when below 1, blend when not Normal, fill, stroke and strokeWidth of objects and compound paths; a compound path's members have compoundMember: true instead of paint, which is the compound's), artboards, selection, history (a sliced tree reports childCount); without the scope options the reply is the whole layer tree", has_doc, doc_inspect),
         cmd!(query "document.node", "Inspect Object", [], None, "{id, summary?: compact summary, depth?: child levels in the summary (default all), childLimit?: children shown per node (default all; a level that shows fewer reports childCount)} → one object", has_doc, doc_node),
         cmd!(query "document.find", "Find Objects", [], None, "{name?: substring of the Layers panel name, kind?: panel label such as Group; Path; Type or Image (exact), text?: substring of type content, within?: [x, y, width, height] (an object's geometric bounds inside this rectangle, edges included; document points as document.inspect's bounds; layers never match this or the size filters), intersects?: [x, y, width, height] (bounds touching or overlapping it), minWidth?, maxWidth?, minHeight?, maxHeight?: pt (the bounds' size), minThickness?, maxThickness?: pt (the smaller of the bounds' width and height), minArea?, maxArea?: pt² (the bounds' width × height), minAnchors?, maxAnchors?: anchor points of a path (a compound path's members together; other objects never match), select?: bool (also select the matches, leaving out hidden and locked ones, those inside another match, and a compound path's members unless the compound path is isolated; Select > Reselect repeats it), limit?: max matches listed (default 100, 0 counts only)} → {matches: [{id, name, kind, path}], total, selected (with select: the count selected)}; at least one filter, all of them matching", has_doc, doc_find),
@@ -255,6 +264,26 @@ fn doc_activate(s: &mut Session, p: &Value) -> Result<Value> {
         Some(v) => v.as_u64().map(index).ok_or_else(|| bad("document.activate", "`index` must be a whole number"))?,
     };
     if s.set_active(i) { ok() } else { Err(bad("document.activate", "no such document")) }
+}
+
+fn doc_set_saved(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "document.setSaved";
+    let i = opt_u64(p, C, "index")?.map(index).or(s.active_index()).ok_or(EngineError::NoDocument)?;
+    let saved = match p.get("saved") {
+        None | Some(Value::Null) => return Err(bad(C, "missing `saved`: true or false")),
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err(bad(C, "`saved` must be true or false")),
+    };
+    let uid = s.documents().get(i).map(|d| d.uid).ok_or_else(|| bad(C, "no such document"))?;
+    let st = s.document_mut(uid).ok_or_else(|| bad(C, "no such document"))?;
+    if st.is_dirty() == saved {
+        if saved {
+            st.mark_saved();
+        } else {
+            st.mark_unsaved();
+        }
+    }
+    ok()
 }
 
 fn doc_move(s: &mut Session, p: &Value) -> Result<Value> {

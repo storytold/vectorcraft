@@ -5947,6 +5947,8 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	Script file could not be written	A parancsfájl fájlját nem sikerült írni
 @msg	Script file dialogs need a person to answer them	A parancsfájl fájlpárbeszédpaneleire egy személynek kell válaszolnia
 @msg	Script file is not open for writing	A parancsfájl fájlja nincs írásra megnyitva
+@msg	Script file is read-only	A parancsfájl fájlja csak olvasható
+@msg	Script file is open for writing	A parancsfájl fájlja írásra meg van nyitva
 @msg	Script file name is already in use	A parancsfájl fájljának neve már használatban van
 @msg	Script file name must be a name without a folder	A parancsfájl fájljának neve mappa nélküli név kell legyen
 @msg	Script file permission can be kept only for a script run from a file	A fájlengedély csak fájlból futtatott parancsfájlnál tartható meg
