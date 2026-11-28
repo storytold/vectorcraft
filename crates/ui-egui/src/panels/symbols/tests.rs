@@ -92,7 +92,7 @@ fn panel(app: VectorcraftApp) -> Panel {
 fn art_and_symbols(app: &mut VectorcraftApp, ui: &mut Ui) {
     use craft::ui::contract::{ListDrag, ShowCollection as _};
     if let Some(st) = app.session.active() {
-        let document = st.uid;
+        let (document, reverts) = (st.uid, st.reverts);
         let mut named = Vec::new();
         st.doc.walk(|n| {
             if let Some(name) = &n.name {
@@ -104,7 +104,7 @@ fn art_and_symbols(app: &mut VectorcraftApp, ui: &mut Ui) {
         let ids: Vec<NodeId> = named.iter().map(|(_, id)| *id).collect();
         ui.allocate_ui(vec2(ui.available_width(), 200.0), |ui| {
             let _ = craft::ui::list::List::<usize>::new("Art off the canvas")
-                .drag_payload(move |drag: &ListDrag<usize>| ids.get(drag.grabbed).map(|id| PanelDrag::Art { document, ids: vec![*id] }))
+                .drag_payload(move |drag: &ListDrag<usize>| ids.get(drag.grabbed).map(|id| PanelDrag::Art { document, reverts, ids: vec![*id] }))
                 .show_items(ui, &rows, &mut |key, _| craft::ui::list::ListRow::new(named[*key].0.clone()));
         });
     }

@@ -14,7 +14,7 @@ use craft::color_ui::palette::{SwatchColor, SwatchEntry, SwatchGroup, SwatchKind
 use craft::color_ui::ui::{SwatchKey, SwatchesPanel, SwatchesState};
 use craft::theme::Srgba;
 use craft::ui::choice::SwatchFace;
-use craft::ui::contract::{Bind, DropPlace, ListDrag, MemoProps, SelectMode};
+use craft::ui::contract::{Bind, DropPlace, ListDrag, MemoProps, PopupKind, SelectMode};
 use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
@@ -408,6 +408,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let dragged_doc = Arc::clone(&thumbs.doc);
     let document = st.uid;
+    let reverts = st.reverts;
     let shown_app: &VectorcraftApp = app;
     let browser = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
         .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, document, &drag.grabbed, dragged_rows(drag))))
@@ -417,8 +418,8 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
             _ => vec![],
         })
         .row_items(|key| row_items(shown_app, key))
-        .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document))
-        .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document))
+        .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document, reverts))
+        .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document, reverts))
         .select(SelectMode::Multi)
         .search(model.show_find)
         .reveal(focus.map(SwatchKey::Swatch))
@@ -777,8 +778,10 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Libraries, Show Swatch Kinds and the edit action sit at the start edge; Delete at the end edge, then New Swatch
     // and New Color Group before it.
     let actions = [
-        FooterAction::new(icon("library"), tl!(SwatchLibraries::MENU)).pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
-        FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).pressed(kind != Kind::All),
+        FooterAction::new(icon("library"), tl!(SwatchLibraries::MENU))
+            .popup(PopupKind::Menu)
+            .pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
+        FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).popup(PopupKind::Menu).pressed(kind != Kind::All),
         edit,
         FooterAction::new(icon("trash-2"), tl!("Delete Swatch"))
             .enabled(!del.is_empty())
@@ -819,10 +822,7 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
-    popup(ui, tl!("Swatch Libraries"), out.responses.get(LIBRARIES), |ui| {
-        ui.set_min_width(200.0);
-        library_panel::library_menu::<SwatchLibraries>(app, ui);
-    });
+    popup(ui, tl!("Swatch Libraries"), out.responses.get(LIBRARIES), |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {

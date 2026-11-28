@@ -9,7 +9,8 @@ description = "VectorCraft PDF export and import"
 workspace = true
 
 [features]
-# `vectorcraft_pdf::reads_of` and `imports_of` for other crates' tests (dev-dependencies only).
+# `vectorcraft_pdf::reads_of`, `imports_of`, `function_evaluations_of`, `form_content_of` and their
+# limits for other crates' tests (dev-dependencies only).
 read-count = []
 
 [dependencies]

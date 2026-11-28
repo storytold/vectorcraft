@@ -7022,6 +7022,15 @@ axis	Y Axis	Y-Achse
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {{"id": …}} allein oder so, wie es übergeben wurde
 @msg	a string	eine Zeichenkette
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	eine Kontur hat nur `paint`, `width`, `join`, `cap` und `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` und `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	eine Kontur hat nur `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` und `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` darf nur true sein
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` gilt nur für einen Live-Effekt, der `paintOutput` angibt, mit `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` muss eine Zahl von 0 bis 1 sein
+@msg	unknown blending mode; `blend` is one of {_1}	unbekannter Mischmodus; `blend` ist einer von {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` muss eine Liste von höchstens {MAX_LOOK_EFFECTS} Einträgen sein
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	ein Ergebnis enthält höchstens {MAX_RESULT_EFFECTS} Effekteinträge
+@msg	this host takes no effects here	dieser Host nimmt hier keine Effekte an
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	eine Kontur muss {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} sein
 @msg	an effect must be {{"id", "params"?, "visible"?}}	ein Effekt muss {{"id", "params"?, "visible"?}} sein
 @msg	an effect on a fill returns only `fills`	ein Effekt auf einer Fläche gibt nur `fills` zurück
@@ -8119,6 +8128,7 @@ breakText	Glyphs	Glyphen
 	Place Brush Art	Pinselgrafik platzieren
 	Replace Brush Art	Pinselgrafik ersetzen
 	Replace Pattern Art	Mustergrafik ersetzen
+	Place Pattern Art	Mustergrafik platzieren
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturen verwenden diesen Pinsel. Die neue Grafik auf diese Konturen anwenden oder sie unverändert lassen und eine Kopie des Pinsels mit der neuen Grafik hinzufügen?
 	Apply to Strokes	Auf Konturen anwenden
 	Leave Strokes	Konturen beibehalten

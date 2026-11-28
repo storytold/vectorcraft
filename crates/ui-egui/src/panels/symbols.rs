@@ -530,7 +530,9 @@ const AT_START: usize = 4;
 /// list becomes a symbol (Shift at the release keeps the art as ordinary art); dropped on a symbol
 /// with Alt it redefines that symbol in one undo step.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let Some((doc, revision, uid, has_sel)) = app.session.active().map(|st| (st.doc.clone(), st.revision, st.uid, !st.selection.is_empty())) else {
+    let Some((doc, revision, uid, reverts, has_sel)) =
+        app.session.active().map(|st| (st.doc.clone(), st.revision, st.uid, st.reverts, !st.selection.is_empty()))
+    else {
         return;
     };
     let keys = document_symbols(&doc, revision);
@@ -575,7 +577,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .show(ui, |ui, _| {
             // Art dropped anywhere on the list becomes a symbol; dropped on a symbol, the browser's
             // own target takes it.
-            DropAction::<PanelDrag>::new(move |drag| art_of(drag, uid).is_some()).show(ui, |ui, _| {
+            DropAction::<PanelDrag>::new(move |drag| art_of(drag, uid, reverts).is_some()).show(ui, |ui, _| {
                 let mut state = PresetState::new();
                 state.zoom = zoom;
                 PresetBrowser::new(tl!("Symbols"), Bind::bound(&mut state), &source)
@@ -587,7 +589,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     .row_menu(PresetRowMenu::Host)
                     .row_items(|key: &SymbolKey| item_rows(&linked, &key.name))
                     .takes_drop(PresetDrop::new::<PanelDrag>(DropPlace::Onto, move |drag: &PanelDrag, _: &DropAt<SymbolKey>| {
-                        art_of(drag, uid).is_some()
+                        art_of(drag, uid, reverts).is_some()
                     }))
                     .empty(tl!("No symbols in this document"))
                     .show(ui)
@@ -605,7 +607,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some((dropped, events)) = taken {
         if let Some((drag, mods)) = dropped
-            && let Some(ids) = art_of(&drag, uid)
+            && let Some(ids) = art_of(&drag, uid, reverts)
         {
             new_symbol(app, ids, mods.shift);
         }
@@ -630,7 +632,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                     }
                 }
                 PresetEvent::Dropped { at, payload, mods, .. } => {
-                    let Some(ids) = payload.get::<PanelDrag>().and_then(|drag| art_of(drag, uid)) else { continue };
+                    let Some(ids) = payload.get::<PanelDrag>().and_then(|drag| art_of(drag, uid, reverts)) else { continue };
                     if !mods.alt {
                         new_symbol(app, ids, mods.shift);
                     } else if let Some(target) = at.key()
@@ -683,13 +685,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-/// The ids of art dragged off the canvas of document `uid`; `None` for another drag or art of
-/// another document.
-fn art_of(drag: &PanelDrag, uid: u64) -> Option<&[NodeId]> {
-    match drag {
-        PanelDrag::Art { document, ids, .. } if *document == uid && !ids.is_empty() => Some(ids),
-        _ => None,
-    }
+/// The ids of the nonempty artwork dragged from the displayed drawing.
+fn art_of(drag: &PanelDrag, uid: u64, reverts: u64) -> Option<&[NodeId]> {
+    drag.artwork_for(uid, reverts).filter(|ids| !ids.is_empty())
 }
 
 /// Whether the art `ids` can redefine a symbol of `doc`: every object is still there and none is a

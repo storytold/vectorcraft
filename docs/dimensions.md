@@ -36,19 +36,25 @@ The **Dimension Tool** is in the Modify section of the toolbar. Its strip offers
   before the second click: the rubber band, Shift and the dimension start from where the art puts
   the point then. When that art is deleted before the second click, the point goes back to where
   it was picked.
-  With Use Preview Bounds on (Preferences › General), a Linear point can land on a corner of the
-  preview bounds of a path or compound path whose strokes or effects reach past its anchors. The
+  With Use Preview Bounds on (Preferences › General), a Linear point can land on the preview
+  bounds of a path, a compound path, stroked type, or a group or layer with fills, strokes or
+  effects of its own, wherever those bounds reach past the object's geometric bounds. The
   [linear dimensions help](https://helpx.adobe.com/illustrator/desktop/measure-and-align/plot-and-measure/plot-linear-dimensions-of-objects.html)
-  describes measuring a stroked segment by snapping onto its preview bounds. VectorCraft snaps to
-  the four corners of those bounds only, not to their edges, by its own rules: a click within 8
-  pixels of a corner lands on it instead of on the anchor at the same corner of the object's
-  geometric bounds, and any other anchor, of that object or of other art, that is nearer the
-  pointer than the corner takes the point instead. A corner that is also an anchor, as on a path
-  without a stroke, takes the anchor, and so does another path's anchor right on the corner. The
-  corners of a group's own strokes or effects, of type, of paths made into guides and of the
-  members of a compound path on their own are not snapped to. The point is linked to the path (in a compound path, to the member
-  whose own bounds reach nearest to the corner), is held against its anchors and shows the
-  "anchor" label. It does not start construction guides for the second point. For an object that
+  describes measuring a stroked segment by snapping onto its preview bounds. VectorCraft's own
+  rules decide where the point lands on them: a click within 8 pixels of a corner lands on it
+  instead of on the anchor at the same corner of the object's geometric bounds, and any other
+  anchor, of that object or of other art, that is nearer the pointer than the corner takes the
+  point instead. A corner that is also an anchor, as on a path without a stroke, takes the anchor,
+  and so does another path's anchor right on the corner. A click that no anchor, corner, line end,
+  guide, grid or pixel snapping places lands on the nearest point of an edge of the preview bounds
+  within 8 pixels when that edge is nearer the pointer than any segment or dimension line, and
+  shows the "path" label. The corners and edges of paths made into guides and of the members of a
+  compound path on their own are not snapped to. A point on a corner or an edge is linked to the
+  path (in a compound path, group or layer, to the member path whose own bounds reach nearest to
+  the corner, and for an edge to the member holding its nearer corner) and is held against its
+  anchors. A point on the preview bounds of type, or held by type in a group, has no link and
+  stays where it was picked. A point on a corner shows the "anchor" label. Neither kind of point
+  starts construction guides for the second point. For an object that
   is not rotated, a horizontal or vertical dimension between two such corners measures, when it
   is drawn, the outside of the stroke, the width or height that W and H show in the Transform and
   Properties panels. The point then moves with the path's anchors, so a later change to the

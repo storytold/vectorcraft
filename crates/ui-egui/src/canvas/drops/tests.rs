@@ -152,12 +152,14 @@ fn a_drop_runs_the_effect_of_its_payload() {
     drop_at(&mut app, Payload::Panel(PanelDrag::paint(Paint::Gradient(Box::new(gradient)))), on_b, Move).unwrap();
     assert!(matches!(fill(&app), Paint::Gradient(g) if g.geom.is_none()), "a gradient fits the object it lands on");
     app.run("transparency.set", json!({"opacity": 40})).unwrap();
-    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance(a)), on_b, Move).unwrap();
+    let document = app.session.active().unwrap().uid;
+    let appearance = |source| Payload::Panel(PanelDrag::Appearance { document, source });
+    drop_at(&mut app, appearance(a), on_b, Move).unwrap();
     let doc = &app.session.active().unwrap().doc;
     let (na, nb) = (doc.node(a).unwrap(), doc.node(b).unwrap());
     assert_eq!((&nb.appearance, nb.opacity), (&na.appearance, na.opacity), "the appearance is copied");
     let n = undo_len(&app);
-    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance(b)), on_b, Move).unwrap();
+    drop_at(&mut app, appearance(b), on_b, Move).unwrap();
     assert_eq!(undo_len(&app), n, "dropped on its own source: nothing changes");
 
     let path = NodeId(app.run("path.create", json!({"anchors": [{"x": 50, "y": 200}, {"x": 350, "y": 200}]})).unwrap()["id"].as_u64().unwrap());
@@ -200,6 +202,64 @@ fn a_drop_runs_the_effect_of_its_payload() {
     symbol_at(&app, on_b);
     drop_at(&mut app, Payload::Symbol(SymbolKey { doc: uid, name: "Star".into() }), empty, Move).unwrap();
     symbol_at(&app, empty);
+}
+
+/// With Object Selection by Path Only, a point inside a filled rectangle and away from its outline is still on art:
+/// a brush with art places nothing there.
+#[test]
+fn a_brush_with_art_dropped_inside_a_fill_with_path_only_places_nothing() {
+    let (mut app, _ctx) = app_with_canvas();
+    app.run("shape.rectangle", json!({"x": 250, "y": 200, "width": 100, "height": 80})).unwrap();
+    app.run("paint.setFill", json!({"color": "#ffffff"})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.run("prefs.set", json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+    let uid = app.session.active().unwrap().uid;
+    let n = undo_len(&app);
+    drop_at(&mut app, Payload::Brush(BrushKey { doc: uid, name: "Arrow".into(), group: false }), Point::new(300.0, 240.0), DropOperation::Move)
+        .unwrap();
+    assert_eq!(undo_len(&app), n, "{}", app.ui.status);
+}
+
+/// A pattern swatch of the Swatches panel dropped where there is no art places a copy of its tile art and tile there,
+/// centered on the drop point and selected, in one undo step; a color swatch, a pattern from elsewhere and a drop
+/// inside a fill with Object Selection by Path Only place nothing, and a drop on art fills it.
+#[test]
+fn a_pattern_swatch_dropped_off_the_art_places_a_copy_of_its_tile_art_there() {
+    use crate::panel_drag::SwatchRows;
+    let (mut app, _ctx) = app_with_canvas();
+    let id = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap();
+    let tile = app.run("shape.rectangle", json!({"x": 300, "y": 20, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap();
+    app.run("object.pattern.make", json!({"ids": [tile], "name": "Checks", "edit": false})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let document = app.session.active().unwrap().uid;
+    let swatch = |name: &str, paint: Paint| {
+        let rows = SwatchRows { document, grabbed: name.into(), names: vec![name.into()], groups: false, unlinked_process_color: false };
+        Payload::Panel(PanelDrag::Paint { paint, params: json!({"swatch": name}), rows: Some(rows), library: None })
+    };
+    let pattern = swatch("Checks", vectorcraft_doc::pattern::pattern_paint("Checks"));
+    let off = Point::new(250.0, 220.0);
+    let n = undo_len(&app);
+    drop_at(&mut app, swatch("Red", Paint::solid(Color::from_hex("#ed1c24").unwrap())), off, DropOperation::Move).unwrap();
+    let elsewhere = Payload::Panel(PanelDrag::paint(vectorcraft_doc::pattern::pattern_paint("Checks")));
+    drop_at(&mut app, elsewhere, off, DropOperation::Move).unwrap();
+    assert_eq!(undo_len(&app), n, "a color swatch and a pattern from elsewhere place nothing");
+    drop_at(&mut app, pattern.clone(), off, DropOperation::Move).unwrap();
+    let st = app.session.active().unwrap();
+    assert_eq!(undo_len(&app), n + 1);
+    assert_eq!(st.history.undo.last().unwrap().label, "Place Pattern Art");
+    let [placed] = st.selection.objects.as_slice() else { panic!("one object selected: {:?}", st.selection.objects) };
+    let b = st.doc.node(*placed).unwrap().geometric_bounds().unwrap();
+    assert!((b.center() - off).hypot() < 0.1, "{b:?}");
+    let inside = Point::new(100.0, 100.0);
+    app.run("paint.setFill", json!({"ids": [id], "color": "#ffffff"})).unwrap();
+    app.run("prefs.set", json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
+    let n = undo_len(&app);
+    drop_at(&mut app, pattern.clone(), inside, DropOperation::Move).unwrap();
+    assert_eq!(undo_len(&app), n, "inside a fill with Object Selection by Path Only is still on art");
+    app.run("prefs.set", json!({"key": "objectSelectionByPathOnly", "value": false})).unwrap();
+    drop_at(&mut app, pattern, inside, DropOperation::Move).unwrap();
+    let fill = app.session.active().unwrap().doc.node(NodeId(id)).unwrap().appearance.fill_paint();
+    assert!(matches!(&fill, Paint::Pattern { pattern, .. } if pattern == "Checks"), "{fill:?}");
 }
 
 #[test]
@@ -445,6 +505,74 @@ fn button(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() }
 }
 
+#[test]
+fn a_canvas_art_drag_cannot_make_a_graphic_style_after_file_revert() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::runtime::drag;
+
+    struct SavedFile(std::path::PathBuf);
+    impl Drop for SavedFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn canvas_and_styles(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+        egui::Panel::top("audit-styles").exact_size(220.0).show(ui, |ui| crate::panels::graphic_styles::show(app, ui));
+        canvas::show(app, ui);
+    }
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let id = NodeId(app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap());
+    app.run("paint.setFill", json!({"color": "#ff0000", "ids": [id.0]})).unwrap();
+    app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+    let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-artwork-drop-revert-{}.vectorcraft", std::process::id())));
+    app.run("file.saveAs", json!({"path": path.0})).unwrap();
+    assert!(path.0.is_file());
+    app.run("paint.setFill", json!({"color": "#00ff00", "ids": [id.0]})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    app.select_tool("selection");
+    let mut panel = Panel::new(app, canvas_and_styles);
+    let carry_to_style = |panel: &mut Panel| {
+        let at = panel.app().canvas_view().unwrap().to_screen(Point::new(100.0, 100.0));
+        let target = panel.rect("Drop Target").center();
+        panel.frame_with(vec![Event::PointerMoved(at), button(at, true)]);
+        panel.frame_with(vec![Event::PointerMoved(at + egui::vec2(20.0, 0.0))]);
+        assert!(panel.app().session.active().unwrap().interaction.is_some(), "the Selection tool starts a move");
+        panel.frame_with(vec![Event::PointerMoved(target)]);
+        panel.frame();
+        let carried = drag::active::<PanelDrag>(panel.ctx());
+        assert!(matches!(carried.as_deref(), Some(PanelDrag::Art { ids, .. }) if ids == &[id]), "the canvas starts the panel payload");
+        assert!(drag::mark(panel.ctx()).is_some(), "Graphic Styles accepts artwork dragged from the current contents");
+    };
+    carry_to_style(&mut panel);
+
+    let (uid, reverts) = {
+        let app = panel.app();
+        let state = app.session.active().unwrap();
+        (state.uid, state.reverts)
+    };
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    let styles = |app: &VectorcraftApp| app.session.active().unwrap().doc.graphic_styles.len();
+    let count = {
+        let app = panel.app();
+        let state = app.session.active().unwrap();
+        assert_eq!((state.uid, state.reverts), (uid, reverts + 1));
+        assert!(state.doc.node(id).is_some(), "the restored object keeps the same ID");
+        styles(&app)
+    };
+    panel.frame();
+    assert!(drag::mark(panel.ctx()).is_none());
+    panel.release();
+    assert_eq!(styles(&panel.app()), count, "a drag from discarded art cannot create a style from restored art");
+    carry_to_style(&mut panel);
+    panel.release();
+    assert_eq!(styles(&panel.app()), count + 1, "a fresh drag can still create a style from the restored artwork");
+}
+
 /// A Selection, Direct Selection or Group Selection move that leaves the canvas hands the art to the drag session
 /// with the ids the move started with, and the move waits where it was last.
 #[test]
@@ -482,4 +610,28 @@ fn an_anchor_dragged_off_the_canvas_is_not_carried() {
     frame(&mut app, &ctx, vec![Event::PointerMoved(Pos2::new(500.0, 2.0))]);
     frame(&mut app, &ctx, vec![]);
     assert!(craft::ui::runtime::drag::active::<PanelDrag>(&ctx).is_none());
+}
+
+#[test]
+fn a_foreign_appearance_drop_never_copies_a_matching_local_object() {
+    let (mut app, ctx) = app_with_canvas();
+    let add = |app: &mut VectorcraftApp, x| {
+        NodeId(app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 100, "height": 100})).unwrap()["id"].as_u64().unwrap())
+    };
+    let source = add(&mut app, 20);
+    let document = app.session.active().unwrap().uid;
+    app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+    let other = add(&mut app, 20);
+    assert_eq!(source, other, "both documents have different objects with the same local ID");
+    app.run("paint.setFill", json!({"color": "#ed1c24"})).unwrap();
+    let target = add(&mut app, 200);
+    app.run("paint.setFill", json!({"color": "#0000ff"})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+
+    let fill = |app: &VectorcraftApp| app.session.active().unwrap().doc.node(target).unwrap().appearance.fill_paint();
+    let before = fill(&app);
+    let history = undo_len(&app);
+    drop_at(&mut app, Payload::Panel(PanelDrag::Appearance { document, source }), Point::new(250.0, 70.0), DropOperation::Move).unwrap();
+    assert_eq!(fill(&app), before);
+    assert_eq!(undo_len(&app), history, "a foreign appearance drop makes no edit");
 }

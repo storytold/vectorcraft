@@ -26,10 +26,10 @@ use craft::behavior::{IconId, Selection, keyed};
 use craft::host::{PickKind, PickRequest, Picked};
 use craft::keymap::CommandRef;
 use craft::ui::buttons::IconButton;
-use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
+use craft::ui::contract::{Bind, CollectionEvent, FieldLayout, Props as _, Show as _, ShowCollection as _, ShowContainer as _};
 use craft::ui::display::{Elide, Shade, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow, ThumbSize};
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
 use craft::ui::runtime::commands::{CommandState, CommandStates};
@@ -640,6 +640,12 @@ impl<'a> Facts<'a> {
         ids(&self.rows, |r| r["linked"] == true)
     }
 
+    /// The linked rows Embed and Break Link can act on: images placed from DCS files stay linked,
+    /// as `links.embed` refuses them.
+    fn embeddable(&self) -> Vec<u64> {
+        ids(&self.rows, |r| r["linked"] == true && r["format"] != "DCS")
+    }
+
     fn modified(&self) -> Vec<u64> {
         ids(&self.rows, is_modified)
     }
@@ -674,7 +680,7 @@ fn can(app: &VectorcraftApp, act: Act, f: &Facts, row: Option<&Value>) -> bool {
         Act::GoTo => row.map_or(f.rows.len() == 1, |r| in_canvas(app, r)),
         Act::Update => !f.modified().is_empty(),
         Act::Edit | Act::Reveal => editable,
-        Act::Embed | Act::BreakLink => !f.linked().is_empty(),
+        Act::Embed | Act::BreakLink => !f.embeddable().is_empty(),
         Act::Unembed => can_unembed(app, f.embedded().len()),
         Act::Placement | Act::CopyInfo => any,
     }
@@ -706,8 +712,8 @@ fn act(app: &mut VectorcraftApp, act: Act, target: Option<u64>) {
         }
         Act::Edit => crate::menus::invoke(app, "links.editOriginal", file_arg()),
         Act::Reveal => crate::menus::invoke(app, "links.reveal", file_arg()),
-        Act::Embed => embed_images(app, f.linked()),
-        Act::BreakLink => break_link(app, f.linked()),
+        Act::Embed => embed_images(app, f.embeddable()),
+        Act::BreakLink => break_link(app, f.embeddable()),
         Act::Unembed => match &f.embedded()[..] {
             [] => {}
             [r] => {
@@ -764,13 +770,20 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 
     let mut footer_pick = None;
     let (mut activated, mut menu_for, mut row_act, mut info_reveal) = (None, None, None, None);
+    let mut info_copy = None;
     Panel::new(tl!("Links"))
         .collection_body()
         .footer(|ui, _| {
-            let info = FooterAction::new(IconId::new(if o.info { "chevron-down" } else { "chevron-right" }), tl!("Show Link Info"));
-            let actions = std::iter::once(info)
-                .chain(FOOTER.iter().map(|(a, icon, label)| FooterAction::new(IconId::new(icon), tl!(label)).enabled(can(view, *a, &facts, None))));
-            footer_pick = FooterBar::actions(actions).at_start(1).show_footer(ui).picked;
+            Stack::new().fill_width().show(ui, |ui, _| {
+                if o.info {
+                    info_reveal = link_info(ui, view, cache.info.as_ref().map(|(id, i)| (*id, i)), units, &mut info_copy);
+                }
+                let info = FooterAction::new(IconId::new(if o.info { "chevron-down" } else { "chevron-right" }), tl!("Show Link Info"));
+                let actions = std::iter::once(info).chain(
+                    FOOTER.iter().map(|(a, icon, label)| FooterAction::new(IconId::new(icon), tl!(label)).enabled(can(view, *a, &facts, None))),
+                );
+                footer_pick = FooterBar::actions(actions).at_start(1).show_footer(ui).picked;
+            });
         })
         .show(ui, |ui, _| {
             let empty = if o.show == "all" { tl!("No images") } else { tl!("Nothing matches the Show filter.") };
@@ -816,9 +829,6 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if let Some(r) = menu_for.or(open_menu).and_then(|id| by_id.get(&id).copied()) {
                 row_act = show_row_menu(ui, &out.response, view, &facts, r);
             }
-            if o.info {
-                info_reveal = link_info(ui, view, cache.info.as_ref().map(|(id, i)| (*id, i)), units);
-            }
         });
 
     app.ui.links.selection = selection;
@@ -831,6 +841,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if let Some(id) = activated {
         go_to(app, id);
+    }
+    if let Some(text) = info_copy {
+        app.clipboard_out = Some(text);
+        app.status("Copied the value");
     }
     if let Some(id) = info_reveal {
         crate::menus::invoke(app, "links.reveal", json!({ "id": id }));
@@ -903,7 +917,7 @@ fn break_link(app: &mut VectorcraftApp, ids: Vec<u64>) {
 }
 
 /// Embed images `ids` (`links.embed`).
-fn embed_images(app: &mut VectorcraftApp, ids: Vec<u64>) {
+pub(crate) fn embed_images(app: &mut VectorcraftApp, ids: Vec<u64>) {
     let r = app.run("links.embed", json!({ "ids": ids }));
     report(app, r, |v| {
         let missing = v["missing"].as_array().map_or(0, Vec::len);
@@ -937,15 +951,17 @@ pub(crate) fn date_label(ms: u64) -> String {
 }
 
 /// One line of Link Info: a labelled field whose text is its value.
-fn info_row(ui: &mut Ui, label: &'static str, value: String) {
+fn info_row(ui: &mut Ui, label: &'static str, value: String, copy: &mut Option<String>) {
     Field::new(label).value(value.clone()).show(ui, |ui, _| {
-        Text::new(value.clone()).show(ui);
+        if super::doc_info::copy_value(ui, label, &value, false) {
+            *copy = Some(value.clone());
+        }
     });
 }
 
 /// The Link Info section: the details of `info` (`links.info` of image `id`), or a hint. Returns
 /// the image whose file the Location row's Show in Folder button was clicked for.
-fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, units: vectorcraft_doc::Unit) -> Option<u64> {
+fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, units: vectorcraft_doc::Unit, copy: &mut Option<String>) -> Option<u64> {
     let mut reveal = None;
     crate::panels::section(tl!("Link Info")).show(ui, |ui, _| {
         let Some((id, i)) = info else {
@@ -960,26 +976,33 @@ fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, uni
                 _ => String::new(),
             }
         };
-        info_row(ui, tl!("Name"), i["fileName"].as_str().or(i["name"].as_str()).unwrap_or_default().into());
-        info_row(ui, tl!("Format"), i["format"].as_str().unwrap_or_default().into());
-        info_row(ui, tl!("Color Space"), i["colorMode"].as_str().unwrap_or_default().into());
+        info_row(ui, tl!("Name"), i["fileName"].as_str().or(i["name"].as_str()).unwrap_or_default().into(), copy);
+        info_row(ui, tl!("Format"), i["format"].as_str().unwrap_or_default().into(), copy);
+        info_row(ui, tl!("Color Space"), i["colorMode"].as_str().unwrap_or_default().into(), copy);
         if let Some(l) = i["location"].as_str() {
             // Show in Folder for the image shown here: off while its file is missing and without a
             // file manager (the web).
             let can_reveal = i["path"].is_string() && i["status"] != "missing" && app.services.reveal.is_some();
-            Field::new(tl!("Location")).value(l.to_string()).show(ui, |ui, _| {
-                Row::new().show(ui, |ui, _| {
+            // Keep the translated caption from taking the compound row's path width.
+            Field::new(tl!("Location")).layout(FieldLayout::Above).value(l.to_string()).show(ui, |ui, _| {
+                Row::new().fill_width().show(ui, |ui, _| {
                     if IconButton::new(IconId::new("folder-open")).label(tl!("Show in Folder")).enabled(can_reveal).show(ui).clicked() {
                         reveal = Some(id);
                     }
-                    Text::new(l.to_string()).elide(Elide::Path).tooltip(l.to_string()).show(ui);
+                    if IconButton::new(IconId::new("copy")).label(tl!("Copy Location")).enabled(!l.is_empty()).show(ui).clicked() {
+                        *copy = Some(l.to_string());
+                    }
+                    let shown = Text::new(l.to_string()).elide(Elide::Path).tooltip(l.to_string()).show(ui);
+                    if super::doc_info::copy_shown(ui, &shown, l) {
+                        *copy = Some(l.to_string());
+                    }
                 });
             });
         }
         // A placed document has no resolution: its rows are left out.
         for (label, k) in [(tl!("PPI"), "ppi"), (tl!("Effective PPI"), "effectivePpi")] {
             if i.get(k).is_some() {
-                info_row(ui, label, pair(k));
+                info_row(ui, label, pair(k), copy);
             }
         }
         // Pixels, or a placed document's artboard size.
@@ -988,22 +1011,22 @@ fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, uni
             (None, Some(w), Some(h)) => format!("{} × {}", units.format(w), units.format(h)),
             _ => String::new(),
         };
-        info_row(ui, tl!("Dimensions"), dims);
+        info_row(ui, tl!("Dimensions"), dims, copy);
         let scale: Vec<f64> = i["scale"].as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
         if let [x, y] = scale[..] {
-            info_row(ui, tl!("Scale"), format!("H: {x:.1}%  V: {y:.1}%"));
+            info_row(ui, tl!("Scale"), format!("H: {x:.1}%  V: {y:.1}%"), copy);
         }
-        info_row(ui, tl!("Rotation"), format!("{:.1}°", i["rotation"].as_f64().unwrap_or(0.0)));
+        info_row(ui, tl!("Rotation"), format!("{:.1}°", i["rotation"].as_f64().unwrap_or(0.0)), copy);
         if let Some(b) = i["fileSize"].as_u64() {
-            info_row(ui, tl!("Size"), size_label(b));
+            info_row(ui, tl!("Size"), size_label(b), copy);
         }
         for (k, label) in [("created", tl!("Created")), ("modified", tl!("Modified"))] {
             if let Some(ms) = i[k].as_u64() {
-                info_row(ui, label, date_label(ms));
+                info_row(ui, label, date_label(ms), copy);
             }
         }
         if let Some(p) = i["page"].as_u64() {
-            info_row(ui, tl!("Page"), p.to_string());
+            info_row(ui, tl!("Page"), p.to_string(), copy);
         }
         let status = match i["status"].as_str().unwrap_or_default() {
             "ok" => tl!("Linked"),
@@ -1011,7 +1034,7 @@ fn link_info(ui: &mut Ui, app: &VectorcraftApp, info: Option<(u64, &Value)>, uni
             "modified" => tl!("Modified"),
             _ => tl!("Embedded"),
         };
-        info_row(ui, tl!("Status"), status.into());
+        info_row(ui, tl!("Status"), status.into(), copy);
     });
     reveal
 }

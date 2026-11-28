@@ -516,14 +516,20 @@ fn the_menu_family_list_now_does_not_wait_for_the_scan() {
     let db: &'static FontDb = Box::leak(Box::new(FontDb::with_font_dirs(vec![dir])));
     let generation = db.generation();
     db.scan_in_background();
-    let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = tx.send((db.installed_fonts_ready(), db.menu_family_list_now()));
+    // The scan can't end until the pipe is opened for writing, so a list that waited for it would
+    // hold the installed fonts. This thread lets the scan go on once the calls return, or after 10 s
+    // if they are still waiting, so that such a test fails instead of hanging.
+    let (returned, waiting) = std::sync::mpsc::channel::<()>();
+    let release = pipe.clone();
+    let guard = std::thread::spawn(move || {
+        let _ = waiting.recv_timeout(std::time::Duration::from_secs(10));
+        // The pipe is opened and closed with nothing written.
+        drop(std::fs::OpenOptions::new().write(true).open(&release).unwrap());
     });
-    let listed = rx.recv_timeout(std::time::Duration::from_secs(10));
-    // Let the scan go on whatever happened: the pipe is opened and closed with nothing written.
-    drop(std::fs::OpenOptions::new().write(true).open(&pipe).unwrap());
-    let (ready, listed) = listed.expect("the list comes while the scan is held");
+    let ready = db.installed_fonts_ready();
+    let listed = db.menu_family_list_now();
+    drop(returned);
+    guard.join().unwrap();
     assert!(!ready && !has(&listed, FAMILY), "before the scan ends, only the fonts already loaded");
     // Waits for the scan.
     assert!(has(&db.menu_family_list(), FAMILY));
@@ -697,22 +703,34 @@ fn the_database_tells_when_fonts_were_installed_or_removed_since_its_scan() {
     assert!(!db.installed_fonts_changed(), "nothing to compare with before the first scan");
     assert!(!db.has_family("Other Sans 33"));
     assert!(!db.installed_fonts_changed());
-    // Past the file system's clock tick, so the folders' times differ from the scan's.
-    let tick = || std::thread::sleep(std::time::Duration::from_millis(50));
-    tick();
-    std::fs::write(dir.join("Sub/Other.ttf"), renamed_to("SourceSans3-Regular.ttf", "Other Sans 33")).unwrap();
+    changed_past_the_clock_tick(&dir.join("Sub"), || {
+        std::fs::write(dir.join("Sub/Other.ttf"), renamed_to("SourceSans3-Regular.ttf", "Other Sans 33")).unwrap();
+    });
     assert!(db.installed_fonts_changed(), "a font installed into a subfolder");
     assert_eq!(db.load_system_fonts(), 3);
     assert!(db.has_family("Other Sans 33") && !db.installed_fonts_changed());
-    tick();
     std::fs::create_dir_all(dir.join("Later")).unwrap();
     assert!(db.installed_fonts_changed(), "a font folder that didn't exist");
     db.load_system_fonts();
-    tick();
-    std::fs::remove_file(dir.join("Sysfont-Regular.ttf")).unwrap();
+    changed_past_the_clock_tick(&dir, || std::fs::remove_file(dir.join("Sysfont-Regular.ttf")).unwrap());
     assert!(db.installed_fonts_changed(), "a font removed");
     assert_eq!(db.load_system_fonts(), 2);
     assert_eq!(db.styles(FAMILY), ["Bold"]);
+}
+
+/// Runs `change` on the folder `dir`, then sets the folder's modification time a minute past the
+/// time it had before, so that it differs from the time a scan read even on a file system whose
+/// clock ticks too coarsely to show the change.
+fn changed_past_the_clock_tick(dir: &std::path::Path, change: impl FnOnce()) {
+    let before = std::fs::metadata(dir).unwrap().modified().unwrap();
+    change();
+    let mut open = std::fs::OpenOptions::new();
+    open.read(true);
+    // A folder opens on Windows with FILE_FLAG_BACKUP_SEMANTICS, and setting its times needs
+    // FILE_WRITE_ATTRIBUTES.
+    #[cfg(windows)]
+    std::os::windows::fs::OpenOptionsExt::custom_flags(std::os::windows::fs::OpenOptionsExt::access_mode(&mut open, 0x0100), 0x0200_0000);
+    open.open(dir).unwrap().set_modified(before + std::time::Duration::from_secs(60)).unwrap();
 }
 
 /// A font a font service loads from a file without an extension, outside the font folders.
@@ -740,9 +758,9 @@ fn fonts_the_platform_lists_outside_the_font_folders_are_cataloged() {
     assert!(!db.installed_fonts_changed(), "nothing to compare with before the first scan");
     db.load_system_fonts();
     assert!(!db.has_family("Service Sans3"));
-    // Past the file system's clock tick, so the folder's time differs from the scan's.
-    std::thread::sleep(std::time::Duration::from_millis(50));
-    std::fs::write(&file, renamed_to("SourceSans3-Regular.ttf", "Service Sans3")).unwrap();
+    changed_past_the_clock_tick(file.parent().unwrap(), || {
+        std::fs::write(&file, renamed_to("SourceSans3-Regular.ttf", "Service Sans3")).unwrap();
+    });
     // PLAN: the catalog's check doesn't ask the listers (font-catalog catalog.rs:447-448): a font a service activates in a folder no scan has seen is found by the next rescan only, where the app's own check found it too (#2576); a framework fix for type-w2.
     assert!(db.installed_fonts_changed(), "a font a font service activated since the scan");
     db.load_system_fonts();

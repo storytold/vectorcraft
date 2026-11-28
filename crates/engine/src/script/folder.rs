@@ -50,6 +50,30 @@ impl Default for Limits {
     }
 }
 
+/// How a listing measures the time it has taken, which [`Limits::time`] bounds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Clock {
+    /// The real time since the listing started.
+    #[default]
+    Wall,
+    /// The same time at every check, whatever the real time: the listing reaches the time limit
+    /// only when this time is past it.
+    Fixed(Duration),
+}
+
+impl Clock {
+    /// Calls `f` with this clock's time since `f` was called.
+    pub fn time<T>(self, f: impl FnOnce(&mut dyn FnMut() -> Duration) -> T) -> T {
+        match self {
+            Clock::Wall => {
+                let start = std::time::Instant::now();
+                f(&mut || start.elapsed())
+            }
+            Clock::Fixed(elapsed) => f(&mut || elapsed),
+        }
+    }
+}
+
 /// One row of a listing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Entry {
@@ -93,11 +117,10 @@ impl Listing {
     }
 }
 
-/// What the folder `root` holds, within the default [`Limits`]. A folder that does not exist gives
-/// an empty listing.
-pub fn list(root: &Path) -> Listing {
-    let start = std::time::Instant::now();
-    list_with(root, &Limits::default(), &mut || start.elapsed())
+/// What the folder `root` holds, within the default [`Limits`], with the time measured by `clock`.
+/// A folder that does not exist gives an empty listing.
+pub fn list(root: &Path, clock: Clock) -> Listing {
+    clock.time(|elapsed| list_with(root, &Limits::default(), elapsed))
 }
 
 /// What the folder `root` holds, within `limits`; `elapsed` says how long the listing has taken.
