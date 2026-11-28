@@ -87,9 +87,9 @@ pub fn is_document(name: &str) -> bool {
 /// The app's Place state (not saved with the preferences).
 #[derive(Default)]
 pub struct PlaceState {
-    /// Web: the bytes of the files picked for the Place dialog, by name.
+    /// Web: the bytes of the files picked for the Place dialog, by selection token.
     pub(crate) picked: Vec<(String, Vec<u8>)>,
-    /// The loaded cursor's thumbnails by file name.
+    /// The loaded cursor's thumbnails by original queue entry, with names for display.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
     info: Option<((u64, u64, u64), Value)>,
@@ -99,10 +99,10 @@ pub struct PlaceState {
     /// The files of the loaded place cursor ask for their import options when clicked or dragged
     /// (the Place dialog loaded it with Show Import Options on).
     queue_asks: bool,
-    /// The loaded cursor's files by name, with the size a click places them at.
-    queue_sizes: Vec<(String, f64, f64)>,
-    /// The names of the loaded cursor's encrypted PDF files, which ask for their password.
-    queue_locked: Vec<String>,
+    /// The size a click places each original queue entry at, including entries without a size.
+    queue_sizes: Vec<Option<(f64, f64)>>,
+    /// Whether each original queue entry is an encrypted PDF, which asks for its password.
+    queue_locked: Vec<bool>,
     /// The engine's count of cursor loads ([`vectorcraft_engine::Session::place_queue_loads`]) when
     /// `queue_asks`, `queue_sizes` and `queue_locked` were set: a later load (`tool.setOption`, a
     /// script) clears them.
@@ -142,6 +142,7 @@ const SET_ASIDE: &str = "__placeCursorOptions";
 
 /// A place cursor thumbnail, decoded when the cursor is loaded.
 struct Thumb {
+    source_index: usize,
     image: std::sync::Arc<egui::ColorImage>,
 }
 
@@ -176,6 +177,13 @@ impl PlaceState {
     #[cfg(test)]
     pub(crate) fn thumbnails(&self) -> Vec<&str> {
         self.thumbs.iter().map(|(n, _)| n.as_str()).collect()
+    }
+
+    /// The current entry's thumbnail, even after earlier entries with the same name are removed.
+    pub(crate) fn cursor_thumbnail(&self, options: &Value) -> Option<(usize, &egui::ColorImage)> {
+        let source_index = usize::try_from(options["sourceIndex"].as_u64()?).ok()?;
+        let (_, thumb) = self.thumbs.iter().find(|(_, thumb)| thumb.source_index == source_index)?;
+        Some((source_index, thumb.image.as_ref()))
     }
 }
 
@@ -348,14 +356,15 @@ fn pick(app: &mut VectorcraftApp, p: &Value) -> Value {
                 paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect()
             }
             Picked::Contents(files) => {
-                // The next Place dialog replaces the previous selection, including its source bytes.
+                // A replacement selection owns a new set of source bytes.
                 app.place.picked.clear();
                 files
                     .into_iter()
                     .map(|(name, bytes)| {
-                        app.place.picked.retain(|(n, _)| *n != name);
-                        let entry = with_importer(json!({ "name": name }), &with);
-                        app.place.picked.push((name, bytes));
+                        static SOURCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+                        let source = SOURCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed).to_string();
+                        let entry = with_importer(json!({ "name": name, "__pickedSource": source }), &with);
+                        app.place.picked.push((source, bytes));
                         entry
                     })
                     .collect()
@@ -478,7 +487,9 @@ fn source(app: &VectorcraftApp, file: &Value) -> Option<Value> {
         return Some(with_importer(json!({ "path": path }), file));
     }
     let name = file.get("name").and_then(Value::as_str)?;
-    let bytes = app.place.picked.iter().find(|(n, _)| n == name).map(|(_, b)| b)?;
+    // The selection token is UI bookkeeping; only the original name and bytes reach the engine.
+    let source = file.get("__pickedSource").and_then(Value::as_str).unwrap_or(name);
+    let bytes = app.place.picked.iter().find(|(n, _)| n == source).map(|(_, b)| b)?;
     Some(with_importer(json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }), file))
 }
 
@@ -535,6 +546,19 @@ pub(crate) fn fill_lines(app: &mut VectorcraftApp, files: &[Value], info: &mut V
             false
         }
     }
+}
+
+/// Unit tests: waits until the open Place dialog's lines have been read, and leaves them for
+/// [`fill_lines`].
+#[cfg(test)]
+pub(crate) fn wait_lines(app: &mut VectorcraftApp) {
+    let Some((_, read)) = &mut app.place.reading_lines else { return };
+    let (tx, rx) = std::sync::mpsc::channel();
+    // A read that stopped without lines leaves the new channel closed too.
+    if let Ok(lines) = read.recv() {
+        let _ = tx.send(lines);
+    }
+    *read = rx;
 }
 
 /// One line about `file` for the Place dialog, read at once ([`line`]).
@@ -652,12 +676,18 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     // at the keyboard: an agent's queue reaches no file it wasn't given.
     let roots = app.session.place_queue_roots();
     forget_older_queue(app);
+    let locked = is_locked(app, p);
+    // A Shift-click asks for the file's import options whatever the cursor was loaded with.
+    let shift_click = p.get("showImportOptions") == Some(&Value::Bool(true));
+    let ask = app.place.queue_asks || locked || shift_click;
+    let mut p = if ask { clicked_at_full_size(app, p) } else { p.clone() };
+    if let Some(params) = p.as_object_mut() {
+        for key in [vectorcraft_tools::place::SOURCE_INDEX, vectorcraft_tools::place::CLICK] {
+            params.remove(key);
+        }
+    }
     vectorcraft_engine::file_access::confine(roots.as_ref(), || {
-        let locked = is_locked(app, p);
-        // A Shift-click asks for the file's import options whatever the cursor was loaded with.
-        let shift_click = p.get("showImportOptions") == Some(&Value::Bool(true));
-        if app.place.queue_asks || locked || shift_click {
-            let mut p = clicked_at_full_size(app, p);
+        if ask {
             if shift_click {
                 set_aside_import_options(&mut p);
             } else if !app.place.queue_asks {
@@ -676,7 +706,6 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
             let _ = place_file(app, &p, Read::ForUser { dropped: false });
         } else {
             // An embedded PDF takes the `pdfTextAs` preference, as one placed from the Place dialog.
-            let mut p = p.clone();
             crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
             if crate::placing::available(app) {
                 if let Err(e) = crate::placing::start(app, &p, false) {
@@ -722,27 +751,34 @@ fn forget_older_queue(app: &mut VectorcraftApp) {
 
 /// Does `p` (a cursor click's `file.place` params) name a file the cursor holds as an encrypted PDF?
 fn is_locked(app: &VectorcraftApp, p: &Value) -> bool {
-    let name = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).map(fileio::file_name);
-    name.is_some_and(|n| app.place.queue_locked.contains(&n))
+    source_index(p).and_then(|index| app.place.queue_locked.get(index)).copied().unwrap_or(false)
+}
+
+fn source_index(p: &Value) -> Option<usize> {
+    usize::try_from(p.get(vectorcraft_tools::place::SOURCE_INDEX)?.as_u64()?).ok()
 }
 
 /// The params of a cursor click (`rect` at the file's queued size) on a PDF or DXF file, whose
 /// import options may change its size (another page, another scale): placed as its options place
 /// it at the click (`at`, the center of the box the click gave), as File › Place of that one file
-/// places it, instead of fitted into the box of the first page or the default scale. A drag keeps
-/// its `rect`; one to exactly the queued size gives the same `rect` as a click, and is taken as one.
+/// places it, instead of fitted into the box of the first page or the default scale. The cursor
+/// marks clicks explicitly: a deliberate drag keeps its `rect`, even at exactly the queued size.
 fn clicked_at_full_size(app: &VectorcraftApp, p: &Value) -> Value {
     let mut p = p.clone();
+    if p.get(vectorcraft_tools::place::CLICK) != Some(&Value::Bool(true)) {
+        return p;
+    }
     let Some(name) = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).map(fileio::file_name) else { return p };
     if !matches!(fileio::extension(&name).as_str(), "pdf" | "ai" | "ait" | "dxf") {
         return p;
     }
     let r: Vec<f64> = p.get("rect").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
     let [x, y, w, h] = r[..] else { return p };
-    // Files of the same name in the cursor must all have that size: the place tool's request names
-    // the file, not its place in the cursor.
-    let mut same_name = app.place.queue_sizes.iter().filter(|(n, ..)| *n == name).peekable();
-    let queued = same_name.peek().is_some() && same_name.all(|(_, qw, qh)| (qw - w).abs() < 1e-6 && (qh - h).abs() < 1e-6);
+    let queued = source_index(&p)
+        .and_then(|index| app.place.queue_sizes.get(index))
+        .copied()
+        .flatten()
+        .is_some_and(|(qw, qh)| (qw - w).abs() < 1e-6 && (qh - h).abs() < 1e-6);
     if queued && let Some(o) = p.as_object_mut() {
         o.remove("rect");
         o.insert("at".into(), json!([x + w / 2.0, y + h / 2.0]));
@@ -756,28 +792,18 @@ pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value, asks: bool) {
     app.place.queue_load = app.session.place_queue_loads();
     app.place.queue_asks = asks;
     app.place.asked = None;
-    app.place.queue_sizes = r["files"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|f| Some((f["name"].as_str()?.to_string(), f["width"].as_f64()?, f["height"].as_f64()?)))
-        .collect();
-    app.place.queue_locked = r["files"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|f| f["needsPassword"] == true)
-        .filter_map(|f| Some(f["name"].as_str()?.to_string()))
-        .collect();
+    app.place.queue_sizes = r["files"].as_array().into_iter().flatten().map(|f| Some((f["width"].as_f64()?, f["height"].as_f64()?))).collect();
+    app.place.queue_locked = r["files"].as_array().into_iter().flatten().map(|f| f["needsPassword"] == true).collect();
     app.place.thumbs = r["files"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|f| {
+        .enumerate()
+        .filter_map(|(source_index, f)| {
             let png = vectorcraft_format::base64_decode(f["thumbnailBase64"].as_str()?)?;
             let img = craft_image_codecs::decode_as(craft_image_codecs::Format::Png, &png).ok()?;
             let color = egui::ColorImage::from_rgba_unmultiplied([img.width() as usize, img.height() as usize], &img.to_rgba8());
-            Some((f["name"].as_str()?.to_string(), Thumb { image: std::sync::Arc::new(color) }))
+            Some((f["name"].as_str()?.to_string(), Thumb { source_index, image: std::sync::Arc::new(color) }))
         })
         .collect();
 }
@@ -789,15 +815,15 @@ pub fn cursor_overlay(app: &mut VectorcraftApp, ui: &mut egui::Ui, at: egui::Pos
     let opts = app.session.tool_options();
     let count = opts["count"].as_u64().unwrap_or(0);
     let name = opts["name"].as_str().unwrap_or_default();
-    let found = app.place.thumbs.iter().enumerate().find(|(_, (n, _))| n == name);
+    let found = (app.place.queue_load == app.session.place_queue_loads()).then(|| app.place.cursor_thumbnail(&opts)).flatten();
     let revision = Revision::new(app.place.queue_load);
     let room = egui::Rect::from_min_max(at, ui.max_rect().max.max(at));
     ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
         match found {
-            Some((key, (_, thumb))) => {
+            Some((key, image)) => {
                 let side = |n: usize| u16::try_from(n.max(1)).unwrap_or(u16::MAX);
-                let [w, h] = thumb.image.size;
-                Picture::new(name.to_string(), key as u64, &|| (*thumb.image).clone())
+                let [w, h] = image.size;
+                Picture::new(name.to_string(), key as u64, &|| image.clone())
                     .revision(revision)
                     .aspect(ThumbAspect::new(side(w), side(h)))
                     .extent(PictureSize::Thumb(ThumbSize::Medium))
@@ -1095,9 +1121,14 @@ pub(crate) enum LinkAction {
 }
 
 impl LinkAction {
-    /// The actions that apply to an image, `linked` or embedded.
-    pub(crate) fn shown(linked: bool) -> &'static [LinkAction] {
-        if linked { &[LinkAction::Embed, LinkAction::EditOriginal] } else { &[LinkAction::Unembed] }
+    /// The actions that apply to an image, `linked` or embedded. An image placed from a DCS file
+    /// (`dcs`) stays linked, as `links.embed` refuses it, so it has no Embed.
+    pub(crate) fn shown(linked: bool, dcs: bool) -> &'static [LinkAction] {
+        match (linked, dcs) {
+            (true, false) => &[LinkAction::Embed, LinkAction::EditOriginal],
+            (true, true) => &[LinkAction::EditOriginal],
+            (false, _) => &[LinkAction::Unembed],
+        }
     }
 
     /// The action's label in the interface language.
@@ -1112,12 +1143,91 @@ impl LinkAction {
     /// Runs the action for image `id`, named `name`.
     pub(crate) fn run(self, app: &mut VectorcraftApp, id: u64, name: &str) {
         match self {
-            LinkAction::Embed => {
-                app.run("links.embed", json!({ "ids": [id] })).ok();
-            }
+            LinkAction::Embed => crate::panels::links::embed_images(app, vec![id]),
             LinkAction::EditOriginal => crate::menus::invoke(app, "links.editOriginal", json!({ "id": id })),
             LinkAction::Unembed => crate::panels::links::unembed(app, id, name),
         }
+    }
+}
+
+/// Is image `id` of the active document placed from a DCS file (its pixels hold plates), which
+/// `links.embed` refuses?
+pub(crate) fn is_dcs_image(app: &VectorcraftApp, id: u64) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let Some(NodeKind::Image(im)) = st.doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind) else { return false };
+    im.link.is_some() && st.doc.images.get(&im.key).is_some_and(vectorcraft_doc::ImageBlob::is_separated)
+}
+
+/// Several selected objects that are all images: the ids of the linked ones that can be embedded
+/// and of the embedded ones, in selection order. Images placed from DCS files are in neither.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SeveralImages {
+    /// The linked images, except those placed from DCS files.
+    pub(crate) linked: Vec<u64>,
+    /// The embedded images.
+    pub(crate) embedded: Vec<u64>,
+}
+
+impl SeveralImages {
+    /// The selection as [`SeveralImages`], when two or more objects are selected and each is an
+    /// image.
+    pub(crate) fn selected(app: &VectorcraftApp) -> Option<SeveralImages> {
+        let st = app.session.active()?;
+        if st.selection.objects.len() < 2 {
+            return None;
+        }
+        let mut out = SeveralImages::default();
+        for id in &st.selection.objects {
+            let NodeKind::Image(im) = &st.doc.node(*id)?.kind else { return None };
+            match &im.link {
+                None => out.embedded.push(id.0),
+                Some(_) if st.doc.images.get(&im.key).is_some_and(vectorcraft_doc::ImageBlob::is_separated) => {}
+                Some(_) => out.linked.push(id.0),
+            }
+        }
+        Some(out)
+    }
+
+    /// The actions that apply to these images: Embed while one of them is linked and not placed
+    /// from a DCS file, and Unembed… while one is embedded and they can be written out. Edit
+    /// Original opens one file, so the
+    /// surfaces offer it for one image only.
+    pub(crate) fn shown(&self, app: &VectorcraftApp) -> Vec<LinkAction> {
+        let mut shown = vec![];
+        if !self.linked.is_empty() {
+            shown.push(LinkAction::Embed);
+        }
+        if crate::panels::links::can_unembed(app, self.embedded.len()) {
+            shown.push(LinkAction::Unembed);
+        }
+        shown
+    }
+
+    /// Runs `action` on these images: Embed embeds every linked one, and Unembed… writes every
+    /// embedded one out, each in one undo step.
+    pub(crate) fn run(&self, app: &mut VectorcraftApp, action: LinkAction) {
+        match (action, &self.embedded[..]) {
+            (LinkAction::Embed, _) => crate::panels::links::embed_images(app, self.linked.clone()),
+            (LinkAction::EditOriginal, _) | (LinkAction::Unembed, []) => {}
+            (LinkAction::Unembed, [one]) => {
+                let info = app.session.execute("image.info", &json!({ "id": one })).unwrap_or_default();
+                let (name, _) = image_summary(&info);
+                crate::panels::links::unembed(app, *one, &name);
+            }
+            (LinkAction::Unembed, ids) => crate::panels::links::unembed_several(app, ids.to_vec()),
+        }
+    }
+}
+
+/// The Control bar for several selected images and nothing else: Embed and Unembed… for them
+/// ([`SeveralImages::shown`]), each a ranked row.
+fn control_bar_several(app: &mut VectorcraftApp, ui: &mut egui::Ui, images: &SeveralImages) {
+    for action in images.shown(app) {
+        Row::new().fit_rank(crate::chrome::rank::GROUP).show(ui, |ui, _| {
+            if clicked(&Button::new(action.label().to_string()).show(ui)) {
+                images.run(app, action);
+            }
+        });
     }
 }
 
@@ -1125,9 +1235,14 @@ impl LinkAction {
 /// resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask, Crop Image and
 /// Remove Background, each a ranked row that leaves a shrinking bar whole. While the Crop Image
 /// tool is in use, the bar shows the file name, colour mode and resolution only, and the tool's
-/// cropping options follow them. Whether one image is selected.
+/// cropping options follow them. For several selected images and nothing else, the bar shows
+/// their Embed and Unembed… ([`SeveralImages`]). Whether one image is selected.
 pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
     use crate::chrome::rank;
+    if let Some(images) = SeveralImages::selected(app) {
+        control_bar_several(app, ui, &images);
+        return false;
+    }
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
     let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return false };
@@ -1163,7 +1278,7 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return true;
     }
-    for action in LinkAction::shown(linked) {
+    for action in LinkAction::shown(linked, is_dcs_image(app, id)) {
         let at = if *action == LinkAction::EditOriginal { rank::DETAIL } else { rank::GROUP };
         Row::new().fit_rank(at).show(ui, |ui, _| {
             if clicked(&Button::new(action.label().to_string()).show(ui)) {
@@ -1182,4 +1297,22 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
         });
     }
     true
+}
+
+#[cfg(test)]
+mod source_identity_tests {
+    use super::*;
+
+    #[test]
+    fn same_named_pdf_sources_keep_independent_password_requirements() {
+        use vectorcraft_testkit::pdf::{PdfPage, pdf};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f")];
+        let files =
+            [None, Some("pw")].map(|password| json!({"name": "same.pdf", "dataBase64": vectorcraft_format::base64_encode(&pdf(&pages, password))}));
+        app.run("file.new", json!({})).unwrap();
+        app.run("file.place.queue", json!({"files": files, "link": false})).unwrap();
+        assert!(!is_locked(&app, &json!({"name": "same.pdf", "__placeSourceIndex": 0})));
+        assert!(is_locked(&app, &json!({"name": "same.pdf", "__placeSourceIndex": 1})));
+    }
 }

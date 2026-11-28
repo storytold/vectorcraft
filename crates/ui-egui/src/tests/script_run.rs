@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;
+use vectorcraft_engine::script::folder::Clock;
 
 use super::script_dialogs::{cancel, confirm, frame, is_open, key, open_id, pump, set};
 use crate::dialogs::script_run::{
@@ -15,8 +16,11 @@ use crate::dialogs::script_run::{
 use crate::tests::picks::{Picker, scripted};
 use crate::{VectorcraftApp, menus, script_runs};
 
+/// An app with a document, whose folder listings take no time.
 fn app() -> VectorcraftApp {
-    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), crate::Services::default()));
+    let mut session = Session::new();
+    session.set_script_listing_clock(Clock::Fixed(std::time::Duration::ZERO));
+    let mut app = crate::testing::windowed(VectorcraftApp::new(session, crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app
 }

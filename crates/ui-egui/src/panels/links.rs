@@ -640,6 +640,12 @@ impl<'a> Facts<'a> {
         ids(&self.rows, |r| r["linked"] == true)
     }
 
+    /// The linked rows Embed and Break Link can act on: images placed from DCS files stay linked,
+    /// as `links.embed` refuses them.
+    fn embeddable(&self) -> Vec<u64> {
+        ids(&self.rows, |r| r["linked"] == true && r["format"] != "DCS")
+    }
+
     fn modified(&self) -> Vec<u64> {
         ids(&self.rows, is_modified)
     }
@@ -674,7 +680,7 @@ fn can(app: &VectorcraftApp, act: Act, f: &Facts, row: Option<&Value>) -> bool {
         Act::GoTo => row.map_or(f.rows.len() == 1, |r| in_canvas(app, r)),
         Act::Update => !f.modified().is_empty(),
         Act::Edit | Act::Reveal => editable,
-        Act::Embed | Act::BreakLink => !f.linked().is_empty(),
+        Act::Embed | Act::BreakLink => !f.embeddable().is_empty(),
         Act::Unembed => can_unembed(app, f.embedded().len()),
         Act::Placement | Act::CopyInfo => any,
     }
@@ -706,8 +712,8 @@ fn act(app: &mut VectorcraftApp, act: Act, target: Option<u64>) {
         }
         Act::Edit => crate::menus::invoke(app, "links.editOriginal", file_arg()),
         Act::Reveal => crate::menus::invoke(app, "links.reveal", file_arg()),
-        Act::Embed => embed_images(app, f.linked()),
-        Act::BreakLink => break_link(app, f.linked()),
+        Act::Embed => embed_images(app, f.embeddable()),
+        Act::BreakLink => break_link(app, f.embeddable()),
         Act::Unembed => match &f.embedded()[..] {
             [] => {}
             [r] => {
@@ -911,7 +917,7 @@ fn break_link(app: &mut VectorcraftApp, ids: Vec<u64>) {
 }
 
 /// Embed images `ids` (`links.embed`).
-fn embed_images(app: &mut VectorcraftApp, ids: Vec<u64>) {
+pub(crate) fn embed_images(app: &mut VectorcraftApp, ids: Vec<u64>) {
     let r = app.run("links.embed", json!({ "ids": ids }));
     report(app, r, |v| {
         let missing = v["missing"].as_array().map_or(0, Vec::len);

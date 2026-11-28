@@ -379,6 +379,52 @@ fn drop_asks_as_paste_does(app: &mut VectorcraftApp, count: impl Fn(&Vectorcraft
     assert_eq!(count(app), before + n);
 }
 
+/// The drop's source can keep the same document UID, profile and node ID while Revert replaces the art.
+fn a_drop_approval_does_not_copy_restored_source_art() {
+    let mut app = app();
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let rect = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+    let id = vectorcraft_doc::NodeId(rect["id"].as_u64().unwrap());
+    app.run("paint.setFill", json!({"ids": [id.0], "color": "#3366cc"})).unwrap();
+    app.run("edit.assignProfile", json!({"rgb": cms::DISPLAY_P3})).unwrap();
+    let dir = vectorcraft_testkit::TempDir::new("profile-drop-source-revert");
+    let path = dir.join("source.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("object.move", json!({"ids": [id.0], "dx": 15, "dy": 0})).unwrap();
+    let source = app.session.active().unwrap();
+    let (uid, reverts) = (source.uid, source.reverts);
+    let moved = source.doc.node(id).unwrap().clone();
+
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    let destination = app.session.active().unwrap().uid;
+    let drop = json!({"sourceDocument": uid, "ids": [id.0], "grab": [0, 0], "at": [50, 50]});
+    assert_eq!(app.run(DROP, drop.clone()).unwrap(), json!({"dialog": PASTE_KIND}));
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored = app.session.active().unwrap();
+    assert_eq!((restored.uid, restored.reverts), (uid, reverts + 1));
+    assert!(restored.doc.node(id).is_some_and(|node| node != &moved), "Revert puts different art under the same ID");
+    assert_eq!(rgb_profile(&app).as_deref(), Some(cms::DISPLAY_P3));
+
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    assert_eq!(app.session.active().unwrap().uid, destination);
+    let before = app.session.active().unwrap().doc.clone();
+    let undo = app.session.active().unwrap().history.undo.len();
+    answer_ok(&mut app, paste_id_open());
+    assert!(app.session.active().unwrap().doc == before, "the old drop approval must leave the destination intact");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert!(app.pending_paste.is_none());
+
+    assert_eq!(app.run(DROP, drop).unwrap(), json!({"dialog": PASTE_KIND}));
+    answer_ok(&mut app, paste_id_open());
+    let after = app.session.active().unwrap();
+    assert_eq!(after.doc.layers[0].children().unwrap().len(), 1, "a fresh approval copies the restored art");
+    assert_eq!(after.history.undo.len(), undo + 1);
+}
+
 /// A paste question about both models has a choice for each, starting on its model's policy, and
 /// setting one model's choice in the dialog leaves the other's as it was.
 #[test]
@@ -493,6 +539,7 @@ fn opening_and_pasting_ask_about_profiles() {
     paste_canceled(&mut app, count);
     paste_asked_before_another_document_is_active(&mut app);
     paste_asked_before_its_drawing_is_reverted(&mut app);
+    a_drop_approval_does_not_copy_restored_source_art();
     drop_asks_as_paste_does(&mut app, count);
     let before = count(&app);
     app.run("edit.colorSettings", json!({"askMismatchPaste": false})).unwrap();

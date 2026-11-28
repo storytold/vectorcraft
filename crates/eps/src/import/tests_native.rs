@@ -3756,6 +3756,85 @@ fn type_painted_with_a_pattern_takes_it_from_the_art_style_its_paint_names() {
 }
 
 #[test]
+fn type_set_in_a_spot_ink_takes_it_from_the_art_style_its_paint_names() {
+    // GUARDS: type set in a spot ink or a global process colour came in as a process colour, so it
+    // printed on the process plates (and white type on none): the text document keeps only the
+    // colour's process values at its tint, and the ink's name and tint are in the art style that
+    // key 5 of the paint names, a style of one paint (`/SimpleStyle`), its fill's for a stroke too.
+    use vectorcraft_color::{Color, Paint};
+    let simple = |name: &str, paint: &str| {
+        format!(
+            "/KnownStyle :\n({name}) /Name ,\n/SimpleStyle :\n0 O\n{paint}\n0 1 0 0 0 Xy\n0 J 0 j 1 w 10 M []0 d\n0 XR\n0 1 Xd\n/Paint ;\n /Def ;\n"
+        )
+    };
+    let styles = [
+        simple("Anon 1", "0 0 0 0 (White Ink) 0 x"),
+        simple("Anon 2", "0 1 1 0 (Red Ink) 0.4 x"),
+        simple("Anon 3", "0 0 0 0 1 1 1 (Chalk) 0 1 Xx"),
+        simple("Anon 4", "0 0.5 1 0 (Brand Orange) 0 0 Xk"),
+        // Styles that give no swatch colour: a process colour, a stroke's colour after the fill's.
+        simple("Anon 5", "0 1 1 0 k"),
+        simple("Anon 6", "0 0 0 0 (Stray Ink) 0 x\n0 0 0 1 K"),
+    ]
+    .concat();
+    let styles = format!("%AI9_BeginArtStyles\n{styles}%AI9_EndArtStyles\n");
+    let doc = text_document(&[("abcdefghijklmn\r", 0, (8200.0, 8180.0), (0.0, 0.0), 0.0)]);
+    let one = "<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 /53 << /99 /CAITextPaint /0 << /0 2 /1 [ 1.0 0.0 1.0 0.0 0.0 ] >> >> >> >> >> /1 15 >>";
+    assert!(doc.contains(one));
+    // Each paint keeps the process values of its colour at its tint, as the files do.
+    let cmyk = |v: &str, style: &str| format!("<< /99 /CAITextPaint /5 ({style}) /0 << /0 2 /1 [ 1.0 {v} ] >> >>");
+    let rgb = |v: &str, style: &str| format!("<< /99 /CAITextPaint /5 ({style}) /0 << /0 1 /1 [ 1.0 {v} ] >> >>");
+    let run = |own: &str| format!("<< /0 << /0 << /0 () /5 0 /6 << /0 0 /1 14.0 {own} >> >> >> /1 2 >>");
+    let white = cmyk("0.0 0.0 0.0 0.0", "Anon 1");
+    let runs = [
+        run(&format!("/53 {white}")),
+        run(&format!("/53 {}", cmyk("0.0 .6 .6 0.0", "Anon 2"))),
+        run(&format!("/53 {}", rgb("1.0 1.0 1.0", "Anon 3"))),
+        run(&format!("/53 {}", cmyk("0.0 .5 1.0 0.0", "Anon 4"))),
+        run(&format!("/53 {} /57 true /54 {white} /63 2.0", cmyk("0.0 1.0 1.0 0.0", "Anon 5"))),
+        run(&format!("/53 {}", cmyk("0.0 0.0 0.0 0.0", "Anon 6"))),
+        // A style the file doesn't have, over "m", "n" and the story's end.
+        run(&format!("/53 {}", cmyk("0.0 0.0 0.0 1.0", "Anon 7"))).replace("/1 2 >>", "/1 3 >>"),
+    ];
+    let doc = doc.replacen(one, &runs.join(" "), 1);
+    // The art beside the type paints with one of the inks too: the type's is the same swatch.
+    let spare = format!("0 1 1 0 (Red Ink) 0 x\n{}\n{}", square_path(30, 30), text_object(0));
+    let art = native_with_text(&format!("{styles}{}{}", layer("Back", true, &square(10, 10)), layer("Spare", false, &spare)), &doc);
+    let r = import(&eps(&page_square(10, 10), &art)).unwrap();
+    let texts = text_of(&r.document.layers[1]);
+    assert_eq!(texts.len(), 1, "{:?}", r.warnings);
+    // Each character's fill and stroke: the swatch it is linked to at its tint, else "process".
+    let paint = |p: &Paint| match p {
+        Paint::Solid { swatch: Some(name), tint, .. } => format!("{name} at {:.0} %", tint * 100.0),
+        Paint::Solid { swatch: None, .. } => "process".into(),
+        Paint::None => "none".into(),
+        other => format!("{other:?}"),
+    };
+    let chars: Vec<(char, String, String)> =
+        texts[0].runs.iter().flat_map(|r| r.text.chars().map(|c| (c, paint(&r.style.fill), paint(&r.style.stroke))).collect::<Vec<_>>()).collect();
+    let want = |c: char, fill: &str, stroke: &str| (c, fill.to_string(), stroke.to_string());
+    let mut expected = vec![];
+    expected.extend(['a', 'b'].map(|c| want(c, "White Ink at 100 %", "none")));
+    expected.extend(['c', 'd'].map(|c| want(c, "Red Ink at 60 %", "none")));
+    expected.extend(['e', 'f'].map(|c| want(c, "Chalk at 100 %", "none")));
+    expected.extend(['g', 'h'].map(|c| want(c, "Brand Orange at 100 %", "none")));
+    expected.extend(['i', 'j'].map(|c| want(c, "process", "White Ink at 100 %")));
+    expected.extend("klmn".chars().map(|c| want(c, "process", "none")));
+    assert_eq!(chars, expected);
+    // The tinted ink draws as its tint, the colour the text document keeps for it.
+    let red = texts[0].runs.iter().find(|r| r.text.starts_with('c')).and_then(|r| r.style.fill.color());
+    assert_eq!(red, Some(Color::cmyk(0.0, 1.0, 1.0, 0.0).tinted(0.6)));
+    // The inks are the document's spot swatches, each once, and the global colour a process one.
+    let swatch = |name: &str| r.document.swatches_iter().filter(|s| s.name == name).map(|s| (s.spot, s.global)).collect::<Vec<_>>();
+    for ink in ["White Ink", "Red Ink", "Chalk"] {
+        assert_eq!(swatch(ink), [(true, true)], "{ink}");
+    }
+    assert_eq!(swatch("Brand Orange"), [(false, true)]);
+    assert_eq!(r.document.swatch("White Ink").and_then(|s| s.paint.color()), Some(Color::cmyk(0.0, 0.0, 0.0, 0.0)));
+    assert_eq!(r.document.swatch("Chalk").and_then(|s| s.paint.color()), Some(Color::rgb(1.0, 1.0, 1.0)));
+}
+
+#[test]
 fn type_keeps_its_manual_kerning() {
     // GUARDS: the text document's manual kerning (key 8 of a story's text: runs of characters, each
     // with its value or none) wasn't read, so type the file kerns by hand came in spaced by the
@@ -8277,6 +8356,119 @@ fn a_placed_pdf_page_bound_to_an_image_variable_stays_a_linked_image() {
     let n = &d.layers[0].children().unwrap()[0];
     assert!(matches!(&n.kind, NodeKind::Image(im) if im.link.as_ref().is_some_and(|l| l.page.is_none())), "{:?} {notes:?}", n.kind);
     assert_eq!(d.variables.objects_of("v_file"), [n.id], "{notes:?}");
+}
+
+/// An included EPS keeps its linked preview and binding when an image variable binds it.
+#[test]
+fn a_placed_eps_with_a_preview_preserves_its_image_variable_binding() {
+    use vectorcraft_testkit::ai::{XmlValue, variable_library_data, xml_element, xml_node};
+    let declared = vec![xml_node(
+        1,
+        "variable",
+        XmlValue::Str(""),
+        &[("trait", XmlValue::Str("fileref")), ("varName", XmlValue::Unicode("v_file")), ("docRef", XmlValue::Raw("/XMLUIDREF : (eps) ;"))],
+        &[],
+    )];
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let library = variable_library_data(&xml_element("variableSets", &[], &[set]));
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 40 40\n%%EndComments\n0 0 40 40 rectfill\n%%EOF\n";
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 0\n[1 0 0 -1 30 70] 0 0 40 40 4 4 0\n(/files/shape.eps)`\n\
+         %%BeginDocument: /files/shape.eps\n{eps}\n%%EndDocument\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n\
+         %_/ArtDictionary :\n%_/XMLUID : (eps) ; (AI10_ArtUID) ,\n%_;\n%_\n",
+        "\x7f\0\0\0".repeat(4)
+    );
+    let art = layer("Jig", true, &place);
+    let (bound, notes) = crate::ai_alone(&private(&native(&(library + &art)))).unwrap();
+    let n = &bound.layers[0].children().unwrap()[0];
+    let NodeKind::Image(im) = &n.kind else { panic!("{:?} {notes:?}", n.kind) };
+    assert_eq!(im.link.as_ref().unwrap().path, "/files/shape.eps");
+    assert_eq!((im.width, im.height), (2, 2));
+    assert_eq!(bound.images[&im.key].mime, "image/png");
+    assert!(bound.images.values().all(|b| b.mime != "application/postscript"));
+    assert_eq!(bound.variables.objects_of("v_file"), [n.id], "{notes:?}");
+    assert!(!notes.iter().any(|n| n.contains("variable bindings")), "{notes:?}");
+    assert!(notes.iter().any(|n| n.contains("low-resolution preview")), "the preview it shows is noted: {notes:?}");
+    let (unbound, notes) = crate::ai_alone(&private(&native(&art))).unwrap();
+    assert!(!notes.iter().any(|n| n.contains("low-resolution preview")), "it draws its bytes: {notes:?}");
+    let converted = &unbound.layers[0].children().unwrap()[0];
+    assert_eq!(converted.id, n.id);
+    let NodeKind::PlacedDocument(p) = &converted.kind else { panic!("{:?} {notes:?}", converted.kind) };
+    assert_eq!(&*unbound.images[&p.key].bytes, eps.as_bytes());
+    assert!(unbound.images[&p.key].proxy.is_none());
+}
+
+/// What reading an included EPS file warns of, such as art left out, is in the open result.
+#[test]
+fn a_placed_eps_read_in_part_warns_of_what_it_leaves_out() {
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n0 0 30 30 rectfill\n0 0 60 60 nosuchoperator\n%%EOF\n";
+    let own = crate::import_names(eps.as_bytes(), true, false, crate::NameEncoding::default()).unwrap().warnings;
+    assert!(!own.is_empty(), "the file read alone warns");
+    for place in [placed_eps_with_preview(eps), placed_eps_with_preview(eps).replace(&placed_eps_preview(), "")] {
+        let (d, notes) = crate::ai_alone(&private(&native(&layer("Jig", true, &place)))).unwrap();
+        let n = &d.layers[0].children().unwrap()[0];
+        assert!(matches!(n.kind, NodeKind::PlacedDocument(_)), "{:?} {notes:?}", n.kind);
+        for w in &own {
+            assert!(notes.contains(&format!("a placed EPS file: {w}")), "{w}: {notes:?}");
+        }
+    }
+}
+
+/// An unreadable included EPS keeps the preview that the linked image can show.
+#[test]
+fn a_placed_eps_with_an_unreadable_program_keeps_its_preview() {
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n0 0 60 60 nosuchoperator\n%%EOF\n";
+    assert!(crate::import_names(eps.as_bytes(), true, false, crate::NameEncoding::default()).is_err());
+    let place = placed_eps_with_preview(eps);
+    let (d, notes) = crate::ai_alone(&private(&native(&layer("Jig", true, &place)))).unwrap();
+    let n = &d.layers[0].children().unwrap()[0];
+    let NodeKind::Image(im) = &n.kind else { panic!("{:?} {notes:?}", n.kind) };
+    assert_eq!(im.link.as_ref().unwrap().path, "/files/shape.eps");
+    assert_eq!((im.width, im.height), (2, 2));
+    let preview = &d.images[&im.key];
+    assert_eq!(preview.mime, "image/png");
+    assert_eq!(preview.proxy.as_deref(), Some(&*preview.bytes));
+    assert!(d.images.values().all(|b| b.mime != "application/postscript"));
+    assert!(notes.iter().any(|n| n.contains("low-resolution preview")), "{notes:?}");
+}
+
+/// A pattern's included EPS keeps its bytes without waiting for image variable binding.
+#[test]
+fn a_placed_eps_with_a_preview_in_a_pattern_keeps_its_bytes() {
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 40 40\n%%EndComments\n0 0 40 40 rectfill\n%%EOF\n";
+    let place = placed_eps_with_preview(eps);
+    let pattern = format!("%AI3_BeginPattern: (Pic)\n(Pic) 0 0 40 40\n{place}E\n%AI3_EndPattern\n");
+    let (d, notes) = crate::ai_alone(&private(&native(&(pattern + &layer("Jig", true, &square(10, 10)))))).unwrap();
+    let art = &d.pattern("Pic").unwrap().art;
+    assert_eq!(art.len(), 1, "{art:?} {notes:?}");
+    let NodeKind::PlacedDocument(p) = &art[0].kind else { panic!("{art:?} {notes:?}") };
+    assert_eq!(&*d.images[&p.key].bytes, eps.as_bytes());
+    assert_eq!(d.images[&p.key].mime, "application/postscript");
+    assert!(d.images[&p.key].proxy.is_none());
+    assert!(!notes.iter().any(|n| n.contains("low-resolution preview")), "{notes:?}");
+
+    // One whose bytes can't be read keeps its preview there too.
+    let broken = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 40 40\n%%EndComments\n0 0 40 40 nosuchoperator\n%%EOF\n";
+    let pattern = format!("%AI3_BeginPattern: (Pic)\n(Pic) 0 0 40 40\n{}E\n%AI3_EndPattern\n", placed_eps_with_preview(broken));
+    let (d, notes) = crate::ai_alone(&private(&native(&(pattern + &layer("Jig", true, &square(10, 10)))))).unwrap();
+    let art = &d.pattern("Pic").unwrap().art;
+    assert!(matches!(&art[..], [n] if matches!(&n.kind, NodeKind::Image(im) if im.link.is_some())), "{art:?} {notes:?}");
+    assert!(notes.iter().any(|n| n.contains("low-resolution preview")), "{notes:?}");
+}
+
+/// A placed EPS file at `/files/shape.eps` whose bytes `eps` the data includes, with a 2 × 2 preview.
+fn placed_eps_with_preview(eps: &str) -> String {
+    format!(
+        "%AI5_BeginPlace\n%%FileType: 0\n[1 0 0 -1 30 70] 0 0 40 40 4 4 0\n(/files/shape.eps)`\n\
+         %%BeginDocument: /files/shape.eps\n{eps}\n%%EndDocument\n{}~\n%AI5_EndPlace\n",
+        placed_eps_preview()
+    )
+}
+
+/// The 2 × 2 preview of [`placed_eps_with_preview`].
+fn placed_eps_preview() -> String {
+    format!("%AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n", "\x7f\0\0\0".repeat(4))
 }
 
 #[test]

@@ -641,10 +641,11 @@ fn selection_preferences_drive_the_selection_tool() {
     assert!(click(&mut s, 225.0, plain).is_empty(), "a click inside the fill selects nothing");
     assert_eq!(click(&mut s, 250.0, plain), vec![front], "a click on the path selects it");
     set(&mut s, "objectSelectionByPathOnly", json!(false));
-    // Command Click to Select Objects Behind (on by default): each Cmd/Ctrl-click goes one down,
-    // then back to the top.
+    // Command Click to Select Objects Behind (on by default): the first Cmd/Ctrl-click is Direct
+    // Selection's, then each one goes one down, then back to the top.
     let cmd = Mods { cmd: true, ..Mods::default() };
     assert_eq!(click(&mut s, 175.0, plain), vec![front]);
+    assert_eq!(click(&mut s, 175.0, cmd), vec![front], "the first Cmd-click arms Select Behind");
     assert_eq!(click(&mut s, 175.0, cmd), vec![back], "the object behind");
     assert_eq!(click(&mut s, 175.0, cmd), vec![front], "back to the topmost");
     set(&mut s, "ctrlClickSelectsBehind", json!(false));

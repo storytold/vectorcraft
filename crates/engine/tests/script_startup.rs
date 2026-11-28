@@ -9,9 +9,11 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
+use vectorcraft_engine::script::folder::{self, Clock};
 use vectorcraft_plugins::safe_mode;
 use vectorcraft_testkit::TempDir;
 
@@ -56,9 +58,11 @@ fn write(dir: &Path, name: &str, text: &str) -> PathBuf {
     path
 }
 
-/// A session with the Startup Scripts folder `dir` and Run Startup Scripts on.
+/// A session with the Startup Scripts folder `dir` and Run Startup Scripts on, whose listings take
+/// no time.
 fn session(dir: &Path) -> Session {
     let mut s = Session::new();
+    s.set_script_listing_clock(Clock::Fixed(Duration::ZERO));
     s.attach_startup_scripts_dir(dir.to_path_buf());
     s.execute("prefs.set", &json!({"key": "runStartupScripts", "value": true})).unwrap();
     s
@@ -113,6 +117,20 @@ fn the_folders_jsx_files_run_in_name_order_at_launch_and_before_a_chosen_script(
     let r = s.execute("script.startup.run", &json!({"reason": "menu", "then": {"source": "vc.log(2);", "name": "chosen"}})).unwrap();
     assert_eq!(r["then"]["ok"], true);
     assert_eq!(started(&s), ["a.jsx", "b.jsx", "C.JSX", "a.jsx", "b.jsx", "C.JSX", "chosen"], "the startup scripts run first");
+}
+
+#[test]
+fn a_listing_stops_when_the_sessions_clock_is_past_the_time_limit() {
+    let _f = fresh();
+    let dir = tmp_dir("clock");
+    write(&dir, "a.jsx", "vc.log(1);");
+    let mut s = session(&dir);
+    s.set_script_listing_clock(Clock::Fixed(folder::MAX_SCAN + Duration::from_millis(1)));
+    let r = s.execute("script.startup.run", &json!({"reason": "launch"})).unwrap();
+    assert_eq!((names(&r["ran"]), &r["truncated"]), (vec![], &json!(true)));
+    s.set_script_listing_clock(Clock::Fixed(folder::MAX_SCAN));
+    let r = s.execute("script.startup.run", &json!({"reason": "launch"})).unwrap();
+    assert_eq!((names(&r["ran"]), &r["truncated"]), (vec!["a.jsx"], &json!(false)));
 }
 
 #[test]

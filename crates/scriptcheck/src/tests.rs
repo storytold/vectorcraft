@@ -213,6 +213,13 @@ fn directives_are_read_at_the_start_of_a_line_in_both_forms() {
 }
 
 #[test]
+fn reflection_needs_only_the_language() {
+    let r = report("var p = obj.reflect.properties;\nvar m = $.reflect.find('write');\n");
+    assert_eq!(feature(&r, "reflection").map(|f| f.lines.clone()), Some(vec![1, 2]));
+    assert_eq!(r.needs, [Need::Language], "VectorCraft runs reflect");
+}
+
+#[test]
 fn a_byte_order_mark_and_every_line_break_are_read() {
     // U+2028 ends line 2.
     let r = check("t.jsx", b"\xEF\xBB\xBF#target acme\nvar a = 1;\xE2\x80\xA8#target b\r\n", None, &Limits::default());
@@ -528,6 +535,29 @@ fn the_scripts_own_platform_names_are_not_the_platforms() {
     assert!(feature(&r, "notify").is_none());
     assert_eq!(feature(&r, "file.objects").map(|f| f.lines.as_slice()), Some(&[5][..]));
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["filesWritten"]);
+}
+
+/// A document's `exportVariables` writes the file it is given; `importVariables` only reads one.
+#[test]
+fn export_variables_writes_a_file() {
+    let r = report("var f = new File(p);\napp.activeDocument.importVariables(f);\napp.activeDocument.exportVariables(f);\n");
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3][..])]);
+}
+
+/// `exportVariables` called with its name as a string literal in brackets writes the file too;
+/// reading the method without calling it does not.
+#[test]
+fn export_variables_in_brackets_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument['importVariables'](f);\n",
+        "app.activeDocument[\"exportVariables\"](f);\n",
+        "var d = app.activeDocument; d['exportVariables'] (f);\n",
+        "var n = d['exportVariables'];\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
 }
 
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
@@ -1590,6 +1620,17 @@ fn type_names_compared_or_created_are_listed() {
     let types: Vec<&str> = r.types.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(types, ["AcmeColor", "AcmeShape"]);
     assert_eq!(r.needs, [Need::Dom]);
+}
+
+#[test]
+fn collections_and_typed_arrays_are_not_type_names() {
+    let r = report(concat!(
+        "var m = new Map(), s = new Set(), wm = new WeakMap(), ws = new WeakSet();\n",
+        "var b = new ArrayBuffer(8), v = new DataView(b), u = new Uint8Array(b), c = new Uint8ClampedArray(2);\n",
+        "var i = [new Int8Array(1), new Int16Array(1), new Uint16Array(1), new Int32Array(1), new Uint32Array(1)];\n",
+        "var f = [new Float32Array(1), new Float64Array(1)];\n",
+    ));
+    assert!(r.types.is_empty(), "{:?}", r.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>());
 }
 
 #[test]
