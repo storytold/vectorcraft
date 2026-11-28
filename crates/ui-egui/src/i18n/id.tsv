@@ -8409,6 +8409,8 @@ breakText	Glyphs	Glif
 	Tangent Circle	Lingkaran singgung
 	Tangent Circle Tool	Alat lingkaran singgung
 	No tangent circle here	Tidak ada lingkaran singgung di sini
+	Ask For Circle Radius	Tanyakan Radius Lingkaran
+	Auto-Update Default	Perbarui Default Otomatis
 	Circle:	Lingkaran:
 @msg	`ids` names an object twice	`ids` menyebut satu objek dua kali
 @msg	select two or three paths or compound paths	pilih dua atau tiga jalur atau jalur gabungan

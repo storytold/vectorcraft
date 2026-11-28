@@ -8571,6 +8571,8 @@ breakText	Glyphs	Glyphes
 	Tangent Circle	Cercle tangent
 	Tangent Circle Tool	Outil Cercle tangent
 	No tangent circle here	Aucun cercle tangent ici
+	Ask For Circle Radius	Demander le rayon du cercle
+	Auto-Update Default	Mettre à jour automatiquement la valeur par défaut
 	Circle:	Cercle :
 @msg	`ids` names an object twice	`ids` désigne deux fois le même objet
 @msg	select two or three paths or compound paths	sélectionnez deux ou trois tracés ou tracés transparents

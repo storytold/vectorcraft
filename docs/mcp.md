@@ -2702,6 +2702,8 @@ vectorcraft-cli run --cmd script.check --params '{"path": "Tidy Layers.jsx"}'
 
 `script.run {path? | source?, name?, args?, answers?, maxFuel?}` runs a JavaScript file against the open documents.
 
+In an ES2015 realm, `Symbol.for` lookups and insertions take fuel for the key's code units. A registered description
+shares the key's existing string buffer.
 Block-scoped declaration checks retain one copy of each `var` declaration name through nested blocks.
 File › Scripts › Other Script… (Cmd+F12) picks a `.js` or `.jsx` file and runs it the same way; the help page
 https://helpx.adobe.com/illustrator/desktop/automate-visualize-data/automate-actions/install-and-run-scripts.html
@@ -7956,6 +7958,11 @@ own, and the corner keeps its place and the directions the path arrives and leav
 `fidelity`. A call that changes no anchor returns `{ids: [], before: 0, after: 0}` and adds no undo step. The 57.5°
 threshold is VectorCraft's own value.
 
+`path.smoothRegion` measures each curved segment of the paths it searches once whole against `points`, and cuts all of
+them together into no more than 131,072 further pieces while it finds where `radius` reaches them, shared equally by
+the segments in reach. A segment searched after those pieces run out is still smoothed where its middle, or its point
+nearest `points`, is within `radius`. The limit is VectorCraft's own value.
+
 `path.smoothRegion`'s `smoothness` (0 to 100, 50 when left out) sets how strongly the path is smoothed before it is
 refitted within `fidelity`: each point is averaged with the stretch of path around it, over a stretch that grows in
 proportion to `smoothness`, so a higher value leaves a smoother path. At 0 the path is only refitted within
@@ -8591,6 +8598,11 @@ and files saved without it open with it off.
 {"name":"run_command","arguments":{"command":"file.new","params":{"preset":"Letter","alignNewObjectsToPixelGrid":true}}}
 ```
 
+The shape Control bar's numeric edits preview changes to selected shapes and future tool settings together.
+Cancel restores both, including the separate scalar radius and per-corner radii. Accept keeps the new settings;
+Undo restores the selected artwork. A canceled edit whose tool or document ownership has ended cannot overwrite
+the new tool's settings.
+
 ## Live Corners
 
 `object.setLiveShape {id?, ids?, radius?, kind?, corners?, rectanglesOnly?, items?}` sets the corners of any path (one undo step): a live
@@ -8629,6 +8641,10 @@ and those shape tools: hidden widgets are not drawn, and those tools do not answ
 on them. `on`, when given and not `null`, must be `true` or `false` and sets the state; without it, or with `null`, the
 command toggles. The reply is the new state (`true` when shown, the default). The bounding box, the center point and
 Direct Selection's corner widgets, which follow `view.cornerWidget` alone, stay as they are, and no undo step is added.
+While the pointer is within 5 px of a corner widget that shows, with any tool that shows it, the desktop app draws the
+cut of that widget's corner (round, inverted round or chamfer) in a 2 px line of the layer color. A square corner has
+no cut and gets no line, and no line is drawn while a mouse button is down. The 5 px reach, the 2 px width and the
+color are VectorCraft's own values. No command runs and no undo step is added.
 In the desktop app, the Corners link in the Control bar (beside the anchor controls) and in the Properties panel (with
 Direct Selection, while a corner is selected or one live rectangle or polygon is selected) opens the Corners pop-up for the picked corners of every selected path:
 the corners holding a Direct-Selected anchor, or every corner of a path selected whole; a path whose selected anchors
@@ -9145,6 +9161,10 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   handle or segment for Direct Selection, the Anchor Point, Add and Delete Anchor Point and Scissors tools, and the
   Pen with Alt. A handle shorter than that leaves its anchor to be picked when pressed nearer the anchor.
 - `objectSelectionByPathOnly`: a click inside a filled path or compound path doesn't select it, one on its path does.
+  Off (the default), a selection tool click inside the closed subpaths of a path or compound path with no fill selects
+  it when the click hits no other object there, by its fill, stroke, path or bounds (a symbol instance, for example,
+  is hit anywhere in its bounds), the topmost such path first, except in Outline view and on a layer whose Preview is
+  off; guides and clipping paths are still picked by their path only (#9175).
 - `ctrlClickSelectsBehind` (on by default): after a first Selection tool click with `mods: {cmd: true}` (Command on
   macOS, Ctrl elsewhere), which Direct Selection or Group Selection takes, each further such click with Cmd held
   selects the object under the selected one there, members of groups one by one, the next such click the one under
@@ -15917,8 +15937,20 @@ Tools:
   `snapTolerance` (screen pixels, 0 to 25, 3; VectorCraft's own range and default) is how near the pointer picks a
   segment while Smart Guides are on (their Snapping Tolerance counts instead when it is larger) or while they are off
   with `snapWithoutGuides` (true or false, true) on. Otherwise a segment is picked within the Selection Tolerance, which is also the least reach with snapping.
+  `askRadius` (Ask For Circle Radius) and `autoUpdateDefault` (Auto-Update Default) are true or false, both false.
   `tool.setOption` gives an error for a value outside an option's range, of the wrong type, or a color not listed, and
-  for any other option, and then sets none of the values.
+  for any other option, and then sets none of the values. With `askRadius` on, a click on the second segment that finds
+  a circle (with or without Shift) opens the Tangent Circle dialog (`tangentCircleRadius`) instead of drawing; a drag,
+  which sets the radius, draws at once. The dialog's Radius starts at the radius of the circle found, and each radius
+  previews the circle of that radius touching the second segments nearest the click, anywhere along the first segment
+  (at the radius it opened with, the circle found). A radius that gives no circle there shows the note and leaves OK
+  off, as do an edit to either segment's path after the click and another active document; a circle the target layer
+  cannot take (locked or hidden) shows why and leaves OK off; a radius outside 0.01 to
+  1000000 pt, typed or set, shows the radius error and leaves OK off, except the radius the dialog opened with.
+  `ui.dialog.set` gives an error for a radius that is not a number. OK draws the circle in one undo
+  step, with `shape.circleThroughPoints`, and with `autoUpdateDefault` on also sets `radius` to the radius given when
+  it is in that range. Cancel draws nothing, leaves no undo step and
+  keeps the first segment picked.
 - **Trim at Crossings Tool** (`trimAtCrossings`): removes stretches of paths between the places where they are crossed,
   on any path that can be edited, selected or not. A click runs `addon.pathtools.trim` with `at`, for the path within 4
   screen pixels of the pointer. A drag draws a rectangle and runs it with `rect` on release; once the pointer has
@@ -17222,6 +17254,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Shape Control bar: canceled numeric edits restore future-tool settings and coupled radii along with selected artwork; retired edits cannot overwrite a different tool. Native scrub, keyboard, next-shape and Undo cases covered. Scores and estimates unchanged. |
 | 2026-11-27 | Anchor Inspector: Cancel restores Corner radius/kind and Shared Edge diameter/coincidence tool values; accepted settings leave document history unchanged. Native numeric and menu cases covered. Scores and estimates unchanged. |
 | 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
 | 2026-11-14 | Built-in Tech Circuit brush library (id `tech-circuit`): Circuit Trace, Bus Lines and Terminal Nodes; ten built-in libraries. |
