@@ -7954,6 +7954,11 @@ own, and the corner keeps its place and the directions the path arrives and leav
 `fidelity`. A call that changes no anchor returns `{ids: [], before: 0, after: 0}` and adds no undo step. The 57.5°
 threshold is VectorCraft's own value.
 
+`path.smoothRegion` measures each curved segment of the paths it searches once whole against `points`, and cuts all of
+them together into no more than 131,072 further pieces while it finds where `radius` reaches them, shared equally by
+the segments in reach. A segment searched after those pieces run out is still smoothed where its middle, or its point
+nearest `points`, is within `radius`. The limit is VectorCraft's own value.
+
 `path.smoothRegion`'s `smoothness` (0 to 100, 50 when left out) sets how strongly the path is smoothed before it is
 refitted within `fidelity`: each point is averaged with the stretch of path around it, over a stretch that grows in
 proportion to `smoothness`, so a higher value leaves a smoother path. At 0 the path is only refitted within
