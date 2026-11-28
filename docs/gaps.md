@@ -542,7 +542,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 - **Done:** spell check (#4936): engine (`text.spelling.check` and `text.spelling.suggest` on craft-proof); custom dictionary and Ignore All (`text.spelling.addWord`, `removeWord`, `changeWord`, `dictionary`, `ignoreAll`); Auto Spell Check (`edit.autoSpellCheck`) with red wavy underlines and canvas context menu suggestions, Ignore All and Add to Dictionary; Edit › Edit Custom Dictionary…; and modal Check Spelling dialog (Edit › Spelling › Check Spelling…, and Spelling › Check Spelling… in the canvas context menu of type, `ui.checkSpelling`) with sentence context, suggestions list, "Change to" edit, Ignore, Ignore All, Change, Change All, Add to Dictionary, Done, Cancel, and keyboard navigation. Estimate unchanged.
 - **Missing:** CJK vertical
   composition (custom mojikumi sets and the Mojikumi Settings dialog, kinsoku settings #633, manual tate-chu-yoko), Middle Eastern
-  features beyond bidi, digit types, Character Direction and Kashidas (a split caret; the Middle Eastern & South Asian composers are done, #4935),
+  features beyond bidi, digit types, Character Direction and Kashidas (split caret runtime/visual validation and
+  path/vertical/warichu coverage; horizontal point/area implementation and regressions added in #8594 on #7094;
+  the Middle Eastern & South Asian composers are done, #4935),
   Touch Type, Retype beyond exact matches of available fonts (phase 1 is in, #4934, the Retype panel lists the exactly matching fonts, installed fonts not yet loaded included, and `type.retype` takes near matches within a tolerance and words outlined as one compound path, in installed fonts not yet loaded too; glyphs fused into one contour, near matches in the panel's list and text in images remain), Snap to Glyph; optional preservation of font sizes during group scaling (#1034 enhancement).
   Itemized in [type-parity.md](type-parity.md).
 - **Impact:** professional typography and Japanese/Chinese publishing.
@@ -1030,6 +1032,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-27 | minor | #8594 on #7094: horizontal bidi boundaries have paired caret geometry, a solid primary with a direction flag, a dimmed alternate and a common blink clock reset by either position or direction. Existing navigation, deletion and IME APIs remain; geometry, transformed-overlay and blink regressions added. Runtime/visual checks pending; path/vertical/warichu split behavior and input-language selection are not claimed. Scores and estimates unchanged. |
 | 2026-11-24 | minor | G12: History row context menus use shared Craft List and Menu controls after rebasing onto the panel migration. App-specific actions retain the chosen snapshot across pending edits and dismiss on document switches; keyboard context requests and focus restoration use the shared runtime. Regression cases retained (#8845); scores and estimates unchanged. |
 | 2026-11-23 | minor | Gradient stop editor: a compact Color-tab menu offers Grayscale Slider, RGB Sliders, HSB Sliders, CMYK Sliders and Web Color Sliders, sharing the Color panel mode and conversion behavior (#7918). Choosing a mode keeps the editor open; Escape closes the menu first. Scores and estimates unchanged. |
 | 2026-11-21 | minor | G13: View › Snapping groups five existing toggles and Pixel Snapping Options…; top-level commands and shortcuts remain; headless click/checkmark coverage added; scores and estimates unchanged. |

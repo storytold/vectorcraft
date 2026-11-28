@@ -8,9 +8,19 @@ use vectorcraft_geom::{Point, Vec2};
 
 use super::{canvas, render_worker};
 
+/// Visual insertion geometry: both positions and the direction flag share one blink clock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CaretBlinkKey {
+    pub primary: [u64; 4],
+    pub split: Option<[u64; 6]>,
+}
+
 /// Cached canvas raster.
 pub struct CanvasCache {
     pub renderer: vectorcraft_render::Renderer,
+    /// The text caret shown last and when it got there (seconds, egui's input time): moving
+    /// either position or its direction flag restarts the common blink clock.
+    pub caret: Option<(CaretBlinkKey, f64)>,
     pub texture: Option<egui::TextureHandle>,
     pub key: Option<CacheKey>,
     /// The document the frame shown was rendered from, and the options it was rendered with, with

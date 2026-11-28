@@ -604,6 +604,43 @@ pub fn caret_position(layout: &TextLayout, byte: usize) -> (Point, Point) {
     (pos + up * line.ascent, pos - up * line.descent)
 }
 
+/// The two visual positions of one insertion offset at an opposing-direction run boundary.
+/// The primary follows the run starting at that offset, as [`caret_position`] does; `rtl` is
+/// that run's direction. The alternate is the preceding logical cluster's trailing edge.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SplitCaret {
+    pub primary: (Point, Point),
+    pub alternate: (Point, Point),
+    pub rtl: bool,
+}
+
+/// Split caret at a same-line RTL/LTR boundary of horizontal text. This is additional drawing
+/// geometry, not a new editing affinity: navigation, hit testing and IME keep their existing
+/// single-position API. Wrapped line boundaries, path type and warichu keep that caret too.
+pub fn split_caret_position(layout: &TextLayout, byte: usize) -> Option<SplitCaret> {
+    if layout.vertical || layout.on_path {
+        return None;
+    }
+    let line = layout.lines.get(layout.line_of(byte))?;
+    let glyphs = layout.glyphs.get(line.glyph_start..line.glyph_end)?;
+    let next = glyphs.iter().find(|g| g.byte == byte && g.len > 0)?;
+    let previous = glyphs.iter().position(|g| g.len > 0 && g.byte + g.len == byte)?;
+    let g = &glyphs[previous];
+    if next.rtl == g.rtl || next.warichu.is_some() || g.warichu.is_some() {
+        return None;
+    }
+    let (left, right) = cluster_extent(layout, glyphs, previous)?;
+    let pos = Point::new(if g.rtl { left } else { right }, g.origin.y);
+    let d = dir(g.angle);
+    let up = Vec2::new(d.y, -d.x);
+    let alternate = (pos + up * line.ascent, pos - up * line.descent);
+    let primary = caret_position(layout, byte);
+    if (primary.0 - alternate.0).hypot2() < 1e-12 && (primary.1 - alternate.1).hypot2() < 1e-12 {
+        return None;
+    }
+    Some(SplitCaret { primary, alternate, rtl: next.rtl })
+}
+
 /// Byte offset nearest to the text-space point `p` (for clicking/dragging with the Type tool).
 pub fn hit_byte(layout: &TextLayout, p: Point) -> usize {
     if layout.on_path {
