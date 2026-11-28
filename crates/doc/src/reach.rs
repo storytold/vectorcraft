@@ -356,13 +356,18 @@ impl StrokeLayer {
     /// wider side of a farther one can paint past the nearest.
     pub fn hits(&self, bp: &BezPath, rule: FillRule, p: Point, tol: f64) -> bool {
         let reach = self.reach() + tol;
-        if self.width.is_nan() || self.width <= 0.0 || !bp.bounding_box().inflate(reach, reach).contains(p) {
+        if self.width.is_nan() || self.width <= 0.0 {
             return false;
+        }
+        let els = bp.elements();
+        // The box of the segments leaves out a closed subpath of one anchor, which has none: away
+        // from the segments only the dot a cap draws for such a subpath can paint.
+        if !bp.bounding_box().inflate(reach, reach).contains(p) {
+            return self.draws_dots() && subpaths(bp).into_iter().any(|(r, closed)| self.dot_contains(bp, rule, (&els[r], closed), p, tol));
         }
         if head_ends(self, bp).into_iter().any(|(at, out, end)| self.head_contains(at, out, end, p, tol)) {
             return true;
         }
-        let els = bp.elements();
         // Aligned strokes paint on one side of the path only.
         let on_side = |region: Option<bool>, d: f64| region.is_none_or(|inside| d <= tol || fill_contains(bp, rule, p) == inside);
         // Every dash gets the caps, as wide as the stroke where the dash ends: round ones reach as
@@ -374,7 +379,13 @@ impl StrokeLayer {
             LineCap::Square => Some(std::f64::consts::SQRT_2),
         };
         for (r, closed) in subpaths(bp) {
-            let segs = drawn(&els[r]);
+            let segs = drawn(&els[r.clone()]);
+            if segs.is_empty() {
+                if self.dot_contains(bp, rule, (&els[r], closed), p, tol) {
+                    return true;
+                }
+                continue;
+            }
             let (half, region) = self.body(closed);
             let full = half * self.profile_max() * dash_caps.unwrap_or(1.0);
             // Past a butt cap or a bevel the stroke stops at the segments' corners. A width profile
@@ -443,6 +454,32 @@ impl StrokeLayer {
             }
         }
         false
+    }
+
+    /// Does this stroke draw a dot for a subpath that never leaves its first point? A round or a
+    /// projecting cap draws one on a stroke without a dash pattern or a width profile.
+    fn draws_dots(&self) -> bool {
+        self.cap != LineCap::Butt && self.profile.is_none() && !self.dash.as_ref().is_some_and(Dash::is_dashed)
+    }
+
+    /// Is `p` within `tol` of the dot this stroke draws for the subpath `els` (`closed`: a closed
+    /// one) of `bp`, filled with `rule`, when every point of the subpath is its first point
+    /// ([`Self::draws_dots`])? A round cap draws a disc there and a projecting cap a square along
+    /// the x axis, as wide as the stroke's body ([`StrokeLayer::body`]). Inside and outside
+    /// strokes of a closed subpath paint on their own side of `bp` only.
+    fn dot_contains(&self, bp: &BezPath, rule: FillRule, (els, closed): (&[vectorcraft_geom::PathEl], bool), p: Point, tol: f64) -> bool {
+        if !self.draws_dots() || vectorcraft_geom::kurbo::segments(els.iter().copied()).any(|s| has_length(&s)) {
+            return false;
+        }
+        let Some(at) = els.first().and_then(vectorcraft_geom::PathEl::end_point) else { return false };
+        let (half, region) = self.body(closed);
+        let v = p - at;
+        let d = v.hypot();
+        let on_dot = match self.cap {
+            LineCap::Square => v.x.abs().max(v.y.abs()) <= half + tol,
+            _ => d <= half + tol,
+        };
+        on_dot && region.is_none_or(|inside| d <= tol || fill_contains(bp, rule, p) == inside)
     }
 
     /// Does this stroke, where it stops at the corners of its segments ([`Self::stops_at_corners`]),
@@ -1000,5 +1037,41 @@ mod tests {
         assert_eq!((h.leaf, h.kind), (id, hit::HitKind::Stroke));
         assert!(hit::hit_test(&d, Point::new(108.0, 150.0), opt).is_none(), "an unfilled interior");
         assert_eq!(d.node(id).unwrap().visual_bounds(), Some(Rect::new(90.0, 90.0, 210.0, 210.0)));
+    }
+
+    /// A round cap draws a disc and a projecting cap a square on a subpath that never leaves its
+    /// first point, a closed lone anchor or a line to the same point: a click on it hits the path,
+    /// and one past it misses. A butt cap draws nothing there.
+    #[test]
+    fn clicks_hit_the_dot_of_a_lone_anchor() {
+        let at = Point::new(150.0, 120.0);
+        let mut lone = BezPath::new();
+        lone.move_to(at);
+        lone.close_path();
+        let mut zero = BezPath::new();
+        zero.move_to(at);
+        zero.line_to(at);
+        let (on_edge, corner, past) = (Point::new(154.5, 120.0), Point::new(154.0, 124.0), Point::new(156.0, 120.0));
+        for (name, bp) in [("closed lone anchor", &lone), ("zero-length line", &zero)] {
+            let round = stroke(10.0, |s| s.cap = LineCap::Round);
+            let square = stroke(10.0, |s| s.cap = LineCap::Square);
+            assert!(round.hits(bp, FillRule::NonZero, at, 0.1) && round.hits(bp, FillRule::NonZero, on_edge, 0.1), "{name}: round dot");
+            assert!(!round.hits(bp, FillRule::NonZero, corner, 0.1) && !round.hits(bp, FillRule::NonZero, past, 0.1), "{name}: past the disc");
+            assert!(square.hits(bp, FillRule::NonZero, corner, 0.1), "{name}: the square's corner");
+            assert!(!square.hits(bp, FillRule::NonZero, past, 0.1), "{name}: past the square");
+            assert!(!stroke(10.0, |_| {}).hits(bp, FillRule::NonZero, on_edge, 0.1), "{name}: a butt cap draws no dot");
+        }
+        // In a document: a click on the dot of a closed lone anchor hits the path's stroke, and a
+        // marquee over the anchor selects it.
+        let mut d = Document::new(300.0, 300.0);
+        let (l, id) = (d.layers[0].id, d.alloc_id());
+        let mut ap = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 10.0);
+        ap.stroke_mut().unwrap().cap = LineCap::Round;
+        d.insert(Some(l), 0, Node::path(id, PathData::from_bezpath(&lone), ap)).unwrap();
+        let opt = hit::HitOptions { tol: 0.5, ..Default::default() };
+        let h = hit::hit_test(&d, Point::new(153.5, 121.0), opt).expect("a click on the dot");
+        assert_eq!((h.leaf, h.kind), (id, hit::HitKind::Stroke));
+        assert!(hit::hit_test(&d, Point::new(157.0, 120.0), opt).is_none(), "past the dot");
+        assert_eq!(hit::marquee(&d, Rect::new(140.0, 110.0, 160.0, 130.0), None, false), vec![id]);
     }
 }

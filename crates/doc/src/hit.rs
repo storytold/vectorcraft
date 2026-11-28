@@ -1563,6 +1563,15 @@ fn near_path_body(path: &PathData, p: Point, radius: f64, decoration_reach: f64)
     let decoration_sq = decoration_reach * decoration_reach;
     let mut near_decoration = false;
     for sp in &path.subpaths {
+        // A closed lone anchor has no segment, and a cap can draw a dot on it: the full check
+        // decides a click near it.
+        if sp.closed
+            && sp.segment_count() == 0
+            && let Some(a) = sp.anchors.first()
+            && (a.p - p).hypot2() <= radius_sq.max(decoration_sq)
+        {
+            near_decoration = true;
+        }
         for i in 0..sp.segment_count() {
             let c = sp.segment(i);
             if decoration_reach > 0.0 && !near_decoration && ([c.p0, c.p3].iter().any(|q| (*q - p).hypot2() <= decoration_sq)) {
