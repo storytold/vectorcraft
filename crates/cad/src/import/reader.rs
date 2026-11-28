@@ -175,6 +175,32 @@ fn layer(l: model::Layer) -> LayerDef {
 /// drawings have a few dozen layouts with short names.
 const MAX_LAYOUT_NAME_BYTES: usize = 4 << 20;
 
+#[cfg(test)]
+thread_local! {
+    /// How many times [`layouts`] compared two layout names on this thread (tests).
+    pub(crate) static LAYOUT_NAME_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// A paper layout's name as [`layouts`] de-duplicates it (lower case: names differing only in
+/// ASCII case are one layout).
+struct LayoutKey(String);
+
+impl PartialEq for LayoutKey {
+    fn eq(&self, other: &Self) -> bool {
+        #[cfg(test)]
+        LAYOUT_NAME_COMPARISONS.with(|n| n.set(n.get().saturating_add(1)));
+        self.0 == other.0
+    }
+}
+
+impl Eq for LayoutKey {}
+
+impl std::hash::Hash for LayoutKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 /// Model space, then each paper layout (its LAYOUT object, in tab order); a file without layout
 /// objects but with paper-space art has one paper layout.
 fn layouts(doc: &model::Document<'_>, block_names: &HashMap<u64, &str>) -> Vec<LayoutDef> {
@@ -187,7 +213,7 @@ fn layouts(doc: &model::Document<'_>, block_names: &HashMap<u64, &str>) -> Vec<L
             continue;
         }
         let Some(block) = block else { continue };
-        let key = l.name.to_ascii_lowercase();
+        let key = LayoutKey(l.name.to_ascii_lowercase());
         let cost = l.name.len() + block.len();
         // A layout past the allowance is skipped alone: a later short one is still offered, and a
         // skipped one reserves neither its name nor its bytes.

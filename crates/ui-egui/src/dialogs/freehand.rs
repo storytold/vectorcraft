@@ -4,14 +4,14 @@
 //! (Live curve fitting, on: its preview fits the stroke while it is drawn).
 //!
 //! Fields: `tool`; `fidelity` (screen pixels for the Pencil, Paintbrush and Smooth, points for the
-//! Blob Brush), `fill` (Pencil and
+//! Blob Brush), `smoothness` (percent, 0 to 100; Smooth), `fill` (Pencil and
 //! Paintbrush), `keepSelected` (Pencil, Paintbrush and Blob Brush), `mergeOnlySelection` (Blob
 //! Brush), `closeWithin` and `editWithin` (screen pixels, 0 turns it off; Pencil and Paintbrush),
 //! `angle` (degrees) and `roundness` (percent; Blob Brush and Eraser), `livePreview` (Pencil: the stroke shows
 //! with its fill and stroke while it is drawn, or as a thin line until the release), `size`
 //! (points; Blob Brush and Eraser), and `sizeMode` and `sizeVariation` (points; Blob Brush and
 //! Eraser: with Pressure the tip is Size − Variation wide at the lightest pen pressure and Size +
-//! Variation at the heaviest). The Blob Brush's `sizeMode` is `fixed` or `pressure`. The Eraser's
+//! Variation at the heaviest). The Blob Brush's `sizeMode` is `fixed`, `pressure` or `stylusWheel`. The Eraser's
 //! Angle, Roundness and Size each have a menu (`angleMode`, `roundnessMode`, `sizeMode`: `fixed`,
 //! `random`, `pressure`, `tilt`, `bearing` or `rotation`) before the field and a Variation field
 //! under it (`angleVariation` in degrees, `roundnessVariation` in percent, `sizeVariation`),
@@ -45,8 +45,9 @@ pub const KIND: &str = "freehandOptions";
 pub const TOOLS: [&str; 5] = ["pencil", "paintbrush", "smooth", "blobBrush", "eraser"];
 
 /// The options the dialog edits, in the order it shows them (a tool has those it reports).
-const KEYS: [&str; 18] = [
+const KEYS: [&str; 19] = [
     "fidelity",
+    "smoothness",
     "angle",
     "angleMode",
     "angleVariation",
@@ -167,8 +168,10 @@ fn tip_row(ui: &mut Ui, fields: &mut DialogFields, least: f64) -> Response {
         let _ = TipEllipse::new(tl!("Tip"), Bind::bound(&mut tip)).least_roundness(least).show(ui);
         dabs(ui, tip);
     });
-    if tip != start {
+    if tip.degrees != start.degrees {
         fields.set("angle", FieldValue::Number(tip.degrees.round()));
+    }
+    if tip.roundness != start.roundness {
         fields.set("roundness", FieldValue::Number((tip.roundness * 100.0).round()));
     }
     shown.output
@@ -227,6 +230,12 @@ fn params(tool: &str, present: &[&str]) -> Vec<Param> {
             .full_width(),
         );
     }
+    if has("smoothness") {
+        // The Smooth tool's Smoothness: a slider from 0% to 100% with the field at its end, in whole percent.
+        rows.push(
+            Param::new("smoothness", tl!("Smoothness:"), ParamKind::range(0.0, 100.0, 50.0, SliderScale::Linear)).decimals(0).unit(UnitKind::Percent),
+        );
+    }
     if eraser {
         rows.push(variation_param("angle", tl!("Angle:"), UnitKind::Degrees, 0, (-180.0, 180.0), (0.0, 180.0), &Variation::ALL));
         rows.push(variation_param("roundness", tl!("Roundness:"), UnitKind::Percent, 0, (1.0, 100.0), (0.0, 100.0), &Variation::ALL));
@@ -244,7 +253,7 @@ fn params(tool: &str, present: &[&str]) -> Vec<Param> {
             rows.push(Param::custom("tip", "", |ui, fields, _| tip_row(ui, fields, 0.0)).full_width());
         }
         if has("sizeMode") {
-            let offered = &[Variation::Fixed, Variation::Pressure];
+            let offered = &vectorcraft_tools::draw2::BLOB_SIZE_MODES;
             rows.push(variation_param("size", tl!("Size:"), UnitKind::Points, 1, (0.1, 1000.0), (0.0, 1000.0), offered));
         } else if has("size") {
             rows.push(Param::number("size", tl!("Size:"), 10.0, 1.0, 1).unit(UnitKind::Points).bounds(Some(0.1), Some(1000.0)));
