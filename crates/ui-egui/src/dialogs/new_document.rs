@@ -20,23 +20,23 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Background, ColorMode, Unit};
 use vectorcraft_engine::cmd::newdoc::{self, ArtboardLayout, DocSettings, MAX_ARTBOARDS, PreviewMode, RASTER_PPI};
 
-use craft::behavior::{ColumnWidth, IconId, Mixed};
+use craft::behavior::{ColumnWidth, IconId};
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Segmented};
-use craft::ui::contract::{Bind, Entry, Gap, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::contract::{Bind, Entry, FieldLayout, Gap, Props as _, Show as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::{Grid, Row};
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::patterns::form_dialogs::{
     CardCx, CardSource, DetailsCx, DocumentCard, DocumentSettings, HostedNewDocument, NewDocumentDialog, Orientation, PresetCategory,
 };
 use craft::ui::patterns::presets::{GroupPath, NamedPresetEvent, PresetLibrary};
 use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
-use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
+use craft::ui::runtime::env::{Env, Label, LengthUnits, UnitKind};
 use craft::ui::sections::Section;
 use craft::ui::style::TypeRole;
-use craft::ui::text::{LinkMode, LinkedFields, LinkedLayout, NumberField};
+use craft::ui::text::{LinkMode, LinkedWords, NumberField, follow_equal, link_toggle};
 
 use super::host::open_held;
 use crate::VectorcraftApp;
@@ -288,30 +288,34 @@ impl DocumentSettings for VcNewDocument {
 
         let s = &mut values.settings;
         let units: Vec<Entry<Unit>> = UNITS.iter().map(|u| Entry::new(*u, Label::from(u.label()))).collect();
-        Field::new(width.clone()).show(ui, |ui, _| {
+        // Each label stands above its field, and the fields fill the column, as Name above them does.
+        Field::new(width.clone()).layout(FieldLayout::Above).id_salt("width").show(ui, |ui, _| {
             Row::new().show(ui, |ui, _| {
                 size_field(ui, &width, &mut s.width, lengths);
-                if let Some(u) = Select::new(text(tl!("Units")), Bind::given(unit), &units).show(ui).events.committed().cloned() {
+                let select = Select::new(text(tl!("Units")), Bind::given(unit), &units).sizing(Sizing::Content);
+                if let Some(u) = select.show(ui).events.committed().cloned() {
                     s.units = u;
                     memory.units_chosen = true;
                 }
             });
         });
-        // The row wraps whenever its fields do not fit the column, so Artboards is never cut off at its right edge.
-        Row::new().wrap(true).show(ui, |ui, _| {
-            Field::new(height.clone()).show(ui, |ui, _| size_field(ui, &height, &mut s.height, lengths));
-            Field::new(orientation.clone()).show(ui, |ui, _| {
+        // Three shares: the grid stacks the three fields when the column has no room for them side by side, so
+        // Artboards is never cut off at its right edge.
+        Grid::new(&THIRDS).fill().show(ui, |ui, _| {
+            Field::new(height.clone()).layout(FieldLayout::Above).id_salt("height").show(ui, |ui, _| size_field(ui, &height, &mut s.height, lengths));
+            Field::new(orientation.clone()).layout(FieldLayout::Above).id_salt("orientation").show(ui, |ui, _| {
                 let entries = [
                     Entry::new(Orientation::Portrait, portrait.clone()).icon(IconId::new("orientation_portrait")),
                     Entry::new(Orientation::Landscape, landscape.clone()).icon(IconId::new("orientation_landscape")),
                 ];
                 picked = Segmented::new(orientation.clone(), Bind::given(current), &entries).show(ui).events.committed().cloned();
             });
-            Field::new(artboards.clone()).show(ui, |ui, _| {
+            Field::new(artboards.clone()).layout(FieldLayout::Above).id_salt("artboards").show(ui, |ui, _| {
                 let field = NumberField::new(artboards.clone(), Bind::given(Some(f64::from(s.artboards))))
                     .range(1.0..=f64::from(MAX_ARTBOARDS))
                     .step(1.0)
-                    .commit_decimals(0);
+                    .commit_decimals(0)
+                    .sizing(Sizing::FillWidth);
                 if let Some(n) = field.show(ui).edit.events.committed().copied().flatten().filter(|n| n.is_finite()) {
                     s.artboards = n.round().clamp(1.0, f64::from(MAX_ARTBOARDS)) as u32;
                 }
@@ -325,41 +329,23 @@ impl DocumentSettings for VcNewDocument {
         }
 
         let bleed = text(tl!("Bleed"));
-        Field::new(bleed.clone()).show(ui, |ui, _| {
-            let mut linked = !memory.bleed_split;
-            let parts = s.bleed.map(|b| Mixed::Same(Some(b)));
-            let captions = [text(tl!("Top")), text(tl!("Bottom")), text(tl!("Left")), text(tl!("Right"))];
-            let out = LinkedFields::<4>::new(bleed.clone(), Bind::given(parts), Bind::bound(&mut linked))
-                .mode(LinkMode::Equal)
-                .layout(LinkedLayout::Columns)
-                .captions(captions)
-                .range(0.0..=vectorcraft_doc::setup::MAX_BLEED)
-                .lengths(lengths)
-                .show(ui);
-            if let Some(edited) = out.edit.events.committed().copied() {
-                for (side, part) in s.bleed.iter_mut().zip(edited) {
-                    if let Mixed::Same(Some(b)) = part {
-                        *side = b.clamp(0.0, vectorcraft_doc::setup::MAX_BLEED);
-                    }
-                }
-            }
-            memory.bleed_split = !linked;
-        });
+        Field::new(bleed.clone()).layout(FieldLayout::Above).id_salt("bleed").show(ui, |ui, _| bleed_row(ui, s, &mut memory, lengths));
 
-        Field::new(background.clone()).show(ui, |ui, _| {
+        Field::new(background.clone()).layout(FieldLayout::Above).id_salt("background").show(ui, |ui, _| {
             let entries: Vec<Entry<Background>> = BACKGROUNDS.iter().map(|(b, name)| Entry::new(*b, text(tl!(name)))).collect();
-            if let Some(b) = Select::new(background.clone(), Bind::given(s.background), &entries).show(ui).events.committed().copied() {
+            let select = Select::new(background.clone(), Bind::given(s.background), &entries).sizing(Sizing::FillWidth);
+            if let Some(b) = select.show(ui).events.committed().copied() {
                 s.background = b;
             }
         });
 
         Section::new(text(tl!("Advanced Options"))).initially_open(false).show(ui, |ui, _| advanced(ui, s));
 
-        // The two buttons side by side, the item gap apart.
+        // The two buttons across the column, one above the other.
         let (mut more, mut manage) = (None, None);
-        Row::new().gap(Gap::Item).wrap(true).show(ui, |ui, _| {
-            more = Some(Button::new(text(tl!("More Settings"))).id_salt("more-settings").show(ui));
-            manage = Some(Button::new(text(tl!("Manage Profiles"))).id_salt("manage-profiles").show(ui));
+        Stack::new().fill_width().gap(Gap::Item).show(ui, |ui, _| {
+            more = Some(Button::new(text(tl!("More Settings"))).id_salt("more-settings").sizing(Sizing::FillWidth).show(ui));
+            manage = Some(Button::new(text(tl!("Manage Profiles"))).id_salt("manage-profiles").sizing(Sizing::FillWidth).show(ui));
         });
         if let Some(more) = &more {
             let mut more_open = memory.more_open != clicked(more);
@@ -433,9 +419,44 @@ fn pixels_per_inch() -> f64 {
     72.0 / Unit::Pixels.to_pt(1.0)
 }
 
+/// The four Bleed fields in one row, each under its side's name, and the link button at the end; linked, an edit to
+/// one side sets all four. Each field is as wide as the widest bleed it takes, and the row wraps when the column has
+/// no room for all of them.
+fn bleed_row(ui: &mut egui::Ui, s: &mut DocSettings, memory: &mut Memory, lengths: LengthUnits) {
+    let mut linked = !memory.bleed_split;
+    let link = LinkMode::Equal.label(&Env::of(ui).words::<LinkedWords>());
+    let sides = [text(tl!("Top")), text(tl!("Bottom")), text(tl!("Left")), text(tl!("Right"))];
+    let mut edited = None;
+    Row::new().wrap(true).show(ui, |ui, _| {
+        for (i, side) in sides.iter().enumerate() {
+            Field::new(side.clone()).layout(FieldLayout::Above).sizing(Sizing::Content).id_salt(("bleed", i)).show(ui, |ui, _| {
+                let field = NumberField::length(side.clone(), Bind::given(Some(s.bleed[i])), lengths)
+                    .range(0.0..=vectorcraft_doc::setup::MAX_BLEED)
+                    .sizing(Sizing::Content);
+                if let Some(v) = field.show(ui).edit.events.committed().copied().flatten().filter(|v| v.is_finite()) {
+                    edited = Some((i, v.clamp(0.0, vectorcraft_doc::setup::MAX_BLEED)));
+                }
+            });
+        }
+        link_toggle(link.clone(), Bind::bound(&mut linked)).id_salt("bleed-link").show(ui);
+    });
+    if let Some((i, v)) = edited {
+        if linked {
+            s.bleed = follow_equal(s.bleed, i, v);
+        } else {
+            s.bleed[i] = v;
+        }
+    }
+    memory.bleed_split = !linked;
+}
+
+/// The Height, Orientation and Artboards row. Orientation's share keeps its two buttons side by side in a 900-point
+/// window.
+const THIRDS: [ColumnWidth; 3] = [ColumnWidth::fill(1.0), ColumnWidth::fill(1.4), ColumnWidth::fill(1.0)];
+
 /// A side of the page in points, shown in the chosen units.
 fn size_field(ui: &mut egui::Ui, name: &Label, points: &mut f64, lengths: LengthUnits) {
-    let field = NumberField::length(name.clone(), Bind::given(Some(*points)), lengths).range(MIN_SIDE..=MAX_SIDE);
+    let field = NumberField::length(name.clone(), Bind::given(Some(*points)), lengths).range(MIN_SIDE..=MAX_SIDE).sizing(Sizing::FillWidth);
     if let Some(v) = field.show(ui).edit.events.committed().copied().flatten().filter(|v| v.is_finite()) {
         *points = v;
     }
@@ -994,8 +1015,13 @@ mod tests {
 
     /// The window's frames with the dialog open, laid out; the last frame's output.
     fn laid_out(app: &mut VectorcraftApp) -> egui::FullOutput {
+        laid_out_in(app, egui::vec2(1280.0, 900.0))
+    }
+
+    /// [`laid_out`] in a window of `size`.
+    fn laid_out_in(app: &mut VectorcraftApp, size: egui::Vec2) -> egui::FullOutput {
         let ctx = ctx(app);
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 900.0));
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
         let mut frame = |i: u32| {
             let input = egui::RawInput { time: Some(0.1 * f64::from(i)), screen_rect: Some(screen), ..Default::default() };
             crate::testing::part_frame(app, &ctx, input, |app, ui| app.ui(ui))
@@ -1376,5 +1402,93 @@ mod tests {
             }
         }
         crate::i18n::set_current(crate::i18n::Lang::EN);
+    }
+
+    /// The accessibility nodes of New Document opened in a window of `width` by `height`: role, name and bounds.
+    fn dialog_nodes(width: f32, height: f32) -> Vec<(egui::accesskit::Role, String, egui::accesskit::Rect)> {
+        let mut app = app();
+        open(&mut app);
+        let out = laid_out_in(&mut app, egui::vec2(width, height));
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        nodes.iter().filter_map(|(_, n)| Some((n.role(), n.label()?.to_owned(), n.bounds()?))).collect()
+    }
+
+    /// The bounds of the node named `name` in `role`.
+    fn node(nodes: &[(egui::accesskit::Role, String, egui::accesskit::Rect)], name: &str, role: egui::accesskit::Role) -> egui::accesskit::Rect {
+        nodes.iter().find(|(r, n, _)| *r == role && n == name).map(|(_, _, b)| *b).unwrap_or_else(|| panic!("no {role:?} {name}"))
+    }
+
+    /// Every Preset Details label stands above its field, at the field's left edge; before, Width, Height,
+    /// Orientation, Artboards, the Bleed sides and Background Contents sat right-aligned beside their fields.
+    #[test]
+    fn new_document_labels_sit_above_their_fields() {
+        use egui::accesskit::Role;
+        let nodes = dialog_nodes(1280.0, 900.0);
+        for (name, role) in [
+            ("Width", Role::SpinButton),
+            ("Height", Role::SpinButton),
+            ("Orientation", Role::RadioGroup),
+            ("Artboards", Role::SpinButton),
+            ("Top", Role::SpinButton),
+            ("Bottom", Role::SpinButton),
+            ("Left", Role::SpinButton),
+            ("Right", Role::SpinButton),
+            ("Background Contents", Role::ComboBox),
+        ] {
+            let (label, field) = (node(&nodes, name, Role::Label), node(&nodes, name, role));
+            assert!(label.y1 <= field.y0 + 0.5, "the {name} label {label:?} stands above its field {field:?}");
+            assert!((label.x0 - field.x0).abs() <= 1.0, "the {name} label {label:?} starts at its field's left edge {field:?}");
+        }
+        // The four Bleed fields share one row, and the link button follows the last of them.
+        let sides = ["Top", "Bottom", "Left", "Right"].map(|side| node(&nodes, side, Role::SpinButton));
+        assert!(sides.windows(2).all(|w| w[0].y0 == w[1].y0 && w[0].x1 <= w[1].x0), "one row, in order: {sides:?}");
+        let link = node(&nodes, "Make all settings the same", Role::Button);
+        assert!(sides[3].x1 <= link.x0, "the link button {link:?} ends the Bleed row {sides:?}");
+    }
+
+    /// At 1280 by 900 the preset cards stand four to a row, with the details column beside them.
+    #[test]
+    fn new_document_presets_show_four_columns_at_the_default_size() {
+        use egui::accesskit::Role;
+        let nodes = dialog_nodes(1280.0, 900.0);
+        let list = node(&nodes, "Blank Document Presets", Role::ListBox);
+        let inside = |b: &egui::accesskit::Rect| list.x0 <= b.x0 && b.x1 <= list.x1 && list.y0 <= b.y0 && b.y1 <= list.y1;
+        let cards: Vec<_> = nodes.iter().filter(|(r, _, b)| *r == Role::ListItem && inside(b)).map(|(_, _, b)| *b).collect();
+        let first = cards.iter().map(|b| b.y0).fold(f64::INFINITY, f64::min);
+        let row = cards.iter().filter(|b| (b.y0 - first).abs() < 0.5).count();
+        assert_eq!(row, 4, "four cards to the first row: {cards:?}");
+        let details = node(&nodes, "Width", Role::SpinButton);
+        assert!(cards.iter().all(|b| b.x1 < details.x0), "the cards stay left of the details column");
+    }
+
+    /// In a 900 by 700 window every Preset Details control ends inside the dialog; before, the Bleed row's Left and
+    /// Right fields ran past its right edge.
+    #[test]
+    fn new_document_details_are_not_clipped_at_the_right_edge() {
+        use egui::accesskit::Role;
+        for (width, height) in [(900.0, 700.0), (1280.0, 900.0)] {
+            let nodes = dialog_nodes(width, height);
+            let dialog = nodes.iter().find(|(r, _, _)| *r == Role::Dialog).map(|(_, _, b)| *b).expect("the dialog");
+            for (name, role) in [
+                ("Width", Role::SpinButton),
+                ("Units", Role::ComboBox),
+                ("Height", Role::SpinButton),
+                ("Landscape", Role::RadioButton),
+                ("Artboards", Role::SpinButton),
+                ("Top", Role::SpinButton),
+                ("Bottom", Role::SpinButton),
+                ("Left", Role::SpinButton),
+                ("Right", Role::SpinButton),
+                ("Make all settings the same", Role::Button),
+                ("Background Contents", Role::ComboBox),
+                ("More Settings", Role::Button),
+                ("Manage Profiles", Role::Button),
+            ] {
+                let field = node(&nodes, name, role);
+                assert!(field.x1 <= dialog.x1 - 8.0, "{width}x{height}: {name} {field:?} ends inside the dialog {dialog:?}");
+            }
+            let (portrait, landscape) = (node(&nodes, "Portrait", Role::RadioButton), node(&nodes, "Landscape", Role::RadioButton));
+            assert!(portrait.y0 == landscape.y0 && portrait.x1 <= landscape.x0, "{width}x{height}: Portrait and Landscape side by side");
+        }
     }
 }
