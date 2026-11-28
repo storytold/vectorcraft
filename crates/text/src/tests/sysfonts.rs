@@ -1257,3 +1257,64 @@ fn a_name_asked_for_before_its_font_is_installed_finds_it_after_a_rescan() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A document names `Gilroy-Black` as the family Gilroy in the style Black. A file whose own family is
+/// `Gilroy-Black`, with no style, is that face, once cataloged and in a search of a folder.
+#[test]
+fn a_search_finds_the_file_of_a_postscript_name_split_into_family_and_style() {
+    let data = named(&[(3, EN, 1, "Gilroy-Black"), (3, EN, 4, "Gilroy-Black"), (3, EN, 6, "Gilroy-Black")]);
+    let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-split-ps", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("Gilroy-Black.ttf");
+    std::fs::write(&file, &data).unwrap();
+    let db = FontDb::with_font_dirs(vec![dir.clone()]);
+    let (face, matched) = db.resolve("Gilroy", "Black").unwrap();
+    assert_eq!(matched, FontMatch::Exact, "{face:?}");
+    let wanted = |style: &str| WantedFonts::new(&[WantedFont { family: "Gilroy".into(), style: style.into(), installed: None }]);
+    assert_eq!(wanted("Black").provided_by(&file), [0]);
+    assert!(wanted("Bold").provided_by(&file).is_empty(), "another style of the family is another file");
+    assert!(wanted("").provided_by(&file).is_empty(), "without a style, the family alone is not the PostScript name");
+    let _ = std::fs::remove_dir_all(dir);
+    // The search offers a file only when installing it resolves the name exactly: not when the
+    // joined name is only a full name, and not when a legacy family of the same name resolves it
+    // first, to another style.
+    let cases = [
+        ("full-name", vec![(3, EN, 1, "Gilroy Black"), (3, EN, 4, "Gilroy Black"), (3, EN, 6, "GilroyBlk")]),
+        (
+            "legacy",
+            vec![(3, EN, 1, "Gilroy"), (3, EN, 2, "Regular"), (3, EN, 16, "Gilroy Display"), (3, EN, 17, "Regular"), (3, EN, 6, "Gilroy-Black")],
+        ),
+    ];
+    for (name, records) in cases {
+        let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-split-ps-{name}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join(format!("{name}.ttf"));
+        std::fs::write(&file, named(&records)).unwrap();
+        let db = FontDb::with_font_dirs(vec![dir.clone()]);
+        let exact = db.resolve("Gilroy", "Black").is_some_and(|(_, matched)| matched == FontMatch::Exact);
+        assert!(!exact, "{name}: installing the file doesn't resolve Gilroy Black exactly");
+        assert!(wanted("Black").provided_by(&file).is_empty(), "{name}: so the search doesn't offer it");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// In a collection whose faces share a legacy family but not a typographic one, the search looks
+/// for the style asked for in each face's family, in either order.
+#[test]
+fn a_search_finds_a_style_among_the_faces_of_a_shared_legacy_family() {
+    let regular = named(&[(3, EN, 1, "Gilroy"), (3, EN, 2, "Regular"), (3, EN, 16, "Gilroy Text"), (3, EN, 17, "Regular")]);
+    let black =
+        named(&[(3, EN, 1, "Gilroy"), (3, EN, 2, "Regular"), (3, EN, 16, "Gilroy Display"), (3, EN, 17, "Black"), (3, EN, 6, "Gilroy-Black")]);
+    for (order, faces) in [("regular-first", [regular.clone(), black.clone()]), ("black-first", [black.clone(), regular.clone()])] {
+        let dir = std::env::temp_dir().join(format!("vc-sysfonts-{}-shared-legacy-{order}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("shared.ttc");
+        std::fs::write(&file, collection(&faces)).unwrap();
+        let db = FontDb::with_font_dirs(vec![dir.clone()]);
+        let (face, matched) = db.resolve("Gilroy", "Black").unwrap();
+        assert_eq!(matched, FontMatch::Exact, "{order}: {face:?}");
+        let wanted = WantedFonts::new(&[WantedFont { family: "Gilroy".into(), style: "Black".into(), installed: None }]);
+        assert_eq!(wanted.provided_by(&file), [0], "{order}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}

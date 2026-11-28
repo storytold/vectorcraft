@@ -35,7 +35,7 @@ impl WantedFonts {
     pub fn new(fonts: &[WantedFont]) -> Self {
         let mut by_name: HashMap<String, Vec<usize>> = HashMap::new();
         for (i, w) in fonts.iter().enumerate() {
-            let mut names = vec![w.family.to_ascii_lowercase(), norm(&w.family)];
+            let mut names = vec![w.family.to_ascii_lowercase(), norm(&w.family), joined(w)];
             names.extend(w.installed.as_ref().map(|c| c.to_ascii_lowercase()));
             names.sort();
             names.dedup();
@@ -136,6 +136,22 @@ fn provides(w: &WantedFont, faces: &[FaceStyle]) -> bool {
     }) {
         return true;
     }
-    // A legacy family with another style: that style of the family.
-    faces.iter().find(|f| f.keys.legacy.iter().any(|(family, _)| *family == key)).is_some_and(|f| styled(&f.family))
+    // A legacy family with another style: that style of the family, among every face of the
+    // legacy family (in a collection they can be of different families). Once installed, the
+    // legacy family resolves the name, and `FontDb::canonical` doesn't join it.
+    let mut legacy = faces.iter().filter(|f| f.keys.legacy.iter().any(|(family, _)| *family == key)).peekable();
+    if legacy.peek().is_some() {
+        return legacy.any(|f| styled(&f.family));
+    }
+    // A family and style split from a PostScript name by an importer that didn't have the font
+    // (`Gilroy-Black` → Gilroy, Black), as `FontDb::canonical` joins them again: a face whose
+    // PostScript name is that name, whatever family and style the file gives it. Of a cataloged
+    // face, `canonical` reads the PostScript name only, so a full name alone isn't enough.
+    let joined = joined(w);
+    !sk.is_empty() && faces.iter().any(|f| f.keys.postscript.contains(&joined))
+}
+
+/// The family and style of `w` as one normalized name (`Gilroy` and `Black` → `gilroyblack`).
+fn joined(w: &WantedFont) -> String {
+    format!("{}{}", norm(&w.family), norm(&w.style))
 }
