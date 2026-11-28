@@ -340,7 +340,9 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             run(app, "library.use", json!({"library": library, "kind": "graphic", "item": item, "center": [at.x, at.y]}))
         }
         Payload::Brush(key) if app.session.active().is_some_and(|st| st.uid == key.doc) => match hit() {
-            None if brush_has_art(app, key) => run(app, "brush.placeArt", json!({"name": key.name, "x": at.x, "y": at.y})),
+            None if brush_has_art(app, key) && no_art_at(app, at, zoom) => {
+                run(app, "brush.placeArt", json!({"name": key.name, "x": at.x, "y": at.y}))
+            }
             None => Ok(()),
             Some(hit) => {
                 let owner = owner(app, &hit)?;
@@ -354,6 +356,12 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             run(app, "graphicStyle.apply", json!({"name": style.name, "ids": [top], "add": drop.op == DropOperation::Copy}))
         }
         Payload::Style(_) => Ok(()),
+        // A pattern swatch from the Swatches panel dropped where there is no art: a copy of its tile art with its tile.
+        Payload::Panel(PanelDrag::Paint { paint: vectorcraft_color::Paint::Pattern { pattern, .. }, rows: Some(_), .. })
+            if hit().is_none() && no_art_at(app, at, zoom) =>
+        {
+            run(app, "pattern.placeArt", json!({"name": pattern, "x": at.x, "y": at.y}))
+        }
         Payload::Panel(drag @ PanelDrag::Paint { params, paint, rows, .. }) if !params.is_null() => {
             if let Some(color) = paint.color()
                 && crate::panels::proxy_cmd(app, false) == "paint.setFill"
@@ -418,6 +426,16 @@ fn brush_has_art(app: &VectorcraftApp, key: &BrushKey) -> bool {
         .and_then(|d| vectorcraft_brush::find(&d.doc, &key.name))
         .and_then(|b| serde_json::to_value(b).ok()) // PLAN: assumed `Brush: Serialize` with a "type" tag, as the panel's `def`
         .is_some_and(|v| matches!(v["type"].as_str(), Some("scatter" | "art" | "pattern")))
+}
+
+/// Whether no art is under document point `p` at `zoom`, with fills counted even with Object Selection by Path Only and
+/// type objects by their area even with Type Object Selection by Path Only: a brush's or a pattern swatch's art is
+/// placed only there.
+fn no_art_at(app: &VectorcraftApp, p: Point, zoom: f64) -> bool {
+    hit_with(app, p, zoom, |doc, p, opt| {
+        vectorcraft_doc::hit::hit_test(doc, p, vectorcraft_doc::hit::HitOptions { path_only: false, type_path_only: false, ..opt })
+    })
+    .is_none()
 }
 
 /// The selected, editable gradient mesh and its points that a solid color dropped at document
