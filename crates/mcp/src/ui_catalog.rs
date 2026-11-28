@@ -2007,6 +2007,12 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "{path?: a .wasm file | dataBase64?: the module, name?: the file name shown as its source (with dataBase64), replace?: bool (true: the user agreed it takes the place of the plug-in with its id, as plugin.install), hash?: the module's SHA-256 (as plugin.install)} install a WebAssembly plug-in (plugin.install); without a path pick one (the web opens the browser's file picker; File › Open of a .wasm installs it too). A plug-in that lists permissions the user hasn't granted it asks the user first, showing its name, id, version, file SHA-256 and what each permission lets it do, so does a filter that asks for a heavy budget, and so does one without replace that would take the place of another module with its id and get its settings and cache (needsReplace in plugin.inspect), showing its id and file SHA-256: OK installs it if the file still has the SHA-256 shown, Cancel installs nothing. Only a person can press OK: ui.dialog.confirm, answer_dialog and synthetic input are refused. When automation asked (a control or MCP request, synthetic input, or a file dialog one of them opened, even when the person picked the file), replace: true doesn't skip the question about replacing, and nothing in the dialog installs it, the person's OK included: the person chooses Object › Plug-ins › Install Plug-in… to install it → plugin.install's result | {pending: \"pluginInstall\"} while it asks | {pending: \"pluginInstall\", approval: \"personMustStartInstall\"} while it asks what automation asked | null on the web without path or dataBase64, once the browser's file picker opens (the picked file is handled as above)",
     ),
     (
+        "ui.failedPlugins",
+        "Plug-ins That Didn't Load…",
+        "",
+        "{} Object › Plug-ins › Plug-ins That Didn't Load…: list the plug-in files that didn't load in this session, each by its file name with why (plugin.list's failed), at most 50 and a count of the others (dialog `pluginsFailed`); Retry All loads them again (plugin.retry) and the status bar says how many loaded, Close changes nothing → {pending: \"pluginsFailed\", failed: n}. Disabled, and an error, while no plug-in failed to load",
+    ),
+    (
         "plugin.cancelRuns",
         "Cancel Plug-in Run",
         "",
