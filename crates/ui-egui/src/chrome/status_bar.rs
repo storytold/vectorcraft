@@ -46,8 +46,10 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     let render = crate::i18n::tr_ctx(lang, "diagnostics", "render");
     let ui_name = crate::i18n::tr_ctx(lang, "diagnostics", "ui");
     let busy = busy_labels(app);
+    let presets = zoom_presets(view.map(|v| crate::state::zoom_display_percent(v.zoom, print)), print);
 
     let (mut zoom_to, mut rotate_to, mut go, mut show_pick, mut stop) = (None, None, None, None, false);
+    let mut preset_pick = None;
     let mut invalid_zoom = None;
     let mut snapping = None;
     // Convenience controls leave first: direct toggles, then the menu. The existing timings and pointer position
@@ -100,6 +102,8 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
             invalid_zoom = zoom.invalid_zoom.map(|invalid| invalid.message(&Env::of(ui)));
         }
+        let open_presets = IconButton::new(IconId::new("chevron_down")).label(tl!("Zoom Presets")).enabled(view.is_some()).show(ui);
+        preset_pick = Menu::new(tl!("Zoom Presets")).values().opened_by(open_presets.response(), Trigger::Press).pick(ui, &presets).picked;
         Field::new(tl!("Rotation")).side(SideLabel::new().kind(LabelKind::Hidden)).show(ui, |ui, _| {
             // Entries are keyed by index: an angle is not a hashable value.
             rotate_to = Select::new(tl!("Rotation"), Bind::given(turned), &angles)
@@ -178,6 +182,18 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some(zoom) = zoom_to {
         app.run("view.setZoom", json!({"zoom": zoom})).ok();
     }
+    match preset_pick {
+        Some(ZoomPreset::Percent(zoom)) => {
+            app.run("view.setZoom", json!({ "zoom": zoom })).ok();
+        }
+        Some(ZoomPreset::FitOnScreen) => {
+            app.run("view.fitArtboard", json!({})).ok();
+        }
+        Some(ZoomPreset::FitAll) => {
+            app.run("view.fitAll", json!({})).ok();
+        }
+        None => {}
+    }
     if let Some(&(_, angle)) = rotate_to.and_then(|i| ROTATE_VIEW_ANGLES.get(i)) {
         app.run("view.rotate", json!({"angle": angle})).ok();
     }
@@ -200,6 +216,7 @@ pub fn status_bar(app: &mut VectorcraftApp, ui: &mut Ui) {
 mod tests {
     use super::*;
     use crate::tests::panel_harness::Panel;
+    use craft::ui::canvas::ViewCommands;
     use craft::ui::contract::Role;
 
     #[test]
@@ -273,6 +290,51 @@ mod tests {
     }
 
     #[test]
+    fn the_zoom_presets_menu_sets_a_stop_and_fits_the_view() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(600.0, 400.0));
+        app.run("view.setZoom", json!({"zoom": 800})).unwrap();
+        app.view_mut().unwrap().request = None;
+        // The canvas applies a fit on its next frame; the status bar alone leaves the request queued.
+        let requested = |panel: &Panel| panel.app().view().and_then(|v| v.request.map(|(r, _)| r.command()));
+        let document = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, status_bar);
+        // Room for the whole menu, so the entries at its foot are on screen.
+        panel.room(egui::vec2(1200.0, 1600.0));
+
+        panel.click_role("Zoom Presets", Role::BUTTON);
+        panel.click_role("200%", Role::MENU_ITEM_RADIO);
+        let print = panel.app().print_ppi();
+        assert!((crate::state::zoom_display_percent(panel.app().view().unwrap().zoom, print) - 200.0).abs() < 1e-6, "a stop sets its zoom");
+
+        panel.click_role("Zoom Presets", Role::BUTTON);
+        panel.click_role("Fit on Screen", Role::MENU_ITEM_RADIO);
+        assert_eq!(requested(&panel), Some(ViewCommands::FitArtboard), "Fit on Screen runs view.fitArtboard");
+        panel.app().view_mut().unwrap().request = None;
+
+        panel.click_role("Zoom Presets", Role::BUTTON);
+        panel.click_role("Fit All", Role::MENU_ITEM_RADIO);
+        assert_eq!(requested(&panel), Some(ViewCommands::FitOnScreen), "Fit All runs view.fitAll");
+
+        let app = panel.app();
+        assert_eq!(app.session.active().unwrap().doc, document);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo, "zooming records no undo step");
+    }
+
+    #[test]
+    fn the_zoom_presets_list_the_stops_from_the_highest_and_check_the_shown_zoom() {
+        let presets = zoom_presets(Some(200.0), None);
+        let labels: Vec<String> = presets.iter().filter(|e| e.is_item()).map(|e| e.label().as_str().to_owned()).collect();
+        assert_eq!(labels.first().map(String::as_str), Some("64000%"));
+        assert_eq!(labels.iter().rev().take(3).rev().map(String::as_str).collect::<Vec<_>>(), ["3.13%", "Fit on Screen", "Fit All"]);
+        let checked: Vec<_> = presets.iter().filter(|e| e.is_checked()).filter_map(|e| e.value().copied()).collect();
+        assert_eq!(checked, [ZoomPreset::Percent(200.0)]);
+        assert!(zoom_presets(None, None).iter().all(|e| !e.is_checked()), "without a view no stop is checked");
+    }
+
+    #[test]
     fn with_no_document_the_artboard_navigator_shows_a_dash() {
         let app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
         let mut panel = Panel::new(app, status_bar);
@@ -293,6 +355,34 @@ fn busy_labels(app: &VectorcraftApp) -> Vec<&str> {
         .chain(app.opening.pending.iter().map(|p| p.label.as_str()))
         .chain(app.placing.pending.iter().map(|p| p.label.as_str()))
         .collect()
+}
+
+/// An entry of the Zoom Presets menu beside the status bar's zoom field.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ZoomPreset {
+    /// A zoom stop, in the percent `view.setZoom` takes.
+    Percent(f64),
+    /// Fit on Screen (`view.fitArtboard`).
+    FitOnScreen,
+    /// Fit All (`view.fitAll`).
+    FitAll,
+}
+
+/// The Zoom Presets menu: the zoom stops from the highest, the one at the `shown` percent checked, then Fit on Screen
+/// and Fit All.
+fn zoom_presets(shown: Option<f64>, print: Option<f64>) -> Vec<Entry<ZoomPreset>> {
+    let stops = crate::state::zoom_stop_percents();
+    let mut entries: Vec<Entry<ZoomPreset>> = stops
+        .rev()
+        .map(|pct| {
+            let label = crate::state::zoom_label(crate::state::zoom_from_display_percent(pct, print), print);
+            Entry::new(ZoomPreset::Percent(pct), label).checked(shown.is_some_and(|s| (s - pct).abs() < 0.01))
+        })
+        .collect();
+    entries.push(Entry::separator());
+    entries.push(Entry::new(ZoomPreset::FitOnScreen, tl!("Fit on Screen")));
+    entries.push(Entry::new(ZoomPreset::FitAll, tl!("Fit All")));
+    entries
 }
 
 /// What the status bar's info field shows, chosen from the Show menu that a click on the field
