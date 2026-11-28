@@ -629,12 +629,13 @@ fn picked(app: &VectorcraftApp) -> Vec<(usize, usize)> {
 
 /// Save `cells`' colors as swatches (one undo step), each in its own model; a tint of a spot color
 /// base becomes a tint swatch of it.
-fn save_selected(app: &mut VectorcraftApp, cells: &[(usize, usize)]) {
+fn save_selected(app: &mut VectorcraftApp, cells: &[(usize, usize)]) -> Result<(), String> {
     let g = guide(app);
     let colors = cell_entries(app, &g, cells);
     if !colors.is_empty() {
-        app.run("swatch.new", json!({ "colors": colors, "keepModel": true })).ok();
+        app.run("swatch.new", json!({ "colors": colors, "keepModel": true }))?;
     }
+    Ok(())
 }
 
 /// Save Color Group to Swatches: `cells` as one swatch group in the order given; with none, the
@@ -714,6 +715,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let limit = model.palette.as_ref().map(|l| l.shown.as_slice()).filter(|s| !s.is_empty());
     let has_cells = !model.picked.cells().is_empty();
     let doc = app.session.active().is_some();
+    let can_save_swatches = crate::menus::enabled(app, "swatch.new");
+    let can_save_group = crate::menus::enabled(app, "swatch.newGroup");
     let (tip, limited) = limit_tip(app);
     let shared: &VectorcraftApp = app;
     let (mut cell, mut base_clicked, mut footer_picked, mut limit_picked) = (None, false, None, None);
@@ -723,8 +726,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .footer(|ui, _| {
             let actions = [
                 FooterAction::new(icon("library"), tip.clone()).pressed(limited).popup(PopupKind::Menu),
-                FooterAction::new(icon("dc-folder"), tl!("Save color group to Swatch panel").to_string()),
-                FooterAction::new(icon("dc-new-item"), tl!("Save selected colors as swatches").to_string()).enabled(has_cells),
+                FooterAction::new(icon("dc-folder"), tl!("Save color group to Swatch panel").to_string()).enabled(can_save_group),
+                FooterAction::new(icon("dc-new-item"), tl!("Save selected colors as swatches").to_string()).enabled(has_cells && can_save_swatches),
                 FooterAction::new(icon("palette"), tl!("Edit or Apply Colors").to_string()).enabled(doc),
             ];
             let out = FooterBar::actions(actions).at_start(LIMIT + 1).show_footer(ui);
@@ -766,7 +769,11 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let cells = picked(app);
     match footer_picked {
         Some(EDIT) => edit_or_apply(app),
-        Some(SAVE_SELECTED) => save_selected(app, &cells),
+        Some(SAVE_SELECTED) => {
+            if let Err(error) = save_selected(app, &cells) {
+                app.status(error);
+            }
+        }
         Some(SAVE_GROUP) => save_group(app, &cells),
         _ => {}
     }
@@ -780,10 +787,20 @@ pub(crate) fn menu_rows() -> Vec<PanelRow> {
 /// The state of each menu command.
 pub(crate) fn menu_states(app: &VectorcraftApp) -> Vec<(HarmonyCommand, CommandState)> {
     HarmonyMenu::states(&panel_state(app.ui.color_guide_panel.rule, app.ui.color_guide), &app.ui.color_guide_panel.picked)
+        .into_iter()
+        .map(|(command, state)| {
+            let state =
+                if command == HarmonyCommand::SaveAsSwatches && !crate::menus::enabled(app, "swatch.new") { state.enabled(false) } else { state };
+            (command, state)
+        })
+        .collect()
 }
 
 /// Carry out menu command `command`.
-pub(crate) fn run(app: &mut VectorcraftApp, command: HarmonyCommand) {
+pub(crate) fn run(app: &mut VectorcraftApp, command: HarmonyCommand) -> Result<(), String> {
+    if command == HarmonyCommand::SaveAsSwatches && app.session.active().is_none() {
+        return Err(tl!("No document").into());
+    }
     let mut state = panel_state(app.ui.color_guide_panel.rule, app.ui.color_guide);
     let action = HarmonyMenu::run_command(&mut state, &app.ui.color_guide_panel.picked, command);
     app.ui.color_guide = state.options;
@@ -792,13 +809,14 @@ pub(crate) fn run(app: &mut VectorcraftApp, command: HarmonyCommand) {
         // keeps its model and a spot tint stays a tint swatch.
         Some(HarmonyMenuAction::SaveAsSwatches(_)) => {
             let cells = picked(app);
-            save_selected(app, &cells);
+            save_selected(app, &cells)?;
         }
         Some(HarmonyMenuAction::Options) => {
             app.run("ui.colorGuideOptions", json!({})).ok();
         }
         _ => {}
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -815,6 +833,45 @@ mod tests {
     fn frame(app: &mut VectorcraftApp, ctx: &egui::Context) {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| show(app, ui));
         out.textures_delta.clear();
+    }
+
+    #[test]
+    fn save_actions_follow_the_drawing_when_it_closes_and_reopens() {
+        use crate::tests::panel_harness::Panel;
+
+        let app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        let mut panel = Panel::new(app, show);
+        panel.room(egui::vec2(360.0, 900.0)).frame();
+        let group = "Save color group to Swatch panel";
+        let selected = "Save selected colors as swatches";
+        let menu_enabled = |app: &VectorcraftApp| {
+            menu_states(app).into_iter().find(|(command, _)| *command == HarmonyCommand::SaveAsSwatches).unwrap().1.is_enabled()
+        };
+        let save_as_swatches = craft::keymap::CommandRef::from(HarmonyCommand::SaveAsSwatches).id;
+        assert!(!panel.enabled(group));
+        assert!(!panel.enabled(selected));
+        assert!(!menu_enabled(&panel.app()));
+        assert!(panel.app().run(&save_as_swatches, json!({})).is_err());
+
+        for _ in 0..2 {
+            panel.app().run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            choose_linked_base(&mut panel.app(), Color::rgb(0.2, 0.4, 0.7), None);
+            panel.frame();
+            panel.click("#1a335a");
+            assert!(!panel.app().ui.color_guide_panel.picked.cells().is_empty());
+            assert!(panel.enabled(group));
+            assert!(panel.enabled(selected));
+            assert!(menu_enabled(&panel.app()));
+            let before = panel.app().session.active().unwrap().doc.swatches.len();
+            panel.app().run(&save_as_swatches, json!({})).unwrap();
+            assert!(panel.app().session.active().unwrap().doc.swatches.len() > before);
+
+            panel.app().session.execute("file.close", &json!({"index": 0})).unwrap();
+            panel.frame();
+            assert!(!panel.enabled(group));
+            assert!(!panel.enabled(selected));
+            assert!(!menu_enabled(&panel.app()));
+        }
     }
 
     /// The guide of the base without a library limit, as the panel makes it.
@@ -908,7 +965,7 @@ mod tests {
         let before = app.session.doc().unwrap().doc.swatches.len();
         let cells = &[(0, 0), (1, 4), (0, 8)].to_vec();
         let undo = app.session.doc().unwrap().history.undo.len();
-        save_selected(&mut app, cells);
+        save_selected(&mut app, cells).unwrap();
         let st = app.session.doc().unwrap();
         assert_eq!(st.doc.swatches.len(), before + 3);
         assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
@@ -925,7 +982,7 @@ mod tests {
         let ctx = crate::testing::ui_context();
         frame(&mut app, &ctx);
         let cells = &[(0, 0), (0, 6)].to_vec();
-        save_selected(&mut app, cells);
+        save_selected(&mut app, cells).unwrap();
         let g = guide_of(&app);
         assert!(matches!(g.grid[0][6], Color::Rgb { .. }), "{:?}", g.grid[0][6]);
         let sw = &app.session.doc().unwrap().doc.swatches;
@@ -1476,7 +1533,7 @@ mod tests {
         let c = g.centre();
         let undo = app.session.doc().unwrap().history.undo.len();
         let cells = &[(0, c + 1), (0, c - 1), (0, c + 3)].to_vec();
-        save_selected(&mut app, cells);
+        save_selected(&mut app, cells).unwrap();
         let st = app.session.doc().unwrap();
         assert_eq!(st.history.undo.len(), undo + 1, "one undo step");
         let made: Vec<_> = st.doc.swatches[st.doc.swatches.len() - 3..].to_vec();

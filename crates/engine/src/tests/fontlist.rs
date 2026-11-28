@@ -2,6 +2,7 @@
 //! and Refresh Font List (`text.rescanFonts`).
 
 use serde_json::{Value, json};
+use vectorcraft_text::test_fonts::steady_fonts;
 use vectorcraft_text::{FontDb, system_font_dirs};
 
 use crate::*;
@@ -13,12 +14,12 @@ fn names(v: &Value) -> Vec<String> {
 #[test]
 fn the_font_list_names_every_available_family_with_its_styles() {
     let mut s = Session::new();
-    let fams = names(&s.execute("text.fontList", &json!({})).unwrap()["families"]);
-    // Other tests running at the same time add and remove composite fonts, which the lists show
-    // first; the installed families are compared.
     let db = FontDb::global();
-    let installed_only = |list: &[String]| list.iter().filter(|f| db.has_installed_family(f)).cloned().collect::<Vec<_>>();
-    assert_eq!(installed_only(&fams), installed_only(&db.menu_family_list()));
+    // Tests running alongside add fonts and composite fonts to the process-wide database; their
+    // changes wait until this test ends, so both lists are read from the same fonts.
+    let _steady = steady_fonts(db);
+    let fams = names(&s.execute("text.fontList", &json!({})).unwrap()["families"]);
+    assert_eq!(fams, db.menu_family_list().to_vec());
     for f in ["Source Sans 3", "Source Serif 4", "Inter", "JetBrains Mono"] {
         assert!(fams.iter().any(|x| x == f), "{f}");
     }
@@ -40,6 +41,9 @@ fn the_font_list_names_every_available_family_with_its_styles() {
 fn similar_fonts_lists_every_family_by_likeness() {
     let mut s = Session::new();
     let db = FontDb::global();
+    // Tests running alongside add fonts and composite fonts to the process-wide database; their
+    // changes wait until this test ends, so every answer is made from the same fonts.
+    let _steady = steady_fonts(db);
     let r = s.execute("text.similarFonts", &json!({"family": "source sans 3"})).unwrap();
     assert_eq!(r["family"], "Source Sans 3");
     let order = names(&r["families"]);
@@ -48,31 +52,10 @@ fn similar_fonts_lists_every_family_by_likeness() {
     sorted.sort();
     let mut listed = db.menu_family_list().to_vec();
     listed.sort();
-    // Other tests running at the same time add and remove composite fonts; the installed families are compared.
-    let installed_only = |list: &[String]| list.iter().filter(|f| db.has_installed_family(f)).cloned().collect::<Vec<_>>();
-    assert_eq!(installed_only(&sorted), installed_only(&listed), "every family once");
-    // The two answers are compared whole when the available fonts did not change while both were
-    // made (the same `FontDb::generation`), and by their installed families when they changed
-    // during every try.
-    let mut answers = (vec![], vec![], false);
-    for _ in 0..20 {
-        let generation = db.generation();
-        let all = names(&s.execute("text.similarFonts", &json!({"family": "Source Sans 3"})).unwrap()["families"]);
-        let two = names(&s.execute("text.similarFonts", &json!({"family": "Source Sans 3", "limit": 2})).unwrap()["families"]);
-        let unchanged = db.generation() == generation;
-        answers = (all, two, unchanged);
-        if unchanged {
-            break;
-        }
-    }
-    let (all, two, unchanged) = answers;
-    assert_eq!(two.len(), 2);
-    if unchanged {
-        assert_eq!(two, all[..2], "the first families, in order");
-    } else {
-        let (two, all) = (installed_only(&two), installed_only(&all));
-        assert_eq!(two[..], all[..two.len()], "the first installed families, in order");
-    }
+    assert_eq!(sorted, listed, "every family once");
+    let all = names(&s.execute("text.similarFonts", &json!({"family": "Source Sans 3"})).unwrap()["families"]);
+    let two = names(&s.execute("text.similarFonts", &json!({"family": "Source Sans 3", "limit": 2})).unwrap()["families"]);
+    assert_eq!(two, all[..2], "the first families, in order");
     for (params, error) in [
         (json!({}), "`family` is required"),
         (json!({"family": " "}), "`family` is required"),
@@ -94,6 +77,9 @@ fn refreshing_the_font_list_redraws_type_without_editing_the_document() {
     s.execute("text.create", &json!({"x": 10, "y": 40, "text": "Type", "font": "No Such Font"})).unwrap();
     s.doc_mut().unwrap().mark_saved();
     let revision = s.doc().unwrap().revision;
+    // Fonts that tests running alongside add wait until this test ends, so the count is of the
+    // fonts the rescan left.
+    let _steady = steady_fonts(FontDb::global());
     let r = s.execute("text.rescanFonts", &json!({})).unwrap();
     assert_eq!(r["families"], json!(FontDb::global().menu_family_list().len()));
     assert!(r["faces"].is_u64());

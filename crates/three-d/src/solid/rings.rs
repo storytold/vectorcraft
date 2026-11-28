@@ -476,6 +476,42 @@ pub(super) fn left(a: Point, b: Point) -> (f64, f64) {
     if l < 1e-12 { (0.0, 0.0) } else { (-dy / l, dx / l) }
 }
 
+/// The safe inward width of a single straight triangle or parallelogram. At the first
+/// collision the whole ring becomes a point or a segment, so no advancing edges remain.
+/// This assumes ordinary miters, whose vertices lie on both inset edge lines.
+pub(super) fn collapse_width(ring: &Ring) -> Option<f64> {
+    let points = ring.points.as_slice();
+    let [a, b, c, ..] = points else { return None };
+    if points.len() > 4 || ring.spans.iter().any(Option::is_some) {
+        return None;
+    }
+    let (u, v) = (*b - *a, *c - *b);
+    let area = u.cross(v);
+    if area <= 0.0 {
+        return None;
+    }
+    // Allow the rounding from a transform of a parallelogram. The final width stays below
+    // the collision by more than this tolerance.
+    let scale = points.iter().map(|p| p.x.abs().max(p.y.abs())).fold(1.0, f64::max);
+    let tolerance = 32.0 * f64::EPSILON * scale;
+    let width = match points {
+        [_, _, _] => area / (u.hypot() + v.hypot() + a.distance(*c)),
+        [_, _, _, d] if (*d - *a - v).hypot() <= tolerance => area / (2.0 * u.hypot().max(v.hypot())),
+        _ => return None,
+    };
+    let cycle = points.iter().copied().cycle();
+    let miters_follow_edges = cycle.clone().zip(cycle.clone().skip(1)).zip(cycle.skip(2)).take(points.len()).all(|((a, b), c)| {
+        let (ax, ay) = left(a, b);
+        let (bx, by) = left(b, c);
+        // The squared cosine of the half angle between the normals is (1 + dot) / 2.
+        ax * bx + ay * by >= 2.0 / (MITER_LIMIT * MITER_LIMIT) - 1.0
+    });
+    // Leave a subpixel cap for the mesh triangulator and room for roundoff in the offset.
+    // The subpixel allowance alone never takes more than half the available width.
+    let margin = 1e-4_f64.min(width / 2.0).max(8.0 * tolerance);
+    miters_follow_edges.then_some((width - margin).max(0.0))
+}
+
 /// `ring` moved `w` points towards its filled side (negative: away from it), each corner along
 /// its bisector, its miter limited to [`MITER_LIMIT`] times `w` so sharp corners don't shoot off.
 /// A point given twice (a corner [`square_corners`] cut) moves each copy along its one edge's

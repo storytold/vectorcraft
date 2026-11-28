@@ -137,6 +137,17 @@ fn a_stall_writes_the_report_file_and_its_end_removes_it() {
 }
 
 #[test]
+fn a_dropped_report_frees_its_lock_while_a_copy_of_its_handle_is_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let held = write_report(dir.path(), "left\n").unwrap();
+    // A child process that is starting holds such a copy.
+    let copy = held.file.try_clone().unwrap();
+    drop(held);
+    assert_eq!(take_previous(dir.path()).as_deref(), Some("left\n"), "a dropped report is no longer locked");
+    drop(copy);
+}
+
+#[test]
 fn closing_normally_removes_the_report_and_writes_no_more() {
     let dir = tempfile::tempdir().unwrap();
     let shared = shared(None);

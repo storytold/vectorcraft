@@ -21,7 +21,7 @@ super::confirm::wrapped_dialog!(BrushDeleteQuestion, StandardPrompt, KIND);
 /// What the question is about: the document it was asked in, the `brush.delete` params and whether a
 /// stroke uses one of the brushes.
 struct BrushDeleteAsk {
-    doc: Option<u64>,
+    doc: Option<(u64, u64)>,
     params: Value,
     used: bool,
 }
@@ -33,7 +33,7 @@ pub fn ask(app: &mut VectorcraftApp, params: Value, used: bool) {
         return;
     };
     let (message, yes, no) = words(used);
-    let doc = app.session.active().map(|d| d.uid);
+    let doc = app.session.active().map(|d| (d.uid, d.reverts));
     let prompt =
         StandardPrompt::custom(message).button(PromptChoice::Proceed, yes).button(PromptChoice::Cancel, no).tag(BrushDeleteAsk { doc, params, used });
     dialogs.with(|host| host.open(BrushDeleteQuestion(prompt)));
@@ -89,7 +89,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 /// Yes on brushes that a stroke has started to use since the question opened asks again with Remove
 /// Strokes and Cancel. When another document has become the active one, nothing is deleted.
 fn confirm(app: &mut VectorcraftApp, question: BrushDeleteAsk) {
-    if question.doc != app.session.active().map(|doc| doc.uid) {
+    if !confirmation_is_current(app, question.doc) {
         return;
     }
     if !question.used {
@@ -109,6 +109,20 @@ fn confirm(app: &mut VectorcraftApp, question: BrushDeleteAsk) {
 pub(crate) fn open_question(app: &VectorcraftApp) -> Option<(String, bool)> {
     let used = app.dialogs()?.with(|host| host.get::<BrushDeleteQuestion>().and_then(|q| q.0.tag_as::<BrushDeleteAsk>().map(|a| a.used)))?;
     Some((words(used).0.to_string(), used))
+}
+
+/// Whether the opening Brush confirmation still owns the active drawing's contents.
+pub(super) fn confirmation_is_current(app: &mut VectorcraftApp, opening: Option<(u64, u64)>) -> bool {
+    let current = app.session.active().map(|st| (st.uid, st.reverts));
+    if opening == current {
+        return true;
+    }
+    if let (Some((document, _)), Some((active, _))) = (opening, current)
+        && document == active
+    {
+        app.status(tl!("The document was reverted. Reopen this dialog to continue."));
+    }
+    false
 }
 
 #[cfg(test)]

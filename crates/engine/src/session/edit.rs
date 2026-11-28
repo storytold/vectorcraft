@@ -149,6 +149,7 @@ impl Session {
                         st.active_layer = st.doc.default_layer();
                     }
                 }
+                st.leave_isolation_if_gone();
                 st.revision += 1;
                 if st.interaction.is_none() {
                     let selection = match st.history.undo.last() {
@@ -198,6 +199,29 @@ impl Session {
             e.named = Some(named);
         }
         Ok(v)
+    }
+
+    /// Run `f`, an edit that applies or edits built-in effect `effect`. The undo step it records,
+    /// when named after the effect, keeps the effect's id ([`crate::HistoryEntry::effect`]), so a
+    /// frontend names it as the Effect menu names the effect. Run as an interaction's preview
+    /// itself, not as one command of a batch the preview runs, the step the interaction records
+    /// keeps it instead, while that preview is the last one. A later edit of an undo group keeps
+    /// none.
+    pub(crate) fn edit_effect<T>(&mut self, effect: &str, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        let id = vectorcraft_render::effects::built_in_effect(effect).map(|(id, _)| id);
+        let previewed = self.previewing && self.depth == 1;
+        let outer = std::mem::replace(&mut self.doc_mut()?.effect_step, id);
+        let v = f(self);
+        if let Ok(st) = self.doc_mut() {
+            st.effect_step = outer;
+            if v.is_ok()
+                && previewed
+                && let Some(it) = &mut st.interaction
+            {
+                it.effect = id;
+            }
+        }
+        v
     }
 
     /// Change only the selection (not an undo step).
@@ -510,6 +534,7 @@ impl Session {
         }
         st.interaction = Some(Interaction {
             label: label.to_string(),
+            effect: None,
             doc: st.doc.clone(),
             selection: Arc::new(st.selection.clone()),
             preview: None,
@@ -554,7 +579,8 @@ impl Session {
             if !Arc::ptr_eq(&st.doc, &it.doc) || selection_changed {
                 st.revision += 1;
             }
-            st.doc = it.doc.clone();
+            let undone = std::mem::replace(&mut st.doc, it.doc.clone());
+            let isolation = it.isolation;
             // A batch, or a preview that changed the new-art paints (a pattern rename), started from
             // the paints the interaction began with.
             it.used_defaults_only |= cmd::asks_defaults_only(params);
@@ -569,12 +595,17 @@ impl Session {
             it.color_mode_paints = None;
             it.deferred_color_mode = None;
             it.plane_placed = false;
+            // The effect the preview below applies or edits marks the step, not an earlier one's.
+            it.effect = None;
             if selection_changed {
                 st.selection.clone_from(&it.selection);
             }
             // Guides locked and slices locked or hidden during the interaction stay deselected,
             // even when the preview fails.
             deselect_hidden(&menu, &st.doc, &mut st.selection);
+            // The previous preview's end of isolation mode, when it removed the isolated object, is
+            // undone with it.
+            st.restore_isolation(isolation, &undone);
             cmd::globaledit::follow_history(st);
             (paint, restore_paint)
         };

@@ -7,6 +7,7 @@ use vectorcraft_geom::{Affine, PathData, Point, Rect, Vec2};
 use crate::appearance::{Appearance, AppearanceItem, Dash, FillLayer, LineCap, LineJoin, StrokeAlign, StrokeLayer};
 
 mod area;
+mod attr_ranges;
 mod char_style;
 mod composite;
 mod file_fonts;
@@ -18,6 +19,9 @@ mod tabs_lists;
 mod wrap;
 
 pub use area::{AreaFit, AreaOptions, PathAlign, PathEffect, TextFlow, TextWrap, VerticalAlign, WrapShape};
+pub use attr_ranges::{
+    AttrRangeError, CHAR_MITER_LIMIT, CHAR_ROTATION, CHAR_SCALE, CHAR_SPACING, FONT_SIZE, LEADING, MAX_BASELINE_SHIFT, MAX_PARA_DISTANCE,
+};
 use char_style::yes;
 pub use char_style::{
     CharAlign, CharPosition, CharStyle, Digits, FontHeightReference, GlyphChoice, GlyphForm, MAX_AKI, MAX_DIACRITIC_POSITION, MAX_TSUME,

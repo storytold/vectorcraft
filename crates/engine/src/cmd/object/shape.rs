@@ -99,6 +99,12 @@ fn corners_param(p: &Value) -> Result<Option<BTreeSet<usize>>> {
     list.iter().map(|k| k.as_u64().and_then(|k| usize::try_from(k).ok()).ok_or_else(err)).collect::<Result<_>>().map(Some)
 }
 
+/// Whether `relativeRadii` applies to a path with live shape `live`: a live rectangle, a live
+/// polygon or a path with Live Corners. A plain path, an ellipse and a line stay as they are.
+fn takes_rounding(live: Option<&LiveShape>) -> bool {
+    matches!(live, Some(LiveShape::Rectangle { .. } | LiveShape::Polygon { .. } | LiveShape::Path { .. }))
+}
+
 /// Live line `l` with Line Length `len` (its first end stays) and then Line Angle `angle` (about
 /// its midpoint; a line whose ends meet has none to turn), or None when neither changes it.
 fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<LiveShape> {
@@ -277,7 +283,7 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             Some(l @ LiveShape::Rectangle { .. }) if rectangle_angle.is_some_and(|a| !at_angle(l.shape_angle(), a)) => return false,
             _ => {}
         }
-        if relative_radii.is_some_and(|on| live.as_deref().map(|l| l.radii_relative()) != Some(on)) {
+        if relative_radii.is_some_and(|on| takes_rounding(live.as_deref()) && live.as_deref().is_some_and(LiveShape::radii_relative) != on) {
             return false;
         }
         if radius.is_none() && kind.is_none() {
@@ -291,10 +297,17 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
             && picked.iter().all(|k| {
                 *k < c.base.anchor_count()
                     // A radius stored in document units can be larger than it draws; a relative
-                    // one is a fraction, so it is compared as drawn.
+                    // one is compared as the fraction `set_corners` would store for it, to a
+                    // precision of 1e-9 pt on a corner whose maximum is 1 pt or more.
                     && radius.is_none_or(|r| {
-                        let now = if c.radii_relative() { c.drawn_radius(*k) } else { c.radius(*k) };
-                        (now - r.max(0.0)).abs() < 1e-9
+                        let r = r.max(0.0);
+                        if c.radii_relative() {
+                            let max = c.corner(*k).map_or(0.0, |c| c.max_radius());
+                            let fraction = if max > 1e-12 { (r / max).clamp(0.0, 1.0) } else { 0.0 };
+                            (c.radius(*k) - fraction).abs() * max.max(1.0) < 1e-9
+                        } else {
+                            (c.radius(*k) - r).abs() < 1e-9
+                        }
                     })
                     && kind.is_none_or(|kd| c.kind(*k) == kd)
             })

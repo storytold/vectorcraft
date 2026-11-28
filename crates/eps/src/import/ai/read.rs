@@ -155,7 +155,7 @@ pub use document::{
 };
 pub(crate) use document::{slot_frame, slot_of};
 use graph::Graph;
-pub(crate) use ops::{ParsedStyle, parse_art_style, parsed_moves_with, read_parsed_style, read_style_list};
+pub(crate) use ops::{ParsedStyle, parse_art_style, parsed_moves_with, parsed_type_color, read_parsed_style, read_style_list};
 #[cfg(test)]
 pub(crate) use raster::with_image_limits;
 pub(crate) use types::BLEND_BUDGET;
@@ -219,10 +219,11 @@ pub struct Structure {
     pub warped_type: super::envelope::WarpedType,
     /// The document's graphic styles are those of the file's style list, in place of the defaults.
     pub styles_read: bool,
-    /// The patterns that paint the text document's characters, placed in the document, by the
-    /// name of the art style that gives each: the styles that are one paint, a pattern this read
-    /// (see `ate::Texts::with_patterns`).
-    pub text_patterns: HashMap<String, Paint>,
+    /// The paints the text document's characters take in place of their own colors, by the name
+    /// of the art style that gives each: the styles that are one paint, a pattern this read,
+    /// placed in the document, or a color linked to its swatch at its tint (see
+    /// `ate::Texts::with_paints`).
+    pub text_paints: HashMap<String, Paint>,
     /// The file's `%AI24_LargeCanvasScale` (1 when it declares none), applied or not.
     pub canvas_scale: f64,
     /// The data's symbols are at their own size, whatever its scale: VectorCraft wrote it (its
