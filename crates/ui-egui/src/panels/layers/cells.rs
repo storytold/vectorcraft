@@ -34,9 +34,10 @@ const SQUARE_SIDE: f32 = 7.0;
 const HELD_SIDE: f32 = 4.0;
 
 /// The selected art a row's selection square carries to another row in the same document.
+/// `document` is the document's uid and revert count: File › Revert keeps the uid but replaces the drawing.
 #[derive(Clone, Debug)]
 pub(super) struct ArtDrag {
-    pub(super) document: u64,
+    pub(super) document: (u64, u64),
     pub(super) ids: Vec<NodeId>,
 }
 
@@ -209,7 +210,7 @@ impl Component for TargetCircle {
 pub(super) struct SelectionSquare {
     #[common]
     common: Common,
-    document: u64,
+    document: (u64, u64),
     id: Option<NodeId>,
     selected: bool,
     holds: bool,
@@ -220,13 +221,13 @@ pub(super) struct SelectionSquare {
 }
 
 impl SelectionSquare {
-    fn new(document: u64, id: Option<NodeId>, selected: bool, holds: bool, color: DataColor, art: Vec<NodeId>) -> Self {
+    fn new(document: (u64, u64), id: Option<NodeId>, selected: bool, holds: bool, color: DataColor, art: Vec<NodeId>) -> Self {
         Self { common: Common::new(), document, id, selected, holds, color, art, pick: None }
     }
 
     /// A selected row's square, for the suite.
     fn sample() -> Self {
-        Self::new(1, Some(NodeId(1)), true, false, DataColor::new(Color32::from_rgb(79, 128, 255)), vec![NodeId(1)]).label("Select art")
+        Self::new((1, 0), Some(NodeId(1)), true, false, DataColor::new(Color32::from_rgb(79, 128, 255)), vec![NodeId(1)]).label("Select art")
     }
 }
 
@@ -371,22 +372,23 @@ pub(super) fn square_marks(tree: &DocLayers<'_>, n: &Node) -> (bool, bool) {
 /// The cells of row `row` (shown as `info`) of the panel over `tree`.
 pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cells {
     let st = tree.state();
+    let document = (st.uid, st.reverts);
     let color = info.color.unwrap_or_else(|| DataColor::new(Color32::TRANSPARENT));
     let selected = |id: NodeId| tree.is_selected(id);
     match *row {
         RowId::Node(id) => {
-            let Some(n) = tree.doc().node(id) else { return Cells::new(None, SelectionSquare::new(st.uid, None, false, false, color, vec![])) };
+            let Some(n) = tree.doc().node(id) else { return Cells::new(None, SelectionSquare::new(document, None, false, false, color, vec![])) };
             let is_sel = selected(id);
             let (full, holds) = square_marks(tree, n);
             let art = if full || holds { st.selection.objects.clone() } else { vec![] };
             let circle = TargetCircle::new(st.uid, id, shows_targeted(tree, n, is_sel), has_styled_target(n))
                 .label(crate::i18n::fmt(tl!("Target {row}"), &[("row", info.name.as_str())]));
-            let square = SelectionSquare::new(st.uid, Some(id), full, holds, color, art)
+            let square = SelectionSquare::new(document, Some(id), full, holds, color, art)
                 .label(crate::i18n::fmt(tl!("Select art of {row}"), &[("row", info.name.as_str())]));
             Cells::new(Some(circle), square)
         }
-        RowId::Guide(i) => Cells::new(None, SelectionSquare::new(st.uid, None, tree.guides().contains(&i), false, color, vec![])),
-        RowId::Spine(blend) => Cells::new(None, SelectionSquare::new(st.uid, None, selected(blend), false, color, vec![])),
+        RowId::Guide(i) => Cells::new(None, SelectionSquare::new(document, None, tree.guides().contains(&i), false, color, vec![])),
+        RowId::Spine(blend) => Cells::new(None, SelectionSquare::new(document, None, selected(blend), false, color, vec![])),
     }
 }
 
@@ -416,6 +418,8 @@ pub(super) fn output(
 /// layer or group that takes the objects ([`DocLayers::lands_in`]).
 pub(super) fn accepts_art<'a>(tree: &'a DocLayers<'a>) -> impl Fn(&ArtDrag, &RowId, LayerPosition) -> bool + 'a {
     move |art: &ArtDrag, row: &RowId, position: LayerPosition| {
-        art.document == tree.state().uid && position == LayerPosition::Into && matches!(*row, RowId::Node(id) if tree.lands_in(id, &art.ids, true))
+        art.document == (tree.state().uid, tree.state().reverts)
+            && position == LayerPosition::Into
+            && matches!(*row, RowId::Node(id) if tree.lands_in(id, &art.ids, true))
     }
 }

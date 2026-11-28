@@ -590,7 +590,8 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
         let id = app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap();
         let dst = app.run("layer.new", json!({"name": "Destination"})).unwrap()["id"].as_u64().unwrap();
         app.run("select.set", json!({"ids": [id]})).unwrap();
-        (app.session.active().unwrap().uid, NodeId(id), source, NodeId(dst))
+        let st = app.session.active().unwrap();
+        ((st.uid, st.reverts), NodeId(id), source, NodeId(dst))
     };
     let (first_doc, first, _, _) = setup(10);
     let (second_doc, second, source, destination) = setup(60);
@@ -603,7 +604,11 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
     panel.drag_hold_role("Select art of Source", Role::BUTTON, to - from);
     assert!(drag::mark(panel.ctx()).is_some(), "the destination accepts artwork in its own document");
     panel.key(Key::F6, Modifiers::COMMAND);
-    assert_eq!(panel.app().session.active().unwrap().uid, second_doc);
+    {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), second_doc);
+    }
     let carried = drag::active::<cells::ArtDrag>(panel.ctx()).expect("the shortcut leaves the drag held");
     assert_eq!((carried.document, carried.ids.as_slice()), (first_doc, &[first][..]));
     assert!(drag::mark(panel.ctx()).is_none(), "the destination rejects the foreign artwork");
@@ -613,6 +618,57 @@ fn a_selection_square_drop_after_next_document_leaves_the_new_artwork_in_place()
 
     panel.drag("Select art of Source", "Destination", Modifiers::NONE);
     assert_eq!(layer(&panel.app()), Some(destination), "a same-document selection-square drag still moves the rectangle");
+}
+
+#[test]
+fn a_selection_square_drop_after_file_revert_leaves_the_restored_artwork_in_place() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use craft::ui::runtime::drag;
+    use egui::Modifiers;
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let source = app.session.active().unwrap().doc.layers[0].id;
+    name_row(&mut app, source, "Source");
+    let rect = NodeId(app.run("shape.rectangle", json!({"x": 10, "y": 20, "width": 40, "height": 30})).unwrap()["id"].as_u64().unwrap());
+    let destination = NodeId(app.run("layer.new", json!({"name": "Destination"})).unwrap()["id"].as_u64().unwrap());
+    let folder = vectorcraft_testkit::TempDir::new("layers-art-drag-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("shape.rectangle", json!({"x": 120, "y": 30, "width": 30, "height": 30})).unwrap();
+    app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+
+    let mut panel = Panel::new(app, show);
+    let from = panel.rect_role("Select art of Source", Role::BUTTON).center();
+    let to = panel.rect("Destination").center();
+    panel.drag_hold_role("Select art of Source", Role::BUTTON, to - from);
+    assert!(drag::mark(panel.ctx()).is_some(), "the destination accepts the selected artwork before the revert");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+    }
+    assert!(drag::active::<cells::ArtDrag>(panel.ctx()).is_some(), "the revert leaves the drag held");
+    assert!(drag::mark(panel.ctx()).is_none(), "the destination rejects artwork carried from before the revert");
+    panel.release();
+    let layer = |app: &VectorcraftApp| app.session.active().unwrap().doc.layer_of(rect);
+    assert_eq!(layer(&panel.app()), Some(source), "the restored rectangle with the same ID has not moved");
+
+    panel.app().run("select.set", json!({"ids": [rect.0]})).unwrap();
+    panel.frame();
+    panel.drag("Select art of Source", "Destination", Modifiers::NONE);
+    assert_eq!(layer(&panel.app()), Some(destination), "a selection-square drag started after the revert still moves the rectangle");
 }
 
 /// The target and the selected objects, sorted.
