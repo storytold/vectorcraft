@@ -537,6 +537,52 @@ fn visual_of_members_unions_the_members_and_grows_by_the_group_stroke() {
     assert_eq!(g.visual_of_members([].into_iter()), None);
 }
 
+/// A group's or layer's own miter-joined stroke is measured along its members' shapes, as a
+/// path's is: a 10 pt stroke round a square reaches 5 pt past it, not the 50 pt a miter spike
+/// could reach, through nested groups and in a turned frame too. It paints nothing round a hidden
+/// member or an image.
+#[test]
+fn a_containers_own_miter_stroke_is_measured_along_its_members() {
+    use vectorcraft_color::{Color, Paint};
+    let path = |id, r: Rect| Arc::new(Node::path(NodeId(id), shapes::rectangle(r), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0)));
+    let stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 10.0);
+    assert_eq!(stroke.outset(), 50.0, "a 10 pt miter-joined stroke can reach 50 pt");
+    let stroked = |mut n: Node| {
+        n.appearance = stroke.clone().into();
+        n
+    };
+    let square = Rect::new(100.0, 100.0, 200.0, 200.0);
+    let around = Some(Rect::new(95.0, 95.0, 205.0, 205.0));
+    assert_eq!(stroked(Node::group(NodeId(1), vec![path(2, square)])).visual_bounds(), around, "a group");
+    let nested = Node::group(NodeId(1), vec![Arc::new(Node::group(NodeId(3), vec![path(2, square)]))]);
+    assert_eq!(stroked(nested.clone()).visual_bounds(), around, "a nested group");
+    // Measured in a turned frame, as a box square to a turned selection is.
+    let turned = stroked(nested).bounds_in(&crate::Document::new(400.0, 400.0).symbol_boxes(), Affine::rotate(std::f64::consts::FRAC_PI_2), true);
+    let want = Rect::new(-205.0, 95.0, -95.0, 205.0);
+    assert!(
+        turned.is_some_and(|b| (b.x0 - want.x0).abs() + (b.y0 - want.y0).abs() + (b.x1 - want.x1).abs() + (b.y1 - want.y1).abs() < 1e-9),
+        "{turned:?}"
+    );
+    let mut layer = Node::layer(NodeId(1), "Layer 1", LayerColor::Preset(0));
+    if let NodeKind::Layer { children, .. } = &mut layer.kind {
+        children.push(path(2, square));
+    }
+    assert_eq!(stroked(layer).visual_bounds(), around, "a layer");
+    let mut hidden = (*path(3, Rect::new(100.0, 300.0, 200.0, 400.0))).clone();
+    hidden.visible = false;
+    let image = ImageObject {
+        key: "k".into(),
+        width: 10,
+        height: 10,
+        xf: Affine::translate((500.0, 100.0)),
+        link: None,
+        placement: Default::default(),
+        pixels: None,
+    };
+    let kids = vec![path(2, square), Arc::new(hidden), Arc::new(Node::new(NodeId(4), NodeKind::Image(Box::new(image))))];
+    assert_eq!(stroked(Node::group(NodeId(1), kids)).visual_bounds(), Some(Rect::new(95.0, 95.0, 510.0, 400.0)), "a hidden member and an image");
+}
+
 /// Type's visual bounds grow by how far its character strokes paint past the glyphs: half the
 /// weight centred, the whole weight outside, nothing inside; scaled with the type.
 #[test]
