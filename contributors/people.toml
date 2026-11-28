@@ -228,3 +228,6 @@ sync_github_name = false
 
 [people.Terra854]
 display_name = "Terra854"
+
+[people.adambelis]
+sync_github_name = true
