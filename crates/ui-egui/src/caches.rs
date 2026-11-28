@@ -25,6 +25,16 @@ pub struct CanvasCache {
     /// The frame shown was rendered on the worker: an interaction's frames stay there
     /// ([`canvas::show`]).
     pub from_worker: bool,
+    /// The frame shown drew art in a way that depends on its size, or a part of it drawn again on
+    /// this thread would not have matched the frame around it. Edits that reach the affected area
+    /// render whole, on the worker when the frame is heavy ([`canvas::show`]).
+    pub whole_frames: bool,
+    /// The shown web frame can still be patched outside this enclosure in its own raster pixels.
+    /// Present only when all frame-size-dependent output has a known bound.
+    pub view_sized_bounds: Option<vectorcraft_geom::Rect>,
+    /// Draws for a patch against a web frame with bounded view-sensitive art.
+    /// The renderer of the whole frame keeps its raster and derived-art caches across these patches.
+    pub web_patch_renderer: Option<Box<vectorcraft_render::Renderer>>,
     /// The frame shown holds pixels the worker copied from its last frame, and when it was shown
     /// (seconds, egui's input time): it renders whole once it has been shown for
     /// [`canvas::STILL_SECS`] with the view unmoved.
@@ -107,6 +117,9 @@ pub struct CanvasCache {
     /// Escape cancelled the tool's press while the button is still down: its release still sends the tool its Up,
     /// which gives back a selection tool Cmd lent.
     pub escaped_press: bool,
+    /// The host's Caps Lock state at the last canvas pass, which `VectorcraftApp::follow_caps_lock` compares with the
+    /// next reading; `None` before the first pass.
+    pub host_caps_lock: Option<bool>,
     /// A press on the canvas committed a panel field's running preview before the tool took the press, as the field's
     /// commit came first in production: the field's own commit later in the pass has nothing left to run.
     pub committed_preview: bool,
@@ -176,9 +189,10 @@ pub struct CanvasCache {
     pub(crate) palette: Option<(crate::palette::BuildKey, Arc<crate::palette::Built>)>,
 }
 
-/// [`CanvasCache::doc_info`]: (document uid, revision, selection only, the Artboard tool's options)
-/// and the `document.info` result fetched for them.
-pub type DocInfoCache = ((u64, u64, bool, Value), Arc<Value>);
+/// [`CanvasCache::doc_info`]: (document uid, revision, selection only, whether Objects is shown
+/// (and so the paths' area asked for), the Artboard tool's options) and the `document.info` result
+/// fetched for them.
+pub type DocInfoCache = ((u64, u64, bool, bool, Value), Arc<Value>);
 
 /// [`CanvasCache::map_surfaces`]: the surfaces and what they were computed for.
 pub type MapSurfacesCache = (MapSurfacesKey, Arc<Vec<vectorcraft_effects::MapSurface>>);

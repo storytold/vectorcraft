@@ -626,6 +626,25 @@ fn file_only_calls_on_a_folder_do_nothing() {
     assert_eq!(lines("file.dialog"), [8]);
 }
 
+/// A variable holding a Folder object is the same object in grouping parentheses, so `(d).write(s)`
+/// and `(d).length = 0` do nothing, as `d.write(s)` and `d.length = 0` do. A variable that may hold
+/// a File object still counts in them.
+#[test]
+fn a_folder_in_parentheses_is_still_a_folder() {
+    let r = report(concat!(
+        "var d = new Folder(p);\n",
+        "(d).write(s); ((d)).copy(q); (d).open('r'); (d).length = 0;\n",
+        "var f = new File(p);\n",
+        "(f).write(s);\n",
+        "var g = Folder(p); (g).open('r');\n",
+    ));
+    let lines = |id: &str| feature(&r, id).map(|f| f.lines.clone()).unwrap_or_default();
+    let outside: Vec<(&str, &[usize])> = r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect();
+    assert_eq!(outside, [("filesWritten", &[4][..])]);
+    assert_eq!(lines("file.write"), [4]);
+    assert_eq!(lines("file.read"), [5]);
+}
+
 /// A File object assigned to a function's own variable, its parameter or a `catch` block's
 /// parameter ends with them; one assigned to an outer variable stays. Such a variable or parameter
 /// starts without what the outer variable of the same name was assigned.

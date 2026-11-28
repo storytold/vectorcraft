@@ -282,7 +282,35 @@ pub(crate) fn selection_path(
     app: &mut VectorcraftApp,
     then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
 ) -> Result<Value, String> {
-    target_path_keeping(app, None, "png", |_| true, then)
+    guarded_selection_path(app, None, "png", then)
+}
+
+/// An unanswered destination belongs to the drawing and selected objects it was opened for.
+fn guarded_selection_path(
+    app: &mut VectorcraftApp,
+    path: Option<String>,
+    ext: &str,
+    then: impl FnOnce(&mut VectorcraftApp, String) -> Result<Value, String> + 'static,
+) -> Result<Value, String> {
+    let source = |app: &VectorcraftApp| {
+        let state = app.session.active()?;
+        let mut objects = state.selection.objects.clone();
+        objects.sort_unstable();
+        Some((state.uid, state.reverts, objects))
+    };
+    let opening = source(app).ok_or("no document")?;
+    target_path_keeping(
+        app,
+        path,
+        ext,
+        |_| true,
+        move |app, path| {
+            if source(app).as_ref() != Some(&opening) {
+                return Err(tl!("The selection changed. Run Export Selection again.").into());
+            }
+            then(app, path)
+        },
+    )
 }
 
 /// Run an engine command that returns `{dataBase64}` without its `path` and write the bytes to
@@ -304,17 +332,11 @@ pub(crate) fn run_to_file(
     let ext = given.map_or(ext, |f| f.extensions.first().copied().unwrap_or_default());
     if selection && params.as_object().is_some_and(|o| o.get("format").is_none()) {
         let (id, own_ext) = (id.to_string(), ext.to_string());
-        return target_path_keeping(
-            app,
-            path,
-            ext,
-            |_| true,
-            move |app, picked| {
-                let e = Some(fileio::extension(&picked)).filter(|e| !e.is_empty()).unwrap_or_else(|| own_ext.clone());
-                params["format"] = serde_json::json!(e);
-                write_output(app, &id, &own_ext, params, Some(picked), then)
-            },
-        );
+        return guarded_selection_path(app, path, ext, move |app, picked| {
+            let e = Some(fileio::extension(&picked)).filter(|e| !e.is_empty()).unwrap_or_else(|| own_ext.clone());
+            params["format"] = serde_json::json!(e);
+            write_output(app, &id, &own_ext, params, Some(picked), then)
+        });
     }
     write_output(app, id, ext, params, path, then)
 }

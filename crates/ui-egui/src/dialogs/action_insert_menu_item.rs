@@ -19,6 +19,7 @@ use craft::ui::display::{Shade, Text};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::Row as Line;
 use craft::ui::list::{List, ListRow};
+use craft::ui::primitives::Revision;
 use craft::ui::runtime::env::Label;
 use craft::ui::text::TextField;
 use egui::{Context, Ui};
@@ -258,6 +259,7 @@ impl StackDialog for InsertMenuItemDialog {
 
     fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<InsertMenuItemFields>> {
         let rows = &self.rows;
+        let rows_key = self.key;
         self.form.show(ui, label("Insert Menu Item"), None, |ui, fields| {
             FieldGroup::new(label("Insert Menu Item")).show(ui, |ui, _| {
                 let before = fields.find.clone();
@@ -284,16 +286,18 @@ impl StackDialog for InsertMenuItemDialog {
                 }
                 let listed: Vec<&Row> = matches(rows, &fields.find).take(MAX_LISTED).collect();
                 let texts: Vec<String> = listed.iter().map(|row| row.shown.clone()).collect();
-                let lead = listed.iter().position(|row| picked(fields, row));
-                let mut selection = lead.map_or_else(Selection::default, Selection::single);
+                let selected = listed.iter().position(|row| picked(fields, row));
+                let mut selection = selected.map_or_else(Selection::default, Selection::single);
                 List::<usize>::new(label("Menu Items"))
                     .select(SelectMode::Single)
+                    .rows_stamp(Revision::of(&(rows_key, &fields.find, selected)).get())
                     .selection(Bind::bound(&mut selection))
                     .sizing(Sizing::Content)
                     .max_rows(8)
                     .show_items(ui, &Listed(&texts), &mut |key, _| ListRow::new(texts.get(*key).cloned().unwrap_or_default()));
-                if selection.lead != lead
-                    && let Some(row) = selection.lead.and_then(|at| listed.get(at))
+                let chosen = selection.items.first().copied();
+                if chosen != selected
+                    && let Some(row) = chosen.and_then(|at| listed.get(at))
                 {
                     pick(fields, row);
                 }
@@ -336,10 +340,13 @@ impl StackDialog for InsertMenuItemDialog {
 
 #[cfg(test)]
 mod tests {
+    use craft::automation::actions::Action;
     use craft::menu::Node;
+    use egui::{Key, Modifiers};
 
     use super::*;
     use crate::dialogs::actions::pump;
+    use crate::tests::panel_harness::Panel;
 
     fn fields(find: &str, command: &str) -> InsertMenuItemFields {
         InsertMenuItemFields { find: find.into(), command: command.into(), ..InsertMenuItemFields::default() }
@@ -357,6 +364,61 @@ mod tests {
         f.find = "no such menu item here".into();
         find(&rows, &mut f);
         assert_eq!((f.note, f.command.as_str()), (FindNote::NoMatch, "object.ungroup"), "a failed Find keeps the pick");
+    }
+
+    #[test]
+    fn arrow_navigation_inserts_the_command_after_the_selected_filtered_result() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.ui.actions = Default::default();
+        app.ui.actions.push(Action { set: Some("Test".into()), ..Action::new("View", Vec::new()) }).unwrap();
+        let available = build(Lang::EN, true, &menus::Listed::default());
+        let fit_params = available.iter().find(|row| row.command == "view.fitArtboard").unwrap().params.clone();
+        let rows = [
+            ("view.zoomIn", "First command", "first command"),
+            ("view.zoomOut", "Second command", "remaining commands"),
+            ("view.fitArtboard", "Third command", "remaining commands"),
+            ("view.outline", "Fourth command", "remaining commands"),
+        ]
+        .into_iter()
+        .map(|(command, shown, haystack)| Row {
+            command: command.into(),
+            params: available.iter().find(|row| row.command == command).unwrap().params.clone(),
+            shown: shown.into(),
+            haystack: haystack.into(),
+        })
+        .collect();
+        let mut panel = Panel::new(app, |app, ui| app.dialogs().unwrap().with(|host| host.run(ui)));
+        let dialog = InsertMenuItemDialog {
+            id: dialog_id(KEY),
+            target: Target::new(Some((0, 0)), None),
+            form: Form::new(InsertMenuItemFields::default(), check),
+            rows,
+            key: None,
+        };
+        open_or_say(&mut panel.app(), dialog);
+        panel.frame();
+        panel.frame();
+
+        let dialogs = panel.app().dialogs().unwrap();
+        let command = || dialogs.with(|host| host.get::<InsertMenuItemDialog>().unwrap().form.values.command.clone());
+        panel.click("First command");
+        assert_eq!(command(), "view.zoomIn");
+        dialogs.with(|host| {
+            host.set_json_field(panel.ctx(), dialog_id(KEY), "find", json!("remaining")).unwrap();
+            host.set_json_field(panel.ctx(), dialog_id(KEY), "command", json!("view.fitArtboard")).unwrap();
+            host.set_json_field(panel.ctx(), dialog_id(KEY), "params", fit_params).unwrap();
+        });
+        panel.frame();
+        assert!(!panel.shows("First command"));
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(command(), "view.outline");
+        panel.click(tl!("OK"));
+        let mut app = panel.app();
+        pump(&mut app, panel.ctx());
+        let steps = &app.ui.actions.action(0).unwrap().steps;
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].command, "view.outline");
     }
 
     /// The list holds the menu items that run an engine command, and the View menu items that the
