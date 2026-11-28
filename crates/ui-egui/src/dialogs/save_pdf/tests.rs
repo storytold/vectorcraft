@@ -285,6 +285,9 @@ fn save_summary_sees_a_deleted_flattener_preset() {
 /// dialog stays open: they are then refused, and nothing is written.
 #[test]
 fn save_summary_sees_a_removed_profile() {
+    if !crate::testing::in_own_process("dialogs::save_pdf::tests::save_summary_sees_a_removed_profile") {
+        return;
+    }
     use vectorcraft_color::cms;
     let name = "Summary Stamp CMYK";
     // The built-in CMYK profile's file renamed `name`: padded with spaces, which names drop.
@@ -425,6 +428,28 @@ fn confirm_runs_export_pdf_with_the_dialog_options() {
     let url = app.pending_url.take().expect("View PDF after Saving opens the file");
     assert!(url.starts_with("file:///") && url.ends_with("/tmp/out.pdf"), "the written file as a URL: {url}");
     assert!(app.ui.status.starts_with("Saved /tmp/out.pdf"), "{}", app.ui.status);
+}
+
+#[test]
+fn save_pdf_and_summary_wait_for_the_drawing_that_opened_them() {
+    let (mut app, written) = app();
+    app.run("ui.savePdfDialog", json!({"path": "/tmp/out.pdf", "compatibility": "1.5"})).unwrap();
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let error = app.run(SAVE_SUMMARY, json!({"path": "/tmp/summary.txt"})).unwrap_err();
+    assert!(error.contains("original drawing"), "{error}");
+    confirm(&mut app);
+    assert!(is_open(&app));
+    assert!(written.borrow().is_empty());
+    assert_eq!(fget(&app, "compatibility"), "1.5");
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    confirm(&mut app);
+    assert!(!is_open(&app));
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert_eq!(w[0].0, "/tmp/out.pdf");
+    assert_eq!(vectorcraft_pdf::import(&w[0].1).unwrap().artboards.len(), 3);
 }
 
 /// A Save PDF that fails keeps the dialog open (#6861); saving again, once it works, closes it.

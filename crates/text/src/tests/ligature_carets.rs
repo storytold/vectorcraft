@@ -175,18 +175,17 @@ fn a_contour_point_caret_on_a_composite_takes_its_scaled_offset() {
 }
 
 /// A contour-point caret on a composite that expands to billions of glyphs with no points gives
-/// no caret, and quickly, rather than reading every one of them.
+/// no caret, after reading no more glyphs than the lookup's budget, rather than reading every one
+/// of them.
 #[test]
 fn a_contour_point_caret_on_a_huge_empty_composite_gives_up() {
     let gid = u32::from(source_sans_gid(LIGATURE_CARET_GLYPH).expect("Source Sans 3 has the glyph"));
-    let (send, receive) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let db = db_with(Some(composite_fan_caret_font()));
-        let carets = db.face(LIGATURE_CARET_FAMILY, "Regular").map(|face| face.ligature_carets(gid, 1));
-        let _ = send.send(carets);
-    });
-    let carets = receive.recv_timeout(std::time::Duration::from_secs(30)).expect("the caret lookup finishes");
-    assert_eq!(carets, Some(None));
+    let db = db_with(Some(composite_fan_caret_font()));
+    let face = db.face(LIGATURE_CARET_FAMILY, "Regular").expect("the test font is added");
+    let before = crate::fontdb::outline_glyphs_read();
+    assert_eq!(face.ligature_carets(gid, 1), None);
+    let read = crate::fontdb::outline_glyphs_read() - before;
+    assert!(read <= crate::fontdb::MAX_OUTLINE_VISITS, "{read} glyphs read");
 }
 
 fn point(text: &str, family: &str) -> TextObject {

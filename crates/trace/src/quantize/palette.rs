@@ -121,6 +121,8 @@ const LIBRARY_CHROMA_WEIGHT: f64 = 3.0;
 /// hue and chroma counted [`LIBRARY_CHROMA_WEIGHT`] times: a neutral or muted tone takes a neutral
 /// library color of another lightness rather than a saturated one of its own lightness.
 pub(super) fn nearest_library(labs: &[[f64; 3]], c: [f64; 3]) -> usize {
+    #[cfg(test)]
+    LIBRARY_COMPARISONS.with(|n| n.set(n.get() + labs.len()));
     let mut best = (f64::INFINITY, 0);
     for (i, m) in labs.iter().enumerate() {
         let d = (m[0] - c[0]).powi(2) + (LIBRARY_CHROMA_WEIGHT * (m[1] - c[1])).powi(2) + (LIBRARY_CHROMA_WEIGHT * (m[2] - c[2])).powi(2);
@@ -129,6 +131,15 @@ pub(super) fn nearest_library(labs: &[[f64; 3]], c: [f64; 3]) -> usize {
         }
     }
     best.1
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The swatch colors [`nearest_library`] has compared a color with, on this thread.
+    pub(crate) static LIBRARY_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The lookups [`library_colors`] has made to tell whether a swatch's color was seen before,
+    /// on this thread: one per set lookup, or one per earlier color a scan compares it with.
+    pub(crate) static SWATCH_LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 pub(super) fn labs(colors: &[[f64; 3]]) -> Vec<[f64; 3]> {
@@ -252,7 +263,15 @@ fn clean_levels(used: &[Used], min_share: f64) -> Option<usize> {
 fn library_colors(used: &[Used], swatches: &[[u8; 3]], k: usize) -> Vec<[f64; 3]> {
     // Each colour once, in their order: looked up in a set, not in the colours kept so far.
     let mut seen = std::collections::HashSet::new();
-    let all: Vec<[f64; 3]> = swatches.iter().filter(|s| seen.insert(**s)).map(|s| s.map(f64::from)).collect();
+    let all: Vec<[f64; 3]> = swatches
+        .iter()
+        .filter(|s| {
+            #[cfg(test)]
+            SWATCH_LOOKUPS.with(|n| n.set(n.get() + 1));
+            seen.insert(**s)
+        })
+        .map(|s| s.map(f64::from))
+        .collect();
     let mut weight = vec![0.0; all.len()];
     let all_labs = labs(&all);
     for (_, c, n) in used {

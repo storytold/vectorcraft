@@ -23,10 +23,11 @@ use craft::color_ui::ui::{ChosenColor, ColorChoice, NamedColor};
 use craft::theme::Srgba;
 use craft::theme::variant::Tone;
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
+use craft::ui::layout_components::Stack;
 use craft::ui::patterns::form_dialogs::HostRequests; // PLAN: assumed re-export of the host requests the form output carries
 use craft::ui::patterns::form_dialogs::{FormCx, FormDialog, ResetFooter, ResetPick};
 use craft::ui::pickers::{Anchor9, ReferencePoint, ReferencePointLook};
@@ -154,6 +155,7 @@ struct Setup {
 #[derive(Clone, Copy)]
 struct Target {
     document: u64,
+    reverts: u64,
     /// The current artboard's ID, or no ID while creating a new artboard.
     artboard: Option<u32>,
 }
@@ -350,7 +352,8 @@ fn length_row(ui: &mut Ui, label: impl Into<Label>, salt: &str, value: f64, leng
     let label = label.into();
     let mut typed = None;
     Field::new(label.clone()).id_salt(salt).show(ui, |ui, _| {
-        typed = NumberField::length(label.clone(), Bind::given(Some(value)), lengths).id_salt(salt).show(ui).value().copied().flatten();
+        typed =
+            NumberField::length(label.clone(), Bind::given(Some(value)), lengths).id_salt(salt).show(ui).edit.events.committed().copied().flatten();
     });
     typed
 }
@@ -390,20 +393,40 @@ fn color_row(
 /// the marks, the Video Ruler Pixel Aspect Ratio and, under Global, the two preferences. The reference
 /// point is the one the Transform panel shares (#1876); X and Y are where it lies on the rulers, counted
 /// from the ruler origin (#1212), and a new Width or Height keeps it where it was.
+///
+/// The groups are a section gap apart: the preset, the size and position, the colors, the marks and Global.
 fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &Setup) {
-    let lengths = s.lengths;
-    let (was, w0, h0) = (v.placed(), v.width, v.height);
-    let (choice, fit) = artboard_size_controls(ui, &s.presets, w0, h0, Some(s.fit_bounds.map(|b| b.is_some())));
-    let mut refi = v.reference;
-    let picked = choice.is_some();
-    if let Some(choice) = choice {
-        if let Some((w, h)) = choice.size_for(w0, h0) {
-            v.set_rect(artboard_rect(was, refi, None, None, Some(w), Some(h), false));
+    Stack::new().gap(Gap::Section).fill_width().show(ui, |ui, _| {
+        let (was, w0, h0) = (v.placed(), v.width, v.height);
+        let (choice, fit) = artboard_size_controls(ui, &s.presets, w0, h0, Some(s.fit_bounds.map(|b| b.is_some())));
+        let picked = choice.is_some();
+        if let Some(choice) = choice {
+            if let Some((w, h)) = choice.size_for(w0, h0) {
+                v.set_rect(artboard_rect(was, v.reference, None, None, Some(w), Some(h), false));
+            }
+            v.size_choice = Some(choice);
+            (v.ref_x, v.ref_y, v.fit) = (v.reference % 3, v.reference / 3, false);
         }
-        v.size_choice = Some(choice);
-        (v.ref_x, v.ref_y, v.fit) = (refi % 3, refi / 3, false);
-    }
-    ui.add_space(8.0);
+        Stack::new().fill_width().show(ui, |ui, _| place_rows(ui, v, s, (was, w0, h0), picked, fit));
+        Stack::new().fill_width().show(ui, |ui, _| {
+            background_row(ui, cx, v, s);
+            guide_label_row(ui, cx, v);
+        });
+        Stack::new().fill_width().show(ui, |ui, _| mark_rows(ui, v));
+        Stack::new().fill_width().show(ui, |ui, _| {
+            Text::new(tl!("Global")).show(ui);
+            check(ui, tl!("Fade Region Outside Artboard"), FADE, &mut v.fade);
+            check(ui, tl!("Update While Dragging"), UPDATE_WHILE_DRAGGING, &mut v.update_while_dragging);
+        });
+    });
+}
+
+/// Name, Width and Height, the reference point with X and Y, and a Fit chosen from the Preset menu. `was`, `w0` and
+/// `h0` are the artboard's rectangle, width and height before this pass's edits; `picked` is whether a size was chosen
+/// this pass.
+fn place_rows(ui: &mut Ui, v: &mut ArtboardOptionsValue, s: &Setup, (was, w0, h0): (Rect, f64, f64), picked: bool, fit: Option<bool>) {
+    let lengths = s.lengths;
+    let mut refi = v.reference;
     let name = Label::from(tl!("Name:"));
     Field::new(name.clone()).id_salt("name").show(ui, |ui, _| {
         TextField::new(name.clone(), Bind::bound(&mut v.name)).show(ui);
@@ -449,10 +472,10 @@ fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &
         v.set_rect(bounds);
         (v.fit, v.size_choice) = (true, None);
     }
-    ui.add_space(8.0);
-    background_row(ui, cx, v, s);
-    guide_label_row(ui, cx, v);
-    ui.add_space(8.0);
+}
+
+/// The marks and the Video Ruler Pixel Aspect Ratio.
+fn mark_rows(ui: &mut Ui, v: &mut ArtboardOptionsValue) {
     check(ui, tl!("Show Center Mark"), "showCenterMark", &mut v.show_center_mark);
     check(ui, tl!("Show Cross Hairs"), "showCrossHairs", &mut v.show_cross_hairs);
     check(ui, tl!("Show Video Safe Areas"), "showVideoSafeAreas", &mut v.show_video_safe_areas);
@@ -463,17 +486,15 @@ fn body(ui: &mut Ui, cx: &mut FormCx<'_, '_>, v: &mut ArtboardOptionsValue, s: &
             .fixed_decimals(4)
             .id_salt(PIXEL_ASPECT)
             .show(ui)
-            .value()
+            .edit
+            .events
+            .committed()
             .copied()
             .flatten();
         if let Some(n) = typed {
             v.pixel_aspect = n;
         }
     });
-    ui.add_space(8.0);
-    Text::new(tl!("Global")).show(ui);
-    check(ui, tl!("Fade Region Outside Artboard"), FADE, &mut v.fade);
-    check(ui, tl!("Update While Dragging"), UPDATE_WHILE_DRAGGING, &mut v.update_while_dragging);
 }
 
 /// Background Color: None, White and Black (in the document's color mode), Custom and Select Custom Color….
@@ -556,7 +577,7 @@ pub(crate) fn active_index(app: &VectorcraftApp) -> usize {
 fn present(app: &mut VectorcraftApp, mut value: ArtboardOptionsValue, artboard: Option<u32>) -> Result<Value, String> {
     let host = app.dialogs().ok_or("no window")?;
     let st = app.session.active().ok_or("no document")?;
-    let target = Target { document: st.uid, artboard };
+    let target = Target { document: st.uid, reverts: st.reverts, artboard };
     let artwork = vectorcraft_render::encode::art_bounds(&st.doc);
     let [(_, fade), (_, update_while_dragging)] = global_fields(app);
     (value.fade, value.update_while_dragging, value.reference) = (fade, update_while_dragging, app.ui.transform_panel.reference_point);
@@ -652,6 +673,9 @@ fn confirm(app: &mut VectorcraftApp, target: Target, v: &ArtboardOptionsValue) -
         .active()
         .filter(|st| st.uid == target.document)
         .ok_or(tl!("Artboard Options can only change the document where it was opened."))?;
+    if st.reverts != target.reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+    }
     let globals = global_changes(app, v);
     if v.new {
         let r = confirm_new(app, v)?;
@@ -771,6 +795,112 @@ mod tests {
 
     fn undo_len(app: &VectorcraftApp) -> usize {
         app.session.doc().unwrap().history.undo.len()
+    }
+
+    fn actual_value(panel: &crate::tests::panel_harness::Panel) -> ArtboardOptionsValue {
+        panel.app().dialogs().unwrap().with(|host| host.get::<ArtboardOptionsDialog>().unwrap().value.clone())
+    }
+
+    #[test]
+    fn canceled_numbers_preserve_the_pending_orientation_and_reference_metadata() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        for (label, typed) in [("Width:", "300"), ("Height:", "250"), ("X:", "25"), ("Y:", "35"), ("Video Ruler Pixel Aspect Ratio:", "1.75")] {
+            let mut app = app();
+            app.run("artboard.new", json!({"x": 400, "y": 0, "width": 50, "height": 100})).unwrap();
+            app.select_tool("artboard");
+            crate::panels::artboards::select(&mut app, 0);
+            app.session.set_tool_option("selected", &json!([0, 1]));
+            let document = app.session.active().unwrap().doc.clone();
+            let revision = app.session.active().unwrap().revision;
+            let undo = undo_len(&app);
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(1100.0, 1100.0));
+            open(&mut panel.app()).unwrap();
+            panel.frame();
+            panel.click("Landscape");
+            let pending = actual_value(&panel);
+            assert_eq!(pending.size_choice, Some(ArtboardSizeChoice::Orientation(true)));
+            panel.click_role(label, Role::SPIN_BUTTON);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(typed);
+            assert_eq!(actual_value(&panel), pending, "typing must not discard the pending orientation or reference-point policy");
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert!(!is_open(&panel.app()), "Escape discards the modal for {label}");
+            assert_eq!(panel.app().session.active().unwrap().doc, document);
+            assert_eq!(panel.app().session.active().unwrap().revision, revision);
+            assert_eq!(undo_len(&panel.app()), undo);
+            open(&mut panel.app()).unwrap();
+            panel.frame();
+            panel.click("Landscape");
+            panel.click("OK");
+            panel.frame();
+            assert!(!is_open(&panel.app()));
+            {
+                let app = panel.app();
+                let rects = boards(&app);
+                assert_eq!((rects[0].width(), rects[0].height()), (200.0, 150.0));
+                assert_eq!(
+                    (rects[1].width(), rects[1].height()),
+                    (100.0, 50.0),
+                    "OK still applies the accepted orientation to the other selected artboard"
+                );
+                assert_eq!(undo_len(&app), undo + 1);
+            }
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, document);
+        }
+    }
+
+    #[test]
+    fn accepted_width_and_pixel_aspect_commit_before_ok_and_cancel_remains_safe() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        for (label, typed, blur, cancel) in [
+            ("Width:", "300", true, false),
+            ("Width:", "300", false, false),
+            ("Width:", "300", true, true),
+            ("Video Ruler Pixel Aspect Ratio:", "1.75", true, false),
+        ] {
+            let app = app();
+            let document = app.session.active().unwrap().doc.clone();
+            let undo = undo_len(&app);
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(1100.0, 1100.0));
+            open(&mut panel.app()).unwrap();
+            panel.frame();
+            panel.click_role(label, Role::SPIN_BUTTON);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(typed);
+            if blur {
+                panel.key(Key::Tab, Modifiers::NONE);
+            }
+            panel.click(if cancel { "Cancel" } else { "OK" });
+            panel.frame();
+            assert!(!is_open(&panel.app()));
+            if cancel {
+                assert_eq!(panel.app().session.active().unwrap().doc, document);
+                assert_eq!(undo_len(&panel.app()), undo);
+            } else {
+                {
+                    let app = panel.app();
+                    let artboard = &app.session.active().unwrap().doc.artboards[0];
+                    if label == "Width:" {
+                        assert_eq!(artboard.rect.width(), 300.0, "OK receives a focused field's accepted value in the same pass");
+                        assert_eq!(artboard.rect.height(), 150.0);
+                    } else {
+                        assert_eq!(artboard.video_ruler_pixel_aspect_ratio, 1.75);
+                    }
+                    assert_eq!(undo_len(&app), undo + 1);
+                }
+                panel.app().run("edit.undo", json!({})).unwrap();
+                assert_eq!(panel.app().session.active().unwrap().doc, document);
+            }
+        }
     }
 
     #[test]
@@ -1062,5 +1192,40 @@ mod tests {
         app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, id()));
         assert!(!is_open(&app));
         assert_eq!(*app.session.doc().unwrap().doc, *before);
+    }
+
+    #[test]
+    fn artboard_options_refuses_a_stale_draft_after_confirmed_revert() {
+        let file = std::env::temp_dir().join(format!("vectorcraft-artboard-options-revert-{}.vectorcraft", std::process::id()));
+        let path = file.to_string_lossy();
+        let mut app = app();
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": path})).unwrap();
+        let original = app.session.active().unwrap();
+        let (uid, reverts, artboard) = (original.uid, original.reverts, original.doc.artboards[0].id);
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+
+        open(&mut app).unwrap();
+        set(&app, &[("name", json!("Stale Draft"))]).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let _ = std::fs::remove_file(&file);
+        let reverted = app.session.active().unwrap();
+        assert_eq!((reverted.uid, reverted.reverts, reverted.doc.artboards[0].id), (uid, reverts + 1, artboard));
+        let undo = undo_len(&app);
+
+        let answer = ok(&mut app);
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Artboard 1");
+        assert_eq!(undo_len(&app), undo);
+        assert_eq!(answer, Err("The document was reverted. Reopen this dialog to continue.".into()));
+        assert!(is_open(&app));
+        let host = app.dialogs().unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        assert_eq!(host.with(|h| h.get::<ArtboardOptionsDialog>().unwrap().value.name.clone()), "Stale Draft");
+        host.with(|h| h.cancel_by_id(&ctx, id()));
+        open(&mut app).unwrap();
+        set(&app, &[("name", json!("Fresh Draft"))]).unwrap();
+        ok(&mut app).unwrap();
+        assert_eq!(app.session.active().unwrap().doc.artboards[0].name, "Fresh Draft");
     }
 }

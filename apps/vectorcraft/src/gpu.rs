@@ -629,6 +629,15 @@ struct StartFile {
     record: StartRecord,
 }
 
+impl Drop for StartFile {
+    /// Frees the lock when the start releases the file. A child process that any thread starts holds
+    /// a copy of the file's handle until it runs its program, and the lock is only freed by closing
+    /// every copy or by unlocking.
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
+}
+
 impl StartFile {
     /// Open `dir`'s [`START_FILE`], with the record the last start left in it (`None` when there is
     /// none or it can't be read). `Ok(None)` when another copy of the app holds it.

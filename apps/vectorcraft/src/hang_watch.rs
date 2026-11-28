@@ -220,11 +220,20 @@ fn report_path(dir: &Path) -> PathBuf {
     dir.join(format!("{REPORT_PREFIX}{}.txt", std::process::id()))
 }
 
-/// A report file this process wrote and holds locked until the interface answers again.
+/// A report file this process holds locked: the one it wrote, until the interface answers again,
+/// or a left one while it is read. Dropping it unlocks the file. A child process that any thread
+/// starts holds a copy of the file's handle until it runs its program, and the lock is only freed
+/// by closing every copy or by unlocking.
 #[derive(Debug)]
 pub struct Held {
     path: PathBuf,
-    _file: File,
+    file: File,
+}
+
+impl Drop for Held {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
 }
 
 /// Write `text` to this process's report file in `dir` and lock it. Where the file system has no
@@ -237,7 +246,7 @@ fn write_report(dir: &Path, text: &str) -> std::io::Result<Held> {
         log::warn!("the hang report file is written without a lock: {e}");
     }
     file.write_all(text.as_bytes())?;
-    Ok(Held { path, _file: file })
+    Ok(Held { path, file })
 }
 
 /// Whether a report file whose `try_lock` gave `locked` was abandoned: nobody holds it. A file
@@ -253,13 +262,14 @@ fn abandoned(locked: Result<(), std::fs::TryLockError>) -> bool {
 
 /// The report file at `path`, opened and locked, with its length, when it was abandoned
 /// ([`abandoned`]) and is not empty (an empty one may be being written).
-fn open_abandoned(path: &Path) -> Option<(File, u64)> {
+fn open_abandoned(path: &Path) -> Option<(Held, u64)> {
     let file = File::options().read(true).write(true).open(path).ok()?;
     if !abandoned(file.try_lock()) {
         return None;
     }
-    let len = file.metadata().map_or(0, |m| m.len());
-    (len > 0).then_some((file, len))
+    let held = Held { path: path.to_path_buf(), file };
+    let len = held.file.metadata().map_or(0, |m| m.len());
+    (len > 0).then_some((held, len))
 }
 
 /// The reports that sessions closed while they did not answer left in `dir`, oldest first; `None`
@@ -286,20 +296,20 @@ pub fn take_previous(dir: &Path) -> Option<String> {
     // Newest first: only abandoned reports count toward the limit.
     let mut texts = Vec::new();
     for (_, path) in found.into_iter().rev() {
-        let Some((file, len)) = open_abandoned(&path) else { continue };
+        let Some((held, len)) = open_abandoned(&path) else { continue };
         if texts.len() == MAX_REPORT_FILES {
-            drop(file);
+            drop(held);
             remove_quietly(&path);
             continue;
         }
         let mut bytes = Vec::new();
-        let text = if len <= MAX_REPORT_BYTES && (&file).take(MAX_REPORT_BYTES).read_to_end(&mut bytes).is_ok() {
+        let text = if len <= MAX_REPORT_BYTES && (&held.file).take(MAX_REPORT_BYTES).read_to_end(&mut bytes).is_ok() {
             String::from_utf8_lossy(&bytes).into_owned()
         } else {
             format!("The report was larger than {MAX_REPORT_BYTES} bytes and was not read.\n")
         };
         // Closed (and unlocked) before it is moved: Windows moves no open file.
-        drop(file);
+        drop(held);
         if !texts.is_empty() {
             remove_quietly(&path);
         } else if let Err(e) = std::fs::rename(&path, dir.join(PREVIOUS_FILE)) {
@@ -324,8 +334,8 @@ pub static CLOSING: AtomicBool = AtomicBool::new(false);
 
 /// Remove `held`'s file, closing it first. → the error message; a file already gone is none.
 fn remove(held: Held) -> Option<String> {
-    let Held { path, _file: file } = held;
-    drop(file);
+    let path = held.path.clone();
+    drop(held);
     match std::fs::remove_file(&path) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Some(e.to_string()),
         _ => None,

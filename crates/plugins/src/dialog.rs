@@ -170,6 +170,8 @@ impl Manifest {
         let mut shown = BTreeSet::new();
         for (name, p) in &self.params {
             let met = p.ui.visible_when.iter().all(|(other, allowed)| {
+                #[cfg(test)]
+                tests::count_check();
                 shown.contains(other.as_str())
                     && match values.get(other) {
                         Some(v) => allowed.contains(v),
@@ -218,6 +220,19 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    thread_local! {
+        /// The conditions [`Manifest::visible`] may still check on this thread before the test fails.
+        static CHECKS_LEFT: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
+    }
+
+    /// Counts one condition [`Manifest::visible`] checks, and fails the test once it checked more
+    /// than it was allowed, so a check that would run forever ends the test instead.
+    pub(super) fn count_check() {
+        let left = CHECKS_LEFT.with(|n| n.get());
+        assert!(left > 0, "more conditions were checked than the test allows");
+        CHECKS_LEFT.with(|n| n.set(left - 1));
+    }
 
     const RICH: &str = r#"{"id":"org.example.hatch","name":"Hatch","kind":"effect","params":{
         "pattern":{"type":"choice","options":["lines","crosshatch","dots"],"default":"lines",
@@ -290,7 +305,8 @@ mod tests {
 
     /// Conditions that each name several earlier parameters are checked once per parameter, not
     /// once per path through them: 256 checkboxes, each shown while the 8 before it are checked,
-    /// would otherwise take longer than the age of the universe on every frame of the dialog.
+    /// would otherwise take longer than the age of the universe on every frame of the dialog. The
+    /// test counts the conditions checked, so it ends however slow the machine is.
     #[test]
     fn overlapping_conditions_are_checked_once_per_parameter() {
         let params: Vec<String> = (0..256)
@@ -300,9 +316,11 @@ mod tests {
             })
             .collect();
         let m = Manifest::parse(format!(r#"{{"id":"a","name":"x","kind":"filter","params":{{{}}}}}"#, params.join(",")).as_bytes()).unwrap();
-        let (done, finished) = std::sync::mpsc::channel();
-        std::thread::spawn(move || done.send(m.visible(&Map::new()).len()));
-        let shown = finished.recv_timeout(std::time::Duration::from_secs(10)).expect("the check took more than 10 s");
+        // Each parameter names at most `MAX_CONDITIONS` others, so checking each condition once
+        // stays within this.
+        CHECKS_LEFT.with(|n| n.set(256 * MAX_CONDITIONS));
+        let shown = m.visible(&Map::new()).len();
+        CHECKS_LEFT.with(|n| n.set(usize::MAX));
         assert_eq!(shown, 256, "every checkbox is checked, so every parameter is shown");
         // Unchecking the first hides the rest: each names it or one it hides.
         let m = Manifest::parse(format!(r#"{{"id":"a","name":"x","kind":"filter","params":{{{}}}}}"#, params.join(",")).as_bytes()).unwrap();

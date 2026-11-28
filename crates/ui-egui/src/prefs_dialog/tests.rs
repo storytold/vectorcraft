@@ -61,6 +61,84 @@ fn field(a: &VectorcraftApp, key: &str) -> Value {
     fields(a).and_then(|f| f.get(key).cloned()).unwrap_or(Value::Null)
 }
 
+#[test]
+fn applying_a_reset_allows_a_later_explicit_document_units_edit() {
+    use craft::ui::patterns::preferences::PreferencesDraft as _;
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    a.run("document.setUnits", json!({"units": "Inches"})).unwrap();
+    open(&mut a, Some("General"));
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    let mut window = a.prefs.take().unwrap();
+    model::Live { app: &mut a, w: &mut window }.apply().unwrap();
+    a.prefs = Some(window);
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Inches);
+    set_field(&mut a, "unitsGeneral", json!("points")).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Points);
+}
+
+#[test]
+fn imported_rows_follow_a_later_external_reset() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    let data = json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"keyboardIncrement": 7}}).to_string();
+    a.run("prefs.import", json!({"data": data})).unwrap();
+    a.run("prefs.reset", json!({"category": "General"})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, Prefs::default().keyboard_increment);
+}
+
+#[test]
+fn a_command_changed_delay_survives_opening_time_normalization() {
+    let mut a = app();
+    a.session.prefs.key_hold_delay = 5.0;
+    open(&mut a, Some("General"));
+    a.run("prefs.set", json!({"key": "keyHoldDelay", "value": 0.6})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.key_hold_delay, 0.6);
+}
+
+#[test]
+fn an_external_reset_keeps_rows_edited_in_preferences() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+    let smart = !a.ui.view.smart_guides;
+    set_field(&mut a, "__smartGuides", json!(smart)).unwrap();
+    a.run("prefs.reset", json!({})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, 9.0);
+    assert_eq!(a.ui.view.smart_guides, smart);
+}
+
+#[test]
+fn an_external_editor_reset_requests_a_settings_save() {
+    let mut a = app();
+    a.ui.original_editor = serde_json::from_value(json!({"path": "editor"})).unwrap();
+    a.prefs_changed = false;
+    a.session.execute("prefs.reset", &json!({"category": "File Handling"})).unwrap();
+    a.prefs_changed = false;
+    apply_prefs_resets(&mut a);
+    assert!(a.prefs_changed);
+}
+
+#[test]
+fn apply_refreshes_untouched_rows_from_current_preferences() {
+    use craft::ui::patterns::preferences::PreferencesDraft as _;
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 7})).unwrap();
+    open(&mut a, Some("General"));
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 9})).unwrap();
+    set_field(&mut a, "constrainAngle", json!(30)).unwrap();
+    let mut w = a.prefs.take().unwrap();
+    model::Live { app: &mut a, w: &mut w }.apply().unwrap();
+    assert_eq!(w.draft.get::<Value>("keyboardIncrement"), Some(json!(9.0)));
+    assert_eq!(w.opened.get::<Value>("keyboardIncrement"), Some(json!(9.0)));
+    assert_eq!(w.source.get::<Value>("keyboardIncrement"), Some(json!(9.0)));
+    assert!(!w.edited("keyboardIncrement"));
+}
+
 /// One row per kind is saved by OK: the model's value conversion reaches `prefs.set` for each.
 #[test]
 fn ok_saves_every_row_kind() {
@@ -296,6 +374,18 @@ fn reset_preferences_keeps_an_edit_of_general_units() {
     reset_preferences(&mut b, PromptChoice::Proceed);
     confirm(&mut b).unwrap();
     assert_eq!(b.session.prefs.units_general, Prefs::default().units_general);
+
+    // A document in the default unit, with another unit saved: the row opens showing the default, and the reset
+    // still resets the saved unit.
+    let mut c = app();
+    c.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    c.run("prefs.set", json!({"values": {"unitsGeneral": "inches"}, "documentUnits": false})).unwrap();
+    assert_eq!(c.session.active().unwrap().doc.units.key(), Prefs::default().units_general);
+    open(&mut c, Some("General"));
+    reset_preferences(&mut c, PromptChoice::Proceed);
+    confirm(&mut c).unwrap();
+    assert_eq!(c.session.prefs.units_general, Prefs::default().units_general, "the saved unit is reset");
+    assert_eq!(c.session.active().unwrap().doc.units.key(), Prefs::default().units_general, "the document's units stay");
 }
 
 /// Smart Guides, Snap to Grid and Enable Contextual Task Bar, the UI-only rows.
@@ -583,6 +673,111 @@ fn prefs_reset_outside_run_resets_the_ui_only_rows_in_the_next_frame() {
     assert!(!left_task_bar(&b, "Essentials Classic"), "the workspace left keeps the reset value");
 }
 
+/// OK writes only the rows changed in Preferences: a preference, a UI-only row or the document's units changed by a
+/// command while the window is open keeps its new value, and a row changed in the window is still written.
+#[test]
+fn ok_keeps_settings_changed_by_commands_while_preferences_is_open() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let before = ui_rows(&a);
+    open(&mut a, Some("General"));
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 9})).unwrap();
+    a.run("document.setUnits", json!({"units": "Millimeters"})).unwrap();
+    for id in ["view.smartGuides", "view.snapToGrid", "window.taskBar"] {
+        a.run(id, json!({})).unwrap();
+    }
+    set_field(&mut a, "constrainAngle", json!(30.0)).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, 9.0, "the command's preference");
+    assert_eq!(a.session.active().unwrap().doc.units, vectorcraft_doc::Unit::Millimeters, "the command's units");
+    assert_eq!(ui_rows(&a), (!before.0, !before.1, !before.2), "the commands' UI-only rows");
+    assert_eq!(a.session.prefs.constrain_angle, 30.0, "the row changed in the window");
+    assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(9.0), "saved with the UI state");
+
+    // A row changed both ways takes the window's value; Cancel writes nothing.
+    open(&mut a, Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(3)).unwrap();
+    set_field(&mut a, "constrainAngle", json!(15.0)).unwrap();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 5})).unwrap();
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, 3.0, "the window's value");
+    open(&mut a, Some("General"));
+    set_field(&mut a, "constrainAngle", json!(45.0)).unwrap();
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 6})).unwrap();
+    cancel(&mut a);
+    assert_eq!((a.session.prefs.keyboard_increment, a.session.prefs.constrain_angle), (6.0, 15.0), "Cancel writes nothing");
+
+    // A reset in the window is written even where the row already showed the default: a command changed the
+    // preference after the window opened.
+    let default = Prefs::default().keyboard_increment;
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": default})).unwrap();
+    open(&mut a, Some("General"));
+    a.run("prefs.set", json!({"key": "keyboardIncrement", "value": 8})).unwrap();
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.keyboard_increment, default, "the reset is written");
+}
+
+/// A reset in Preferences that leaves a row showing the value it opened with, after a command changed the setting,
+/// still enables Apply, and Apply writes it.
+#[test]
+fn apply_writes_a_reset_of_a_row_a_command_changed() {
+    use craft::ui::patterns::preferences::PreferencesDraft as _;
+    let live = |a: &mut VectorcraftApp, apply: bool| {
+        let mut w = a.prefs.take().expect("Preferences is open");
+        let mut m = model::Live { app: &mut *a, w: &mut w };
+        let differs = m.differs();
+        if apply {
+            m.apply().unwrap();
+        }
+        a.prefs = Some(w);
+        differs
+    };
+    let mut a = app();
+    let on = a.ui.view.smart_guides;
+    open(&mut a, Some("General"));
+    assert!(!live(&mut a, false), "nothing to apply at open");
+    a.run("view.smartGuides", json!({})).unwrap();
+    reset_preferences(&mut a, PromptChoice::Proceed);
+    assert_eq!(field(&a, "__smartGuides"), json!(on), "the row shows the value it opened with");
+    assert!(live(&mut a, true), "Apply is enabled");
+    assert_eq!(a.ui.view.smart_guides, on, "Apply writes the reset");
+    assert!(!live(&mut a, false), "nothing left to apply");
+}
+
+/// OK with nothing changed in Preferences writes nothing: no preference, no undo step in the document and no save
+/// of the settings.
+#[test]
+fn ok_with_nothing_changed_writes_nothing() {
+    let mut a = app();
+    a.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+    let undo = a.session.active().unwrap().history.undo.len();
+    let prefs = a.session.prefs.clone();
+    a.take_prefs_changed();
+    open(&mut a, Some("Units"));
+    confirm(&mut a).unwrap();
+    assert!(!is_open(&a));
+    assert_eq!(a.session.prefs, prefs);
+    assert_eq!(a.session.active().unwrap().history.undo.len(), undo, "no undo step");
+    assert!(!a.take_prefs_changed(), "the settings are not saved again");
+}
+
+/// Enable Contextual Task Bar left alone in Preferences stays with each workspace: a workspace switch while the
+/// window is open keeps the bar of the workspace switched to, and the workspace left keeps its own.
+#[test]
+fn ok_after_a_workspace_switch_keeps_each_workspaces_task_bar() {
+    let off = crate::workspaces::builtins().into_iter().find(|w| !w.record.task_bar).expect("a workspace saved with the bar off");
+    let mut a = app();
+    crate::workspaces::switch(&mut a, crate::workspaces::ESSENTIALS).unwrap();
+    assert!(a.ui.task_bar, "Essentials starts with the bar on");
+    open(&mut a, Some("General"));
+    a.run("window.workspace", json!({"name": off.name})).unwrap();
+    set_field(&mut a, "keyboardIncrement", json!(3)).unwrap();
+    confirm(&mut a).unwrap();
+    assert!(!a.ui.task_bar, "{} keeps its bar off", off.name);
+    assert!(left_task_bar(&a, crate::workspaces::ESSENTIALS), "Essentials keeps its bar on");
+}
+
 #[test]
 fn old_pref_files_keep_their_brightness() {
     let mut a = app();
@@ -795,6 +990,41 @@ fn prefs_import_refreshes_an_open_preferences_dialog() {
     a.run("prefs.import", json!({ "data": data })).unwrap();
     assert!(same(&field(&a, "keyboardIncrement"), &json!(7.0)));
     assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(7.0));
+}
+
+#[test]
+fn browser_import_applies_picked_preferences_and_refreshes_the_draft() {
+    let mut a = app();
+    open(&mut a, Some("General"));
+    set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+    let picker = crate::tests::picks::scripted(&mut a);
+    a.services.read = None;
+    let data = json!({"format": "vectorcraft-preferences", "version": 1, "prefs": {"keyboardIncrement": 7}}).to_string();
+    import_preferences(&mut a);
+    picker.answer_contents(&[("preferences.json", data.as_bytes())]);
+    file_asks::poll(&mut a);
+    assert!(same(&field(&a, "keyboardIncrement"), &json!(7.0)));
+    assert_eq!(a.ui.engine_prefs["keyboardIncrement"], json!(7.0));
+    assert_eq!(a.ui.status, "Preferences imported.");
+    assert!(is_open(&a));
+}
+
+#[test]
+fn browser_import_refuses_bad_contents_without_losing_draft_edits() {
+    for bytes in [vec![0xff], vec![b' '; (1 << 20) + 1], b"not JSON".to_vec()] {
+        let mut a = app();
+        open(&mut a, Some("General"));
+        set_field(&mut a, "keyboardIncrement", json!(9)).unwrap();
+        let before = a.session.prefs.to_json();
+        let picker = crate::tests::picks::scripted(&mut a);
+        import_preferences(&mut a);
+        picker.answer_contents(&[("preferences.json", &bytes)]);
+        file_asks::poll(&mut a);
+        assert_eq!(a.session.prefs.to_json(), before);
+        assert!(same(&field(&a, "keyboardIncrement"), &json!(9)));
+        assert!(!a.ui.status.is_empty(), "the invalid picked file reports an error");
+        assert_ne!(a.ui.status, "Preferences imported.");
+    }
 }
 
 /// An import that turns Enable Touch Workspace on or off switches the workspace on a touch screen,

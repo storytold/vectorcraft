@@ -695,7 +695,13 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 fn ask_open(app: &mut VectorcraftApp, filters: &[(&str, &[&str])], command: &'static str) -> Value {
     let request = filters.iter().fold(PickRequest::open("variables"), |r, (name, exts)| r.filter(*name, exts));
     file_asks::ask(app, request, Owner::Document, move |app, picked| match file_asks::open_params(&picked) {
-        Some(params) => app.run(command, Value::Object(params)),
+        Some(mut params) => {
+            // The combined importer uses the file name to choose a reader. The dedicated readers already know the format.
+            if command != "variable.import" {
+                params.remove("name");
+            }
+            app.run(command, Value::Object(params))
+        }
         None => Ok(Value::Null),
     })
 }
@@ -754,6 +760,48 @@ fn save_library(app: &mut VectorcraftApp) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pick_variable_source(command: fn(&mut VectorcraftApp) -> Value, name: &str, bytes: &[u8]) -> VectorcraftApp {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        let picker = crate::tests::picks::scripted(&mut app);
+        assert_eq!(command(&mut app), json!({"pending": "fileDialog"}));
+        picker.answer_contents(&[(name, bytes)]);
+        let ctx = app.ui_ctx.clone().unwrap();
+        crate::tests::picks::poll(&mut app, &ctx);
+        app
+    }
+
+    fn browser_xml() -> String {
+        let mut source = vectorcraft_engine::Session::new();
+        source.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        source.execute("variable.define", &json!({"name": "Caption", "kind": "text"})).unwrap();
+        source.execute("variable.saveLibrary", &json!({})).unwrap()["xml"].as_str().unwrap().to_owned()
+    }
+
+    #[test]
+    fn browser_variable_import_reads_csv_and_tsv_from_the_file_name() {
+        for (name, bytes) in [("rows.CSV", &b"Caption,Other\nHello,World\n"[..]), ("rows.tsv", &b"Caption\tOther\nHello\tWorld\n"[..])] {
+            let app = pick_variable_source(import_data_source, name, bytes);
+            let data = &app.session.active().unwrap().doc.variables;
+            assert_eq!(data.datasets.len(), 1, "{name}");
+            assert!(data.variables.iter().any(|v| v.name == "Caption"));
+        }
+    }
+
+    #[test]
+    fn browser_variable_import_reads_xml_from_the_file_name() {
+        let app = pick_variable_source(import_data_source, "variables.XML", browser_xml().as_bytes());
+        assert!(app.session.active().unwrap().doc.variables.variables.iter().any(|v| v.name == "Caption"));
+    }
+
+    #[test]
+    fn browser_dedicated_variable_importers_accept_file_bytes() {
+        let csv = pick_variable_source(import_datasets, "rows.csv", b"Caption\nHello\n");
+        assert_eq!(csv.session.active().unwrap().doc.variables.datasets.len(), 1);
+        let xml = pick_variable_source(load_library, "variables.xml", browser_xml().as_bytes());
+        assert!(xml.session.active().unwrap().doc.variables.variables.iter().any(|v| v.name == "Caption"));
+    }
     use crate::i18n::LangExt;
 
     #[test]

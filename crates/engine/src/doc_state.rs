@@ -69,11 +69,17 @@ pub struct DocState {
     pub recalled_selection: RecalledSelection,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
+    /// When the document last became the current one: a larger value is more recent
+    /// ([`Session::front_order`]). It is not saved.
+    pub(crate) activated: u64,
     /// How many times File → Revert replaced the document's content in its tab
     /// ([`Session::replace_document`]). Work started for the document (a file read for Place, a
     /// pasted bitmap) is dropped when this has changed by the time it finishes; edits do not
     /// change it, and a batch that fails puts it back with the document.
     pub reverts: u64,
+    /// Advances when Undo or Redo restores an older document snapshot. The same node ID can name different objects
+    /// across that boundary.
+    pub history_restores: u64,
     /// Preferences › User Interface › Open Documents As Tabs when the document opened: cleared,
     /// the UI opens it in a floating window of its own.
     pub opened_as_tab: bool,
@@ -186,6 +192,33 @@ pub(crate) fn objects_only(sel: &Selection) -> bool {
         && sel.key_anchor.is_none()
         && sel.symbol_part.is_none()
         && sel.on_path_member.is_none()
+}
+
+/// How `after` starts with objects of `before` kept in their order: → how many objects of `after`
+/// do, and the objects of `before` that are not among them, in order.
+pub(crate) fn kept_from(before: &[NodeId], after: &[NodeId]) -> (usize, Vec<NodeId>) {
+    let (mut at, mut kept, mut removed) = (0, 0, Vec::new());
+    for id in after {
+        let Some(i) = before[at..].iter().position(|b| b == id) else { break };
+        removed.extend_from_slice(&before[at..at + i]);
+        at += i + 1;
+        kept += 1;
+    }
+    removed.extend_from_slice(&before[at..]);
+    (kept, removed)
+}
+
+/// The objects of `ids` that are not in `of`, each named once, in order.
+fn left_out(ids: &[NodeId], of: &[NodeId]) -> Vec<NodeId> {
+    if ids.is_empty() {
+        return vec![];
+    }
+    let mut out: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+    for id in of {
+        out.remove(id);
+    }
+    let mut seen = std::collections::HashSet::new();
+    ids.iter().copied().filter(|id| out.contains(id) && seen.insert(*id)).collect()
 }
 
 /// What the commands scripts ran did to an open document since the person last opened or saved it
@@ -418,7 +451,9 @@ impl DocState {
             last_selection_cmd: None,
             recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            activated: 0,
             reverts: 0,
+            history_restores: 0,
             opened_as_tab: true,
             mask_view: None,
             spelling_ignored: Default::default(),
@@ -463,8 +498,10 @@ impl DocState {
         self.selection_record().and_then(|r| r.paints.as_ref())
     }
     /// Keep the [`SelectionRecord`] of the selection that [`crate::Session::select`] left, with
-    /// Lock Guides `guides_locked`. `record` is the record of the selection before: when the
-    /// selected objects start with its objects, the added objects are read into its paints.
+    /// Lock Guides `guides_locked`. `record` is the record of the selection before, in the same
+    /// document: the objects that leave the selection are taken out of its paints and the objects
+    /// that join it are read into them, unless that reads more objects than reading the selection
+    /// again would, or the paints left can't be told apart without reading them again.
     pub(crate) fn record_selection(&mut self, record: Option<SelectionRecord>, guides_locked: bool) {
         if !objects_only(&self.selection) {
             self.selection_record = None;
@@ -472,16 +509,22 @@ impl DocState {
         }
         let objects = &self.selection.objects;
         self.selection_record = Some(match record {
-            Some(mut r) if objects.starts_with(&r.objects) => {
-                let added = &objects[r.objects.len()..];
+            Some(mut r) => {
                 if let Some(p) = &mut r.paints {
-                    p.add(&self.doc, added);
+                    let (kept, removed) = kept_from(&r.objects, objects);
+                    let gone = left_out(&removed, objects);
+                    let joined = left_out(&objects[kept..], &r.objects);
+                    if gone.len() + joined.len() > objects.len() || !p.remove(&self.doc, &gone) {
+                        r.paints = None;
+                    } else {
+                        p.add(&self.doc, &joined);
+                    }
                 }
-                r.objects.extend_from_slice(added);
+                r.objects.clone_from(objects);
                 r.settled = Some(guides_locked);
                 r
             }
-            _ => SelectionRecord { doc: Arc::downgrade(&self.doc), objects: objects.clone(), settled: Some(guides_locked), paints: None },
+            None => SelectionRecord { doc: Arc::downgrade(&self.doc), objects: objects.clone(), settled: Some(guides_locked), paints: None },
         });
     }
 
@@ -649,6 +692,32 @@ impl DocState {
             self.layer_rows = it.layer_rows;
             self.variables_highlight = it.variables_highlight;
             self.isolation = it.isolation;
+            self.revision += 1;
+        }
+    }
+    /// End isolation mode when the isolated object is no longer in the document (an edit deleted,
+    /// cut, ungrouped or replaced it, or Undo or Redo took it out, such as the clip group Draw
+    /// Inside made around it, #3705), rather than naming an id a later object may take. While
+    /// opacity mask, pattern or symbol editing is on, isolation goes back to that mode's editing
+    /// layer.
+    pub(crate) fn leave_isolation_if_gone(&mut self) {
+        if self.isolation.is_some_and(|i| self.doc.node(i).is_none()) {
+            let d = &self.doc;
+            let layer = d.mask_edit.map(|e| e.layer).or(d.pattern_edit.as_ref().map(|e| e.layer)).or(d.symbol_edit.as_ref().map(|e| e.layer));
+            self.isolation = layer.filter(|l| d.node(*l).is_some());
+            self.revision += 1;
+        }
+    }
+    /// After the document went back from `undone` to a state from when `before` was isolated (a
+    /// canceled undo group or undo scope, an interaction's next preview): `before` is isolated
+    /// again when the edits taken back had removed it.
+    pub(crate) fn restore_isolation(&mut self, before: Option<NodeId>, undone: &Document) {
+        if let Some(b) = before
+            && self.isolation != before
+            && undone.node(b).is_none()
+            && self.doc.node(b).is_some()
+        {
+            self.isolation = before;
             self.revision += 1;
         }
     }

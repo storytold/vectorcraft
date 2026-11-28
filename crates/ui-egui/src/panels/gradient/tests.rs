@@ -10,6 +10,30 @@ use super::*;
 use crate::tests::panel_harness::{Place, Shown, floated};
 
 #[test]
+fn add_to_swatches_requires_a_drawing_even_when_the_default_gradient_remains() {
+    let enabled = |app: &VectorcraftApp| {
+        let mut states = CommandStates::new();
+        menu_states(app, &mut states);
+        states.get(&CommandRef::new(MENU_ADD_TO_SWATCHES)).is_some_and(CommandState::is_enabled)
+    };
+    let mut app = app(json!({"gradient": {}}));
+    app.run("select.none", json!({})).unwrap();
+    app.run("paint.setFill", json!({"gradient": {}})).unwrap();
+    assert!(enabled(&app));
+    app.session.execute("file.close", &json!({"index": 0})).unwrap();
+    assert!(current(&app).is_some(), "the default gradient remains visible without a drawing");
+    assert!(!enabled(&app), "there is no drawing to receive a swatch");
+    assert!(app.run(MENU_ADD_TO_SWATCHES, json!({})).is_err());
+
+    app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+    app.run("paint.setFill", json!({"gradient": {}})).unwrap();
+    assert!(enabled(&app));
+    let before = app.session.active().unwrap().doc.swatches.len();
+    run(&mut app, MENU_ADD_TO_SWATCHES, &json!({})).unwrap().unwrap();
+    assert_eq!(app.session.active().unwrap().doc.swatches.len(), before + 1);
+}
+
+#[test]
 fn dropped_colours_recolour_or_add_an_opaque_stop() {
     let mut g = Gradient::default();
     g.stops[1].opacity = 0.5;
@@ -78,7 +102,7 @@ fn a_gradient_saved_as_a_swatch_keeps_its_stops_models_in_a_cmyk_document() {
     let g = current(&app).expect("a gradient fill");
     let colors = |g: &GradientPaint| g.gradient.stops.iter().map(|s| s.color).collect::<Vec<_>>();
     assert_eq!(colors(&g), [Color::rgb8(255, 128, 0), Color::cmyk(0.0, 0.0, 0.0, 1.0)]);
-    save_to_swatches(&mut app, &g);
+    save_to_swatches(&mut app, &g).unwrap();
     let Some(Paint::Gradient(saved)) = app.session.doc().unwrap().doc.swatches.last().map(|w| w.paint.clone()) else { panic!("a gradient swatch") };
     assert_eq!(colors(&saved), colors(&g));
 }
