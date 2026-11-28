@@ -142,7 +142,7 @@ jxl-grid = "0.6.2"
 zune-jpegxl = { version = "0.5.2", default-features = false, features = ["std"] }
 zune-core = "0.5"
 hayro-ccitt = "0.3"
-jpeg-encoder = { version = "0.6", default-features = false, features = ["std"] }
+jpeg-encoder = { version = "0.7", default-features = false, features = ["std"] }
 # Substring search for the EPS reader's PostScript `search`.
 memchr = "2"
 # The WHATWG Encoding Standard's legacy encodings: names in legacy .ai files read in the code page

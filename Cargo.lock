@@ -1617,7 +1617,7 @@ dependencies = [
  "hayro-jpeg2000",
  "image",
  "image-webp",
- "jpeg-encoder",
+ "jpeg-encoder 0.6.1",
  "png 0.18.1",
  "rayon",
  "serde_json",
@@ -4410,6 +4410,12 @@ name = "jpeg-encoder"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b454d911ac55068f53495488d8ccd0646eaa540c033a28ee15b07838afafb01f"
+
+[[package]]
+name = "jpeg-encoder"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0370574b86f7eca156b9f298392b5e69a23f8c86f3f865add60bbc2e79467a6"
 
 [[package]]
 name = "js-sys"
@@ -8493,7 +8499,7 @@ dependencies = [
  "craft-stream-codecs",
  "flate2",
  "image",
- "jpeg-encoder",
+ "jpeg-encoder 0.7.1",
  "kurbo 0.13.1",
  "proptest",
  "serde",
@@ -8749,7 +8755,7 @@ dependencies = [
  "flate2",
  "getrandom 0.4.3",
  "image",
- "jpeg-encoder",
+ "jpeg-encoder 0.7.1",
  "krilla",
  "kurbo 0.13.1",
  "log",
@@ -8806,7 +8812,7 @@ dependencies = [
  "craft-tiff",
  "flate2",
  "image",
- "jpeg-encoder",
+ "jpeg-encoder 0.7.1",
  "log",
  "proptest",
  "serde_json",
