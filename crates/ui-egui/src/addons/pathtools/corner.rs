@@ -1,6 +1,7 @@
 //! The Anchor Inspector panel's Corners section: the Corner Tool's radius and kind, how many corners
 //! the selection holds, Apply (`addon.pathtools.cornerSet`) and Set Corners… (its dialog, which
-//! can also take every other anchor, or only the corners in an angle range).
+//! can also take every other anchor, or only the corners in an angle range). Canceling a Radius edit
+//! or Corner choice restores its opening tool value; a retired edit supplies no replacement.
 
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Entry, Props as _, Show as _, Sizing, clicked};
@@ -55,12 +56,12 @@ pub(super) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut set: Option<Value> = None;
     let radius_field = |ui: &mut Ui| {
         let field = fields::size_field(ui, tl!("Radius"), Some(radius), lengths).range(0.0..=MAX_RADIUS);
-        typed(field.show(ui).value())
+        typed(field.show(ui).events.landed())
     };
     if let Some(v) = row(ui, "Radius", "corner-tool-radius", radius_field) {
         set = Some(json!({ "radius": v }));
     }
-    let kind_field = |ui: &mut Ui| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).value().copied();
+    let kind_field = |ui: &mut Ui| Select::new(tl!("Corner"), Bind::given(kind), &entries).show(ui).events.landed().copied();
     if let Some(k) = row(ui, "Corner", "corner-tool-kind", kind_field) {
         set = Some(json!({ "kind": k }));
     }
@@ -74,5 +75,83 @@ pub(super) fn section(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
     if dialog {
         crate::menus::invoke(app, super::set_corners::COMMAND, json!({}));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+    use vectorcraft_tools::addons::shared_edge;
+
+    fn app() -> VectorcraftApp {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("tool.setOption", json!({"tool": ID, "values": {"radius": 12.5, "kind": "round"}})).unwrap();
+        app.run("tool.setOption", json!({"tool": shared_edge::ID, "values": {"diameter": 14.25, "tolerance": 0.5}})).unwrap();
+        app
+    }
+
+    #[test]
+    fn canceling_a_corner_kind_popup_restores_the_tools_complete_options() {
+        let mut panel = Panel::new(app(), section);
+        let before = panel.app().session.tool_options_of(ID);
+        let doc = panel.app().session.active().unwrap().doc.clone();
+        let revision = panel.app().session.active().unwrap().revision;
+        let undo = panel.app().session.active().unwrap().history.undo.len();
+        panel.click_role("Corner", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.frame();
+        let proposed = panel.app().session.tool_options_of(ID);
+        assert_ne!(proposed["kind"], before["kind"], "the choice previews the next corner kind");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(panel.app().session.tool_options_of(ID), before);
+        panel.click_role("Corner", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        assert_eq!(panel.app().session.tool_options_of(ID), proposed, "Enter accepts the new tool setting");
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc, doc);
+        assert_eq!(st.revision, revision);
+        assert_eq!(st.history.undo.len(), undo, "tool settings do not edit the drawing");
+    }
+
+    #[test]
+    fn canceling_an_option_text_edit_restores_options_and_enter_keeps_accepted_edits() {
+        for (draw, tool, label, key, typed) in [
+            (section as fn(&mut VectorcraftApp, &mut Ui), ID, "Radius", "radius", "19.75"),
+            (super::super::shared_edge::section, shared_edge::ID, "Diameter", "diameter", "28.5"),
+            (super::super::shared_edge::section, shared_edge::ID, "Coincidence", "tolerance", "0.75"),
+        ] {
+            for cancel in [false, true] {
+                let mut panel = Panel::new(app(), draw);
+                let before = panel.app().session.tool_options_of(tool);
+                let doc = panel.app().session.active().unwrap().doc.clone();
+                let revision = panel.app().session.active().unwrap().revision;
+                let undo = panel.app().session.active().unwrap().history.undo.len();
+                panel.click_role(label, Role::SPIN_BUTTON);
+                panel.key(Key::A, Modifiers::COMMAND);
+                panel.type_text(typed);
+                panel.frame();
+                let proposed = panel.app().session.tool_options_of(tool);
+                assert_ne!(proposed[key], before[key], "{label} changes while typing");
+                if cancel {
+                    panel.key(Key::Escape, Modifiers::NONE);
+                    assert_eq!(panel.app().session.tool_options_of(tool), before, "{label} restores on Escape");
+                } else {
+                    panel.key(Key::Enter, Modifiers::NONE);
+                }
+                panel.frame();
+                assert_eq!(panel.app().session.tool_options_of(tool), if cancel { before } else { proposed });
+                let app = panel.app();
+                let st = app.session.active().unwrap();
+                assert_eq!(st.doc, doc);
+                assert_eq!(st.revision, revision);
+                assert_eq!(st.history.undo.len(), undo, "{label} only changes future tool options");
+            }
+        }
     }
 }
