@@ -786,6 +786,25 @@ fn a_picked_symbol_object_is_measured_with_its_instances_stain() {
     assert!((4.5..4.57).contains(&got), "{fix:?} draws {drawn:?}: {got}");
 }
 
+/// A pick for a picked symbol object with a fill of None puts a solid color there, which the
+/// instance's stain mixes like any other, so the Color Wheel's contrast lines measure it stained.
+#[test]
+fn a_pick_for_a_picked_symbol_object_with_no_fill_is_measured_with_the_stain() {
+    let mut s = picked_symbol_part();
+    let inst = s.active().unwrap().selection.symbol_part.as_ref().unwrap().instance;
+    s.active_mut().unwrap().selection.symbol_part = None;
+    s.execute("paint.setFill", &json!({"color": "#000000"})).unwrap();
+    s.execute("transparency.set", &json!({"item": fill_index(&s), "opacity": 50})).unwrap();
+    s.active_mut().unwrap().selection.symbol_part = Some(vectorcraft_doc::SymbolPart { instance: inst, path: vec![1] });
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    assert!(s.execute("color.contrast", &json!({})).is_err(), "no color to measure");
+    let backdrop = crate::cmd::contrast_pick_backdrop(&s, &json!({"against": "#000000", "opacity": 100})).unwrap();
+    let cms = vectorcraft_color::cms::active();
+    let white = backdrop.ratio(backdrop.shown(&cms, &vectorcraft_color::Color::rgb(1.0, 1.0, 1.0)));
+    let want = vectorcraft_color::wcag::contrast_ratio([0.5; 3], [0.0; 3]);
+    assert!((white - want).abs() < 1e-3, "a white pick stained half way to black: {white} against {want}");
+}
+
 #[test]
 fn a_picked_symbol_object_is_drawn_at_its_instances_opacity() {
     let mut s = picked_symbol_part();

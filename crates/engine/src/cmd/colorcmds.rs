@@ -1341,7 +1341,7 @@ fn contrast_reading(s: &Session, p: &Value, need_color: bool) -> Result<(Option<
         (_, alpha, alone) = pass.draw(([0.0; 3], alpha, alone));
         passes.push(pass);
     }
-    let stain = if given { None } else { stain_of(s) };
+    let stain = if given { None } else { stain_of(s, !need_color) };
     Ok((color, Backdrop { against, written, passes, stain, rich_black }))
 }
 
@@ -1619,11 +1619,14 @@ fn drawn_settings(s: &Session, n: &Node, item: Option<usize>, stroke: bool) -> s
 
 /// The color and amount a fill stains the picked object of a dynamic symbol instance with
 /// (`symbol_overrides::instance_art` mixes the art's solid paints towards the instance's fill), when
-/// such an object is picked and its proxy shows a solid color.
-fn stain_of(s: &Session) -> Option<(Color, f32)> {
+/// such an object is picked and its proxy shows a solid color. For a pick (`pick`), a proxy of None
+/// or a pattern counts too, as the pick puts a solid color in its place.
+fn stain_of(s: &Session, pick: bool) -> Option<(Color, f32)> {
     let (fill, stroke) = s.proxy_paints();
-    if !matches!(if s.fill_active { fill } else { stroke }, Paint::Solid { .. }) {
-        return None;
+    match if s.fill_active { fill } else { stroke } {
+        Paint::Solid { .. } => {}
+        Paint::None | Paint::Pattern { .. } if pick => {}
+        _ => return None,
     }
     let st = s.active()?;
     let sp = st.selection.symbol_part.as_ref()?;
