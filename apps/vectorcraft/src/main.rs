@@ -617,32 +617,26 @@ fn main() -> std::process::ExitCode {
     // An engine preference the window's start reads before the app exists.
     let engine_pref = |key: &str| settings.lock().get().ui.engine_prefs.get(key).cloned();
     #[cfg(feature = "wgpu")]
-    let gpu_pref_value = engine_pref("gpuPreference");
-    #[cfg(feature = "wgpu")]
-    let gpu_pref = gpu_pref_value.as_ref().and_then(serde_json::Value::as_str);
+    let gpu_pref = serde_json::from_value::<vectorcraft_engine::Prefs>(serde_json::json!({"gpuPreference": engine_pref("gpuPreference")}))
+        .unwrap_or_default()
+        .gpu_preference;
     // Preferences › Performance › Low-Latency Drawing; anything but `true` in the file is off.
     #[cfg(feature = "wgpu")]
     let low_latency_drawing = engine_pref("lowLatencyDrawing").and_then(|v| v.as_bool()).unwrap_or(false);
     #[cfg(feature = "wgpu")]
-    let backend_pref_value = engine_pref("gpuBackend");
-    #[cfg(feature = "wgpu")]
-    let backend_pref = backend_pref_value.as_ref().and_then(serde_json::Value::as_str);
-    #[cfg(feature = "wgpu")]
-    let backend = gpu::backend_preference(backend_pref);
-    #[cfg(feature = "wgpu")]
     let power_env = eframe::wgpu::PowerPreference::from_env();
     #[cfg(feature = "wgpu")]
-    let power = gpu::power_preference(gpu_pref, power_env);
+    let power = power_env.unwrap_or_else(|| gpu_pref.power());
     // Automatic draws on the GPU that drives the (primary) display: a GPU without a monitor reset
     // its driver and took every monitor down (pdfcraft#378). Logged first: the first question in
     // every black-window report.
     #[cfg(feature = "wgpu")]
-    let displays = gpu::preferred_displays(gpu_pref, power_env);
+    let displays = gpu::preferred_displays(&gpu_pref, power_env);
     // Under Wayland, the GPU the compositor draws with comes even before those (src/compositor_gpu.rs).
     #[cfg(feature = "wgpu")]
-    let compositor = gpu::preferred_compositor(gpu_pref, power_env);
+    let compositor = gpu::preferred_compositor(&gpu_pref, power_env);
     #[cfg(feature = "wgpu")]
-    let chosen_gpu = !gpu::automatic(gpu_pref, power_env);
+    let chosen_gpu = !matches!(&gpu_pref, craft_gpu_device::Preference::Auto) || power_env.is_some();
     #[cfg(feature = "wgpu")]
     if !chosen_gpu {
         let listed: Vec<String> = displays.iter().map(ToString::to_string).collect();
@@ -652,12 +646,14 @@ fn main() -> std::process::ExitCode {
     }
     #[cfg(feature = "wgpu")]
     let startup = std::sync::Arc::new(gpu::Startup::default());
+    #[cfg(feature = "wgpu")]
+    let graphics_adapters = Arc::new(std::sync::Mutex::new(Vec::new()));
     // A driver that crashes the process while the window starts leaves this start recorded in the
     // log folder; the next start leaves that adapter out (#2243). Runs without preferences, which
     // write no log file, don't record their starts.
     #[cfg(feature = "wgpu")]
     let left_out = match log_dir().filter(|_| prefs_enabled()) {
-        Some(dir) => startup.track(&dir, gpu_pref, backend_pref, gpu::explicit_choice()),
+        Some(dir) => startup.track(&dir, &gpu_pref, gpu::explicit_choice()),
         None => gpu::LeftOut::default(),
     };
     #[cfg(feature = "wgpu")]
@@ -722,18 +718,31 @@ fn main() -> std::process::ExitCode {
         log::info!("requested window surface: {}", presentation::describe(&options.wgpu_options.surface, &presentation, low_latency_drawing));
         // Only adapters that can show the window, in the order `gpu` gives (#306, #502).
         if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
-            create.native_adapter_selector = Some(gpu::selector(power, displays, compositor, left_out.adapters.clone(), startup.clone()));
-            // Nothing draws or dispatches indirectly, so wgpu's check of indirect arguments only
-            // costs a compute shader at start-up, one some drivers can't compile (OCLP-patched
-            // Metal on an Iris Pro, #651). `WGPU_VALIDATION_INDIRECT_CALL=1` turns it back on.
+            create.native_adapter_selector = Some(gpu::selector(
+                gpu_pref.clone(),
+                power_env,
+                displays,
+                compositor,
+                left_out.adapters.clone(),
+                startup.clone(),
+                graphics_adapters.clone(),
+            ));
+            // The shared descriptor chooses supported native APIs; saved preferences select an
+            // adapter through the shared selector, never a separate backend mask.
+            create.instance_descriptor = craft_gpu_device::native_descriptor();
+            // Explicit diagnostic environment choices retain precedence over saved preferences.
+            if let Some(backends) = eframe::wgpu::Backends::from_env() {
+                create.instance_descriptor.backends = backends;
+            }
+            // Nothing draws or dispatches indirectly (#651). Keep the app's existing validation
+            // and Windows recovery policy without duplicating the saved-adapter chooser.
             create.instance_descriptor.flags =
                 (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
             let env_set = std::env::var_os("WGPU_BACKEND").is_some();
-            let recovering = left_out.opengl_only || !left_out.adapters.is_empty() || !gpu::skipped().is_empty();
-            // A healthy saved API choice needs no DX12/OpenGL probe of another backend.
-            let opengl = cfg!(windows) && !env_set && (backend.is_none() || recovering) && gpu::windows_opengl(&left_out);
-            create.instance_descriptor.backends =
-                left_out.backends(gpu::selected_backends(create.instance_descriptor.backends, env_set, backend, opengl, recovering));
+            if cfg!(windows) && !env_set && gpu::windows_opengl(&left_out) {
+                create.instance_descriptor.backends |= eframe::wgpu::Backends::GL;
+            }
+            create.instance_descriptor.backends = left_out.backends(create.instance_descriptor.backends);
             // DX12 shaders compile with FXC, part of Windows: wgpu's default loads whichever
             // dxcompiler.dll the search path finds, and one without its dxil.dll fails every shader,
             // losing the device before the first frame (#1194). `WGPU_DX12_COMPILER` picks another.
@@ -841,6 +850,11 @@ fn main() -> std::process::ExitCode {
                 prefs_dir::attach_proof_setups(&mut session);
                 prefs_dir::attach_script_data(&mut session);
                 let mut app = VectorcraftApp::new(session, services(winit_window.clone()));
+                #[cfg(feature = "wgpu")]
+                {
+                    let adapters = graphics_adapters.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+                    app = app.with_graphics_adapters(adapters);
+                }
                 app.adopt_context(&cc.egui_ctx);
                 // A nightly is updated by the Launcher: it never checks for a stable release, which
                 // would install this program's own updater over the nightly build.
@@ -901,12 +915,38 @@ fn main() -> std::process::ExitCode {
                     } else if let Some(crash) = &crash {
                         app.status(match crash {
                             gpu::Crash::Adapter { name, .. } => format!(
-                                "The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor or Graphics Backend, or start with WGPU_BACKEND set"
+                                "The last start of VectorCraft ended on {name} before its window appeared, so it started on {summary}. To try that graphics processor again, change Preferences › Performance › Graphics Processor, or start with WGPU_BACKEND set"
                             ),
                             gpu::Crash::Listing => format!(
-                                "The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor or Graphics Backend, or start with WGPU_BACKEND set"
+                                "The last start of VectorCraft ended while it listed the graphics processors, so it started on {summary} with OpenGL alone. To try the other graphics backends again, change Preferences › Performance › Graphics Processor, or start with WGPU_BACKEND set"
                             ),
                         });
+                    }
+                    for notice in startup.notices() {
+                        let message = match notice {
+                            craft_gpu_device::Notice::AdapterMissing(key) => Some(
+                                vectorcraft_ui_egui::tl!(
+                                    "The saved graphics adapter {adapter} is unavailable; VectorCraft is using its automatic choice."
+                                )
+                                .replace("{adapter}", &key.to_string()),
+                            ),
+                            craft_gpu_device::Notice::NoSoftwareAdapter => Some(
+                                vectorcraft_ui_egui::tl!("No software graphics adapter is available; VectorCraft is using its automatic choice.")
+                                    .to_string(),
+                            ),
+                            craft_gpu_device::Notice::SoftwareOnly => Some(
+                                vectorcraft_ui_egui::tl!("Graphics hardware is unavailable; VectorCraft is drawing with a software adapter.")
+                                    .to_string(),
+                            ),
+                            _ => None,
+                        };
+                        if let Some(message) = message {
+                            if app.ui.status.is_empty() {
+                                app.status(message);
+                            } else {
+                                app.status(format!("{}\n{message}", app.ui.status));
+                            }
+                        }
                     }
                     app.graphics_adapter = Some(summary);
                     let (loss, ctx) = (graphics_loss.clone(), cc.egui_ctx.clone());

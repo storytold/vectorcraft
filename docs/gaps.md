@@ -554,7 +554,7 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 - **Implemented and tested (2026-11-21):** Properties panel Quick Actions follow every selected object. Ungroup (`object.ungroup`) is offered when any selected object is a group, including several groups, a group selected after a path, and a group that holds another group. Isolate Group (`object.isolate`) is offered only when that one group is the whole selection. Unite (`object.pathfinder.unite`) appears only for selections of at least two objects, each a non-guide path or a compound path. It appears alongside Group and Make Clipping Mask. Headless regressions: `panels::properties::tests::two_groups_offer_ungroup_without_isolate_group`, `one_group_offers_ungroup_and_isolate_group` and `several_paths_offer_group_clipping_mask_and_unite`. Other G12 gaps remain; scores and estimates unchanged.
 
-Desktop Graphics Backend (#7942) is a restart-only Performance preference with platform choices, tolerant saved settings and WGPU_BACKEND precedence. Automatic and GPU power preference remain independent. This source preparation does not establish a hardware-specific blur fix; native execution is pending. Scores and estimates are unchanged.
+Desktop graphics adapter/backend choice (#7942) uses the shared structured Preference, backend-grouped adapter rows, tolerant legacy settings and explicit environment overrides. Startup records compare full preferences and adapter keys. This source preparation does not establish a hardware-specific blur fix; native execution is pending. Scores and estimates are unchanged.
 
 - **Implemented and tested (2026-11-21):** Document Info's panel menu Selection Only (`ui.docInfo.selectionOnly`; kept in memory for the session, not stored) asks `document.info` for the selection: object counts cover the selected nodes and their descendants, and with no artwork selected it shows `(No artwork selected)` instead of the document's counts, while artboards the Artboard tool has selected still show under Document. With the item off, counts stay for the whole document. Headless regressions: `panels::doc_info::tests::test_doc_info_counts_entire_document`, `test_doc_info_selection_only_toggles_and_filters_counts`, `test_doc_info_selection_only_keeps_selected_artboard` and `test_doc_info_panel_menu_toggles_state`. Scores and estimates unchanged.
 
@@ -1032,7 +1032,7 @@ trap, and the defaults (0.25 pt, 100%, 40%) are VectorCraft's own, the pages giv
 
 ## Revision history
 
-- 2026-11-26: Desktop Graphics Backend (#7942) is a restart-only Performance preference with platform choices, tolerant saved settings and WGPU_BACKEND precedence. Automatic and GPU power preference remain independent. This source preparation does not establish a hardware-specific blur fix; native execution is pending. Scores and estimates are unchanged.
+- 2026-11-26: Desktop graphics adapter/backend choice (#7942) uses the shared structured Preference, backend-grouped adapter rows, tolerant legacy settings and explicit environment overrides. Startup records compare full preferences and adapter keys. This source preparation does not establish a hardware-specific blur fix; native execution is pending. Scores and estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|

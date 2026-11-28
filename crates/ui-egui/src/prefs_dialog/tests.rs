@@ -835,15 +835,23 @@ fn dimmed_rows_follow_the_settings_they_depend_on() {
     }
 }
 
-/// 0.5.0 saved `powerSaving` for everyone (its default): it reads as Automatic, while the
-/// choices this version offers are kept (#502).
+/// Legacy processor strings migrate through the engine's tolerant shared-preference reader;
+/// malformed values still choose Automatic without discarding the rest of the preferences.
 #[test]
 fn a_graphics_processor_this_version_does_not_offer_reads_as_automatic() {
-    for (saved, read) in [("powerSaving", "automatic"), ("turbo", "automatic"), ("lowPower", "lowPower"), ("highPerformance", "highPerformance")] {
+    use craft_gpu_device::Preference;
+    for (saved, read) in [
+        (json!("powerSaving"), Preference::Auto),
+        (json!("turbo"), Preference::Auto),
+        (json!("lowPower"), Preference::LowPower),
+        (json!("highPerformance"), Preference::Auto),
+        (json!({"kind": "software"}), Preference::Software),
+    ] {
         let mut a = app();
-        a.ui.engine_prefs = json!({"gpuPreference": saved});
+        a.ui.engine_prefs = json!({"gpuPreference": saved, "keyboardIncrement": 4});
         restore(&mut a);
         assert_eq!(a.session.prefs.gpu_preference, read, "{saved}");
+        assert_eq!(a.session.prefs.keyboard_increment, 4.0);
     }
 }
 
@@ -1535,4 +1543,124 @@ fn script_file_access_revoke_names_the_whole_path() {
         assert!(descriptions.iter().any(|d| d.ends_with(&*whole)), "{whole} in {descriptions:?}");
     }
     let _ = std::fs::remove_dir_all(store.parent().unwrap());
+}
+
+/// Adapters used by the preferences tests are plain data; no instance or graphics device is opened.
+fn graphics_candidate(backend: wgpu::Backend, name: &str, bus: &str) -> craft_gpu_device::Candidate {
+    craft_gpu_device::Candidate {
+        name: name.into(),
+        backend,
+        device_type: wgpu::DeviceType::DiscreteGpu,
+        vendor: 0x1002,
+        device: 0x73df,
+        pci_bus_id: bus.into(),
+        driver: "synthetic-driver".into(),
+        driver_info: String::new(),
+        features: 1,
+        usable: true,
+    }
+}
+
+/// Inspect the actual native-choice model, including its non-pickable backend headings.
+fn graphics_row(a: &mut VectorcraftApp) -> (String, Vec<(Option<String>, String, bool, bool)>) {
+    with_pages(a, |pages| {
+        let rows: Vec<_> = pages.iter().flat_map(|page| &page.groups).flat_map(|group| &group.rows).collect();
+        assert!(!rows.iter().any(|row| row.key == "gpuBackend"));
+        let rows: Vec<_> = rows.into_iter().filter(|row| row.key == "gpuPreference").collect();
+        assert_eq!(rows.len(), 1, "one Graphics Processor row");
+        let craft::ui::patterns::preferences::RowKind::Choice { value, options, .. } = &rows[0].kind else {
+            panic!("the processor uses the existing native choice");
+        };
+        (
+            (*value).to_string(),
+            options
+                .iter()
+                .map(|entry| (entry.value().map(|id| (*id).to_string()), entry.label().as_str().to_string(), entry.is_enabled(), entry.is_stepped()))
+                .collect(),
+        )
+    })
+}
+
+fn choose_graphics(a: &mut VectorcraftApp, preference: &craft_gpu_device::Preference) {
+    use craft::ui::patterns::preferences::PrefValue;
+    let mut window = a.prefs.take().unwrap();
+    model::Live { app: &mut *a, w: &mut window }.set("gpuPreference", PrefValue::Choice(json!(preference).to_string()));
+    a.prefs = Some(window);
+}
+
+#[test]
+fn shared_graphics_choices_group_adapters_and_apply_full_preferences() {
+    use craft_gpu_device::{AdapterKey, Preference};
+    let first = graphics_candidate(wgpu::Backend::Vulkan, "Same GPU", "0000:03:00.0");
+    let second = graphics_candidate(wgpu::Backend::Vulkan, "Same GPU", "0000:04:00.0");
+    let dx12 = graphics_candidate(wgpu::Backend::Dx12, "Other GPU", "0000:05:00.0");
+    let mut duplicate = first.clone();
+    duplicate.usable = false;
+    let mut a = app().with_graphics_adapters(vec![second.clone(), dx12.clone(), duplicate, first.clone()]);
+    open(&mut a, Some("Performance"));
+    let (_, rows) = graphics_row(&mut a);
+    let headings: Vec<_> = rows.iter().filter(|row| row.0.is_none()).collect();
+    assert_eq!(headings.iter().map(|row| row.1.as_str()).collect::<Vec<_>>(), ["Direct3D 12", "Vulkan"]);
+    assert!(headings.iter().all(|row| !row.2 && !row.3), "headings are not keyboard or AX step targets");
+    let ids: Vec<_> = rows.iter().filter_map(|row| row.0.as_deref()).collect();
+    assert_eq!(ids.len(), 6, "three policy choices and three distinct adapter identities");
+    assert_eq!(ids.iter().copied().collect::<std::collections::BTreeSet<_>>().len(), ids.len());
+    assert!(rows.iter().filter(|row| row.0.is_some()).all(|row| row.2), "the usable duplicate remains offered");
+    let chosen = Preference::Adapter(AdapterKey::of(&second));
+    let value = json!(chosen);
+    assert!(ids.contains(&value.to_string().as_str()));
+    choose_graphics(&mut a, &chosen);
+    assert_eq!(field(&a, "gpuPreference"), value, "the GUI string id writes a structured draft value");
+    let mut window = a.prefs.take().unwrap();
+    model::Live { app: &mut a, w: &mut window }
+        .set("gpuPreference", craft::ui::patterns::preferences::PrefValue::Choice("not an offered preference".into()));
+    a.prefs = Some(window);
+    assert_eq!(field(&a, "gpuPreference"), value, "an unknown choice id cannot replace the structured draft");
+    assert_eq!(a.session.prefs.gpu_preference, Preference::Auto, "editing does not apply");
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.gpu_preference, chosen);
+    assert_eq!(a.ui.engine_prefs["gpuPreference"], value);
+    a = a.with_graphics_adapters(vec![first, second, dx12]);
+    open(&mut a, Some("Performance"));
+    assert_eq!(graphics_row(&mut a).0, value.to_string(), "enumeration order is not identity");
+    choose_graphics(&mut a, &Preference::LowPower);
+    cancel(&mut a);
+    assert_eq!(a.session.prefs.gpu_preference, chosen, "Cancel leaves the saved object alone");
+}
+
+#[test]
+fn shared_graphics_choices_keep_absent_and_older_adapter_keys_visible() {
+    use craft_gpu_device::{AdapterKey, Preference};
+    let candidate = graphics_candidate(wgpu::Backend::Vulkan, "Saved GPU", "0000:03:00.0");
+    let key = AdapterKey::of(&candidate);
+    let chosen = Preference::Adapter(key.clone());
+    let mut a = app();
+    a.run("prefs.set", json!({"key": "gpuPreference", "value": chosen})).unwrap();
+    open(&mut a, Some("Performance"));
+    let (selected, rows) = graphics_row(&mut a);
+    let saved = rows.iter().find(|row| row.0.as_deref() == Some(selected.as_str())).unwrap();
+    assert!(!saved.2 && !saved.3, "the absent key is visible but not a pickable new option");
+    let help = row_state(&mut a, "gpuPreference").unwrap().1.unwrap();
+    assert!(help.contains(tl!("The saved graphics adapter is unavailable. Automatic will be used until it is available.")));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.gpu_preference, chosen, "absence does not rewrite the saved preference");
+    // The shared matcher accepts old keys with missing bus/driver fields. Showing one must not
+    // rewrite it, falsely call it unavailable, or depend on its current enumeration position.
+    let old = Preference::Adapter(AdapterKey { pci_bus_id: String::new(), driver: String::new(), ..key });
+    a = a.with_graphics_adapters(vec![candidate]);
+    a.run("prefs.set", json!({"key": "gpuPreference", "value": old})).unwrap();
+    open(&mut a, Some("Performance"));
+    let (selected, rows) = graphics_row(&mut a);
+    assert_eq!(selected, json!(old).to_string());
+    assert!(rows.iter().find(|row| row.0.as_deref() == Some(selected.as_str())).unwrap().2);
+    let help = row_state(&mut a, "gpuPreference").unwrap().1.unwrap();
+    assert!(!help.contains(tl!("The saved graphics adapter is unavailable. Automatic will be used until it is available.")));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.gpu_preference, old);
+    open(&mut a, Some("Performance"));
+    choose_graphics(&mut a, &Preference::Software);
+    let help = row_state(&mut a, "gpuPreference").unwrap().1.unwrap();
+    assert!(help.contains(tl!("No software graphics adapter is available. Automatic will be used.")));
+    confirm(&mut a).unwrap();
+    assert_eq!(a.session.prefs.gpu_preference, Preference::Software, "retain the requested policy, not its temporary fallback");
 }

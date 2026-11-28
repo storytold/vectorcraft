@@ -2,7 +2,6 @@
 //! after a load, and pushing the UI-side ones into the renderer and the toolbar each frame.
 
 use vectorcraft_engine::Prefs;
-use vectorcraft_engine::cmd::prefscmds::GPU_PREFERENCES;
 
 use crate::VectorcraftApp;
 use crate::i18n::LangExt as _;
@@ -31,11 +30,8 @@ pub fn restore(app: &mut VectorcraftApp) {
     {
         p.interface_language = code;
     }
-    // 0.5.0 saved its default, `powerSaving`, which Automatic replaced (#502): any value this
-    // version doesn't offer reads as the default, as the desktop app reads it at startup.
-    if !GPU_PREFERENCES.iter().any(|(v, _)| *v == p.gpu_preference) {
-        p.gpu_preference = Prefs::default().gpu_preference;
-    }
+    // Prefs' tolerant deserializer restores the shared graphics preference, including legacy
+    // strings. A valid saved adapter remains a preference even while it is not plugged in.
     app.session.apply_prefs(p);
 }
 

@@ -20,6 +20,7 @@ bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
 interface-fonts = []
 
 [dependencies]
+craft-gpu-device = { workspace = true }
 craft = { workspace = true, features = [
     "ui",
     "automation",
@@ -95,6 +96,8 @@ web-time = "1"
 rustix = { workspace = true, features = ["std", "process"] }
 
 [dev-dependencies]
+# Synthetic adapter choices use the same wgpu data types as the shared selector.
+wgpu = { version = "30", default-features = false }
 # `Fixture` and the stories sit behind craft-ui's `testing` feature.
 craft = { workspace = true, features = ["ui-testing"] }
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }

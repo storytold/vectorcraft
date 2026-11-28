@@ -16,6 +16,7 @@ use std::sync::{Mutex, MutexGuard};
 use craft::automation::{ControlRequest, Reply};
 use craft::ui::runtime::frame::take_output;
 use craft::ui::shell::embed;
+use craft_gpu_device::{AdapterKey, Candidate, Preference};
 use egui::{Pos2, RawInput, Rect, Shape, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
@@ -59,7 +60,7 @@ struct Scene {
 
 impl Scene {
     fn new() -> Self {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        let mut app = VectorcraftApp::new(Session::new(), Default::default()).with_graphics_adapters(vec![adapter()]);
         app.run("app.language", json!({"lang": "en"})).unwrap();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
@@ -111,73 +112,94 @@ impl Scene {
     }
 }
 
+/// An original synthetic adapter; building its row opens no hardware or renderer.
+fn adapter() -> Candidate {
+    Candidate {
+        name: "Synthetic GPU".into(),
+        backend: wgpu::Backend::Vulkan,
+        device_type: wgpu::DeviceType::DiscreteGpu,
+        vendor: 0x1002,
+        device: 0x73df,
+        pci_bus_id: "0000:03:00.0".into(),
+        driver: "synthetic-driver".into(),
+        driver_info: String::new(),
+        features: 1,
+        usable: true,
+    }
+}
+
 #[test]
 fn graphics_backend_shows_its_restart_note_and_uses_preferences_ok_cancel() {
     let _language = LanguageGuard::new();
     let mut scene = Scene::new();
     prefs_dialog::open(&mut scene.app, Some("Performance"));
-    // Match this row's complete note: another startup-only setting cannot satisfy the oracle.
-    scene.request("ui.dialog.set", json!({"dialog": "preferences", "field": "__search", "value": "Graphics Backend"}));
+    scene.request("ui.dialog.set", json!({"dialog": "preferences", "field": "__search", "value": "Graphics Processor"}));
     let shown = scene.settle();
-    assert!(shown.iter().any(|t| t.starts_with("Graphics Backend")), "{shown:?}");
-    let backend_note = concat!(
+    assert!(shown.iter().any(|t| t.starts_with("Graphics Processor")), "{shown:?}");
+    assert!(!shown.iter().any(|t| t.starts_with("Graphics Backend")), "one shared processor choice");
+    let processor_note = concat!(
         "Applies the next time VectorCraft starts.\n",
-        "From the next start, the desktop window uses this graphics API. ",
-        "Automatic keeps the platform default; WGPU_BACKEND overrides this choice. ",
+        "From the next start, the desktop window uses this graphics processor. ",
+        "Automatic and Low Power use the shared adapter policy; an unavailable saved adapter falls back to Automatic. ",
         "The artwork is drawn on the CPU either way."
     );
-    assert!(shown.iter().any(|t| t == backend_note), "{shown:?}");
-    let chosen = if cfg!(target_os = "macos") { "metal" } else { "vulkan" };
+    assert!(shown.iter().any(|t| t == processor_note), "{shown:?}");
+    let chosen = Preference::Adapter(AdapterKey::of(&adapter()));
+    let value = json!(chosen);
     let saved_before = scene.app.ui.engine_prefs.clone();
-    let processor = scene.app.session.prefs.gpu_preference.clone();
     let latency = scene.app.session.prefs.low_latency_drawing;
     let _ = scene.app.take_prefs_changed();
-    scene.request("ui.dialog.set", json!({"dialog": "preferences", "field": "gpuBackend", "value": chosen}));
+    scene.request("ui.dialog.set", json!({"dialog": "preferences", "field": "gpuPreference", "value": value}));
     scene.settle();
-    assert_eq!(scene.draft()["gpuBackend"], chosen, "the actual Preferences model holds the edited choice");
-    assert_eq!(scene.app.session.prefs.to_json()["gpuBackend"], "automatic", "editing the working copy does not apply it");
+    assert_eq!(scene.draft()["gpuPreference"], value, "the actual draft keeps the full adapter object");
+    assert_eq!(scene.app.session.prefs.gpu_preference, Preference::Auto, "editing does not apply it");
     assert!(!scene.app.take_prefs_changed());
     scene.request("ui.dialog.cancel", json!({"dialog": "preferences"}));
-    assert_eq!(scene.app.session.prefs.to_json()["gpuBackend"], "automatic");
+    assert_eq!(scene.app.session.prefs.gpu_preference, Preference::Auto);
     assert_eq!(scene.app.ui.engine_prefs, saved_before);
     assert!(!scene.app.take_prefs_changed());
     prefs_dialog::open(&mut scene.app, Some("Performance"));
-    scene.request("ui.dialog.set", json!({"dialog": "preferences", "field": "gpuBackend", "value": chosen}));
+    scene.request("ui.dialog.set", json!({"dialog": "preferences", "field": "gpuPreference", "value": value}));
     scene.request("ui.dialog.confirm", json!({"dialog": "preferences"}));
     assert!(scene.app.take_prefs_changed(), "OK asks the host to save for the next start");
     assert!(!scene.app.take_prefs_changed());
-    assert_eq!(scene.app.session.prefs.to_json()["gpuBackend"], chosen);
-    assert_eq!(scene.app.session.prefs.gpu_preference, processor);
+    assert_eq!(scene.app.session.prefs.gpu_preference, chosen);
     assert_eq!(scene.app.session.prefs.low_latency_drawing, latency);
+    assert!(scene.app.session.prefs.to_json().get("gpuBackend").is_none());
     let saved: Value = serde_json::from_slice(&serde_json::to_vec(&scene.app.ui).unwrap()).unwrap();
-    assert_eq!(saved["engine_prefs"]["gpuBackend"], chosen);
+    assert_eq!(saved["engine_prefs"]["gpuPreference"], value);
     prefs_dialog::open(&mut scene.app, Some("Performance"));
-    assert_eq!(scene.draft()["gpuBackend"], chosen);
+    assert_eq!(scene.draft()["gpuPreference"], value);
 }
 
 #[test]
 fn graphics_backend_restore_keeps_old_preferences_and_supported_choices() {
     let _language = LanguageGuard::new();
-    let chosen = if cfg!(target_os = "macos") { "metal" } else { "vulkan" };
-    let unsupported = if cfg!(target_os = "macos") { "vulkan" } else { "metal" };
+    // A valid saved adapter is retained on a different platform or while unplugged. Selection,
+    // not settings-file parsing, later supplies the shared AdapterMissing fallback notice.
+    let chosen = Preference::Adapter(AdapterKey::of(&adapter()));
     let cases = [
-        (None, "automatic"),
-        (Some(json!("unknown")), "automatic"),
-        (Some(json!(unsupported)), "automatic"),
+        (None, Preference::Auto),
+        (Some(json!("unknown")), Preference::Auto),
+        (Some(json!("powerSaving")), Preference::Auto),
+        (Some(json!("lowPower")), Preference::LowPower),
+        (Some(json!("highPerformance")), Preference::Auto),
         (Some(json!(chosen)), chosen),
-        (Some(Value::Null), "automatic"),
-        (Some(json!({"future": "backend"})), "automatic"),
+        (Some(json!({"kind": "lowPower"})), Preference::LowPower),
+        (Some(json!({"kind": "software"})), Preference::Software),
+        (Some(Value::Null), Preference::Auto),
+        (Some(json!({"future": "backend"})), Preference::Auto),
     ];
     for (value, expected) in cases {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.ui.engine_prefs = json!({"keyboardIncrement":4,"gpuPreference":"highPerformance","lowLatencyDrawing":true});
+        app.ui.engine_prefs = json!({"keyboardIncrement":4,"lowLatencyDrawing":true,"gpuBackend":"vulkan"});
         if let Some(value) = value {
-            app.ui.engine_prefs["gpuBackend"] = value;
+            app.ui.engine_prefs["gpuPreference"] = value;
         }
         prefs_dialog::restore(&mut app);
-        assert_eq!(app.session.prefs.to_json()["gpuBackend"], expected);
+        assert_eq!(app.session.prefs.gpu_preference, expected);
         assert_eq!(app.session.prefs.keyboard_increment, 4.0);
-        assert_eq!(app.session.prefs.gpu_preference, "highPerformance");
         assert!(app.session.prefs.low_latency_drawing);
+        assert!(app.session.prefs.to_json().get("gpuBackend").is_none(), "the obsolete independent API selector is gone");
     }
 }

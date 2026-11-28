@@ -15,6 +15,7 @@ wgpu = ["eframe/wgpu", "dep:winsafe"]
 accessibility = ["eframe/accesskit"]
 
 [dependencies]
+craft-gpu-device = { workspace = true }
 vectorcraft-engine = { workspace = true, features = ["bundled-fonts", "heif"] }
 vectorcraft-ui-egui = { workspace = true }
 vectorcraft-text = { workspace = true }

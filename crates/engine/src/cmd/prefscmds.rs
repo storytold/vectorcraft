@@ -35,6 +35,8 @@ pub enum PrefKind {
     },
     /// One of (value, label).
     Choice(&'static [(&'static str, &'static str)]),
+    /// The shared structured adapter preference; available devices are supplied by the app.
+    GpuPreference,
     /// `#rrggbb`.
     Color,
     Text,
@@ -93,27 +95,6 @@ pub const EAST_ASIAN_UNITS: &[(&str, &str)] = &{
     out
 };
 const LINE_STYLE: &[(&str, &str)] = &[("lines", "Lines"), ("dots", "Dots")];
-/// Performance › Graphics Processor (`gpuPreference`), read by the desktop app at startup. The
-/// values are WebGPU's power preferences plus `automatic`; 0.5.0's default, `powerSaving`, reads as
-/// `automatic` (#502).
-pub const GPU_PREFERENCES: &[(&str, &str)] =
-    &[("automatic", "Automatic"), ("lowPower", "Power Saving (integrated)"), ("highPerformance", "High Performance (discrete)")];
-/// Desktop graphics APIs available to this platform, independently of the GPU power preference.
-pub const GPU_BACKENDS: &[(&str, &str)] = if cfg!(windows) {
-    &[("automatic", "Automatic"), ("dx12", "Direct3D 12"), ("vulkan", "Vulkan"), ("gl", "OpenGL")]
-} else if cfg!(target_os = "macos") {
-    &[("automatic", "Automatic"), ("metal", "Metal")]
-} else if cfg!(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")) {
-    &[("automatic", "Automatic"), ("vulkan", "Vulkan"), ("gl", "OpenGL")]
-} else {
-    &[("automatic", "Automatic")]
-};
-
-/// A saved choice from another platform or version falls back to the existing startup policy.
-pub fn gpu_backend_name(value: Option<&str>) -> &'static str {
-    GPU_BACKENDS.iter().find(|(id, _)| Some(*id) == value).map_or("automatic", |(id, _)| *id)
-}
-
 /// Performance › Linux Display Server (`linuxDisplayServer`), read by the desktop app at startup:
 /// `x11` opens the window through XWayland on a Wayland session, where dropped files arrive
 /// (winit 0.30 has no Wayland drag and drop, #1151); `automatic` and `x11WithPen` do the same only
@@ -398,10 +379,15 @@ pub const PREF_SPECS: &[PrefSpec] = &[
     // Performance
     p!("gpuPerformance", "Performance", "GPU Performance", "GPU Performance", bool),
     p!("animatedZoom", "Performance", "GPU Performance", "Animated Zoom", bool),
-    p!("gpuPreference", "Performance", "GPU Performance", "Graphics Processor", choice(GPU_PREFERENCES)),
+    PrefSpec {
+        key: "gpuPreference",
+        category: "Performance",
+        section: "GPU Performance",
+        label: "Graphics Processor",
+        kind: PrefKind::GpuPreference,
+    },
     // Read by the desktop app at startup: the window presents without vsync, capped at 240 fps (#6013).
     p!("lowLatencyDrawing", "Performance", "GPU Performance", "Low-Latency Drawing", bool),
-    p!("gpuBackend", "Performance", "GPU Performance", "Graphics Backend", choice(GPU_BACKENDS)),
     p!("historyStates", "Performance", "", "History States", int(5, 1000)),
     p!("realTimeDrawing", "Performance", "", "Real-time Drawing and Editing", bool),
     p!("renderThreads", "Performance", "", "Render Threads (-1 = Automatic)", int(-1, 64)),
@@ -563,6 +549,9 @@ pub fn validate(key: &str, v: &Value) -> std::result::Result<Value, String> {
                 .map(|(val, _)| json!(val))
                 .ok_or_else(|| format!("`{key}` must be one of {}", opts.iter().map(|o| o.0).collect::<Vec<_>>().join(", ")))
         }
+        PrefKind::GpuPreference => serde_json::from_value::<craft_gpu_device::Preference>(v.clone())
+            .map(|preference| json!(preference))
+            .map_err(|e| format!("`{key}` must be a graphics adapter preference: {e}")),
         PrefKind::Color => {
             let s = v.as_str().unwrap_or("");
             let hex = s.trim_start_matches('#');
@@ -857,7 +846,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Preferences",
             [],
             None,
-            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). A present unsupported or malformed gpuBackend falls back to Automatic. Other values are checked first, as prefs.set checks them: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference (for scratchPrimary and scratchSecondary, a folder; the choices Startup and None are read) is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
+            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). A present legacy or malformed gpuPreference is migrated or falls back to Auto. The obsolete gpuBackend is ignored; without gpuPreference the current choice stays unchanged. Other values are checked first, as prefs.set checks them: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference (for scratchPrimary and scratchSecondary, a folder; the choices Startup and None are read) is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
             always,
             import
         ),
@@ -956,8 +945,11 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(too_large());
     }
     let mut values = read_prefs_file(&bytes).map_err(|e| bad(C, e))?;
-    if let Some(value) = values.get_mut("gpuBackend") {
-        *value = validate("gpuBackend", value).unwrap_or_else(|_| json!("automatic"));
+    // A legacy backend does not identify an adapter. In a partial import, its absence of a
+    // gpuPreference must not reset a current choice; saved files without one default to Auto.
+    values.remove("gpuBackend");
+    if let Some(value) = values.get_mut("gpuPreference") {
+        *value = json!(crate::prefs::saved_gpu_preference(value.clone()));
     }
     let mut next = s.prefs.clone();
     next.set_values(&values).map_err(|e| bad(C, e))?;
@@ -1072,6 +1064,7 @@ fn list(s: &mut Session, _: &Value) -> Result<Value> {
                         o["kind"] = json!("choice");
                         o["options"] = json!(c.iter().map(|x| x.0).collect::<Vec<_>>());
                     }
+                    PrefKind::GpuPreference => o["kind"] = json!("gpuPreference"),
                     PrefKind::Color => o["kind"] = json!("color"),
                     PrefKind::Text => o["kind"] = json!("text"),
                 }

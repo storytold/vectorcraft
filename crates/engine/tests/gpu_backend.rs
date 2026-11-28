@@ -1,42 +1,91 @@
-//! Graphics backend preference validation and saved-file compatibility.
+//! Shared graphics adapter preference validation and saved-file compatibility.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+use craft_gpu_device::{AdapterKey, Preference};
 use serde_json::{Value, json};
 use vectorcraft_engine::{Prefs, Session};
 
+fn unavailable_adapter() -> Preference {
+    Preference::Adapter(AdapterKey {
+        name: "A disconnected graphics adapter".into(),
+        backend: "vulkan".into(),
+        vendor: 0x1234,
+        device: 0x5678,
+        pci_bus_id: "0000:04:00.0".into(),
+        driver: "A retained driver".into(),
+    })
+}
+
+fn malformed_preferences() -> Vec<Value> {
+    vec![
+        Value::Null,
+        json!(true),
+        json!(1),
+        json!(2.5),
+        json!([]),
+        json!({}),
+        json!("automatic"),
+        json!("powerSaving"),
+        json!("highPerformance"),
+        json!("lowPower"),
+        json!({"kind":"future"}),
+        json!({"kind":false}),
+        json!({"kind":"adapter","vendor":"not a number"}),
+        json!({"kind":"adapter","backend":42}),
+    ]
+}
+
 #[test]
-fn gpu_backend_defaults_validates_and_round_trips_platform_choices() {
-    use vectorcraft_engine::cmd::prefscmds::GPU_BACKENDS;
+fn gpu_backend_shared_preference_defaults_validates_and_round_trips_choices() {
     let mut session = Session::new();
-    assert_eq!(session.prefs.gpu_backend, "automatic");
-    assert_eq!(session.execute("prefs.get", &json!({"key":"gpuBackend"})).unwrap(), "automatic");
-    for (value, label) in GPU_BACKENDS {
-        session.execute("prefs.set", &json!({"key":"gpuBackend", "value":label})).unwrap();
-        assert_eq!(session.prefs.gpu_backend, *value);
+    assert_eq!(session.prefs.gpu_preference, Preference::Auto);
+    assert_eq!(session.execute("prefs.get", &json!({"key":"gpuPreference"})).unwrap(), json!({"kind":"auto"}));
+    for preference in [Preference::Auto, Preference::LowPower, Preference::Software, unavailable_adapter()] {
+        let value = json!(preference);
+        session.execute("prefs.set", &json!({"key":"gpuPreference", "value":value})).unwrap();
+        assert_eq!(session.prefs.gpu_preference, preference);
+        assert_eq!(session.execute("prefs.get", &json!({"key":"gpuPreference"})).unwrap(), value);
         let restored: Prefs = serde_json::from_value(session.prefs.to_json()).unwrap();
-        assert_eq!(restored.gpu_backend, *value);
-        assert_eq!(restored.gpu_preference, "automatic", "backend and power choice are independent");
+        assert_eq!(restored.gpu_preference, preference, "no device enumeration is needed to retain the complete saved key");
     }
-    let row = session.execute("prefs.list", &json!({})).unwrap();
-    let row = row.as_array().unwrap().iter().find(|row| row["key"] == "gpuBackend").unwrap();
+    let rows = session.execute("prefs.list", &json!({})).unwrap();
+    let rows = rows.as_array().unwrap();
+    let row = rows.iter().find(|row| row["key"] == "gpuPreference").unwrap();
     assert_eq!(row["category"], "Performance");
-    assert_eq!(row["options"], json!(GPU_BACKENDS.iter().map(|(value, _)| *value).collect::<Vec<_>>()));
+    assert_eq!(row["kind"], "gpuPreference");
+    assert!(row.get("options").is_none(), "the app supplies available adapter choices, not a static string list");
+    assert!(!rows.iter().any(|row| row["key"] == "gpuBackend"));
+    assert!(session.execute("prefs.get", &json!({"key":"gpuBackend"})).is_err());
+    assert!(session.execute("prefs.set", &json!({"key":"gpuBackend", "value":"vulkan"})).is_err());
+    for value in malformed_preferences() {
+        let before = session.prefs.to_json();
+        assert!(session.execute("prefs.set", &json!({"values":{"gpuPreference":value,"keyboardIncrement":4}})).is_err());
+        assert_eq!(session.prefs.to_json(), before, "strict prefs.set must not apply a valid sibling after a malformed choice");
+    }
     session.execute("prefs.reset", &json!({"category":"Performance"})).unwrap();
-    for bad in [json!("unknown"), json!(""), json!(1), Value::Null, json!(true), json!(2.5), json!([]), json!({})] {
-        assert!(session.execute("prefs.set", &json!({"key":"gpuBackend", "value":bad})).is_err());
-        assert_eq!(session.prefs.gpu_backend, "automatic");
+    assert_eq!(session.prefs.gpu_preference, Preference::Auto);
+
+    for (old, expected) in [
+        ("automatic", Preference::Auto),
+        ("powerSaving", Preference::Auto),
+        ("highPerformance", Preference::Auto),
+        ("lowPower", Preference::LowPower),
+    ] {
+        let restored: Prefs = serde_json::from_value(json!({"gpuPreference":old,"keyboardIncrement":4})).unwrap();
+        assert_eq!(restored.gpu_preference, expected);
+        assert_eq!(restored.keyboard_increment, 4.0);
     }
-    let old: Prefs = serde_json::from_value(json!({"keyboardIncrement":4})).unwrap();
-    assert_eq!(old.gpu_backend, "automatic");
-    for value in ["future", "dx12", "metal", "vulkan", "gl"] {
-        let saved: Prefs = serde_json::from_value(json!({"gpuBackend":value,"keyboardIncrement":4})).unwrap();
-        let expected = vectorcraft_engine::cmd::prefscmds::gpu_backend_name(Some(value));
-        assert_eq!(saved.gpu_backend, expected);
-        assert_eq!(saved.keyboard_increment, 4.0, "an unsupported backend does not discard other preferences");
+    for value in malformed_preferences() {
+        // Saved legacy strings above have a migration; every other malformed value uses Auto.
+        let expected = if value == json!("lowPower") { Preference::LowPower } else { Preference::Auto };
+        let saved: Prefs = serde_json::from_value(json!({"gpuPreference":value,"keyboardIncrement":4})).unwrap();
+        assert_eq!(saved.gpu_preference, expected);
+        assert_eq!(saved.keyboard_increment, 4.0, "a malformed preference must not discard valid siblings");
     }
-    for value in [Value::Null, json!(true), json!(1), json!(2.5), json!([]), json!({"future":"backend"})] {
-        let saved: Prefs = serde_json::from_value(json!({"gpuBackend":value,"keyboardIncrement":4})).unwrap();
-        assert_eq!(saved.gpu_backend, "automatic");
-        assert_eq!(saved.keyboard_increment, 4.0, "a malformed backend must not discard other preferences");
+    for backend in [json!("vulkan"), json!("dx12"), json!("future"), Value::Null, json!({"bad":true})] {
+        let saved: Prefs = serde_json::from_value(json!({"gpuBackend":backend,"keyboardIncrement":4})).unwrap();
+        assert_eq!(saved.gpu_preference, Preference::Auto, "a backend-only choice cannot invent an AdapterKey");
+        assert_eq!(saved.keyboard_increment, 4.0);
+        assert!(saved.to_json().get("gpuBackend").is_none());
     }
 }
 
@@ -45,43 +94,61 @@ fn imported_preferences(prefs: Value) -> Value {
 }
 
 #[test]
-fn gpu_backend_import_keeps_other_values_when_the_backend_is_invalid() {
-    use vectorcraft_engine::cmd::prefscmds::GPU_BACKENDS;
-    let mut invalid = vec![Value::Null, json!(true), json!(1), json!(2.5), json!([]), json!({}), json!(""), json!("future")];
-    invalid.extend(
-        ["dx12", "vulkan", "gl", "metal"].into_iter().filter(|value| !GPU_BACKENDS.iter().any(|(id, _)| id == value)).map(|value| json!(value)),
-    );
-    for value in invalid {
+fn gpu_backend_import_keeps_other_values_when_the_preference_is_invalid() {
+    for value in malformed_preferences() {
         let mut session = Session::new();
-        let before = session.prefs.to_json();
-        assert!(session.execute("prefs.set", &json!({"key":"gpuBackend", "value":&value})).is_err(), "{value}");
-        assert_eq!(session.prefs.to_json(), before, "strict prefs.set remains atomic for {value}");
-        let params = imported_preferences(json!({"gpuBackend":value, "keyboardIncrement":4}));
+        session.execute("prefs.set", &json!({"key":"gpuPreference","value":unavailable_adapter()})).unwrap();
+        let expected = if value == json!("lowPower") { Preference::LowPower } else { Preference::Auto };
+        let params = imported_preferences(json!({"gpuPreference":value, "keyboardIncrement":4}));
         assert_eq!(session.execute("prefs.import", &params).unwrap(), json!({"imported":2}));
-        assert_eq!(session.prefs.gpu_backend, "automatic");
+        assert_eq!(session.prefs.gpu_preference, expected);
         assert_eq!(session.prefs.keyboard_increment, 4.0);
+    }
+    for (old, expected) in [
+        ("automatic", Preference::Auto),
+        ("powerSaving", Preference::Auto),
+        ("highPerformance", Preference::Auto),
+        ("lowPower", Preference::LowPower),
+    ] {
+        let mut session = Session::new();
+        session.execute("prefs.import", &imported_preferences(json!({"gpuPreference":old,"keyboardIncrement":6}))).unwrap();
+        assert_eq!(session.prefs.gpu_preference, expected);
+        assert_eq!(session.prefs.keyboard_increment, 6.0);
     }
 }
 
 #[test]
-fn gpu_backend_import_preserves_supported_choices_and_other_import_rules() {
-    use vectorcraft_engine::cmd::prefscmds::GPU_BACKENDS;
+fn gpu_backend_import_preserves_shared_choices_and_other_import_rules() {
     let mut session = Session::new();
-    for (id, label) in GPU_BACKENDS {
-        for value in [id.to_string(), id.to_ascii_uppercase(), label.to_string(), label.to_ascii_lowercase()] {
-            let params = imported_preferences(json!({"gpuBackend":value, "keyboardIncrement":4}));
-            assert_eq!(session.execute("prefs.import", &params).unwrap(), json!({"imported":2}));
-            assert_eq!(session.prefs.gpu_backend, *id, "offered IDs and labels retain the existing case-insensitive matching");
-            assert_eq!(session.prefs.keyboard_increment, 4.0);
-        }
+    for preference in [Preference::Auto, Preference::LowPower, Preference::Software, unavailable_adapter()] {
+        let params = imported_preferences(json!({"gpuPreference":preference, "keyboardIncrement":4}));
+        assert_eq!(session.execute("prefs.import", &params).unwrap(), json!({"imported":2}));
+        assert_eq!(session.prefs.gpu_preference, preference);
+        assert_eq!(session.prefs.keyboard_increment, 4.0);
     }
-    let kept_backend = session.prefs.gpu_backend.clone();
+    let saved = session.prefs.gpu_preference.clone();
     session.execute("prefs.import", &imported_preferences(json!({"keyboardIncrement":5}))).unwrap();
-    assert_eq!(session.prefs.gpu_backend, kept_backend, "an omitted backend leaves the current choice alone");
+    assert_eq!(session.prefs.gpu_preference, saved, "omitting gpuPreference retains the saved unavailable adapter");
     assert_eq!(session.prefs.keyboard_increment, 5.0);
-    for prefs in [json!({"gpuBackend":"future", "keyboardIncrement":true}), json!({"gpuBackend":false, "noSuchPreference":4})] {
+    // The obsolete key does not name a new adapter, and a partial import must not erase one.
+    assert_eq!(
+        session.execute("prefs.import", &imported_preferences(json!({"gpuBackend":"vulkan","keyboardIncrement":6}))).unwrap(),
+        json!({"imported":1})
+    );
+    assert_eq!(session.prefs.gpu_preference, saved);
+    assert_eq!(session.prefs.keyboard_increment, 6.0);
+    for prefs in [
+        json!({"gpuPreference":{"kind":"future"}, "keyboardIncrement":true}),
+        json!({"gpuPreference":false, "noSuchPreference":4}),
+        json!({"gpuPreference":"lowPower", "unitsGeneral":"not a unit"}),
+        json!({"gpuBackend":"future", "keyboardIncrement":true}),
+    ] {
         let before = session.prefs.to_json();
         assert!(session.execute("prefs.import", &imported_preferences(prefs)).is_err());
-        assert_eq!(session.prefs.to_json(), before, "normalizing the backend must not bypass another invalid value");
+        assert_eq!(session.prefs.to_json(), before, "migration must not bypass another invalid value");
     }
+    let exported = session.execute("prefs.export", &json!({})).unwrap();
+    let file: Value = serde_json::from_str(exported["data"].as_str().unwrap()).unwrap();
+    assert_eq!(file["prefs"]["gpuPreference"], json!(saved));
+    assert!(file["prefs"].get("gpuBackend").is_none());
 }

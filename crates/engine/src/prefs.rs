@@ -38,10 +38,22 @@ fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<S
     Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
 }
 
-/// An unknown saved backend must not discard the other preferences or select an unsupported API.
-fn gpu_backend<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<String, D::Error> {
-    let saved = <serde_json::Value as serde::Deserialize>::deserialize(d)?;
-    Ok(cmd::prefscmds::gpu_backend_name(saved.as_str()).to_string())
+/// A saved/imported graphics choice: old power strings migrate to the shared policy, and a
+/// malformed choice falls back to Auto without discarding valid sibling preferences. Auto now
+/// ranks high performance; the old `powerSaving` value already meant Automatic. A backend-only
+/// legacy setting cannot identify an AdapterKey and is ignored, leaving the default Auto.
+pub(crate) fn saved_gpu_preference(saved: Value) -> craft_gpu_device::Preference {
+    use craft_gpu_device::Preference;
+    match saved.as_str() {
+        Some("lowPower") => Preference::LowPower,
+        Some("automatic" | "powerSaving" | "highPerformance") => Preference::Auto,
+        _ => serde_json::from_value(saved).unwrap_or_default(),
+    }
+}
+
+fn gpu_preference<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<craft_gpu_device::Preference, D::Error> {
+    let saved = <Value as serde::Deserialize>::deserialize(d)?;
+    Ok(saved_gpu_preference(saved))
 }
 
 /// Application preferences (Edit → Preferences). Every field is reachable through `prefs.get` /
@@ -267,23 +279,14 @@ pub struct Prefs {
     // Performance
     pub gpu_performance: bool,
     pub animated_zoom: bool,
-    /// Which graphics processor the desktop app asks for at startup (it takes effect after a
-    /// restart): `automatic`, `lowPower` (the integrated GPU on hybrid-graphics machines) or
-    /// `highPerformance` (the discrete one). The canvas is rasterized on the CPU and only
-    /// composited on the GPU, so the integrated GPU is plenty; presenting from the discrete GPU
-    /// through the integrated one made some hybrid laptops flicker (#306). Automatic is power
-    /// saving on Windows and macOS and the system's default GPU elsewhere, the one the desktop
-    /// runs on: a Wayland compositor may not show frames from another GPU (#502). Single-GPU
-    /// machines are unaffected.
-    pub gpu_preference: String,
+    /// The shared adapter preference, read by the desktop app at startup; changes take effect
+    /// after restarting. Adapter keys are retained even when that device is not currently present.
+    #[serde(deserialize_with = "gpu_preference")]
+    pub gpu_preference: craft_gpu_device::Preference,
     /// The desktop app's window presents without vsync, with frames capped at 240 a second (#6013).
     /// Read at startup (it takes effect after a restart); `--present-mode` and
     /// `VECTORCRAFT_PRESENT_MODE` take precedence over it.
     pub low_latency_drawing: bool,
-    /// Desktop graphics API, read once at startup; `automatic` preserves the platform defaults.
-    /// WGPU_BACKEND overrides it. Unsupported saved choices become Automatic.
-    #[serde(deserialize_with = "gpu_backend")]
-    pub gpu_backend: String,
     pub history_states: u32,
     pub real_time_drawing: bool,
     /// Rasterizer worker threads; -1 = automatic.
@@ -620,9 +623,8 @@ impl Default for Prefs {
             app_title_bar: false,
             gpu_performance: true,
             animated_zoom: true,
-            gpu_preference: s("automatic"),
+            gpu_preference: craft_gpu_device::Preference::Auto,
             low_latency_drawing: false,
-            gpu_backend: s("automatic"),
             history_states: 500,
             real_time_drawing: true,
             render_threads: -1,

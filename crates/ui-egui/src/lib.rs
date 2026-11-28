@@ -132,6 +132,8 @@ pub use services::{DownloadFn, ExistsFn, Inbox, ReadFn, SaveStreamFn, SaveWriteF
 pub use ui_fonts::ui_fonts;
 
 pub struct VectorcraftApp {
+    /// Available desktop adapters, captured by the host; never persisted as list indices.
+    pub(crate) graphics_adapters: Vec<craft_gpu_device::Candidate>,
     pub session: Session,
     pub ui: UiState,
     pub views: Vec<View>,

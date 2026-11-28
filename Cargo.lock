@@ -1624,6 +1624,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-gpu"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=e6eac94fbc5ff9c3c338f74f71bc84b95601116b#e6eac94fbc5ff9c3c338f74f71bc84b95601116b"
+dependencies = [
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "craft-gpu-device"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=e6eac94fbc5ff9c3c338f74f71bc84b95601116b#e6eac94fbc5ff9c3c338f74f71bc84b95601116b"
+dependencies = [
+ "craft-gpu",
+ "log",
+ "pollster 0.4.0",
+ "serde",
+ "wgpu",
+]
+
+[[package]]
 name = "craft-gzip"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=e6eac94fbc5ff9c3c338f74f71bc84b95601116b#e6eac94fbc5ff9c3c338f74f71bc84b95601116b"
@@ -8522,6 +8543,7 @@ dependencies = [
  "chrono",
  "clipboard-win",
  "craft",
+ "craft-gpu-device",
  "eframe",
  "egui",
  "egui_extras",
@@ -8699,6 +8721,7 @@ dependencies = [
  "craft-codepage",
  "craft-doc",
  "craft-docpath",
+ "craft-gpu-device",
  "craft-image-codecs",
  "craft-jxl",
  "craft-proof",
@@ -9140,6 +9163,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "craft",
+ "craft-gpu-device",
  "craft-image-codecs",
  "egui",
  "egui_extras",
@@ -9170,6 +9194,7 @@ dependencies = [
  "vectorcraft-tools",
  "wat",
  "web-time",
+ "wgpu",
 ]
 
 [[package]]

@@ -13,6 +13,7 @@ use craft::ui::form::{SliderField, SliderFieldLayout};
 use craft::ui::layout_components::Row;
 use craft::ui::patterns::preferences::{GroupSpec, PageSpec, PathSetting, PrefValue, PreferencesDraft, PreferencesModel, RowKind, RowSpec};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
+use craft_gpu_device::{AdapterKey, Candidate, Preference};
 use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind, PrefSpec, folder_check, spec};
@@ -61,6 +62,125 @@ fn counted(unit: &str) -> Option<UnitKind> {
 /// The note under a setting the desktop app reads once, when it starts.
 fn applies_at_start() -> String {
     tl!("Applies the next time VectorCraft starts.").to_string()
+}
+
+/// One choice has a stable, structured preference as its id, never an enumeration index.
+struct GraphicsOption {
+    id: String,
+    label: String,
+    backend: Option<String>,
+    enabled: bool,
+}
+
+/// The window owns the strings the native choice borrows. Hardware comes only from the app's
+/// startup snapshot; building or editing Preferences never enumerates adapters.
+pub(super) struct GraphicsChoices {
+    adapters: Vec<Candidate>,
+    options: Vec<GraphicsOption>,
+    selected: String,
+    saved: Option<GraphicsOption>,
+    fallback: Option<&'static str>,
+}
+
+fn graphics_id(preference: &Preference) -> String {
+    json!(preference).to_string()
+}
+
+fn adapter_label(key: &AdapterKey) -> String {
+    let mut parts = vec![key.name.clone()];
+    if key.vendor != 0 || key.device != 0 {
+        parts.push(format!("{:04x}:{:04x}", key.vendor, key.device));
+    }
+    if !key.pci_bus_id.is_empty() {
+        parts.push(key.pci_bus_id.clone());
+    }
+    if !key.driver.is_empty() {
+        parts.push(key.driver.clone());
+    }
+    parts.join(" / ")
+}
+
+impl GraphicsChoices {
+    pub(super) fn new(adapters: &[Candidate]) -> Self {
+        let mut options: Vec<GraphicsOption> =
+            [(Preference::Auto, "Automatic"), (Preference::LowPower, "Low Power"), (Preference::Software, "Software")]
+                .into_iter()
+                .map(|(preference, label)| GraphicsOption { id: graphics_id(&preference), label: label.into(), backend: None, enabled: true })
+                .collect();
+        let mut listed: Vec<GraphicsOption> = Vec::new();
+        for candidate in adapters {
+            let key = AdapterKey::of(candidate);
+            let id = graphics_id(&Preference::Adapter(key.clone()));
+            // A driver can list the same saved identity twice. One usable entry makes it offered.
+            if let Some(option) = listed.iter_mut().find(|option| option.id == id) {
+                option.enabled |= candidate.usable;
+            } else {
+                listed.push(GraphicsOption { id, label: adapter_label(&key), backend: Some(key.backend), enabled: candidate.usable });
+            }
+        }
+        listed.sort_by(|a, b| (&a.backend, &a.label, &a.id).cmp(&(&b.backend, &b.label, &b.id)));
+        options.extend(listed);
+        Self { adapters: adapters.to_vec(), options, selected: graphics_id(&Preference::Auto), saved: None, fallback: None }
+    }
+
+    pub(super) fn sync(&mut self, preference: &Preference) {
+        self.selected = graphics_id(preference);
+        self.saved = None;
+        self.fallback = match preference {
+            Preference::Adapter(key) => {
+                let available = self.adapters.iter().any(|candidate| candidate.usable && key.matches(candidate));
+                // Older keys can omit bus/driver fields. Keep their exact value visible instead of
+                // silently rewriting it to a current list entry, or calling a matching key missing.
+                if !self.options.iter().any(|option| option.id == self.selected) {
+                    self.saved = Some(GraphicsOption {
+                        id: self.selected.clone(),
+                        label: adapter_label(key),
+                        backend: Some(key.backend.clone()),
+                        enabled: available,
+                    });
+                }
+                (!available).then_some("The saved graphics adapter is unavailable. Automatic will be used until it is available.")
+            }
+            Preference::Software if !self.adapters.iter().any(|candidate| candidate.usable && candidate.is_software()) => {
+                Some("No software graphics adapter is available. Automatic will be used.")
+            }
+            _ => None,
+        };
+    }
+
+    fn entries(&self) -> Vec<Entry<&str>> {
+        let mut entries = Vec::new();
+        let mut backend = None;
+        for option in &self.options {
+            if option.backend.as_deref() != backend {
+                backend = option.backend.as_deref();
+                if let Some(name) = backend {
+                    entries.push(Entry::heading(
+                        match name {
+                            "dx12" => "Direct3D 12",
+                            "vulkan" => "Vulkan",
+                            "metal" => "Metal",
+                            "gl" => "OpenGL",
+                            _ => name,
+                        }
+                        .to_owned(),
+                    ));
+                }
+            }
+            let label = if option.backend.is_none() { tl!(option.label.as_str()).to_string() } else { option.label.clone() };
+            entries.push(Entry::new(option.id.as_str(), label).enabled(option.enabled));
+        }
+        if let Some(saved) = &self.saved {
+            entries.push(Entry::heading(tl!("Saved graphics adapter")));
+            entries.push(Entry::new(saved.id.as_str(), saved.label.clone()).enabled(saved.enabled));
+        }
+        entries
+    }
+
+    fn picked(&self, id: &str) -> Option<Value> {
+        self.options.iter().chain(self.saved.iter()).find(|option| option.enabled && option.id == id)?;
+        serde_json::from_str(id).ok()
+    }
 }
 
 /// The groups of a page, one per run of equal sections.
@@ -128,7 +248,7 @@ impl Live<'_> {
             "systemTitleBar" => cfg!(all(not(target_arch = "wasm32"), not(target_os = "macos"))),
             "appTitleBar" => APP_TITLE_BAR_SHOWN,
             "linuxDisplayServer" => cfg!(target_os = "linux"),
-            "monitorProfileDisplay" | "lowLatencyDrawing" | "gpuBackend" => !cfg!(target_arch = "wasm32"),
+            "monitorProfileDisplay" | "lowLatencyDrawing" | "gpuPreference" => !cfg!(target_arch = "wasm32"),
             // Only where the session keeps script grants: not without a settings folder, and not on the web.
             script_access::KEY => self.w.script_access.is_some(),
             "editOriginal" => self.app.services.check_application.is_some() && self.app.services.open_in_application.is_some(),
@@ -171,7 +291,14 @@ impl Live<'_> {
                 });
                 notes
             }
-            "gpuPreference" | "lowLatencyDrawing" | "gpuBackend" => vec![applies_at_start()],
+            "gpuPreference" => {
+                let mut notes = vec![applies_at_start()];
+                if let Some(note) = self.w.graphics.fallback {
+                    notes.push(tl!(note).to_string());
+                }
+                notes
+            }
+            "lowLatencyDrawing" => vec![applies_at_start()],
             "linuxDisplayServer" => vec![
                 applies_at_start(),
                 // Many Wayland desktops give a drawing tablet's pen to the window only through XWayland (#2028).
@@ -222,6 +349,7 @@ impl Live<'_> {
                 RowKind::length(self.num_of(key).unwrap_or(min), min..=max, lengths)
             }
             PrefKind::Int { min, max } => RowKind::int(self.w.draft.get::<i64>(key).unwrap_or(min), min..=max),
+            PrefKind::GpuPreference => RowKind::choice(&self.w.graphics.selected, self.w.graphics.entries()),
             PrefKind::Choice(opts) => {
                 let value = opts.iter().find(|o| o.0 == self.text_of(key)).map_or("", |o| o.0);
                 RowKind::choice(value, opts.iter().map(|o| Entry::new(o.0, tl!(o.1))).collect())
@@ -344,6 +472,10 @@ impl PreferencesModel for Live<'_> {
 
     fn set(&mut self, key: &str, value: PrefValue) {
         let value = match value {
+            PrefValue::Choice(id) if key == "gpuPreference" => match self.w.graphics.picked(&id) {
+                Some(value) => value,
+                None => return,
+            },
             PrefValue::Bool(b) => json!(b),
             PrefValue::Int(i) => json!(i),
             PrefValue::Float(f) => json!(f),

@@ -104,6 +104,7 @@ impl VectorcraftApp {
         // PLAN: the hosts (hub-w3) replace `host` with the one they build (files, settings, jobs); every frame installs it through `frame_input`.
         let host = Arc::new(Host::builder(app_info()).i18n(i18n::shared()).build());
         Self {
+            graphics_adapters: Vec::new(),
             session,
             ui: UiState::default(),
             views,
@@ -281,6 +282,12 @@ impl VectorcraftApp {
             fail_next_tool_choice: None,
             held_tool: Vec::new(),
         }
+    }
+
+    /// Supply the native host's current adapter inventory for Preferences.
+    pub fn with_graphics_adapters(mut self, adapters: Vec<craft_gpu_device::Candidate>) -> Self {
+        self.graphics_adapters = adapters;
+        self
     }
 
     /// Answers the control channel whose requests arrive on `rx`.

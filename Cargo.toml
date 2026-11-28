@@ -11,6 +11,7 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/vectorcraft"
 
 [workspace.dependencies]
+craft-gpu-device = { git = "https://github.com/storytold/craft-libs", rev = "e6eac94fbc5ff9c3c338f74f71bc84b95601116b", default-features = false, features = ["serde"] }
 craft-cms = { git = "https://github.com/storytold/craft-libs", rev = "e6eac94fbc5ff9c3c338f74f71bc84b95601116b" }
 craft-pdf = { git = "https://github.com/storytold/craft-libs", rev = "e6eac94fbc5ff9c3c338f74f71bc84b95601116b", default-features = false, features = ["interpret", "write"] }
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "e6eac94fbc5ff9c3c338f74f71bc84b95601116b" }
