@@ -9,12 +9,14 @@
 //! eyedropper samples), `tips` (whether Colorization Tips is open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
 //! (`fixed` | `random` | `pressure` | `tilt` | `bearing` | `rotation`), `rotationRelativeTo` (`page` |
-//! `path`), `hueJitter` (°).
+//! `path`), `hueJitter` (°), `saturationJitter` (%), `brightnessJitter` (%).
 //! Art: `width` (%), `widthMode` (`fixed` | `pressure` | `tilt` | `bearing` | `rotation`),
 //! `widthMax` (the width at the heaviest pen pressure, upright or at 180°, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
 //! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,
 //! `overlap` (bend on each run between sharp corners).
-//! Pattern: `scale`, `spacing` (%), `fit` (`stretch` | `addSpace` | `approximate`), `flipAlong`,
+//! Pattern: `scale`, `scaleMax` (the scale at the heaviest pen pressure, upright, at 180° or at
+//! the wheel's far end, %), `scaleMode` (`fixed` | `pressure` | `tilt` | `bearing` | `rotation` |
+//! `stylusWheel`), `spacing` (%), `fit` (`stretch` | `addSpace` | `approximate`), `flipAlong`,
 //! `flipAcross`, and the tiles `outerCornerTile`, `sideTile`, `innerCornerTile`, `startTile` and
 //! `endTile` (`original`: the art the brush draws there | `none` | `pattern:<name>` | for a
 //! corner `autoCentered` | `autoBetween` | `autoSliced` | `autoOverlap`: a tile made from the side
@@ -41,7 +43,7 @@ use craft::ui::primitives::IconSpec;
 use craft::ui::runtime::env::UnitKind;
 use craft::ui::runtime::requests::EyedropperRequest;
 use craft::ui::text::NumberField;
-use craft::ui::value_drag::{Slider, SliderScale};
+use craft::ui::value_drag::Slider;
 use egui::{Color32, ColorImage, Response, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_brush::{ArtBrush, ArtScale, Brush, BrushKind, Colorization, CornerSource, Direction, PatternBrush, PatternFit, Scatter, Variation};
@@ -203,6 +205,8 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
             }
             f.insert("rotationRelativeTo".into(), json!(if s.rotation_relative_to_path { "path" } else { "page" }));
             f.insert("hueJitter".into(), json!(s.hue_jitter));
+            f.insert("saturationJitter".into(), json!(s.saturation_jitter));
+            f.insert("brightnessJitter".into(), json!(s.brightness_jitter));
         }
         BrushKind::Art(a) => {
             let (mode, start, end) = match a.scale {
@@ -223,6 +227,8 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
         }
         BrushKind::Pattern(p) => {
             f.insert("scale".into(), json!(p.scale));
+            f.insert("scaleMode".into(), json!(p.scale_mode.unwrap_or_default().id()));
+            f.insert("scaleMax".into(), json!(p.scale_range().1));
             f.insert("spacing".into(), json!(p.spacing));
             f.insert("fit".into(), json!(id_of(&p.fit)));
             f.insert("flipAlong".into(), json!(p.flip_along));
@@ -282,6 +288,66 @@ fn art_width_mode(f: &DialogFields) -> Variation {
     Variation::parse(&text(f, "widthMode")).filter(|m| m.follows_pen()).unwrap_or(Variation::Fixed)
 }
 
+/// How a pattern brush's scale varies: Fixed, or with the pen's pressure, tilt, bearing, rotation
+/// or wheel.
+fn pattern_scale_mode(f: &DialogFields) -> Variation {
+    Variation::parse(&text(f, "scaleMode")).filter(|m| m.follows_pen()).unwrap_or(Variation::Fixed)
+}
+
+/// The second value (`max_key`, the definition's `def_max`) of a value that follows the pen (`key`,
+/// the same in the definition), for `brush.options` params. `null` in Options of Selected Object
+/// when the path it opened with has no second value and the second value has not been changed from
+/// the value it opened with, so each selected path keeps its own.
+fn second_value(f: &DialogFields, (key, max_key, def_max): (&str, &str, &str), range: (f64, f64)) -> Value {
+    let v = clamped(f, max_key, range);
+    let def = json_field(f, "__def");
+    let opened = def.and_then(|def| def.get(key)).and_then(Value::as_f64);
+    let unset = def.and_then(|def| def.get(def_max)).is_none_or(Value::is_null);
+    let object = f.bool(super::brush_options::OBJECT).unwrap_or(false);
+    if object && unset && opened == Some(v) { Value::Null } else { json!(v) }
+}
+
+/// The modes an art brush's width and a pattern brush's scale offer, in menu order.
+const PEN_SIZE_MODES: [Variation; 6] =
+    [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel];
+
+/// A value that can follow the pen (an art brush's Width, a pattern brush's Scale): its field and
+/// the fields of its second value and its [`PEN_SIZE_MODES`] menu.
+struct PenSize {
+    key: &'static str,
+    max_key: &'static str,
+    mode_key: &'static str,
+    /// The row's label and the name of its slider.
+    label: &'static str,
+    /// The names of the second value's field and of the menu.
+    max_label: &'static str,
+    mode_label: &'static str,
+    range: (f64, f64),
+    mode: fn(&DialogFields) -> Variation,
+}
+
+/// The row of `size`: a slider, the second value (live only for a mode that follows the pen) and
+/// how the value varies.
+fn pen_size_row(size: PenSize) -> Param {
+    let PenSize { key, max_key, mode_key, label, max_label, mode_label, range, mode } = size;
+    Param::custom(key, label, move |ui, f, _| {
+        let mode = mode(f);
+        let entries = variation_entries(&PEN_SIZE_MODES);
+        Row::new()
+            .show(ui, |ui, _| {
+                let slid = Slider::new(Bind::given(clamped(f, key, range)), range.0..=range.1).step(1.0).label(label).id_salt(key).show(ui);
+                if let Some(value) = slid.events.landed() {
+                    // The slider quantizes new edits; Cancel restores the exact opening value.
+                    f.set(key, *value);
+                }
+                number_cell(ui, f, max_key, max_label, range, UnitKind::Percent, mode.follows_pen());
+                id_select(ui, f, mode_key, mode_label, &entries, mode.id().to_string());
+            })
+            .output
+    })
+    .companions([max_key, mode_key])
+}
+
 /// `brush.options` params from the fields.
 pub(super) fn params(f: &DialogFields) -> Value {
     let flag = |key: &str| f.bool(key).unwrap_or(false);
@@ -293,6 +359,8 @@ pub(super) fn params(f: &DialogFields) -> Value {
             }
             p["modes"] = json!(SCATTER.map(|(key, _)| scatter_mode(f, key).id()));
             p["hue_jitter"] = json!(clamped(f, "hueJitter", Scatter::HUE_JITTER_RANGE));
+            p["saturation_jitter"] = json!(clamped(f, "saturationJitter", Scatter::SATURATION_JITTER_RANGE));
+            p["brightness_jitter"] = json!(clamped(f, "brightnessJitter", Scatter::BRIGHTNESS_JITTER_RANGE));
             p
         }
         "art" => {
@@ -309,7 +377,7 @@ pub(super) fn params(f: &DialogFields) -> Value {
             json!({
                 "width": clamped(f, "width", ArtBrush::WIDTH_RANGE),
                 "width_mode": if pen { json!(mode.id()) } else { Value::Null },
-                "width_max": if pen { json!(clamped(f, "widthMax", ArtBrush::WIDTH_RANGE)) } else { Value::Null },
+                "width_max": if pen { second_value(f, ("width", "widthMax", "width_max"), ArtBrush::WIDTH_RANGE) } else { Value::Null },
                 "scale": serde_json::to_value(scale).unwrap_or_default(),
                 "direction": id_of(&parse_field::<Direction>(f, "direction")),
                 "flip_along": flag("flipAlong"),
@@ -318,8 +386,12 @@ pub(super) fn params(f: &DialogFields) -> Value {
             })
         }
         _ => {
+            let mode = pattern_scale_mode(f);
+            let pen = mode.follows_pen();
             let mut p = json!({
                 "scale": clamped(f, "scale", PatternBrush::SCALE_RANGE),
+                "scale_mode": if pen { json!(mode.id()) } else { Value::Null },
+                "scale_max": if pen { second_value(f, ("scale", "scaleMax", "scale_max"), PatternBrush::SCALE_RANGE) } else { Value::Null },
                 "spacing": clamped(f, "spacing", PatternBrush::SPACING_RANGE),
                 "fit": id_of(&parse_field::<PatternFit>(f, "fit")),
                 "flip_along": flag("flipAlong"),
@@ -434,7 +506,7 @@ fn number_cell(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str
         .enabled(enabled)
         .id_salt(key)
         .show(ui);
-    if let Some(Some(value)) = typed.edit.value() {
+    if let Some(Some(value)) = typed.edit.events.landed() {
         f.set(key, *value);
     }
     typed.edit.response.clone()
@@ -448,7 +520,7 @@ fn clamped_number(key: &'static str, label: &'static str, range: (f64, f64), uni
 
 /// A menu over `ids` (id, label) bound to the text field `key`, showing `current`.
 fn id_select(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str, entries: &[Entry<String>], current: String) {
-    if let Some(picked) = Select::new(label, Bind::given(current), entries).id_salt(key).show(ui).value() {
+    if let Some(picked) = Select::new(label, Bind::given(current), entries).id_salt(key).show(ui).events.committed() {
         f.set(key, picked.as_str());
     }
 }
@@ -482,6 +554,10 @@ fn scatter_rows() -> Vec<Param> {
     rows.push(Param::new("rotationRelativeTo", tl!("Rotation relative to"), ParamKind::radio(relative, Some("page".into()))));
     // Each copy turns its colors' hue by its own amount up to this many degrees either way.
     rows.push(clamped_number("hueJitter", tl!("Hue Jitter"), Scatter::HUE_JITTER_RANGE, UnitKind::Degrees));
+    // Each copy moves its colors' saturation by its own amount up to this many points either way.
+    rows.push(clamped_number("saturationJitter", tl!("Saturation Jitter"), Scatter::SATURATION_JITTER_RANGE, UnitKind::Percent));
+    // Each copy moves its colors' brightness by its own amount up to this many points either way.
+    rows.push(clamped_number("brightnessJitter", tl!("Brightness Jitter"), Scatter::BRIGHTNESS_JITTER_RANGE, UnitKind::Percent));
     rows
 }
 
@@ -492,25 +568,16 @@ fn check(key: &str, label: &'static str) -> Param {
 
 fn art_rows(object: bool) -> Vec<Param> {
     // Width, then the second width (only when the width follows the pen) and how it varies.
-    let range = ArtBrush::WIDTH_RANGE;
-    let modes = [Variation::Fixed, Variation::Pressure, Variation::Tilt, Variation::Bearing, Variation::Rotation, Variation::StylusWheel];
-    let width = Param::custom("width", tl!("Width"), move |ui, f, _| {
-        let mode = art_width_mode(f);
-        let entries = variation_entries(&modes);
-        Row::new()
-            .show(ui, |ui, _| {
-                let slid =
-                    Slider::new(Bind::given(clamped(f, "width", range)), range.0..=range.1).step(1.0).label(tl!("Width")).id_salt("width").show(ui);
-                if let Some(value) = slid.value() {
-                    f.set("width", value.round());
-                }
-                number_cell(ui, f, "widthMax", tl!("Width"), range, UnitKind::Percent, mode.follows_pen());
-                id_select(ui, f, "widthMode", tl!("Width"), &entries, mode.id().to_string());
-            })
-            .output
-    })
-    .companions(["widthMax", "widthMode"]);
-    let mut rows = vec![width];
+    let mut rows = vec![pen_size_row(PenSize {
+        key: "width",
+        max_key: "widthMax",
+        mode_key: "widthMode",
+        label: tl!("Width"),
+        max_label: tl!("Width: Maximum"),
+        mode_label: tl!("Width: Mode"),
+        range: ArtBrush::WIDTH_RANGE,
+        mode: art_width_mode,
+    })];
     // A path sets its own width, flips, overlap and colorization, not how the art scales or runs.
     if !object {
         let scales = vec![
@@ -541,7 +608,7 @@ fn direction_row() -> Param {
         let current = DIRECTIONS.iter().position(|d| *d == parse_field::<Direction>(f, "direction")).unwrap_or(0);
         let entries: Vec<Entry<usize>> = arrows.iter().enumerate().map(|(i, (icon, tip))| Entry::new(i, *tip).icon(IconId::new(icon))).collect();
         let shown = Segmented::new(tl!("Direction"), Bind::given(current), &entries).show(ui);
-        if let Some(dir) = shown.value().and_then(|i| DIRECTIONS.get(*i)) {
+        if let Some(dir) = shown.events.committed().and_then(|i| DIRECTIONS.get(*i)) {
             f.set("direction", id_of(dir));
         }
         shown.response().clone()
@@ -549,8 +616,17 @@ fn direction_row() -> Param {
 }
 
 fn pattern_rows(object: bool) -> Vec<Param> {
-    let (lo, hi) = PatternBrush::SCALE_RANGE;
-    let mut rows = vec![Param::new("scale", tl!("Scale"), ParamKind::range(lo, hi, 100.0, SliderScale::Linear)).unit(UnitKind::Percent)];
+    // Scale, then the second scale (only when the scale follows the pen) and how it varies.
+    let mut rows = vec![pen_size_row(PenSize {
+        key: "scale",
+        max_key: "scaleMax",
+        mode_key: "scaleMode",
+        label: tl!("Scale"),
+        max_label: tl!("Scale: Maximum"),
+        mode_label: tl!("Scale: Mode"),
+        range: PatternBrush::SCALE_RANGE,
+        mode: pattern_scale_mode,
+    })];
     let (lo, hi) = PatternBrush::SPACING_RANGE;
     rows.push(Param::number("spacing", tl!("Spacing"), 0.0, 1.0, 0).bounds(Some(lo), Some(hi)).unit(UnitKind::Percent));
     // The tiles belong to the brush; a path sets its own scale, spacing, flips, fit and colorization.

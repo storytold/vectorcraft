@@ -307,9 +307,7 @@ impl ActionDialog for BatchDialog {
 /// A row that picks one of `entries` for `value`.
 fn select_row<T: Copy + Eq + Hash + std::fmt::Debug + Send + Sync + 'static>(ui: &mut Ui, name: &str, value: &mut T, entries: &[Entry<T>]) {
     Field::new(label(name)).show(ui, |ui, _| {
-        if let Some(picked) = Select::new(label(name), Bind::given(*value), entries).show(ui).value().copied() {
-            *value = picked;
-        }
+        Select::new(label(name), Bind::bound(value), entries).show(ui);
     });
 }
 
@@ -417,10 +415,13 @@ impl StackDialog for BatchDialog {
 #[cfg(test)]
 mod tests {
     use craft::automation::actions::{Action, ActionStep};
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
     use vectorcraft_engine::Session;
 
     use super::*;
     use crate::dialogs::actions::pump;
+    use crate::tests::panel_harness::Panel;
 
     /// An app with one set holding `steps` as the action "Draw", and a window to show dialogs in.
     fn app_with(steps: Vec<ActionStep>) -> VectorcraftApp {
@@ -494,6 +495,42 @@ mod tests {
         pump(&mut app, &ctx);
         assert!(app.dialogs().unwrap().with(|host| host.confirm::<BatchDialog>(&ctx)));
         assert!(!app.dialogs().unwrap().with(|host| host.is_open::<BatchDialog>()));
+        assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
+        assert!(!app.session.replaying());
+    }
+
+    #[test]
+    fn canceled_choices_keep_the_batch_source_destination_and_file_name() {
+        let mut app = app_with(vec![ActionStep::new("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20}))]);
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("dataset.new", json!({"name": "a"})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        open(&mut panel.app(), 0, 0).unwrap();
+        set_fields(&panel.app(), &[("source", json!("datasets"))]);
+        panel.frame();
+        let fields = |panel: &Panel| panel.app().dialogs().unwrap().with(|host| host.get::<BatchDialog>().unwrap().fields().clone());
+        let is_open = |panel: &Panel| panel.app().dialogs().unwrap().with(|host| host.is_open::<BatchDialog>());
+        let original = fields(&panel);
+        for (name, key) in [("Play", Key::ArrowUp), ("Destination", Key::ArrowUp), ("File Name", Key::ArrowDown)] {
+            panel.click_role(name, Role::COMBO_BOX);
+            panel.key(key, Modifiers::NONE);
+            assert_ne!(fields(&panel), original, "the popup previews {name}");
+            panel.key(Key::Escape, Modifiers::NONE);
+            panel.frame();
+            assert!(is_open(&panel), "Escape closes only the {name} popup");
+            assert_eq!(fields(&panel), original, "Escape restores {name}");
+        }
+        panel.click_role("Destination", Role::COMBO_BOX);
+        panel.key(Key::Home, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        panel.frame();
+        let chosen = fields(&panel);
+        assert_eq!((chosen.source, chosen.destination), (BatchSource::DataSets, BatchDestination::None));
+        panel.click("OK");
+        panel.frame();
+        panel.frame();
+        assert!(!is_open(&panel));
+        let app = panel.app();
         assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
         assert!(!app.session.replaying());
     }

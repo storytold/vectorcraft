@@ -734,6 +734,34 @@ fn object_set_props_that_changes_nothing_deselects_what_it_leaves_hidden_or_lock
     }
 }
 
+/// Layer Options that leave every row as it is change nothing and record no undo step; one that
+/// changes a row records one.
+#[test]
+fn layer_options_that_change_nothing_record_no_undo_step() {
+    let mut s = session();
+    let (layer, sub, a, ..) = tree(&mut s);
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "name": "Sub", "color": "red"}));
+    let before = (s.doc().unwrap().doc.clone(), undos(&s));
+    for p in [
+        json!({}),
+        json!({"id": layer.0, "visible": true, "locked": false, "template": false, "printable": true, "preview": true, "dimImages": false}),
+        json!({"id": sub.0, "name": "Sub", "color": "red"}),
+        json!({"id": sub.0, "name": " "}),
+        json!({"ids": [a.0, sub.0], "visible": true}),
+    ] {
+        run(&mut s, "layer.setProps", p.clone());
+        let after = (s.doc().unwrap().doc.clone(), undos(&s));
+        assert!(after.0 == before.0 && after.1 == before.1, "{p} changes nothing");
+    }
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "locked": true}));
+    assert_eq!(undos(&s), before.1 + 1, "locking the sublayer is one undo step");
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let undo = undos(&s);
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "locked": true}));
+    assert_eq!(undos(&s), undo, "locking it again records no undo step");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the art of the locked sublayer is deselected");
+}
+
 #[test]
 fn layer_options_validate_and_template_locks_and_dims() {
     let mut s = session();

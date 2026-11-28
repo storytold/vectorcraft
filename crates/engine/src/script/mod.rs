@@ -53,8 +53,10 @@ pub mod dialogs;
 pub mod dollar;
 pub mod dom;
 pub mod include;
+pub mod scriptui;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
+pub use scriptui::{ScriptUiDialog, UiEvent, UiKind, UiValue};
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -135,7 +137,7 @@ impl Written {
 /// The version `vc.api.version` gives.
 pub const API_VERSION: &str = "1.0";
 /// The features `vc.api.has` knows.
-pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs", "dollar"];
+pub const API_FEATURES: &[&str] = &["run", "document", "commands", "log", "args", "console", "dialogs", "dollar", "scriptui"];
 /// The most commands a run's report lists in `slowestCommands`.
 pub const SLOWEST_COMMANDS: usize = 5;
 
@@ -1107,6 +1109,20 @@ impl Host {
         self.pause.set(true);
         Ok(())
     }
+
+    /// The growth [`Host::charge_growth`] has counted, and whether the run waits for an answer about
+    /// it, for [`Host::put_growth_back`].
+    fn growth_mark(&self) -> (u64, u64, bool) {
+        (self.objects.get(), self.bytes_kept.get(), self.waiting.get())
+    }
+
+    /// Puts back the growth counted after [`Host::growth_mark`] gave `mark`: the commands that added
+    /// it were put back.
+    fn put_growth_back(&self, (objects, bytes, waiting): (u64, u64, bool)) {
+        self.objects.set(objects);
+        self.bytes_kept.set(bytes);
+        self.waiting.set(waiting);
+    }
 }
 
 /// A run in progress.
@@ -1350,16 +1366,15 @@ fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, H
 
 /// [`command`], with the command's result as it gave it as well as the script's copy of it.
 fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
-    let id = id.to_string();
-    let params = params.clone();
     let session = host.session.clone();
     let started = clock();
+    let before = dom::before_command(host, id);
     let r = {
         let mut s = session.borrow_mut();
-        step(&mut s, host, &id, &params)
+        step(&mut s, host, id, params)
     };
     // Only commands that exist are timed, so the table holds at most one row per command.
-    if let (Some(started), Some(spec)) = (started, crate::find_command(&id)) {
+    if let (Some(started), Some(spec)) = (started, crate::find_command(id)) {
         let nanos = started.elapsed().as_nanos();
         let mut times = host.commands.borrow_mut();
         let row = times.entry(spec.id).or_insert((0, 0, 0));
@@ -1372,13 +1387,18 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
         Err(EngineError::Cancelled) => return Err(HostError::Abort("canceled".into())),
         Err(e) => return Err(HostError::Error(e.to_string())),
     };
+    let mark = host.growth_mark();
     let crossed = host.charge_growth(objects, added).and_then(|()| {
         let data = to_data(&value, &result_limits(), 0, &mut (0, 0))
             .map_err(|place| HostError::Range(format!("vc.run: the result{place} is too large for a script")))?;
         host.charge_call(data_size(&data))?;
         Ok(data)
     });
-    // A command whose result does not reach the script is put back, like one that failed.
+    // A command whose result does not reach the script is put back, like one that failed, and so is
+    // the growth it was charged.
+    if crossed.is_err() {
+        host.put_growth_back(mark);
+    }
     if let Some(save) = save {
         let mut s = session.borrow_mut();
         if crossed.is_ok() {
@@ -1387,6 +1407,7 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
             return Err(HostError::Abort(HISTORY_LOST.to_string()));
         }
     }
+    dom::after_command(host, before);
     crossed.map(|data| (data, value))
 }
 
@@ -1623,7 +1644,7 @@ fn kind_id(kind: &RunErrorKind) -> &'static str {
 /// `e`'s message, with what to do about a failure that comes from a script written for another
 /// program. A message the script supplied itself ([`RunError::authored`]) is given as it is.
 fn explained(e: &RunError) -> String {
-    const HOST_OBJECTS: &[&str] = &["Window", "BridgeTalk"];
+    const HOST_OBJECTS: &[&str] = &["BridgeTalk"];
     let message = &e.message;
     let first = message.strip_prefix("ReferenceError: ").and_then(|m| m.split_whitespace().next());
     let names_host_object = first.is_some_and(|f| HOST_OBJECTS.contains(&f));
@@ -1889,6 +1910,32 @@ impl Session {
         with_job(k, |j| j.host.dialogs.answer(&mut j.realm, answer)).unwrap_or(false)
     }
 
+    /// The ScriptUI dialog the running script's `show()` waits at for what the person does. A run
+    /// asked to stop no longer waits: the next [`Session::script_pump`] ends it.
+    pub fn script_window(&self) -> Option<ScriptUiDialog> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.waiting_window())).flatten()
+    }
+
+    /// The ScriptUI dialog whose `show()` the running script is in, whether it waits at it or runs
+    /// one of its handlers. A run asked to stop is in none.
+    pub fn script_window_showing(&self) -> Option<ScriptUiDialog> {
+        if self.script_stop.is_set() {
+            return None;
+        }
+        self.script_key.as_ref().and_then(|k| with_job(k, |j| j.host.dialogs.showing_window())).flatten()
+    }
+
+    /// Gives the ScriptUI dialog the running script waits at `event`; the next
+    /// [`Session::script_pump`] runs the control's handler. → an error, and the dialog still
+    /// waits, when nothing waits or the dialog cannot take the event ([`scriptui::check_event`]).
+    pub fn script_window_answer(&mut self, event: UiEvent) -> std::result::Result<(), String> {
+        let Some(k) = self.script_key.as_ref().filter(|_| !self.script_stop.is_set()) else { return Err("no script dialog waits".into()) };
+        with_job(k, |j| j.host.dialogs.window_answer(&mut j.realm, event)).unwrap_or_else(|| Err("no script dialog waits".into()))
+    }
+
     /// The file dialog (`File.openDialog`, `File.saveDialog`, `Folder.selectDialog` and the objects'
     /// `openDlg`, `saveDlg` and `selectDlg`) the running script waits at. A run asked to stop no
     /// longer waits.
@@ -2134,7 +2181,7 @@ impl Session {
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
-            dom: dom::State::default(),
+            dom: dom::State::new(heap_bytes),
             run_docs: RefCell::new(
                 self.docs
                     .iter()
@@ -2181,6 +2228,7 @@ impl Session {
                     .and_then(|()| if fresh { realm.define_host_object("vc", vc_object(&link)) } else { Ok(()) })
                     .and_then(|()| if fresh { realm.define_host_object("$", dollar_object(&link, info, &localization)) } else { Ok(()) })
                     .and_then(|()| if fresh { dialogs::install(&mut realm, &link) } else { Ok(()) })
+                    .and_then(|()| if fresh { scriptui::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { dom::install(&mut realm, &link) } else { Ok(()) })
                     .and_then(|()| if fresh { files::install(&mut realm, &link) } else { realm.reset_folder_current() })
                     .and_then(|()| {
@@ -2269,6 +2317,12 @@ impl Session {
         }
         job.host.calls_this_slice.set(0);
         let outcome = run_slice(self, &mut job);
+        // A failure a dialog recorded in the slice (steps a show left unused) ends the run, even
+        // when the script went on.
+        let outcome = match (outcome, job.host.dialogs.take_failure()) {
+            (Ok(Ok(_)), Some(e)) => Ok(Err(e)),
+            (outcome, _) => outcome,
+        };
         match outcome {
             Err(panic) => {
                 let e = RunError { kind: RunErrorKind::Internal, message: panic, line: 0, column: 0, authored: false };

@@ -43,6 +43,8 @@ vectorcraft-metafile = { workspace = true }
 vectorcraft-plugins = { workspace = true }
 vectorcraft-affinity = { workspace = true }
 craft-cdr = { workspace = true }
+# `.pcraft` documents opened and placed as images (cmd/fileio/pcraftread.rs).
+craft-doc = { workspace = true }
 vectorcraft-scriptcheck = { workspace = true }
 vectorcraft-js = { workspace = true }
 # The commands' parameter schemas (schemas.rs).
@@ -120,8 +122,13 @@ vectorcraft-testkit = { workspace = true }
 proptest = { workspace = true }
 # A variable font built in code (no font file is committed).
 vectorcraft-text = { workspace = true, features = ["test-fonts"] }
-# How many times an open reads a PDF.
+# Holds the installed plug-ins steady while a test counts what a cache keeps.
+vectorcraft-plugins = { workspace = true, features = ["test-steady"] }
+# How many times an open reads a PDF, and the work its import takes.
 vectorcraft-pdf = { workspace = true, features = ["read-count"] }
+# The work `.ai` blends take to be checked and made live, and how many included EPS open checks
+# an open performs.
+vectorcraft-eps = { workspace = true, features = ["work-count"] }
 # How many times the symbol list is read to find symbols by name, and how many objects are
 # measured against locked artboards.
 vectorcraft-doc = { workspace = true, features = ["symbol-read-count", "locked-artboard-count"] }

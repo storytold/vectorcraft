@@ -49,6 +49,7 @@ mod export_as;
 mod export_for_screens;
 pub(crate) mod export_host;
 pub mod eyedropper;
+pub mod failed_plugins;
 pub mod file_info;
 pub mod find_links;
 pub mod find_replace;
@@ -138,6 +139,7 @@ pub(crate) mod saved_names;
 pub(crate) mod screen_formats;
 pub mod script_check;
 pub mod script_run;
+pub mod script_window;
 pub mod shape_builder_options;
 pub(crate) mod shapes;
 pub mod shortcut_import;
@@ -208,6 +210,8 @@ mod tests_package;
 mod tests_plugin_export;
 #[cfg(test)]
 mod tests_plugin_fields;
+#[cfg(test)]
+mod tests_plugin_generate;
 #[cfg(test)]
 mod tests_plugin_import;
 #[cfg(test)]

@@ -2948,6 +2948,9 @@ digits	Hindi	Hindi
 	Only Web Colors	Chỉ màu web
 	Opacity	Độ mờ
 	Show Opacity	Hiện độ mờ
+	Show Hex Field	Hiện trường hex
+	Hex or CSS color	Màu hex hoặc CSS
+	Parse Color	Phân tích màu
 	Opacity & Mask Define Knockout Shape	Độ mờ & Mặt nạ xác định hình dạng Knockout
 	Opacity Mask	Mặt nạ độ mờ
 	Opacity Mask Info	Thông tin mặt nạ độ mờ
@@ -5266,6 +5269,7 @@ theme	Appearance	Giao diện
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` phải là hue, saturation, brightness, red, green hoặc blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` phải là none, oklch hoặc hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH cần sRGB làm không gian RGB làm việc
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` phải là màu hex (#rgb, #rgba, #rrggbb hoặc #rrggbbaa) hoặc màu CSS rgb(), hsl() hoặc oklch() dài tối đa 48 ký tự
 @msg	`{k}` must be [x, y]	`{k}` phải là [x, y]
 @msg	`{name}` has no options	`{name}` không có tùy chọn
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` là không gian làm việc tích hợp sẵn; hãy chọn tên khác
@@ -5617,7 +5621,9 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	is a confirm's answer, whose `value` must be true or false	là câu trả lời cho confirm, nên `value` phải là true hoặc false
 @msg	is longer than 16 KiB	dài hơn 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	là câu trả lời cho prompt, nên `value` phải là chuỗi hoặc null
-@msg	must have `kind` alert, confirm or prompt	phải có `kind` là alert, confirm hoặc prompt
+@msg	must have `kind` alert, confirm, prompt or window	phải có `kind` là alert, confirm, prompt hoặc window
+@msg	is a window's answer, whose `value` must be a list of steps	là câu trả lời của một cửa sổ, có `value` phải là danh sách các bước
+@msg	has a step {i} that is not a valid click, change or close	có bước {i} không phải là một lần nhấp, thay đổi hoặc đóng hợp lệ
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` chỉ dành cho lần chạy không có ai để hỏi: trong ứng dụng, người dùng trả lời từng hộp thoại
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` phải là số nguyên từ 1 đến {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` lồng sâu hơn 64 cấp
@@ -7090,6 +7096,15 @@ axis	Y Axis	Trục Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	một đối tượng chỉ đọc đã bị bỏ sót: hãy trả lại nó dưới dạng chỉ {{"id": …}} hoặc như khi được nhận
 @msg	a string	một chuỗi
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	nét chỉ có `paint`, `width`, `join`, `cap` và `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	một phần của hiệu ứng động kiểu tô chỉ có `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` và `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	nét chỉ có `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` và `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` chỉ có thể là true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` chỉ dành cho hiệu ứng trực tiếp có khai báo `paintOutput`, ở `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` phải là một số từ 0 đến 1
+@msg	unknown blending mode; `blend` is one of {_1}	chế độ hòa trộn không xác định; `blend` là một trong {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` phải là một mảng tối đa {MAX_LOOK_EFFECTS} bản ghi
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	một kết quả mang tối đa {MAX_RESULT_EFFECTS} bản ghi hiệu ứng
+@msg	this host takes no effects here	máy chủ này không nhận hiệu ứng ở đây
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	nét phải có dạng {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	hiệu ứng phải có dạng {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	hiệu ứng trên phần tô chỉ trả về `fills`
@@ -8185,6 +8200,7 @@ breakText	Glyphs	Glyph
 	Place Brush Art	Đặt đối tượng của cọ
 	Replace Brush Art	Thay đối tượng của cọ
 	Replace Pattern Art	Thay đối tượng của họa tiết
+	Place Pattern Art	Đặt đối tượng của họa tiết
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Có nét đang dùng cọ này. Áp dụng đối tượng mới cho các nét đó, hay giữ nguyên chúng và thêm một bản sao của cọ với đối tượng mới?
 	Apply to Strokes	Áp dụng cho nét
 	Leave Strokes	Giữ nguyên nét
@@ -8254,6 +8270,8 @@ breakText	Glyphs	Glyph
 	Tangent Circle	Đường tròn tiếp xúc
 	Tangent Circle Tool	Công cụ Đường tròn tiếp xúc
 	No tangent circle here	Không có đường tròn tiếp xúc ở đây
+	Ask For Circle Radius	Hỏi bán kính đường tròn
+	Auto-Update Default	Tự động cập nhật mặc định
 	Circle:	Đường tròn:
 @msg	`ids` names an object twice	`ids` nêu một đối tượng hai lần
 @msg	select two or three paths or compound paths	chọn hai hoặc ba đường dẫn hoặc đường dẫn phức hợp

@@ -87,6 +87,8 @@ fn thumbnails(ctx: &egui::Context) -> Thumbnails<PaneKey> {
 pub struct Panes {
     /// The panes the last frame drew, as (window, pane rect).
     pub(crate) last: Vec<(Win, egui::Rect)>,
+    /// The UI layer that drew the last tiled canvases.
+    last_layer: Option<egui::LayerId>,
     /// The slots of `last`'s windows, in the same order: which windows they were, as document
     /// indices shift when a document closes.
     last_slots: Vec<Option<Slot>>,
@@ -110,6 +112,7 @@ impl Panes {
     /// Forget every pane. The pictures go with the next frame that does not tile.
     fn clear(&mut self) {
         self.last.clear();
+        self.last_layer = None;
         self.last_slots.clear();
         self.fits.clear();
         self.at = SplitAt::default();
@@ -322,6 +325,7 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
             app.canvas.panes.fits.clear();
         }
         app.canvas.panes.last.clear();
+        app.canvas.panes.last_layer = None;
         app.canvas.panes.last_slots.clear();
         return false;
     }
@@ -361,8 +365,10 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let mut lines = std::mem::take(&mut app.canvas.panes.at);
     let placed = lines.clone();
     let mut cells: Vec<(Win, egui::Rect)> = vec![];
+    let mut layer = None;
     let split = SplitViews::new("Documents", arranged, Bind::bound(&mut lines)).count(shown.len()).active(active_pane).show(ui, |ui, body| {
         cells = shown.iter().copied().zip(placed.placed(arranged, shown.len(), body.rect, body.env.direction().is_rtl())).collect();
+        layer = Some(ui.layer_id());
         let areas: Vec<(Win, egui::Rect)> = cells.iter().map(|(w, cell)| (*w, art_area(app, *w, *cell))).collect();
         let unfitted = refit_resized(app, &areas);
         // The other panes first, so that what the canvas draws past its pane (the Contextual Task Bar)
@@ -381,6 +387,7 @@ pub(crate) fn tiled_area(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let activated = split.output.activated;
     app.canvas.panes.at = lines;
     app.canvas.panes.last = cells;
+    app.canvas.panes.last_layer = layer;
     if let Some(&(w, _)) = activated.and_then(|i| app.canvas.panes.last.get(i)) {
         crate::doc_windows::show_window(app, w);
     }
@@ -408,6 +415,20 @@ pub(crate) fn catch_waiting(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// Window `w`'s [`Slot`].
 fn slot(app: &VectorcraftApp, (i, n): Win) -> Option<Slot> {
     app.session.documents().get(i).map(|d| (d.uid, n))
+}
+
+/// The drawing and document point under a browser file drop in the last shown tiled panes.
+pub(crate) fn file_drop_at(app: &VectorcraftApp, pos: egui::Pos2) -> Option<(u64, Point)> {
+    let panes = &app.canvas.panes;
+    let layer = panes.last_layer?;
+    if app.ui_ctx.as_ref().and_then(|ctx| ctx.layer_id_at(pos)).is_some_and(|front| front != layer) {
+        return None;
+    }
+    panes.last.iter().zip(&panes.last_slots).find_map(|(&(win, cell), &shown)| {
+        let (doc, _) = shown.filter(|&shown| Some(shown) == slot(app, win) && cell.contains(pos))?;
+        let view = crate::doc_windows::view(app, win)?;
+        view.rect.contains(pos).then(|| (doc, view.canvas(app.ui_scaling(), view.rect).to_doc(pos)))
+    })
 }
 
 /// The area window `w`'s view shows its art in: what its body last showed, `cell` before the first.

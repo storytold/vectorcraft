@@ -27,10 +27,10 @@ log = { workspace = true }
 # `wgpu` pulls egui-wgpu's defaults: WebGPU plus the WebGL2 fallback.
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
 # The page command API (storytold/craft-libs#413): the request plumbing behind window.vectorcraft.
-craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "b0d422cf0c23baccdaca314b916458a89c0952e0", version = "0.1.0" }
+craft-web-api = { git = "https://github.com/storytold/craft-libs", rev = "51fcc3b0413af193db952df28dffae2321745703", version = "0.1.0" }
 
 wasm-bindgen = "0.2"
 serde_json = { workspace = true }
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlInputElement", "KeyboardEvent", "HtmlIFrameElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "ClipboardEvent", "DataTransfer", "File", "FileList", "Url", "Location", "CssStyleDeclaration", "Event", "EventTarget", "MouseEvent", "PointerEvent", "TouchEvent", "AddEventListenerOptions", "DomRect", "DragEvent", "Storage", "Navigator", "RequestInit", "Response", "AbortController", "AbortSignal"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlInputElement", "KeyboardEvent", "HtmlIFrameElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "ClipboardEvent", "DataTransfer", "File", "FileList", "Url", "Location", "CssStyleDeclaration", "Event", "EventTarget", "MouseEvent", "PointerEvent", "TouchEvent", "AddEventListenerOptions", "DomRect", "DragEvent", "Storage", "Navigator", "RequestInit", "Response", "AbortController", "AbortSignal", "Node", "Worker", "MessageEvent", "ErrorEvent", "Performance"] }

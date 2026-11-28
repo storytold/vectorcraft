@@ -243,6 +243,34 @@ pub fn imports_of(bytes: &[u8]) -> usize {
     IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
 }
 
+/// The work the imports of each buffer took, by its address (tests): the function evaluations of
+/// its function-based shadings, and the bytes of form content its pages' scans walked.
+#[cfg(any(test, feature = "read-count"))]
+static WORK: std::sync::Mutex<std::collections::BTreeMap<usize, (usize, usize)>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// Adds `evaluations` and `form_content` to the work of the imports of `bytes` (tests).
+#[cfg(any(test, feature = "read-count"))]
+fn note_work(bytes: &[u8], evaluations: usize, form_content: usize) {
+    if let Ok(mut work) = WORK.lock() {
+        let (e, f) = work.entry(bytes.as_ptr() as usize).or_default();
+        (*e, *f) = (e.saturating_add(evaluations), f.saturating_add(form_content));
+    }
+}
+
+/// How many function evaluations the function-based shadings of `bytes`, at its address, have
+/// taken in its imports on any thread (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn function_evaluations_of(bytes: &[u8]) -> usize {
+    WORK.lock().ok().and_then(|w| w.get(&(bytes.as_ptr() as usize)).map(|w| w.0)).unwrap_or(0)
+}
+
+/// How many bytes of form content the pages of `bytes`, at its address, have walked in its imports
+/// on any thread, up to [`crate::import_scan::form_content_limit`] a page (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn form_content_of(bytes: &[u8]) -> usize {
+    WORK.lock().ok().and_then(|w| w.get(&(bytes.as_ptr() as usize)).map(|w| w.1)).unwrap_or(0)
+}
+
 /// The notes on the fonts the file draws with that aren't available: type in a font the file
 /// carries keeps its look until it is edited; the rest shows in the fallback font.
 fn warn_missing_fonts(b: &mut Builder, doc: &Document) {
@@ -344,7 +372,12 @@ fn read_opened(
         b.page = ab;
         // The first id of this page's art.
         let first_id = b.next;
-        let mut scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream())?;
+        #[cfg(any(test, feature = "read-count"))]
+        crate::import_scan::FORM_CONTENT_WALKED.set(0);
+        let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream());
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, 0, crate::import_scan::FORM_CONTENT_WALKED.take());
+        let mut scan = scan?;
         // The walk's ink names pick between spaces of inks that look the same to the interpreter. A
         // page keeps them only when it uses such an ink and the interpreter draws as many paths
         // there as the walk counts.
@@ -358,7 +391,12 @@ fn read_opened(
             merge_order(&mut order, &mut known, &marked);
         }
         b.begin_page(scan);
-        craft::pdf::interpret_page(page, &mut ctx, &mut b).map_err(|e| PdfError::Parse(e.to_string()))?;
+        let drawn = craft::pdf::interpret_page(page, &mut ctx, &mut b);
+        // The page's shadings take their evaluations while it is drawn: they count even when the
+        // import stops on this page or a later one.
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, b.function_budget.take_spent(), 0);
+        drawn.map_err(|e| PdfError::Parse(e.to_string()))?;
         if incomplete.load(Ordering::Relaxed) {
             return Err(crate::import_scan::incomplete_content());
         }

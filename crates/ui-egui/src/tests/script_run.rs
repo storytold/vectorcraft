@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;
+use vectorcraft_engine::script::folder::Clock;
 
 use super::script_dialogs::{cancel, confirm, frame, is_open, key, open_id, pump, set};
 use crate::dialogs::script_run::{
@@ -15,8 +16,11 @@ use crate::dialogs::script_run::{
 use crate::tests::picks::{Picker, scripted};
 use crate::{VectorcraftApp, menus, script_runs};
 
+/// An app with a document, whose folder listings take no time.
 fn app() -> VectorcraftApp {
-    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), crate::Services::default()));
+    let mut session = Session::new();
+    session.set_script_listing_clock(Clock::Fixed(std::time::Duration::ZERO));
+    let mut app = crate::testing::windowed(VectorcraftApp::new(session, crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app
 }
@@ -606,6 +610,28 @@ fn a_scripts_file_dialog_keeps_at_most_2048_picked_files() {
     assert_eq!(files_fields(&app).unwrap()["leftOut"], true);
     cancel(&mut app, PICKER_KIND);
     finish(&mut app);
+}
+
+#[test]
+fn a_script_sees_the_window_and_sets_its_zoom_centre_and_screen_mode() {
+    let mut app = app();
+    let before = {
+        let v = app.view_mut().unwrap();
+        v.rect = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(600.0, 400.0));
+        v.fitted = true;
+        v.zoom = 1.0;
+        *v
+    };
+    app.session.script_frames = true;
+    let source = "var v = app.activeDocument.views[0]; vc.log(v.bounds[2] - v.bounds[0]); v.zoom = 2;\
+                  v.centerPoint = [10, 20]; v.screenMode = ScreenMode.FULLSCREEN;";
+    app.run("script.run", json!({"source": source, "name": "v.js"})).unwrap();
+    finish(&mut app);
+    let report = app.session.script_report().cloned().unwrap();
+    assert_eq!(report["log"][0].as_f64(), Some(600.0), "the bounds use the physical camera scale");
+    let now = *app.view().unwrap();
+    assert!(now.zoom > before.zoom && now.center != before.center);
+    assert_eq!(app.ui.screen_mode, 2);
 }
 
 /// With two files picked, the file dialog lists them in a scrolled group named Picked files.

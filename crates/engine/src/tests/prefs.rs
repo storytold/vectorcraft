@@ -641,10 +641,11 @@ fn selection_preferences_drive_the_selection_tool() {
     assert!(click(&mut s, 225.0, plain).is_empty(), "a click inside the fill selects nothing");
     assert_eq!(click(&mut s, 250.0, plain), vec![front], "a click on the path selects it");
     set(&mut s, "objectSelectionByPathOnly", json!(false));
-    // Command Click to Select Objects Behind (on by default): each Cmd/Ctrl-click goes one down,
-    // then back to the top.
+    // Command Click to Select Objects Behind (on by default): the first Cmd/Ctrl-click is Direct
+    // Selection's, then each one goes one down, then back to the top.
     let cmd = Mods { cmd: true, ..Mods::default() };
     assert_eq!(click(&mut s, 175.0, plain), vec![front]);
+    assert_eq!(click(&mut s, 175.0, cmd), vec![front], "the first Cmd-click arms Select Behind");
     assert_eq!(click(&mut s, 175.0, cmd), vec![back], "the object behind");
     assert_eq!(click(&mut s, 175.0, cmd), vec![front], "back to the topmost");
     set(&mut s, "ctrlClickSelectsBehind", json!(false));
@@ -1263,6 +1264,22 @@ fn transform_pattern_tiles_is_the_transforms_default() {
     assert_eq!(tiles(&s), [1.0, 0.0, 0.0, 1.0, 10.0, 0.0], "the param wins");
     s.execute("object.scale", &json!({"sx": 50, "origin": [0, 0]})).unwrap();
     assert_eq!(tiles(&s), [0.5, 0.0, 0.0, 0.5, 5.0, 0.0]);
+}
+
+/// A transform of an object whose pattern is only in its linked opacity mask notes Transform
+/// Patterns in the journal too, so a replay moves the mask's tiles alike.
+#[test]
+fn transform_patterns_is_journaled_for_a_pattern_in_a_linked_mask() {
+    let mut s = new_doc();
+    // The mask art is the patterned square above the polygon.
+    let id = NodeId(s.execute("shape.polygon", &json!({"cx": 125, "cy": 125, "radius": 40, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    let art = patterned_square(&mut s);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [id.0, art.0]})).unwrap();
+    set_pref(&mut s, "transformPatternTiles", json!(true));
+    s.execute("object.move", &json!({"ids": [id.0], "dx": 10, "dy": 0})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["patterns"], json!(true), "object.move");
+    s.execute("object.setLiveShape", &json!({"ids": [id.0], "polygonAngle": 20})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["patterns"], json!(true), "object.setLiveShape");
 }
 
 /// A 50 pt square at (100, 100) with a 1 pt stroke, filled with a 20 pt pattern, selected.

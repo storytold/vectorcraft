@@ -61,6 +61,129 @@ fn two_documents_with_artboards() -> (VectorcraftApp, egui::Context) {
     (app, ctx)
 }
 
+/// The fill (or stroke) colour of the active document's selection.
+fn paint_hex(app: &VectorcraftApp, stroke: bool) -> Option<String> {
+    let (fill, line) = crate::panels::current_paints(app);
+    if stroke { line } else { fill }.color().map(|c| c.to_hex())
+}
+
+/// Two documents, each with a selected rectangle; the first is active.
+fn two_documents_with_selected_art() -> (VectorcraftApp, egui::Context) {
+    let (mut app, ctx) = app();
+    app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+    app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 60})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    (app, ctx)
+}
+
+fn picker_params(stroke: bool) -> Value {
+    json!({ "stroke": stroke })
+}
+
+#[test]
+fn fill_and_stroke_pickers_preview_only_in_their_opening_document() {
+    for stroke in [false, true] {
+        let (mut app, ctx) = two_documents_with_selected_art();
+        app.run("ui.colorPicker", picker_params(stroke)).unwrap();
+        set_hex(&mut app, &ctx, "#ff0000");
+        assert_eq!(paint_hex(&app, stroke).as_deref(), Some("#ff0000"), "the opening document previews");
+
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let other = app.session.doc().unwrap().doc.layers.clone();
+        let before = undo_len(&app);
+        set_hex(&mut app, &ctx, "#00ff00");
+        assert_eq!(app.session.doc().unwrap().doc.layers, other, "the other document never previews the color");
+        assert!(!app.session.in_interaction());
+        assert_eq!(undo_len(&app), before);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_ne!(paint_hex(&app, stroke).as_deref(), Some("#ff0000"), "leaving the source rolled its preview back");
+        let before = undo_len(&app);
+        ok(&mut app, &ctx);
+        assert_eq!(paint_hex(&app, stroke).as_deref(), Some("#00ff00"), "OK back in the opening document applies");
+        assert_eq!(undo_len(&app), before + 1);
+    }
+}
+
+#[test]
+fn confirming_a_fill_or_stroke_picker_in_another_document_leaves_both_unchanged() {
+    for stroke in [false, true] {
+        let (mut app, ctx) = two_documents_with_selected_art();
+        let source = app.session.doc().unwrap().doc.layers.clone();
+        let source_undo = undo_len(&app);
+        app.run("ui.colorPicker", json!({"stroke": stroke, "color": "#00ff00"})).unwrap();
+        frame(&mut app, &ctx);
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let destination = app.session.doc().unwrap().doc.layers.clone();
+        let destination_undo = undo_len(&app);
+        ok(&mut app, &ctx);
+        assert_eq!(app.ui.status, "The active document changed while the Color Picker was open");
+        assert_eq!(app.session.doc().unwrap().doc.layers, destination);
+        assert_eq!(undo_len(&app), destination_undo);
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc.layers, source);
+        assert_eq!(undo_len(&app), source_undo);
+    }
+}
+
+#[test]
+fn canceling_a_fill_or_stroke_picker_preserves_the_other_documents_interaction() {
+    for stroke in [false, true] {
+        let (mut app, ctx) = two_documents_with_selected_art();
+        app.run("ui.colorPicker", picker_params(stroke)).unwrap();
+        set_hex(&mut app, &ctx, "#ff0000");
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.begin_interaction("Other edit").unwrap();
+        app.session.preview("paint.setFill", &json!({"color": "#445566"})).unwrap();
+
+        cancel(&mut app, &ctx);
+        assert!(app.session.in_interaction(), "the current document keeps its own interaction");
+        assert_eq!(paint_hex(&app, false).as_deref(), Some("#445566"));
+    }
+}
+
+#[test]
+fn a_picker_opened_without_a_document_leaves_a_document_opened_later_unchanged() {
+    let ctx = crate::testing::ui_context();
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(ctx.clone());
+    app.run("ui.colorPicker", json!({"color": "#00ff00"})).unwrap();
+    frame(&mut app, &ctx);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+    let art = app.session.doc().unwrap().doc.layers.clone();
+    let steps = undo_len(&app);
+    ok(&mut app, &ctx);
+    assert_eq!(app.ui.status, "The active document changed while the Color Picker was open");
+    assert_eq!(app.session.doc().unwrap().doc.layers, art);
+    assert_eq!(undo_len(&app), steps);
+}
+
+#[test]
+fn a_fill_or_stroke_picker_leaves_a_reverted_document_unchanged() {
+    for stroke in [false, true] {
+        let (mut app, ctx) = app();
+        let dir = vectorcraft_testkit::TempDir::new("paint-picker-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("ui.colorPicker", picker_params(stroke)).unwrap();
+        set_hex(&mut app, &ctx, "#abcdef");
+        assert_eq!(paint_hex(&app, stroke).as_deref(), Some("#abcdef"));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        let restored = app.session.doc().unwrap().doc.layers.clone();
+        let steps = undo_len(&app);
+        frame(&mut app, &ctx);
+        ok(&mut app, &ctx);
+        assert!(app.ui.status.contains("document was reverted"));
+        assert_eq!(app.session.doc().unwrap().doc.layers, restored);
+        assert_eq!(undo_len(&app), steps);
+    }
+}
+
 /// The selected art takes each colour as it is picked; OK keeps the last as one undo step and
 /// Cancel puts the art back.
 #[test]
@@ -286,4 +409,45 @@ fn sampler_above_the_field_previews_and_cancel_restores_the_original() {
     assert_eq!(fill_hex(&app), "#00ff00");
     cancel(&mut app, &ctx);
     assert_eq!(fill_hex(&app), original);
+}
+
+#[test]
+fn the_artboard_picker_leaves_restored_artboards_unchanged() {
+    for accept in [true, false] {
+        let (mut app, ctx) = app();
+        app.run("artboard.new", json!({})).unwrap();
+        app.run("artboard.setProps", json!({"index": 1, "color": "#123456"})).unwrap();
+        let dir = vectorcraft_testkit::TempDir::new("artboard-picker-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("artboard.setProps", json!({"index": 1, "color": "#ff0000"})).unwrap();
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        set_hex(&mut app, &ctx, "#abcdef");
+        assert_eq!(artboard_color(&app).map(|c| c.to_hex()).as_deref(), Some("#abcdef"));
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let restored = artboard_color(&app);
+        assert_eq!(restored.map(|c| c.to_hex()).as_deref(), Some("#123456"));
+        let steps = undo_len(&app);
+        frame(&mut app, &ctx);
+        assert_eq!(artboard_color(&app), restored);
+        assert!(!app.session.in_interaction());
+        if accept {
+            ok(&mut app, &ctx);
+            assert!(app.ui.status.contains("document was reverted"));
+        } else {
+            app.begin_interaction("New drawing edit").unwrap();
+            cancel(&mut app, &ctx);
+            assert!(app.session.in_interaction());
+            app.session.cancel_interaction().unwrap();
+        }
+        assert_eq!(artboard_color(&app), restored);
+        assert_eq!(undo_len(&app), steps);
+
+        app.run("ui.colorPicker", json!({"artboard": 1})).unwrap();
+        set_hex(&mut app, &ctx, "#abcdef");
+        ok(&mut app, &ctx);
+        assert_eq!(artboard_color(&app).map(|c| c.to_hex()).as_deref(), Some("#abcdef"));
+    }
 }

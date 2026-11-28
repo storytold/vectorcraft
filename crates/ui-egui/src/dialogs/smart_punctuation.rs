@@ -6,6 +6,8 @@
 //! Fields: the switches `fiLigatures`, `flLigatures`, `quotes`, `spaces`, `dashes`, `ellipsis` and
 //! `fractions`, `scope` (`selection` or `document`) and `report`.
 
+use std::collections::HashSet;
+
 use craft::ui::contract::{Bind, SaveKey};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
@@ -49,8 +51,9 @@ fn params_of(result: &ParamResult) -> Value {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let source = app.session.active().ok_or("no document")?;
-    let document = source.uid;
+    let document = (source.uid, source.reverts);
     let selected = !source.selection.is_empty();
+    let selection = source.selection.objects.iter().copied().collect::<HashSet<_>>();
     let mut params: Vec<Param> = options()
         .into_iter()
         .map(|(key, _, label)| Param::new(key, label, ParamKind::bool(matches!(key, "quotes" | "dashes" | "ellipsis"))))
@@ -71,11 +74,22 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let owner = egui::Id::unique((COMMAND, "opening-drawing"));
     ctx.data_mut(|data| data.insert_temp(owner, document));
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| -> Result<(), String> {
-        let document = ctx.data(|data| data.get_temp::<u64>(owner));
-        if app.session.active().is_none_or(|st| Some(st.uid) != document) {
+        let document = ctx.data(|data| data.get_temp::<(u64, u64)>(owner));
+        let Some(active) = app.session.active().filter(|st| document.is_some_and(|(uid, _)| st.uid == uid)) else {
             return Err(tl!("Return to the original drawing to replace its punctuation").into());
+        };
+        if document.is_some_and(|(_, reverts)| active.reverts != reverts) {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
         }
-        let r = app.run(COMMAND, params_of(result))?;
+        let params = params_of(result);
+        if params["scope"] == "selection"
+            && (active.selection.is_empty()
+                || active.selection.objects.len() != selection.len()
+                || active.selection.objects.iter().any(|id| !selection.contains(id)))
+        {
+            return Err(tl!("The selected text changed. Restore the selection to continue.").into());
+        }
+        let r = app.run(COMMAND, params)?;
         result.remember(&ctx);
         if result.fields.bool("report") == Some(true) {
             let lines: Vec<String> = options()
@@ -193,6 +207,33 @@ mod tests {
     }
 
     #[test]
+    fn smart_punctuation_refuses_a_draft_from_before_revert() {
+        let (mut app, id) = app_with_text("a--b");
+        let dir = vectorcraft_testkit::TempDir::new("smart-punctuation-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        open(&mut app).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let answer = super::super::tests_export::try_confirm(&mut app);
+        assert_eq!(plain(&app, id), "a--b", "OK changed the restored drawing");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(answer, Err("The document was reverted. Reopen this dialog to continue.".into()));
+
+        let (ctx, dialog) = (app.ui_ctx.clone().unwrap(), entry(&app, COMMAND).unwrap().id);
+        app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, dialog));
+        crate::testing::app_frame(&mut app, &ctx, Default::default());
+        assert!(entry(&app, COMMAND).is_none());
+        open(&mut app).unwrap();
+        ok(&mut app);
+        assert_eq!(plain(&app, id), "a–b");
+    }
+
+    #[test]
     fn reopened_smart_punctuation_applies_in_its_new_drawing() {
         let (mut app, source) = app_with_text("a--b");
         app.run("select.none", json!({})).unwrap();
@@ -207,5 +248,48 @@ mod tests {
         assert_eq!(plain(&app, other), "c–d");
         app.run("document.activate", json!({"index": 0})).unwrap();
         assert_eq!(plain(&app, source), "a--b");
+    }
+
+    fn selected_text_pair() -> (VectorcraftApp, u64, u64) {
+        let (mut app, selected) = app_with_text("a--b");
+        let other = app.run("text.create", json!({"x": 10, "y": 70, "text": "c--d", "font": "Source Sans 3"})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.set", json!({"ids": [selected]})).unwrap();
+        open(&mut app).unwrap();
+        assert_eq!(entry(&app, COMMAND).unwrap().fields.unwrap()["scope"], "selection");
+        (app, selected, other)
+    }
+
+    #[test]
+    fn selected_text_only_does_not_expand_to_the_document_after_clearing_selection() {
+        let (mut app, selected, other) = selected_text_pair();
+        let undo = app.session.active().unwrap().history.undo.len();
+        app.run("select.none", json!({})).unwrap();
+        assert_eq!(entry(&app, COMMAND).unwrap().fields.unwrap()["scope"], "selection");
+
+        let answer = super::super::tests_export::try_confirm(&mut app);
+        assert_eq!([plain(&app, selected), plain(&app, other)], ["a--b", "c--d"], "Selected Text Only must not expand to the document");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(answer, Err("The selected text changed. Restore the selection to continue.".into()));
+
+        app.run("select.set", json!({"ids": [selected]})).unwrap();
+        ok(&mut app);
+        assert_eq!([plain(&app, selected), plain(&app, other)], ["a–b", "c--d"], "retry changes only the original selection");
+    }
+
+    #[test]
+    fn selected_text_only_refuses_later_art_but_entire_document_still_works() {
+        let (mut app, selected, other) = selected_text_pair();
+        app.run("select.set", json!({"ids": [other]})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+
+        let answer = super::super::tests_export::try_confirm(&mut app);
+        assert_eq!([plain(&app, selected), plain(&app, other)], ["a--b", "c--d"], "Selected Text Only must not change later artwork");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(answer, Err("The selected text changed. Restore the selection to continue.".into()));
+
+        set(&app, "scope", json!("document"));
+        ok(&mut app);
+        assert_eq!([plain(&app, selected), plain(&app, other)], ["a–b", "c–d"], "an explicit Entire Document still works");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
     }
 }

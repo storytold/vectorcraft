@@ -2693,6 +2693,9 @@ font-technology	Variable	Променливи
 	Only Web Colors	Само уеб цветове
 	Opacity	Непрозрачност
 	Show Opacity	Показване на непрозрачността
+	Show Hex Field	Показване на шестнадесетичното поле
+	Hex or CSS color	Шестнадесетичен или CSS цвят
+	Parse Color	Разчитане на цвят
 	Opacity & Mask Define Knockout Shape	Непрозрачността и маската определят формата на изрязване
 	Opacity Mask	Маска за непрозрачност
 	Opacity Mask Info	Информация за маската за непрозрачност
@@ -5021,6 +5024,7 @@ axis	Both	И двете
 @msg	`color` must be a colour	`color` трябва да бъде цвят
 @msg	`sliders` must be none, oklch or hsl	`sliders` трябва да бъде none, oklch или hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH изисква sRGB като работно RGB пространство
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` трябва да бъде шестнадесетичен цвят (#rgb, #rgba, #rrggbb или #rrggbbaa) или CSS цвят rgb(), hsl() или oklch() с най-много 48 знака
 @msg	the Color Picker is not open	Палитрата с цвят не е отворена
 @msg	the screen color sampler is already open	инструментът за вземане на цвят от екрана вече е отворен
 @msg	this system has no screen color sampler	тази система няма инструмент за вземане на цвят от екрана
@@ -8227,6 +8231,7 @@ breakText	Glyphs	Глифи
 	Place Brush Art	Поставяне на графика на четка
 	Replace Brush Art	Замяна на графика на четка
 	Replace Pattern Art	Замяна на графика на мостра
+	Place Pattern Art	Поставяне на графика на мостра
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Щрихи използват тази четка. Да се приложи ли новата графика към тези щрихи, или те да останат както са и да се добави копие на четката с новата графика?
 	Apply to Strokes	Прилагане към щрихите
 	Leave Strokes	Оставяне на щрихите
@@ -8296,6 +8301,8 @@ breakText	Glyphs	Глифи
 	Tangent Circle	Допирателна окръжност
 	Tangent Circle Tool	Инструмент „Допирателна окръжност“
 	No tangent circle here	Тук няма допирателна окръжност
+	Ask For Circle Radius	Питане за радиуса на окръжността
+	Auto-Update Default	Автоматично обновяване на стойността по подразбиране
 	Circle:	Окръжност:
 @msg	`ids` names an object twice	`ids` посочва обект два пъти
 @msg	select two or three paths or compound paths	изберете два или три пътя или съставни пътя

@@ -29,6 +29,25 @@ pub(crate) fn windowed(mut app: crate::VectorcraftApp) -> crate::VectorcraftApp 
     app
 }
 
+/// Waits until the process's lookup of the installed CJK faces has ended: fontconfig's scan on Linux, which
+/// [`crate::ui_fonts`]'s loader starts the first time a CJK character has no glyph. Nothing waits on macOS and Windows.
+/// While the scan runs, Japanese, Chinese and Korean text draws without glyphs; the pass after it ends registers the
+/// face it found, and the next frame lays the text out again, wider or narrower, moving the controls around it. A test
+/// that measures controls in one frame and clicks them in a later one calls this first; then each new context
+/// registers its face after its first pass, and the controls hold still from the second frame on.
+pub(crate) fn wait_for_cjk_fonts() {
+    use craft::ui::fonts::{FontCandidates as _, SystemCandidates};
+    // `pending` starts the scan when it has not started.
+    if !SystemCandidates.pending() {
+        return;
+    }
+    let (ended, wait) = std::sync::mpsc::channel();
+    SystemCandidates.wake_when_ready(craft::host::Wake::new(move || {
+        let _ = ended.send(());
+    }));
+    let _ = wait.recv();
+}
+
 /// A context with the runtime, the app's interface fonts and its root theme installed.
 pub(crate) fn ui_context() -> egui::Context {
     let ctx = egui::Context::default();
@@ -89,6 +108,30 @@ pub(crate) fn run_fired(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
 pub(crate) fn custom_dictionary() -> std::sync::MutexGuard<'static, ()> {
     static HELD: std::sync::Mutex<()> = std::sync::Mutex::new(());
     HELD.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Runs the test `name` (its path in the crate, such as `canvas::tests::a_test`) alone in a child test process, for a
+/// test that loads or removes a color profile. The loaded profiles are the whole process's, and the canvas's frame key
+/// holds their generation ([`vectorcraft_color::cms::profiles_generation`]), so a profile loaded in this process while
+/// another test renders changes that test's keys. A test that assigns a profile to its front document, or changes
+/// Color Settings, also runs here: the active color settings ([`vectorcraft_color::cms::active`]) are the whole
+/// process's too, and another test converting a color while they are changed gets that profile's values. In the child
+/// it returns `true`, and the test goes on. Here it waits for the child, fails when the child's test fails, and returns
+/// `false`.
+pub(crate) fn in_own_process(name: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+    if std::env::var_os(CHILD).is_some_and(|v| v == name) {
+        return true;
+    }
+    let output =
+        std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", name, "--nocapture"]).env(CHILD, name).output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{name} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
 }
 
 /// The default proof view, held: View › Proof Colors, Overprint Preview and Separations Preview are the whole process's

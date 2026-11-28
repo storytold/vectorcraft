@@ -90,6 +90,8 @@ use interp::{Fault, Interp};
 use obj::PsError;
 
 pub use ai::NameEncoding;
+#[cfg(any(test, feature = "work-count"))]
+pub use ai::blend_work;
 #[cfg(test)]
 pub(crate) use ai::objects_read;
 #[cfg(test)]
@@ -98,10 +100,13 @@ pub(crate) use ai::{
     BLEND_BUDGET, BLEND_PLUGIN, BRUSH_MANAGER, BrushesRead, DEFORM_PLUGIN, EnvelopeGridPoint, MAX_BLEND_KEYS, MAX_BLEND_OBJECTS,
     MAX_CHECKED as ENVELOPE_CHECKS, MAX_EDITING_OBJECTS, MAX_GRADIENT_STOPS, MAX_LISTED, MAX_LISTED_NAME, MAX_MESH_SIDE, MAX_SYMBOLS, ParsedStyle,
     blend_reads, brush_plugin_name, brushes_kept, envelope_outline, envelope_upright, mesh_reads, parse_art_style, parsed_moves_with,
-    read_brush_object, read_parsed_style, read_style_list, symbol_art_member, turn_brush_art_over, warp_number,
+    parsed_type_color, read_brush_object, read_parsed_style, read_style_list, symbol_art_member, turn_brush_art_over, warp_number,
 };
 pub(crate) use ate::{MAX_BYTES as MAX_TEXT_DOCUMENT, MAX_FRAMES, MAX_SEGMENTS, MAX_STORY, MAX_VALUES as MAX_TEXT_VALUES, record_version};
-pub use native::{AiLayers, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard, is_loss, layered_ai, layered_ai_from};
+pub use native::{
+    AiLayers, ai_alone, ai_alone_decoded, ai_alone_on_page, ai_alone_on_page_decoded, ai_alone_with, ai_layers_alone, ai_layers_alone_decoded,
+    ai_opened_artboard, ai_opened_artboard_decoded, decode_ai_private, is_loss, layered_ai, layered_ai_from,
+};
 pub(crate) use native::{MAX_TEXT, MAX_WRAP_WORK, scale_document, scale_symbols};
 pub use text::family_style;
 pub(crate) use text::{document_font, postscript_face};
@@ -276,6 +281,12 @@ fn program(bytes: &[u8]) -> Result<&[u8], String> {
 pub fn page(bytes: &[u8]) -> Result<Rect, String> {
     let [llx, lly, urx, ury] = Dsc::read(program(bytes)?).bbox.unwrap_or(LETTER);
     Ok(Rect::new(0.0, 0.0, urx - llx, ury - lly))
+}
+
+/// An EPS or PostScript file's bounding box (`%%HiResBoundingBox` when it has one) in its own
+/// space, as `[llx, lly, urx, ury]`, read from its comments; `None` without one.
+pub(crate) fn bounding_box(bytes: &[u8]) -> Option<[f64; 4]> {
+    Dsc::read(program(bytes).ok()?).bbox
 }
 
 /// [`import`], an Illustrator EPS through the editing copy of its art only when `editing_data`

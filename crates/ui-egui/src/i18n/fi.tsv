@@ -519,6 +519,9 @@
 	Fill Color	Täyttöväri
 	Opacity	Peittävyys
 	Show Opacity	Näytä peittävyys
+	Show Hex Field	Näytä heksakenttä
+	Hex or CSS color	Heksa- tai CSS-väri
+	Parse Color	Jäsennä väri
 	Stroke Color	Viivan väri
 	Fill Gradient	Täytön liukuväri
 	Stroke Gradient	Viivan liukuväri
@@ -5336,7 +5339,9 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	is a confirm's answer, whose `value` must be true or false	on confirm-vastaus, joten sen `value`-arvon on oltava true tai false
 @msg	is longer than 16 KiB	on pidempi kuin 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	on prompt-vastaus, joten sen `value`-arvon on oltava merkkijono tai null
-@msg	must have `kind` alert, confirm or prompt	`kind`-arvon on oltava alert, confirm tai prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind`-arvon on oltava alert, confirm, prompt tai window
+@msg	is a window's answer, whose `value` must be a list of steps	on ikkunan vastaus, jonka `value`-arvon on oltava luettelo vaiheista
+@msg	has a step {i} that is not a valid click, change or close	sisältää vaiheen {i}, joka ei ole kelvollinen napsautus, muutos tai sulkeminen
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` on vain ajolle, jossa ei ole ketään kysyttävää: sovelluksessa henkilö vastaa jokaiseen valintaikkunaan
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` on oltava kokonaisluku väliltä 1–{_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` on sisäkkäin yli 64 tason syvyydellä
@@ -7089,6 +7094,7 @@ mark-style	Japanese	Japanilainen
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel`-arvon on oltava hue, saturation, brightness, red, green tai blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` on oltava none, oklch tai hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH vaatii sRGB:n RGB-työväriavaruudeksi
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` on oltava heksaväri (#rgb, #rgba, #rrggbb tai #rrggbbaa) tai CSS-väri rgb(), hsl() tai oklch(), enintään 48 merkkiä
 @msg	`{key}` must be an array of these names: {_1}	`{key}`-arvon on oltava taulukko, jossa on näitä nimiä: {_1}
 @msg	choose a destination folder	valitse kohdekansio
 @msg	choose a source folder	valitse lähdekansio
@@ -7508,6 +7514,15 @@ axis	Y Axis	Y-akseli
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	vain luku -objekti jätettiin pois: palauta se pelkkänä {{"id": …}}-muotona tai sellaisena kuin se annettiin
 @msg	a string	merkkijono
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	viivalla on vain `paint`, `width`, `join`, `cap` ja `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	maalaavan live-tehosteen osalla on vain `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` ja `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	viivalla on vain `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` ja `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` voi olla vain true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` on vain reaaliaikaiselle tehosteelle, joka ilmoittaa `paintOutput`-avaimen, tasolla `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` on oltava luku 0:sta 1:een
+@msg	unknown blending mode; `blend` is one of {_1}	tuntematon sekoitustila; `blend` on yksi seuraavista: {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` on oltava enintään {MAX_LOOK_EFFECTS} tietueen taulukko
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	tuloksessa on enintään {MAX_RESULT_EFFECTS} tehostetietuetta
+@msg	this host takes no effects here	tämä isäntä ei ota tässä vastaan tehosteita
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	viivan on oltava muotoa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	tehosteen on oltava muotoa {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	täytön tehoste palauttaa vain kentän `fills`
@@ -8563,6 +8578,7 @@ breakText	Glyphs	Merkit
 	Place Brush Art	Sijoita siveltimen kuvitus
 	Replace Brush Art	Korvaa siveltimen kuvitus
 	Replace Pattern Art	Korvaa kuvion kuvitus
+	Place Pattern Art	Sijoita kuvion kuvitus
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Viivat käyttävät tätä sivellintä. Käytetäänkö uutta kuvitusta näissä viivoissa, vai jätetäänkö ne ennalleen ja lisätään siveltimestä kopio, jossa on uusi kuvitus?
 	Apply to Strokes	Käytä viivoihin
 	Leave Strokes	Jätä viivat ennalleen
@@ -8632,6 +8648,8 @@ breakText	Glyphs	Merkit
 	Tangent Circle	Sivuava ympyrä
 	Tangent Circle Tool	Sivuava ympyrä -työkalu
 	No tangent circle here	Tässä ei ole sivuavaa ympyrää
+	Ask For Circle Radius	Kysy ympyrän säde
+	Auto-Update Default	Päivitä oletus automaattisesti
 	Circle:	Ympyrä:
 @msg	`ids` names an object twice	`ids` mainitsee saman objektin kahdesti
 @msg	select two or three paths or compound paths	valitse kaksi tai kolme polkua tai yhdistelmäpolkua

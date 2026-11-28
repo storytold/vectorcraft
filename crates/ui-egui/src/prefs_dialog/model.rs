@@ -289,7 +289,7 @@ impl Live<'_> {
     fn reset_ui_rows(&mut self, reset: impl Fn(&str) -> bool) {
         for (key, value) in super::default_ui_fields(&self.app.ui) {
             if UI_FIELDS.iter().any(|&(k, c, _)| k == key && reset(c)) {
-                self.w.draft.set(key, &value);
+                self.w.set_row(key, &json!(value));
             }
         }
     }
@@ -427,49 +427,81 @@ impl PreferencesModel for Live<'_> {
 }
 
 impl PreferencesDraft for Live<'_> {
+    /// A row set in the window counts even when it shows the value it opened with: a reset of a row a command changed
+    /// while the window is open is still applied.
     fn differs(&self) -> bool {
-        self.w.draft != self.w.opened
+        self.w.draft != self.w.opened || !self.w.touched.is_empty()
     }
 
     fn apply(&mut self) -> Result<(), String> {
         // A `prefs.reset` run since the last frame shows in the draft before OK reads it.
         super::apply_prefs_resets_to(self.app, Some(&mut *self.w));
-        let values: Map<String, Value> =
-            self.w.draft.to::<Map<String, Value>>().unwrap_or_default().into_iter().filter(|(k, _)| !k.starts_with("__")).collect();
+        // Only the rows changed in the window: a setting changed outside it while it is open keeps its new value.
+        let current = self.app.session.prefs.to_json();
+        let edited: Map<String, Value> = self
+            .w
+            .draft
+            .to::<Map<String, Value>>()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(k, _)| {
+                self.w.edited(k)
+                    && (k != "keyHoldDelay"
+                        || self.w.explicitly_edited(k)
+                        || current.get(k).and_then(Value::as_f64) == self.w.source.get::<Value>(k).as_ref().and_then(Value::as_f64))
+            })
+            .collect();
+        let values: Map<String, Value> = edited.iter().filter(|(k, _)| !k.starts_with("__")).map(|(k, v)| (k.clone(), v.clone())).collect();
         let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
         let document_units = self.w.reset_units.as_deref().is_none_or(|u| values.get("unitsGeneral").and_then(Value::as_str) != Some(u));
         // A refused folder, typed or picked, comes back here as the engine's message.
-        self.app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
+        if !values.is_empty() {
+            self.app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
+        }
+        let row = |key: &str| edited.get(key).and_then(Value::as_bool);
         // When OK enters the Touch workspace, the task bar is set before the switch, so it goes to the workspace being
         // left; otherwise after it, so a return from Touch gives it to the workspace returned to.
         let before_switch = touch_ws.is_some() && crate::workspaces::enters_touch(self.app, self.app.touch_screen);
-        if before_switch && let Some(on) = self.w.draft.get::<bool>("__taskBar") {
+        if before_switch && let Some(on) = row("__taskBar") {
             self.app.ui.task_bar = on;
         }
-        let was_touch = crate::workspaces::is_current(&self.app.ui, crate::workspaces::TOUCH);
         if touch_ws.is_some() {
             crate::workspaces::sync_touch_workspace(self.app, self.app.touch_screen);
         }
-        // When OK leaves Touch, the workspace returned to takes the row only when it changed since the window opened or
-        // last applied; otherwise it keeps its own.
-        let left_touch = was_touch && !crate::workspaces::is_current(&self.app.ui, crate::workspaces::TOUCH);
-        let task_bar_row = self.w.draft.get::<bool>("__taskBar").filter(|on| !left_touch || self.w.opened.get::<bool>("__taskBar") != Some(*on));
-        let flag = |key: &str, now: bool| self.w.draft.get::<bool>(key).unwrap_or(now);
-        let (smart_guides, snap_to_grid, task_bar) = (
-            flag("__smartGuides", self.app.ui.view.smart_guides),
-            flag("__snapToGrid", self.app.ui.view.snap_to_grid),
-            if before_switch { self.app.ui.task_bar } else { task_bar_row.unwrap_or(self.app.ui.task_bar) },
-        );
-        self.app.ui.view.smart_guides = smart_guides;
-        self.app.ui.view.snap_to_grid = snap_to_grid;
-        self.app.ui.task_bar = task_bar;
-        crate::original_editor::commit(self.app);
-        super::snapshot(self.app);
-        self.app.prefs_changed = true;
+        if let Some(on) = row("__smartGuides") {
+            self.app.ui.view.smart_guides = on;
+        }
+        if let Some(on) = row("__snapToGrid") {
+            self.app.ui.view.snap_to_grid = on;
+        }
+        if !before_switch && let Some(on) = row("__taskBar") {
+            self.app.ui.task_bar = on;
+        }
+        let editor = crate::original_editor::commit(self.app);
+        // The host saves the settings only when one changed.
+        if !edited.is_empty() || editor {
+            super::snapshot(self.app);
+            self.app.prefs_changed = true;
+        }
         // The row shows the task bar in use: after OK enters Touch, that is Touch's, not the value the workspace left
         // took, so a later Apply does not give the workspace left's value to Touch.
+        let current = self.app.session.prefs.to_json();
+        for (key, value) in current.as_object().into_iter().flatten() {
+            if self.w.draft.get::<Value>(key).is_some() {
+                self.w.draft.set(key, value);
+            }
+        }
+        if let Some(state) = self.app.session.active() {
+            self.w.draft.set("unitsGeneral", &state.doc.units.key());
+        }
+        self.w.draft.set("__smartGuides", &self.app.ui.view.smart_guides);
+        self.w.draft.set("__snapToGrid", &self.app.ui.view.snap_to_grid);
         self.w.draft.set("__taskBar", &self.app.ui.task_bar);
         self.w.opened = self.w.draft.clone();
+        self.w.source = self.w.draft.clone();
+        self.w.touched.clear();
+        self.w.reset_units = None;
+        self.w.sync_strings();
         Ok(())
     }
 

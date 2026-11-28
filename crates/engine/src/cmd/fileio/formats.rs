@@ -1,6 +1,6 @@
 use super::super::unique_name;
 use super::{
-    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, dxf, eps, hpgl, json, metafile, native, pdf, screens, svg, text,
+    Result, Session, TEMPLATE_FORMATS, UNSUPPORTED, Unsupported, Value, bad, cmx, dxf, eps, hpgl, json, metafile, native, pdf, screens, svg, text,
     unsupported,
 };
 
@@ -553,11 +553,14 @@ pub const FORMATS: &[Format] = &[
     // them.
     reader("cdr", "CDR Drawing", &["cdr"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
     reader("cdt", "CDR Template", &["cdt"], "application/vnd.corel-draw", false), // brand-ok: shared MIME type
-    // `.cmx` exchange files with 32-bit coordinates, read by `craft-cdr`; exports don't write
-    // them.
-    reader("cmx", "CMX", &["cmx"], "image/x-cmx", false),
+    // `.cmx` exchange files with 32-bit coordinates, read and written by `craft-cdr`: a page for
+    // each chosen artboard, with the art's fills and strokes in their colors.
+    Format { id: "cmx", label: "CMX", extensions: &["cmx"], mime: "image/x-cmx", read: true, write: true, raster: false, options: cmx::OPTIONS },
     // QuickDraw pictures, read by `vectorcraft_metafile::import_pict` into paths, type and images.
     reader("pict", "PICT", &["pct", "pic", "pict"], "image/x-pict", false),
+    // Layered raster `.pcraft` documents, read by `pcraftread` as one image: the full-size
+    // composite, the layers combined, or the preview with a note. Exports don't write them.
+    reader("pcraft", "PCRAFT", &["pcraft"], "application/x-pcraft", true),
 ];
 
 /// Every extension `document.open` reads (the "All readable files" filter of open dialogs).
@@ -618,6 +621,7 @@ pub const OPEN_EXTS: &[&str] = &[
     "cdr",
     "cdt",
     "cmx",
+    "pcraft",
 ];
 
 /// Extensions in [`OPEN_EXTS`] the packaging declares no type for: Photoshop documents belong to
@@ -625,10 +629,11 @@ pub const OPEN_EXTS: &[&str] = &[
 /// `.epsf`, `.ps`, Targa, PCX, Pixar, JPEG 2000, HEIC/HEIF, JPEG XL, `.cdr` or `.cmx` type, nor one for the `.pns`, `.dib` and `.rle` names of
 /// PNG and BMP files (File › Open and Place still read them all). On Linux the desktop entry's EPS
 /// type (shared-mime-info's) also covers `.epsf`, so file managers offer VectorCraft for it.
-/// The packaging declares no type for HP-GL plot files or PICT pictures either.
+/// The packaging declares no type for HP-GL plot files, PICT pictures or layered raster `.pcraft`
+/// documents either.
 pub const UNASSOCIATED_EXTS: &[&str] = &[
     "psd", "pdd", "psb", "epsf", "ps", "pns", "dib", "rle", "tga", "vda", "icb", "vst", "pcx", "pxr", "jpf", "jpx", "jp2", "j2k", "j2c", "jpc",
-    "heic", "heif", "jxl", "cdr", "cdt", "cmx", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict",
+    "heic", "heif", "jxl", "cdr", "cdt", "cmx", "plt", "hpgl", "hgl", "hpg", "pct", "pic", "pict", "pcraft",
 ];
 
 /// The extension that picks each writable format when exporting (the format's first; PNG-8 shares
@@ -718,6 +723,7 @@ pub const PLACE_EXTS: &[&str] = &[
     "cdr",
     "cdt",
     "cmx",
+    "pcraft",
     "txt",
     "rtf",
     "docx",

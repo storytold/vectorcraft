@@ -1,17 +1,22 @@
 //! WebAssembly plug-ins in the menus and their generated dialogs.
 //!
-//! Object › Plug-ins lists the installed object filters (`plugin.dialog {id}`), then Install
-//! Plug-in… and Reload Plug-ins; Effect › Plug-ins lists the live-effect plug-ins, which open the
-//! effect dialog (`effect.dialog`). A filter with parameters opens a hosted dialog `plugin`: one row
+//! Object › Plug-ins lists the installed object filters and generators (`plugin.dialog {id}`),
+//! then Edit Generated Art…, Install Plug-in… and Reload Plug-ins. A generator with parameters
+//! opens a hosted dialog `pluginGenerate`, whose OK draws new generated art (`plugin.generate`);
+//! Edit Generated Art… opens it with a selected generated art object's parameters, and its OK draws
+//! the object again (`plugin.editGenerated`). Effect › Plug-ins lists the live-effect plug-ins,
+//! which open the effect dialog (`effect.dialog`). A filter with parameters opens a hosted dialog `plugin`: one row
 //! per declared parameter, shown while its `visibleWhen` holds, with a live Preview, and OK keeps the
 //! run as one undo step (`plugin.run`). A filter without parameters runs at once. A heavy filter (its
 //! manifest's `budget`) has no Preview, since a run may take minutes: it runs in the background
 //! ([`crate::plugin_runs`]). A light filter that reports its progress (plug-in API level 2 with the
 //! `progress` permission) and calls no commands runs in the background too, with its progress and
-//! Cancel, when it runs at once or when OK runs it without a kept preview ([`in_background`]). A
-//! filter or live effect with commands of its own is a submenu named after it, holding its item and
-//! then its commands; a command with parameters opens the same dialog for them ([`open_command`]).
-//! A command whose manifest names another menu is listed in that menu instead ([`place_commands`]).
+//! Cancel, when it runs at once or when OK runs it without a kept preview ([`in_background`]). On the
+//! web every filter and plug-in command run here goes to a worker, and their dialogs have no Preview
+//! ([`crate::plugin_runs`]). A filter or live effect with commands of its own is a submenu named
+//! after it, holding its item and then its commands; a command with parameters opens the same dialog
+//! for them ([`open_command`]). A command whose manifest names another menu is listed in that menu
+//! instead ([`place_commands`]).
 //! Object › Plug-ins starts with Apply Last Filter and Last Filter…, which run the filter that last
 //! ran again with the same parameters or open its dialog with them, and a filter's dialog opens with
 //! the parameters it last ran with in the session ([`LastFilters`]).
@@ -20,8 +25,9 @@
 //! files File › Open finds no built-in format for, and File › Open With lists them; one with
 //! parameters opens dialog `pluginImport` once the file is picked, and its Open button opens it.
 //!
-//! The one open filter, export or import dialog is [`PluginDialog`]: what the hosted dialog cannot
-//! hold (the plug-in, the live preview, the export's or open's own parameters) lives there, and
+//! The one open filter, generator, export or import dialog is [`PluginDialog`]: what the hosted
+//! dialog cannot hold (the plug-in, the live preview, the edited object, the export's or open's own
+//! parameters) lives there, and
 //! [`pump`] reads the dialog's values each frame and acts on its answer.
 //!
 //! [`InstallPrompt`] asks a person to approve a plug-in's permissions or heavy budget. What it
@@ -193,18 +199,25 @@ fn leave_out(items: &mut [Node], placed: &std::collections::HashSet<String>) {
     }
 }
 
-/// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
-/// Install Plug-in… and Reload Plug-ins.
+/// Object › Plug-ins: the installed object filters (each with its commands, if it has any) and
+/// generators, then Edit Generated Art…, Install Plug-in…, Reload Plug-ins and Plug-ins That Didn't
+/// Load… ([`super::failed_plugins`]).
 pub fn object_menu() -> Vec<Node> {
     let mut items: Vec<Node> = registry::list()
         .iter()
-        .filter(|p| p.manifest().kind == Kind::Filter)
+        .filter(|p| matches!(p.manifest().kind, Kind::Filter | Kind::Generator))
         .map(|p| with_commands(p, cp(label(&p.manifest().name, !p.manifest().params.is_empty()), "plugin.dialog", json!({ "id": p.id() }))))
         .collect();
     if items.is_empty() {
         items.push(placeholder(NO_FILTERS));
     }
-    items.extend([Sep, c("Install Plug-in…", "ui.installPlugin"), c("Reload Plug-ins", "plugin.reload")]);
+    items.extend([
+        Sep,
+        c(EDIT_GENERATED, EDIT_COMMAND),
+        c("Install Plug-in…", "ui.installPlugin"),
+        c("Reload Plug-ins", "plugin.reload"),
+        c("Plug-ins That Didn't Load…", super::failed_plugins::COMMAND),
+    ]);
     items
 }
 
@@ -263,8 +276,17 @@ pub(crate) enum Opened {
         refused: bool,
         params: Arc<[Param]>,
     },
+    /// A generator's parameters: for new generated art (`edit` is `None`), or for drawing the
+    /// generated art object `edit` names again.
+    Generate { plugin: String, edit: Option<EditTarget>, params: Arc<[Param]> },
     /// An exporter's parameters, with Export As's own parameters (`format`, `path`, …) kept for Export.
-    Export { plugin: String, export: Value, params: Arc<[Param]> },
+    Export {
+        plugin: String,
+        export: Value,
+        /// The drawing the dialog opened on and its revert count then: Export writes that drawing.
+        document: Option<(u64, u64)>,
+        params: Arc<[Param]>,
+    },
     /// An importer's parameters, with Open With's own parameters (`path`, `importer`, `picked`) kept for Open.
     Import { plugin: String, open: Value, params: Arc<[Param]> },
 }
@@ -281,13 +303,13 @@ impl PluginDialog {
 impl Opened {
     fn plugin(&self) -> &str {
         match self {
-            Opened::Filter { plugin, .. } | Opened::Export { plugin, .. } | Opened::Import { plugin, .. } => plugin,
+            Opened::Filter { plugin, .. } | Opened::Generate { plugin, .. } | Opened::Export { plugin, .. } | Opened::Import { plugin, .. } => plugin,
         }
     }
 
     fn params(&self) -> &Arc<[Param]> {
         match self {
-            Opened::Filter { params, .. } | Opened::Export { params, .. } | Opened::Import { params, .. } => params,
+            Opened::Filter { params, .. } | Opened::Generate { params, .. } | Opened::Export { params, .. } | Opened::Import { params, .. } => params,
         }
     }
 
@@ -476,11 +498,16 @@ fn step_id(s: &Value) -> Option<&str> {
 
 /// Whether batch step `s`, which returned `result` if the batch reports it, may have installed,
 /// removed or reloaded plug-in `id`: a removal names its id, an install reports the id it installed,
-/// and a reload, or an install whose result is not known, may change any plug-in.
+/// a retry the ids it installed, and a reload, or an install or retry whose result is not known, may
+/// change any plug-in.
 fn may_change(s: &Value, result: Option<&Value>, id: &str) -> bool {
     match step_id(s) {
         Some("plugin.remove") => s.get("params").and_then(|p| p.get("id")).and_then(Value::as_str) == Some(id),
         Some("plugin.install") => result.and_then(|r| r.get("id")).and_then(Value::as_str).is_none_or(|i| i == id),
+        Some("plugin.retry") => result
+            .and_then(|r| r.get("retried"))
+            .and_then(Value::as_array)
+            .is_none_or(|rows| rows.iter().any(|row| row.get("id").and_then(Value::as_str) == Some(id))),
         Some("plugin.reload") => true,
         _ => false,
     }
@@ -545,15 +572,26 @@ pub fn open_last(app: &mut VectorcraftApp) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// `plugin.dialog {id, params?}`: run filter `id` at once when it takes no parameters or `params`
-/// are given, else open its dialog prefilled with the parameters it last ran with in this session
-/// ([`remembered`]), or with its defaults.
+/// `plugin.dialog {id, params?}`: run filter or generator `id` at once when it takes no parameters
+/// or `params` are given, else open its dialog prefilled with the parameters a filter last ran with
+/// in this session ([`remembered`]), or with its defaults.
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     let id = p.get("id").and_then(Value::as_str).ok_or("missing `id` (see plugin.list)")?;
     let plugin = registry::get(id).ok_or_else(|| format!("no plug-in {id:?} is installed"))?;
     let m = plugin.manifest();
     match m.kind {
         Kind::Filter => {}
+        Kind::Generator => {
+            let given = p.get("params");
+            if given.is_some_and(|value| !value.is_object()) {
+                return Err(vectorcraft_plugins::Error::Params("plug-in parameters must be a JSON object".into()).to_string());
+            }
+            if m.params.is_empty() || given.is_some() {
+                return app.run(GENERATE, json!({"id": id, "params": given.cloned().unwrap_or(Value::Null)}));
+            }
+            open_generate(app, &plugin, None, &Map::new())?;
+            return Ok(Value::Null);
+        }
         Kind::Effect => return Err(format!("{} is a live effect (Effect › Plug-ins)", m.name)),
         Kind::Exporter => return Err(format!("{} is an exporter (File › Export › Export As…)", m.name)),
         Kind::Importer => return Err(format!("{} is an importer (File › Open With)", m.name)),
@@ -568,7 +606,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 }
 
 /// Opens the dialog of filter `plugin`, or of its command `command`, with `m` the manifest it runs
-/// with, headed `heading`: the rows at `values`, with a live Preview for a light filter.
+/// with, headed `heading`: the rows at `values`, with a live Preview for a light filter. Where
+/// filters run in workers (the web build) the dialog has no Preview: a preview would run the plug-in
+/// on the page.
 fn open_filter(
     app: &mut VectorcraftApp,
     plugin: &Plugin,
@@ -578,8 +618,9 @@ fn open_filter(
     values: Map<String, Value>,
 ) -> Result<(), String> {
     let own = plugin.manifest();
-    let light = own.budget == Budget::Light;
-    let look = Look { title: heading.clone(), description: own.description.clone(), previews: light, note: !light, ok: None };
+    let heavy = own.budget == Budget::Heavy;
+    let light = !heavy && !crate::plugin_runs::in_workers(app);
+    let look = Look { title: heading.clone(), description: own.description.clone(), previews: light, note: heavy, ok: None };
     let instance = command.as_deref().unwrap_or(plugin.id()).to_string();
     let (id, params) = open_hosted(app, KIND, &instance, m, values, look)?;
     let kind = Opened::Filter {
@@ -629,11 +670,83 @@ fn in_background(m: &Manifest) -> bool {
 }
 
 /// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background
-/// ([`in_background`]).
+/// ([`in_background`]). Where filters run in workers (the web build), every run does.
 fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, String> {
-    match in_background(plugin.manifest()) {
+    match in_background(plugin.manifest()) || crate::plugin_runs::in_workers(app) {
         false => app.run(CMD, p),
         true => crate::plugin_runs::start(app, p),
+    }
+}
+
+/// The key of a generator's parameters dialog: for new generated art, or for drawing a generated
+/// art object again.
+pub const GENERATE_KIND: &str = "pluginGenerate";
+
+const GENERATE: &str = "plugin.generate";
+
+/// Object › Plug-ins › Edit Generated Art…, and the UI command it runs.
+pub const EDIT_GENERATED: &str = "Edit Generated Art…";
+pub const EDIT_COMMAND: &str = "ui.editGeneratedArt";
+
+/// The generated art object an Edit Generated Art… dialog draws again: its id, and the
+/// [`uid`](vectorcraft_engine::DocState::uid) of the document it is in.
+pub(crate) struct EditTarget {
+    object: Value,
+    doc: Option<u64>,
+}
+
+/// OK's error when the document of an Edit Generated Art… dialog is no longer the active one.
+const EDIT_DOC_GONE: &str = "the document it was prepared for is no longer active";
+
+/// Opens the dialog of generator `plugin`: its rows at the parameters `values` holds, else at their
+/// defaults, for new generated art, or for drawing the object of `edit` again.
+fn open_generate(app: &mut VectorcraftApp, plugin: &Plugin, edit: Option<EditTarget>, values: &Map<String, Value>) -> Result<(), String> {
+    let m = plugin.manifest();
+    let look = Look { title: m.name.trim_end_matches('…').to_string(), description: m.description.clone(), previews: false, note: false, ok: None };
+    let rows = vectorcraft_plugins::generate::resolve_over(plugin, values, &Value::Null).map_err(|error| error.to_string())?;
+    let (id, params) = open_hosted(app, GENERATE_KIND, plugin.id(), m.clone(), rows, look)?;
+    app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Generate { plugin: plugin.id().to_string(), edit, params } });
+    Ok(())
+}
+
+/// `ui.editGeneratedArt {id?}`: opens the dialog of generated art object `id` (else the one
+/// selected) with the parameters it was drawn with, for the parameters its plug-in still declares.
+/// An object whose plug-in isn't installed, or whose saved fields are damaged, is an error that says
+/// so, and its art stays as it is.
+pub fn open_edit(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
+    let mut q = json!({});
+    if let Some(id) = p.get("id").filter(|v| !v.is_null()) {
+        q["id"] = id.clone();
+    }
+    let info = app.run("plugin.generatedInfo", q)?;
+    let id = info.get("id").cloned().unwrap_or(Value::Null);
+    let installed = info.get("installed") == Some(&Value::Bool(true));
+    let Some(plugin) = info.get("plugin").and_then(Value::as_str).and_then(registry::get).filter(|_| installed) else {
+        // The engine's error says which plug-in is missing or that the saved fields are damaged.
+        return app.run("plugin.editGenerated", json!({"id": id, "params": {}}));
+    };
+    let saved = info.get("params").and_then(Value::as_object).cloned().unwrap_or_default();
+    let edit = EditTarget { object: id, doc: app.session.active().map(|st| st.uid) };
+    open_generate(app, &plugin, Some(edit), &saved)?;
+    Ok(Value::Null)
+}
+
+/// Is the selection one object, a generated art object, which Edit Generated Art… edits?
+pub fn one_generated_selected(app: &VectorcraftApp) -> bool {
+    app.session.active().is_some_and(|st| match st.selection.objects.as_slice() {
+        [id] => st.doc.node(*id).is_some_and(|n| n.extras().generated.is_some()),
+        _ => false,
+    })
+}
+
+/// OK of a generator dialog: draws new generated art (`plugin.generate`), or draws the object of
+/// `edit` again (`plugin.editGenerated`), as one undo step. When another document has come to the
+/// front since Edit Generated Art… opened the dialog, it draws nothing and says so.
+fn generate_with(app: &mut VectorcraftApp, plugin: String, edit: Option<EditTarget>, values: Map<String, Value>) -> Result<Value, String> {
+    match edit {
+        Some(e) if e.doc != app.session.active().map(|st| st.uid) => Err(EDIT_DOC_GONE.into()),
+        Some(e) => app.run("plugin.editGenerated", json!({"id": e.object, "params": values})),
+        None => app.run(GENERATE, json!({"id": plugin, "params": values})),
     }
 }
 
@@ -654,8 +767,11 @@ pub fn open_export(app: &mut VectorcraftApp, plugin: &Plugin, export: Value) {
         note: false,
         ok: Some(tl!("Export")),
     };
+    let document = app.session.active().map(|st| (st.uid, st.reverts));
     match open_hosted(app, EXPORT_KIND, plugin.id(), m.clone(), m.defaults(), look) {
-        Ok((id, params)) => app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Export { plugin: plugin.id().to_string(), export, params } }),
+        Ok((id, params)) => {
+            app.plugin_dialog = Some(PluginDialog { id, kind: Opened::Export { plugin: plugin.id().to_string(), export, document, params } })
+        }
         Err(e) => app.status(e),
     }
 }
@@ -678,8 +794,17 @@ pub fn open_import(app: &mut VectorcraftApp, plugin: &Plugin, open: Value) {
     }
 }
 
-/// Writes the file with the export's parameters and the plug-in's, as `params`.
-fn export_with(app: &mut VectorcraftApp, export: Value, values: Map<String, Value>) -> Result<Value, String> {
+/// Writes the file with the export's parameters and the plug-in's, as `params`, of `document`, the
+/// drawing the dialog opened on, which is made active again first. A drawing closed or reverted
+/// since is not exported, and the status bar says why.
+fn export_with(app: &mut VectorcraftApp, export: Value, document: Option<(u64, u64)>, values: Map<String, Value>) -> Result<Value, String> {
+    if let Some((uid, reverts)) = document {
+        let closed = tl!("The drawing was closed while its export options were open");
+        let reverted = tl!("The drawing was reverted while its export options were open");
+        if !crate::file_asks::back_to(app, uid, Some(reverts), closed, reverted) {
+            return Ok(Value::Null);
+        }
+    }
     let mut p = Some(export).filter(Value::is_object).ok_or("no format to export to")?;
     p["params"] = Value::Object(values);
     let format = p.get("format").and_then(Value::as_str).map(str::to_string);
@@ -697,13 +822,23 @@ fn import_with(app: &mut VectorcraftApp, open: Value, values: Map<String, Value>
 
 /// OK of a filter dialog: a filter keeps its previewed run as one undo step; a heavy one, which has
 /// no preview, and a light one that runs in the background ([`in_background`]) with Preview off or a
-/// failed preview, start in the background ([`run`]). A preview still shown when Preview was just
-/// turned off, or one that failed, is rolled back first.
+/// failed preview, start in the background ([`run`]). On the web the filter or its command always
+/// starts in a worker. A preview still shown when Preview was just turned off, or one that failed, is
+/// rolled back first.
 fn confirm_filter(app: &mut VectorcraftApp, kind: Opened, values: Map<String, Value>) -> Result<Value, String> {
     let Opened::Filter { plugin, command: own, preview, light, previewing, refused, .. } = kind else { return Ok(Value::Null) };
     let (cmd, p) = command(&plugin, own.as_deref(), values);
     let kept = light && previewing && app.session.in_interaction() && !refused;
     match registry::get(&plugin) {
+        // On the web, with no Preview, the filter or its command always runs in a worker; a command
+        // automation confirmed runs on the page and returns its result, as `routes` runs it.
+        Some(found) if crate::plugin_runs::in_workers(app) && !(own.is_some() && app.automation_asked()) => {
+            preview.cancel(app);
+            match own {
+                None => run(app, &found, p),
+                Some(_) => crate::plugin_runs::start_command(app, &cmd, p),
+            }
+        }
         Some(found) if own.is_none() && in_background(found.manifest()) && !kept => {
             preview.cancel(app);
             run(app, &found, p)
@@ -774,7 +909,8 @@ fn pump_dialog(app: &mut VectorcraftApp, ctx: &egui::Context) {
     // The dialog is already closed, so a failure goes to the status line.
     let done = match open.kind {
         Opened::Filter { .. } => confirm_filter(app, open.kind, values),
-        Opened::Export { export, .. } => export_with(app, export, values),
+        Opened::Generate { plugin, edit, .. } => generate_with(app, plugin, edit, values),
+        Opened::Export { export, document, .. } => export_with(app, export, document, values),
         Opened::Import { open, .. } => import_with(app, open, values),
     };
     if let Err(e) = done {

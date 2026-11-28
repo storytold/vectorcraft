@@ -540,7 +540,10 @@ fn vary(rng: &mut Rng, (a, b): (f64, f64), mode: Variation, pen: PenAt) -> f64 {
 
 pub(crate) fn scatter(sc: &Scatter, bp: &BezPath, weight: f64, stroke: &StrokeLayer, name: &str) -> Vec<Node> {
     let Some(b) = sc.art.geometric_bounds() else { return vec![] };
-    let (aw, ah) = (b.width().max(1e-3), b.height().max(1e-3));
+    // Copies are spaced by the width of the art with its strokes, so at 100% spacing stroked
+    // copies touch instead of overlapping by the stroke.
+    let aw = sc.art.visual_bounds().unwrap_or(b).width().max(1e-3);
+    let ah = b.height().max(1e-3);
     let mut rng = Rng::new(seed_of(bp, name));
     let [size_mode, spacing_mode, scatter_mode, rotation_mode] = sc.modes();
     let mut out = Budget::default();
@@ -644,6 +647,253 @@ impl Budget {
 /// A tile placed on [s0, s1] of the track (stretched along, `cross` across).
 fn tile_on(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, cross: f64) -> Option<Node> {
     bend(t, &tile.0, tile.1, AlongMap::linear(tile.1.width(), s0, s1), cross)
+}
+
+/// A tile placed on [s0, s1] of the track, `k(s)` across at arc length `s` when the scale varies
+/// (`marks`: the arc lengths of the recorded pen samples in order, between which the scale runs
+/// in a straight line), else `k` at the middle of the span across all of it ([`tile_on`]), as it
+/// is too when the scale is the same at both ends of the span, at every sample within it and, at
+/// a closed track's start within it, on both sides of the start.
+fn tile_scaled(t: &Track, tile: &(Node, Rect), s0: f64, s1: f64, k: &dyn Fn(f64) -> f64, marks: Option<&[f64]>) -> Option<Node> {
+    let mid = k((s0 + s1) / 2.0);
+    // Only the samples within the span are looked at.
+    let within = |marks: &[f64]| {
+        let from = marks.partition_point(|&s| s <= s0);
+        let to = from + marks[from..].partition_point(|&s| s < s1);
+        marks[from..to].iter().all(|&s| k(s) == mid)
+    };
+    // A closed track's scale goes from the one at its end to the one at its start where it wraps
+    // round, so a span over its start (or a track's length before or after it) takes both.
+    let l = t.len();
+    let seam = t.closed && l > 0.0 && (s0 / l).ceil() <= (s1 / l).floor();
+    let ends = || !seam || (k(0.0) == mid && k(l) == mid);
+    let even = |marks: &[f64]| k(s0) == mid && k(s1) == mid && within(marks) && ends();
+    if mid <= 0.0 || marks.is_none_or(even) {
+        return tile_on(t, tile, s0, s1, mid);
+    }
+    bend_widened(t, &tile.0, tile.1, AlongMap::linear(tile.1.width(), s0, s1), mid, &|s| k(s) / mid)
+}
+
+/// The most side tiles a run of a pattern brush places.
+const MAX_TILES: usize = 20000;
+
+/// How many times a pattern brush whose scale varies measures its side tiles again where the fit
+/// puts them.
+const REFITS: usize = 3;
+
+/// How many times a pattern brush whose scale varies halves the range a start or end tile's
+/// length lies in.
+const END_SOLVE_STEPS: usize = 48;
+
+/// How many evenly spaced lengths a pattern brush whose scale varies tries for a start or end
+/// tile before it halves the range the tile's length lies in.
+const END_SCAN_STEPS: usize = 64;
+
+/// The side tiles of a pattern brush on a run `avail` long from `a` when the scale varies along
+/// it: each tile's length and the gap after it, as `natural` gives them at the tile's start, and
+/// how many tiles fit whole and what fraction of the next one fits after them. The tiles include
+/// that next one when there is room for part of it.
+fn varied_tiles(a: f64, avail: f64, natural: &dyn Fn(f64) -> (f64, f64)) -> (Vec<(f64, f64)>, f64) {
+    let mut tiles = vec![];
+    let mut pos = 0.0;
+    while tiles.len() < MAX_TILES {
+        let (w, g) = natural(a + pos);
+        if !(w > 1e-9 && w.is_finite() && g.is_finite() && g >= 0.0) {
+            break;
+        }
+        tiles.push((w, g));
+        if pos + w > avail {
+            let whole = (tiles.len() - 1) as f64;
+            return (tiles, whole + ((avail - pos + g) / (w + g)).clamp(0.0, 1.0));
+        }
+        pos += w + g;
+    }
+    let whole = tiles.len() as f64;
+    (tiles, whole)
+}
+
+/// The size factor of a pattern brush's tiles at `weight` where its scale's pen input is `p`
+/// (0 at the first scale, 1 at the second).
+fn pattern_scale_at(pb: &PatternBrush, weight: f64, p: f64) -> f64 {
+    let (light, heavy) = pb.scale_range();
+    weight * (light + (heavy - light) * p).max(1.0) / 100.0
+}
+
+/// A pattern brush's size factor on `stroke` at `weight`, and whether it varies along the stroke.
+/// A stroke with no recording of the input the scale follows is drawn at one scale, the one that
+/// input's missing value gives.
+fn pattern_scale(pb: &PatternBrush, weight: f64, stroke: &StrokeLayer) -> (f64, bool) {
+    let (light, heavy) = pb.scale_range();
+    match pb.scale_mode {
+        Some(m) if light != heavy && pen_recorded(stroke, m) => (weight * pb.scale.max(1.0) / 100.0, true),
+        Some(m) if light != heavy => (pattern_scale_at(pb, weight, PenAt::of(stroke, 0.0).control(m).unwrap_or(0.5)), false),
+        _ => (weight * pb.scale.max(1.0) / 100.0, false),
+    }
+}
+
+/// The length of a start or end tile `width` wide at its art's size, at the scale `k_mid(w)` at
+/// the middle of the tile when it is `w` long: the shortest length that is as long as the scale at
+/// its own middle. The scale can rise and fall along the stroke, so the lengths up to `room` are
+/// tried in order (evenly spaced ones, and `breaks`, the lengths whose middle falls on a recorded
+/// pen sample), and the range between the last one the tile is too long for and the first one it
+/// fits is halved. A tile that fits at no length up to `room` gets the length it needs at `room`,
+/// longer than `room`. `breaks` is `None` when the scale is the same along the whole track, and
+/// the tile then takes its length at that scale.
+fn end_tile_length(width: f64, room: f64, k_mid: &dyn Fn(f64) -> f64, breaks: Option<&[f64]>) -> f64 {
+    let length = |w: f64| width * k_mid(w);
+    let first = length(0.0);
+    let Some(breaks) = breaks.filter(|_| !room.is_nan() && room > 0.0) else {
+        return first;
+    };
+    let mut tries: Vec<f64> = (1..=END_SCAN_STEPS).map(|i| room * i as f64 / END_SCAN_STEPS as f64).collect();
+    tries.extend(breaks.iter().copied().filter(|&w| w > 0.0 && w < room));
+    tries.sort_by(f64::total_cmp);
+    let Some(i) = tries.iter().position(|&w| length(w) <= w) else {
+        return length(room);
+    };
+    let (mut short, mut long) = (if i == 0 { 0.0 } else { tries[i - 1] }, tries[i]);
+    for _ in 0..END_SOLVE_STEPS {
+        let mid = (short + long) / 2.0;
+        if length(mid) > mid {
+            short = mid;
+        } else {
+            long = mid;
+        }
+    }
+    long
+}
+
+/// Where along a track `l` long `stroke` recorded the pen input `mode` follows: each sample at its
+/// arc length, and again a track's length before and after it, for tiles of a closed track that
+/// wrap round, in order.
+fn pen_marks(stroke: &StrokeLayer, mode: Variation, l: f64) -> Vec<f64> {
+    let points = match mode {
+        Variation::Fixed | Variation::Random => None,
+        Variation::Pressure => stroke.pressure.as_ref().map(|p| &p.points),
+        Variation::Tilt => stroke.tilt.as_ref().map(|p| &p.points),
+        Variation::Bearing => stroke.bearing.as_ref().map(|p| &p.points),
+        Variation::Rotation => stroke.rotation.as_ref().map(|p| &p.points),
+        Variation::StylusWheel => stroke.wheel.as_ref().map(|p| &p.points),
+    };
+    let mut marks: Vec<f64> = points.into_iter().flatten().flat_map(|&(f, _)| [f * l - l, f * l, f * l + l]).collect();
+    marks.sort_by(f64::total_cmp);
+    marks
+}
+
+/// Whether `stroke` recorded the pen input `mode` follows.
+fn pen_recorded(stroke: &StrokeLayer, mode: Variation) -> bool {
+    match mode {
+        Variation::Fixed | Variation::Random => false,
+        Variation::Pressure => stroke.pressure.is_some(),
+        Variation::Tilt => stroke.tilt.is_some(),
+        Variation::Bearing => stroke.bearing.is_some(),
+        Variation::Rotation => stroke.rotation.is_some(),
+        Variation::StylusWheel => stroke.wheel.is_some(),
+    }
+}
+
+/// Leaves out or adds tiles at the end of `tiles` (each a length and the gap after it) once they
+/// have been measured again: with `add_space` as many as fit in `avail` with the gaps between
+/// them, at least one, otherwise the count whose lengths and gaps between them come nearest to
+/// `avail`. An added tile is
+/// `natural(s)` long at `s` from the run's start.
+fn recount(tiles: &mut Vec<(f64, f64)>, avail: f64, add_space: bool, natural: &dyn Fn(f64) -> (f64, f64)) {
+    let mut length: f64 = tiles.iter().map(|t| t.0).sum();
+    let mut gaps: f64 = tiles.split_last().map_or(0.0, |(_, before)| before.iter().map(|t| t.1).sum());
+    // How much of the run the tiles and the spacing between them take.
+    let run = |length: f64, gaps: f64| length + gaps;
+    while let [.., (_, before), (w, _)] = tiles.as_slice() {
+        let (w, before) = (*w, *before);
+        let (now, without) = (run(length, gaps), run(length - w, gaps - before));
+        let drop = if add_space { now > avail } else { (without - avail).abs() < (now - avail).abs() };
+        if !drop {
+            break;
+        }
+        tiles.pop();
+        length -= w;
+        gaps -= before;
+    }
+    while tiles.len() < MAX_TILES {
+        let last_gap = tiles.last().map_or(0.0, |t| t.1);
+        let now = run(length, gaps);
+        let (w, g) = natural(run(length, gaps + last_gap));
+        if w.is_nan() || w <= 1e-9 {
+            break;
+        }
+        let with = run(length + w, gaps + last_gap);
+        let add = if add_space { with <= avail } else { (with - avail).abs() < (now - avail).abs() };
+        if !add {
+            break;
+        }
+        tiles.push((w, g));
+        length += w;
+        gaps += last_gap;
+    }
+}
+
+/// A pattern brush's side tiles on the run `avail` long from `a` of `t` (`marks` as
+/// [`tile_scaled`] takes them), at the scale `k(s)` at
+/// arc length `s` ([`varied_tiles`]), fitted as `pb.fit` says: Stretch scales the lengths and gaps
+/// to fill the run, Add Space keeps the lengths and shares out what is left between the tiles
+/// (around a lone tile), and Approximate keeps both and centers the tiles on the run.
+fn varied_side_tiles(
+    out: &mut Budget,
+    t: &Track,
+    pb: &PatternBrush,
+    side: &(Node, Rect),
+    (a, avail): (f64, f64),
+    k: &dyn Fn(f64) -> f64,
+    marks: &[f64],
+) {
+    let tw = side.1.width();
+    // Each side tile and the gap after it as long as the scale at the tile's middle.
+    let natural = |s: f64| {
+        let w = tw * k(s + tw * k(s) / 2.0);
+        (w, w * pb.spacing.max(0.0) / 100.0)
+    };
+    let (tiles, count) = varied_tiles(a, avail, &natural);
+    let n = match pb.fit {
+        PatternFit::AddSpace => count.floor(),
+        PatternFit::Stretch | PatternFit::Approximate => count.round(),
+    }
+    .max(1.0) as usize;
+    let mut tiles = tiles[..n.min(tiles.len())].to_vec();
+    // How far the fit stretches the tiles and gaps, where the first tile starts, and the space
+    // between tiles when the fit sets it.
+    let fitted = |tiles: &[(f64, f64)]| {
+        let length: f64 = tiles.iter().map(|t| t.0).sum();
+        // The gaps between the tiles: after every tile but the last.
+        let gaps: f64 = tiles.split_last().map_or(0.0, |(_, before)| before.iter().map(|t| t.1).sum());
+        match pb.fit {
+            PatternFit::Stretch => (avail / (length + gaps), 0.0, None),
+            PatternFit::AddSpace if tiles.len() > 1 => (1.0, 0.0, Some(((avail - length) / (tiles.len() - 1) as f64).max(0.0))),
+            PatternFit::AddSpace => (1.0, (avail - tiles.first().map_or(0.0, |t| t.0)) / 2.0, None),
+            PatternFit::Approximate => (1.0, (avail - length - gaps) / 2.0, None),
+        }
+    };
+    // The fit moves the tiles from where they were measured, so each is measured again at the
+    // middle of where the fit puts it, and the fit worked out again, a few times over.
+    for _ in 0..REFITS {
+        let (stretch, lead, space) = fitted(&tiles);
+        let mut s0 = a + lead;
+        for tile in &mut tiles {
+            let placed = tile.0 * stretch;
+            let w = tw * k(s0 + placed / 2.0);
+            s0 += placed + space.unwrap_or(tile.1 * stretch);
+            *tile = (w, w * pb.spacing.max(0.0) / 100.0);
+        }
+        recount(&mut tiles, avail, pb.fit == PatternFit::AddSpace, &|s| natural(a + s));
+    }
+    let (stretch, lead, space) = fitted(&tiles);
+    let mut s0 = a + lead;
+    for &(w, g) in &tiles {
+        let w = w * stretch;
+        out.take(tile_scaled(t, side, s0, s0 + w, k, Some(marks)));
+        if out.full() {
+            break;
+        }
+        s0 += w + space.unwrap_or(g * stretch);
+    }
 }
 
 /// What a pattern brush draws at a corner: corner tile art (oriented, with its bounds), or what
@@ -800,10 +1050,15 @@ fn masked(n: Node, quad: &[Point], p: Point, towards: Vec2) -> Option<Node> {
     Some(Node::new(NodeId(0), NodeKind::Group { children: vec![Arc::new(mask), Arc::new(n)], clip: true }))
 }
 
-pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node> {
+/// A pattern brush's tiles along `bp`. With a scale that follows the pen (its pressure, tilt,
+/// bearing, rotation or wheel), the tiles are as tall as what `stroke` recorded at each point gives
+/// (half way without a recording), each tile and the gap after it as long as the scale at its
+/// middle, and each corner tile at the scale at its corner.
+pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64, stroke: &StrokeLayer) -> Vec<Node> {
     let orient = |n: &Node, frame| oriented_tile(n, frame, pb.flip_along, pb.flip_across);
     let Some(side) = orient(&pb.side, pb.side_frame) else { return vec![] };
-    let k = weight * pb.scale.max(1.0) / 100.0;
+    let scale_at = |p: f64| pattern_scale_at(pb, weight, p);
+    let (k, varies) = pattern_scale(pb, weight, stroke);
     let outer = pb.outer_corner.as_ref().and_then(|n| orient(n, pb.outer_corner_frame));
     let inner = pb.inner_corner.as_ref().and_then(|n| orient(n, pb.inner_corner_frame));
     let start = pb.start.as_ref().and_then(|n| orient(n, pb.start_frame));
@@ -822,6 +1077,17 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
         if l <= 1e-9 {
             continue;
         }
+        // The scale at arc length `s` of the track; on a closed track a point before its start or
+        // past its end wraps round as `Track::frame` places it (its end itself keeps the scale at
+        // the end), and on an open track a point past either end takes the scale at that end.
+        let ks = |s: f64| {
+            if !varies {
+                return k;
+            }
+            let at = if t.closed && !(0.0..=l).contains(&s) { s.rem_euclid(l) } else { s.clamp(0.0, l) };
+            scale_at(pb.scale_mode.and_then(|m| PenAt::of(stroke, at / l).control(m)).unwrap_or(0.5))
+        };
+        let marks = pb.scale_mode.filter(|_| varies).map(|m| pen_marks(stroke, m, l));
         let corners = t.corner_positions();
         // Corner tiles, centred on the corner and turned to the bisector. The path on each side of
         // a corner is shortened by `trims` (`None`: half the widest corner tile art).
@@ -845,17 +1111,18 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
             };
             before.min(after)
         };
-        for (ci, &(i, _)) in corners.iter().enumerate() {
+        for (ci, &(i, at)) in corners.iter().enumerate() {
             if out.full() {
                 break;
             }
+            let kc = ks(at);
             let (a, b) = t.in_out(i);
             // Turning towards the left normal puts the tile's +y side on the inside.
             let tile = if a.cross(b) > 0.0 { inner_tile.or(outer.as_ref().map(Corner::Art)) } else { outer_tile.or(inner.as_ref().map(Corner::Art)) };
             let (art, bb) = match tile {
                 Some(Corner::Art(tile)) => tile,
                 Some(Corner::Source(source)) => {
-                    let (pieces, trim) = auto_corner(&t, i, source, &side, k, room(ci));
+                    let (pieces, trim) = auto_corner(&t, i, source, &side, kc, room(ci));
                     for n in pieces {
                         out.take(Some(n));
                     }
@@ -867,8 +1134,10 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
                     continue;
                 }
             };
-            trims.push(None);
-            corner_half = corner_half.max(bb.width() * k / 2.0);
+            // With a scale that varies, each corner's tile is its own size, so the path beside it
+            // is shortened by half of that tile.
+            trims.push(varies.then_some(bb.width() * kc / 2.0));
+            corner_half = corner_half.max(bb.width() * kc / 2.0);
             // Inner and outer corner art is the corner that joins a side tile on its right to one
             // below it, so its arms point along +x and +y (as the flips leave them). The tile is
             // turned so that the line halving its arms lies on the line halving the sides at the
@@ -878,7 +1147,7 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
             let arms = Vec2::new(if pb.flip_along { -1.0 } else { 1.0 }, if pb.flip_across { -1.0 } else { 1.0 });
             let sides = b - a;
             let angle = sides.y.atan2(sides.x) - arms.y.atan2(arms.x);
-            let xf = Affine::translate(t.verts[i].to_vec2()) * Affine::rotate(angle) * Affine::scale(k) * Affine::translate(-bb.center().to_vec2());
+            let xf = Affine::translate(t.verts[i].to_vec2()) * Affine::rotate(angle) * Affine::scale(kc) * Affine::translate(-bb.center().to_vec2());
             let mut n = art.clone();
             n.transform(xf, true);
             out.take(Some(n));
@@ -911,9 +1180,11 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
                 && ri == 0
                 && let Some(st) = &start
             {
-                let w = st.1.width() * k;
+                // As long as the scale at its middle.
+                let breaks: Option<Vec<f64>> = marks.as_ref().map(|m| m.iter().map(|&m| 2.0 * (m - a)).collect());
+                let w = end_tile_length(st.1.width(), b - a, &|w| ks(a + w / 2.0), breaks.as_deref());
                 if b - a > w {
-                    out.take(tile_on(&t, st, a, a + w, k));
+                    out.take(tile_scaled(&t, st, a, a + w, &ks, marks.as_deref()));
                     a += w;
                 }
             }
@@ -921,14 +1192,19 @@ pub(crate) fn pattern(pb: &PatternBrush, bp: &BezPath, weight: f64) -> Vec<Node>
                 && ri + 1 == nruns
                 && let Some(en) = &end
             {
-                let w = en.1.width() * k;
+                let breaks: Option<Vec<f64>> = marks.as_ref().map(|m| m.iter().map(|&m| 2.0 * (b - m)).collect());
+                let w = end_tile_length(en.1.width(), b - a, &|w| ks(b - w / 2.0), breaks.as_deref());
                 if b - a > w {
-                    out.take(tile_on(&t, en, b - w, b, k));
+                    out.take(tile_scaled(&t, en, b - w, b, &ks, marks.as_deref()));
                     b -= w;
                 }
             }
             let avail = b - a;
             if avail <= 1e-6 {
+                continue;
+            }
+            if let Some(marks) = &marks {
+                varied_side_tiles(&mut out, &t, pb, &side, (a, avail), &ks, marks);
                 continue;
             }
             let unit = tw + gap;
@@ -1129,11 +1405,23 @@ mod tests {
     /// Fitting is bounded however badly the map behaves: where it gives points that are not finite
     /// the tile falls back to chords with those points left out (or to nothing), and where it never
     /// fits (a map that jumps everywhere) the halving stops at its depth and anchor count. Either
-    /// way the call comes back promptly with finite geometry.
+    /// way the call comes back with finite geometry, having called the map a bounded number of
+    /// times.
     #[test]
     fn a_map_that_misbehaves_still_returns_promptly_and_finite() {
         let b = Rect::new(0.0, -20.0, 40.0, 20.0);
         let tile = circle_tile(b);
+        // Each piece the fitting tries reads its two ends, the derivatives there and the checks
+        // between them. Fitted pieces are at most the chords, so the halving tries at most twice
+        // as many pieces plus those on the way down to the one that gives up. The chord route
+        // maps each chord point once more.
+        let NodeKind::Path { path, .. } = &tile.kind else { panic!("the tile is a path") };
+        let allowed: usize = path
+            .subpaths
+            .iter()
+            .filter_map(|sp| densified(sp, 0.25, 1.5))
+            .map(|dense| 1 + (FIT_CHECKS + 3) * (2 * dense.len() + FIT_DEPTH as usize + 1) + dense.len())
+            .sum();
         let finite = |n: &Node| match &n.kind {
             NodeKind::Path { path, .. } => {
                 path.subpaths.iter().flat_map(|s| &s.anchors).all(|a| a.p.is_finite() && a.h_in.is_finite() && a.h_out.is_finite())
@@ -1147,9 +1435,14 @@ mod tests {
             &|_| Point::new(f64::NAN, f64::NAN),
         ];
         for (i, f) in maps.iter().enumerate() {
-            let t0 = std::time::Instant::now();
-            let out = warp_node(&tile, f, 0.25, 1.5, 0.25, 1.0);
-            assert!(t0.elapsed() < std::time::Duration::from_secs(2), "map {i} took {:?}", t0.elapsed());
+            // Past the allowance the map places nothing, so a warp that keeps calling it stops.
+            let calls = std::cell::Cell::new(0usize);
+            let counted = |p: Point| {
+                calls.set(calls.get() + 1);
+                if calls.get() > allowed { Point::new(f64::NAN, f64::NAN) } else { f(p) }
+            };
+            let out = warp_node(&tile, &counted, 0.25, 1.5, 0.25, 1.0);
+            assert!(calls.get() <= allowed, "map {i} was called {} times, {allowed} allowed", calls.get());
             match (i, &out) {
                 (3, out) => assert!(out.is_none(), "a map that places nothing draws nothing"),
                 (_, Some(n)) => assert!(finite(n), "map {i} drew non-finite geometry"),

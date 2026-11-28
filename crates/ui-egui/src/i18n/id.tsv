@@ -141,7 +141,9 @@
 @msg	is a confirm's answer, whose `value` must be true or false	adalah jawaban confirm, yang `value`-nya harus true atau false
 @msg	is longer than 16 KiB	lebih panjang dari 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	adalah jawaban prompt, yang `value`-nya harus berupa string atau null
-@msg	must have `kind` alert, confirm or prompt	harus memiliki `kind` alert, confirm, atau prompt
+@msg	must have `kind` alert, confirm, prompt or window	harus memiliki `kind` alert, confirm, prompt, atau window
+@msg	is a window's answer, whose `value` must be a list of steps	adalah jawaban jendela, yang `value`-nya harus berupa daftar langkah
+@msg	has a step {i} that is not a valid click, change or close	memiliki langkah {i} yang bukan klik, perubahan, atau penutupan yang valid
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` hanya untuk proses tanpa orang yang dapat ditanya: di aplikasi, pengguna menjawab setiap dialog
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` harus berupa bilangan bulat dari 1 sampai {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` bersarang lebih dari 64 tingkat
@@ -511,6 +513,15 @@
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objek baca-saja dihilangkan: kembalikan objek itu, sebagai {{"id": …}} saja atau seperti yang diberikan
 @msg	a string	string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	goresan hanya memiliki `paint`, `width`, `join`, `cap` dan `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	potongan efek langsung yang dicat hanya memiliki `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` dan `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	goresan hanya memiliki `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` dan `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` hanya boleh true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` hanya untuk efek langsung yang menyatakan `paintOutput`, pada `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` harus berupa angka dari 0 sampai 1
+@msg	unknown blending mode; `blend` is one of {_1}	mode campuran tidak dikenal; `blend` adalah salah satu dari {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` harus berupa larik berisi paling banyak {MAX_LOOK_EFFECTS} catatan
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	satu hasil membawa paling banyak {MAX_RESULT_EFFECTS} catatan efek
+@msg	this host takes no effects here	host ini tidak menerima efek di sini
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	goresan harus berupa {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	efek harus berupa {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efek pada isian hanya mengembalikan `fills`
@@ -1186,6 +1197,9 @@
 	Fill Color	Warna isian
 	Opacity	Opasitas
 	Show Opacity	Tampilkan opasitas
+	Show Hex Field	Tampilkan bidang hex
+	Hex or CSS color	Warna hex atau CSS
+	Parse Color	Urai warna
 	Stroke Color	Warna stroke
 	Fill Gradient	Gradien isian
 	Stroke Gradient	Gradien stroke
@@ -7058,6 +7072,7 @@ mark-style	Japanese	Jepang
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` harus hue, saturation, brightness, red, green atau blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` harus none, oklch, atau hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH memerlukan sRGB sebagai ruang RGB kerja
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` harus berupa warna hex (#rgb, #rgba, #rrggbb, atau #rrggbbaa) atau warna CSS rgb(), hsl(), atau oklch() dengan paling banyak 48 karakter
 @msg	the Color Picker is not open	Pemilih Warna tidak terbuka
 @msg	the screen color sampler is already open	pengambil warna layar sudah terbuka
 @msg	this system has no screen color sampler	sistem ini tidak memiliki pengambil warna layar
@@ -8330,6 +8345,7 @@ breakText	Glyphs	Glif
 	Place Brush Art	Tempatkan karya seni kuas
 	Replace Brush Art	Ganti karya seni kuas
 	Replace Pattern Art	Ganti karya seni pola
+	Place Pattern Art	Tempatkan karya seni pola
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Stroke menggunakan kuas ini. Terapkan karya seni baru ke stroke tersebut, atau biarkan apa adanya dan tambahkan salinan kuas dengan karya seni baru?
 	Apply to Strokes	Terapkan ke Stroke
 	Leave Strokes	Biarkan Stroke
@@ -8399,6 +8415,8 @@ breakText	Glyphs	Glif
 	Tangent Circle	Lingkaran singgung
 	Tangent Circle Tool	Alat lingkaran singgung
 	No tangent circle here	Tidak ada lingkaran singgung di sini
+	Ask For Circle Radius	Tanyakan Radius Lingkaran
+	Auto-Update Default	Perbarui Default Otomatis
 	Circle:	Lingkaran:
 @msg	`ids` names an object twice	`ids` menyebut satu objek dua kali
 @msg	select two or three paths or compound paths	pilih dua atau tiga jalur atau jalur gabungan
@@ -9182,6 +9200,12 @@ file-filter	Applications	Aplikasi
 @msg	the layer effects of {n} layers weren't drawn	efek lapisan dari {n} lapisan tidak digambar
 @msg	the vector masks of 1 layer weren't applied	masker vektor dari 1 lapisan tidak diterapkan
 @msg	the vector masks of {n} layers weren't applied	masker vektor dari {n} lapisan tidak diterapkan
+@msg	`opacity` must be a number from 0 to 100	`opacity` harus berupa angka dari 0 sampai 100
+@msg	`opacity` must be true or false	`opacity` harus true atau false
+@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	karakter teks tidak memiliki opasitas sendiri: tambahkan isian atau guratan dengan Tambahkan isian baru atau Tambahkan guratan baru di panel Tampilan
+@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objek yang dipilih dalam instans simbol tidak memiliki opasitas isian atau guratan sendiri
+@msg	no target has that fill or stroke to take the opacity	tidak ada target yang memiliki isian atau guratan itu untuk menerima opasitas
+@msg	give color, none, swatch, gradient or opacity	berikan color, none, swatch, gradient, atau opacity
 @msg	the knockout of 1 layer wasn't applied	knockout dari 1 lapisan tidak diterapkan
 @msg	the knockout of {n} layers wasn't applied	knockout dari {n} lapisan tidak diterapkan
 @msg	1 layer was left out (hidden layers and the layers clipped to them)	1 lapisan tidak disertakan (lapisan tersembunyi dan lapisan yang dikliping padanya)

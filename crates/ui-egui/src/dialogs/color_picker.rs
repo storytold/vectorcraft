@@ -3,7 +3,8 @@
 //! as one undo step through `paint.setFill` / `paint.setStroke` and makes the colour the Color
 //! Guide's base colour; Cancel puts the art back. Opened for an artboard (Properties › Artboards ›
 //! Fill), it shows the colour on the artboard's paper and OK keeps it through
-//! `artboard.setProps {index, color}`. Preview and OK require the opening document to be active.
+//! `artboard.setProps {index, color}`. For the fill, the stroke and an artboard, preview and OK
+//! require the opening document to be active and not reverted since the picker opened.
 //!
 //! A command dialog's colour row raises a `ColorRequest`; [`pump`] opens a picker over that dialog
 //! and answers the row with its OK. Every picker has the Color Swatches view; one over Recolor
@@ -38,20 +39,33 @@ use crate::{VectorcraftApp, screen_color};
 /// What a picker's OK writes.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Target {
-    /// The fill proxy.
-    Fill,
-    /// The stroke proxy.
-    Stroke,
+    /// The fill proxy of the document it opened in (`None` with no document open).
+    Fill { document: Option<u64>, reverts: u64 },
+    /// The stroke proxy of the document it opened in (`None` with no document open).
+    Stroke { document: Option<u64>, reverts: u64 },
     /// The background colour of this artboard.
-    Artboard { document: u64, index: usize },
+    Artboard { document: u64, reverts: u64, index: usize },
     /// A colour row `key` of the open dialog `parent`.
     Answer { parent: DialogId, key: String },
 }
 
 impl Target {
     fn in_active_document(&self, app: &VectorcraftApp) -> bool {
-        let Self::Artboard { document, .. } = self else { return true };
-        app.session.active().is_some_and(|st| st.uid == *document)
+        self.document_problem(app).is_none()
+    }
+
+    fn document_problem(&self, app: &VectorcraftApp) -> Option<&'static str> {
+        let (document, reverts) = match self {
+            Self::Fill { document, reverts } | Self::Stroke { document, reverts } => (*document, *reverts),
+            Self::Artboard { document, reverts, .. } => (Some(*document), *reverts),
+            Self::Answer { .. } => return None,
+        };
+        match (app.session.active(), document) {
+            (None, None) => None,
+            (Some(st), Some(document)) if st.uid == document && st.reverts == reverts => None,
+            (Some(st), Some(document)) if st.uid == document => Some(tl!("The document was reverted. Reopen this dialog to continue.")),
+            _ => Some(tl!("The active document changed while the Color Picker was open")),
+        }
     }
 }
 
@@ -160,14 +174,14 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             let found = index.and_then(|i| {
                 let st = app.session.active()?;
                 let color = st.doc.artboards.get(i)?.color.unwrap_or(Color::WHITE);
-                Some((st.uid, i, color))
+                Some((st.uid, st.reverts, i, color))
             });
             Some(found.ok_or("no such artboard")?)
         }
     };
     let color = match (p.get("color"), artboard) {
         (Some(v), _) => color_value(v).ok_or_else(|| format!("bad color {v}"))?,
-        (None, Some((_, _, c))) => c,
+        (None, Some((_, _, _, c))) => c,
         (None, None) => proxy_color(app, stroke),
     };
     let dialogs = app.dialogs().ok_or("no window")?;
@@ -195,20 +209,22 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
         dialog = dialog.kept(model_values(&color));
     }
     // The host replaces a picker only for the same document and artboard.
-    if let Some((document, index, _)) = artboard {
+    if let Some((document, _, index, _)) = artboard {
         dialog = dialog.instance((document, index));
     }
     let id = dialogs.with(|h| h.open(dialog));
     // A picker the open replaced leaves its preview behind: end it.
-    let before = app.color_dialogs.pickers.len();
-    app.color_dialogs.pickers.retain(|o| o.id != id);
-    if app.color_dialogs.pickers.len() != before {
-        let _ = app.session.cancel_interaction();
+    if let Some(at) = app.color_dialogs.pickers.iter().position(|open| open.id == id) {
+        let retired = app.color_dialogs.pickers.remove(at);
+        if retired.target.in_active_document(app) {
+            let _ = app.session.cancel_interaction();
+        }
     }
+    let (document, reverts) = app.session.active().map_or((None, 0), |st| (Some(st.uid), st.reverts));
     let target = match artboard {
-        Some((document, index, _)) => Target::Artboard { document, index },
-        None if stroke => Target::Stroke,
-        None => Target::Fill,
+        Some((document, reverts, index, _)) => Target::Artboard { document, reverts, index },
+        None if stroke => Target::Stroke { document, reverts },
+        None => Target::Fill { document, reverts },
     };
     // OK with the artboard's color (or the white that stands in for none) unchanged keeps the artboard as it is.
     let keep = artboard.is_some() && p.get("color").is_none();
@@ -284,10 +300,10 @@ fn finish(
     open: &mut Open,
     result: Option<DialogResult<craft::color_ui::ui::ColorPickerResult>>,
 ) {
-    // Switching documents rolls back the source preview. Do not settle it against the new drawing.
-    if !open.target.in_active_document(app) {
+    // Switching or restoring a drawing ends the preview belonging to its old contents.
+    if let Some(reason) = open.target.document_problem(app) {
         if matches!(result, Some(DialogResult::Ok(_))) {
-            app.status("The active document changed while the Color Picker was open");
+            app.status(reason);
         }
         return;
     }
@@ -311,8 +327,8 @@ fn finish(
 fn paint_command(target: &Target, c: Color) -> (&'static str, Value) {
     match target {
         Target::Artboard { index, .. } => ("artboard.setProps", json!({ "index": index, "color": color_json(&c) })),
-        Target::Stroke => ("paint.setStroke", json!({ "color": color_json(&c) })),
-        Target::Fill | Target::Answer { .. } => ("paint.setFill", json!({ "color": color_json(&c) })),
+        Target::Stroke { .. } => ("paint.setStroke", json!({ "color": color_json(&c) })),
+        Target::Fill { .. } | Target::Answer { .. } => ("paint.setFill", json!({ "color": color_json(&c) })),
     }
 }
 
@@ -343,7 +359,7 @@ fn preview(app: &mut VectorcraftApp, open: &mut Open, picked: &PickedColor) {
     }
     let label = match open.target {
         Target::Artboard { .. } => "Artboard Options",
-        Target::Stroke => "Stroke Color",
+        Target::Stroke { .. } => "Stroke Color",
         _ => "Fill Color",
     };
     open.preview.run(app, true, label, cmd, &params);

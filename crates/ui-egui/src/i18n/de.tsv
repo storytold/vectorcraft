@@ -2606,6 +2606,9 @@ file-filter	Templates	Vorlagen
 	Only Web Colors	Nur Webfarben
 	Opacity	Deckkraft
 	Show Opacity	Deckkraft einblenden
+	Show Hex Field	Hex-Feld einblenden
+	Hex or CSS color	Hex- oder CSS-Farbe
+	Parse Color	Farbe auswerten
 	Opacity & Mask Define Knockout Shape	Deckkraft und Maske definieren Aussparungsform
 	Opacity Mask	Deckkraftmaske
 	Opacity Mask Info	Informationen zur Deckkraftmaske
@@ -5156,6 +5159,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` muss hue, saturation, brightness, red, green oder blue sein
 @msg	`sliders` must be none, oklch or hsl	`sliders` muss none, oklch oder hsl sein
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH erfordert sRGB als RGB-Arbeitsfarbraum
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` muss eine Hex-Farbe (#rgb, #rgba, #rrggbb oder #rrggbbaa) oder eine CSS-Farbe rgb(), hsl() oder oklch() mit höchstens 48 Zeichen sein
 @msg	`{k}` must be [x, y]	`{k}` muss [x, y] sein
 @msg	`{name}` has no options	`{name}` hat keine Optionen
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` ist ein integrierter Arbeitsbereich; wählen Sie einen anderen Namen
@@ -7022,6 +7026,15 @@ axis	Y Axis	Y-Achse
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {{"id": …}} allein oder so, wie es übergeben wurde
 @msg	a string	eine Zeichenkette
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	eine Kontur hat nur `paint`, `width`, `join`, `cap` und `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` und `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	eine Kontur hat nur `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` und `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` darf nur true sein
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` gilt nur für einen Live-Effekt, der `paintOutput` angibt, mit `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` muss eine Zahl von 0 bis 1 sein
+@msg	unknown blending mode; `blend` is one of {_1}	unbekannter Mischmodus; `blend` ist einer von {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` muss eine Liste von höchstens {MAX_LOOK_EFFECTS} Einträgen sein
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	ein Ergebnis enthält höchstens {MAX_RESULT_EFFECTS} Effekteinträge
+@msg	this host takes no effects here	dieser Host nimmt hier keine Effekte an
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	eine Kontur muss {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} sein
 @msg	an effect must be {{"id", "params"?, "visible"?}}	ein Effekt muss {{"id", "params"?, "visible"?}} sein
 @msg	an effect on a fill returns only `fills`	ein Effekt auf einer Fläche gibt nur `fills` zurück
@@ -8119,6 +8132,7 @@ breakText	Glyphs	Glyphen
 	Place Brush Art	Pinselgrafik platzieren
 	Replace Brush Art	Pinselgrafik ersetzen
 	Replace Pattern Art	Mustergrafik ersetzen
+	Place Pattern Art	Mustergrafik platzieren
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturen verwenden diesen Pinsel. Die neue Grafik auf diese Konturen anwenden oder sie unverändert lassen und eine Kopie des Pinsels mit der neuen Grafik hinzufügen?
 	Apply to Strokes	Auf Konturen anwenden
 	Leave Strokes	Konturen beibehalten
@@ -8188,6 +8202,8 @@ breakText	Glyphs	Glyphen
 	Tangent Circle	Tangentialkreis
 	Tangent Circle Tool	Tangentialkreis-Werkzeug
 	No tangent circle here	Hier kein Tangentialkreis
+	Ask For Circle Radius	Nach Kreisradius fragen
+	Auto-Update Default	Standardwert automatisch aktualisieren
 	Circle:	Kreis:
 @msg	`ids` names an object twice	`ids` nennt ein Objekt zweimal
 @msg	select two or three paths or compound paths	wählen Sie zwei oder drei Pfade oder zusammengesetzte Pfade aus
@@ -8743,7 +8759,9 @@ breakText	Glyphs	Glyphen
 @msg	missing `picks`	`picks` fehlt
 @msg	missing `word`	`word` fehlt
 @msg	must be an object with `kind` and `value`	muss ein Objekt mit `kind` und `value` sein
-@msg	must have `kind` alert, confirm or prompt	muss `kind` alert, confirm oder prompt haben
+@msg	must have `kind` alert, confirm, prompt or window	muss `kind` alert, confirm, prompt oder window haben
+@msg	is a window's answer, whose `value` must be a list of steps	ist die Antwort auf ein Fenster, deren `value` eine Liste von Schritten sein muss
+@msg	has a step {i} that is not a valid click, change or close	hat einen Schritt {i}, der kein gültiger Klick, keine gültige Änderung und kein gültiges Schließen ist
 @msg	must have exactly `kind` and `value`	muss genau `kind` und `value` haben
 @msg	needs a closing quote after the name	braucht ein schließendes Anführungszeichen nach dem Namen
 @msg	needs a name	braucht einen Namen

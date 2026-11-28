@@ -2161,6 +2161,9 @@ font-technology	Variable	Μεταβλητές
 	Only Web Colors	Μόνο χρώματα ιστού
 	Opacity	Αδιαφάνεια
 	Show Opacity	Εμφάνιση αδιαφάνειας
+	Show Hex Field	Εμφάνιση πεδίου Hex
+	Hex or CSS color	Χρώμα Hex ή CSS
+	Parse Color	Ανάλυση χρώματος
 	Opacity Mask	Μάσκα αδιαφάνειας
 	Opacity:	Αδιαφάνεια:
 	Open	Άνοιγμα
@@ -2815,7 +2818,9 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	is a confirm's answer, whose `value` must be true or false	είναι απάντηση σε confirm, οπότε το `value` πρέπει να είναι true ή false
 @msg	is longer than 16 KiB	είναι μεγαλύτερο από 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	είναι απάντηση σε prompt, οπότε το `value` πρέπει να είναι συμβολοσειρά ή null
-@msg	must have `kind` alert, confirm or prompt	πρέπει να έχει `kind` alert, confirm ή prompt
+@msg	must have `kind` alert, confirm, prompt or window	πρέπει να έχει `kind` alert, confirm, prompt ή window
+@msg	is a window's answer, whose `value` must be a list of steps	είναι απάντηση παραθύρου, της οποίας το `value` πρέπει να είναι λίστα βημάτων
+@msg	has a step {i} that is not a valid click, change or close	έχει ένα βήμα {i} που δεν είναι έγκυρο κλικ, αλλαγή ή κλείσιμο
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	το `answers` είναι μόνο για εκτέλεση χωρίς κανέναν να ερωτηθεί: στην εφαρμογή, το άτομο απαντά σε κάθε παράθυρο διαλόγου
 @msg	`maxFuel` must be a whole number from 1 to {_1}	το `maxFuel` πρέπει να είναι ακέραιος από 1 έως {_1}
 @msg	`args{place}` is nested more than 64 levels deep	το `args{place}` έχει ένθεση μεγαλύτερη των 64 επιπέδων
@@ -7084,6 +7089,7 @@ effect	Points	Σημεία
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	το `channel` πρέπει να είναι hue, saturation, brightness, red, green ή blue
 @msg	`sliders` must be none, oklch or hsl	Το `sliders` πρέπει να είναι none, oklch ή hsl
 @msg	OKLCH needs sRGB as the working RGB space	Το OKLCH απαιτεί sRGB ως χώρο εργασίας RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	Το `text` πρέπει να είναι χρώμα Hex (#rgb, #rgba, #rrggbb ή #rrggbbaa) ή χρώμα CSS rgb(), hsl() ή oklch() με έως 48 χαρακτήρες
 @msg	`{key}` must be an array of these names: {_1}	το `{key}` πρέπει να είναι πίνακας με αυτά τα ονόματα: {_1}
 @msg	choose a destination folder	επιλέξτε φάκελο προορισμού
 @msg	choose a source folder	επιλέξτε φάκελο προέλευσης
@@ -7431,6 +7437,15 @@ axis	Y Axis	Άξονας Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	παραλείφθηκε ένα αντικείμενο μόνο για ανάγνωση: επιστρέψτε το ως {{"id": …}} μόνο ή όπως δόθηκε
 @msg	a string	συμβολοσειρά
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap` και `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ένα κομμάτι ζωντανού εφέ βαφής έχει μόνο `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` και `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	ένα περίγραμμα έχει μόνο `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` και `effects`
+@msg	`appearanceOutput` may only be true	Το `appearanceOutput` μπορεί να είναι μόνο true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	το `appearanceOutput` ισχύει μόνο για ζωντανό εφέ που δηλώνει `paintOutput`, με `api` 3
+@msg	`opacity` must be a number from 0 to 1	το `opacity` πρέπει να είναι αριθμός από 0 έως 1
+@msg	unknown blending mode; `blend` is one of {_1}	άγνωστη λειτουργία ανάμειξης· το `blend` είναι ένα από τα {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	το `effects` πρέπει να είναι πίνακας με το πολύ {MAX_LOOK_EFFECTS} εγγραφές
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	ένα αποτέλεσμα φέρει το πολύ {MAX_RESULT_EFFECTS} εγγραφές εφέ
+@msg	this host takes no effects here	αυτό το κεντρικό σύστημα δεν δέχεται εφέ εδώ
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	ένα περίγραμμα πρέπει να είναι {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	ένα εφέ πρέπει να είναι {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ένα εφέ σε γέμισμα επιστρέφει μόνο `fills`
@@ -8487,6 +8502,7 @@ breakText	Glyphs	Γλύφοι
 	Place Brush Art	Τοποθέτηση σχεδίου πινέλου
 	Replace Brush Art	Αντικατάσταση σχεδίου πινέλου
 	Replace Pattern Art	Αντικατάσταση σχεδίου μοτίβου
+	Place Pattern Art	Τοποθέτηση σχεδίου μοτίβου
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Περιγράμματα χρησιμοποιούν αυτό το πινέλο. Να εφαρμοστεί το νέο σχέδιο σε αυτά τα περιγράμματα ή να μείνουν ως έχουν και να προστεθεί αντίγραφο του πινέλου με το νέο σχέδιο;
 	Apply to Strokes	Εφαρμογή στα περιγράμματα
 	Leave Strokes	Διατήρηση περιγραμμάτων
@@ -8556,6 +8572,8 @@ breakText	Glyphs	Γλύφοι
 	Tangent Circle	Εφαπτόμενος κύκλος
 	Tangent Circle Tool	Εφαπτόμενος κύκλος (Tangent Circle Tool)
 	No tangent circle here	Δεν υπάρχει εφαπτόμενος κύκλος εδώ
+	Ask For Circle Radius	Ερώτηση για την ακτίνα του κύκλου
+	Auto-Update Default	Αυτόματη ενημέρωση προεπιλογής
 	Circle:	Κύκλος:
 @msg	`ids` names an object twice	το `ids` αναφέρει ένα αντικείμενο δύο φορές
 @msg	select two or three paths or compound paths	επιλέξτε δύο ή τρεις διαδρομές ή σύνθετες διαδρομές

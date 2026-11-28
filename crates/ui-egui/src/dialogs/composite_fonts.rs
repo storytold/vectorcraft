@@ -57,7 +57,7 @@ use egui::{Context, Ui};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::{COMPOSITE_BASELINE, COMPOSITE_SCALE, COMPOSITE_SIZE, CUSTOM_CHARS_MAX, CUSTOM_SETS_MAX};
 use vectorcraft_doc::{CharClass, CompositeFont, CompositePart, CustomCharSet};
-use vectorcraft_engine::cmd::compositefonts::{EXTS, file_bytes};
+use vectorcraft_engine::cmd::compositefonts::{EXTS, MAX_FILE_BYTES, file_bytes};
 use vectorcraft_text::FontDb;
 
 use crate::VectorcraftApp;
@@ -137,7 +137,7 @@ enum PartEdit {
 /// [`COMMAND`] and answers whether the dialog may close.
 pub struct CompositeFontsDialog {
     /// The document whose fonts the draft edits.
-    document: u64,
+    document: (u64, u64),
     fonts: Vec<CompositeFont>,
     /// The index of the font picked.
     selected: usize,
@@ -149,7 +149,8 @@ pub struct CompositeFontsDialog {
     entry_mode: EntryMode,
     /// The index of the character picked in the set picked.
     picked_char: Option<usize>,
-    /// Show Sample's fields ([`sample::defaults`]).
+    /// Show Sample's fields ([`sample::defaults`]). Zoom previews menu choices and restores its opening
+    /// percentage on cancellation; a later automation edit takes precedence over that older gesture.
     sample: Map<String, Value>,
     /// The view settings of the Composite Font row's picker and of the Character Set row's.
     pickers: (PresetState<String>, PresetState<String>),
@@ -172,7 +173,7 @@ pub struct CompositeFontsDialog {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let document = app.session.active().ok_or("no document open")?;
     let dialogs = app.dialogs().ok_or("no window to show the dialog in")?;
-    let dialog = CompositeFontsDialog::new(document.uid, document.doc.composite_fonts.to_vec(), crate::font_menu::hold(app));
+    let dialog = CompositeFontsDialog::new((document.uid, document.reverts), document.doc.composite_fonts.to_vec(), crate::font_menu::hold(app));
     dialogs.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
@@ -244,7 +245,7 @@ fn part_mut(f: &mut CompositeFont, at: usize) -> Option<&mut CompositePart> {
 
 impl CompositeFontsDialog {
     /// The dialog over `fonts`, the first picked.
-    fn new(document: u64, fonts: Vec<CompositeFont>, hold: PickerHold) -> Self {
+    fn new(document: (u64, u64), fonts: Vec<CompositeFont>, hold: PickerHold) -> Self {
         let mut sample = Map::new();
         sample::defaults(&mut sample);
         CompositeFontsDialog {
@@ -862,11 +863,11 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &Context) {
     }) else {
         return;
     };
-    if let Some((document, fonts)) = held {
-        let answer = if app.session.active().is_some_and(|active| active.uid == document) {
-            app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from)
-        } else {
-            Err(Label::from(tl!("Composite Fonts can only change the document where it was opened.").to_owned()))
+    if let Some(((document, reverts), fonts)) = held {
+        let answer = match app.session.active().filter(|active| active.uid == document) {
+            Some(active) if active.reverts == reverts => app.run(COMMAND, json!({ "fonts": fonts })).map(|_| ()).map_err(Label::from),
+            Some(_) => Err(Label::from(tl!("The document was reverted. Reopen this dialog to continue."))),
+            None => Err(Label::from(tl!("Composite Fonts can only change the document where it was opened."))),
         };
         with_dialog(app, |d| d.held.answer(answer));
     }
@@ -899,6 +900,12 @@ fn ask_file(app: &mut VectorcraftApp, request: PresetFileRequest, owner: Arc<()>
 
 /// Reads the fonts of the file picked and gives them to the dialog (Load… or Replace…).
 fn load_file(app: &mut VectorcraftApp, request: &PresetFileRequest, replace: bool, picked: &Picked) -> Result<Value, String> {
+    // Refuse the browser's raw file before open_params allocates its base64 representation.
+    if let Picked::Contents(files) = picked
+        && files.first().is_some_and(|(_, bytes)| bytes.len() > MAX_FILE_BYTES)
+    {
+        return Err(vectorcraft_engine::EngineError::BadParams { cmd: IMPORT.into(), msg: "the file is larger than 4 MB".into() }.to_string());
+    }
     let Some(mut params) = open_params(picked) else { return Ok(Value::Null) };
     let browser_name = params.remove("name");
     let name = picked

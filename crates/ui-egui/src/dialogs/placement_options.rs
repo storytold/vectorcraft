@@ -16,6 +16,7 @@ use crate::VectorcraftApp;
 use crate::dialogs::tool_options::reference_param;
 
 const KEY: &str = "placementOptions";
+const OPENING: &str = "__opening";
 const CMD: &str = "links.placementOptions";
 /// (value, label) of each Preserve choice.
 const PRESERVE: [(&str, &str); 5] = [
@@ -33,7 +34,7 @@ const CENTRE: usize = 4;
 const FREE: [&str; 4] = ["transforms", "fileDimensions", "fit", "fill"];
 
 fn params() -> Vec<Param> {
-    let options = PRESERVE.iter().map(|(value, label)| ((*value).to_owned(), Label::from(*label))).collect();
+    let options = PRESERVE.iter().map(|(value, label)| ((*value).to_owned(), Label::from(tl!(label).to_owned()))).collect();
     vec![
         Param::new("preserve", tl!("Preserve:"), ParamKind::choice(options, Some("transforms".into()))),
         reference_param("align", tl!("Alignment:")).enabled_when_in("preserve", FREE),
@@ -43,16 +44,18 @@ fn params() -> Vec<Param> {
 
 /// Open the dialog on the placement options of images `ids` (default: the selected ones).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    let source_document = app.session.active().map(|document| document.uid);
+    let active = app.session.active().ok_or("no document open")?;
+    let source = (active.uid, active.reverts);
     let ids = p.get("ids").cloned().unwrap_or(Value::Null);
     let r = app.session.execute(CMD, &json!({ "ids": ids })).map_err(|e| e.to_string())?;
     let placement = &r["placement"];
     let align = ALIGN.iter().position(|a| Some(*a) == placement["align"].as_str()).unwrap_or(CENTRE);
-    let fields = DialogFields::from_pairs([
+    let mut fields = DialogFields::from_pairs([
         ("preserve", FieldValue::Text(placement["preserve"].as_str().unwrap_or("transforms").to_owned())),
         ("align", FieldValue::Int(align as i64)),
         ("clip", FieldValue::Bool(placement["clip"].as_bool().unwrap_or(false))),
     ]);
+    fields.set(OPENING, FieldValue::Json(json!({"uid": source.0, "reverts": source.1, "ids": ids})));
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let dialog = HostedParamDialog::new(&ctx, KEY, fields, |fields| {
         ParamDialog::new(KEY, tl!("Placement Options"), params())
@@ -60,13 +63,17 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
             .footer_note(tl!("Applies when the linked file is relinked or updated."))
     })
     .held_ok();
-    crate::dialogs::host::open_held(app, dialog, move |app, result: &ParamResult| {
-        if app.session.active().map(|document| document.uid) != source_document {
-            return Err(tl!("Placement Options can only change the document where it was opened.").to_owned());
-        }
+    crate::dialogs::host::open_held(app, dialog, |app, result: &ParamResult| {
         let f = &result.fields;
+        let Some(FieldValue::Json(opening)) = f.get(OPENING) else { return Err("the Placement Options target is missing".into()) };
+        let Some(active) = app.session.active().filter(|document| Some(document.uid) == opening["uid"].as_u64()) else {
+            return Err(tl!("Placement Options can only change the document where it was opened.").to_owned());
+        };
+        if Some(active.reverts) != opening["reverts"].as_u64() {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
+        }
         let align = f.int("align").and_then(|i| usize::try_from(i).ok()).and_then(|i| ALIGN.get(i).copied()).unwrap_or(ALIGN[CENTRE]);
-        let params = json!({ "ids": ids, "preserve": f.text("preserve"), "align": align, "clip": f.bool("clip").unwrap_or(false) });
+        let params = json!({ "ids": opening["ids"], "preserve": f.text("preserve"), "align": align, "clip": f.bool("clip").unwrap_or(false) });
         app.run(CMD, params).map(|_| ())
     })
     .ok_or("no window")?;
@@ -124,5 +131,41 @@ mod tests {
         let (placement, steps) = settings(&mut app);
         assert_eq!(placement["preserve"], json!("fit"));
         assert_eq!(steps, starting.1 + 1);
+    }
+
+    #[test]
+    fn held_placement_options_do_not_edit_a_link_restored_by_file_revert() {
+        let dir = vectorcraft_testkit::TempDir::new("placement-options-revert");
+        let path = dir.join("linked.png");
+        let image = Image::from_raw(2, 2, ChannelLayout::Rgba, SampleType::U8, vec![255; 16]).unwrap();
+        std::fs::write(&path, craft_image_codecs::encode(&image, Format::Png, &EncodeOptions::default()).unwrap()).unwrap();
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let link = app.run("file.place", json!({"path": path, "at": [100, 100], "link": true})).unwrap()["ids"][0].as_u64().unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let placement = |app: &mut VectorcraftApp| app.run(CMD, json!({"ids": [link]})).unwrap()["placement"].clone();
+        let original = placement(&mut app);
+        app.run(CMD, json!({"ids": [link], "preserve": "fill"})).unwrap();
+        open(&mut app, &json!({"ids": [link]})).unwrap();
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialog = dialog_id(KEY);
+        let host = app.dialogs().unwrap();
+        host.with(|h| {
+            h.set_json_field(&ctx, dialog, "preserve", json!("fit")).unwrap();
+            assert!(!h.confirm_by_id(&ctx, dialog));
+        });
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        crate::dialogs::host::pump(&mut app, &ctx);
+        assert_eq!(placement(&mut app), original);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(host.with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+
+        host.with(|h| h.cancel_by_id(&ctx, dialog));
+        open(&mut app, &json!({"ids": [link]})).unwrap();
+        crate::tests::picks::answer_dialog(&mut app, dialog, &[("preserve", json!("fit"))], true);
+        assert_eq!(placement(&mut app)["preserve"], "fit");
     }
 }

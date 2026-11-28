@@ -2157,6 +2157,9 @@ antiAlias	Sharp	Nítido
 	Only Web Colors	Apenas Cores da Web
 	Opacity	Opacidade
 	Show Opacity	Mostrar Opacidade
+	Show Hex Field	Mostrar Campo Hex
+	Hex or CSS color	Cor hex ou CSS
+	Parse Color	Interpretar Cor
 	Opacity & Mask Define Knockout Shape	Opacidade e Máscara Definem Forma de Isolamento
 	Opacity Mask	Máscara de Opacidade
 	Opacity Mask Info	Informações da Máscara de Opacidade
@@ -7030,6 +7033,7 @@ mark-style	Japanese	Japonesas
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve ser hue, saturation, brightness, red, green ou blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` deve ser none, oklch ou hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH requer sRGB como espaço de trabalho RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` deve ser uma cor hex (#rgb, #rgba, #rrggbb ou #rrggbbaa) ou uma cor CSS rgb(), hsl() ou oklch() de no máximo 48 caracteres
 @msg	the image can't be read as a texture	a imagem não pode ser lida como textura
 
 # User Interface › Accent Color
@@ -7340,6 +7344,15 @@ axis	Y Axis	Eixo Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {{"id": …}} sozinho ou como foi recebido
 @msg	a string	uma string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	um traçado tem apenas `paint`, `width`, `join`, `cap` e `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` e `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	um traçado tem apenas `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` e `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` só pode ser true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` é só para um efeito dinâmico que declara `paintOutput`, com `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` deve ser um número de 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	modo de mesclagem desconhecido; `blend` é um de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` deve ser uma lista de no máximo {MAX_LOOK_EFFECTS} registros
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	um resultado leva no máximo {MAX_RESULT_EFFECTS} registros de efeito
+@msg	this host takes no effects here	este host não aceita efeitos aqui
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	um traçado deve ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	um efeito deve ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	um efeito em um preenchimento retorna apenas `fills`
@@ -8515,6 +8528,7 @@ breakText	Glyphs	Glifos
 	Place Brush Art	Colocar Arte do Pincel
 	Replace Brush Art	Substituir Arte do Pincel
 	Replace Pattern Art	Substituir Arte do Padrão
+	Place Pattern Art	Colocar Arte do Padrão
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Traçados usam este pincel. Aplicar a nova arte a esses traçados, ou deixá-los como estão e adicionar uma cópia do pincel com a nova arte?
 	Apply to Strokes	Aplicar aos Traçados
 	Leave Strokes	Manter Traçados
@@ -8584,6 +8598,8 @@ breakText	Glyphs	Glifos
 	Tangent Circle	Círculo tangente
 	Tangent Circle Tool	Ferramenta Círculo tangente
 	No tangent circle here	Nenhum círculo tangente aqui
+	Ask For Circle Radius	Perguntar o Raio do Círculo
+	Auto-Update Default	Atualizar o Padrão Automaticamente
 	Circle:	Círculo:
 @msg	`ids` names an object twice	`ids` indica um objeto duas vezes
 @msg	select two or three paths or compound paths	selecione dois ou três caminhos ou caminhos compostos
@@ -10049,7 +10065,9 @@ swatch	Yellow Green	Verde-amarelado
 @msg	more than {MAX_IMPORT} presets	mais de {MAX_IMPORT} predefinições
 @msg	moved must be [[x,y]…]	moved deve ser [[x,y]…]
 @msg	must be an object with `kind` and `value`	deve ser um objeto com `kind` e `value`
-@msg	must have `kind` alert, confirm or prompt	deve ter `kind` alert, confirm ou prompt
+@msg	must have `kind` alert, confirm, prompt or window	deve ter `kind` alert, confirm, prompt ou window
+@msg	is a window's answer, whose `value` must be a list of steps	é a resposta de uma janela, cujo `value` deve ser uma lista de etapas
+@msg	has a step {i} that is not a valid click, change or close	tem uma etapa {i} que não é um clique, uma alteração nem um fechamento válido
 @msg	must have exactly `kind` and `value`	deve ter exatamente `kind` e `value`
 @msg	name (a toolbar's name) is required	name (o nome de uma barra de ferramentas) é obrigatório
 @msg	name (a toolbar's name) must be a string	name (o nome de uma barra de ferramentas) deve ser uma string

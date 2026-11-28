@@ -250,6 +250,54 @@ pub enum Expr {
         arg: Option<ExprId>,
         delegate: bool,
     },
+    /// A class expression.
+    Class(Box<ClassDef>),
+    /// `super(arguments)` in a derived class's constructor.
+    SuperCall(Vec<ExprId>),
+    /// `super.property` in a class's methods and constructor.
+    SuperMember(Name),
+    /// `super[index]`.
+    SuperIndex(ExprId),
+    /// `new.target`.
+    NewTarget,
+}
+
+/// A class declaration or expression (ECMA-262 2015 section 14.5).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClassDef {
+    pub name: Option<Name>,
+    /// The expression after `extends`.
+    pub heritage: Option<ExprId>,
+    /// The constructor as written, or the default one a class without one gets. Its span is the
+    /// class's.
+    pub constructor: FunctionId,
+    /// The methods and accessors other than the constructor, in source order.
+    pub elements: Vec<ClassElement>,
+    pub span: Span,
+}
+
+/// A method or accessor in a class body.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClassElement {
+    pub key: ClassKey,
+    /// Defined on the constructor (`static`) rather than on its `prototype`.
+    pub is_static: bool,
+    pub kind: MethodKind,
+    pub function: FunctionId,
+}
+
+/// A class element's name: written out, or computed (`[expression]`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum ClassKey {
+    Fixed(PropertyKey),
+    Computed(ExprId),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MethodKind {
+    Method,
+    Get,
+    Set,
 }
 
 /// A piece of a template literal's text between its substitutions.
@@ -359,6 +407,8 @@ pub enum Stmt {
     /// `let` or `const` declarations (a `const` always has an initializer).
     Lexical(LexKind, Vec<VarDecl>),
     FunctionDecl(FunctionId),
+    /// A class declaration, its name a `let`-like binding of the scope it stands in.
+    Class(Box<ClassDef>),
     Expr(ExprId),
     Block(Vec<StmtId>),
     Empty,
@@ -428,8 +478,12 @@ pub enum FunctionKind {
     Setter,
     /// An arrow function; one with an expression body has a body of one `return` statement.
     Arrow,
-    /// A method in an object literal.
+    /// A method in a class body or an object literal.
     Method,
+    /// The constructor of a class without `extends`.
+    ClassConstructor,
+    /// The constructor of a class with `extends`.
+    DerivedConstructor,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -449,9 +503,17 @@ pub struct Function {
     /// A generator function (`function*`, or `*name() {…}` in an object literal).
     pub generator: bool,
     pub span: Span,
+    /// The function is defined in a class body (a method, an accessor or the constructor): it has
+    /// a home object for `super.property`.
+    pub home: bool,
 }
 
 impl Function {
+    /// The function is a class constructor.
+    pub fn is_class_constructor(&self) -> bool {
+        matches!(self.kind, FunctionKind::ClassConstructor | FunctionKind::DerivedConstructor)
+    }
+
     /// The parameters are plain names: no pattern, no default value and no rest parameter.
     pub fn simple_params(&self) -> bool {
         self.rest.is_none() && self.defaults.iter().all(Option::is_none) && self.params.iter().all(|p| matches!(p, Binding::Name(_)))

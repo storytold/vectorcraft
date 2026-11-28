@@ -30,10 +30,10 @@ pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
 pub use cmd::distortcmds::{perspective_click, width_point_pair};
 pub use cmd::flare::flare_settings;
-pub use cmd::gradient::StopOwner;
+pub use cmd::gradient::{GradientEditPaints, StopOwner};
 pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
-pub use cmd::pathops::auto_simplify_level;
+pub use cmd::pathops::{auto_simplify_level, can_outline_stroke};
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::select::{path_fingerprint, storable_selection, stored_path_params, stored_path_step};
 pub use cmd::textwrap::TEXT_WRAP_OFFSET_RANGE;
@@ -121,6 +121,10 @@ pub struct Session {
     /// lent from: a follow-up in another document, after a tool switch (also one back to the same
     /// tool) or after the tool starts afresh is not lent. None when the press was not lent.
     pub(crate) press_lent: Option<(Option<u64>, &'static str, &'static str)>,
+    /// The uid of the document in which a Cmd press with the Selection tool armed Select Behind
+    /// ([`Session::behind_armed`]): Cmd has been held since. None once Cmd is let go, the tool
+    /// changes or another document becomes active.
+    pub(crate) behind_armed: Option<Option<u64>>,
     /// The selection tool a Cmd press would borrow at the pointer, as [`Session::hover_tool_at`]
     /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none), with
     /// the document state, active tool and keys it was found for. None when it was last asked
@@ -222,6 +226,9 @@ pub struct Session {
     /// The Startup Scripts folder, whose scripts `script.startup.run` runs; `None`: no folder
     /// ([`Session::attach_startup_scripts_dir`]).
     startup_scripts_dir: Option<std::path::PathBuf>,
+    /// How listings of the Scripts and Startup Scripts folders measure their time
+    /// ([`Session::set_script_listing_clock`]).
+    script_listing_clock: script::folder::Clock,
     /// The folder of File Info's metadata templates; `None`: no folder
     /// ([`Session::attach_metadata_templates_dir`]).
     metadata_templates_dir: Option<std::path::PathBuf>,
@@ -240,6 +247,12 @@ pub struct Session {
     /// A filter's output that a run made in the background handed in for `plugin.run` to apply
     /// ([`cmd::plugin::FilterRun::hand_in`]); the next `plugin.run` takes it.
     plugin_output: Option<cmd::plugin::HandedIn>,
+    /// The modules a load in another place checked, with the manifest it read
+    /// ([`Session::hand_in_checked_plugin`]), the newest last.
+    plugin_checked: Vec<cmd::plugin::Checked>,
+    /// The run of a filter that calls commands that holds the documents while the web build's
+    /// plug-in worker runs it ([`cmd::plugin::FilterRun::begin_calls`]).
+    plugin_calling: Option<cmd::plugin::Calling>,
     /// What a person approved for the next `plugin.install` ([`Session::approve_plugin_install`]);
     /// that install spends it, whatever it does.
     plugin_install_approval: Option<cmd::plugin::InstallApproval>,
@@ -362,6 +375,11 @@ pub struct Session {
     pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
     /// While a slice of a script runs in this session.
     pub(crate) script_in_run: bool,
+    /// The desktop app supplies each window by (document uid, runtime window identity) while a
+    /// script runs. Scripts read them as `Document.views`, and the app applies their zoom, center,
+    /// and screen mode. This list is empty without windows (headless).
+    /// View state: not saved, not undoable, and a run that fails keeps what it changed.
+    pub window_views: Vec<((u64, u64), WindowView)>,
     /// Write recovery copies of the unsaved documents before a run, and don't start without them.
     pub script_copy_first: bool,
     /// While the active tool's actions run: their commands aren't "a command from outside the
@@ -486,7 +504,7 @@ pub(crate) use command_sets::SELECTS_GIVEN_IDS;
 #[cfg(test)]
 use command_sets::given_ids;
 pub use command_sets::{DRAWS_SHAPE, FIT_ACTIVE_ARTBOARD, ON_ACTIVE_ARTBOARD, waits_for_plugin_loads, waits_for_tool_edit};
-pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection};
+pub use doc_state::{DocState, LayersReveal, OpenRows, RecalledSelection, WindowView};
 pub use error::{EngineError, READ_ONLY_LOCATION, Result, SCRIPT_BUSY};
 #[cfg(test)]
 use history::history_budget_for;

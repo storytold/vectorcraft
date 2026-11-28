@@ -1,12 +1,15 @@
 //! A running script, advanced one slice per frame: `script.run` starts it and [`poll`] takes it to
 //! its end, while the app goes on drawing the documents as they were before the run. The status bar
 //! shows it with a Stop button; a run that has added a great deal, or that opened a dialog with
-//! `alert`, `confirm`, `prompt` or a `File` or `Folder` file dialog, waits for the person's answer.
+//! `alert`, `confirm`, `prompt`, a ScriptUI dialog's `show()` or a `File` or `Folder` file dialog,
+//! waits for the person's answer.
 
 use serde_json::{Value, json};
+use vectorcraft_engine::WindowView;
 
 use crate::VectorcraftApp;
 use crate::dialogs::script_run::{self, GrowthQuestion, ScriptFiles, ScriptNotice};
+use crate::dialogs::script_window;
 
 /// Advances the running script by one slice, or asks what its growth needs asked.
 pub fn poll(app: &mut VectorcraftApp) {
@@ -24,7 +27,10 @@ pub fn poll(app: &mut VectorcraftApp) {
     }
     let name = app.session.script_name().unwrap_or_default();
     let startup = app.session.startup_script_running();
-    let Some(result) = app.session.script_pump() else {
+    let shared = share_views(app);
+    let pumped = app.session.script_pump();
+    take_views(app, &shared);
+    let Some(result) = pumped else {
         // A pump that started the next queued run shows the runs before it that could not start
         // in this frame: with none left running, the app may draw no next one.
         startup_failures(app);
@@ -34,6 +40,7 @@ pub fn poll(app: &mut VectorcraftApp) {
     };
     script_run::forget::<GrowthQuestion>(app);
     script_run::settle_close(app);
+    script_window::sync(app);
     match result {
         // The commands it ran are journaled now: a recording they no longer fit in names its limit.
         Ok(_) => {
@@ -45,6 +52,54 @@ pub fn poll(app: &mut VectorcraftApp) {
     }
     startup_failures(app);
     app.sync_views();
+}
+
+/// The running script reads each drawn window in `Document.views`, with its last drawn area.
+/// The returned list contains those windows for [`take_views`].
+pub(crate) fn share_views(app: &mut VectorcraftApp) -> Vec<((u64, u64), WindowView)> {
+    // The view's zoom counts screen points before UI scaling; its area is in the interface's points.
+    let scaling = f64::from(app.ui_scaling());
+    let mode = app.ui.screen_mode;
+    let shared: Vec<((u64, u64), WindowView)> = crate::doc_windows::windows(app)
+        .into_iter()
+        .filter_map(|window| {
+            let uid = app.session.documents().get(window.0)?.uid;
+            let v = crate::doc_windows::view(app, window)?;
+            if !v.fitted || v.rect.width() <= 0.0 || v.rect.height() <= 0.0 {
+                return None;
+            }
+            let print = app.print_ppi_of(Some(window));
+            let baseline = crate::state::zoom_baseline(print);
+            let size = [f64::from(v.rect.width()) * scaling / baseline, f64::from(v.rect.height()) * scaling / baseline];
+            let zoom = crate::state::zoom_display_percent(v.zoom, print) / 100.0;
+            Some(((uid, v.runtime_id), WindowView { center: v.center, zoom, zoom_baseline: baseline, rotation: v.rotation, size, screen_mode: mode }))
+        })
+        .collect();
+    app.session.window_views.clone_from(&shared);
+    shared
+}
+
+/// Applies the zoom, center and screen mode a script assigned to the views from [`share_views`].
+pub(crate) fn take_views(app: &mut VectorcraftApp, shared: &[((u64, u64), WindowView)]) {
+    let (min, max) = WindowView::ZOOM_RANGE;
+    for (key, before) in shared {
+        let Some(now) = app.session.window_views.iter().find(|(k, _)| k == key).map(|(_, v)| *v) else { continue };
+        if now == *before {
+            continue;
+        }
+        if let Some(v) = crate::doc_windows::view_by_id_mut(app, *key) {
+            if now.zoom != before.zoom {
+                v.zoom = (now.zoom * now.zoom_baseline).clamp(min, max);
+            }
+            v.center = now.center;
+        }
+    }
+    // The screen mode is the app's: a script that sets it on any view sets it on every view.
+    if let (Some((_, before)), Some((_, now))) = (shared.first(), app.session.window_views.first())
+        && now.screen_mode != before.screen_mode
+    {
+        app.ui.screen_mode = now.screen_mode.min(3);
+    }
 }
 
 /// Shows each run `script.startup.run` queued that could not start ([`add_notes`]), and once the
@@ -96,32 +151,36 @@ fn show_notes(app: &mut VectorcraftApp, notes: Vec<String>) {
     }
 }
 
-/// Opens what the run waits at, once no other dialog is open: the script's own dialog, or the
-/// question about its growth. Closes the script's dialog when the run no longer waits at it.
-/// → true while the run waits.
+/// Opens what the run waits at, once no other dialog is open, or over the script's ScriptUI dialog:
+/// the script's own dialog, or the question about its growth. Closes the script's dialog when the
+/// run no longer waits at it, and the ScriptUI dialog when its `show()` ends. → true while the run
+/// waits.
 fn ask(app: &mut VectorcraftApp) -> bool {
+    script_window::sync(app);
     if let Some(picker) = app.session.script_picker() {
-        if !script_run::busy(app) {
+        if script_run::can_ask(app) {
             script_run::open_picker(app, picker);
         }
         return true;
     }
     script_run::forget::<ScriptFiles>(app);
     if let Some(dialog) = app.session.script_dialog() {
-        if !script_run::busy(app) {
+        if script_run::can_ask(app) {
             script_run::open_notice(app, &dialog);
         }
         return true;
     }
     // A run asked to stop no longer waits at its dialog.
     script_run::forget::<ScriptNotice>(app);
+    // A run past its growth allowance asks about it first, also when its ScriptUI dialog waits
+    // again.
     if app.session.script_waiting() {
-        if !script_run::busy(app) {
+        if script_run::can_ask(app) {
             script_run::open_growth(app);
         }
         return true;
     }
-    false
+    app.session.script_window().is_some()
 }
 
 /// Runs the script of `params` (`script.run`'s) that the person chose from File › Scripts, after

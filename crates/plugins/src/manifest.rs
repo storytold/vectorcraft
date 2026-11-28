@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::dialog::ParamUi;
-use crate::permissions::{self, API_LEVEL, CONTEXT_API, INPUTS_API, PROGRESS_API, Permission, WRITES_API};
+use crate::permissions::{self, API_LEVEL, APPEARANCE_API, CONTEXT_API, INPUTS_API, PROGRESS_API, Permission, WRITES_API};
 use crate::{Error, Result};
 
 /// Longest manifest the host reads.
@@ -118,6 +118,10 @@ pub enum Kind {
     /// An importer: reads a file in a format of its own, whose extensions the manifest lists, into
     /// a new document (File › Open, `document.open`; see [`crate::import`]).
     Importer,
+    /// A generator: draws art from its parameters alone into a generated art object, which keeps
+    /// them so the art can be drawn again with changed ones (Object › Plug-ins, `plugin.generate`;
+    /// see [`crate::generate`]).
+    Generator,
 }
 
 impl Kind {
@@ -127,6 +131,7 @@ impl Kind {
             Kind::Effect => "effect",
             Kind::Exporter => "exporter",
             Kind::Importer => "importer",
+            Kind::Generator => "generator",
         }
     }
 }
@@ -512,6 +517,11 @@ pub struct Manifest {
     /// manifest has `"paintOutput": true`, the only value the key may hold.
     #[serde(default, rename = "paintOutput", skip_serializing_if = "std::ops::Not::not")]
     pub paint_output: bool,
+    /// A live effect at `api` 3 that declares `paintOutput` and whose pieces, and their fills and
+    /// strokes, may also carry opacity, a blending mode and effects ([`crate::painted`]): `true`
+    /// when the manifest has `"appearanceOutput": true`, the only value the key may hold.
+    #[serde(default, rename = "appearanceOutput", skip_serializing_if = "std::ops::Not::not")]
+    pub appearance_output: bool,
     /// The menu commands it adds, in menu order (a filter or a live effect only).
     #[serde(default, deserialize_with = "ordered_commands", skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<Command>,
@@ -539,8 +549,13 @@ impl Manifest {
     /// manifest's (a JavaScript plug-in's `source`), whose caller checks the manifest's size. Keys
     /// the manifest doesn't declare are ignored, and `params` keep the order the text gives them.
     pub(crate) fn parse_text(text: &str) -> Result<Manifest> {
-        if serde_json::from_str::<Value>(text).is_ok_and(|v| v.get("paintOutput").is_some_and(|p| *p != Value::Bool(true))) {
+        let value = serde_json::from_str::<Value>(text).ok();
+        let not_true = |key: &str| value.as_ref().is_some_and(|v| v.get(key).is_some_and(|p| *p != Value::Bool(true)));
+        if not_true("paintOutput") {
             return Err(Error::Manifest("`paintOutput` may only be true".into()));
+        }
+        if not_true("appearanceOutput") {
+            return Err(Error::Manifest("`appearanceOutput` may only be true".into()));
         }
         let mut man: Manifest = serde_json::from_str(text).map_err(|e| Error::Manifest(format!("manifest: {e}")))?;
         man.validate()?;
@@ -567,6 +582,7 @@ impl Manifest {
             place: false,
             budget: Budget::Light,
             paint_output: false,
+            appearance_output: false,
             commands: Vec::new(),
             command_allowlist: Vec::new(),
             runtime: Runtime::Wasm,
@@ -639,6 +655,9 @@ impl Manifest {
         if self.paint_output && (self.kind != Kind::Effect || self.api < 2) {
             return Err(Error::Manifest("`paintOutput` is only for a live effect (`kind` \"effect\") at `api` 2".into()));
         }
+        if self.appearance_output && (!self.paint_output || self.api < APPEARANCE_API) {
+            return Err(Error::Manifest("`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3".into()));
+        }
         self.validate_extensions()?;
         if self.place && self.kind != Kind::Importer {
             return Err(Error::Manifest("`place` is only for an importer (`kind` \"importer\")".into()));
@@ -653,6 +672,9 @@ impl Manifest {
             }
             (Budget::Heavy, Kind::Importer) => {
                 return Err(Error::Manifest("an importer always gets an import's budget: leave `budget` out".into()));
+            }
+            (Budget::Heavy, Kind::Generator) => {
+                return Err(Error::Manifest("a generator always gets the usual budget: leave `budget` out".into()));
             }
         }
         self.validate_params()?;
@@ -823,7 +845,7 @@ impl Manifest {
         if self.commands.is_empty() {
             return Ok(());
         }
-        if matches!(self.kind, Kind::Exporter | Kind::Importer) {
+        if matches!(self.kind, Kind::Exporter | Kind::Importer | Kind::Generator) {
             return Err(Error::Manifest("only a filter or a live effect declares `commands`".into()));
         }
         if self.budget == Budget::Heavy {
@@ -1380,6 +1402,29 @@ mod tests {
         }
     }
 
+    /// A generator gets the usual budget and needs `doc.write`, which its manifest implies; it
+    /// declares no extensions, commands, inputs or other permissions.
+    #[test]
+    fn a_generator_writes_art_with_the_usual_budget() {
+        let m = Manifest::parse(br#"{"id":"org.example.stars","name":"Stars","kind":"generator"}"#).unwrap();
+        assert_eq!((m.kind, m.budget), (Kind::Generator, Budget::Light));
+        assert_eq!(serde_json::to_value(&m).unwrap()["kind"], json!("generator"));
+        assert_eq!(m.permissions(), [Permission::DocWrite]);
+        let listed = Manifest::parse(br#"{"id":"a","name":"x","kind":"generator","permissions":["doc.write"]}"#).unwrap();
+        assert_eq!(listed.permissions(), [Permission::DocWrite]);
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"generator","budget":"heavy"}"#, "the usual budget"),
+            (r#"{"id":"a","name":"x","kind":"generator","extensions":["plt"]}"#, "only an exporter or an importer"),
+            (r#"{"id":"a","name":"x","kind":"generator","permissions":[]}"#, "needs the permission `doc.write`"),
+            (r#"{"id":"a","name":"x","kind":"generator","permissions":["doc.write","doc.read"]}"#, "doesn't apply"),
+            (r#"{"id":"a","name":"x","kind":"generator","commands":[{"id":"again","label":"Again"}]}"#, "only a filter or a live effect"),
+            (r#"{"id":"a","name":"x","kind":"generator","place":true}"#, "`place` is only for an importer"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+    }
+
     /// Only an importer sets `place`, to a boolean, and it asks for no permission beyond
     /// `import.read`; false, the default, isn't written back.
     #[test]
@@ -1665,6 +1710,35 @@ mod tests {
         ] {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains("paintOutput") || e.contains("effect.render"), "{bad}: {e}");
+        }
+    }
+
+    /// A live effect at `api` 3 that declares `paintOutput` may also declare
+    /// `"appearanceOutput": true`, and only that value, with no permission beyond `doc.read` and `effect.render`;
+    /// without `paintOutput`, below `api` 3, on another kind, or with `false`, `null` or another
+    /// type, it is refused naming the key. Without the key, at `api` 3, the effect paints as at 2.
+    #[test]
+    fn manifest_accepts_api3_appearance_output_only_for_painted_effects() {
+        let m = Manifest::parse(
+            br#"{"id":"org.example.tone","name":"Tone","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"permissions":["doc.read","effect.render"]}"#,
+        )
+        .unwrap();
+        assert!(m.paint_output && m.appearance_output);
+        assert_eq!(serde_json::to_value(&m).unwrap()["appearanceOutput"], json!(true));
+        let plain = Manifest::parse(br#"{"id":"a","name":"x","kind":"effect","api":3,"paintOutput":true}"#).unwrap();
+        assert!(plain.paint_output && !plain.appearance_output);
+        assert!(serde_json::to_value(&plain).unwrap().get("appearanceOutput").is_none());
+        for bad in [
+            r#"{"id":"a","name":"x","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":false}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":null}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":1}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":3,"appearanceOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"effect","api":2,"paintOutput":true,"appearanceOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"filter","api":3,"appearanceOutput":true}"#,
+            r#"{"id":"a","name":"x","kind":"exporter","api":3,"extensions":["plt"],"appearanceOutput":true}"#,
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains("appearanceOutput"), "{bad}: {e}");
         }
     }
 

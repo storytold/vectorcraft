@@ -15,7 +15,7 @@ use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
 use craft::ui::contract::{
     Bind, CollectionEvent, ColumnSpec, Entry, Lazy, Props as _, Scroll, SelectMode, Show as _, ShowCollection as _, ShowContainer as _, Sizing,
-    ToggleColumn, clicked,
+    ToggleColumn, TooltipSpec, clicked,
 };
 use craft::ui::display::Text;
 use craft::ui::layout_components::{Row, Stack};
@@ -249,7 +249,12 @@ fn settings_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
     }
     Row::new().show(ui, |ui, _| {
-        if clicked(&Button::new(tl!("Load Profile…")).id_salt("load-profile").show(ui)) {
+        let load = tl!("Load Profile…");
+        let picker = Button::new(load)
+            .id_salt("load-profile")
+            .enabled(app.host.files().can_pick())
+            .tooltip(TooltipSpec::new(load).disabled_text(tl!("Loading color profiles requires a desktop file picker.")));
+        if clicked(&picker.show(ui)) {
             load_profile(app);
         }
         if clicked(&Button::new(tl!("Gamut Check")).id_salt("gamut-check").show(ui)) {
@@ -459,6 +464,25 @@ mod tests {
     use vectorcraft_engine::Session;
 
     #[test]
+    fn load_profile_only_offers_a_picker_that_returns_a_path() {
+        use craft::host::ScriptedFiles;
+        use std::sync::Arc;
+
+        for browser in [false, true] {
+            let mut app = VectorcraftApp::new(Session::new(), Default::default());
+            app.run("file.new", json!({})).unwrap();
+            let files = ScriptedFiles::held();
+            let files = Arc::new(if browser { files.in_browser() } else { files });
+            crate::tests::picks::install_files(&mut app, files.clone());
+            let mut panel = Panel::new(app, settings_rows);
+            assert_eq!(panel.enabled("Load Profile…"), !browser);
+            assert!(panel.enabled("Gamut Check"));
+            panel.click("Load Profile…");
+            assert_eq!(files.requests().len(), usize::from(!browser));
+        }
+    }
+
+    #[test]
     fn browser_profile_pick_reports_why_it_cannot_load() {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         let picker = crate::tests::picks::scripted(&mut app);
@@ -522,6 +546,10 @@ mod tests {
     /// model's profile stays as it was.
     #[test]
     fn assign_rows_follow_the_document_color_mode() {
+        // Assigning a profile to the front document changes the process's active color settings.
+        if !crate::testing::in_own_process("panels::separations::tests::assign_rows_follow_the_document_color_mode") {
+            return;
+        }
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         app.run("file.new", json!({})).unwrap();
         for (mode, key, kind, other) in [("rgb", "rgb", ProfileKind::Rgb, "cmyk"), ("cmyk", "cmyk", ProfileKind::Cmyk, "rgb")] {

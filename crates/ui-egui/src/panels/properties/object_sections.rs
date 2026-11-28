@@ -66,7 +66,7 @@ pub(super) fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         Text::new(details.clone()).shade(Shade::Muted).show(ui);
         Grid::new(&HALVES).show(ui, |ui, _| {
             // PLAN: assumed `crate::place::LinkAction::{shown(linked) -> &'static [LinkAction], label(self), run(self, app, id, &name)}` (files-w14, fl.A18)
-            for action in crate::place::LinkAction::shown(linked) {
+            for action in crate::place::LinkAction::shown(linked, crate::place::is_dcs_image(app, id)) {
                 if Button::new(action.label()).sizing(Sizing::FillWidth).show(ui).clicked() {
                     action.run(app, id, &name);
                 }

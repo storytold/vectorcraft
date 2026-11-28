@@ -2718,6 +2718,7 @@ file-filter	Templates	範本
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` 必須是 hue、saturation、brightness、red、green 或 blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` 必須是 none、oklch 或 hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH 需要將 sRGB 用作 RGB 工作空間
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` 必須是十六進位顏色 (#rgb、#rgba、#rrggbb 或 #rrggbbaa)，或不超過 48 個字元的 CSS rgb()、hsl() 或 oklch() 顏色
 @msg	`{key}` must be true or false	`{key}` 必須是 true 或 false
 @msg	`top` and `below` can't both be true	`top` 和 `below` 不能同時為 true
 @msg	`select` must be true or false	`select` 必須是 true 或 false
@@ -3991,6 +3992,9 @@ liquify-list-end	{0}, {1}	{0}和{1}
 	Only Web Colors	僅限網頁色彩
 	Opacity	不透明度
 	Show Opacity	顯示不透明度
+	Show Hex Field	顯示十六進位欄位
+	Hex or CSS color	十六進位或 CSS 顏色
+	Parse Color	剖析顏色
 	Opacity & Mask Define Knockout Shape	不透明度與遮色片定義挖空形狀
 	Opacity Mask	不透明度遮色片
 	Opacity Mask Info	不透明度遮色片資訊
@@ -7092,6 +7096,15 @@ axis	Y Axis	Y 軸
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一個唯讀物件：請以單獨的 {{"id": …}} 或原樣傳回它
 @msg	a string	字串
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	筆畫只有 `paint`、`width`、`join`、`cap` 和 `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	繪製型即時效果的片段只有 `path`、`fillRule`、`fills`、`strokes`、`opacity`、`blend` 和 `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	筆畫只有 `paint`、`width`、`join`、`cap`、`miterLimit`、`opacity`、`blend` 和 `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` 只能為 true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` 僅適用於宣告了 `paintOutput` 的 `api` 3 即時效果
+@msg	`opacity` must be a number from 0 to 1	`opacity` 必須是 0 到 1 之間的數字
+@msg	unknown blending mode; `blend` is one of {_1}	未知的混合模式；`blend` 是 {_1} 之一
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` 必須是最多 {MAX_LOOK_EFFECTS} 筆記錄的陣列
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	一個結果最多帶 {MAX_RESULT_EFFECTS} 筆效果記錄
+@msg	this host takes no effects here	此主機不在此處接受效果
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	筆畫必須是 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 形式
 @msg	an effect must be {{"id", "params"?, "visible"?}}	效果必須是 {{"id", "params"?, "visible"?}} 形式
 @msg	an effect on a fill returns only `fills`	填色上的效果只傳回 `fills`
@@ -8187,6 +8200,7 @@ breakText	Glyphs	字符
 	Place Brush Art	置入筆刷圖稿
 	Replace Brush Art	取代筆刷圖稿
 	Replace Pattern Art	取代圖樣圖稿
+	Place Pattern Art	置入圖樣圖稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有筆畫使用了此筆刷。要將新圖稿套用到這些筆畫，還是保留筆畫不變並加入一個使用新圖稿的筆刷複本？
 	Apply to Strokes	套用至筆畫
 	Leave Strokes	保留筆畫
@@ -8256,6 +8270,8 @@ breakText	Glyphs	字符
 	Tangent Circle	相切圓
 	Tangent Circle Tool	相切圓工具
 	No tangent circle here	此處沒有相切圓
+	Ask For Circle Radius	詢問圓半徑
+	Auto-Update Default	自動更新預設值
 	Circle:	圓：
 @msg	`ids` names an object twice	`ids` 將同一個物件指定了兩次
 @msg	select two or three paths or compound paths	請選取兩個或三個路徑或複合路徑
@@ -8938,7 +8954,9 @@ breakText	Glyphs	字符
 @msg	missing `picks`	未提供 `picks`
 @msg	missing `word`	未提供 `word`
 @msg	must be an object with `kind` and `value`	必須是包含 `kind` 和 `value` 的物件
-@msg	must have `kind` alert, confirm or prompt	`kind` 必須是 alert、confirm 或 prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind` 必須是 alert、confirm、prompt 或 window
+@msg	is a window's answer, whose `value` must be a list of steps	是視窗的回答，其 `value` 必須是步驟清單
+@msg	has a step {i} that is not a valid click, change or close	的第 {i} 步不是有效的點按、變更或關閉
 @msg	must have exactly `kind` and `value`	只能有 `kind` 和 `value`
 @msg	needs a closing quote after the name	名稱之後需要結尾引號
 @msg	needs a name	需要名稱

@@ -127,7 +127,7 @@ pub(crate) fn strips_follow(app: &mut VectorcraftApp, owner: &Owner, shown: bool
 
 /// The Basic toolbar: (category, slots); each slot is a flyout group (first = default).
 pub const BASIC: &[(&str, &[&[&str]])] = &[
-    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "enclosingLasso", "magicWand"]]),
+    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "enclosingLasso", "polygonalLasso", "magicWand"]]),
     (
         "Shapes",
         &[

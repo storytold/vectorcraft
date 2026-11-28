@@ -69,7 +69,7 @@ vectorcraft-render = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-foundation", "objc2-quartz-core", "NSApplication", "NSCursor", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSButton", "NSColor", "NSColorSpace", "NSControl", "NSEvent", "NSPasteboard", "NSPopUpButton", "NSResponder", "NSSavePanel", "NSScreen", "NSTextField", "NSTextInputContext", "NSView", "NSWindow"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-foundation", "objc2-quartz-core", "NSApplication", "NSCursor", "NSImage", "NSImageRep", "NSBitmapImageRep", "NSButton", "NSColor", "NSColorSpace", "NSControl", "NSEvent", "NSPasteboard", "NSPopUpButton", "NSResponder", "NSSavePanel", "NSScreen", "NSTextField", "NSView", "NSWindow"] }
 # Files opened from Finder and the Dock (src/open_documents.rs) and pasted bitmaps (src/clipboard.rs); both already come with winit.
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSArray", "NSData", "NSGeometry", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL"] }
 block2 = "0.6"
