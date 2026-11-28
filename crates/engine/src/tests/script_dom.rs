@@ -46,7 +46,7 @@ fn app_documents_track_active_tab_and_new_document() {
     let out = log(
         &mut s,
         "var d = app.documents; vc.log(d.length); vc.log(app.activeDocument.width);\
-         app.activeDocument = d[0]; vc.log(app.activeDocument.width); vc.log(d[0].parent.typename);\
+         app.activeDocument = d[1]; vc.log(app.activeDocument.width); vc.log(d[0].parent.typename);\
          vc.log(d[5] === undefined); vc.log(app.activeDocument instanceof Document);\
          var n = d.add(DocumentColorSpace.CMYK, 50, 60, 2);\
          vc.log(d.length); vc.log(app.activeDocument.name === n.name); vc.log(n.documentColorSpace); vc.log(n.height);\
@@ -297,8 +297,43 @@ fn selection_assignment_is_atomic_across_invalid_items() {
     assert_eq!(s.active().unwrap().selection.objects, vec![a]);
     // An item of another document cannot be selected here.
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    let e = failure(&mut s, "app.activeDocument.selection = app.documents[0].pageItems[0];");
+    let e = failure(&mut s, "app.activeDocument.selection = app.documents[1].pageItems[0];");
     assert!(e.contains("Cannot select"), "{e}");
+}
+
+/// An index past the end of `pageItems` gives `undefined`, which does not clear the selection;
+/// `null` and `[]` do.
+#[test]
+fn assigning_an_index_past_the_end_to_the_selection_throws_and_keeps_it() {
+    let (mut s, a, _) = doc();
+    s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+    let caught = "var d = app.activeDocument, m = '';\
+                  try { d.selection = d.pageItems[99]; } catch (e) { m = e.name; }\
+                  vc.log(m); vc.log(d.selection.length);";
+    assert_eq!(log(&mut s, caught), vec![json!("TypeError"), json!(1)]);
+    assert_eq!(s.active().unwrap().selection.objects, vec![a]);
+    for clear in ["null", "[]"] {
+        s.execute("select.set", &json!({"ids": [a.0]})).unwrap();
+        log(&mut s, &format!("app.activeDocument.selection = {clear};"));
+        assert!(s.active().unwrap().selection.objects.is_empty(), "{clear}");
+    }
+}
+
+/// `controlBounds` takes in a direction point that lies past the curve; `visibleBounds` does not.
+#[test]
+fn control_bounds_take_in_direction_points_past_the_curve() {
+    let (mut s, _, _) = doc();
+    s.execute("path.create", &json!({"anchors": [{"x": 200, "y": 0, "out": [200, -100]}, {"x": 300, "y": 0, "in": [300, -100]}]})).unwrap();
+    let out = log(
+        &mut s,
+        "app.coordinateSystem = CoordinateSystem.ARTBOARDCOORDINATESYSTEM; var p = app.activeDocument.pageItems;\
+         vc.log(p[0].controlBounds); vc.log(p[0].visibleBounds); vc.log(p[2].controlBounds); vc.log(p[2].visibleBounds);",
+    );
+    let top = |v: &Value| v[1].as_f64().unwrap();
+    assert!((top(&out[0]) + 100.0).abs() < 1e-9, "{out:?}");
+    assert!(top(&out[1]) > -90.0, "{out:?}");
+    // A rectangle's direction points lie on its edges.
+    assert_eq!(out[2], out[3]);
 }
 
 #[test]
@@ -324,11 +359,42 @@ fn a_guide_path_is_not_selected_while_guides_are_locked() {
 fn an_inactive_document_changes_without_switching_tabs() {
     let (mut s, a, _) = doc();
     s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
-    log(&mut s, "var d = app.documents[0]; d.pageItems[1].name = 'far'; d.selection = d.pageItems[0];");
+    log(&mut s, "var d = app.documents[1]; d.pageItems[1].name = 'far'; d.selection = d.pageItems[0];");
     assert_eq!(s.active_index(), Some(1));
     let first = &s.documents()[0];
     assert_eq!(first.doc.node(a).unwrap().name.as_deref(), Some("far"));
     assert_eq!(first.selection.objects.len(), 1);
+}
+
+#[test]
+fn documents_list_the_current_document_first_then_the_most_recently_current() {
+    let mut s = Session::new();
+    for _ in 0..3 {
+        s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+        rect(&mut s, 0.0, 0.0, 5.0, 5.0);
+    }
+    let out = log(
+        &mut s,
+        "var t = {}, n = ['A', 'B', 'C'];\
+         for (var i = 0; i < 3; i++) t[app.documents[2 - i].name] = n[i];\
+         function order() { var r = []; for (var i = 0; i < app.documents.length; i++) r.push(t[app.documents[i].name]); return r.join(''); }\
+         var A = app.documents[2], B = app.documents[1], C = app.documents[0];\
+         vc.log(order());\
+         app.activeDocument = A; vc.log(order());\
+         app.activeDocument = B; vc.log(order());\
+         app.activeDocument = app.documents[2]; vc.log(order());\
+         A.pageItems[0].name = 'far'; vc.log(order());\
+         vc.log([app.documents[0] === app.activeDocument, app.documents.getByName(B.name) === B]);",
+    );
+    // A change to a document in the back leaves the order as it was.
+    assert_eq!(out, vec![json!("CBA"), json!("ACB"), json!("BAC"), json!("CBA"), json!("CBA"), json!([true, true])]);
+    // Closing a document in the back keeps the others in their order as the tabs shift.
+    s.execute("document.activate", &json!({"index": 0})).unwrap();
+    s.execute("document.activate", &json!({"index": 1})).unwrap();
+    s.execute("document.activate", &json!({"index": 2})).unwrap();
+    assert_eq!(s.front_order(), vec![2, 1, 0]);
+    s.close_document(0);
+    assert_eq!(s.front_order(), vec![1, 0]);
 }
 
 #[test]
@@ -459,6 +525,17 @@ fn a_copy_that_cannot_be_placed_is_deleted() {
     assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before);
     // The refused copy leaves no undo step and does not change the document's step.
     assert_eq!((undo_steps(&s), s.active().unwrap().history.step()), (steps, step));
+    // Nor does it count toward the run's growth allowance: many refused copies stay within one
+    // that a few kept copies would pass.
+    crate::script::TEST_GROWTH.with(|g| g.set(Some(5)));
+    let r = run(
+        &mut s,
+        "var p = app.activeDocument.pageItems, n = p.length, g = p[0], t = p[n - 1], refused = 0;\
+         for (var k = 0; k < 20; k++) { try { t.duplicate(g, ElementPlacement.INSIDE); } catch (e) { refused++; } }\
+         vc.log(refused);",
+    );
+    crate::script::TEST_GROWTH.with(|g| g.set(None));
+    assert_eq!(r.unwrap()["log"], json!([20]));
 }
 
 #[test]
@@ -528,14 +605,14 @@ fn moving_the_last_path_out_of_a_compound_path_keeps_the_compound_path() {
          m[1].move(c, ElementPlacement.PLACEBEFORE); vc.log(d.pageItems.length);\
          vc.log([c.typename, c === d.pageItems[2]]);\
          var bad = []; for (var k in c) { try { c[k]; } catch (e) { bad.push(k + ': ' + e.message); } } vc.log(bad);\
-         vc.log([c.geometricBounds, c.visibleBounds, c.position, c.width, c.height]);\
+         vc.log([c.geometricBounds, c.visibleBounds, c.controlBounds, c.position, c.width, c.height]);\
          c.left = 5; c.top = 5; c.position = [1, 2]; c.width = 10; c.height = 10; vc.log(c.geometricBounds);",
     );
     let zeros = json!([0, 0, 0, 0]);
     assert_eq!(out[..3], [json!(3), json!(3), json!(["CompoundPathItem", true])]);
     // Every property `for`-`in` lists reads, and the emptied compound path has zero bounds that
     // moving or resizing leaves as they are.
-    assert_eq!(out[3..], [json!([]), json!([zeros, zeros, [0, 0], 0, 0]), zeros]);
+    assert_eq!(out[3..], [json!([]), json!([zeros, zeros, zeros, [0, 0], 0, 0]), zeros]);
     let doc = &s.active().unwrap().doc;
     assert!(doc.node(compound).is_some_and(|n| n.children().is_some_and(|c| c.is_empty())), "the compound path stays, empty");
     // Each path went directly above the compound path, the second above the first.
@@ -656,6 +733,14 @@ fn file_new_takes_the_rows_of_a_grid_by_column() {
         let by_row = stored.clone().with_params(&json!({"artboardLayout": layout}), "file.new").unwrap();
         assert_eq!((by_row.rows, by_row.to_json()["artboardLayout"].get("rows")), (0, None), "{layout}");
     }
+    // A change of spacing alone leaves the stored columns as they are, so leaving the rows later
+    // gives the same grid with or without it.
+    let to_row = json!({"artboardLayout": {"layout": "gridByRow"}});
+    let plain = stored.clone().with_params(&json!({"artboards": 9}), "file.new").unwrap();
+    let spaced = stored.clone().with_params(&json!({"artboards": 9, "artboardLayout": {"spacing": 20}}), "file.new").unwrap();
+    assert_eq!((plain.grid_columns(), spaced.grid_columns()), (3, 3));
+    let (plain, spaced) = (plain.with_params(&to_row, "file.new").unwrap(), spaced.with_params(&to_row, "file.new").unwrap());
+    assert_eq!(plain.grid_columns(), spaced.grid_columns());
     let e = s.execute("file.new", &json!({"artboardLayout": {"layout": "gridByColumn", "rows": 0}})).unwrap_err().to_string();
     assert!(e.contains("rows must be 1 or more"), "{e}");
     for layout in ["gridByRow", "row", "column"] {
@@ -725,6 +810,26 @@ fn an_edit_keeps_the_order_of_a_mixed_selection() {
     log(&mut s, "app.activeDocument.pageItems[2].duplicate();");
     let sel = &s.active().unwrap().selection;
     assert_eq!((sel.objects.clone(), sel.anchors.clone()), (before.objects, before.anchors));
+}
+
+/// A path with segments selected and no anchors gets the segments back, not every anchor.
+#[test]
+fn an_edit_keeps_a_path_with_only_a_segment_selected() {
+    let (mut s, a, b) = doc();
+    rect(&mut s, 200.0, 200.0, 20.0, 20.0);
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();
+    s.execute("select.segments", &json!({"id": b.0, "segments": [[0, 1]], "mode": "add"})).unwrap();
+    s.doc_mut().unwrap().selection.anchors.remove(&b);
+    let before = s.active().unwrap().selection.clone();
+    log(&mut s, "app.activeDocument.pageItems[2].duplicate();");
+    let sel = &s.active().unwrap().selection;
+    assert_eq!((&sel.objects, &sel.segments, sel.anchors.get(&a)), (&before.objects, &before.segments, before.anchors.get(&a)));
+    // The segment brings back its own two end points, as `select.segments` selects them, and none
+    // of the path's other anchors: the journaled restore selects none of them first.
+    assert_eq!(sel.anchors.get(&b).map(|k| k.len()), Some(2), "{sel:?}");
+    let restore = s.journal.iter().rev().find(|(id, _)| id == "select.anchorsMany").map(|(_, p)| p.clone()).unwrap();
+    let path = restore["items"].as_array().unwrap().iter().find(|i| i["id"] == json!(b.0)).cloned().unwrap();
+    assert_eq!(path["anchors"], json!([]), "{restore}");
 }
 
 #[test]
@@ -954,6 +1059,55 @@ fn a_document_preset_is_an_instance_of_its_class() {
     assert_eq!(out, vec![json!(true), json!("DocumentPreset"), json!(612)]);
 }
 
+/// The values the presets hold count against the run's heap, a value assigned again in place of
+/// the one before it.
+#[test]
+fn document_preset_values_are_bounded_by_the_runs_heap() {
+    use crate::script::TEST_ENGINE_HEAP;
+    TEST_ENGINE_HEAP.with(|h| h.set(Some(2 << 20)));
+    let mut s = Session::new();
+    // A title of 4,092 bytes, which with the loop counter stays within the 4,096 a title may have.
+    let big = "var s = 'a'; while (s.length < 4092) s += 'a';";
+    let again =
+        format!("#targetengine presets\n{big} var p = new DocumentPreset(); for (var k = 0; k < 1000; k++) p.title = s + k; vc.log(p.title.length);");
+    assert_eq!(log(&mut s, &again), vec![json!(4095)]);
+    let many = format!(
+        "#targetengine presets\n{big} var m = '';\
+         try {{ for (var k = 0; k < 2000; k++) {{ var p = new DocumentPreset(); p.title = s; }} }} catch (e) {{ m = e.name + ': ' + e.message; }}\
+         vc.log(k < 2000); vc.log(m);"
+    );
+    let out = log(&mut s, &many);
+    TEST_ENGINE_HEAP.with(|h| h.set(None));
+    assert_eq!(out[0], json!(true), "{out:?}");
+    assert!(out[1].as_str().unwrap().starts_with("RangeError: the DocumentPreset settings"), "{out:?}");
+}
+
+/// An array a preset holds counts a whole value for each element: presets that each hold a
+/// `documentBleedOffsetRect` of four numbers reach the run's heap after fewer presets than ones
+/// that each hold an eight-byte `title`, which counts one value and its text.
+#[test]
+fn document_preset_arrays_count_each_element_they_hold() {
+    use crate::script::TEST_ENGINE_HEAP;
+    let made = |assign: &str| {
+        TEST_ENGINE_HEAP.with(|h| h.set(Some(1 << 20)));
+        let mut s = Session::new();
+        let out = log(
+            &mut s,
+            &format!(
+                "#targetengine presets\nvar m = '';\
+                 try {{ for (var k = 0; k < 10000; k++) {{ var p = new DocumentPreset(); {assign} }} }} catch (e) {{ m = e.name + ': ' + e.message; }}\
+                 vc.log(k); vc.log(m);"
+            ),
+        );
+        TEST_ENGINE_HEAP.with(|h| h.set(None));
+        assert!(out[1].as_str().unwrap().starts_with("RangeError: the DocumentPreset settings"), "{assign}: {out:?}");
+        out[0].as_f64().unwrap()
+    };
+    let with_title = made("p.title = 'abcdefgh';");
+    let with_rect = made("p.documentBleedOffsetRect = [1, 2, 3, 4];");
+    assert!(with_rect < with_title, "{with_rect} presets with a rectangle, {with_title} with a title");
+}
+
 #[test]
 fn the_same_document_or_item_is_the_same_object() {
     let (mut s, a, _) = doc();
@@ -1178,12 +1332,12 @@ fn add_document_refuses_pixel_preview() {
 
 #[test]
 fn document_preset_values_count_toward_the_data_a_run_passes() {
-    // A 64 KiB title, set once, then read or handed to addDocument 32 times: 2 MiB, over a 1 MiB limit.
+    // A 4 KiB title, set once, then read or handed to addDocument 512 times: 2 MiB, over a 1 MiB limit.
     crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(Some(1 << 20)));
     let mut s = Session::new();
-    let set = "var p = new DocumentPreset(); p.title = new Array(65537).join('t');";
-    let read = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) p.title;"));
-    let added = failure(&mut s, &format!("{set} for (var i = 0; i < 32; i++) try {{ app.documents.addDocument('Print', p, 5); }} catch (e) {{}}"));
+    let set = "var p = new DocumentPreset(); p.title = new Array(4097).join('t');";
+    let read = failure(&mut s, &format!("{set} for (var i = 0; i < 512; i++) p.title;"));
+    let added = failure(&mut s, &format!("{set} for (var i = 0; i < 512; i++) try {{ app.documents.addDocument('Print', p, 5); }} catch (e) {{}}"));
     let within = run(&mut s, &format!("{set} for (var i = 0; i < 8; i++) p.title;"));
     crate::script::TEST_BRIDGE_BYTES.with(|b| b.set(None));
     for e in [read, added] {
@@ -1191,6 +1345,32 @@ fn document_preset_values_count_toward_the_data_a_run_passes() {
     }
     within.unwrap();
     assert!(s.documents().is_empty());
+}
+
+#[test]
+fn document_preset_setter_refuses_a_value_of_the_wrong_kind_or_size_and_keeps_the_old_one() {
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.title = 'Flyer';\
+         var bad = [['title', new Array(4098).join('t')], ['title', 5], ['width', 'wide'], ['width', Infinity], ['height', null],\
+         ['colorMode', 'RGB'], ['units', {}], ['artboardLayout', 'DocumentColorSpace.RGB'], ['documentBleedLink', 1],\
+         ['documentBleedOffsetRect', [1, 2, 3]], ['documentBleedOffsetRect', [1, 2, 3, 'x']], ['transparencyGrid', 'TransparencyGridRed']];\
+         for (var i = 0; i < bad.length; i++) { try { p[bad[i][0]] = bad[i][1]; vc.log('kept ' + bad[i][0]); } catch (e) { vc.log(e.name); } }\
+         vc.log([p.title, p.width, p.height, p.colorMode === undefined, p.units === undefined, p.artboardLayout,\
+         p.documentBleedLink === undefined, p.documentBleedOffsetRect === undefined, p.transparencyGrid === undefined]);",
+    );
+    let mut names = vec![json!("RangeError")];
+    names.extend(std::iter::repeat_n(json!("TypeError"), 11));
+    assert_eq!(out[..12], names[..], "{out:?}");
+    assert_eq!(out[12], json!(["Flyer", 612, 792, true, true, "DocumentArtboardLayout.GridByRow", true, true, true]));
+    let out = log(
+        &mut s,
+        "var p = new DocumentPreset(); p.title = new Array(4097).join('t'); p.documentBleedLink = null; p.transparencyGrid = null;\
+         p.documentBleedOffsetRect = [0, 0, 0, 0]; p.width = undefined; vc.log([p.title.length, p.documentBleedLink, p.width === undefined]);\
+         p.documentBleedOffsetRect = undefined; vc.log(app.documents.addDocument('Print', p).typename);",
+    );
+    assert_eq!(out, vec![json!([4096, null, true]), json!("Document")]);
 }
 
 #[test]
@@ -1208,20 +1388,75 @@ fn wrappers_go_stale_after_delete_and_undo() {
     assert!(e.contains("Stale page item"), "{e}");
 }
 
+/// File › Revert loads objects with the ids they were saved with: an object or a layer read before
+/// the revert does not name the loaded one.
+#[test]
+fn objects_read_before_a_revert_are_stale_and_ones_read_after_are_the_loaded_ones() {
+    // `pageItems[0]` is the topmost object, the one made last.
+    let (mut s, _, b) = doc();
+    let dir = std::env::temp_dir().join(format!("vc-dom-revert-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("saved.vectorcraft");
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    for read in ["i.name", "i.name = 'after'", "app.activeDocument.selection = i", "l.name"] {
+        let source = format!("var i = app.activeDocument.pageItems[0], l = i.parent; i.name = 'before'; vc.run('file.revert'); {read};");
+        let e = failure(&mut s, &source);
+        assert!(e.contains("Stale page item"), "{read}: {e}");
+    }
+    // Objects read after the revert are the loaded ones.
+    let out = log(
+        &mut s,
+        "var p = app.activeDocument.pageItems; p[0].name = 'before'; vc.run('file.revert');\
+         app.activeDocument.pageItems[0].name = 'loaded'; vc.log(app.activeDocument.pageItems.length);",
+    );
+    assert_eq!(out, vec![json!(2)]);
+    assert_eq!(s.active().unwrap().doc.node(b).unwrap().name.as_deref(), Some("loaded"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn wrappers_go_stale_after_revert() {
+    let (mut s, ..) = doc();
+    let folder = vectorcraft_testkit::TempDir::new("script-dom-revert");
+    let path = folder.join("saved's art.vectorcraft");
+    s.execute("document.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    let held = "var d = app.activeDocument, i = d.pageItems[0], l = i.parent; i.name = 'changed'; vc.run('file.revert');";
+    let out = log(&mut s, &format!("{held} vc.log(d.pageItems.length); vc.log(d.pageItems[0] === i); vc.log(d.pageItems[0].parent === l);"));
+    assert_eq!(out, vec![json!(2), json!(false), json!(false)]);
+    for operation in [
+        "i.name",
+        "i.name = 'wrong'",
+        "l.name",
+        "i.move(d.pageItems[1], ElementPlacement.PLACEBEFORE)",
+        "d.pageItems[1].duplicate(i, ElementPlacement.PLACEBEFORE)",
+        "d.pageItems[1].move(l, ElementPlacement.PLACEATEND)",
+    ] {
+        let source = format!("{held} try {{ {operation}; vc.log('ran'); }} catch (e) {{ vc.log(e.message); }} vc.log(d.pageItems.length);");
+        assert_eq!(log(&mut s, &source), vec![json!("Stale page item"), json!(2)], "{operation}");
+    }
+}
+
 #[test]
 fn remove_all_refuses_locked_art_before_deleting_anything() {
     let (mut s, a, b) = doc();
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
-    let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
-    assert!(e.contains(&b.0.to_string()), "{e}");
-    assert_eq!(s.active().unwrap().doc.layers[0].children().unwrap().len(), 2);
+    // The script catches the error and finds both objects still there before the run ends, so the
+    // run's own rollback cannot hide a deletion.
+    let caught = "var p = app.activeDocument.pageItems, m = '';\
+                  try { p.removeAll(); } catch (e) { m = e.message; }\
+                  vc.log(m); vc.log(p.length);";
+    let out = log(&mut s, caught);
+    assert!(out[0].as_str().unwrap().contains(&b.0.to_string()), "{out:?}");
+    assert_eq!(out[1], json!(2));
+    assert!(s.active().unwrap().doc.node(a).is_some() && s.active().unwrap().doc.node(b).is_some());
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     // A locked object inside an unlocked group stops it too.
     s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
     let g = s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap();
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": true})).unwrap();
-    let e = failure(&mut s, "app.activeDocument.pageItems.removeAll();");
-    assert!(e.contains(&g.to_string()), "{e}");
+    let out = log(&mut s, caught);
+    assert!(out[0].as_str().unwrap().contains(&g.to_string()), "{out:?}");
+    assert_eq!(out[1], json!(3));
     assert!(s.active().unwrap().doc.node(b).is_some());
     s.execute("object.setProps", &json!({"ids": [b.0], "locked": false})).unwrap();
     let out = log(&mut s, "var p = app.activeDocument.pageItems; p.removeAll(); vc.log(p.length);");
@@ -1516,12 +1751,12 @@ fn prototype_changes_cannot_forge_a_page_item() {
     let (mut s, a, _) = doc();
     let out = log(
         &mut s,
-        "var f = Object.create(PathItem.prototype); var m = '';\
-         try { f.name = 'x'; } catch (e) { m = e.message; } vc.log(m);\
-         try { PathItem.prototype.name = 'y'; } catch (e) { m = e.message; } vc.log(m); PageItem = null; Document.prototype.pageItems = null;\
+        "var f = Object.create(PathItem.prototype);\
+         try { f.name = 'x'; vc.log('wrote'); } catch (e) { vc.log(e.message); }\
+         try { PathItem.prototype.name = 'y'; vc.log('wrote'); } catch (e) { vc.log(e.message); } PageItem = null; Document.prototype.pageItems = null;\
          vc.log(Object.isFrozen(PathItem.prototype) || !Object.isExtensible(PathItem.prototype));\
          vc.log(app.activeDocument.pageItems.length);\
-         try { new PathItem(); } catch (e) { m = e.name; } vc.log(m);",
+         try { new PathItem(); vc.log('made'); } catch (e) { vc.log(e.name); }",
     );
     assert_eq!(out, vec![json!("this is not a page item"), json!("this is not a page item"), json!(true), json!(2), json!("TypeError")]);
     assert_eq!(s.active().unwrap().doc.node(a).unwrap().name, None);

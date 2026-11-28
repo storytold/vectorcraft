@@ -294,7 +294,7 @@ impl Line {
         let mut origins = |text: String| -> Vec<Point> {
             bare.text = text;
             let t = bare.probe(system_layout);
-            let lay = vectorcraft_text::layout(FontDb::global(), &t);
+            let lay = lay_out(&t);
             lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| t.xf * (g.xf * Point::ORIGIN)).collect()
         };
         let joined = origins(ms.iter().map(|m| m.ch).collect());
@@ -534,7 +534,7 @@ impl Line {
         let mut origins = |text: String| -> Vec<Point> {
             bare.text = text;
             let t = bare.probe(system_layout);
-            let lay = vectorcraft_text::layout(FontDb::global(), &t);
+            let lay = lay_out(&t);
             lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty()).map(|g| t.xf * (g.xf * Point::ORIGIN)).collect()
         };
         // With no spaces.
@@ -723,7 +723,7 @@ fn round_tracking(t: f64) -> f64 {
 /// glyph (a substitution the font makes) or the same glyph elsewhere (tracking, manual spacing,
 /// more space than whole spaces make); `None` when the type draws every glyph in its place.
 fn first_mismatch(t: &TextObject, matches: &[GlyphMatch], size: f64, slack: f64) -> Option<usize> {
-    let lay = vectorcraft_text::layout(FontDb::global(), t);
+    let lay = lay_out(t);
     let mut drawn = lay.glyphs.iter().filter(|g| !g.outline.elements().is_empty());
     // With a tolerance, a near-matched glyph, or any glyph of a line whose first glyph is one,
     // may sit that much further (as a fraction of the size) from where the type draws it.
@@ -998,6 +998,20 @@ fn max_wrap_work() -> usize {
     WRAP_LIMIT.with(|c| c.get())
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The glyphs [`lay_out`] laid out on this thread.
+    static GLYPHS_LAID_OUT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Type `t` laid out, for a check of where it draws its glyphs.
+fn lay_out(t: &TextObject) -> vectorcraft_text::TextLayout {
+    let lay = vectorcraft_text::layout(FontDb::global(), t);
+    #[cfg(test)]
+    GLYPHS_LAID_OUT.with(|n| n.set(n.get().saturating_add(lay.glyphs.len())));
+    lay
+}
+
 /// Lines farther apart than this many times their size do not join into one object.
 const MAX_LEADING: f64 = 3.0;
 
@@ -1159,7 +1173,7 @@ impl Block {
         let matches: Vec<GlyphMatch> = self.lines.iter().flat_map(|l| l.matches.iter().cloned()).collect();
         // Aligned at its end or center, point type starts its first line elsewhere: the type moves
         // so its first glyph is where the first outline is.
-        let lay = vectorcraft_text::layout(FontDb::global(), &t);
+        let lay = lay_out(&t);
         if let (Some(g), Some(m)) = (lay.glyphs.iter().find(|g| !g.outline.elements().is_empty()), matches.first()) {
             let at = t.xf * (g.xf * Point::ORIGIN);
             t.xf = kurbo::Affine::translate(m.origin - at) * t.xf;

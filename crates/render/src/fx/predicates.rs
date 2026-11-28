@@ -68,11 +68,13 @@ pub(super) fn evaluates_live(n: &Node) -> bool {
 /// dots sampled from everything it draws), one with a live-effect plug-in that paints its pieces
 /// (drawn only while the swatches and patterns they name are in the document), or an image with a
 /// fill or stroke that follows the outline of its pixels ([`effects::follows_image_pixels`]: the
-/// document's pixels for it can change), in it or in the opacity masks of the objects in it.
+/// document's pixels for it can change), or a placed document (its file read, or in some Outline
+/// frames its crossed box, [`vectorcraft_doc::placed_document::Crossed`]), in it or in the opacity
+/// masks of the objects in it.
 pub(super) fn reads_outside(n: &Node) -> bool {
     let mut reads = false;
     n.walk(&mut |c| {
-        reads |= matches!(c.kind, NodeKind::Text(_) | NodeKind::SymbolInstance { .. })
+        reads |= matches!(c.kind, NodeKind::Text(_) | NodeKind::SymbolInstance { .. } | NodeKind::PlacedDocument(_))
             || effects::follows_image_pixels(c)
             || effects::has_revolve(c)
             || effects::has_solid(c)

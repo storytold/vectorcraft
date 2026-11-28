@@ -523,7 +523,8 @@ fn layer_row_footer_drops_after_next_document_leave_the_new_document_alone() {
             name_row(&mut app, source, "Dragged Layer");
             app.run("shape.rectangle", json!({"x": x, "y": 20, "width": 40, "height": 30})).unwrap();
             app.run("layer.new", json!({"name": "Other Layer"})).unwrap();
-            (app.session.active().unwrap().uid, source)
+            let st = app.session.active().unwrap();
+            ((st.uid, st.reverts), source)
         };
         let (first_doc, first_layer) = setup(10);
         let (second_doc, second_layer) = setup(60);
@@ -536,7 +537,11 @@ fn layer_row_footer_drops_after_next_document_leave_the_new_document_alone() {
         panel.drag_hold_role("Dragged Layer", Role::TREE_ITEM, to - from);
         assert!(drag::mark(panel.ctx()).is_some(), "{button} accepts a drag from its own list");
         panel.key(Key::F6, Modifiers::COMMAND);
-        assert_eq!(panel.app().session.active().unwrap().uid, second_doc);
+        {
+            let app = panel.app();
+            let st = app.session.active().unwrap();
+            assert_eq!((st.uid, st.reverts), second_doc);
+        }
         let carried = drag::active::<LayersDrag<RowId>>(panel.ctx()).expect("the shortcut leaves the drag held");
         assert_eq!(carried.document(), Some(document_hash(first_doc)));
         assert!(drag::mark(panel.ctx()).is_none(), "{button} rejects a drag belonging to another document");

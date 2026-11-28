@@ -275,10 +275,10 @@ impl DisplayOrder<usize> for Names<'_> {
 
 impl ItemSource<usize> for Names<'_> {}
 
-/// A single-choice `Select` over `labels`: the index picked this pass.
+/// The index of a committed choice over `labels`.
 fn select(ui: &mut Ui, label: &'static str, current: usize, labels: &[&'static str]) -> Option<usize> {
     let entries: Vec<Entry<usize>> = labels.iter().enumerate().map(|(i, l)| Entry::new(i, Label::from(*l))).collect();
-    Select::new(label, Bind::given(current), &entries).show(ui).value().copied()
+    Select::new(label, Bind::given(current), &entries).show(ui).events.committed().copied()
 }
 
 /// The color mode menu (CMYK, RGB, Lab and HSB) and its rows, each a rail and a number field, for the
@@ -652,6 +652,65 @@ mod tests {
 
     fn themes(app: &VectorcraftApp) -> &[ColorTheme] {
         &app.session.prefs.color_themes
+    }
+
+    #[test]
+    fn color_theme_choice_escape_keeps_custom_colors_and_selection() {
+        use crate::tests::panel_harness::Panel;
+        use egui::{Key, Modifiers};
+
+        let mut app = app();
+        let starting = five_colors(&mut app);
+        let undo = undo_len(&app);
+        let next = Harmony::ALL[0];
+        let label = harmony::label(next);
+        let mut panel = Panel::new(app, show);
+        assert_eq!(panel.value_role("Rule:", Role::COMBO_BOX).as_deref(), Some("Custom"));
+        panel.click_role("Rule:", Role::COMBO_BOX);
+        assert!(panel.shows(label), "the list is open");
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        let browsing = draft(&mut panel.app());
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert!(!panel.shows(label), "Escape closes the list");
+        let cancelled = draft(&mut panel.app());
+        assert_eq!(cancelled, starting, "Escape keeps the original draft");
+        assert_eq!(browsing, starting, "browsing keeps the original draft");
+        assert_eq!(undo_len(&panel.app()), undo);
+
+        panel.click_role("Rule:", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        let applied = draft(&mut panel.app());
+        assert_eq!(applied.rule, Some(next));
+        assert_eq!(applied.colors, harmony::theme(next, starting.colors[starting.sel]));
+        assert_eq!(applied.sel, 0);
+        assert_eq!(undo_len(&panel.app()), undo);
+    }
+
+    #[test]
+    fn color_theme_choice_escape_keeps_slider_mode() {
+        use crate::tests::panel_harness::Panel;
+        use egui::{Key, Modifiers};
+
+        let mut app = app();
+        let starting = five_colors(&mut app);
+        app.ui.color_themes_panel.mode = Some(ColorPanelMode::RgbSliders);
+        let mut panel = Panel::new(app, show);
+        assert_eq!(panel.value_role("Color Mode:", Role::COMBO_BOX).as_deref(), Some("RGB"));
+        panel.click_role("Color Mode:", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        let browsing = panel.app().ui.color_themes_panel.mode;
+        panel.key(Key::Escape, Modifiers::NONE);
+        let cancelled = panel.app().ui.color_themes_panel.mode;
+        assert_eq!(cancelled, Some(ColorPanelMode::RgbSliders));
+        assert_eq!(browsing, Some(ColorPanelMode::RgbSliders));
+        assert_eq!(draft(&mut panel.app()), starting);
+
+        panel.click_role("Color Mode:", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        assert_eq!(panel.app().ui.color_themes_panel.mode, Some(ColorPanelMode::LabSliders));
+        assert_eq!(draft(&mut panel.app()), starting);
     }
 
     #[test]

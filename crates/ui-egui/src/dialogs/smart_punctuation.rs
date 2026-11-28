@@ -51,7 +51,7 @@ fn params_of(result: &ParamResult) -> Value {
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let source = app.session.active().ok_or("no document")?;
-    let document = source.uid;
+    let document = (source.uid, source.reverts);
     let selected = !source.selection.is_empty();
     let selection = source.selection.objects.iter().copied().collect::<HashSet<_>>();
     let mut params: Vec<Param> = options()
@@ -74,10 +74,13 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let owner = egui::Id::unique((COMMAND, "opening-drawing"));
     ctx.data_mut(|data| data.insert_temp(owner, document));
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| -> Result<(), String> {
-        let document = ctx.data(|data| data.get_temp::<u64>(owner));
-        let Some(active) = app.session.active().filter(|st| Some(st.uid) == document) else {
+        let document = ctx.data(|data| data.get_temp::<(u64, u64)>(owner));
+        let Some(active) = app.session.active().filter(|st| document.is_some_and(|(uid, _)| st.uid == uid)) else {
             return Err(tl!("Return to the original drawing to replace its punctuation").into());
         };
+        if document.is_some_and(|(_, reverts)| active.reverts != reverts) {
+            return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+        }
         let params = params_of(result);
         if params["scope"] == "selection"
             && (active.selection.is_empty()
@@ -201,6 +204,33 @@ mod tests {
         app.run("document.activate", json!({ "index": 0 })).unwrap();
         ok(&mut app);
         assert_eq!(plain(&app, source), "a–b");
+    }
+
+    #[test]
+    fn smart_punctuation_refuses_a_draft_from_before_revert() {
+        let (mut app, id) = app_with_text("a--b");
+        let dir = vectorcraft_testkit::TempDir::new("smart-punctuation-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("select.none", json!({})).unwrap();
+        open(&mut app).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let answer = super::super::tests_export::try_confirm(&mut app);
+        assert_eq!(plain(&app, id), "a--b", "OK changed the restored drawing");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert_eq!(answer, Err("The document was reverted. Reopen this dialog to continue.".into()));
+
+        let (ctx, dialog) = (app.ui_ctx.clone().unwrap(), entry(&app, COMMAND).unwrap().id);
+        app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, dialog));
+        crate::testing::app_frame(&mut app, &ctx, Default::default());
+        assert!(entry(&app, COMMAND).is_none());
+        open(&mut app).unwrap();
+        ok(&mut app);
+        assert_eq!(plain(&app, id), "a–b");
     }
 
     #[test]

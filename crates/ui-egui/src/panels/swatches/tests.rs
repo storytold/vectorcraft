@@ -163,15 +163,31 @@ fn a_foreign_swatch_row_payload_cannot_move_or_replace_local_swatches() {
     let drag = rows_drag(&app, "Red", &["Red"]);
     app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
     let before = doc(&app);
-    assert!(!dnd::accepts(&drag, app.session.active().unwrap().uid));
+    let state = app.session.active().unwrap();
+    assert!(!dnd::accepts(&drag, state.uid, state.reverts));
     dropped_below(&mut app, drag.clone(), none());
     dropped(&mut app, drag, "Green", alt());
     assert_eq!(doc(&app).swatches, before.swatches);
 }
 
+#[test]
+fn the_footer_menu_buttons_report_that_they_open_a_menu() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::PopupKind;
+
+    let panel = Panel::new(app(), show);
+    for name in [SwatchLibraries::MENU, "Show Swatch Kinds"] {
+        assert_eq!(panel.popup_kind(name), Some(PopupKind::Menu), "{name}");
+    }
+    for name in ["Delete Swatch", "New Swatch", "New Color Group"] {
+        assert_eq!(panel.popup_kind(name), None, "{name}");
+    }
+}
+
 /// Art `ids` dragged off the canvas.
 fn art_drag(app: &VectorcraftApp, ids: Vec<vectorcraft_doc::NodeId>) -> PanelDrag {
-    PanelDrag::Art { document: app.session.active().map(|st| st.uid).unwrap_or_default(), ids }
+    let (document, reverts) = app.session.active().map_or((0, 0), |st| (st.uid, st.reverts));
+    PanelDrag::Art { document, reverts, ids }
 }
 
 /// The browser's reorder committing `names` before row `before` (a colour group: into it).
@@ -1332,4 +1348,37 @@ fn show_recent_colors_keeps_collecting_and_reads_as_on_unless_false() {
         serde_json::from_value::<crate::UiState>(prefs).unwrap().swatches_show_recent_colors
     };
     assert_eq!((saved(json!(false)), saved(json!(true)), saved(json!("no"))), (false, true, true));
+}
+
+/// The footer's Swatch Libraries menu is as wide as the same rows in a swatch library panel's menu: the menu fits its
+/// rows.
+#[test]
+fn the_swatch_libraries_menu_fits_its_rows_like_a_library_panels_menu() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    fn library(app: &mut VectorcraftApp, ui: &mut Ui) {
+        let panel = library_panel::last_open(&app.ui).expect("a library panel is open").panel();
+        library_panel::show(app, ui, &panel);
+    }
+    let with_library = || {
+        let mut app = app();
+        let id = library_panel::tests::menu_library_ids::<SwatchLibraries>(&app).into_iter().next().expect("a swatch library");
+        app.run("window.swatchLibrary", json!({"library": id})).unwrap();
+        app
+    };
+    // Space on the focused footer button opens its menu; the Swatches panel's footer sits below the harness's room.
+    let open = |panel: &mut Panel| {
+        panel.focus("Swatch Libraries Menu");
+        panel.key(Key::Space, Modifiers::NONE);
+        panel.frame();
+    };
+    let mut footer = Panel::new(with_library(), show);
+    open(&mut footer);
+    let footer_menu = footer.rect_role("Swatch Libraries", Role::MENU);
+    let mut panel = Panel::new(with_library(), library);
+    open(&mut panel);
+    let panel_menu = panel.rect_role("Swatch Libraries Menu", Role::MENU);
+    assert_eq!(footer_menu.width(), panel_menu.width(), "footer menu {footer_menu:?}, library panel menu {panel_menu:?}");
 }

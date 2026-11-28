@@ -98,12 +98,14 @@ fn cancel_changes_nothing() {
 #[test]
 fn the_progress_window_shows_a_search() {
     let (mut app, _) = outlined();
+    // The app's clock stands still: the search is only old enough for its window when made so.
+    app.now_override = Some(0.0);
     let ctx = crate::testing::ui_context();
     let before = undos(&app);
     crate::menus::invoke(&mut app, "type.retype", json!({}));
     assert!(app.retype_runs.running.is_some());
     assert!(!progress(&mut app, &ctx, 0.0).contains("Finding matching fonts"), "not before the delay");
-    // The delay counts on the monotonic clock: the search started that long ago.
+    // The delay counts on the app's clock: the search started that long ago.
     if let Some(r) = app.retype_runs.running.as_mut() {
         r.started -= DELAY;
     }
