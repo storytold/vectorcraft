@@ -89,12 +89,14 @@ jobs:
   # 10 GB cache limit and get the corpus, SonarCloud and Windows ARM64 entries evicted. This deletes
   # the old entries when the `cache warm` leg starts saving (scripts/ci-clear-rolling-cache.py).
   # When the leg fails or is canceled it saves nothing, and this job fails too, so "Re-run failed
-  # jobs" runs it again beside the re-run leg.
+  # jobs" runs it again beside the re-run leg. The script's 160-minute wait starts when the leg
+  # starts, which is after `gate / select legs` and a free runner, so this job's timeout leaves
+  # 40 minutes for that.
   cold-cache-clear:
     name: cold cache clear
     if: github.event_name == 'schedule'
     runs-on: ubuntu-24.04
-    timeout-minutes: 170
+    timeout-minutes: 200
     permissions:
       actions: write
     steps:

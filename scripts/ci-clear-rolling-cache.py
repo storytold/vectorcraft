@@ -6,20 +6,21 @@
 The cold run (ci.yml, `cold-build`) never restores the rolling entry, so the old one only adds to
 the cache while the new one is saved: two entries of about 4.6 GB each, beside the others, go over
 the repository's 10 GB limit and GitHub evicts the corpus, SonarCloud and Windows ARM64 entries. The
-gate's `cache warm` leg saves in its `Post` steps; this deletes the old entries when the first of
-them starts. Pull requests and pushes that start in the minutes between restore nothing from the
+gate's `cache warm` leg saves in its `Post Setup` step; this deletes the old entries when that step
+starts. Pull requests and pushes that start in the minutes between restore nothing from the
 deleted entry and build cold once. Deleting is the only write; the entry the cold run saves does not
 exist yet when this runs. Only entries created before this run started are deleted: a push or pull
 request run in the same minutes may have saved an entry of its own, and the cold run's own save is
 never touched. A leg that failed or was canceled saves nothing: its old entries stay, and this
-exits 1, so "Re-run failed jobs" runs it again beside the re-run leg. It also exits 1 when the leg
-has not reached its save after GIVE_UP_SECONDS. An absent warm leg is treated as finished only
+exits 1, so "Re-run failed jobs" runs it again beside the re-run leg. The same holds for a leg that
+ends, canceled or failed, before its save step finished. It also exits 1 when the leg has not
+reached its save GIVE_UP_SECONDS after the leg started. An absent warm leg is treated as finished only
 when the most recent earlier attempt that lists it reports success and the current attempt lists
 no `cache prune` job, which runs from the start of "Re-run all jobs". Otherwise this keeps polling
 because reusable-workflow dependencies may still be scheduling it.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
 import re
@@ -34,9 +35,13 @@ WARM_JOB = re.compile(r'^gate / cache warm \(')
 NEEDED_JOBS = re.compile(r'^gate / (select legs$|build \()')
 PRUNE_JOB = 'cache prune'
 ROLLING = '-gate-crates-'
+# The gate-setup action's post step, which saves the dependency cache (craft-common-actions
+# actions/gate-setup, under the gate's `Setup` step).
+SAVE_STEP = 'Post Setup'
 POLL_SECONDS = 20
-# Longer than the gate's `timeout-minutes` in ci.yml, so a cold leg that runs to its limit still
-# reaches its save before this gives up.
+PAGE_SIZE = 100
+# Longer than the gate's `timeout-minutes` in ci.yml and timed from the leg's own start, so a cold
+# leg that starts late and runs to its limit still reaches its save before this gives up.
 GIVE_UP_SECONDS = 160 * 60
 STOPPED = ('failure', 'cancelled', 'timed_out')
 # Steps with continue-on-error in craft-common-actions .github/workflows/gate.yml.
@@ -44,14 +49,48 @@ TOLERATED_FAILURES = ('Trim the cache entry to this build',)
 NO_SAVE = 'the cache warm leg failed or was canceled and saves no entry; nothing deleted. Re-running the failed jobs runs this job again with the leg'
 
 
+def save_step(job):
+    return next((s for s in job.get('steps', []) if s['name'] == SAVE_STEP), None)
+
+
 def saving(job):
-    """True once the job's post steps (the cache save) have started."""
-    return any(s['name'].startswith('Post ') and s['status'] in ('in_progress', 'completed') for s in job.get('steps', []))
+    """True once the job's save step has started."""
+    step = save_step(job)
+    return step is not None and step['status'] in ('in_progress', 'completed')
 
 
 def failed(job):
     """True when a step before the post steps failed or was canceled: the leg then saves no entry."""
     return any(not s['name'].startswith('Post ') and s['name'] not in TOLERATED_FAILURES and s.get('conclusion') in STOPPED for s in job.get('steps', []))
+
+
+def saves_nothing(job):
+    """True when the leg saves no entry: a step before the save stopped, the save step did not
+    succeed, or the job ended before its save step finished."""
+    if failed(job):
+        return True
+    step = save_step(job)
+    if step is not None and step['status'] == 'completed':
+        return step.get('conclusion') != 'success'
+    return job.get('status') == 'completed'
+
+
+def gave_up(job, now, began):
+    """True once GIVE_UP_SECONDS have passed since the warm leg started, or since `began` (this
+    script's start) while the leg has not started."""
+    started = job.get('started_at') if job and job.get('status') in ('in_progress', 'completed') else None
+    return (now - (parse_time(started) if started else began)).total_seconds() > GIVE_UP_SECONDS
+
+
+def all_caches(fetch):
+    """Every cache entry, one page at a time: `fetch(page)` returns one page of actions/caches."""
+    entries, page = [], 1
+    while True:
+        batch = (fetch(page) or {}).get('actions_caches', [])
+        entries += batch
+        if len(batch) < PAGE_SIZE:
+            return entries
+        page += 1
 
 
 def warm_job(jobs):
@@ -95,7 +134,7 @@ def gh(*args):
 
 def main():
     repo, run, attempt = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_RUN_ID'], os.environ.get('GITHUB_RUN_ATTEMPT', '1')
-    deadline = time.monotonic() + GIVE_UP_SECONDS
+    began = datetime.now(timezone.utc)
     earlier_jobs = {}
     while True:
         jobs = gh(f'repos/{repo}/actions/runs/{run}/attempts/{attempt}/jobs?per_page=100') or {}
@@ -121,15 +160,15 @@ def main():
                 return 1
             print('the cache warm leg finished without a save step; nothing deleted')
             return
-        if time.monotonic() > deadline:
+        if gave_up(job, datetime.now(timezone.utc), began):
             print('::error::the cache warm leg never reached its save; nothing deleted')
             return 1
         time.sleep(POLL_SECONDS)
-    if failed(job):
+    if saves_nothing(job):
         print(f'::error::{NO_SAVE}')
         return 1
     started = gh(f'repos/{repo}/actions/runs/{run}')['run_started_at']
-    caches = (gh(f'repos/{repo}/actions/caches?ref={REF}&per_page=100') or {}).get('actions_caches', [])
+    caches = all_caches(lambda page: gh(f'repos/{repo}/actions/caches?ref={REF}&sort=created_at&direction=asc&per_page={PAGE_SIZE}&page={page}'))
     for c in created_before(rolling_entries(caches), started):
         print(f"delete {c['key']} ({c['size_in_bytes'] / 1e9:.2f} GB)")
         result = subprocess.run(['gh', 'api', '-X', 'DELETE', f"repos/{repo}/actions/caches/{c['id']}"], capture_output=True, text=True)
