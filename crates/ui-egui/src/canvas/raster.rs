@@ -987,7 +987,15 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, view: &CanvasV
                 let old = CanvasView::new(old_rect, Point::new(k.cx, k.cy), k.zoom).rotation(rotation);
                 let a = view.to_screen(old.to_doc(old_rect.min));
                 let b = view.to_screen(old.to_doc(old_rect.max));
-                let placed = snapped_rect(a, b - a, painter.pixels_per_point());
+                // A frame shown for the view, size and pixel density it was rendered for lands on
+                // whole device pixels so its strokes stay sharp. A cached frame shown while the
+                // canvas is panned, zoomed, resized or moved to another display keeps its exact
+                // document mapping until the replacement arrives.
+                let device_ppp = painter.pixels_per_point();
+                let current = (k.ppp - device_ppp).abs() < 1e-4
+                    && (k.cx, k.cy, k.zoom) == (view.center.x, view.center.y, view.zoom)
+                    && (old_rect.size() - rect.size()).abs().max_elem() < 1.0;
+                let placed = if current { snapped_rect(a, b - a, device_ppp) } else { egui::Rect::from_min_max(a, b) };
                 painter.image(tex.id(), placed, egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
             }
             // The view turned after the last frame was rendered, and the worker renders the frame at

@@ -9202,11 +9202,6 @@ file-filter	Applications	Aplikasi
 @msg	the layer effects of {n} layers weren't drawn	efek lapisan dari {n} lapisan tidak digambar
 @msg	the vector masks of 1 layer weren't applied	masker vektor dari 1 lapisan tidak diterapkan
 @msg	the vector masks of {n} layers weren't applied	masker vektor dari {n} lapisan tidak diterapkan
-@msg	`opacity` must be a number from 0 to 100	`opacity` harus berupa angka dari 0 sampai 100
-@msg	`opacity` must be true or false	`opacity` harus true atau false
-@msg	type characters have no opacity of their own: add a fill or stroke with the Appearance panel's Add New Fill or Add New Stroke	karakter teks tidak memiliki opasitas sendiri: tambahkan isian atau guratan dengan Tambahkan isian baru atau Tambahkan guratan baru di panel Tampilan
-@msg	an object selected in a symbol instance has no fill or stroke opacity of its own	objek yang dipilih dalam instans simbol tidak memiliki opasitas isian atau guratan sendiri
-@msg	no target has that fill or stroke to take the opacity	tidak ada target yang memiliki isian atau guratan itu untuk menerima opasitas
 @msg	give color, none, swatch, gradient or opacity	berikan color, none, swatch, gradient, atau opacity
 @msg	the knockout of 1 layer wasn't applied	knockout dari 1 lapisan tidak diterapkan
 @msg	the knockout of {n} layers wasn't applied	knockout dari {n} lapisan tidak diterapkan
