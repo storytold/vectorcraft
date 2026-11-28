@@ -5534,7 +5534,8 @@ already walks Image Trace. Short agent entry points:
   selection's appearance, as after any command.
 
 For an existing brush, approving Brush Options without changing its trimmed name or options closes the dialog
-without rewriting the brush, changing the document revision or adding Undo. A changed name or option is saved in
+without rewriting the brush, changing the document revision or adding Undo. An empty name is ignored and counts
+as unchanged. A changed name or option is saved in
 one step. A brush deleted while its dialog is open still gives an error on approval.
 
 `brush.selectionArt {ids?|id?}` (a query) replies `{art}`: the object that `brush.new` given the same `ids` or `id`,
