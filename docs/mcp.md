@@ -3038,7 +3038,7 @@ other files through `$`:
   `inscribed` true throw an error that says they are not available yet. A change to the geometry or paint of a path
   that is hidden or locked, that is in a hidden or locked layer or group, or that is on a locked artboard, throws
   `Cannot edit` with nothing changed. A point given to `setEntirePath` or assigned to `anchor`, `leftDirection` or
-  `rightDirection` more than 4,000,000 pt from the origin throws a range error when it is given, and the path keeps
+  `rightDirection` whose x or y is more than 4,000,000 pt from the origin throws a range error when it is given, and the path keeps
   its points. A path in a compound path or compound shape reads the fill, stroke and overprint of that compound path or
   shape, which the paint commands paint in its place. A change to a path's paint or stroke leaves the paint for new
   art, the active Fill or Stroke proxy and Recent Colors as they were. `transform`, `polarity`, the gradient stops and

@@ -16,8 +16,8 @@
 //!   groups and compound paths included.
 //! - A change to the geometry or paint of a path that is hidden or locked, or that is in a hidden
 //!   or locked layer or group, or that is on a locked artboard, throws `Cannot edit` with nothing
-//!   changed. A point assigned more than `MAX_COORD` from the origin throws a range error when it
-//!   is assigned.
+//!   changed. A point assigned whose x or y is more than `MAX_COORD` from the origin throws a
+//!   range error when it is assigned.
 //! - A path in a compound path or compound shape reads that owner's paint, which the paint
 //!   commands change in its place, and a gradient that `filled = true` gives it is placed on that
 //!   owner's bounds. A paint or stroke change leaves the paint for new art, the active proxy and
@@ -120,7 +120,7 @@ fn protected(h: &super::Host, st: &DocState, id: NodeId) -> Option<HostError> {
     }
 }
 
-/// `p`, a point the script assigned, which must be within [`crate::MAX_COORD`] of the origin.
+/// `p`, a point the script assigned, whose x and y must each be within [`crate::MAX_COORD`] of the origin.
 fn in_canvas(p: Point, what: &str) -> std::result::Result<Point, HostError> {
     if p.x.abs() <= crate::MAX_COORD && p.y.abs() <= crate::MAX_COORD {
         Ok(p)
