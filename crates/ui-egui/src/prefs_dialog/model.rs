@@ -17,7 +17,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind, PrefSpec, folder_check, spec};
 
-use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions};
+use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions, script_access};
 use crate::VectorcraftApp;
 use crate::i18n::{Lang, LangExt as _};
 use craft::color_ui::ui::ColorPickerDialog;
@@ -129,6 +129,8 @@ impl Live<'_> {
             "appTitleBar" => APP_TITLE_BAR_SHOWN,
             "linuxDisplayServer" => cfg!(target_os = "linux"),
             "monitorProfileDisplay" | "lowLatencyDrawing" => !cfg!(target_arch = "wasm32"),
+            // Only where the session keeps script grants: not without a settings folder, and not on the web.
+            script_access::KEY => self.w.script_access.is_some(),
             "editOriginal" => self.app.services.check_application.is_some() && self.app.services.open_in_application.is_some(),
             _ => true,
         }
@@ -258,6 +260,10 @@ impl Live<'_> {
             if sp.key == "editOriginalSystemDefaults" {
                 groups.add(sp.section, self.row("editOriginal", "", "Edit Original with PhotoCraft", RowKind::Custom));
             }
+            if sp.key == "showExternalScriptWarning" {
+                let english = "Script File Access revoke read write file folder";
+                groups.add(sp.section, self.row(script_access::KEY, tl!("Script File Access"), english, RowKind::CustomRows));
+            }
         }
         if cat == PREF_CATEGORIES[0] {
             let tools = self.row("prefsFile", "", "export import reset preferences", RowKind::Custom);
@@ -358,6 +364,10 @@ impl PreferencesModel for Live<'_> {
             "editOriginal" => {
                 let enabled = self.enabled(key);
                 crate::original_editor::show(self.app, ui, enabled);
+                false
+            }
+            script_access::KEY => {
+                script_access::show(self.app, &mut self.w.script_access, ui);
                 false
             }
             "prefsFile" => {

@@ -74,7 +74,15 @@ fn the_document_info_rows_wrap_in_a_narrow_panel_in_german() {
 
 #[test]
 fn the_magic_wand_rows_wrap_in_a_narrow_panel_in_french() {
-    let past = past_a_narrow_panel("magicWand", "fr", &["Tolerance:"]);
+    use crate::i18n::{Lang, LangExt as _, tr};
+
+    let captions = ["Tolerance:"];
+    let panel = floated(app_with_rect(), "magicWand", "fr", Place::Floating(PANEL_MIN_WIDTH), &captions);
+    let prefix = format!("{} ", tr(Lang::from_code("fr").unwrap(), "Tolerance:"));
+    let fields: Vec<_> = panel.nodes.iter().filter(|(name, _)| name.starts_with(&prefix)).cloned().collect();
+    assert_eq!(fields.len(), 4, "{fields:?}");
+    let mut past = panel.past_named(&captions);
+    past.extend(panel.past(fields));
     assert!(past.is_empty(), "past the panel: {past:?}");
 }
 

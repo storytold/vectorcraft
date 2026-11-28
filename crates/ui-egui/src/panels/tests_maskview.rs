@@ -33,6 +33,43 @@ fn click_mask(panel: &mut Panel, mods: Modifiers) {
     panel.click_part(ROW, ThumbTarget::Extra(0).part(), mods);
 }
 
+#[test]
+fn the_mask_thumbnail_only_edits_the_whole_symbol_instance() {
+    for mods in [Modifiers::ALT, Modifiers::NONE] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        run(&mut app, "file.new", json!({"width": 100, "height": 100}));
+        let rect = |app: &mut VectorcraftApp, x| run(app, "shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20}))["id"].clone();
+        let left = rect(&mut app, 10);
+        let right = rect(&mut app, 50);
+        let symbol = run(&mut app, "symbol.new", json!({"name": "Pair", "type": "dynamic", "ids": [left, right]}))["id"].clone();
+        let mask = rect(&mut app, 20);
+        run(&mut app, "transparency.makeOpacityMask", json!({"ids": [symbol, mask]}));
+        run(&mut app, "symbol.instance.selectPart", json!({"id": symbol, "path": [0]}));
+        let mut panel = Panel::new(app, transparency::show);
+        let undo = panel.app().session.active().unwrap().history.undo.len();
+
+        click_mask(&mut panel, mods);
+        {
+            let app = panel.app();
+            let st = app.session.active().unwrap();
+            assert!(st.doc.mask_edit.is_none() && st.shown_mask().is_none(), "the part cannot enter the instance mask with {mods:?}");
+            assert_eq!(st.history.undo.len(), undo);
+            assert!(st.selection.symbol_part.is_some());
+        }
+        for label in ["Release", "Clip", "Invert Mask", "Isolate Blending", "Knockout Group", "Opacity & Mask Define Knockout Shape"] {
+            assert!(!panel.enabled(label), "{label} applies to the whole instance");
+        }
+        assert!(panel.enabled("Opacity") && panel.enabled("Blend Mode"));
+
+        run(&mut panel.app(), "select.set", json!({"ids": [symbol]}));
+        click_mask(&mut panel, mods);
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.doc.mask_edit.map(|edit| edit.object.0), symbol.as_u64());
+        assert_eq!(st.shown_mask().map(|id| id.0), mods.alt.then(|| symbol.as_u64().unwrap()));
+    }
+}
+
 /// In pattern editing mode a click or an Alt-click on the mask thumbnail of a masked object in the
 /// tile does not edit the mask, and the status bar says to finish editing the pattern first. Make
 /// Mask is off for one object, which it would take into mask editing. After Done a click edits the

@@ -12,9 +12,7 @@ use vectorcraft_three_d::fold::raster::{Image, MAX_PIXELS, MAX_SIDE};
 
 use super::{PrintKey, Settings, Shown, View, inside_color, show, status};
 use crate::VectorcraftApp;
-
-/// How long a test waits for the print to render.
-const PRINT_WAIT: Duration = Duration::from_secs(30);
+use crate::thumb_worker::SETTLE_SECS;
 
 /// An app with a tray blank (a 100 pt base at x 140 to 240, y 140 to 240, and a 40 pt wall on each
 /// side) and a red square printed on the base, nothing selected → (app, the red square's id).
@@ -37,6 +35,7 @@ fn app() -> (VectorcraftApp, u64) {
     app.run("paint.setStroke", json!({ "none": true })).unwrap();
     app.run("object.arrange.sendToBack", json!({})).unwrap();
     app.run("select.none", json!({})).unwrap();
+    app.now_override = Some(0.0);
     (app, red)
 }
 
@@ -74,11 +73,12 @@ impl Window {
     /// Frames until the print of the document as it is has been rendered and drawn.
     fn settle(&mut self, app: &mut VectorcraftApp) -> Shown {
         for _ in 0..SETTLE_FRAMES {
+            tick(app);
             self.frame(app);
             if print_ready(app) {
                 break;
             }
-            wait_for_print(app);
+            finish_print(app);
         }
         assert!(print_ready(app), "the print renders");
         for _ in 0..3 {
@@ -88,9 +88,18 @@ impl Window {
     }
 }
 
-/// Most frames a test runs while it waits for the print: the window waits for the document to
-/// settle (by the real clock) before it renders a print of a changed document.
-const SETTLE_FRAMES: usize = 200;
+/// Most frames a test runs while it waits for the print: one notes the change, the next finds the
+/// document settled and queues the print, and the one after that takes the finished print in.
+const SETTLE_FRAMES: usize = 8;
+
+/// How far [`tick`] moves the app's clock: more than [`SETTLE_SECS`], and exact in binary.
+const TICK_SECS: f64 = 1.0;
+
+/// Moves the app's clock on by [`TICK_SECS`], so the next frame finds a document that changed
+/// before it settled.
+fn tick(app: &mut VectorcraftApp) {
+    app.now_override = Some(app.now() + TICK_SECS);
+}
 
 /// Whether the print shown is the one of the document and Show Fold Lines setting as they are.
 fn print_ready(app: &VectorcraftApp) -> bool {
@@ -99,12 +108,11 @@ fn print_ready(app: &VectorcraftApp) -> bool {
     view.pending.is_none() && view.print.as_ref().map(|(k, _)| (Some(k.revision), k.fold_lines)) == Some(wanted)
 }
 
-/// Lets a queued print finish, and gives the settle gate time to pass.
-fn wait_for_print(app: &VectorcraftApp) {
+/// Waits until the queued print has rendered, so the next frame takes it in.
+fn finish_print(app: &VectorcraftApp) {
     if let Some(queue) = &app.addon_panels.fold_view.prints {
-        queue.finish(PRINT_WAIT);
+        assert!(queue.finish(Duration::MAX), "the print queue finishes its work");
     }
-    std::thread::sleep(Duration::from_millis(20));
 }
 
 /// Draws the window in a 520 × 440 room and settles it.
@@ -203,6 +211,30 @@ fn the_window_draws_the_print_on_the_folded_panels_and_the_inside_on_their_backs
     let after = app.addon_panels.fold_view.print.clone();
     let same = matches!((&before, &after), (Some((k, p)), Some((k2, p2))) if k == k2 && Arc::ptr_eq(p, p2));
     assert!(same, "no new print without a change");
+}
+
+#[test]
+fn a_changed_document_is_printed_again_once_it_has_settled_on_the_app_clock() {
+    let (mut app, _) = app();
+    let mut window = Window::new(1.0, vec2(520.0, 440.0));
+    app.run("ui.foldPreview", json!({"amount": 0, "view": "front"})).unwrap();
+    window.settle(&mut app);
+    let printed = |app: &VectorcraftApp| app.addon_panels.fold_view.print.as_ref().map(|(k, _)| k.revision);
+    let before = printed(&app);
+    app.run("shape.rectangle", json!({"x": 350, "y": 350, "width": 10, "height": 10})).unwrap();
+    // The frame that sees the change, and a frame before the clock has moved on by the settle time,
+    // queue no print.
+    window.frame(&mut app);
+    app.now_override = Some(app.now() + SETTLE_SECS / 2.0);
+    window.frame(&mut app);
+    assert!(app.addon_panels.fold_view.pending.is_none(), "no print is queued while the document settles");
+    app.now_override = Some(app.now() + SETTLE_SECS);
+    window.frame(&mut app);
+    assert!(app.addon_panels.fold_view.pending.is_some(), "the print is queued once the app's clock passes the settle time");
+    finish_print(&app);
+    window.frame(&mut app);
+    let after = printed(&app);
+    assert!(after.is_some() && after != before, "the print is of the changed document: {before:?} then {after:?}");
 }
 
 #[test]
@@ -323,11 +355,12 @@ impl Rig {
     /// Frames until the print of the document as it is has been rendered and drawn.
     fn settle(&mut self) {
         for _ in 0..SETTLE_FRAMES {
+            tick(&mut self.app.borrow_mut());
             self.fx.idle(1);
             if print_ready(&self.app.borrow()) {
                 break;
             }
-            wait_for_print(&self.app.borrow());
+            finish_print(&self.app.borrow());
         }
         assert!(print_ready(&self.app.borrow()), "the print renders");
         self.fx.idle(3);

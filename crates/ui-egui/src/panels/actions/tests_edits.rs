@@ -203,6 +203,29 @@ fn options_with_a_field_that_is_not_an_index_change_nothing() {
     }
 }
 
+#[test]
+fn stale_action_options_do_not_rename_the_copy_that_took_its_index() {
+    let mut app = app_with_sets();
+    crate::dialogs::action_set_options::open_action(&mut app, 1, 1);
+    set_dialog::<SetOptionsDialog>(&mut app, "name", json!("Wrong target"));
+    assert_eq!(app.run(DUPLICATE, json!({"set": 1, "action": 0})).unwrap(), json!({"set": 1, "action": 1}));
+    let before = action_names(&app, 1);
+    assert!(confirm_dialog::<SetOptionsDialog>(&mut app).is_err(), "an index taken by a copy must refuse OK");
+    assert!(is_open::<SetOptionsDialog>(&app));
+    assert_eq!(action_names(&app, 1), before);
+}
+
+#[test]
+fn stale_set_options_do_not_rename_the_set_that_took_its_index() {
+    let mut app = app_with_sets();
+    crate::dialogs::action_set_options::open(&mut app, 1);
+    set_dialog::<SetOptionsDialog>(&mut app, "name", json!("Wrong target"));
+    app.ui.actions.delete_set("Mine").unwrap();
+    assert!(confirm_dialog::<SetOptionsDialog>(&mut app).is_err(), "an index taken by the next set must refuse OK");
+    assert!(is_open::<SetOptionsDialog>(&app));
+    assert_eq!(set_names(&app), ["Default Actions", "Other"]);
+}
+
 /// `ui.actionSet.delete` moves the panel's selected action down with its set, and clears it
 /// when its set is deleted.
 #[test]

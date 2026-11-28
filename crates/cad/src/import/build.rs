@@ -708,16 +708,29 @@ fn rgb_color([r, g, b]: [u8; 3]) -> Color {
     Color::rgb8(r, g, b)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many names [`unique`] tried on this thread (tests).
+    pub(crate) static SYMBOL_NAMES_TRIED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether `taken` holds `name`, counted as one name tried (tests).
+fn is_taken(taken: &HashSet<String>, name: &str) -> bool {
+    #[cfg(test)]
+    SYMBOL_NAMES_TRIED.with(|n| n.set(n.get().saturating_add(1)));
+    taken.contains(name)
+}
+
 /// `base`, or `base 2`, `base 3`… when taken; `next` remembers where each base left off.
 fn unique(base: &str, next: &mut HashMap<String, usize>, taken: &HashSet<String>) -> String {
-    if !taken.contains(base) {
+    if !is_taken(taken, base) {
         return base.to_string();
     }
     let i = next.entry(base.to_string()).or_insert(2);
     loop {
         let name = format!("{base} {i}");
         *i += 1;
-        if !taken.contains(&name) {
+        if !is_taken(taken, &name) {
             return name;
         }
     }

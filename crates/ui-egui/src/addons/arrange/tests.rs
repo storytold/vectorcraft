@@ -4,6 +4,7 @@ use vectorcraft_engine::Session;
 
 use super::ZOOM;
 use crate::addons::dialogs::tests as host;
+use crate::tests::panel_harness::Panel as Harness;
 use crate::{VectorcraftApp, menus};
 
 /// An app with a window, where its dialogs open, and two rectangles without a stroke, both selected.
@@ -27,6 +28,85 @@ fn click(app: &mut VectorcraftApp, label: &str) {
     let item = entries.iter().find(|e| e.path == ["Object", "Plug-ins", "Arrange Tools"] && e.label == label).expect(label);
     let (id, p) = menus::click_target(&item.label, item.command.as_deref().unwrap(), &item.params);
     menus::invoke(app, &id, p);
+}
+
+/// Replace a numeric field's text and commit by moving focus, without confirming the dialog.
+fn type_number(panel: &mut Harness, label: &str, text: &str) {
+    panel.click(label);
+    panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+    panel.type_text(text);
+    panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+    panel.frame();
+}
+
+#[test]
+fn real_grid_edits_reach_the_preview_and_confirmed_geometry() {
+    let (app, a, b) = app();
+    let mut panel = Harness::new(app, crate::tests::picks::dialogs);
+    click(&mut panel.app(), "Arrange in Grid…");
+    type_number(&mut panel, "Columns", "1");
+    type_number(&mut panel, "V Spacing", "7");
+    let id = host::dialog_id(&panel.app());
+    assert_eq!(host::read(&panel.app(), id, |f| f.int("columns")), Some(1));
+    let preview = {
+        let app = panel.app();
+        (bounds(&app, a), bounds(&app, b))
+    };
+    assert!((preview.0.center().x - preview.1.center().x).abs() < 1e-6);
+    assert!((preview.1.y0 - preview.0.y1 - 7.0).abs() < 1e-6);
+    panel.click("OK");
+    panel.frame();
+    let app = panel.app();
+    assert_eq!((bounds(&app, a), bounds(&app, b)), preview);
+    assert!(!app.any_dialog_open());
+}
+
+#[test]
+fn real_size_keyboard_edits_keep_unticked_sides_unchanged() {
+    let (app, a, b) = app();
+    let mut panel = Harness::new(app, crate::tests::picks::dialogs);
+    click(&mut panel.app(), "Set Size of Each…");
+    panel.frame();
+    panel.focus("Height");
+    panel.key(egui::Key::Space, egui::Modifiers::NONE);
+    // Width's number follows its checkbox in keyboard order; the number has no separate caption.
+    panel.focus("Width");
+    panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+    panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+    panel.type_text("30");
+    panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+    panel.frame();
+    let id = host::dialog_id(&panel.app());
+    assert_eq!(host::read(&panel.app(), id, |f| (f.number("width"), f.bool("heightOn"))), (Some(30.0), Some(false)));
+    panel.click("OK");
+    panel.frame();
+    let app = panel.app();
+    let (first, second) = (bounds(&app, a), bounds(&app, b));
+    assert_eq!((first.width(), first.height()), (30.0, 10.0));
+    assert_eq!((second.width(), second.height()), (30.0, 40.0));
+}
+
+#[test]
+fn real_opacity_edits_drive_validation_confirmation_and_cancel() {
+    let (app, a, b) = app();
+    let mut panel = Harness::new(app, crate::tests::picks::dialogs);
+    click(&mut panel.app(), "Randomize Opacity…");
+    type_number(&mut panel, "Minimum", "80");
+    type_number(&mut panel, "Maximum", "20");
+    assert!(!panel.enabled("OK"), "a minimum above the maximum disables confirmation");
+    type_number(&mut panel, "Maximum", "80");
+    assert!(panel.enabled("OK"));
+    panel.click("OK");
+    panel.frame();
+    let opacity = |panel: &Harness, id| panel.app().session.doc().unwrap().doc.node(id).unwrap().opacity;
+    assert!((opacity(&panel, a) - 0.8).abs() < 1e-6 && (opacity(&panel, b) - 0.8).abs() < 1e-6);
+    click(&mut panel.app(), "Randomize Opacity…");
+    type_number(&mut panel, "Minimum", "25");
+    type_number(&mut panel, "Maximum", "25");
+    assert!((opacity(&panel, a) - 0.25).abs() < 1e-6);
+    panel.click("Cancel");
+    panel.frame();
+    assert!((opacity(&panel, a) - 0.8).abs() < 1e-6 && (opacity(&panel, b) - 0.8).abs() < 1e-6);
 }
 
 #[test]

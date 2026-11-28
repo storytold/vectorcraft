@@ -138,9 +138,7 @@ impl StackDialog for NewActionDialog {
                     TextField::new(label("Name:"), Bind::bound(&mut fields.name)).show(ui);
                 });
                 Field::new(label("Action Set:")).show(ui, |ui, _| {
-                    if let Some(set) = Select::new(label("Action Set:"), Bind::given(fields.set), &sets).show(ui).value().copied() {
-                        fields.set = set;
-                    }
+                    Select::new(label("Action Set:"), Bind::bound(&mut fields.set), &sets).show(ui);
                 });
                 key_and_color(ui, &mut fields.options);
                 automatic_align_options(ui, &mut fields.options);
@@ -162,5 +160,112 @@ impl StackDialog for NewActionDialog {
 
     fn set_json_field(&mut self, ctx: &Context, field: &str, value: Value) -> Result<(), String> {
         self.form.set_field(ctx, field, value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use craft::automation::actions::{ActionColor, ActionList};
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    use super::*;
+    use crate::dialogs::action_set_options::SetOptionsDialog;
+    use crate::panels::actions::{FUNCTION_KEYS, STOP_RECORDING, model};
+    use crate::tests::panel_harness::Panel;
+
+    fn panel() -> Panel {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        app.ui.actions = ActionList::new();
+        app.ui.actions.new_set("First").unwrap();
+        app.ui.actions.new_set("Second").unwrap();
+        app.ui.action_set = Some("First".into());
+        Panel::new(app, crate::tests::picks::dialogs)
+    }
+
+    fn fields(panel: &Panel) -> NewActionFields {
+        panel.app().dialogs().unwrap().with(|host| host.get::<NewActionDialog>().unwrap().form.values.clone())
+    }
+
+    fn popup(panel: &mut Panel, name: &str) {
+        panel.click_role(name, Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+    }
+
+    #[test]
+    fn cancelled_choices_keep_the_new_action_destination_key_and_color() {
+        let mut panel = panel();
+        open(&mut panel.app()).unwrap();
+        panel.frame();
+        let original = fields(&panel);
+        for name in ["Action Set", "Function Key", "Color"] {
+            popup(&mut panel, name);
+            assert_ne!(fields(&panel), original, "the popup previews {name}");
+            panel.key(Key::Escape, Modifiers::NONE);
+            panel.frame();
+            assert_eq!(fields(&panel), original, "Escape restores {name}");
+        }
+        assert!(panel.enabled("Record"));
+        panel.click("Record");
+        panel.frame();
+        panel.frame();
+        {
+            let app = panel.app();
+            assert!(app.ui.recording.is_some());
+            assert_eq!(model::members(&app.ui.actions, "First").len(), 1);
+            assert!(model::members(&app.ui.actions, "Second").is_empty());
+            let action = app.ui.actions.actions().first().unwrap();
+            assert_eq!(action.name, original.name);
+            assert_eq!(action.color, ActionColor::None);
+            assert!(model::function_key(action).is_none());
+        }
+        panel.app().run(STOP_RECORDING, json!({})).unwrap();
+        crate::dialogs::action_set_options::open_action(&mut panel.app(), 0, 0);
+        panel.frame();
+        let options = |panel: &Panel| panel.app().dialogs().unwrap().with(|host| host.get::<SetOptionsDialog>().unwrap().json_fields().unwrap());
+        let original = options(&panel);
+        for name in ["Function Key", "Color"] {
+            popup(&mut panel, name);
+            panel.key(Key::Escape, Modifiers::NONE);
+            panel.frame();
+            assert_eq!(options(&panel), original, "Action Options restores {name}");
+        }
+        panel.click("OK");
+        panel.frame();
+        let app = panel.app();
+        let action = app.ui.actions.actions().first().unwrap();
+        assert_eq!(action.color, ActionColor::None);
+        assert!(model::function_key(action).is_none());
+    }
+
+    #[test]
+    fn committed_choices_are_used_by_record() {
+        let mut panel = panel();
+        open(&mut panel.app()).unwrap();
+        panel.frame();
+        popup(&mut panel, "Action Set");
+        panel.key(Key::Enter, Modifiers::NONE);
+        popup(&mut panel, "Color");
+        panel.key(Key::Enter, Modifiers::NONE);
+        let key = (1..=FUNCTION_KEYS).find(|&key| key_reason(&ActionOptions { key, ..Default::default() }).is_none()).unwrap();
+        panel.click_role("Function Key", Role::COMBO_BOX);
+        panel.key(Key::Home, Modifiers::NONE);
+        for _ in 0..key {
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+        }
+        panel.key(Key::Enter, Modifiers::NONE);
+        let chosen = fields(&panel);
+        assert_eq!((chosen.set, chosen.options.key, chosen.options.color), (1, key, ActionColor::ALL[1]));
+        panel.click("Record");
+        panel.frame();
+        panel.frame();
+        let app = panel.app();
+        assert!(model::members(&app.ui.actions, "First").is_empty());
+        assert_eq!(model::members(&app.ui.actions, "Second").len(), 1);
+        let action = app.ui.actions.actions().first().unwrap();
+        assert_eq!(action.color, chosen.options.color);
+        assert_eq!(model::function_key(action).map(|key| key.key), Some(key));
+        assert!(app.ui.recording.is_some());
     }
 }

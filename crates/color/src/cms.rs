@@ -1211,7 +1211,18 @@ pub fn active_settings() -> ColorSettings {
 
 /// The color-management context of Edit → Color Settings (the working spaces, intent and black
 /// point compensation), as [`set_active`] last set them, whatever profiles a document is assigned.
+/// Inside [`with_active`] on this thread: the working settings of the settings it was given.
 pub fn working() -> Arc<Cms> {
+    if SCOPED_FLAGS.with(Cell::get) & SCOPED_SET != 0
+        && let Some(c) = SCOPED.with(|s| s.borrow().clone())
+    {
+        return c.working.clone().unwrap_or(c);
+    }
+    installed_working()
+}
+
+/// The working settings of the process, as [`set_active`] last set them.
+fn installed_working() -> Arc<Cms> {
     if let Some(c) = WORKING.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
         return c.clone();
     }
@@ -1241,7 +1252,7 @@ pub fn set_active(settings: &ColorSettings) -> Result<(), CmsError> {
 /// is not of its model, leaves the working space. The working settings stay as they are. True when
 /// the active settings changed.
 pub fn use_document_profiles(rgb: Option<&str>, cmyk: Option<&str>) -> bool {
-    let working = working();
+    let working = installed_working();
     let st = document_settings(&working.settings, rgb, cmyk);
     if st == installed().settings {
         return false;
@@ -1281,7 +1292,7 @@ const DOCUMENT_CONTEXTS: usize = 8;
 /// loaded gives the working settings.
 pub fn for_document(rgb: Option<&str>, cmyk: Option<&str>) -> Arc<Cms> {
     static KEPT: Mutex<Vec<(u64, Arc<Cms>)>> = Mutex::new(Vec::new());
-    let working = working();
+    let working = installed_working();
     let st = document_settings(&working.settings, rgb, cmyk);
     let installed = installed();
     if st == installed.settings {
@@ -1308,7 +1319,10 @@ pub fn for_document(rgb: Option<&str>, cmyk: Option<&str>) -> Arc<Cms> {
 
 /// Run `f` with `cms` as the active settings on this thread ([`active`], [`crate::Color::to_rgb`]
 /// and the conversions that read them), as when drawing a document other than the front one
-/// through its own profiles. Other threads, and this thread after `f`, keep the settings they had.
+/// through its own profiles, and with the working settings `cms` was made from as the working
+/// settings ([`working`]): the ones [`for_document`] put the document's profiles in place of, else
+/// `cms` itself. A [`set_active`] while `f` runs, on any thread, does not change either on this
+/// thread. Other threads, and this thread after `f`, keep the settings they had.
 pub fn with_active<R>(cms: Arc<Cms>, f: impl FnOnce() -> R) -> R {
     /// Puts back the settings this thread had before, when `f` returns or unwinds.
     struct Restore(Option<Arc<Cms>>, u8);
