@@ -360,6 +360,16 @@ impl Panel {
         (shapes, images)
     }
 
+    /// The runs of text the latest frame painted, with their rects.
+    pub(crate) fn texts(&self) -> Vec<(String, Rect)> {
+        self.fixture.texts().iter().map(|t| (t.text.clone(), t.rect)).collect()
+    }
+
+    /// Where the latest frame painted `text` as a whole run.
+    pub(crate) fn painted(&self, text: &str) -> Vec<Rect> {
+        self.texts().into_iter().filter(|(t, _)| t == text).map(|(_, r)| r).collect()
+    }
+
     /// Where the control of `role` named `name` is, where nodes of other roles share the name.
     pub(crate) fn rect_role(&self, name: &str, role: craft::ui::contract::Role) -> Rect {
         self.look_role(name, role).rect

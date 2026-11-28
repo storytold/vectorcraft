@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use craft::keymap::CommandRef;
-use craft::ui::contract::{Show as _, ShowContainer as _};
+use craft::ui::contract::{Gap, Show as _, ShowContainer as _};
 use craft::ui::display::{Divider, Shade, Text};
 use craft::ui::layout::RowAlign;
 use craft::ui::layout_components::{Row, Stack};
@@ -35,7 +35,8 @@ pub struct DocInfoView {
 /// the second or third click of a double or triple click.
 pub(crate) fn row(ui: &mut Ui, label: &str, value: &str) -> bool {
     let mut clicked = false;
-    Row::new().fill_width().align(RowAlign::SpaceBetween).wrap(true).show(ui, |ui, _| {
+    // A wrapping row places its children as `Start` does, so the row does not wrap and the value stands at its end.
+    Row::new().fill_width().align(RowAlign::SpaceBetween).show(ui, |ui, _| {
         Text::new(label.to_string()).shade(Shade::Muted).show(ui);
         // The value can be selected and copied, and a click copies all of it (#8432). A drag selects
         // and a Shift-click extends the selection, so neither copies.
@@ -154,7 +155,9 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let DocInfoView { selection_only: sel_only, category } = app.ui.doc_info.clone();
     let mut copy = None;
-    Stack::new().show(ui, |ui, _| {
+    // The sections fill the panel's width, so each row's value stands at its end, and a section gap sets the
+    // dividers apart from the sections around them.
+    Stack::new().fill_width().gap(Gap::Section).show(ui, |ui, _| {
         if sel_only && no_artwork_selected(app) {
             Text::new(tl!("(No artwork selected)").to_string()).shade(Shade::Muted).show(ui);
         }
@@ -164,38 +167,40 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             if n > 0 {
                 Divider::horizontal().show(ui);
             }
-            let title = s["title"].as_str().unwrap_or_default();
-            let rows = s["rows"].as_array().map_or(&[][..], Vec::as_slice);
-            // Lists show how many they hold; the selection scope shows on the first.
-            let title = match s["id"].as_str() {
-                Some("document" | "objects") => tl!(title).to_string(),
-                _ => format!("{} ({})", tl!(title), rows.len()),
-            };
-            let title =
-                if sel_only && n == 0 && category.is_empty() { crate::i18n::fmt(tl!("{title} (selection)"), &[("title", &title)]) } else { title };
-            Text::new(title).role(TypeRole::Heading).show(ui);
-            if rows.is_empty() {
-                Text::new(tl!("None").to_string()).shade(Shade::Muted).show(ui);
-            }
-            let id = s["id"].as_str().unwrap_or_default();
-            let named = named_rows(id, rows);
-            for (k, r) in rows.iter().enumerate() {
-                let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
-                if value.is_empty() {
-                    if named.contains(&k) && !label.is_empty() {
-                        if copy_value(ui, label, label, false) {
-                            copy = Some(label.to_string());
+            Stack::new().fill_width().show(ui, |ui, _| {
+                let title = s["title"].as_str().unwrap_or_default();
+                let rows = s["rows"].as_array().map_or(&[][..], Vec::as_slice);
+                // Lists show how many they hold; the selection scope shows on the first.
+                let title = match s["id"].as_str() {
+                    Some("document" | "objects") => tl!(title).to_string(),
+                    _ => format!("{} ({})", tl!(title), rows.len()),
+                };
+                let title =
+                    if sel_only && n == 0 && category.is_empty() { crate::i18n::fmt(tl!("{title} (selection)"), &[("title", &title)]) } else { title };
+                Text::new(title).role(TypeRole::Heading).show(ui);
+                if rows.is_empty() {
+                    Text::new(tl!("None").to_string()).shade(Shade::Muted).show(ui);
+                }
+                let id = s["id"].as_str().unwrap_or_default();
+                let named = named_rows(id, rows);
+                for (k, r) in rows.iter().enumerate() {
+                    let (label, value) = (r[0].as_str().unwrap_or_default(), r[1].as_str().unwrap_or_default());
+                    if value.is_empty() {
+                        if named.contains(&k) && !label.is_empty() {
+                            if copy_value(ui, label, label, false) {
+                                copy = Some(label.to_string());
+                            }
+                        } else {
+                            Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
                         }
                     } else {
-                        Text::new(super::label_or_name(label, !named.contains(&k)).to_string()).shade(Shade::Muted).show(ui);
-                    }
-                } else {
-                    let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
-                    if row(ui, super::label_or_name(label, !named.contains(&k)), &shown) {
-                        copy = Some(shown);
+                        let shown = shown_value(&i, id, k, (label, value), named.contains(&k)).unwrap_or_else(|| value.to_string());
+                        if row(ui, super::label_or_name(label, !named.contains(&k)), &shown) {
+                            copy = Some(shown);
+                        }
                     }
                 }
-            }
+            });
         }
     });
     if let Some(text) = copy {

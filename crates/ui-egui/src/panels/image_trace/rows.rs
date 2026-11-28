@@ -10,7 +10,7 @@ use craft::color_ui::ui::{ColorPopover, PickedColor};
 use craft::theme::Srgba;
 use craft::ui::buttons::ToggleButton;
 use craft::ui::choice::{Checkbox, Segmented};
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, FieldLayout, Props as _, Show as _, ShowContainer as _};
 use craft::ui::form::{Field, SliderField, SliderFieldLayout};
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::Select;
@@ -265,7 +265,14 @@ pub(crate) fn advanced_rows(ui: &mut Ui, params: &mut Value, _data: &RowsData, _
             Row::new().show(ui, |ui, _| {
                 let mut hit = None;
                 for (key, on, other, label) in [("fills", fills, strokes, tl!("Fills")), ("strokes", strokes, fills, tl!("Strokes"))] {
-                    if check(ui, label, on, !on || other) {
+                    // Inside the Create field a check box's own label is not drawn, so each box takes a field of
+                    // its own with the label after it.
+                    let enabled = !on || other;
+                    let mut value = on;
+                    Field::new(label).layout(FieldLayout::After).enabled(enabled).show(ui, |ui, _| {
+                        Checkbox::new(Bind::bound(&mut value)).enabled(enabled).show(ui);
+                    });
+                    if value != on {
                         hit = Some(key);
                     }
                 }

@@ -1237,6 +1237,8 @@ mod tests_maskview;
 #[cfg(test)]
 mod tests_panel_rows;
 #[cfg(test)]
+mod tests_panel_spacing;
+#[cfg(test)]
 mod tests_script_console;
 #[cfg(test)]
 mod tests_stroke;
