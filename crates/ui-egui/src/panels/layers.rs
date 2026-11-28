@@ -239,7 +239,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         .trailing(|id, info| cells::build(&tree, id, info), |id, shown| cells::output(&mut picks, &mut target_click, &mut art_click, id, shown))
         .row_menu(|target| controls::row_menu(&tree, target))
         .footer(|ui| controls::footer(&tree, ui, &mut footer))
-        .document(uid);
+        // Revert keeps the UID but replaces the drawing that the row edits belonged to.
+        .document((uid, st.reverts));
     if let Some(id) = reveal {
         panel = panel.reveal(RowId::Node(id), Groups::Open);
     }

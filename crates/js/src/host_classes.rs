@@ -131,6 +131,19 @@ pub fn host_ref(class: &str, handle: &[f64]) -> Data {
     Data::Object(vec![(HOST_REF_KEY.to_string(), Data::Array(list))])
 }
 
+/// The one key of the [`Data`] object that stands for a script's `File` in the arguments of a host
+/// class's member ([`file_ref_path`]). A plain object a script made that carries it is refused.
+pub const FILE_REF_KEY: &str = "\u{0}fileRef";
+
+/// The path of the `File` that `d`, an argument of a host class's member, stands for.
+pub fn file_ref_path(d: &Data) -> Option<&str> {
+    let Data::Object(items) = d else { return None };
+    match items.as_slice() {
+        [(k, Data::String(path))] if k == FILE_REF_KEY => Some(path),
+        _ => None,
+    }
+}
+
 /// The class and handle of the object `d` stands for, when it is one [`host_ref`] made.
 pub fn host_ref_parts(d: &Data) -> Option<(&str, Vec<f64>)> {
     let Data::Object(items) = d else { return None };

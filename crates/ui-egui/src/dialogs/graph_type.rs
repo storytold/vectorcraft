@@ -749,7 +749,7 @@ fn body(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject) {
     // A page the type picked lacks shows Graph Options.
     let page = pages.iter().map(|(id, _)| *id).find(|id| *id == v.str(PAGE)).unwrap_or("options");
     let entries: Vec<Entry<&'static str>> = pages.iter().map(|&(id, name)| Entry::new(id, name)).collect();
-    if let Some(id) = Select::new(tl!("Graph Type"), Bind::given(page), &entries).show(ui).value().copied() {
+    if let Some(id) = Select::new(tl!("Graph Type"), Bind::given(page), &entries).show(ui).events.committed().copied() {
         v.set(PAGE, json!(id));
     }
     match page {
@@ -765,7 +765,7 @@ fn body(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject) {
 
 /// A checkbox over the flag `key`.
 fn check(ui: &mut Ui, v: &mut GraphTypeValues, key: &str, label: &'static str, enabled: bool) {
-    if let Some(on) = Checkbox::new(Bind::given(v.bool(key))).label(label).enabled(enabled).show(ui).value().copied() {
+    if let Some(on) = Checkbox::new(Bind::given(v.bool(key))).label(label).enabled(enabled).show(ui).events.committed().copied() {
         v.set(key, json!(on));
     }
 }
@@ -777,7 +777,8 @@ fn choice(ui: &mut Ui, v: &mut GraphTypeValues, key: &str, label: &'static str, 
     let current = options.iter().map(|(value, _)| *value).find(|value| *value == v.str(key));
     let shown = current.map_or(Mixed::Mixed, Mixed::Same);
     let mut picked = None;
-    Field::new(label).show(ui, |ui, _| picked = Select::new(label, Bind::given(shown), &entries).enabled(enabled).show(ui).value().copied());
+    Field::new(label)
+        .show(ui, |ui, _| picked = Select::new(label, Bind::given(shown), &entries).enabled(enabled).show(ui).events.committed().copied());
     if let Some(value) = picked {
         v.set(key, json!(value));
     }
@@ -796,7 +797,7 @@ fn number_row(ui: &mut Ui, v: &mut GraphTypeValues, key: &str, label: &'static s
         }
         edit = Some(field.show(ui).edit);
     });
-    if let Some(Some(x)) = edit.as_ref().and_then(|edit| edit.value().copied()) {
+    if let Some(Some(x)) = edit.as_ref().and_then(|edit| edit.events.committed().copied()) {
         v.set(key, json!(x));
     }
 }
@@ -805,7 +806,7 @@ fn number_row(ui: &mut Ui, v: &mut GraphTypeValues, key: &str, label: &'static s
 fn text_row(ui: &mut Ui, v: &mut GraphTypeValues, key: &str, label: &'static str) {
     let mut typed = None;
     Field::new(label).show(ui, |ui, _| {
-        typed = TextField::new(label, Bind::given(v.str(key).to_owned())).limit(AFFIX_CHARS).show(ui).value().cloned();
+        typed = TextField::new(label, Bind::given(v.str(key).to_owned())).limit(AFFIX_CHARS).show(ui).events.committed().cloned();
     });
     if let Some(text) = typed {
         v.set(key, json!(text));
@@ -966,7 +967,7 @@ fn type_row(ui: &mut Ui, v: &mut GraphTypeValues, s: &GraphSubject) {
         })
         .collect();
     let shown = chosen(v).map_or(Mixed::Mixed, |kind| Mixed::Same(kind.id()));
-    if let Some(id) = Segmented::new(tl!("Type"), Bind::given(shown), &entries).show(ui).value().copied() {
+    if let Some(id) = Segmented::new(tl!("Type"), Bind::given(shown), &entries).show(ui).events.committed().copied() {
         v.set("type", json!(id));
     }
 }
@@ -1132,6 +1133,90 @@ mod tests {
 
     fn steps(app: &VectorcraftApp) -> usize {
         app.session.active().unwrap().history.undo.len()
+    }
+
+    /// The dialog edits a draft until OK. Escape from a field or popup must not leave its last
+    /// proposal in that draft, while deliberate edits still apply together in one undo step.
+    #[test]
+    fn real_cancelled_and_committed_controls_apply_only_the_accepted_graph_options() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        for commit in [false, true] {
+            let mut app = app_with_graph("column");
+            app.run(COMMAND, json!({"columnWidth": 80, "prefix": "USD", "tickLength": "short", "dropShadow": false})).unwrap();
+            let original = query(&mut app);
+            let document = app.session.active().unwrap().doc.clone();
+            let before = steps(&app);
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(900.0, 900.0));
+            open(&mut panel.app()).unwrap();
+            panel.frame();
+            panel.click_role("Column Width", Role::SPIN_BUTTON);
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text("140");
+            if commit {
+                panel.key(Key::Tab, Modifiers::NONE);
+            } else {
+                panel.key(Key::Escape, Modifiers::NONE);
+                assert!(!is_open(&panel.app()), "Escape from a typed number discards the modal");
+                assert!(panel.app().session.active().unwrap().doc == document);
+                open(&mut panel.app()).unwrap();
+            }
+            panel.frame();
+            assert_eq!(field(&panel.app(), "columnWidth"), if commit { json!(140.0) } else { json!(80.0) });
+            if commit {
+                panel.click("Add Drop Shadow");
+                panel.click("Stacked Column Graph");
+                assert_eq!(field(&panel.app(), "dropShadow"), true);
+                assert_eq!(field(&panel.app(), "type"), "stackedColumn");
+            }
+            panel.click_role("Graph Type", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Escape, Modifiers::NONE);
+            panel.frame();
+            assert_eq!(field(&panel.app(), PAGE), "options", "the cancelled page choice stays on Graph Options");
+            panel.click_role("Graph Type", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(Key::Enter, Modifiers::NONE);
+            panel.frame();
+            assert_eq!(field(&panel.app(), PAGE), "valueAxis");
+            if commit {
+                panel.click_role("Prefix", Role::TEXT_INPUT);
+                panel.key(Key::A, Modifiers::COMMAND);
+                panel.type_text("EUR");
+                panel.key(Key::Tab, Modifiers::NONE);
+                panel.frame();
+            }
+            assert_eq!(field(&panel.app(), "prefix"), if commit { json!("EUR") } else { json!("USD") });
+            panel.click_role("Length", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            panel.key(if commit { Key::Enter } else { Key::Escape }, Modifiers::NONE);
+            panel.frame();
+            assert_eq!(field(&panel.app(), "tickLength"), if commit { json!("full") } else { json!("short") });
+            assert_eq!(*panel.app().session.active().unwrap().doc, *document, "the draft has no live artwork preview");
+            assert_eq!(steps(&panel.app()), before);
+            panel.click("OK");
+            panel.frame();
+            panel.frame();
+            assert!(!is_open(&panel.app()));
+            assert_eq!(steps(&panel.app()), before + usize::from(commit));
+            let after = query(&mut panel.app());
+            if commit {
+                assert_eq!(
+                    (after["columnWidth"].clone(), after["prefix"].clone(), after["tickLength"].clone()),
+                    (json!(140.0), json!("EUR"), json!("full"))
+                );
+                assert_eq!(after["type"], "stackedColumn");
+                assert_eq!(after["dropShadow"], true);
+                panel.app().run("edit.undo", json!({})).unwrap();
+                assert_eq!(query(&mut panel.app()), original);
+            } else {
+                assert_eq!(after, original);
+                assert_eq!(*panel.app().session.active().unwrap().doc, *document);
+            }
+        }
     }
 
     /// Object › Graph › Type… opens the dialog on the selected graph's options, on its Graph

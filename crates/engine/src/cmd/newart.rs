@@ -286,9 +286,9 @@ impl Session {
             return;
         }
         let read = self.read_selection_paints();
-        let (fill_mixed, stroke_mixed) = read.as_ref().map_or_else(|| self.proxy_mixed(), |p| (p.fill_mixed, p.stroke_mixed));
+        let (fill_mixed, stroke_mixed) = read.as_ref().map_or_else(|| self.proxy_mixed(), |p| (p.fill_mixed(), p.stroke_mixed()));
         let (fill, stroke) = self.proxy_paints();
-        let weight_mixed = read.as_ref().map_or_else(|| self.active().is_some_and(|st| st.stroke_mixed().weight), |p| p.weight_mixed);
+        let weight_mixed = read.as_ref().map_or_else(|| self.active().is_some_and(|st| st.stroke_mixed().weight), |p| p.weight_mixed());
         let weight = self.shown_stroke().filter(|st| st.paint != Paint::None && !weight_mixed).map(|st| st.width);
         // A proxy that shows the color the active tool paints with (the Shape Builder's fill) keeps it.
         if !fill_mixed && !self.tool_paints(false) {
@@ -323,7 +323,7 @@ impl Session {
                 Some(SelectionRecord { doc: Arc::downgrade(&st.doc), objects: st.selection.objects.clone(), settled, paints: Some(paints) });
         }
         let paints = st.selection_paints()?.clone();
-        (!paints.in_live_paint && self.fill_mesh_points().is_empty()).then_some(paints)
+        (!paints.in_live_paint() && self.fill_mesh_points().is_empty()).then_some(paints)
     }
 }
 
