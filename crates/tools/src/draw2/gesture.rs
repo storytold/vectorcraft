@@ -1778,6 +1778,9 @@ impl Tool for GestureTool {
                 }
                 self.knife_shift(ev.mods);
                 self.moved |= self.points.first().is_some_and(|start| p.distance(*start) > vectorcraft_geom::EPS);
+                // Where the pointer really went: a sample dropped below, or a point snapped back
+                // onto the start, has still left it.
+                self.note_leaving(cx, p);
                 let p = self.constrained_drag(cx, p, ev.mods);
                 let mut end = p;
                 if self.grid_snaps(cx) && !self.smoothing && !self.straight {
@@ -1810,7 +1813,6 @@ impl Tool for GestureTool {
                     // follows the point `finish` will test.
                     let kept = self.points.last().copied().filter(|l| l.distance(p) < cx.tol(1.0) && !self.grid_snaps(cx));
                     let release_end = kept.unwrap_or(end);
-                    self.note_leaving(cx, release_end);
                     self.near_start = self.release_closes_near_start(cx, release_end);
                     self.connects = self.connects_at(cx, release_end).is_some();
                     if self.points.last().is_some_and(|l| l.distance(p) < cx.tol(1.0)) {
@@ -1819,7 +1821,6 @@ impl Tool for GestureTool {
                     return vec![];
                 }
                 self.push(p, ev);
-                self.note_leaving(cx, end);
                 self.near_start = self.release_closes_near_start(cx, end);
                 self.connects = self.connects_at(cx, end).is_some();
                 if !self.draws_path() || self.smoothing {
