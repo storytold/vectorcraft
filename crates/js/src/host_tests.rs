@@ -842,6 +842,48 @@ fn the_answer_to_a_waiting_member_of_a_host_class_is_an_object_of_its_class() {
 }
 
 #[test]
+fn a_read_of_a_class_on_another_branch_gives_a_new_object() {
+    let mut r = realm(1_000_000);
+    let class = |name: &str, parent: Option<&str>| HostClass {
+        name: name.into(),
+        parent: parent.map(Into::into),
+        members: Vec::new(),
+        index: None,
+        construct: None,
+    };
+    let get: HostFunction = Rc::new(|a| match a.get(1) {
+        Some(Data::String(name)) => Ok(host_ref(name, &[1.0])),
+        _ => Ok(Data::Null),
+    });
+    let mut maker = class("Maker", None);
+    maker.members.push(("get".into(), HostMember::Method(get)));
+    let classes = vec![class("Base", None), class("Left", Some("Base")), class("Right", Some("Base")), class("Leaf", Some("Left")), maker];
+    r.define_host_classes(classes, vec![("maker".into(), host_ref("Maker", &[]))]).unwrap();
+    let script = "function get(n) { return maker.get(n); } var l = get('Left'), b = get('Base'), f = get('Leaf'); var r = get('Right'); \
+                  [l === b, b === f, f instanceof Leaf, r === l, r instanceof Right, l instanceof Leaf, get('Leaf') === l, \
+                  get('Right') === r, get('Base') === r].join()";
+    assert_eq!(r.run(script).unwrap(), JsValue::String("true,true,true,false,true,true,true,true,true".into()));
+}
+
+/// The path of a `File` a member of a host class gives is charged to the heap.
+#[test]
+fn the_path_of_a_file_a_host_class_gives_is_charged_to_the_heap() {
+    let bytes_after = |len: usize| {
+        let mut r = realm(1_000_000);
+        let current: HostFunction = Rc::new(|_| Ok(Data::String("d".into())));
+        r.define_file_classes(vec![("current".into(), HostItem::Function(current))]).unwrap();
+        let file: HostFunction = Rc::new(move |_| Ok(file_ref(&"p".repeat(len))));
+        let members = vec![("file".to_string(), HostMember::Method(file))];
+        let maker = HostClass { name: "Maker".into(), parent: None, members, index: None, construct: None };
+        r.define_host_classes(vec![maker], vec![("maker".into(), host_ref("Maker", &[]))]).unwrap();
+        assert_eq!(r.run("var f = maker.file(); f instanceof File"), Ok(JsValue::Bool(true)));
+        r.interp().heap.bytes
+    };
+    let (short, long) = (bytes_after(1), bytes_after(100_000));
+    assert!(long >= short + 2 * 99_999, "{short} {long}");
+}
+
+#[test]
 fn a_host_class_constructor_called_with_new_cannot_wait() {
     let mut r = realm(1_000_000);
     let could: Rc<Cell<Option<bool>>> = Rc::default();

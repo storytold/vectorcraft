@@ -5136,6 +5136,8 @@ liquify-list-end	{0}, {1}	{0} и {1}
 @msg	Script file could not be written	Не удалось записать файл скрипта
 @msg	Script file dialogs need a person to answer them	Для ответа на файловые диалоги скрипта нужен человек
 @msg	Script file is not open for writing	Файл скрипта не открыт для записи
+@msg	Script file is read-only	Файл скрипта доступен только для чтения
+@msg	Script file is open for writing	Файл скрипта открыт для записи
 @msg	Script file name is already in use	Имя файла скрипта уже используется
 @msg	Script file name must be a name without a folder	Имя файла скрипта должно быть именем без папки
 @msg	Script file permission can be kept only for a script run from a file	Разрешение на файлы можно сохранить только для скрипта, запущенного из файла

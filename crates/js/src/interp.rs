@@ -322,9 +322,9 @@ pub(crate) struct Interp {
     pub(crate) host_classes: Vec<crate::host_classes::Entry>,
     /// Whether [`Self::write_data`] makes objects of host classes from their [`crate::host_ref`].
     pub(crate) write_hosted: bool,
-    /// The object made for each family of classes and handle ([`crate::host_classes`]), so that two reads of
-    /// the same one give the same object. It is not a root: an entry whose object was collected is
-    /// dropped after each collection.
+    /// The objects made for each family of classes and handle ([`crate::host_classes`]), so that two reads of
+    /// the same one give the same object. It is not a root: an object that was collected is dropped
+    /// after each collection.
     pub(crate) host_objects: crate::host_classes::Made,
     /// `UnitValue`, once a host has added it ([`crate::Realm::add_unit_values`]). Until then the
     /// operators take no object as a measurement.

@@ -290,7 +290,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// `(` after a name: a call.
     fn call(&mut self, line: Option<usize>) {
         let [h0, h1, h2, h3] = self.h;
-        // `doc['exportVariables'](f)`: a document method named by a string literal in brackets.
+        // `doc['saveAs'](f)`: a document method named by a string literal in brackets.
         if is(h0, "]")
             && is(h2, "[")
             && let Some(name) = h1.filter(|s| s.kind == T::Str)

@@ -859,7 +859,7 @@ fn assigning_the_selection_selects_a_symbol_or_on_path_group_as_a_whole() {
 }
 
 #[test]
-fn a_held_image_stays_the_same_object_when_it_is_embedded() {
+fn a_held_image_is_stale_when_it_is_embedded() {
     let dir = super::links::Folder::new("dom-embed");
     let photo = dir.file("photo.png");
     super::links::write(&photo, &super::links::png(20, 10, [255, 0, 0]));
@@ -869,11 +869,12 @@ fn a_held_image_stays_the_same_object_when_it_is_embedded() {
         &mut s,
         &format!(
             "var i = app.activeDocument.pageItems[0]; vc.log(i.typename); vc.run('links.embed', {{ids: [{}]}});\
-             var j = app.activeDocument.pageItems[0]; vc.log([i === j, i.typename, i instanceof RasterItem, i instanceof PlacedItem]);",
+             var j = app.activeDocument.pageItems[0], m = ''; try {{ i.typename; }} catch (e) {{ m = e.message; }}\
+             vc.log([i === j, m, j.typename, j instanceof RasterItem, i instanceof PlacedItem]);",
             id.0
         ),
     );
-    assert_eq!(out, vec![json!("PlacedItem"), json!([true, "RasterItem", true, false])]);
+    assert_eq!(out, vec![json!("PlacedItem"), json!([false, "Stale page item", "RasterItem", true, true])]);
 }
 
 #[test]

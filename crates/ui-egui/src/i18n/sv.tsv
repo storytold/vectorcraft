@@ -5009,6 +5009,8 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	Script file could not be written	Skriptets fil kunde inte skrivas
 @msg	Script file dialogs need a person to answer them	Skriptets fildialoger behöver en person som svarar på dem
 @msg	Script file is not open for writing	Skriptets fil är inte öppen för skrivning
+@msg	Script file is read-only	Skriptets fil är skrivskyddad
+@msg	Script file is open for writing	Skriptets fil är öppen för skrivning
 @msg	Script file name is already in use	Namnet på skriptets fil används redan
 @msg	Script file name must be a name without a folder	Namnet på skriptets fil måste vara ett namn utan mapp
 @msg	Script file permission can be kept only for a script run from a file	Filbehörighet kan bara behållas för ett skript som körs från en fil

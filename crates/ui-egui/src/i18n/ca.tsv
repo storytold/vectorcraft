@@ -6641,6 +6641,8 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	Script file could not be written	No s’ha pogut escriure el fitxer de l’script
 @msg	Script file dialogs need a person to answer them	Els diàlegs de fitxers de l’script necessiten una persona que els respongui
 @msg	Script file is not open for writing	El fitxer de l’script no està obert per escriure-hi
+@msg	Script file is read-only	El fitxer de l’script és només de lectura
+@msg	Script file is open for writing	El fitxer de l’script està obert per escriure-hi
 @msg	Script file name is already in use	El nom del fitxer de l’script ja està en ús
 @msg	Script file name must be a name without a folder	El nom del fitxer de l’script ha de ser un nom sense carpeta
 @msg	Script file permission can be kept only for a script run from a file	El permís de fitxers només es pot conservar per a un script executat des d’un fitxer

@@ -848,8 +848,9 @@ macOS cursor delivery (#2292) is narrowed to a native host adapter using the exi
 
 - **Missing:** the rest of the document object model for scripts (layers, artboards, paths, type and the
   other classes) and the `#engine` script directive (#1183 is open). Scripts have `app`, the open documents, new
-  documents, each document's selection and its page items, and each document's variables, data sets and variable
-  libraries. File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry, `#targetengine`
+  documents, each document's selection and its page items, each document's variables, data sets and variable
+  libraries, and its linked and embedded images (`placedItems` and `rasterItems`, with `PlacedItem` and
+  `RasterItem`); tracing, rasterizing and capturing images are still missing. File › Scripts › Other Script… and `script.run` run JavaScript files over the command registry, `#targetengine`
   runs a script in a named engine whose globals last between runs,
   File › Scripts lists the scripts of the Scripts folder, and
   Window › Script Console shows their output, errors and run reports. Actions, Batch, Variables (text, visibility, image and graph), data set CSV import and

@@ -39,12 +39,15 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
     ("Document.prototype.exportVariables", "app.activeDocument.exportVariables(f);", "filesWritten"),
     ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
+    ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
+    ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.saveAs` and `close` throw "not available yet".
+/// documents; `Document.close` throws "not available yet". `app.open` reads the file it is given,
+/// and `PlacedItem.file=` and `PlacedItem.relink` read the image file they are given.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -81,13 +84,14 @@ const INSIDE: &[(&str, &str)] = &[
         "",
         "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
          DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
-         Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= Tag Tags ZOrderMethod",
+         Documents ElementPlacement Layer PageItem PageItems PlacedItem PlacedItems RasterItem RasterItems RulerUnits \
+         selection selection= Tag Tags ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents executeMenuCommand \
-         getIsFileOpen selection selection= toString typename",
+         getIsFileOpen open selection selection= toString typename userInteractionLevel userInteractionLevel=",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -103,9 +107,9 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
-         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
-         typename views views= width",
+         groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= placedItems rasterItems \
+         rulerOrigin rulerOrigin= rulerUnits selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= \
+         toString typename views views= width",
     ),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name toString typename"),
@@ -120,6 +124,19 @@ const INSIDE: &[(&str, &str)] = &[
          position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
+    ),
+    ("PlacedItems.", "prototype"),
+    ("PlacedItems.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("PlacedItem.", "prototype"),
+    ("PlacedItem.prototype.", "boundingBox constructor contentVariable contentVariable= embed file file= matrix matrix= relink trace trace="),
+    ("RasterItems.", "prototype"),
+    ("RasterItems.prototype.", "constructor getByName index length parent removeAll typename"),
+    ("RasterItem.", "prototype"),
+    (
+        "RasterItem.prototype.",
+        "bitsPerChannel boundingBox channels colorants colorants= colorize colorize= colorizedGrayscale constructor \
+         contentVariable contentVariable= embedded embedded= file imageColorSpace matrix matrix= overprint overprint= status \
+         trace trace= transparent",
     ),
     ("Tags.", "prototype"),
     ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
@@ -139,6 +156,24 @@ const INSIDE: &[(&str, &str)] = &[
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
+    // The enumerations of saving, exporting and opening.
+    ("", "Compatibility EPSPostScriptLevelEnum EPSPreview ExportType PDFBoxType PDFCompatibility PDFOverprint UserInteractionLevel"),
+    (
+        "Compatibility.",
+        "ILLUSTRATOR10 ILLUSTRATOR11 ILLUSTRATOR12 ILLUSTRATOR13 ILLUSTRATOR14 ILLUSTRATOR15 ILLUSTRATOR16 ILLUSTRATOR17 \
+         ILLUSTRATOR19 ILLUSTRATOR8 ILLUSTRATOR9 JAPANESEVERSION3",
+    ),
+    ("EPSPostScriptLevelEnum.", "LEVEL2 LEVEL3"),
+    ("EPSPreview.", "BWTIFF COLORTIFF None TRANSPARENTCOLORTIFF"),
+    ("ExportType.", "AutoCAD FLASH GIF JPEG PNG24 PNG8 SVG TIFF"),
+    ("PDFBoxType.", "PDFARTBOX PDFBLEEDBOX PDFBOUNDINGBOX PDFCROPBOX PDFMEDIABOX PDFTRIMBOX"),
+    ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
+    ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
+    ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
+    // The enumerations of placed and raster items.
+    ("", "ImageColorSpace RasterLinkState"),
+    ("ImageColorSpace.", "CMYK DeviceN Grayscale Indexed LAB RGB Separation"),
+    ("RasterLinkState.", "DATAFROMFILE DATAMODIFIED NODATA"),
     // Variables and data sets. `importVariables` reads the library file it is given. `PageItem`'s
     // `visibilityVariable` is in its row above.
     ("", "Dataset Datasets Variable VariableKind Variables"),
@@ -158,9 +193,11 @@ const INSIDE: &[(&str, &str)] = &[
     ("TextFrame.prototype.", "contentVariable contentVariable="),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: the page item types.
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// and the save and export option classes.
 const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+     PlacedDocumentItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
+     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

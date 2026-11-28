@@ -500,9 +500,7 @@ fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
         let shown = f64::from(shown_columns(s));
         let field = NumberField::new(columns.clone(), Bind::given(Some(shown))).range(1.0..=n).step(1.0).commit_decimals(0).enabled(several && grid);
         if let Some(v) = field.show(ui).edit.events.committed().copied().flatten().filter(|v| v.is_finite()) {
-            // A column count replaces a preset's rows.
-            s.columns = v.round().clamp(1.0, n) as u32;
-            s.rows = 0;
+            set_columns(s, v.round().clamp(1.0, n) as u32);
         }
     });
 }
@@ -526,6 +524,15 @@ fn choose_layout(s: &mut DocSettings, l: ArtboardLayout) {
         s.rows = 0;
     }
     s.layout = l;
+}
+
+/// A column count entered in More Settings replaces the rows of a preset made with `file.new`'s
+/// `rows`; the same count as shown changes nothing.
+fn set_columns(s: &mut DocSettings, columns: u32) {
+    if columns != shown_columns(s) {
+        s.columns = columns;
+        s.rows = 0;
+    }
 }
 
 /// Manage Profiles' pop-up: a row per New Document profile with Edit, which opens the profile as a
@@ -1110,6 +1117,18 @@ mod tests {
         let ctx = ctx(&app);
         crate::dialogs::host::pump(&mut app, &ctx);
         assert!(app.session.documents().is_empty(), "no document was made");
+    }
+
+    /// A new column count replaces a preset's rows; the count already shown changes nothing.
+    #[test]
+    fn a_new_column_count_replaces_a_presets_rows() {
+        let rows = DocSettings { artboards: 9, layout: ArtboardLayout::GridByColumn, columns: 2, rows: 4, ..DocSettings::default() };
+        let mut s = rows.clone();
+        set_columns(&mut s, 3);
+        assert_eq!(s, rows, "3 is what the rows show");
+        set_columns(&mut s, 2);
+        assert_eq!((s.layout, s.columns, s.rows), (ArtboardLayout::GridByColumn, 2, 0));
+        assert_eq!(s.grid_columns(), 2);
     }
 
     /// The preset keeps the artboard layout, spacing and columns More Settings set (#4893); an empty

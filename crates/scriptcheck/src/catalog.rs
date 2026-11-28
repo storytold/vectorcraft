@@ -77,7 +77,7 @@ pub(crate) const REFLECT: &str = "reflect";
 pub(crate) const DOM_ROOTS: [&str; 4] = ["app", "activeDocument", "documents", "selection"];
 
 // Document methods that write the file they are given: https://ai-scripting.docsforadobe.dev/jsobjref/Document/
-pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportVariables"];
+pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportFile", "exportVariables", "saveAs"];
 
 // Application methods that page doesn't list, named in public forum posts:
 // https://community.adobe.com/t5/illustrator-discussions/changes-in-cs6/td-p/4173362 (executeMenuCommand,

@@ -530,6 +530,34 @@ fn the_scripts_own_platform_names_are_not_the_platforms() {
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["filesWritten"]);
 }
 
+/// A document's `saveAs` and `exportFile` write the file they are given; `app.open` only reads one.
+#[test]
+fn save_as_and_export_file_write_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = app.open(f);\n",
+        "d.saveAs(f);\n",
+        "app.activeDocument.exportFile(f, ExportType.PNG24);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
+/// `saveAs` and `exportFile` called with their names as string literals in brackets write the file
+/// too; reading the method without calling it does not.
+#[test]
+fn save_as_and_export_file_in_brackets_write_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument['open'](f);\n",
+        "app.activeDocument[\"saveAs\"](f);\n",
+        "var d = app.activeDocument; d['exportFile'] (f, ExportType.SVG);\n",
+        "var n = d['saveAs'];\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
 /// A document's `exportVariables` writes the file it is given; `importVariables` only reads one.
 #[test]
 fn export_variables_writes_a_file() {

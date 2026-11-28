@@ -90,6 +90,8 @@
 @msg	Script file could not be written	Het scriptbestand kon niet worden geschreven
 @msg	Script file dialogs need a person to answer them	Dialoogvensters voor scriptbestanden moeten door een persoon worden beantwoord
 @msg	Script file is not open for writing	Het scriptbestand is niet geopend voor schrijven
+@msg	Script file is read-only	Het scriptbestand is alleen-lezen
+@msg	Script file is open for writing	Het scriptbestand is geopend voor schrijven
 @msg	Script file name is already in use	De naam van het scriptbestand is al in gebruik
 @msg	Script file name must be a name without a folder	De naam van het scriptbestand moet een naam zonder map zijn
 @msg	Script file permission can be kept only for a script run from a file	Toestemming voor scriptbestanden kan alleen worden bewaard voor een script dat vanuit een bestand wordt uitgevoerd

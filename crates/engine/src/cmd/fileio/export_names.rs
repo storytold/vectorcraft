@@ -73,7 +73,9 @@ pub(super) fn distinct_names_by(names: impl IntoIterator<Item = String>, key: im
 
 /// Write an export's files for the destination `path` → `{path, bytes, files?, linked?, …extra}`
 /// (`files`: every file when there are several; `linked`: the images it links to); with no path
-/// → the same with `dataBase64` and `{name, dataBase64}` rows, named after `name`.
+/// → the same with `dataBase64` and `{name, dataBase64}` rows, named after `name`. Every path is
+/// checked against the file access in force before the first file is written, so a refused path
+/// writes none of them.
 pub(super) fn write_encoded(path: Option<&str>, name: &str, doc: &vectorcraft_doc::Document, enc: &Encoded, extra: Value) -> Result<Value> {
     let files = enc.named(doc, path.unwrap_or(name));
     let (main, linked) = files.split_at(enc.files.len());
@@ -82,6 +84,12 @@ pub(super) fn write_encoded(path: Option<&str>, name: &str, doc: &vectorcraft_do
         None => json!({ "name": name, "dataBase64": vectorcraft_format::base64_encode(bytes) }),
     };
     if path.is_some() {
+        #[cfg(not(target_arch = "wasm32"))]
+        if files.len() > 1 {
+            for (p, _) in &files {
+                super::may_write(p)?;
+            }
+        }
         for (p, bytes) in &files {
             write_file(p, bytes)?;
         }
