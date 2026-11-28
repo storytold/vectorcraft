@@ -174,6 +174,11 @@ struct Group {
     document: Option<Shown>,
     /// An image placed from a DCS file: the plate files of their own its plates were read from.
     plate_files: Vec<vectorcraft_doc::separated::PlateFile>,
+    /// The stored relative paths of the group's objects other than `link`'s, each once: objects
+    /// with the same path and content can each keep a relative path of its own.
+    other_relatives: Vec<String>,
+    /// `other_relatives` as a set, looked up for every object added to the group.
+    relatives_seen: std::collections::HashSet<String>,
 }
 
 /// What a placed document shows: whether the art's bounds (not the artboard or page) are shown,
@@ -203,6 +208,31 @@ pub(crate) fn linked_groups(d: &Document) -> Vec<(String, Vec<u64>)> {
     out
 }
 
+/// Every place a linked image or placed document of `d` (a document looking from `base`) is read
+/// from, wherever it is stored, brush art included, whether or not a file is there: each place
+/// [`locate`] looks at, and beside each one the plate files of an image placed from a DCS file,
+/// as its plate-change check finds them. A link's absolute stored and relative paths are listed
+/// as they are too, for the relative path of every object in a group.
+pub(crate) fn link_read_places(d: &Document, base: LinkBase) -> Vec<String> {
+    let mut out = vec![];
+    for g in groups(d, None) {
+        let others = g.other_relatives.iter().map(|r| LinkInfo { relative: Some(r.clone()), ..g.link.clone() });
+        for link in std::iter::once(g.link.clone()).chain(others) {
+            let mut mains: Vec<String> = std::iter::once(link.path.as_str())
+                .chain(link.relative.as_deref())
+                .filter(|p| Path::new(p).is_absolute())
+                .map(str::to_string)
+                .collect();
+            mains.extend(places(&link, base));
+            for main in mains {
+                out.extend(g.plate_files.iter().filter_map(|f| super::place::dcs::plate_file_path(&main, &f.name)));
+                out.push(main);
+            }
+        }
+    }
+    out
+}
+
 /// The linked images and placed documents of `d` by file and content, wherever they are stored
 /// (only `ids` when given), in [`Document::visit_stored`] order. An object whose id an object
 /// visited before it has (art being edited on a layer and its definition) counts once, by its
@@ -220,10 +250,26 @@ fn groups(d: &Document, ids: Option<&[NodeId]>) -> Vec<Group> {
                 None => d.images.get(key).map(ImageBlob::plate_files).unwrap_or_default(),
                 Some(_) => vec![],
             };
-            out.push(Group { link: link.clone(), key: key.to_string(), ids: vec![], document, plate_files });
+            out.push(Group {
+                link: link.clone(),
+                key: key.to_string(),
+                ids: vec![],
+                document,
+                plate_files,
+                other_relatives: vec![],
+                relatives_seen: Default::default(),
+            });
             out.len() - 1
         });
-        if let (Some(id), Some(g)) = (id, out.get_mut(i)) {
+        let Some(g) = out.get_mut(i) else { return };
+        if let Some(r) = &link.relative
+            && g.link.relative.as_ref() != Some(r)
+            && !g.relatives_seen.contains(r)
+        {
+            g.relatives_seen.insert(r.clone());
+            g.other_relatives.push(r.clone());
+        }
+        if let Some(id) = id {
             g.ids.push(id);
         }
     };
@@ -399,6 +445,17 @@ fn found_at(path: String) -> Option<Found> {
 /// by name in the document's folder, then in that of [`LinkBase::relative`]. Only paths
 /// [`fileio::document_path`] follows from the document's own file are looked at.
 fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
+    let mut f = places(link, base).find_map(found_at)?;
+    f.relative = base.relative.map(|from| {
+        let from = absolute_path(from);
+        Path::new(&from).parent().and_then(|dir| relative_path(Path::new(&f.path), dir))
+    });
+    Some(f)
+}
+
+/// The places [`locate`] looks for the file of `link` at, in its order, whether or not a file is
+/// there.
+fn places<'a>(link: &'a LinkInfo, base: LinkBase<'a>) -> impl Iterator<Item = String> + 'a {
     let (relative, other) = (link.relative.as_deref(), base.doc != base.relative);
     let stored = [
         (Some(link.path.as_str()), base.doc),
@@ -407,12 +464,7 @@ fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
         (Some(link.name()), base.doc),
         (other.then_some(link.name()), base.relative),
     ];
-    let mut f = stored.into_iter().filter_map(|(p, from)| follow_from(p?, from, base.doc, fileio::document_path)).find_map(found_at)?;
-    f.relative = base.relative.map(|from| {
-        let from = absolute_path(from);
-        Path::new(&from).parent().and_then(|dir| relative_path(Path::new(&f.path), dir))
-    });
-    Some(f)
+    stored.into_iter().filter_map(move |(p, from)| follow_from(p?, from, base.doc, fileio::document_path))
 }
 
 /// The files the links of `d` (a document looking from `base`) lead to now: where [`locate`]
@@ -3248,6 +3300,43 @@ mod tests {
         write(&path, &png(40, 20, [1, 2, 3]));
         let c = read();
         assert!(!Arc::ptr_eq(&a.blob.bytes, &c.blob.bytes));
+    }
+
+    /// Many objects of one file and content that each keep a relative path of their own make one
+    /// group, which lists every other relative path once, in the order the objects are stored.
+    #[test]
+    fn a_group_lists_each_other_relative_path_once_in_stored_order() {
+        let mut d = Document::new(612.0, 792.0);
+        let layer = d.default_layer();
+        let relatives: Vec<String> = (0..2_000).map(|i| format!("art/{}/pic.png", i % 1_000)).collect();
+        for r in &relatives {
+            let link = LinkInfo { relative: Some(r.clone()), ..LinkInfo::new("/art/pic.png") };
+            let im = ImageObject {
+                key: "pic".into(),
+                width: 1,
+                height: 1,
+                xf: Affine::IDENTITY,
+                link: Some(link),
+                placement: Default::default(),
+                pixels: None,
+            };
+            let id = d.alloc_id();
+            d.insert(layer, 0, Node::new(id, NodeKind::Image(Box::new(im)))).unwrap();
+        }
+        let groups = groups(&d, None);
+        assert_eq!(groups.len(), 1);
+        let g = &groups[0];
+        assert_eq!(g.ids.len(), 2_000);
+        // Objects inserted at index 0 are stored last to first.
+        let first = g.link.relative.clone().unwrap();
+        let mut expected: Vec<String> = vec![];
+        for r in relatives.iter().rev() {
+            if *r != first && !expected.contains(r) {
+                expected.push(r.clone());
+            }
+        }
+        assert_eq!(expected.len(), 999);
+        assert_eq!(g.other_relatives, expected);
     }
 
     #[test]

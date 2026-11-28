@@ -2655,7 +2655,7 @@ control character, in the first 8 KiB) or `tooLarge` (over 8 MiB). For a script,
   assign or declare `Folder`; a variable whose name a member assignment writes counts as one that may hold a File
   object; the same objects left out are not counted for the File-only functions `open`, `read`, `readch`,
   `readln`, `write`, `writeln`, `copy`, `createAlias`, `openDlg` and `saveDlg`, which a Folder object does not
-  have), `filesOpened` (files opened in other apps), `network`,
+  have; a document's `saveAs` or `exportFile` counts too), `filesOpened` (files opened in other apps), `network`,
   `nativeCode`, `otherApps` (messages to other apps), `environment` (environment variables), `unseenCode` (`eval`,
   `new Function` and `$.evalFile`) and `preferences` (the reference app's preferences changed).
 - `problems` lists what would stop the script loading as written (strings, comments, regular expressions,
@@ -2790,7 +2790,8 @@ other files through `$`:
   `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
   `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
-  starts with the defaults that page gives. Assigning one of its settings checks the value's kind: a value of the
+  starts with the defaults that page gives. The settings of the `DocumentPreset` objects one run makes hold at most
+  4 MB together, and an assignment past that throws a `RangeError`. Assigning one of its settings checks the value's kind: a value of the
   setting's enumeration, a finite number, a `title` string, `true` or `false` for `documentBleedLink`, or an array
   of four finite numbers for `documentBleedOffsetRect`. Any setting takes `undefined`, which unsets it. A value of
   another kind throws a `TypeError`, a `title` longer than 4096 bytes throws a `RangeError`, and the setting keeps
@@ -2814,15 +2815,16 @@ other files through `$`:
   Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
-  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
-  visible bounds), `editable` (false for an object that is hidden or locked, in a hidden or locked layer or group,
-  or on a locked artboard), `zOrderPosition`, `duplicate(relativeObject?, insertionLocation?)`,
+  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `editable` (false for an
+  object that is hidden or locked, in a hidden or locked layer or group, or on a locked artboard), `zOrderPosition`,
+  `duplicate(relativeObject?, insertionLocation?)`,
   `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`
   (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/). `move` runs `node.move`, and `duplicate` runs
   `edit.duplicate` and then `node.move` on the copy. The relative object is a page item or a layer of the same
   document; `ElementPlacement.INSIDE` and `PLACEATBEGINNING` (the default) put the object on top of a layer's or a
   group's contents, `PLACEATEND` under them, `PLACEBEFORE` directly above the relative object and `PLACEAFTER`
-  directly below it. An object of another document throws `Cross-document placement is not available`, and when
+  directly below it. `PLACEAFTER` with a clipping group's clipping path as the relative object throws an error and
+  changes nothing. An object of another document throws `Cross-document placement is not available`, and when
   `node.move` refuses the place of a copy, `duplicate` throws that error and leaves the documents, the selection and
   the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
@@ -2884,7 +2886,7 @@ other files through `$`:
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.controlBounds`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned.
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the
@@ -2902,6 +2904,77 @@ other files through `$`:
   on `add()`; `add()` gives a tag with an empty name and value; `getByName` gives the first tag with the name;
   `name` and `value` take strings of at most 65,536 bytes, and an object has at most 64 tags. A tag that was deleted
   throws `Stale tag`, and one whose page item was deleted throws `Stale page item`.
+- `Document.saveAs(file, options?)` runs `file.saveAs`, and the document then has the new file.
+  `Document.exportFile(file, exportType, options?)` runs `document.export` and leaves the document's file as it is.
+  `app.open(file, documentColorSpace?, options?)` runs `document.open` and gives the new `Document`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/Application/).
+  `file` is a `File`. `new IllustratorSaveOptions()`, `new EPSSaveOptions()` and `new PDFSaveOptions()` pick the
+  format (https://ai-scripting.docsforadobe.dev/jsobjref/IllustratorSaveOptions/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/EPSSaveOptions/, https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/);
+  without options the path's extension picks it. Without options, `saveAs` to a `.ai`, `.eps` or `.pdf` path and
+  `exportFile` as `PNG24`, `JPEG` or `SVG` use the defaults a new options object of that class holds. `saveAs` maps `compressed`, `pdfCompatible`, `embedICCProfile` and
+  `compatibility` (`ILLUSTRATOR17` and `ILLUSTRATOR19`) of `.ai`; `cmykPostScript`, `includeDocumentThumbnails`,
+  `postScript`, `preview`, `overprint` and `compatibility` of EPS; and `pDFPreset`, `compatibility` (`ACROBAT4` to
+  `ACROBAT8` as PDF 1.3 to 1.7), `artboardRange`, `preserveEditability`, `acrobatLayers` and `compressArt` of PDF.
+  `exportType` is an `ExportType`: `PNG24`, `JPEG` and `SVG` take `new ExportOptionsPNG24()`, `new ExportOptionsJPEG()`
+  and `new ExportOptionsSVG()` (https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/,
+  https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/, https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/),
+  with `antiAliasing`, `artBoardClipping`, `horizontalScale` and `verticalScale` (the same value, from 1 to
+  776.19; 100 writes one pixel per point whatever the raster effects resolution), `transparency` (PNG24), `qualitySetting` (0 to 100) and `optimization` (JPEG), and
+  `coordinatePrecision` (1 to 7), `embedRasterImages`, `compressed`, `preserveEditability` and
+  `includeVariablesAndDatasets` (SVG); `PNG8`, `GIF` and `TIFF` take no options. `app.open`'s
+  `options` is a `PDFFileOptions` record (https://ai-scripting.docsforadobe.dev/jsobjref/PDFFileOptions/) with
+  `pageToOpen` and `pDFCropToBox`. `app.userInteractionLevel` is `UserInteractionLevel.DISPLAYALERTS` at the start of
+  each run. The enumerations `ExportType`, `Compatibility`, `PDFCompatibility`, `PDFBoxType`, `EPSPreview`,
+  `EPSPostScriptLevelEnum`, `PDFOverprint` and `UserInteractionLevel` hold strings such as `"ExportType.PNG24"`.
+  VectorCraft's own rules: each path is checked as a `File` opened for reading or writing is checked, before the
+  command runs. A path outside the script's folders throws `Script file access denied`, also when it is an open
+  document's file, a link that leads outside them, or the settings folder; a read-only file throws `Script file is
+  read-only`; a file a `File` object holds open for writing throws `Script file is open for writing` on `saveAs`
+  and `exportFile`, and `Script file access denied` when a command would write it besides the file named; and the
+  files a command reads or writes besides the one named, such as an SVG's linked files, are
+  read and written only where the script's folders allow. `userInteractionLevel` does not change what a command
+  does or where it may read and write, since a command a script runs never shows a dialog. `exportFile` adds the
+  format's extension unless the name already ends with it (`.jpg` or `.jpeg`, `.tif` or `.tiff`, `.svgz` with
+  `compressed`), and writes one file: the active artboard with `artBoardClipping`, otherwise the bounds of the
+  visible art. An SVG with `embedRasterImages` false also writes the document's embedded images beside it, and
+  when one of those files may not be written, none of them is. A listed option that is not mapped is accepted at its help page's default, and any other value throws
+  an error that says it is not available yet, as do `ExportType.FLASH` and `ExportType.AutoCAD`; properties the help
+  pages do not list are left out. With `pDFPreset` named, a `PDFSaveOptions` option still at a new object's default
+  keeps the preset's value. A bad value throws an error before anything is written.
+- `Document.rasterize(sourceArt, clipBounds?, options?)` runs `object.rasterize` with the source art's `ids` and gives
+  the new `RasterItem`; the source art is replaced in one undo step and its objects throw `Stale page item` after.
+  `Document.imageCapture(imageFile, clipBounds?, options?)` runs `document.export` of a PNG of the art inside
+  `clipBounds`, or of all the visible art when it is left out, and gives `undefined`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/). `new RasterizeOptions()` starts with
+  `antiAliasingMethod` `ARTOPTIMIZED`, `backgroundBlack`, `clippingMask`, `convertSpotColors`,
+  `convertTextToOutlines`, `includeLayers` and `transparency` false, `colorModel` `DEFAULTCOLORMODEL`, `padding` 0
+  and `resolution` 300 (https://ai-scripting.docsforadobe.dev/jsobjref/RasterizeOptions/); `new
+  ImageCaptureOptions()` starts with `antiAliasing`, `matte` and `transparency` false, `matteColor` white and
+  `resolution` 150 (https://ai-scripting.docsforadobe.dev/jsobjref/ImageCaptureOptions/). Both resolutions take 72 to
+  2400 pixels per inch. Every option goes to the command at that value when the script leaves it out, so the
+  document's raster effects settings do not change the result. The enumerations `AntiAliasingMethod` and
+  `RasterizationColorModel` (https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/) hold strings such
+  as `"AntiAliasingMethod.TYPEOPTIMIZED"`.
+  VectorCraft's own rules: `clipBounds` is `[left, top, right, bottom]` in the run's script coordinates, as
+  `geometricBounds` gives them, and bounds whose right edge is not right of the left one, or whose bottom edge is not
+  below the top one, throw an error. For bounds that miss all the art, `rasterize` throws an error and `imageCapture`
+  writes a blank image of that area. `rasterize` takes one page item or a list of at most 10,000; an object of another
+  document, one listed twice, one inside another listed one, a path of a compound path, and one that is locked or in
+  a locked layer or group throw an error, and nothing changes. It keeps the selection, less the art it replaces. With
+  `clippingMask` the `RasterItem` is the image inside its clip group. `transparency` wins over `backgroundBlack`, and
+  `padding` takes 0 to 1,000 points. `convertSpotColors`, `convertTextToOutlines` and `includeLayers` true throw an
+  error that says they are not available yet. `imageCapture` writes a PNG, and the file's name must end with `.png`. With
+  `transparency` the image keeps its transparency; otherwise it is drawn on `matteColor` with `matte`, and on white
+  without. `matteColor` is a record with `red`, `green` and `blue` from 0 to 255. The file is checked as a `File`
+  opened for writing is checked, and a path that is an open document's file or a file one of them links throws an
+  error, also when that file is missing. The linked files are every place opening the document looks for a link's
+  file (its stored path, its relative path from the file the document was read from, and its name in those files' folders), with a DCS
+  image's plate files beside each, and the documents count whether they were open when the run started or were
+  opened while it was paused. A name that differs from it only in letter case throws the same error in a
+  folder whose names ignore case, and in a folder where that cannot be told. An image of more than 64 megapixels or
+  32,768 pixels a side throws an error before anything is drawn or written, and the resolution is never lowered to
+  make it fit. `Document.windowCapture` throws an error that says it is not available yet.
 - `$.write(...values)` writes the values to the Script Console with no separator, each as `String(value)` gives it, and
   `$.writeln(...values)` does the same and ends the line. Each call counts as a host call.
 - `$.evalFile(path, timeout?)` runs the file `path` names, relative to the file being run, in the same global
@@ -10457,6 +10530,12 @@ without it, and their results carry the `warning` that Flatten Transparency give
 of threaded text that it rasterizes out of its thread with the text it shows, as `type.createOutlines` does (see
 Threading text from the in and out ports), and the other frames keep the text they hold. `object.rasterize`
 refuses an image larger than 64 million pixels or longer than 32,768 pixels a side, and the art stays as it was.
+With `ids`, `object.rasterize` rasterizes those objects instead of the selection and leaves the selection as it was,
+without the objects it replaced. An object inside another listed one is left out, as it is from a selection. An id
+listed twice, a layer, a path of a compound path or a part of another object that is not a group, and an object that
+is locked or in a locked layer or group are refused, and nothing changes. `clipBounds: [x0, y0, x1, y1]` (points, y down)
+keeps only the part of the art's area inside that rectangle; a rectangle that misses the art is refused. The result's
+`imageId` is the image, which is `id` itself unless `clippingMask` put the image in a clip group.
 
 ```json
 {"name":"run_command","arguments":{"command":"document.rasterEffectsSettings","params":{"resolution":"high","background":"white","addAround":36}}}

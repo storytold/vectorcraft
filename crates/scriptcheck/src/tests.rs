@@ -530,6 +530,49 @@ fn the_scripts_own_platform_names_are_not_the_platforms() {
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["filesWritten"]);
 }
 
+/// A document's `saveAs` and `exportFile` write the file they are given; `app.open` only reads one.
+#[test]
+fn save_as_and_export_file_write_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = app.open(f);\n",
+        "d.saveAs(f);\n",
+        "app.activeDocument.exportFile(f, ExportType.PNG24);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
+/// A document's `imageCapture` writes the file it is given, with or without bounds and options, and
+/// called by its name in brackets; `rasterize` stays inside the document.
+#[test]
+fn image_capture_writes_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument.imageCapture(f);\n",
+        "var d = app.activeDocument; d.imageCapture(f, [0, 0, 10, 10], new ImageCaptureOptions());\n",
+        "d['imageCapture'](f);\n",
+        "d.rasterize(d.pageItems[0]);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[2, 3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[2, 3, 4][..])]);
+}
+
+/// `saveAs` and `exportFile` called with their names as string literals in brackets write the file
+/// too; reading the method without calling it does not.
+#[test]
+fn save_as_and_export_file_in_brackets_write_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument['open'](f);\n",
+        "app.activeDocument[\"saveAs\"](f);\n",
+        "var d = app.activeDocument; d['exportFile'] (f, ExportType.SVG);\n",
+        "var n = d['saveAs'];\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]

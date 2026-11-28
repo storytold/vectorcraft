@@ -67,6 +67,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+mod raster_capture;
+mod save_open;
 mod tags;
 
 /// The error for a member read or called with no document open.
@@ -125,7 +127,11 @@ pub(super) struct State {
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
+    /// `app.userInteractionLevel` ([`save_open`]).
+    save_options: save_open::State,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    /// What the settings in `presets` hold together ([`MAX_PRESET_BYTES`]).
+    preset_bytes: Cell<u64>,
 }
 
 impl State {
@@ -1150,19 +1156,30 @@ fn new_preset(h: &Host) -> Answer {
         return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
     }
     let item = |k: &str, v: Data| (k.to_string(), v);
-    presets.push(vec![
+    let fields = vec![
         item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
         item("artboardRowsOrCols", num(1.0)),
         item("artboardSpacing", num(20.0)),
         item("height", num(792.0)),
         item("numArtboards", num(1.0)),
         item("width", num(612.0)),
-    ]);
+    ];
+    // The defaults count toward MAX_PRESET_BYTES as the setter counts a value.
+    let kept = h.dom.preset_bytes.get().saturating_add(fields.iter().map(|(_, v)| data_size(v)).sum::<u64>());
+    if kept > MAX_PRESET_BYTES {
+        return Err(HostError::Range(format!("the DocumentPresets of a script can hold at most {} MB of settings", MAX_PRESET_BYTES >> 20)));
+    }
+    h.dom.preset_bytes.set(kept);
+    presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
 }
 
 /// The most `DocumentPreset` objects one run can make.
 const MAX_PRESETS: usize = 10_000;
+
+/// The most bytes the settings of one run's `DocumentPreset` objects hold together, as
+/// [`data_size`] counts them.
+const MAX_PRESET_BYTES: u64 = 4 << 20;
 
 /// The settings a `DocumentPreset` has, each a property a script reads and assigns.
 const PRESET_FIELDS: &[&str] = &[
@@ -1267,7 +1284,16 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         check_preset_value(key, &value)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
-        match fields.iter_mut().find(|(k, _)| k == key) {
+        let slot = fields.iter_mut().find(|(k, _)| k == key);
+        // The settings of the run's presets hold at most MAX_PRESET_BYTES together, and the value a
+        // setting replaces no longer counts.
+        let old = slot.as_ref().map_or(0, |(_, v)| data_size(v));
+        let kept = h.dom.preset_bytes.get().saturating_sub(old).saturating_add(data_size(&value));
+        if kept > MAX_PRESET_BYTES {
+            return Err(HostError::Range(format!("the DocumentPresets of a script can hold at most {} MB of settings", MAX_PRESET_BYTES >> 20)));
+        }
+        h.dom.preset_bytes.set(kept);
+        match slot {
             Some((_, v)) => *v = value,
             None => fields.push((key.to_string(), value)),
         }
@@ -1985,6 +2011,10 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::
             }
             Placement::Above | Placement::Below => {
                 let parent = d.parent_of(target).ok_or_else(|| HostError::Error("an object cannot go beside a top-level layer".into()))?;
+                let mask = d.node(parent).is_some_and(crate::doc::Node::clips) && d.position(target).is_some_and(|(_, i, _)| i == 0);
+                if how == Placement::Below && mask {
+                    return Err(HostError::Error("an object cannot go below a clipping group's clipping path".into()));
+                }
                 (parent, Some(target))
             }
         };
@@ -2212,7 +2242,7 @@ const ENUMS: &[(&str, &[&str])] = &[
 /// Adds `app`, its classes and the enumerations to `realm`; their members act for the run `link`
 /// holds.
 pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(), RunError> {
-    for (name, members) in ENUMS {
+    for (name, members) in ENUMS.iter().chain(save_open::ENUMS).chain(raster_capture::ENUMS) {
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
@@ -2228,6 +2258,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(save_open::application_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |_: Vec<Data>| {
@@ -2273,11 +2304,13 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("toString", method(l, doc_to_string)),
     ]);
     document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
+        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "close"]
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
     document.push(("tags".into(), get(l, tags::doc_tags)));
+    document.extend(save_open::document_members(l));
+    document.extend(raster_capture::document_members(l));
     classes.push(class("Document", None, document, None));
     classes.push(class(
         "PageItems",
@@ -2310,7 +2343,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("height", property(l, item_height, item_set_height)),
         ("geometricBounds", get(l, item_geometric)),
         ("visibleBounds", get(l, item_visible)),
-        ("controlBounds", get(l, item_visible)),
         ("editable", get(l, item_editable)),
         ("zOrderPosition", get(l, item_z_order_position)),
         ("duplicate", method(l, item_duplicate)),
@@ -2323,6 +2355,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         [
             "artworkKnockout",
             "blendingMode",
+            "controlBounds",
             "isIsolated",
             "layer",
             "pixelAligned",
@@ -2344,6 +2377,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
     );
     classes.push(class("PageItem", None, page_item, None));
     classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(save_open::classes(l));
+    classes.extend(raster_capture::classes(l));
     classes.push(class(
         "Layer",
         None,

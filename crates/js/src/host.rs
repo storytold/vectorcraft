@@ -272,11 +272,19 @@ impl Interp {
         if r.ancestors.len() >= r.limits.depth {
             return Err(self.data_error(r, ErrorType::Range, "is nested too deep"));
         }
+        // A `File` reads as its path ([`crate::FILE_REF_KEY`]).
+        if r.hosted
+            && let Some(file) = self.file_ref_of(id)?
+        {
+            let len = crate::file_ref_path(&file).map_or(0, str::len);
+            self.charge_reading(r, len.saturating_mul(3).saturating_add(2))?;
+            return Ok(file);
+        }
         let shape = match &self.object(id)?.class {
             Class::Host(_) if r.hosted => return self.read_host_ref(id, r),
             Class::Host(_) => return Err(self.data_error(r, ErrorType::Type, "is an object of a host class, not plain data")),
             Class::Array { length, .. } => Shape::Array(*length),
-            Class::Ordinary => {
+            Class::Ordinary | Class::FsEntry(_) => {
                 let o = self.object(id)?;
                 if o.props.len() > r.limits.entries {
                     return Err(self.data_error(r, ErrorType::Range, "has too many entries"));
@@ -338,7 +346,7 @@ impl Interp {
             self.use_fuel()?;
             self.charge_reading(r, k.len().saturating_mul(3).saturating_add(8))?;
             let name = String::from_utf16_lossy(&k);
-            if r.hosted && name == crate::HOST_REF_KEY {
+            if r.hosted && (name == crate::HOST_REF_KEY || name == crate::FILE_REF_KEY) {
                 return Err(self.data_error(r, ErrorType::Type, "is not plain data"));
             }
             r.path.push(Step::Name(k));

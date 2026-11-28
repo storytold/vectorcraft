@@ -466,6 +466,34 @@ fn a_copy_goes_beside_its_source() {
     assert!(e.contains("into itself"), "{e}");
 }
 
+/// A clipping group's clipping path stays at the bottom of the group, so an object cannot go
+/// below it; above it is the bottom of the clipped art.
+#[test]
+fn nothing_goes_below_a_clipping_path() {
+    let (mut s, a, b) = doc();
+    let c = rect(&mut s, 300.0, 10.0, 5.0, 5.0);
+    s.execute("object.setProps", &json!({"ids": [b.0], "name": "mask"})).unwrap();
+    s.execute("object.setProps", &json!({"ids": [c.0], "name": "loose"})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    let g = NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    let children = |s: &Session| -> Vec<NodeId> { s.active().unwrap().doc.node(g).unwrap().children().unwrap().iter().map(|n| n.id).collect() };
+    assert_eq!(children(&s)[0], b, "the clipping path is the group's first child");
+    let before = format!("{:?}", s.active().unwrap().doc.layers);
+    let steps = undo_steps(&s);
+    for source in [
+        "var p = app.activeDocument.pageItems; p.getByName('loose').move(p.getByName('mask'), ElementPlacement.PLACEAFTER);",
+        "var p = app.activeDocument.pageItems; p.getByName('loose').duplicate(p.getByName('mask'), ElementPlacement.PLACEAFTER);",
+    ] {
+        let e = failure(&mut s, source);
+        assert!(e.contains("cannot go below a clipping group's clipping path"), "{source}: {e}");
+    }
+    assert_eq!(format!("{:?}", s.active().unwrap().doc.layers), before, "a refused move changes nothing");
+    assert_eq!(undo_steps(&s), steps);
+    log(&mut s, "var p = app.activeDocument.pageItems; p.getByName('loose').move(p.getByName('mask'), ElementPlacement.PLACEBEFORE);");
+    assert_eq!(children(&s), [b, c, a]);
+}
+
 #[test]
 fn a_copy_that_cannot_be_placed_is_deleted() {
     let mut s = Session::new();
@@ -910,9 +938,12 @@ fn a_startup_preset_alone_gives_its_first_size() {
 #[test]
 fn page_item_members_not_built_yet_throw_on_read_and_assignment() {
     let (mut s, _, _) = doc();
-    for source in
-        ["app.activeDocument.pageItems[0].blendingMode;", "app.activeDocument.pageItems[0].uuid = 'x';", "app.activeDocument.pageItems[0].rotate(5);"]
-    {
+    for source in [
+        "app.activeDocument.pageItems[0].blendingMode;",
+        "app.activeDocument.pageItems[0].uuid = 'x';",
+        "app.activeDocument.pageItems[0].rotate(5);",
+        "app.activeDocument.pageItems[0].controlBounds;",
+    ] {
         assert!(failure(&mut s, source).contains("is not available yet"), "{source}");
     }
     assert!(failure(&mut s, "app.activeDocument.layers = 1;").contains("Document.layers is not available yet"));
@@ -1079,6 +1110,47 @@ fn document_preset_applies_only_its_given_fields() {
         assert!(e.contains(part), "{source}: {e}");
     }
     assert_eq!(s.documents().len(), 2, "a refused preset makes no document");
+}
+
+/// The presets of one run hold at most 4 MB of settings together; a setting that replaces another
+/// gives back what the old value held.
+#[test]
+fn document_preset_settings_are_limited_in_bytes() {
+    let mut s = Session::new();
+    // A title holds at most 4,096 bytes, so 1,005 presets with such a title and their six defaults
+    // hold 4,192,860 bytes, and the next preset's defaults bring that to 4,192,934 of 4,194,304.
+    let out = log(
+        &mut s,
+        "var big = new Array(4097).join('a'), ps = [];\
+         for (var i = 0; i < 1005; i++) { var p = new DocumentPreset(); p.title = big; ps.push(p); }\
+         var q = new DocumentPreset(); ps[0].title = big; vc.log(ps[0].title.length);\
+         try { q.title = big; } catch (e) { vc.log([e.name, e.message]); }\
+         vc.log(q.title === undefined); ps[0].title = 'short'; q.title = big; vc.log(q.title.length);",
+    );
+    assert_eq!(out[0], json!(4096), "a setting assigned again replaces what it held");
+    assert_eq!(out[1], json!(["RangeError", "the DocumentPresets of a script can hold at most 4 MB of settings"]));
+    assert_eq!(out[2], json!(true), "a refused setting is not stored");
+    assert_eq!(out[3], json!(4096), "replacing a setting frees what it held");
+}
+
+/// A new `DocumentPreset`'s default settings count toward the 4 MB, so one that would pass the
+/// limit is refused and leaves the count as it was.
+#[test]
+fn a_new_document_preset_is_refused_past_the_byte_limit() {
+    let mut s = Session::new();
+    // The six defaults hold 74 bytes and a 4,096-byte title 4,098, so 1,005 presets with such a
+    // title and one more with a 1,358-byte title leave 10 bytes of the 4 MB free.
+    let out = log(
+        &mut s,
+        "var big = new Array(4097).join('a');\
+         for (var i = 0; i < 1005; i++) { var f = new DocumentPreset(); f.title = big; }\
+         var p = new DocumentPreset(); p.title = new Array(1359).join('b');\
+         try { new DocumentPreset(); vc.log('made'); } catch (e) { vc.log([e.name, e.message]); }\
+         p.documentBleedLink = true; vc.log(p.documentBleedLink); p.title = 'x'; vc.log(new DocumentPreset().width);",
+    );
+    assert_eq!(out[0], json!(["RangeError", "the DocumentPresets of a script can hold at most 4 MB of settings"]));
+    assert_eq!(out[1], json!(true), "a refused preset adds nothing to the count");
+    assert_eq!(out[2], json!(612), "a preset below the limit is still made");
 }
 
 #[test]

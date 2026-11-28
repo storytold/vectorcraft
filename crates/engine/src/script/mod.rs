@@ -804,6 +804,9 @@ struct Host {
     args: RefCell<(Data, u64)>,
     /// The run's state of the script object model (`app`).
     dom: dom::State,
+    /// While a slice runs: the documents the interface has open ([`World::docs`] of the run's
+    /// job), which a capture must not write over either. Empty between slices.
+    interface_docs: RefCell<Vec<DocState>>,
     /// The documents open when the run began as the person last left them, each with its own file
     /// and the file it was read from ([`crate::DocState::as_person_left`],
     /// [`crate::cmd::links::LinkBase::of_files`]), until the run's first command takes the files
@@ -2135,6 +2138,7 @@ impl Session {
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
             dom: dom::State::default(),
+            interface_docs: RefCell::new(Vec::new()),
             run_docs: RefCell::new(
                 self.docs
                     .iter()
@@ -2609,6 +2613,8 @@ fn failure_frame(report: &Value) -> (String, String) {
 fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result::Result<Progress, RunError>, String> {
     let depth = std::mem::replace(&mut s.depth, 0);
     job.world.swap(s);
+    // The interface's documents are the host's to read during the slice, and the job's again after.
+    std::mem::swap(&mut job.world.docs, &mut *job.host.interface_docs.borrow_mut());
     // The run's front document draws and converts through its own profiles, and the interface's
     // again after the slice.
     s.sync_front_profiles();
@@ -2632,6 +2638,7 @@ fn run_slice(s: &mut Session, job: &mut Job) -> std::result::Result<std::result:
     }
     std::mem::swap(s, &mut *cell.borrow_mut());
     s.script_in_run = false;
+    std::mem::swap(&mut job.world.docs, &mut *job.host.interface_docs.borrow_mut());
     job.world.swap(s);
     s.depth = depth;
     s.sync_front_profiles();
