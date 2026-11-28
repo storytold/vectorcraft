@@ -6828,9 +6828,13 @@ details are VectorCraft's own rules; the help page says only that the option mov
 
 `object.pattern.replaceArt {name, ids?}` (Replace Pattern Art) makes copies of the selected art, or of `ids`, the tile
 art of pattern `name`, as one undo step, and returns `{name}`. The pattern keeps its name, its swatch and the swatch's
-place, its tile and its options; with `sizeTileToArt` on, the tile is sized to the new art plus `hSpacing` and
-`vSpacing`. Fills and strokes name the pattern, so every object painted with it draws the new tile. The art stays on the
-canvas, selected as it was. Art that matches the tile art already records no undo step. The command is off while a
+place, and its options. When the backmost object of the art is a rectangle with no fill and no stroke (or the backmost
+member of one selected group, as `pattern.placeArt` places it), that rectangle becomes the tile and is left out of the
+tile art, and the group's members become the art. Otherwise the tile keeps its size and moves by as much as the top-left
+corner of the art's bounds moved from the old tile art's, so art drawn anywhere on the canvas stays in its tile. With
+`sizeTileToArt` on, the tile is sized to the new art plus `hSpacing` and `vSpacing`. Fills and strokes name the pattern,
+so every object painted with it draws the new tile. The art stays on the canvas, selected as it was. Art and a tile that
+match the pattern's already record no undo step. A rectangle alone leaves no art and is refused. The command is off while a
 pattern is edited ("finish editing the pattern first"), and returns an error, changing nothing, for a missing `name`, a
 pattern that does not exist, no art, and art painted with the pattern itself, directly or through the symbols, other
 patterns, graph designs and brushes it uses, or the series and label paints a graph stores. In the Swatches panel, art dragged off the canvas and released with Alt (Option on macOS) held over a
@@ -6838,7 +6842,22 @@ pattern swatch runs it with that swatch's pattern; the swatch is outlined while 
 else in the list, or without Alt, the art becomes a new pattern swatch as before. The help page describes replacing a
 pattern by dragging its edited tile onto the old swatch with Alt or Option held, with the pattern updated in the file
 (<https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=226>,
-archived copy). Keeping the tile, the options and the source art are VectorCraft's own rules.
+archived copy). Keeping the tile's size, moving it with the art, the options and the source art are VectorCraft's own
+rules. The help page describes a tile bounded by a rectangle that is the backmost object, with no fill and no stroke
+(<https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=204>, archived copy).
+
+`pattern.placeArt {name, x?, y?}` (Place Pattern Art) places a copy of pattern `name`'s tile art, centered on (`x`, `y`)
+(default: the center of the first artboard), in the layer new art goes into, selects it, and returns `{id}`, in one undo
+step. The copy is one group: a rectangle of the pattern's tile with no fill and no stroke at its back, then the tile art
+in its place in the tile, so `object.pattern.replaceArt` reads the edited copy back with the same tile. The pattern does
+not change. The command is off while a pattern is edited ("finish editing the pattern first"), and returns an error,
+changing nothing, for a missing `name`, a pattern that does not exist, an `x` or `y` that is not a number, a pattern
+with no art ("no artwork") and a locked or hidden target layer. In the app, a pattern swatch dragged from the Swatches
+panel onto an empty part of the canvas runs it at the drop point; dropped on art, the swatch fills it as before. The
+help page describes changing a pattern by dragging its swatch onto the artboard, editing the tile there and Alt-dragging
+it back onto the swatch
+(<https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=208>, archived copy). The group,
+its rectangle, the centering and the default position are VectorCraft's own rules.
 
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
