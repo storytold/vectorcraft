@@ -72,6 +72,7 @@ fn japanese_document_fonts_from(fonts: &[EmbeddedFace]) -> Vec<&EmbeddedFace> {
 /// first: the fallback for Arabic text; the other families are picked by name), then the Thai ones
 /// (Noto Sans Thai: the fallback for Thai text where no Thai font is installed, and on the web),
 /// then the Georgian ones (Noto Sans Georgian, the same for Georgian). Remaining faces follow in manifest order, so every explicitly supplied family can be selected.
+/// The tab-title face (role `tab`), which only document tab titles draw in, is left out.
 /// Empty when built without craft-fonts.
 pub fn document_fonts() -> Vec<&'static EmbeddedFace> {
     document_fonts_from(CRAFT_FONTS)
@@ -79,7 +80,9 @@ pub fn document_fonts() -> Vec<&'static EmbeddedFace> {
 
 fn document_fonts_from(fonts: &[EmbeddedFace]) -> Vec<&EmbeddedFace> {
     let mut v = japanese_document_fonts_from(fonts);
-    let rest = |f: &&EmbeddedFace, earlier: &[&str]| !f.has_script("Jpan") && !earlier.iter().any(|s| f.has_script(s));
+    let rest = |f: &&EmbeddedFace, earlier: &[&str]| {
+        f.role != Some(craft_fonts_build::TAB_ROLE) && !f.has_script("Jpan") && !earlier.iter().any(|s| f.has_script(s))
+    };
     v.extend(fonts.iter().filter(|f| f.has_script("Arab") && rest(f, &[])));
     v.extend(fonts.iter().filter(|f| f.has_script("Thai") && rest(f, &["Arab"])));
     v.extend(fonts.iter().filter(|f| f.has_script("Geor") && rest(f, &["Arab", "Thai"])));
@@ -129,6 +132,14 @@ mod tests {
             ]
         );
         assert!(document_fonts_from(&[]).is_empty());
+    }
+
+    #[test]
+    fn document_fonts_leave_out_the_tab_title_face() {
+        let latin = EmbeddedFace { family: "Latin", style: "Regular", scripts: &["Latn"], index: 0, bytes: &[], role: None };
+        let tab = EmbeddedFace { family: "Noto Sans", style: "Condensed SemiBold", role: Some(craft_fonts_build::TAB_ROLE), ..latin };
+        let listed: Vec<_> = document_fonts_from(&[latin, tab]).into_iter().map(|f| f.family).collect();
+        assert_eq!(listed, ["Latin"]);
     }
 
     #[test]

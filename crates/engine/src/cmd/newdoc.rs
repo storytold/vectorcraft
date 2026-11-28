@@ -403,9 +403,8 @@ impl DocSettings {
         if (o.contains_key("columns") && !o.contains_key("rows")) || self.layout != ArtboardLayout::GridByColumn {
             self.rows = 0;
         }
-        if self.grid_rows().is_some() {
-            self.columns = u32::try_from(self.grid_columns()).unwrap_or(u32::MAX);
-        }
+        // While rows are set, `grid_columns` gives the columns they make; the stored columns stay as
+        // they were given, and are the ones a later layout without rows uses.
         Ok(())
     }
 

@@ -47,7 +47,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
 /// documents; `Document.saveAs` and `close` throw "not available yet".
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
-    ("Object.prototype.", "toSource"),
+    ("Object.prototype.", "reflect toSource"),
     ("UnitValue.", "baseUnit baseUnit= length prototype"),
     ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),

@@ -7273,6 +7273,15 @@ axis	Y Axis	Y 轴
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	漏掉了一个只读对象：请以单独的 {{"id": …}} 或原样返回它
 @msg	a string	字符串
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	描边只有 `paint`、`width`、`join`、`cap` 和 `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	绘制型实时效果的片段只有 `path`、`fillRule`、`fills`、`strokes`、`opacity`、`blend` 和 `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	描边只有 `paint`、`width`、`join`、`cap`、`miterLimit`、`opacity`、`blend` 和 `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` 只能为 true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` 仅适用于声明了 `paintOutput` 的 `api` 3 实时效果
+@msg	`opacity` must be a number from 0 to 1	`opacity` 必须是 0 到 1 之间的数字
+@msg	unknown blending mode; `blend` is one of {_1}	未知的混合模式；`blend` 是 {_1} 之一
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` 必须是最多 {MAX_LOOK_EFFECTS} 条记录的数组
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	一个结果最多带 {MAX_RESULT_EFFECTS} 条效果记录
+@msg	this host takes no effects here	此宿主不在此处接受效果
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	描边必须是 {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} 形式
 @msg	an effect must be {{"id", "params"?, "visible"?}}	效果必须是 {{"id", "params"?, "visible"?}} 形式
 @msg	an effect on a fill returns only `fills`	填色上的效果只返回 `fills`

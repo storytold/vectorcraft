@@ -7426,6 +7426,15 @@ axis	Y Axis	Y tengely
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	kimaradt egy írásvédett objektum: adja vissza önmagában {{"id": …}} formában vagy úgy, ahogy megkapta
 @msg	a string	karakterlánc
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	a körvonalnak csak `paint`, `width`, `join`, `cap` és `miterLimit` kulcsa van
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	a festő élő effektus darabjának csak `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` és `effects` kulcsa van
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	a körvonalnak csak `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` és `effects` kulcsa van
+@msg	`appearanceOutput` may only be true	Az `appearanceOutput` értéke csak true lehet
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	az `appearanceOutput` csak `paintOutput` kulcsot megadó élő effektushoz használható, `api` 3 mellett
+@msg	`opacity` must be a number from 0 to 1	az `opacity` értéke 0 és 1 közötti szám kell legyen
+@msg	unknown blending mode; `blend` is one of {_1}	ismeretlen keverési mód; a `blend` értéke ezek egyike: {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	az `effects` legfeljebb {MAX_LOOK_EFFECTS} bejegyzésből álló tömb lehet
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	egy eredmény legfeljebb {MAX_RESULT_EFFECTS} effektusbejegyzést tartalmazhat
+@msg	this host takes no effects here	ez a gazdagép itt nem fogad effektusokat
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	a körvonal formája {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} legyen
 @msg	an effect must be {{"id", "params"?, "visible"?}}	az effektus formája {{"id", "params"?, "visible"?}} legyen
 @msg	an effect on a fill returns only `fills`	a kitöltésen lévő effektus csak `fills` értéket ad vissza
