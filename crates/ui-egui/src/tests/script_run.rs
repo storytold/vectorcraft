@@ -343,7 +343,6 @@ fn a_finished_run_delivers_its_plugin_events_in_the_frame_it_ends() {
         if !app.session.script_running() {
             break;
         }
-        app.begin_host_iteration();
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| app.tick(ui.ctx()));
         out.textures_delta.clear();
     }

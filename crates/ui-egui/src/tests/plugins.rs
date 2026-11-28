@@ -838,20 +838,18 @@ fn a_change_made_in_a_ui_pass_is_delivered_in_that_pass() {
     app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant, "replace": true})).unwrap();
     let r = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap()["id"].clone();
     app.run("select.none", json!({})).unwrap();
-    let ctx = egui::Context::default();
+    let ctx = crate::testing::ui_context();
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0));
     let pass = |app: &mut VectorcraftApp, select: bool| {
-        app.begin_host_iteration();
-        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+        crate::testing::part_frame(app, &ctx, egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |app, ui| {
             app.tick(ui.ctx());
             if select {
                 app.session.execute("select.set", &json!({"ids": [r]})).unwrap();
             }
             app.ui(ui);
         });
-        out.textures_delta.clear();
     };
-    // Fonts install on the first pass and are ready on the second.
+    // The window lays itself out in the first two passes.
     pass(&mut app, false);
     pass(&mut app, false);
     pass(&mut app, true);

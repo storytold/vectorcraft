@@ -704,7 +704,7 @@ impl Manifest {
     }
 
     /// A JavaScript plug-in (`"runtime": "js"`) is an object filter, and of the host's permissions
-    /// it lists only `progress`: its realm has no settings, cache or command calls.
+    /// it lists only `progress`: its realm has no settings, cache, command calls or `vc_event`.
     fn validate_runtime(&self) -> Result<()> {
         if self.runtime == Runtime::Wasm {
             return Ok(());
@@ -714,7 +714,7 @@ impl Manifest {
             return Err(Error::Manifest(format!("`runtime` \"js\" is for an object filter (`kind` \"filter\"), not `kind` \"{kind}\"")));
         }
         let listed = self.permissions.as_deref().unwrap_or_default();
-        for p in [Permission::Settings, Permission::Cache, Permission::Commands] {
+        for p in [Permission::Settings, Permission::Cache, Permission::Commands, Permission::Events] {
             if listed.iter().any(|n| n == p.name()) {
                 let name = p.name();
                 return Err(Error::Manifest(format!(

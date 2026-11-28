@@ -460,6 +460,8 @@ mod tests {
         assert!(matches!(&e, Error::Manifest(why) if why.contains("`runtime` \"js\" is for an object filter")), "{e:?}");
         let e = refused(bundle("test.js.settings", ok, json!({"api": 2, "permissions": ["settings"]})));
         assert!(matches!(&e, Error::Manifest(why) if why.contains("`settings`")), "{e:?}");
+        let e = refused(bundle("test.js.events", ok, json!({"api": 2, "permissions": ["events"], "events": ["selection.changed"]})));
+        assert!(matches!(&e, Error::Manifest(why) if why.contains("can't list the permission `events`")), "{e:?}");
         let e = refused(bundle("test.js.name", ok, json!({"script": "../x.js"})));
         assert!(matches!(&e, Error::Manifest(why) if why.starts_with("`script`")), "{e:?}");
         let e = refused(bundle("test.js.py", ok, json!({"runtime": "py"})));

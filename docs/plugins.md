@@ -1308,8 +1308,8 @@ function run(input, params) {
 The manifest has the keys of a module's [manifest](#manifest), with `"runtime": "js"` and `script`, a file name of 1 to
 128 bytes ending in `.js`, without a folder or `:`, and not starting with `.`. Left out, `runtime` is WebAssembly, so
 existing modules load as before; a module's own manifest may not give `"js"`. A JavaScript plug-in is a filter (`kind`
-`"filter"`), and of the host's [permissions](#permissions) it may list `progress` but not `settings`, `cache` or
-`commands`, so it has no `commandAllowlist`.
+`"filter"`), and of the host's [permissions](#permissions) it may list `progress` but not `settings`, `cache`,
+`commands` or `events`, so it has no `commandAllowlist` and no `events`.
 
 `plugin.install {path}` and `plugin.inspect {path}` take the `.vcplugin` file, and File › Open and `plugin.reload`
 install it like a `.wasm` file. The host refuses a manifest without `script`, with `source`, or with a `runtime` other

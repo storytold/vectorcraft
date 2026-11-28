@@ -1264,6 +1264,16 @@ fn an_event_plugin_exports_vc_event() {
     assert!(e.to_string().contains("vc_event"), "{e}");
     assert!(Plugin::load(&build(&tpl::reacting(&manifest, tpl::HOST_IMPORTS, tpl::LOG_EVENT)), Limits::default()).is_ok());
     assert!(Plugin::load(&ok_module(tpl::ECHO), Limits::default()).is_ok(), "no events, no vc_event");
+    // A module whose manifest is in its custom section is checked without being instantiated.
+    let section =
+        r#"{"id":"test.events.section","name":"T","kind":"filter","api":2,"permissions":["events"],"events":["selection.changed"],"abi":1}"#;
+    let e = Plugin::load(&build(&tpl::sectioned(section, tpl::ECHO, "", 1)), Limits::default()).unwrap_err();
+    assert!(e.to_string().contains("vc_event"), "{e}");
+    let one_param = r#"(func (export "vc_event") (param i32) (result i32) (i32.const 0))"#;
+    let e = Plugin::load(&build(&tpl::sectioned(section, tpl::ECHO, one_param, 1)), Limits::default()).unwrap_err();
+    assert!(e.to_string().contains("vc_event"), "{e}");
+    let handler = r#"(func (export "vc_event") (param i32 i32) (result i32) (i32.const 0))"#;
+    assert!(Plugin::load(&build(&tpl::sectioned(section, tpl::ECHO, handler, 1)), Limits::default()).is_ok());
 }
 
 /// `vc_event` is given the event JSON in its own memory and returns 0; anything else, a trap and a

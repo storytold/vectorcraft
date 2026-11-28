@@ -322,8 +322,9 @@ fn check_tables(bytes: &[u8]) -> Result<()> {
 }
 
 /// Checks the exports a run needs without instantiating `module`: its memory as `memory`, whose
-/// initial size fits in `max_memory_bytes`, and `vc_alloc` and `vc_run` with the ABI's types.
-fn check_exports(module: &Module, max_memory_bytes: usize) -> Result<()> {
+/// initial size fits in `max_memory_bytes`, and `vc_alloc` and `vc_run` with the ABI's types, and
+/// `vc_event` with its type when `events` is set (the manifest lists events).
+fn check_exports(module: &Module, max_memory_bytes: usize, events: bool) -> Result<()> {
     use ValType::{I32, I64};
     let export = |name: &str| module.exports().find(|e| e.name() == name).map(|e| e.ty().clone());
     let Some(ExternType::Memory(memory)) = export("memory") else {
@@ -340,6 +341,9 @@ fn check_exports(module: &Module, max_memory_bytes: usize) -> Result<()> {
         if !matches!(export(name), Some(ExternType::Func(f)) if f.params() == params && f.results() == results) {
             return Err(Error::Abi(format!("the module must export `{name}` with the type {signature}")));
         }
+    }
+    if events && !matches!(export("vc_event"), Some(ExternType::Func(f)) if f.params() == [I32, I32] && f.results() == [I32]) {
+        return Err(Error::Abi("the module lists `events`, so it must export `vc_event` with the type (param i32 i32) (result i32)".into()));
     }
     Ok(())
 }
@@ -428,7 +432,7 @@ impl Plugin {
                 }
             }
             None => {
-                check_exports(&module, p.limits.max_memory_bytes)?;
+                check_exports(&module, p.limits.max_memory_bytes, !p.manifest.events.is_empty())?;
                 check_tables(bytes)?;
             }
         }
