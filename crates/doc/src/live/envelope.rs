@@ -95,8 +95,8 @@ pub struct EnvelopeOptions {
     /// Distort Pattern Fills (with Distort Appearance): pattern tiles bend with the art.
     pub distort_pattern_fills: bool,
     /// With Distort Appearance, how far the box the content maps from reaches past its geometric
-    /// bounds at the top, bottom, left and right, as shares of their height and width; on content
-    /// with no height or no width, the margins along that side are shares of the other side
+    /// bounds at the top, bottom, left and right, as shares of their height and width; when the
+    /// height or width is shorter than 1e-6 pt, the margins along that side are shares of the other side
     /// ([`envelope_margin_lengths`]). An envelope
     /// opened from a `.ai` whose saved size includes its strokes has these margins. New envelopes
     /// have none. Leaving Edit Contents measures them again when the strokes reach differently.
