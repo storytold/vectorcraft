@@ -509,6 +509,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let uid = st.uid;
+    let reverts = st.reverts;
     let model = app.ui.asset_export_panel.docs.entry(uid).or_default();
     model.selection.items.retain(|id| st.doc.asset(*id).is_some());
     let grid_id = ui.scope_id().with(("asset-export-grid", uid));
@@ -553,7 +554,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         footer = Some(bar);
     });
     let zone = footed.show(ui, |ui, _| {
-        DropAction::<PanelDrag>::new(|p| matches!(p, PanelDrag::Art { .. })).sizing(Sizing::Fill).show(ui, |ui, _| {
+        let drop_art = DropAction::<PanelDrag>::new(move |p| p.artwork_for(uid, reverts).is_some());
+        drop_art.sizing(Sizing::Fill).show(ui, |ui, _| {
             if st.doc.assets.is_empty() {
                 Notice::new(Tone::Neutral, tl!("Drag art here, or select it and click +. Hold Alt for one asset of several objects."))
                     .title(tl!("No assets"))
@@ -570,8 +572,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         })
     });
-    if let Some(PanelDrag::Art { ids, .. }) = zone.inner.and_then(|zone| zone.output.dropped) {
-        seen.dropped = Some((ids.into_iter().map(|id| id.0).collect(), alt));
+    if let Some(payload) = zone.inner.and_then(|zone| zone.output.dropped)
+        && let Some(ids) = payload.artwork_for(uid, reverts)
+    {
+        seen.dropped = Some((ids.iter().map(|id| id.0).collect(), alt));
     }
     for event in events {
         match event {

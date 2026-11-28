@@ -20,7 +20,10 @@
 //!   disabled, which `disabled.json` in the same folder lists (`plugin.setEnabled`). The Additional
 //!   Plug-ins Folder preference is not copied: it is loaded from where it is. `grants.json` holds what the user granted the plug-ins
 //!   stored there that list permissions (id, module hash, permissions); a stored plug-in whose
-//!   permissions it doesn't grant is skipped with a log record, and stays in the folder.
+//!   permissions it doesn't grant is skipped with a log record, and stays in the folder. The file
+//!   carries a generation and a MAC of its generation, grants and folder, made with a key the user's
+//!   key store keeps ([`grant_keys`]); a file without that MAC, or at another generation than the
+//!   one the key store keeps for the folder, grants nothing.
 //! * **Plug-in settings and caches**: `storage/id-<id>/` in the plug-in store, the id written as
 //!   [`case_safe`] writes it, holds what a plug-in
 //!   keeps with the `settings` and `cache` permissions ([`PluginStorage`]): `settings.json` and a
@@ -51,6 +54,8 @@ use vectorcraft_plugins::storage::{self, Meter, Storage, StorageError};
 
 use crate::Session;
 use crate::cmd::pdfcmds::{PRESET_FORMAT, PresetFile};
+
+pub mod grant_keys;
 
 /// Files read from one store folder, at most (the rest are ignored).
 pub const MAX_STORE_FILES: usize = 1000;
@@ -175,24 +180,26 @@ fn list_files(dir: &Path, ext: &str) -> Vec<PathBuf> {
 /// [`list_files`], each file with its stamp ([`file_stamp`]) from the same look at it.
 fn list_stamped_files(dir: &Path, ext: &str) -> Vec<(PathBuf, (u64, SystemTime))> {
     let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
-    let mut files: Vec<_> = entries
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)))
-        .filter_map(|p| {
-            let m = std::fs::metadata(&p).ok().filter(std::fs::Metadata::is_file)?;
-            match m.modified() {
-                Ok(t) => Some((p, (m.len(), t))),
-                Err(e) => {
-                    log::warn!("skipping the stored plug-in {}: {e}", p.display());
-                    None
-                }
-            }
-        })
-        .collect();
+    let mut files: Vec<_> = entries.filter_map(Result::ok).map(|e| e.path()).filter_map(|p| stamped_file(p, ext)).collect();
     files.sort_by_key(|(p, _)| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
     files.truncate(MAX_STORE_FILES);
     files
+}
+
+/// The file `p` with its size and modified time, as [`list_stamped_files`] lists it: `None` unless
+/// it is a regular file with the extension `ext`.
+fn stamped_file(p: PathBuf, ext: &str) -> Option<(PathBuf, (u64, SystemTime))> {
+    if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext)) {
+        return None;
+    }
+    let m = std::fs::metadata(&p).ok().filter(std::fs::Metadata::is_file)?;
+    match m.modified() {
+        Ok(t) => Some((p, (m.len(), t))),
+        Err(e) => {
+            skip_stored(&p, e);
+            None
+        }
+    }
 }
 
 /// The content of `path` when it is at most `max` bytes; the file is never read past `max`.
@@ -307,6 +314,8 @@ pub(crate) struct StoredLoad {
     loads: Loads<StoredRead>,
     /// Outcomes taken from `loads` and not installed yet, in order.
     loaded: VecDeque<vectorcraft_plugins::Result<StoredRead>>,
+    /// The ids this load installed, in file-name order.
+    installed: Vec<String>,
     /// The next file to install.
     next: usize,
     /// The store's grants this load removed, by id, because the module stored for the id lists no
@@ -364,6 +373,45 @@ fn after_stored_load(path: &Path) {
 /// Why a stored plug-in whose file changed between its listing and its install is skipped.
 const CHANGED_WHILE_LOADING: &str = "it changed or went away while it loaded";
 
+/// The stored plug-in files that didn't install in this process, by path, with why
+/// ([`skip_stored`]). A file stays listed until it installs or its store is loaded again.
+static STORED_FAILED: Mutex<BTreeMap<PathBuf, String>> = Mutex::new(BTreeMap::new());
+
+/// The stored plug-ins skipped ([`STORED_FAILED`]).
+fn stored_failures() -> MutexGuard<'static, BTreeMap<PathBuf, String>> {
+    STORED_FAILED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Skips the stored plug-in `path` because of `why`: logs it and lists the file as failed.
+fn skip_stored(path: &Path, why: impl std::fmt::Display) {
+    log::warn!("skipping the stored plug-in {}: {why}", path.display());
+    stored_failures().insert(path.to_path_buf(), why.to_string());
+}
+
+/// The stored plug-in files in the plug-in store `dir` that didn't install in this process, in
+/// file-name order, each with why.
+pub(crate) fn failed_stored_plugins(dir: &Path) -> Vec<(PathBuf, String)> {
+    stored_failures().iter().filter(|(p, _)| p.parent() == Some(dir)).map(|(p, why)| (p.clone(), why.clone())).collect()
+}
+
+/// Stops listing the stored plug-in file `path` as failed: a plug-in installed from it.
+pub(crate) fn clear_stored_failure(path: &Path) {
+    stored_failures().remove(path);
+}
+
+/// A plug-in installed from the stored file `path`: it is no longer listed as failed, by the store
+/// (a load in another session may have failed on it meanwhile) or by the folder report of a
+/// `plugin.reload` of the store's folder.
+fn installed_from(path: &Path) {
+    clear_stored_failure(path);
+    crate::cmd::plugin::clear_folder_failure(path);
+}
+
+/// Why the stored plug-in `path` didn't install in this process, if it is listed as failed.
+pub(crate) fn stored_failure(path: &Path) -> Option<String> {
+    stored_failures().get(path).cloned()
+}
+
 #[cfg(test)]
 thread_local! {
     /// Tests: the stored plug-in bytes a store listed on this thread may read ([`MAX_PLUGIN_STORE`]).
@@ -403,11 +451,15 @@ fn list_stored_plugins(rest: &mut VecDeque<StoredFile>, left: &mut u64) -> (Vec<
         let most = *left + taken;
         if most == 0 {
             log::warn!("skipping the other stored plug-ins: they hold more than {MAX_PLUGIN_STORE} bytes together");
-            rest.clear();
+            let why = format!("the stored plug-ins hold more than {MAX_PLUGIN_STORE} bytes together");
+            let mut failed = stored_failures();
+            for (path, _) in std::iter::once((path, stamp)).chain(rest.drain(..)) {
+                failed.insert(path, why.clone());
+            }
             break;
         }
         if len > most {
-            log::warn!("skipping the stored plug-in {}: {}", path.display(), too_large(most));
+            skip_stored(&path, too_large(most));
             continue;
         }
         // An empty file too waits once `left` is used up.
@@ -463,6 +515,11 @@ fn put(dir: &Path, file: &str, bytes: &[u8]) -> bool {
     if std::fs::File::open(&path).is_ok_and(|old| holds(old, bytes)) {
         return true;
     }
+    #[cfg(test)]
+    if file == GRANTS_FILE && GRANTS_WRITE_FAILS.get() {
+        log::warn!("can't save {}: the test fails it", path.display());
+        return false;
+    }
     let written = std::fs::create_dir_all(dir).and_then(|()| write_atomic(&path, bytes));
     if let Err(e) = &written {
         log::warn!("can't save {}: {e}", path.display());
@@ -481,15 +538,40 @@ fn write_atomic(_: &Path, _: &[u8]) -> std::io::Result<()> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
-/// [`DISABLED_LOCK`] in the plug-in store `dir`, locked until the file is dropped, waiting while
+/// A lock file this process locked, unlocked when it is dropped. A child process that any thread
+/// starts holds a copy of the file's handle until it runs its program, and the lock is only freed
+/// by closing every copy or by unlocking.
+pub(crate) struct LockedFile(std::fs::File);
+
+impl LockedFile {
+    /// `file`, which the caller has locked.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn new(file: std::fs::File) -> Self {
+        LockedFile(file)
+    }
+
+    /// The locked file.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn file(&self) -> &std::fs::File {
+        &self.0
+    }
+}
+
+impl Drop for LockedFile {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
+/// [`DISABLED_LOCK`] in the plug-in store `dir`, locked until it is dropped, waiting while
 /// another window or process holds it, or another handle in this process. The file is opened for
 /// reading and writing (a handle that only appends can't be locked on Windows) and is never
 /// replaced or removed, so that every window locks the same file.
 #[cfg(not(target_arch = "wasm32"))]
-fn lock_store(dir: &Path) -> std::io::Result<std::fs::File> {
+fn lock_store(dir: &Path) -> std::io::Result<LockedFile> {
     let file = open_store_lock(dir)?;
     match file.try_lock() {
-        Ok(()) => return Ok(file),
+        Ok(()) => return Ok(LockedFile::new(file)),
         Err(std::fs::TryLockError::WouldBlock) => {}
         Err(std::fs::TryLockError::Error(e)) => return Err(e),
     }
@@ -498,7 +580,7 @@ fn lock_store(dir: &Path) -> std::io::Result<std::fs::File> {
         waiting();
     }
     file.lock()?;
-    Ok(file)
+    Ok(LockedFile::new(file))
 }
 
 /// [`DISABLED_LOCK`] in `dir`, opened (and made, with the folder) but not locked.
@@ -510,10 +592,10 @@ fn open_store_lock(dir: &Path) -> std::io::Result<std::fs::File> {
 
 /// [`lock_store`] without waiting: `None` while another window or process holds the lock.
 #[cfg(not(target_arch = "wasm32"))]
-fn try_lock_store(dir: &Path) -> std::io::Result<Option<std::fs::File>> {
+fn try_lock_store(dir: &Path) -> std::io::Result<Option<LockedFile>> {
     let file = open_store_lock(dir)?;
     match file.try_lock() {
-        Ok(()) => Ok(Some(file)),
+        Ok(()) => Ok(Some(LockedFile::new(file))),
         Err(std::fs::TryLockError::WouldBlock) => Ok(None),
         Err(std::fs::TryLockError::Error(e)) => Err(e),
     }
@@ -521,13 +603,13 @@ fn try_lock_store(dir: &Path) -> std::io::Result<Option<std::fs::File>> {
 
 /// The browser has no folders to keep anything in.
 #[cfg(target_arch = "wasm32")]
-fn try_lock_store(_: &Path) -> std::io::Result<Option<std::fs::File>> {
+fn try_lock_store(_: &Path) -> std::io::Result<Option<LockedFile>> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
 /// The browser has no folders to keep anything in.
 #[cfg(target_arch = "wasm32")]
-fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
+fn lock_store(_: &Path) -> std::io::Result<LockedFile> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "no file system"))
 }
 
@@ -538,13 +620,19 @@ fn lock_store(_: &Path) -> std::io::Result<std::fs::File> {
 pub(crate) struct StoreTurn {
     /// [`DISABLED_LOCK`], locked; `None` without a store, and for a load that goes ahead without
     /// a turn ([`Session::plugin_store_turn_for_load`]), which then writes nothing to the store.
-    lock: Option<std::fs::File>,
+    lock: Option<LockedFile>,
 }
 
 impl StoreTurn {
     /// A turn that isn't held, for a load that goes ahead without one: it writes nothing.
     pub(crate) fn unheld() -> Self {
         StoreTurn { lock: None }
+    }
+
+    /// Tests: the locked [`DISABLED_LOCK`], when the turn is held.
+    #[cfg(test)]
+    pub(crate) fn lock_file(&self) -> Option<&std::fs::File> {
+        self.lock.as_ref().map(LockedFile::file)
     }
 
     /// Whether the store may be written in this turn.
@@ -560,6 +648,9 @@ thread_local! {
     /// Tests: removing [`GRANTS_FILE`] fails on this thread while the file still reads, as when
     /// another program holds it open.
     pub(crate) static GRANTS_DELETE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: writing [`GRANTS_FILE`] fails on this thread and leaves the file as it was, as on a
+    /// full volume.
+    pub(crate) static GRANTS_WRITE_FAILS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Tests: [`Session::put_back_plugin`] writes the old module back on this thread and then
     /// reports a failure, as when the last flush of a copy fails.
     pub(crate) static PUT_BACK_FAILS_AFTER_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -730,7 +821,7 @@ impl Session {
     pub fn attach_plugin_store(&mut self, dir: PathBuf) {
         self.finish_plugin_loads();
         self.plugin_dir = Some(dir);
-        self.start_stored_plugins(true);
+        self.start_stored_plugins(true, None);
     }
 
     /// Install the plug-ins kept in the plug-in folder: none in Safe Mode, and none the user
@@ -747,34 +838,58 @@ impl Session {
     /// ([`Session::plugin_store_turn_for_load`]); the modules load between them. With
     /// [`Session::load_plugins_in_background`] on, this returns while the modules load.
     pub fn load_stored_plugins(&mut self) {
-        self.start_stored_plugins(false);
+        self.start_stored_plugins(false, None);
+    }
+
+    /// Loads the stored plug-in `path` again, as [`Session::load_stored_plugins`] loads each file,
+    /// and waits until it is installed or skipped (`plugin.retry`) → the id it installed, if any.
+    pub(crate) fn retry_stored_plugin(&mut self, path: &Path) -> Option<String> {
+        self.finish_plugin_loads();
+        self.start_stored_plugins(false, Some(path))
     }
 
     /// [`Session::load_stored_plugins`]; `disabled`: first take the disabled plug-ins saved in the
-    /// folder ([`DISABLED_FILE`]).
-    fn start_stored_plugins(&mut self, disabled: bool) {
-        let Some(dir) = self.plugin_dir.clone() else { return };
+    /// folder ([`DISABLED_FILE`]); `only`: load that one file of the folder, if it is there. The
+    /// files it loads stop being listed as failed ([`failed_stored_plugins`]) until they fail again.
+    /// With `only`, waits for the load → the id it installed, if any.
+    fn start_stored_plugins(&mut self, disabled: bool, only: Option<&Path>) -> Option<String> {
+        let dir = self.plugin_dir.clone()?;
         // A `plugin.install` in another session or process writes the store before this lists it.
         let held = crate::cmd::plugin::hold_plugin_changes();
         let turn = self.plugin_store_turn_for_load();
+        match only {
+            Some(path) => {
+                stored_failures().remove(path);
+            }
+            None => stored_failures().retain(|p, _| p.parent() != Some(dir.as_path())),
+        }
         if disabled {
             let path = dir.join(DISABLED_FILE);
             let saved = read_capped(&path, safe_mode::MAX_DISABLED_FILE_BYTES).map(|b| safe_mode::parse_disabled_file(&b)).unwrap_or_default();
             safe_mode::set_disabled(saved);
         }
         if safe_mode::active() {
-            return;
+            return None;
         }
         let module = vectorcraft_plugins::Limits::default().max_module_bytes as u64;
         let mut rest = VecDeque::new();
         let disabled: BTreeSet<String> = safe_mode::skipped_ids().iter().map(|id| file_stem(id)).collect();
-        for (path, stamp) in list_stamped_files(&dir, PLUGIN_EXT) {
+        // A retry reads its one file without listing the folder again.
+        let listed: Vec<_> = match only {
+            Some(path) => stamped_file(path.to_path_buf(), PLUGIN_EXT).filter(|(p, _)| p.parent() == Some(dir.as_path())).into_iter().collect(),
+            None => list_stamped_files(&dir, PLUGIN_EXT),
+        };
+        // A retried file that isn't there (yet) stays listed, so a later retry can load it.
+        if let Some(path) = only.filter(|p| listed.is_empty() && stored_failure(p).is_none()) {
+            skip_stored(path, "it is no longer in the plug-in store");
+        }
+        for (path, stamp) in listed {
             let item = safe_mode::Item::file(path.display().to_string());
             let by_id = path.file_stem().is_some_and(|s| disabled.contains(s.to_string_lossy().as_ref()));
             if safe_mode::skipped(&item) || by_id {
                 log::info!("skipping the stored plug-in {}: disabled", path.display());
             } else if stamp.0 > module {
-                log::warn!("skipping the stored plug-in {}: {}", path.display(), too_large(module));
+                skip_stored(&path, too_large(module));
             } else {
                 rest.push_back((path, Some(Some(stamp))));
             }
@@ -786,9 +901,24 @@ impl Session {
         changes.start();
         // The modules load after the turn, once the loads queued before them are done.
         drop((turn, held));
-        let load =
-            StoredLoad { dir, files, loads: Loads::deferred(jobs), loaded: VecDeque::new(), next: 0, retired: BTreeMap::new(), changes, rest, left };
+        let load = StoredLoad {
+            dir,
+            files,
+            loads: Loads::deferred(jobs),
+            loaded: VecDeque::new(),
+            installed: Vec::new(),
+            next: 0,
+            retired: BTreeMap::new(),
+            changes,
+            rest,
+            left,
+        };
+        if only.is_some() {
+            let report = self.finish_plugin_load(PluginLoad::Stored(load));
+            return report["loaded"].as_array()?.first()?.as_str().map(str::to_string);
+        }
         self.queue_plugin_load(PluginLoad::Stored(load));
+        None
     }
 
     /// Installs what the stored plug-ins' `load` has loaded so far, in file-name order up to the
@@ -810,18 +940,10 @@ impl Session {
         }
         let dir = load.dir.clone();
         // The grants file is read once for this turn. `written` holds whether it names each id
-        // whose grant this turn removed or put back.
+        // whose grant this turn removed or put back. Only a signed file grants anything
+        // ([`signed_grants`]).
         let file = read_grants(&dir);
-        let mut grants = self.counted(
-            &dir,
-            match &file {
-                Ok(file) => file.grants.clone(),
-                Err(e) => {
-                    log::warn!("skipping the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
-                    BTreeMap::new()
-                }
-            },
-        );
+        let mut grants = self.counted(&dir, signed_grants(&dir, &file));
         let mut written: BTreeMap<String, bool> = BTreeMap::new();
         let named = |written: &BTreeMap<String, bool>, id: &str| {
             written.get(id).copied().unwrap_or_else(|| match &file {
@@ -841,7 +963,7 @@ impl Session {
             // The worker read the file again once its module loaded ([`list_stored_plugins`]); one
             // whose stamp changed since then is skipped too.
             if file_stamp(path).ok() != *stamp {
-                log::warn!("skipping the stored plug-in {}: {CHANGED_WHILE_LOADING}", path.display());
+                skip_stored(path, CHANGED_WHILE_LOADING);
                 continue;
             }
             match loaded {
@@ -865,7 +987,7 @@ impl Session {
                             // grant it, so it wouldn't load at the next launch either.
                             if back.is_some() {
                                 if !self.store_grant_in(turn, &m.id, Some(g.clone())) {
-                                    log::warn!("skipping the stored plug-in {}: couldn't put back its grant", path.display());
+                                    skip_stored(path, "couldn't put back its grant");
                                     continue;
                                 }
                                 load.retired.remove(&m.id);
@@ -886,6 +1008,8 @@ impl Session {
                             ) {
                                 Ok(Some(p)) => {
                                     load.changes.installed(&p);
+                                    load.installed.push(p.id().to_string());
+                                    installed_from(path);
                                     true
                                 }
                                 Ok(None) => {
@@ -893,7 +1017,7 @@ impl Session {
                                     false
                                 }
                                 Err(e) => {
-                                    log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                                    skip_stored(path, e);
                                     false
                                 }
                             };
@@ -909,9 +1033,7 @@ impl Session {
                                 }
                             }
                         }
-                        None => {
-                            log::warn!("skipping the stored plug-in {}: the user hasn't granted this module the permissions it lists", path.display())
-                        }
+                        None => skip_stored(path, "the user hasn't granted this module the permissions it lists"),
                     }
                 }
                 Ok(plugin) => {
@@ -932,11 +1054,13 @@ impl Session {
                             continue;
                         }
                         Err(e) => {
-                            log::warn!("skipping the stored plug-in {}: {e}", path.display());
+                            skip_stored(path, e);
                             continue;
                         }
                     };
                     load.changes.installed(&p);
+                    load.installed.push(p.id().to_string());
+                    installed_from(path);
                     // In the same turn: the grants for the id stop counting, the process's and the
                     // store's, so no session sees the earlier module as approved. A module installed
                     // in its place meanwhile keeps the process's grant recorded for it.
@@ -953,7 +1077,7 @@ impl Session {
                         }
                     }
                 }
-                Err(e) => log::warn!("skipping the stored plug-in {}: {e}", path.display()),
+                Err(e) => skip_stored(path, e),
             }
         }
     }
@@ -1037,7 +1161,7 @@ impl Session {
     }
 
     /// Waits for `load`'s modules and installs them as they load, in turns on the store, then
-    /// ends it → its report (a folder's; `null` for the stored plug-ins).
+    /// ends it → its report (the installed ids for the stored plug-ins).
     pub(crate) fn finish_plugin_load(&mut self, mut load: PluginLoad) -> Value {
         load.start();
         loop {
@@ -1106,7 +1230,7 @@ impl Session {
         }
     }
 
-    /// Ends `load` once [`PluginLoad::done`], in `turn` → its report (a folder's).
+    /// Ends `load` once [`PluginLoad::done`], in `turn` → its report.
     fn end_plugin_load(&mut self, load: PluginLoad, turn: &StoreTurn) -> Value {
         // The loads queued after it count what it installed as their own: one of theirs replaces
         // it, as it would have with the loads run one after the other.
@@ -1119,7 +1243,7 @@ impl Session {
         }
         match load {
             // A stored load's grants were settled as each module installed.
-            PluginLoad::Stored(_) => Value::Null,
+            PluginLoad::Stored(load) => serde_json::json!({"loaded": load.installed}),
             PluginLoad::Folder(load) => crate::cmd::plugin::end_folder(self, load, turn),
         }
     }
@@ -1252,9 +1376,19 @@ impl Session {
     }
 
     /// Write the module `bytes` of the plug-in `id` to the store in `turn` → whether they went there
-    /// (`false` without a folder, and when `turn` isn't held).
+    /// (`false` without a folder, and when `turn` isn't held). The file written is no longer listed
+    /// as failed ([`failed_stored_plugins`]).
     pub(crate) fn store_plugin(&self, turn: &StoreTurn, id: &str, bytes: &[u8]) -> bool {
-        turn.held() && self.plugin_dir.as_deref().is_some_and(|dir| put(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id)), bytes))
+        let name = format!("{}.{PLUGIN_EXT}", file_stem(id));
+        turn.held()
+            && self.plugin_dir.as_deref().is_some_and(|dir| {
+                let written = put(dir, &name, bytes);
+                if written {
+                    stored_failures().remove(&dir.join(&name));
+                    crate::cmd::plugin::clear_folder_failure(&dir.join(&name));
+                }
+                written
+            })
     }
 
     /// The module the store holds for the plug-in `id`: `None` without a folder or such a file, and
@@ -1304,9 +1438,25 @@ impl Session {
 
     /// Record in the store what the user granted plug-in `id` (`None`: nothing), leaving the store's
     /// other grants as they are; with none left, remove the file. Entries this version can't use
-    /// are written back as they were, except one for `id`. A grants file that is too large, can't
-    /// be read or doesn't hold a list is left as it is, with a log record, and nothing is recorded;
-    /// so is one whose new content would be larger than `MAX_GRANTS_FILE`. The file is read and
+    /// are written back as they were, except one for `id`. The generation is raised, and the file is
+    /// written at the generation after the raised one with the MAC of its grants for this folder
+    /// ([`grant_keys`]), making the key when the key store holds none; the key store then keeps that
+    /// generation ([`put_grants`]). A signed file left empty is removed after raising the generation
+    /// ([`take_signed_grants`]). The generation is never lowered: when the file can't be written or
+    /// removed after the raise, the file in place grants nothing and its plug-ins ask again. A file
+    /// VectorCraft didn't write for this folder ([`Trust::Unsigned`]) grants nothing: a grant replaces it with a file that holds that grant alone, and removing one
+    /// raises the generation ([`raise_generation`]), then takes out the entry for `id` and leaves the
+    /// rest unsigned. Removing a grant when there is no file, or when the file grants nothing
+    /// (unsigned, too large or not a list) and has no entry to take out, also raises the generation
+    /// when the key store holds a key ([`retire_signed_copies`]), so that a signed copy put back
+    /// doesn't grant it again. The generation is never read from the file; when it can't be raised,
+    /// nothing is recorded. When the key store can't be reached ([`Trust::Unknown`], or
+    /// a key can't be made or kept), the file is left as it is and nothing is recorded, and an entry
+    /// for `id` stays; a removal then reports a failure, also when the file doesn't name `id`. A
+    /// grants file that is too large, can't be read or doesn't hold a list is left as it is, with a
+    /// log record, and nothing is recorded; so is one whose new content would be larger than
+    /// `MAX_GRANTS_FILE`. A removal still holds for a file that is too large or doesn't hold a list
+    /// once the generation is raised ([`retire_signed_copies`]). The file is read and
     /// written in `turn`. → whether the store now holds what was asked (`false` without a folder,
     /// and when `turn` isn't held). When it does, the grant kept for `id` counts again, for every
     /// session in the process attached to the store ([`Session::ignore_stored_grant`]).
@@ -1364,13 +1514,33 @@ impl Session {
             Ok(file) => file,
             Err(e) => {
                 log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
-                return false;
+                // A file that is too large or doesn't hold a list grants nothing and is left as it
+                // is, but a signed copy made before it must not grant `id` again once it is put back:
+                // the removal holds once no such copy can.
+                return grant.is_none() && !e.unread && retire_signed_copies(dir);
             }
         };
         #[cfg(test)]
         if let Some(between) = AFTER_GRANTS_READ.take() {
             between();
         }
+        match (file.trust, &grant) {
+            // Nothing in the file can be checked, so nothing in it is rewritten: a grant holds for
+            // the session only, and one the file may still hold for `id` can't be removed. A file
+            // that doesn't name `id` may not be the one the kept generation was signed for, so the
+            // removal isn't known to hold either.
+            (Trust::Unknown, _) => return false,
+            // The file grants nothing. A new grant replaces it with a signed file that holds that
+            // grant alone; removing one takes its entry out and leaves the rest unsigned.
+            (Trust::Unsigned, Some(_)) => {
+                log::warn!("replacing the stored plug-in grants {}: VectorCraft didn't write them for this folder", dir.join(GRANTS_FILE).display());
+                file.grants.clear();
+                file.other.clear();
+            }
+            (Trust::Unsigned | Trust::Signed, _) => {}
+        }
+        let signed = file.trust == Trust::Signed || grant.is_some();
+        let removing = grant.is_none();
         let others = file.other.len();
         file.other.retain(|entry| entry.get("id").and_then(serde_json::Value::as_str) != Some(id));
         let changed = match grant {
@@ -1378,23 +1548,25 @@ impl Session {
             None => file.grants.remove(id).is_some(),
         } || file.other.len() != others;
         if !changed {
-            return true;
+            // Without a file, or with one that grants nothing, the last signed file may still be
+            // around as a copy at the kept generation: a removal raises the generation so that the
+            // copy doesn't grant `id` again once it is put back. A signed file that doesn't name `id`
+            // is the latest, so every copy that does is at an earlier generation already. The new
+            // generation is past every one a file was signed at, so the file left in place grants
+            // nothing either.
+            return !removing || (file.present && file.trust == Trust::Signed) || retire_signed_copies(dir);
         }
         let mut entries: Vec<serde_json::Value> = file.grants.into_values().filter_map(|g| serde_json::to_value(g).ok()).collect();
         entries.extend(file.other);
-        if entries.is_empty() {
-            return take(dir, GRANTS_FILE);
+        if signed {
+            return if entries.is_empty() { take_signed_grants(dir) } else { put_grants(dir, entries, true) };
         }
-        // The file is read back only up to its cap: written compactly when pretty-printed is larger,
-        // and not at all when that is too.
-        let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
-        match serde_json::to_vec_pretty(&entries).ok().filter(fits).or_else(|| serde_json::to_vec(&entries).ok().filter(fits)) {
-            Some(bytes) => put(dir, GRANTS_FILE, &bytes),
-            None => {
-                log::warn!("not updating the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), too_large(MAX_GRANTS_FILE));
-                false
-            }
+        // An unsigned file loses an entry: the generation is raised first, so that no signed copy
+        // made before brings the entry back, nor the file itself when it can't be rewritten.
+        if raise_generation(dir).is_none() {
+            return false;
         }
+        if entries.is_empty() { take(dir, GRANTS_FILE) } else { put_grants(dir, entries, false) }
     }
 
     /// Whether the store holds, or may hold, an entry for the plug-in `id`, including one this
@@ -1408,10 +1580,33 @@ impl Session {
         })
     }
 
+    /// The grant the attached plug-in store's signed grants file holds for the plug-in `id` (`None`
+    /// without a folder, and when the file grants nothing: unsigned, unreadable or without an entry
+    /// for `id`).
+    pub(crate) fn stored_plugin_grant(&self, id: &str) -> Option<vectorcraft_plugins::permissions::Grant> {
+        self.plugin_dir.as_deref().and_then(|dir| stored_grants(dir).remove(id))
+    }
+
+    /// Does the attached plug-in store hold a module file for the plug-in `id`, loaded or not (one
+    /// that no grant covers is skipped at startup and stays in the folder)?
+    pub(crate) fn holds_stored_plugin(&self, id: &str) -> bool {
+        self.plugin_dir.as_deref().is_some_and(|dir| std::fs::symlink_metadata(dir.join(format!("{}.{PLUGIN_EXT}", file_stem(id)))).is_ok())
+    }
+
     /// Remove the plug-in `id` from the store in `turn` → whether its file is gone (`false` without a
-    /// folder, and when `turn` isn't held).
+    /// folder, and when `turn` isn't held). A file removed is no longer listed as failed
+    /// ([`failed_stored_plugins`]).
     pub(crate) fn unstore_plugin(&self, turn: &StoreTurn, id: &str) -> bool {
-        turn.held() && self.plugin_dir.as_deref().is_some_and(|dir| take(dir, &format!("{}.{PLUGIN_EXT}", file_stem(id))))
+        let name = format!("{}.{PLUGIN_EXT}", file_stem(id));
+        turn.held()
+            && self.plugin_dir.as_deref().is_some_and(|dir| {
+                let gone = take(dir, &name);
+                if gone {
+                    stored_failures().remove(&dir.join(&name));
+                    crate::cmd::plugin::clear_folder_failure(&dir.join(&name));
+                }
+                gone
+            })
     }
 
     /// Keep the settings and cache of plug-in `id` in the attached plug-in store from now on; without
@@ -1782,7 +1977,7 @@ impl PluginStorage {
 
     /// A turn on the plug-in store ([`lock_store`]), taken before [`PLUGIN_DATA_LOCK`], so that a
     /// window or process changing the same settings or cache waits for this change.
-    fn turn(&self) -> Result<std::fs::File, StorageError> {
+    fn turn(&self) -> Result<LockedFile, StorageError> {
         lock_store(&self.root).map_err(|e| StorageError::Io(format!("{STORE_NOT_LOCKED}: {e}")))
     }
 
@@ -2049,16 +2244,223 @@ impl Storage for PluginStorage {
 /// What the grants file of a plug-in store holds.
 #[derive(Default)]
 struct GrantsFile {
-    /// The grants this version can use, by plug-in id.
+    /// The grants this version can use, by plug-in id. They grant something only when the file is
+    /// [`Trust::Signed`].
     grants: BTreeMap<String, vectorcraft_plugins::permissions::Grant>,
     /// The entries it can't use (a permission it doesn't know, an invalid id), as they were.
     other: Vec<serde_json::Value>,
+    /// Whether VectorCraft wrote the grants for this folder.
+    trust: Trust,
+    /// Whether there is a grants file: `false` when there is none, and the file is then empty and
+    /// [`Trust::Signed`].
+    present: bool,
 }
 
 impl GrantsFile {
     /// Whether the file has an entry for the plug-in `id`, usable by this version or not.
     fn names(&self, id: &str) -> bool {
         self.grants.contains_key(id) || self.other.iter().any(|e| e.get("id").and_then(serde_json::Value::as_str) == Some(id))
+    }
+}
+
+/// Whether a grants file was written by VectorCraft for its folder ([`grant_keys`]).
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
+enum Trust {
+    /// There is no file, or it is at the generation kept for its folder and carries the MAC of that
+    /// generation, its grants and its folder made with the user's key.
+    #[default]
+    Signed,
+    /// It doesn't: an older version wrote it, another program wrote or changed it, it was copied
+    /// from another folder or machine, it is an earlier copy or a write whose generation wasn't kept
+    /// (its generation is not the one the key store keeps), or the key store holds no key. It grants
+    /// nothing.
+    Unsigned,
+    /// The key store can't be reached, so it is not known which. It grants nothing, and is left as
+    /// it is.
+    Unknown,
+}
+
+/// The version of the grants file this version writes ([`SignedGrants::version`]).
+const GRANTS_VERSION: u64 = 1;
+
+/// The grants file as this version writes it: its generation ([`grant_keys::current_generation`]),
+/// the grants, and their MAC ([`grant_keys::sign`]) over the generation and the list written as
+/// compact JSON.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SignedGrants {
+    version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    generation: Option<u64>,
+    grants: Vec<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mac: Option<String>,
+}
+
+/// Tests: a grants file for the plug-in store `dir` that holds `grants` (a JSON list, written as it
+/// is) at the generation kept for `dir`, with their MAC made with the key in use, as VectorCraft
+/// writes one.
+#[cfg(test)]
+pub(crate) fn signed_grants_file(dir: &Path, grants: &str) -> Vec<u8> {
+    let entries: Vec<serde_json::Value> = serde_json::from_str(grants).unwrap_or_default();
+    let key = grant_keys::signing_key().unwrap_or_else(|e| panic!("no key: {e}"));
+    let folder = plugin_store_key(dir);
+    let generation = grant_keys::current_generation(&folder).unwrap_or_else(|e| panic!("no generation: {e}"));
+    let canonical = serde_json::to_vec(&entries).unwrap_or_default();
+    let mac = grant_keys::sign(&key, &folder, generation, &canonical).unwrap_or_default();
+    format!(r#"{{"version":{GRANTS_VERSION},"generation":{generation},"grants":{grants},"mac":"{mac}"}}"#).into_bytes()
+}
+
+/// Tests: the entries of the grants file `bytes`, signed or not.
+#[cfg(test)]
+pub(crate) fn grant_entries(bytes: &[u8]) -> Vec<serde_json::Value> {
+    match serde_json::from_slice::<serde_json::Value>(bytes) {
+        Ok(serde_json::Value::Array(entries)) => entries,
+        Ok(serde_json::Value::Object(mut file)) => match file.remove("grants") {
+            Some(serde_json::Value::Array(entries)) => entries,
+            _ => vec![],
+        },
+        _ => vec![],
+    }
+}
+
+/// Whether `signed`, read from the grants file of the plug-in store `dir`, is at the generation kept
+/// for `dir` and carries the MAC of that generation, its grants and `dir` made with the user's key.
+/// A file at another generation, one behind or one ahead of the kept one included, is
+/// [`Trust::Unsigned`].
+fn trust_of(dir: &Path, signed: &SignedGrants) -> Trust {
+    let (Some(tag), Some(generation), true) = (&signed.mac, signed.generation, signed.version == GRANTS_VERSION) else { return Trust::Unsigned };
+    let Ok(grants) = serde_json::to_vec(&signed.grants) else { return Trust::Unsigned };
+    let folder = plugin_store_key(dir);
+    let kept = grant_keys::current_key().and_then(|key| key.map(|key| Ok((key, grant_keys::current_generation(&folder)?))).transpose());
+    match kept {
+        Ok(Some((key, kept))) if generation == kept && grant_keys::verify(&key, &folder, generation, &grants, tag) => Trust::Signed,
+        Ok(_) => Trust::Unsigned,
+        Err(e) => {
+            log::warn!("can't check the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+            Trust::Unknown
+        }
+    }
+}
+
+/// Write `entries` as the grants file of the plug-in store `dir`, pretty-printed, or compact when
+/// that is larger than [`MAX_GRANTS_FILE`] → whether it went there; the file is not written when the
+/// key or the generation can't be had or it is too large either way. When `signed`, the generation
+/// is raised first ([`raise_generation`]), the file is written at the generation after the raised one
+/// with its MAC, and the key store keeps that generation once the file is written. Every signed write
+/// is then at a generation no file was signed at before, a write whose generation wasn't kept
+/// included, since that one is at most one past the generation the key store kept. A file too large
+/// either way is found before the raise, and then nothing changes. The kept generation only goes up:
+/// when the file isn't written after the raise, the generation stays raised, so the file in place
+/// grants nothing and its plug-ins ask again. When the file's generation can't be kept, the file is
+/// at a generation the key store doesn't hold, so it grants nothing either. Both report a failure.
+/// Call it in the store's turn ([`StoreTurn`]).
+fn put_grants(dir: &Path, entries: Vec<serde_json::Value>, signed: bool) -> bool {
+    let path = dir.join(GRANTS_FILE);
+    let folder = plugin_store_key(dir);
+    if !signed {
+        return match grants_bytes(serde_json::to_value(entries).ok()) {
+            Some(bytes) => put(dir, GRANTS_FILE, &bytes),
+            None => {
+                log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
+                false
+            }
+        };
+    }
+    let key = match grant_keys::signing_key() {
+        Ok(key) => key,
+        Err(e) => {
+            log::warn!("not updating the stored plug-in grants {}: {e}", path.display());
+            return false;
+        }
+    };
+    // A file too large to keep is found before the raise, at the generation it would be written at
+    // (three past the kept one, [`raise_generation`]) and a MAC of its length, so the file in place
+    // keeps its grants when nothing can be written. When the kept generation can't be read, the raise
+    // fails too.
+    let expected = grant_keys::current_generation(&folder).ok().and_then(|kept| kept.checked_add(3)).unwrap_or(u64::MAX);
+    let mut file =
+        SignedGrants { version: GRANTS_VERSION, generation: Some(expected), grants: entries, mac: Some("0".repeat(2 * grant_keys::KEY_LEN)) };
+    if grants_bytes(serde_json::to_value(&file).ok()).is_none() {
+        log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
+        return false;
+    }
+    let Some(raised) = raise_generation(dir) else { return false };
+    let Some(next) = raised.checked_add(1) else {
+        log::warn!("not updating the stored plug-in grants {}: the generation can't be raised", path.display());
+        return false;
+    };
+    file.generation = Some(next);
+    file.mac = serde_json::to_vec(&file.grants).ok().and_then(|grants| grant_keys::sign(&key, &folder, next, &grants));
+    let Some(bytes) = file.mac.as_ref().and_then(|_| grants_bytes(serde_json::to_value(&file).ok())) else {
+        log::warn!("not updating the stored plug-in grants {}: {}", path.display(), too_large(MAX_GRANTS_FILE));
+        return false;
+    };
+    put(dir, GRANTS_FILE, &bytes) && keep_generation(dir, &folder, next)
+}
+
+/// `file` written as the bytes of a grants file: pretty-printed, or compact when that is larger than
+/// [`MAX_GRANTS_FILE`]; `None` when that is too, since the file is read back only up to its cap.
+fn grants_bytes(file: Option<serde_json::Value>) -> Option<Vec<u8>> {
+    let fits = |bytes: &Vec<u8>| bytes.len() as u64 <= MAX_GRANTS_FILE;
+    file.and_then(|file| serde_json::to_vec_pretty(&file).ok().filter(fits).or_else(|| serde_json::to_vec(&file).ok().filter(fits)))
+}
+
+/// Keep `generation` for the grants file of the plug-in store `dir` (whose folder is `folder`) →
+/// whether the key store kept it; a failure is logged.
+fn keep_generation(dir: &Path, folder: &Path, generation: u64) -> bool {
+    match grant_keys::set_current_generation(folder, generation) {
+        Ok(()) => true,
+        Err(e) => {
+            log::warn!("the stored plug-in grants {} grant nothing: their generation wasn't kept ({e})", dir.join(GRANTS_FILE).display());
+            false
+        }
+    }
+}
+
+/// Remove the signed grants file of the plug-in store `dir` → whether it is gone. Its generation is
+/// raised first, so that no copy of the file grants anything once it is gone. The generation stays
+/// raised when the file can't be removed: the file left in place then grants nothing, and its
+/// plug-ins ask again. The file holds no grant but the one being removed. Nothing is removed when
+/// the generation can't be raised. Call it in the store's turn ([`StoreTurn`]).
+fn take_signed_grants(dir: &Path) -> bool {
+    raise_generation(dir).is_some() && take(dir, GRANTS_FILE)
+}
+
+/// Keep a generation two past the one kept for the grants file of the plug-in store `dir`, so that
+/// no signed copy of the file made before grants anything → the generation kept now; `None`, with a
+/// log record, when the key store can't read or keep it or the generation is within two of the
+/// largest 64-bit value. A signed write whose generation wasn't kept is at the generation after the
+/// kept one ([`put_grants`]), so the new generation is past it too. The generation comes from the
+/// key store alone, never from a file, which anyone can edit, and it is never lowered again.
+fn raise_generation(dir: &Path) -> Option<u64> {
+    let folder = plugin_store_key(dir);
+    let raised = grant_keys::current_generation(&folder).and_then(|generation| {
+        // A signed write goes one past the raised generation, so that one must fit too.
+        let next = generation.checked_add(3).and(generation.checked_add(2));
+        let next = next.ok_or_else(|| grant_keys::KeyStoreError("the generation can't be raised".into()))?;
+        grant_keys::set_current_generation(&folder, next).map(|()| next)
+    });
+    match raised {
+        Ok(generation) => Some(generation),
+        Err(e) => {
+            log::warn!("not changing the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+            None
+        }
+    }
+}
+
+/// Make sure no signed copy of an earlier grants file of the plug-in store `dir` grants anything →
+/// whether none can: the generation is raised ([`raise_generation`]) when the key store holds a key,
+/// and left as it is when it holds none, since no file is then signed. `false`, with a log record,
+/// when the key store can't read or keep it. Call it in the store's turn ([`StoreTurn`]).
+fn retire_signed_copies(dir: &Path) -> bool {
+    match grant_keys::current_key() {
+        Ok(None) => true,
+        Ok(Some(_)) => raise_generation(dir).is_some(),
+        Err(e) => {
+            log::warn!("not changing the stored plug-in grants {}: {e}", dir.join(GRANTS_FILE).display());
+            false
+        }
     }
 }
 
@@ -2072,8 +2474,10 @@ struct GrantsError {
 }
 
 /// The grants file of the plug-in store `dir`: empty when there is none, an error when it is too
-/// large, can't be read or doesn't hold a list. An entry that doesn't parse as a grant, or names an
-/// invalid id, is kept in [`GrantsFile::other`] with a log record.
+/// large, can't be read or doesn't hold a list. A list without a MAC (as an older version wrote it),
+/// or with one the user's key didn't make for `dir`, is [`Trust::Unsigned`] ([`trust_of`]). An
+/// entry that doesn't parse as a grant, or names an invalid id, is kept in [`GrantsFile::other`]
+/// with a log record.
 fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
     let path = dir.join(GRANTS_FILE);
     let bytes = match read_past_cap(&path, MAX_GRANTS_FILE) {
@@ -2084,8 +2488,23 @@ fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
     if bytes.len() as u64 > MAX_GRANTS_FILE {
         return Err(GrantsError { unread: false, why: too_large(MAX_GRANTS_FILE) });
     }
-    let entries = serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).map_err(|e| GrantsError { unread: false, why: e.to_string() })?;
-    let mut file = GrantsFile::default();
+    let not_a_list = |why: String| GrantsError { unread: false, why };
+    let (entries, trust) = match serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|e| not_a_list(e.to_string()))? {
+        serde_json::Value::Array(entries) => (entries, Trust::Unsigned),
+        serde_json::Value::Object(_) => {
+            let signed = serde_json::from_slice::<SignedGrants>(&bytes).map_err(|e| not_a_list(e.to_string()))?;
+            let trust = trust_of(dir, &signed);
+            (signed.grants, trust)
+        }
+        _ => return Err(not_a_list("not a list of grants".into())),
+    };
+    if trust == Trust::Unsigned {
+        log::warn!(
+            "the stored plug-in grants {} were not written by VectorCraft for this folder: the plug-ins that list permissions ask for them again",
+            path.display()
+        );
+    }
+    let mut file = GrantsFile { trust, present: true, ..GrantsFile::default() };
     let mut first_error = None;
     for entry in entries {
         let why = match serde_json::from_value::<vectorcraft_plugins::permissions::Grant>(entry.clone()) {
@@ -2106,11 +2525,19 @@ fn read_grants(dir: &Path) -> Result<GrantsFile, GrantsError> {
 }
 
 /// The grants kept in the plug-in store `dir` that this version can use, by plug-in id: none when
-/// there is no grants file, and none, with a log record, when it is too large, can't be read or
-/// doesn't hold a list.
+/// there is no grants file, when VectorCraft didn't write it for `dir` or that can't be checked
+/// ([`Trust`]), and none, with a log record, when it is too large, can't be read or doesn't hold a
+/// list.
 fn stored_grants(dir: &Path) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
-    match read_grants(dir) {
-        Ok(file) => file.grants,
+    signed_grants(dir, &read_grants(dir))
+}
+
+/// [`stored_grants`] from `file`, the grants file of the plug-in store `dir` as [`read_grants`]
+/// read it.
+fn signed_grants(dir: &Path, file: &Result<GrantsFile, GrantsError>) -> BTreeMap<String, vectorcraft_plugins::permissions::Grant> {
+    match file {
+        Ok(file) if file.trust == Trust::Signed => file.grants.clone(),
+        Ok(_) => BTreeMap::new(),
         Err(e) => {
             log::warn!("skipping the stored plug-in grants {}: {}", dir.join(GRANTS_FILE).display(), e.why);
             BTreeMap::new()

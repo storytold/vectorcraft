@@ -309,7 +309,7 @@ impl ShapeWidgets {
     }
 
     fn new(marks: Vec<Mark>) -> Self {
-        ShapeWidgets { common: Common::new(), marks }.label("Shape widgets")
+        ShapeWidgets { common: Common::new(), marks }.label(tl!("Shape widgets"))
     }
 }
 
@@ -368,7 +368,7 @@ impl Component for ShapeWidgets {
     }
 
     fn access(&self, access: &mut Access, _: &Cx<'_, Self>) {
-        access.description("Shape widgets");
+        access.description(tl!("Shape widgets"));
     }
 
     fn finish(self, cx: Cx<'_, Self>) -> Response {

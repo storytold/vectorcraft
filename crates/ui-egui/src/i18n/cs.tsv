@@ -669,6 +669,8 @@
 	RGB	RGB
 	sRGB IEC61966-2.1	sRGB IEC61966-2.1
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft obecný CMYK (podobný SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft natíraný CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft nenatíraný CMYK (FOGRA52)
 	Legacy Macintosh RGB (Gamma 1.8)	Starší Macintosh RGB (gama 1,8)
 	Internet Standard RGB (sRGB)	Standardní internetové RGB (sRGB)
 	Monitor RGB	RGB monitoru
@@ -5254,6 +5256,14 @@ imageTrace	Outline	Obrys
 	The script asks to read and write a folder you choose, with everything in it.	Skript žádá o čtení a zápis složky, kterou vyberete, se vším, co obsahuje.
 	Allow Once	Povolit jednou
 	Always Allow This Script	Vždy povolit tento skript
+	No script has kept file access.	Žádný skript nemá uložený přístup k souborům.
+	Read file	Čtení souboru
+	Read and write file	Čtení a zápis souboru
+	Read and write folder	Čtení a zápis složky
+	Revoke	Odvolat
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Odvolat odebere přístup uložený pro každou verzi skriptu. Přístup ke složce zahrnuje vše, co obsahuje.
+@msg	Script file access revoked	Přístup skriptu k souborům byl odvolán
+@msg	The script file access was already revoked	Přístup skriptu k souborům už byl odvolán
 	Deny	Zamítnout
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skript může měnit otevřené dokumenty a prostřednictvím příkazů, které spouští, zapisovat soubory. Spouštějte jen skripty, kterým důvěřujete.
 	Do not show this warning again	Toto upozornění již nezobrazovat
@@ -5428,6 +5438,7 @@ liquify-list-end	{0}, {1}	{0} a {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` pro dialog souboru skriptu musí být jedna z hodnot: once, always, deny, stop
 @msg	choose a file or folder first, or deny	nejprve vyberte soubor nebo složku, nebo odmítněte
 @msg	the script file permissions could not be saved: {e}	oprávnění skriptů k souborům nelze uložit: {e}
+@msg	the script file permissions could not be read: {e}	oprávnění skriptů k souborům nelze přečíst: {e}
 @msg	this script's file access can be allowed only once	přístup tohoto skriptu k souborům lze povolit jen jednou
 @msg	Only the person at the keyboard can allow a script's file access	Přístup skriptu k souborům může povolit jen člověk u klávesnice
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Skript dostane nejvýše 2 048 souborů: soubory vybrané po nich byly vynechány
@@ -7430,6 +7441,15 @@ axis	Y Axis	osa Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	objekt jen pro čtení byl vynechán: vraťte ho jako samotné {{"id": …}} nebo tak, jak byl předán
 @msg	a string	řetězec
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	tah má jen `paint`, `width`, `join`, `cap` a `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	část malujícího živého efektu má jen `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` a `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	tah má jen `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` a `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` může být jen true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` je jen pro živý efekt, který deklaruje `paintOutput`, s `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` musí být číslo od 0 do 1
+@msg	unknown blending mode; `blend` is one of {_1}	neznámý režim míchání; `blend` je jedno z {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` musí být pole nejvýše {MAX_LOOK_EFFECTS} záznamů
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	výsledek nese nejvýše {MAX_RESULT_EFFECTS} záznamů efektů
+@msg	this host takes no effects here	tento hostitel zde nepřijímá žádné efekty
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	tah musí být {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	efekt musí být {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efekt na výplni vrací jen `fills`
@@ -7542,6 +7562,35 @@ axis	Y Axis	osa Y
 @msg	`inputs` lists `{shown}` twice	`inputs` uvádí `{shown}` dvakrát
 @msg	`inputs` needs `api` 2 or later	`inputs` vyžaduje `api` 2 nebo vyšší
 @msg	`inputs` needs the permission `doc.read`	`inputs` vyžaduje oprávnění `doc.read`
+@msg	only a filter declares `writes`	`writes` deklaruje pouze filtr
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` uvádí neznámý druh objektu `{shown}`: použijte type, image nebo symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` uvádí `{shown}` dvakrát
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` uvádí `{shown}`, který `inputs` neuvádí
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` vyžaduje `api` {WRITES_API} nebo vyšší
+@msg	`writes` needs the permission `doc.write`	`writes` vyžaduje oprávnění `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} není text, obraz ani instance symbolu
+@msg	the text of type given as `truncated` can't be changed	text objektu předaného jako `truncated` nelze změnit
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	musí být seznam nejvýše {MAX_INPUT_RUNS} položek
+@msg	type needs at least one run	text potřebuje alespoň jeden úsek
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bajtů textu (limit {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} odstavců (limit {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	více než {MAX_INPUT_TEXT_TOTAL} bajtů textu v celém výstupu
+@msg	unknown key '{k}'	neznámý klíč '{k}'
+@msg	must be a list of 6 numbers	musí být seznam 6 čísel
+@msg	a number is out of range (limit ±{MAX_COORD})	číslo je mimo rozsah (limit ±{MAX_COORD})
+@msg	flattens the object to a line or a point	zplošťuje objekt na čáru nebo bod
+@msg	an object flattened to a line or a point can't be placed again	objekt zploštělý na čáru nebo bod nelze znovu umístit
+@msg	must be a number from 0 to 1	musí být číslo od 0 do 1
+@msg	must be the name of a symbol	musí být název symbolu
+@msg	'{shown}' is not a symbol in this document	'{shown}' není symbol v tomto dokumentu
+@msg	a run must be {{"text", "style", "inline"?}}	úsek musí být {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` obsahuje znak vložené grafiky
+@msg	inline graphics can't be added, removed, reordered or changed	vloženou grafiku nelze přidávat, odebírat, přeřazovat ani měnit
+@msg	the characters of threaded type can't be changed	znaky zřetězeného textu nelze změnit
+@msg	the characters of type with ruby can't be changed	znaky textu s ruby nelze změnit
+@msg	expected {count} paragraph styles, one per paragraph	očekáváno {count} stylů odstavců, jeden na každý odstavec
+@msg	the document has no Kinsoku set named '{shown}'	dokument nemá sadu Kinsoku s názvem '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	musí mít 1-{MAX_FAMILY} tisknutelných znaků
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Číst objekty, které dostane, a nastavení, pracovní plochy, vrstvy a vzorky dokumentu
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` musí uvádět různé oddíly: settings, artboards, layers nebo swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` je pro filtr nebo živý efekt s `commands`, s `api` 3 nebo vyšším a s oprávněním `doc.read`
@@ -7552,6 +7601,21 @@ axis	Y Axis	osa Y
 @msg	time budget	časový rozpočet
 @msg	memory budget (the selection is too large to hand over)	rozpočet paměti (výběr je příliš velký na předání)
 @msg	output size ({what} is {len} bytes, limit {max})	velikost výstupu ({what} má {len} bajtů, limit {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} řádek {line}, sloupec {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	rozpočet paměti
+@msg	call depth	hloubka volání
+@msg	run(input, params) returned no output object	run(input, params) nevrátila žádný výstupní objekt
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" vyžaduje `script`: název souboru .js zásuvného modulu vedle manifestu
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` musí být název souboru .js ve složce manifestu: 1-128 bajtů, bez složky, bez `:`, nesmí začínat `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` je text skriptu a uvádí se jen v JSON, které přijímá dataBase64 příkazu plugin.install: soubor .vcplugin uvádí svůj skript v `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifest zásuvného modulu v JavaScriptu uvádí `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" je pro filtr objektů (`kind` "filter"), ne pro `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	zásuvný modul v JavaScriptu nemůže uvést oprávnění `{name}`: z oprávnění hostitele smí uvést `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifest modulu WebAssembly vynechává `runtime`: "js" je pro zásuvný modul v JavaScriptu
+@msg	a JavaScript plug-in makes no command calls	zásuvný modul v JavaScriptu nevolá žádné příkazy
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) přijímá dvě čísla
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) přijímá úroveň, 0 (chyba), 1 (varování), 2 (informace) nebo 3 (ladění), a řetězec
 @msg	the plug-in's grant can't be removed from the plug-in store	oprávnění zásuvného modulu nelze odebrat z úložiště zásuvných modulů
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	oprávnění `{shown}` je vyhrazeno pro pozdější API zásuvných modulů; tento hostitel ho neuděluje
 @msg	unknown permission `{shown}`	neznámé oprávnění `{shown}`
@@ -8441,6 +8505,7 @@ breakText	Glyphs	Glyfy
 	Place Brush Art	Umístit kresbu štětce
 	Replace Brush Art	Nahradit kresbu štětce
 	Replace Pattern Art	Nahradit kresbu vzorku
+	Place Pattern Art	Umístit kresbu vzorku
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Tahy používají tento štětec. Použít novou kresbu na tyto tahy, nebo je ponechat beze změny a přidat kopii štětce s novou kresbou?
 	Apply to Strokes	Použít na tahy
 	Leave Strokes	Ponechat tahy
@@ -10803,6 +10868,11 @@ breakText	Glyphs	Glyfy
 	No objects are selected.	Nejsou vybrány žádné objekty.
 	Open a document to mark its fold lines.	Otevřete dokument, abyste označili jeho linie skladu.
 	Remove Fold Line Role	Odstranit typ linie
+	Fold Angle	Úhel skladu
+	Set Fold Angle…	Nastavit úhel skladu…
+	Set Fold Angle	Nastavit úhel skladu
+	Reset Fold Angle	Obnovit úhel skladu
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	vyberte linii bigu, částečného řezu nebo perforace, která není zamčená ani skrytá
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Místo popisku zobrazí kartu s tím, co dělá nástroj z panelu a co dělají jeho klávesy; vyžaduje Zobrazovat popisky nástrojů.
 	Selects whole objects and groups to move, resize or rotate them.	Vybírá celé objekty a skupiny, abyste je mohli přesunout, změnit jejich velikost nebo je otočit.

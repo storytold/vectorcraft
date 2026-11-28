@@ -4842,6 +4842,14 @@ theme	Appearance	Erscheinungsbild
 	The script asks to read and write a folder you choose, with everything in it.	Das Skript möchte einen Ordner, den Sie auswählen, mit seinem gesamten Inhalt lesen und schreiben.
 	Allow Once	Einmal erlauben
 	Always Allow This Script	Dieses Skript immer erlauben
+	No script has kept file access.	Kein Skript hat einen gespeicherten Dateizugriff.
+	Read file	Datei lesen
+	Read and write file	Datei lesen und schreiben
+	Read and write folder	Ordner lesen und schreiben
+	Revoke	Widerrufen
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	„Widerrufen“ entfernt den Zugriff, der für jede Version des Skripts gespeichert ist. Der Zugriff auf einen Ordner umfasst seinen gesamten Inhalt.
+@msg	Script file access revoked	Dateizugriff des Skripts widerrufen
+@msg	The script file access was already revoked	Der Dateizugriff des Skripts wurde bereits widerrufen
 	Deny	Ablehnen
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ein Skript kann die geöffneten Dokumente ändern und über die ausgeführten Befehle Dateien schreiben. Führen Sie nur Skripte aus, denen Sie vertrauen.
 	Do not show this warning again	Diese Warnung nicht mehr anzeigen
@@ -5007,6 +5015,7 @@ liquify-list-end	{0}, {1}	{0} und {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` für den Dateidialog eines Skripts muss einer der folgenden Werte sein: once, always, deny, stop
 @msg	choose a file or folder first, or deny	wählen Sie zuerst eine Datei oder einen Ordner aus oder lehnen Sie ab
 @msg	the script file permissions could not be saved: {e}	die Dateiberechtigungen der Skripte konnten nicht gespeichert werden: {e}
+@msg	the script file permissions could not be read: {e}	die Dateiberechtigungen der Skripte konnten nicht gelesen werden: {e}
 @msg	this script's file access can be allowed only once	der Dateizugriff dieses Skripts kann nur einmal erlaubt werden
 @msg	Only the person at the keyboard can allow a script's file access	Nur die Person an der Tastatur kann den Dateizugriff eines Skripts erlauben
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Ein Skript erhält höchstens 2.048 Dateien: Die danach ausgewählten Dateien wurden weggelassen
@@ -7013,6 +7022,15 @@ axis	Y Axis	Y-Achse
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ein schreibgeschütztes Objekt wurde weggelassen: Geben Sie es zurück, als {{"id": …}} allein oder so, wie es übergeben wurde
 @msg	a string	eine Zeichenkette
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	eine Kontur hat nur `paint`, `width`, `join`, `cap` und `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ein Teil eines malenden Live-Effekts hat nur `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` und `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	eine Kontur hat nur `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` und `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` darf nur true sein
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` gilt nur für einen Live-Effekt, der `paintOutput` angibt, mit `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` muss eine Zahl von 0 bis 1 sein
+@msg	unknown blending mode; `blend` is one of {_1}	unbekannter Mischmodus; `blend` ist einer von {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` muss eine Liste von höchstens {MAX_LOOK_EFFECTS} Einträgen sein
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	ein Ergebnis enthält höchstens {MAX_RESULT_EFFECTS} Effekteinträge
+@msg	this host takes no effects here	dieser Host nimmt hier keine Effekte an
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	eine Kontur muss {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} sein
 @msg	an effect must be {{"id", "params"?, "visible"?}}	ein Effekt muss {{"id", "params"?, "visible"?}} sein
 @msg	an effect on a fill returns only `fills`	ein Effekt auf einer Fläche gibt nur `fills` zurück
@@ -7125,6 +7143,35 @@ axis	Y Axis	Y-Achse
 @msg	`inputs` lists `{shown}` twice	`inputs` führt `{shown}` doppelt auf
 @msg	`inputs` needs `api` 2 or later	`inputs` erfordert `api` 2 oder höher
 @msg	`inputs` needs the permission `doc.read`	`inputs` erfordert die Berechtigung `doc.read`
+@msg	only a filter declares `writes`	nur ein Filter deklariert `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` nennt eine unbekannte Objektart `{shown}`: verwenden Sie type, image oder symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` führt `{shown}` doppelt auf
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` führt `{shown}` auf, das `inputs` nicht aufführt
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` erfordert `api` {WRITES_API} oder höher
+@msg	`writes` needs the permission `doc.write`	`writes` erfordert die Berechtigung `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} ist weder Text noch ein Bild noch eine Symbolinstanz
+@msg	the text of type given as `truncated` can't be changed	der Text eines als `truncated` übergebenen Textobjekts kann nicht geändert werden
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	muss eine Liste mit höchstens {MAX_INPUT_RUNS} Einträgen sein
+@msg	type needs at least one run	Text braucht mindestens einen Abschnitt
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} Byte Text (Grenze {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} Absätze (Grenze {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	mehr als {MAX_INPUT_TEXT_TOTAL} Byte Text in der gesamten Ausgabe
+@msg	unknown key '{k}'	unbekannter Schlüssel '{k}'
+@msg	must be a list of 6 numbers	muss eine Liste von 6 Zahlen sein
+@msg	a number is out of range (limit ±{MAX_COORD})	eine Zahl liegt außerhalb des Bereichs (Grenze ±{MAX_COORD})
+@msg	flattens the object to a line or a point	macht das Objekt zu einer Linie oder einem Punkt
+@msg	an object flattened to a line or a point can't be placed again	ein zu einer Linie oder einem Punkt zusammengefallenes Objekt kann nicht neu platziert werden
+@msg	must be a number from 0 to 1	muss eine Zahl von 0 bis 1 sein
+@msg	must be the name of a symbol	muss der Name eines Symbols sein
+@msg	'{shown}' is not a symbol in this document	'{shown}' ist kein Symbol in diesem Dokument
+@msg	a run must be {{"text", "style", "inline"?}}	ein Abschnitt muss {{"text", "style", "inline"?}} sein
+@msg	`text` holds the character of an inline graphic	`text` enthält das Zeichen einer eingebundenen Grafik
+@msg	inline graphics can't be added, removed, reordered or changed	eingebundene Grafiken können nicht hinzugefügt, entfernt, umgeordnet oder geändert werden
+@msg	the characters of threaded type can't be changed	die Zeichen von verkettetem Text können nicht geändert werden
+@msg	the characters of type with ruby can't be changed	die Zeichen von Text mit Ruby können nicht geändert werden
+@msg	expected {count} paragraph styles, one per paragraph	{count} Absatzformate erwartet, eines pro Absatz
+@msg	the document has no Kinsoku set named '{shown}'	das Dokument hat keinen Kinsoku-Satz namens '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	muss 1-{MAX_FAMILY} druckbare Zeichen haben
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Die Objekte lesen, die es erhält, sowie die Einstellungen, Zeichenflächen, Ebenen und Farbfelder des Dokuments
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` muss verschiedene Abschnitte aufführen: settings, artboards, layers oder swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` gilt für einen Filter oder einen Live-Effekt mit `commands`, mit `api` 3 oder höher und der Berechtigung `doc.read`
@@ -7135,6 +7182,21 @@ axis	Y Axis	Y-Achse
 @msg	time budget	Zeitbudget
 @msg	memory budget (the selection is too large to hand over)	Speicherbudget (die Auswahl ist zu groß zum Übergeben)
 @msg	output size ({what} is {len} bytes, limit {max})	Ausgabegröße ({what} ist {len} Byte groß, Grenze {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} Zeile {line}, Spalte {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	Speicherbudget
+@msg	call depth	Aufruftiefe
+@msg	run(input, params) returned no output object	run(input, params) hat kein Ausgabeobjekt zurückgegeben
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" braucht `script`: den Namen der .js-Datei des Plug-ins neben dem Manifest
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` muss der Name einer .js-Datei im Ordner des Manifests sein: 1-128 Byte, kein Ordner, kein `:`, nicht mit `.` beginnend
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` ist der Text des Skripts und steht nur in dem JSON, das dataBase64 von plugin.install übernimmt: eine .vcplugin-Datei nennt ihr Skript in `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	das Manifest eines JavaScript-Plug-ins gibt `runtime` "js" an
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" gilt für einen Objektfilter (`kind` "filter"), nicht für `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	ein JavaScript-Plug-in kann die Berechtigung `{name}` nicht aufführen: von den Berechtigungen des Hosts darf es `progress` aufführen
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	das Manifest eines WebAssembly-Moduls lässt `runtime` weg: "js" gilt für ein JavaScript-Plug-in
+@msg	a JavaScript plug-in makes no command calls	ein JavaScript-Plug-in ruft keine Befehle auf
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) nimmt zwei Zahlen
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) nimmt eine Stufe, 0 (Fehler), 1 (Warnung), 2 (Information) oder 3 (Debug), und eine Zeichenfolge
 @msg	the plug-in's grant can't be removed from the plug-in store	die Berechtigung des Plug-ins kann nicht aus dem Plug-in-Speicher entfernt werden
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	die Berechtigung `{shown}` ist für eine spätere Plug-in-API reserviert; dieser Host gewährt sie nicht
 @msg	unknown permission `{shown}`	unbekannte Berechtigung `{shown}`
@@ -8066,6 +8128,7 @@ breakText	Glyphs	Glyphen
 	Place Brush Art	Pinselgrafik platzieren
 	Replace Brush Art	Pinselgrafik ersetzen
 	Replace Pattern Art	Mustergrafik ersetzen
+	Place Pattern Art	Mustergrafik platzieren
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturen verwenden diesen Pinsel. Die neue Grafik auf diese Konturen anwenden oder sie unverändert lassen und eine Kopie des Pinsels mit der neuen Grafik hinzufügen?
 	Apply to Strokes	Auf Konturen anwenden
 	Leave Strokes	Konturen beibehalten
@@ -10445,6 +10508,11 @@ breakText	Glyphs	Glyphen
 	No objects are selected.	Es sind keine Objekte ausgewählt.
 	Open a document to mark its fold lines.	Öffnen Sie ein Dokument, um seine Faltlinien festzulegen.
 	Remove Fold Line Role	Linienart entfernen
+	Fold Angle	Faltwinkel
+	Set Fold Angle…	Faltwinkel festlegen…
+	Set Fold Angle	Faltwinkel festlegen
+	Reset Fold Angle	Faltwinkel zurücksetzen
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	Wählen Sie eine Rill-, Teilschnitt- oder Perforationslinie aus, die weder gesperrt noch ausgeblendet ist
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Zeigt statt des Tooltips eine Karte, was ein Werkzeug der Werkzeugleiste und seine Tasten tun; erfordert Tooltips anzeigen.
 	Selects whole objects and groups to move, resize or rotate them.	Wählt ganze Objekte und Gruppen aus, um sie zu verschieben, zu skalieren oder zu drehen.
