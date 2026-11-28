@@ -14530,7 +14530,9 @@ A plug-in of API level 2 (`api: 2` in its entry) that lists `progress` may repor
 log lines: `notifications/cancelled` makes its `vc_cancelled` return 1, and its log lines go to the server's log
 under its id. With a desktop app connected, `plugin.dialog` runs such a filter (one without a `commandAllowlist`) in the
 background when it runs at once or OK runs it with Preview off, and returns `{background: true, status}`;
-`plugin.cancelRuns` stops it. With a desktop app connected, `plugin.applyLastFilter {}` (Object › Plug-ins › Apply
+`plugin.cancelRuns` stops it. In the web build, `plugin.dialog` has no Preview and runs every filter in a Web Worker,
+returning `{background: true, status}`, and `ui.installPlugin` returns `{pending: true}` while a worker checks module
+bytes that no worker has checked yet ([plug-ins](plugins.md#the-web-build)). With a desktop app connected, `plugin.applyLastFilter {}` (Object › Plug-ins › Apply
 Last Filter) runs the object filter whose `plugin.run` last succeeded in the app's session again on the selection, with
 the same parameters and without a dialog, and returns `plugin.run`'s result, or `{background: true, status}` for a
 filter that runs in the background; `plugin.lastFilter {}` (Last Filter…) opens its dialog with those parameters

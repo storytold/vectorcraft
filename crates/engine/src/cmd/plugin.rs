@@ -207,6 +207,36 @@ pub struct FilterRun {
     limits: vectorcraft_plugins::Limits,
 }
 
+/// What running a [`FilterRun`] away from the session takes ([`FilterRun::job`]).
+pub struct FilterJob {
+    pub plugin: Arc<Plugin>,
+    pub input: Vec<u8>,
+    pub params: Vec<u8>,
+    pub limits: vectorcraft_plugins::Limits,
+}
+
+/// The run of a filter that calls commands that holds the documents ([`FilterRun::begin_calls`]):
+/// the run, what its calls keep fixed, and its open undo step.
+pub(crate) struct Calling {
+    /// The command that applies its output: `plugin.run`, or the plug-in command it runs, and the
+    /// params it was started with, which that command must be given.
+    cmd: String,
+    params: Value,
+    run: FilterRun,
+    calls: super::plugin_call::Calls,
+    tx: super::plugin_call::Transaction,
+}
+
+/// A module that a load in another place checked ([`Session::hand_in_checked_plugin`]): its
+/// SHA-256 and the manifest JSON that load read.
+pub(crate) struct Checked {
+    hash: String,
+    manifest: Vec<u8>,
+}
+
+/// How many checked modules the session keeps.
+const MAX_CHECKED: usize = 4;
+
 /// A filter's output handed in by a [`FilterRun`] made away from `plugin.run`, with what the run
 /// was made of: only a run of the same installation of the plug-in on the same input with the same
 /// parameters takes it (a plug-in's output depends on nothing else).
@@ -339,6 +369,53 @@ impl FilterRun {
     /// it was made, less what its document context costs.
     pub fn limits(&self) -> &vectorcraft_plugins::Limits {
         &self.limits
+    }
+
+    /// The input JSON it gives the plug-in: the objects.
+    pub fn input(&self) -> &[u8] {
+        &self.input
+    }
+
+    /// The parameters JSON it gives the plug-in, `_context` included.
+    pub fn params(&self) -> &[u8] {
+        &self.params
+    }
+
+    /// What running it away from the session takes: the plug-in, its input and parameters, and the
+    /// limits it runs under.
+    pub fn job(&self) -> FilterJob {
+        FilterJob { plugin: Arc::clone(&self.plugin), input: self.input.clone(), params: self.params.clone(), limits: self.limits.clone() }
+    }
+
+    /// [`FilterRun::prepare_for`] command `c` (`plugin.run` or a plug-in command) of a filter that
+    /// calls commands, which runs away from the session (the web build's plug-in worker) while the
+    /// session makes its command calls ([`Session::plugin_call`]). The edit in progress is kept
+    /// first, as `c` keeps it. The session then holds the run's undo step open and refuses every
+    /// command but queries and `c` ([`EngineError::PluginBusy`]) until `c` applies the output handed
+    /// in for it ([`Session::hand_in_plugin_calls`]) or [`Session::end_plugin_calls`] ends it → what
+    /// running it takes.
+    pub fn begin_calls(s: &mut Session, c: &str, p: &Value) -> Result<FilterJob> {
+        if s.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
+        let r = FilterRun::prepare_for(s, c, p)?;
+        let r = if super::plugin_call::settle(s)? { FilterRun::prepare_for(s, c, p)? } else { r };
+        let tx = super::plugin_call::Transaction::begin(s, &r.label())?;
+        let may = r.plugin.manifest().permissions();
+        let calls = super::plugin_call::Calls::of(s, may.contains(&Permission::DocRead), may.contains(&Permission::DocWrite));
+        let job = r.job();
+        s.plugin_calling = Some(Calling { cmd: c.to_string(), params: p.clone(), run: r, calls, tx });
+        Ok(job)
+    }
+
+    /// The run command `c`'s params `p` ask for: `plugin.run`'s ([`FilterRun::prepare`]), or a
+    /// plug-in command's (`plugin.<id>.<command>`), on the active document.
+    pub fn prepare_for(s: &Session, c: &str, p: &Value) -> Result<FilterRun> {
+        if c == "plugin.run" {
+            return FilterRun::prepare(s, p);
+        }
+        let (plugin, command) = command_of(c).ok_or_else(|| EngineError::UnknownCommand(c.into()))?;
+        FilterRun::prepare_with(s, plugin, Some(command), c, p)
     }
 
     /// The parameters it hands the plug-in, `_context` included.
@@ -523,7 +600,10 @@ pub fn keep_unapplied_typing(s: &mut Session) -> Result<bool> {
 /// was applied, with the plug-in's name.
 fn run(s: &mut Session, p: &Value) -> Result<Value> {
     // An output handed in is for this run only (the app hands it in just before), whatever it does.
-    let handed = s.plugin_output.take();
+    let mut handed = s.plugin_output.take();
+    if let Some(r) = end_held(s, "plugin.run", p, &mut handed) {
+        return r;
+    }
     let r = FilterRun::prepare(s, p)?;
     // One that calls commands runs here, where it can make them, on the document with any edit in
     // progress committed.
@@ -541,6 +621,32 @@ fn run(s: &mut Session, p: &Value) -> Result<Value> {
         None => r.run()?,
     };
     r.finish(s, &output)
+}
+
+/// Ends the run that holds the documents ([`FilterRun::begin_calls`]) when command `c` (with params
+/// `p`, the params the run was started with) is the one that applies its output and `handed` is
+/// that output: applied in the run's own undo step, to the objects the run was given → the
+/// command's result. Any other command, or other params, is refused while a run holds them, and so
+/// is the output once the plug-in is no longer installed as the run had it. `None`: no run holds
+/// them.
+fn end_held(s: &mut Session, c: &str, p: &Value, handed: &mut Option<HandedIn>) -> Option<Result<Value>> {
+    let held = s.plugin_calling.take()?;
+    let serial = held.run.plugin.serial();
+    let installed = registry::get(held.run.plugin.id()).is_some_and(|plugin| plugin.serial() == serial);
+    let same = held.cmd == c && *p == held.params && installed;
+    let mine = handed.take().filter(|h| same && (h.serial, &h.input, &h.params) == (serial, &held.run.input, &held.run.params));
+    let Some(h) = mine else {
+        s.plugin_calling = Some(held);
+        return Some(Err(EngineError::PluginBusy));
+    };
+    let Calling { cmd, run, calls, tx, .. } = held;
+    // A panic applying the output still ends the run, so what its calls did is undone.
+    let r = if calls.kept(s) {
+        crate::guard::catch_panic(|| run.finish(s, &h.output)).unwrap_or_else(|msg| Err(EngineError::Internal { cmd, msg }))
+    } else {
+        Err(EngineError::Cancelled)
+    };
+    Some(tx.end(s, r))
 }
 
 /// The command id of plug-in `plugin`'s command `command`: `plugin.<plugin>.<command>`.
@@ -934,10 +1040,11 @@ fn unrouted(_: &mut Session, _: &Value) -> Result<Value> {
 /// `_context.command`, under the plug-in's permissions and budget, applied as one undo step named
 /// after the command → `{plugin, command, ids, notice?, pluginName?}`. A run that fails (a trap, an exhausted
 /// budget, an output it may not make) leaves the document as it was, and the error names the
-/// plug-in and the command.
+/// plug-in and the command. An output handed in for this very run ([`FilterRun::hand_in`]) is
+/// applied instead of running the plug-in, as `plugin.run` applies one.
 pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value> {
-    // An output handed in is for `plugin.run` alone.
-    s.plugin_output = None;
+    // An output handed in is for this run only, whatever it does.
+    let mut handed = s.plugin_output.take();
     let (plugin, command) = command_of(id).ok_or_else(|| EngineError::UnknownCommand(id.into()))?;
     let failed = {
         let (name, label) = (permissions::display_text(&plugin.manifest().name, permissions::MAX_SHOWN_NAME), command.shown_label());
@@ -946,6 +1053,9 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
             e => EngineError::Other(format!("“{name}” › {label}: {e}")),
         }
     };
+    if let Some(r) = end_held(s, id, p, &mut handed) {
+        return r.map_err(failed);
+    }
     let r = FilterRun::prepare_with(s, plugin, Some(command), id, p)?;
     if r.calls() {
         let r = match super::plugin_call::settle(s)? {
@@ -964,7 +1074,11 @@ pub(crate) fn run_command(s: &mut Session, id: &str, p: &Value) -> Result<Value>
         }
         false => r,
     };
-    let output = r.run().map_err(&failed)?;
+    let handed = handed.filter(|h| (h.serial, &h.input, &h.params) == (r.plugin.serial(), &r.input, &r.params));
+    let output = match handed {
+        Some(h) => h.output,
+        None => r.run().map_err(&failed)?,
+    };
     r.finish(s, &output).map_err(failed)
 }
 
@@ -1025,15 +1139,22 @@ const MAX_DATA_CHARS: usize = (32 << 20) / 3 * 4 + 4;
 pub const EXTS: &[&str] = &["wasm", vectorcraft_plugins::js::PACKAGE_EXT];
 
 /// The plug-in module command `c`'s params give, loaded and checked, and its bytes: `path` (a
-/// `.wasm` file) or `dataBase64` (the module, with `name` shown as its source).
-fn load_given(c: &str, p: &Value) -> Result<(Plugin, Vec<u8>)> {
+/// `.wasm` file) or `dataBase64` (the module, with `name` shown as its source). A module that a
+/// load in another place checked ([`Session::hand_in_checked_plugin`]) runs none of its code here.
+fn load_given(s: &Session, c: &str, p: &Value) -> Result<(Plugin, Vec<u8>)> {
     match (str_param(p, "path").filter(|s| !s.is_empty()), str_param(p, "dataBase64")) {
         (_, Some(data)) => {
             if data.len() > MAX_DATA_CHARS {
                 return Err(bad(c, "`dataBase64` is larger than the module limit"));
             }
             let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(c, "`dataBase64` is not valid base64"))?;
-            let plugin = Plugin::load(&bytes, vectorcraft_plugins::Limits::default()).map_err(err)?;
+            let limits = vectorcraft_plugins::Limits::default();
+            let hash = permissions::sha256_hex(&bytes);
+            let plugin = match s.plugin_checked.iter().find(|k| k.hash == hash) {
+                Some(k) => Plugin::load_checked(&bytes, limits, &k.manifest),
+                None => Plugin::load(&bytes, limits),
+            }
+            .map_err(err)?;
             let plugin = match str_param(p, "name") {
                 Some(name) => plugin.with_source(name),
                 None => plugin,
@@ -1081,6 +1202,93 @@ impl InstallApproval {
 }
 
 impl Session {
+    /// Hands in the manifest JSON `manifest` that a load of the module with SHA-256 `hash` read in
+    /// another place (the web build's plug-in worker, [`vectorcraft_plugins::worker`]): a
+    /// `plugin.inspect` or `plugin.install` of those very bytes (`dataBase64`) then loads the module
+    /// with [`Plugin::load_checked`], which runs none of its code here. The newest
+    /// [`MAX_CHECKED`] are kept.
+    pub fn hand_in_checked_plugin(&mut self, hash: &str, manifest: Vec<u8>) {
+        self.plugin_checked.retain(|c| c.hash != hash);
+        if self.plugin_checked.len() >= MAX_CHECKED {
+            self.plugin_checked.remove(0);
+        }
+        self.plugin_checked.push(Checked { hash: hash.to_string(), manifest });
+    }
+
+    /// Has a load in another place checked the module with SHA-256 `hash`
+    /// ([`Session::hand_in_checked_plugin`])?
+    pub fn plugin_checked(&self, hash: &str) -> bool {
+        self.plugin_checked.iter().any(|c| c.hash == hash)
+    }
+
+    /// Does a plug-in run that calls commands hold the documents ([`FilterRun::begin_calls`])?
+    pub fn plugin_calls_open(&self) -> bool {
+        self.plugin_calling.is_some()
+    }
+
+    /// Applies the edit the active tool computes on another thread (a Shape Builder merge), as a
+    /// command that edits waits for it, and keeps the edit in progress (a drag, a preview, typing)
+    /// as its own undo step, as a run that calls commands does before it starts, so a run made away
+    /// from the session is given the document with them and applies as an undo step of its own →
+    /// whether that changed the document or the selection.
+    pub fn settle_for_plugin_run(&mut self) -> Result<bool> {
+        let before = self.active().map(|d| (Arc::clone(&d.doc), d.selection.clone()));
+        self.finish_tool_edit_later()?;
+        let finished = match (&before, self.active()) {
+            (Some((doc, selection)), Some(d)) => !Arc::ptr_eq(doc, &d.doc) || *selection != d.selection,
+            (None, None) => false,
+            _ => true,
+        };
+        Ok(super::plugin_call::settle(self)? || finished)
+    }
+
+    /// Is command `id` the one that applies the output of the run that holds the documents?
+    pub fn plugin_calls_end_with(&self, id: &str) -> bool {
+        self.plugin_calling.as_ref().is_some_and(|c| c.cmd == id)
+    }
+
+    /// Makes the command call `id` with `args` that the run [`FilterRun::begin_calls`] started asked
+    /// for, as a call of that run on the page makes it → its result, or why it didn't run. With no
+    /// such run, nothing runs.
+    pub fn plugin_call(&mut self, id: &str, args: &Value) -> std::result::Result<Value, vectorcraft_plugins::host::CallFailure> {
+        let Some(c) = self.plugin_calling.take() else {
+            return Err(vectorcraft_plugins::host::CallFailure {
+                code: vectorcraft_plugins::host::CALL_NO_CONTEXT,
+                why: EngineError::Cancelled.to_string(),
+            });
+        };
+        // As a step of `plugin.run`: not journaled on its own, and a panic fails the call.
+        let depth = self.depth;
+        self.depth += 1;
+        let r = crate::guard::catch_panic(|| super::plugin_call::call(self, &c.calls, id, args));
+        self.depth = depth;
+        self.plugin_calling = Some(c);
+        r.unwrap_or_else(|msg| {
+            let why = EngineError::Internal { cmd: id.to_string(), msg }.to_string();
+            Err(vectorcraft_plugins::host::CallFailure { code: vectorcraft_plugins::host::CALL_COMMAND_FAILED, why })
+        })
+    }
+
+    /// Hands in `output`, the output of the run [`FilterRun::begin_calls`] started, for the next run
+    /// of the command that started it, with that run's params, to apply in its undo step.
+    pub fn hand_in_plugin_calls(&mut self, output: Vec<u8>) {
+        if let Some(c) = &self.plugin_calling {
+            let r = &c.run;
+            self.plugin_output = Some(HandedIn { serial: r.plugin.serial(), input: r.input.clone(), params: r.params.clone(), output });
+        }
+    }
+
+    /// Ends the run [`FilterRun::begin_calls`] started, which has no output (it failed, or was
+    /// canceled): every document and the session state go back to how they were before it.
+    pub fn end_plugin_calls(&mut self) {
+        if let Some(c) = self.plugin_calling.take() {
+            // An output handed in for it is dropped with it: a later run with the same input and
+            // params is not given it.
+            self.plugin_output = None;
+            let _ = c.tx.end(self, Err(EngineError::Cancelled));
+        }
+    }
+
     /// Lets the next `plugin.install` take its `grant` and `allowHeavy`, for the module `approval`
     /// describes. Call it only with what a person approved, just before that install.
     pub fn approve_plugin_install(&mut self, approval: InstallApproval) {
@@ -1190,7 +1398,7 @@ fn install(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let allow_heavy = switch_or(p, "allowHeavy", false, C)?;
     let grant = grant_param(C, p)?;
-    let (plugin, bytes) = load_given(C, p)?;
+    let (plugin, bytes) = load_given(s, C, p)?;
     // `hash` pins the module the user was shown: one with other bytes is refused.
     if let Some(h) = p.get("hash").filter(|v| !v.is_null())
         && h.as_str() != Some(plugin.hash())
@@ -1387,7 +1595,7 @@ pub(crate) fn keep_installed(s: &Session, turn: &StoreTurn, id: &str, bytes: &[u
 /// needs the user to grant its permissions first (`needsApproval`) and whether it would take
 /// another module's place (`needsReplace`).
 fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
-    load_given("plugin.inspect", p).map(|(plugin, _)| {
+    load_given(s, "plugin.inspect", p).map(|(plugin, _)| {
         let mut v = describe(&plugin);
         v["needsApproval"] = json!(!s.plugin_approved(&plugin));
         v["needsReplace"] = json!(takes_over(s, &plugin));
