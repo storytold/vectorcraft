@@ -436,3 +436,99 @@ fn pdf_x1a_keeps_overprint() {
     let r = export(&overprinting(RED), json!({"standard": "pdfX1a", "compatibility": "1.4", "compression": {"compressText": false}}));
     assert!(r.bytes.starts_with(b"%PDF-1.3") && String::from_utf8_lossy(&r.bytes).contains("/OP true/op true/OPM 1"));
 }
+
+/// A PDF with a correct cross-reference table from `bodies` (each an object's contents, numbered
+/// from 1), its trailer naming object 1 as the catalog.
+fn handmade(bodies: &[String]) -> Vec<u8> {
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offs = vec![];
+    for (i, b) in bodies.iter().enumerate() {
+        offs.push(out.len());
+        out.extend(format!("{} 0 obj\n{b}\nendobj\n", i + 1).bytes());
+    }
+    let xref = out.len();
+    out.extend(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).bytes());
+    for o in offs {
+        out.extend(format!("{o:010} 00000 n \n").bytes());
+    }
+    out.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).bytes());
+    out
+}
+
+/// #6299: a layer's form whose mark gives no paper (its mark rewritten without the paper corners
+/// [`layer_form`] writes) still gets a real box — its art's box, ordered — never the page-max
+/// box that inflated the document bounds on import.
+#[test]
+fn a_layer_form_without_paper_gets_a_real_box() {
+    // The mark without its paper corners: the layer index reads, the paper doesn't.
+    let art = "q -32000 0 m h W n Q 0 0 1 rg 10 10 90 90 re f";
+    let page = "/Fm0 Do";
+    let pdf = handmade(&[
+        "<< /Type/Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type/Pages /Kids[3 0 R] /Count 1 >>".to_string(),
+        "<< /Type/Page /Parent 2 0 R /MediaBox[0 0 612 792] /Contents 4 0 R /Resources<</XObject<</Fm0 5 0 R>>>> >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len()),
+        format!("<< /Type/XObject /Subtype/Form /BBox[10 10 100 100] /Length {} >>\nstream\n{art}\nendstream", art.len()),
+    ]);
+    let doc = Document::new(612.0, 792.0);
+    let set: PdfSettings = serde_json::from_value(json!({})).unwrap();
+    let out = crate::forms::finish(pdf, &doc, &set, true, false, false).unwrap();
+    let text = String::from_utf8_lossy(&out);
+    assert!(!text.contains("32767"), "no page-max box: {text}");
+    assert_eq!(form_boxes(&out), ["10 10 100 100"], "the art's box: {text}");
+}
+
+/// #6299: every layer form's box stays round the page and the art — with an empty layer, art
+/// across the page's edge and a sublayer — so no form's box is page-max or past the page and the
+/// art on import.
+#[test]
+fn layer_forms_stay_round_the_page_and_the_art() {
+    let mut d = Document::new(200.0, 100.0);
+    d.layers.clear();
+    let art = |d: &mut Document, x0: f64, y0: f64, x1: f64, y1: f64, c: Color| {
+        Node::path(d.alloc_id(), shapes::rectangle(Rect::new(x0, y0, x1, y1)), Appearance::basic(Paint::solid(c), Paint::None, 0.0))
+    };
+    let layer = |d: &mut Document, name: &str, children: Vec<Node>| {
+        let mut l = Node::layer(d.alloc_id(), name, LayerColor::Preset(0));
+        if let NodeKind::Layer { children: c, .. } = &mut l.kind {
+            c.extend(children.into_iter().map(std::sync::Arc::new));
+        }
+        l
+    };
+    let sub = {
+        let a = art(&mut d, 90.0, 10.0, 120.0, 40.0, Color::gray(0.5));
+        layer(&mut d, "Sub", vec![a])
+    };
+    let main = {
+        let a = art(&mut d, 50.0, 10.0, 80.0, 40.0, BLUE);
+        layer(&mut d, "Main", vec![a, sub])
+    };
+    let back = {
+        let a = art(&mut d, 10.0, 10.0, 40.0, 40.0, RED);
+        layer(&mut d, "Back", vec![a])
+    };
+    let empty = layer(&mut d, "Empty", vec![]);
+    let off = {
+        let a = art(&mut d, 180.0, 80.0, 260.0, 160.0, GREEN);
+        layer(&mut d, "Off", vec![a])
+    };
+    d.layers.push(back.into());
+    d.layers.push(empty.into());
+    d.layers.push(off.into());
+    d.layers.push(main.into());
+    let r = export(&d, json!({"createLayers": true, "compression": {"compressText": false}}));
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let boxes = form_boxes(&r.bytes);
+    assert_eq!(boxes.len(), 5, "one form per layer and sublayer: {boxes:?}");
+    // The boxes live in their forms' space (the art drawn through the page's y-flip); mapped
+    // back to the page they must stay round the page and the art, in whole units.
+    for b in &boxes {
+        let v: Vec<f64> = b.split_whitespace().map(|v| v.parse().unwrap()).collect();
+        assert_eq!(v.len(), 4, "{b}");
+        assert!(v.iter().all(|v| v.is_finite()) && v[0] <= v[2] && v[1] <= v[3], "{b}");
+        assert!(v.iter().all(|x| x.abs() < 10_000.0), "no page-max box: {b}");
+        let page = [v[0], 100.0 - v[3], v[2], 100.0 - v[1]];
+        assert!(page[0] >= -0.5 && page[1] >= -0.5 && page[2] <= 260.5 && page[3] <= 160.5, "round the page and the art: {b}");
+    }
+    assert!(boxes.contains(&"0 -60 260 100".to_string()), "the art across the edge is covered: {boxes:?}");
+}
