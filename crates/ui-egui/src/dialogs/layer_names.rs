@@ -289,8 +289,12 @@ fn settings(app: &VectorcraftApp) -> Fields {
 }
 
 /// `ui.nameLayers`: opens the dialog, on the session checkpoint when it is for the active
-/// document's current revision.
+/// document's current revision. The web build refuses it: a browser page can't reach a local
+/// Ollama server.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
+    if cfg!(target_arch = "wasm32") {
+        return Err(tl!("Name Layers with AI isn't available in the web version").to_owned());
+    }
     let (uid, revision) = app.session.active().map(|st| (st.uid, st.revision)).ok_or_else(|| tl!("No document").to_owned())?;
     close(app);
     let fields = match app.naming_checkpoint.take() {
