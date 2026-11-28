@@ -332,6 +332,14 @@ pub struct Scatter {
     /// they are.
     #[serde(skip_serializing_if = "is_zero")]
     pub saturation_jitter: f64,
+    /// Brightness jitter in percent, 0 to 100: each copy moves the brightness of the solid colors
+    /// it draws, after the colorization and the hue and saturation jitter, by its own amount
+    /// between −`brightness_jitter` and `brightness_jitter` percentage points, keeping their hue
+    /// and saturation. White, black and grays move too. The stroke's path and the brush name fix
+    /// the amounts, so a stroke draws the same colors every time. 0 (brushes saved before there
+    /// was brightness jitter) leaves the colors as they are.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub brightness_jitter: f64,
     /// How size, spacing, scatter and rotation vary between their two values: Fixed takes the
     /// first, Random any value between them, Pressure the first at the lightest pen pressure and
     /// the second at the heaviest, Tilt the first with the pen lying flat and the second upright,
@@ -355,6 +363,7 @@ impl Default for Scatter {
             colorization: Colorization::None,
             hue_jitter: 0.0,
             saturation_jitter: 0.0,
+            brightness_jitter: 0.0,
             modes: None,
         }
     }
@@ -367,6 +376,8 @@ impl Scatter {
     pub const HUE_JITTER_RANGE: (f64, f64) = (0.0, 180.0);
     /// The range of [`Scatter::saturation_jitter`] (%).
     pub const SATURATION_JITTER_RANGE: (f64, f64) = (0.0, 100.0);
+    /// The range of [`Scatter::brightness_jitter`] (%).
+    pub const BRIGHTNESS_JITTER_RANGE: (f64, f64) = (0.0, 100.0);
 
     /// Size, spacing, scatter and rotation, each as its (first, second) values.
     pub fn values(&self) -> [(f64, f64); 4] {
@@ -762,6 +773,7 @@ impl Brush {
                 s.rotation = within_pair(s.rotation, rotation, 0.0);
                 s.hue_jitter = within(s.hue_jitter, Scatter::HUE_JITTER_RANGE, 0.0);
                 s.saturation_jitter = within(s.saturation_jitter, Scatter::SATURATION_JITTER_RANGE, 0.0);
+                s.brightness_jitter = within(s.brightness_jitter, Scatter::BRIGHTNESS_JITTER_RANGE, 0.0);
                 s.colorization.sanitize();
             }
             BrushKind::Art(a) => {
@@ -815,6 +827,7 @@ struct ScatterOptions {
     colorization: Colorization,
     hue_jitter: f64,
     saturation_jitter: f64,
+    brightness_jitter: f64,
 }
 
 /// The Art brush fields a stroke can set for itself.
@@ -847,9 +860,18 @@ impl BrushKind {
     pub fn stroke_option_keys(&self) -> &'static [&'static str] {
         match self {
             BrushKind::Calligraphic(_) => &["angle", "roundness", "size", "variation", "modes"],
-            BrushKind::Scatter(_) => {
-                &["size", "spacing", "scatter", "rotation", "modes", "rotation_relative_to_path", "colorization", "hue_jitter", "saturation_jitter"]
-            }
+            BrushKind::Scatter(_) => &[
+                "size",
+                "spacing",
+                "scatter",
+                "rotation",
+                "modes",
+                "rotation_relative_to_path",
+                "colorization",
+                "hue_jitter",
+                "saturation_jitter",
+                "brightness_jitter",
+            ],
             BrushKind::Art(_) => &["width", "width_mode", "width_max", "flip_along", "flip_across", "overlap", "colorization"],
             BrushKind::Pattern(_) => &["scale", "spacing", "fit", "flip_along", "flip_across", "colorization"],
             BrushKind::Bristle(_) => &[],
@@ -876,6 +898,7 @@ impl BrushKind {
                 colorization: s.colorization,
                 hue_jitter: s.hue_jitter,
                 saturation_jitter: s.saturation_jitter,
+                brightness_jitter: s.brightness_jitter,
             }),
             BrushKind::Art(a) => serde_json::to_value(ArtOptions {
                 width: a.width,
@@ -908,7 +931,7 @@ impl BrushKind {
                 let o: ScatterOptions = serde_json::from_value(v)?;
                 (s.size, s.spacing, s.scatter, s.rotation, s.modes) = (o.size, o.spacing, o.scatter, o.rotation, o.modes);
                 (s.rotation_relative_to_path, s.colorization) = (o.rotation_relative_to_path, o.colorization);
-                (s.hue_jitter, s.saturation_jitter) = (o.hue_jitter, o.saturation_jitter);
+                (s.hue_jitter, s.saturation_jitter, s.brightness_jitter) = (o.hue_jitter, o.saturation_jitter, o.brightness_jitter);
             }
             BrushKind::Art(a) => {
                 let o: ArtOptions = serde_json::from_value(v)?;
@@ -1155,6 +1178,9 @@ pub fn stroke_pieces(doc: &Document, brush: &Brush, bp: &BezPath, stroke: &Strok
         }
         if s.saturation_jitter > 0.0 {
             colorize::jitter_saturations(&mut out, s.saturation_jitter, track::seed_of(bp, &brush.name));
+        }
+        if s.brightness_jitter > 0.0 {
+            colorize::jitter_brightnesses(&mut out, s.brightness_jitter, track::seed_of(bp, &brush.name));
         }
     }
     leave_out_brushed(doc, &mut out, &mut Known::new());
