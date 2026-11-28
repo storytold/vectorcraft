@@ -16,11 +16,12 @@ use craft::theme::Srgba;
 use craft::ui::choice::SwatchFace;
 use craft::ui::contract::{Bind, DropPlace, ListDrag, MemoProps, PopupKind, SelectMode};
 use craft::ui::contract::{Entry, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::layout_components::Stack;
 use craft::ui::menu::{Menu, MenuItem};
 use craft::ui::patterns::presets::{PresetEvent, PresetView, ThumbInfo};
 use craft::ui::primitives::{ContentPainterCx, Glyph, IconSpec, PaintShape, StrokeWidth};
 use craft::ui::runtime::env::Label;
-use craft::ui::sections::{FooterAction, FooterBar};
+use craft::ui::sections::{FooterAction, FooterBar, FooterOutput};
 use craft::ui::style::{DataColor, UiTokens};
 use egui::{Color32, Painter, Rect, Response, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::{Value, json};
@@ -401,42 +402,58 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
         app.ui.swatches_panel = model;
         return;
     };
-    let thumbs = Thumbs {
-        revision: (st.uid, st.revision),
-        lit: highlighted(&st.doc, &base).into_iter().map(str::to_string).collect(),
-        doc: Arc::clone(&st.doc),
-    };
-    let dragged_doc = Arc::clone(&thumbs.doc);
+    let revision = (st.uid, st.revision);
+    let lit: Vec<String> = highlighted(&st.doc, &base).into_iter().map(str::to_string).collect();
+    let doc = Arc::clone(&st.doc);
     let document = st.uid;
     let reverts = st.reverts;
+    let foot = Footer::of(app);
     let shown_app: &VectorcraftApp = app;
-    let browser = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
-        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, document, &drag.grabbed, dragged_rows(drag))))
-        .thumb(thumbs, thumb)
-        .row_icons(|key| match key {
-            SwatchKey::Swatch(name) => row_icons(shown_app, name),
-            _ => vec![],
+    let search = model.show_find;
+    let state = &mut model.state;
+    // The browser fills the room the footer leaves, so the footer stays in view under the swatches. The body can run
+    // more than once in a pass, so each run builds its own browser. A list drag is keyed by its browser ID. Each
+    // document has its own browser.
+    let mut footed = None;
+    let out = Stack::new()
+        .label(tl!("Swatches"))
+        .fill()
+        .footer(|ui, _| footed = Some(foot.show(ui)))
+        .show(ui, |ui, _| {
+            let dragged_doc = Arc::clone(&doc);
+            let thumbs = Thumbs { revision, lit: lit.clone(), doc: Arc::clone(&doc) };
+            let browser = SwatchesPanel::new(&data, Bind::bound(&mut *state), Srgba::rgb(0.0, 0.0, 0.0))
+                .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, document, &drag.grabbed, dragged_rows(drag))))
+                .thumb(thumbs, thumb)
+                .row_icons(|key| match key {
+                    SwatchKey::Swatch(name) => row_icons(shown_app, name),
+                    _ => vec![],
+                })
+                .row_items(|key| row_items(shown_app, key))
+                .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document, reverts))
+                .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document, reverts))
+                .select(SelectMode::Multi)
+                .search(search)
+                .reveal(focus.clone().map(SwatchKey::Swatch))
+                .footer(None);
+            ui.push_id(("swatch-rows", document), |ui| browser.show(ui)).inner
         })
-        .row_items(|key| row_items(shown_app, key))
-        .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document, reverts))
-        .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document, reverts))
-        .select(SelectMode::Multi)
-        .search(model.show_find)
-        .reveal(focus.map(SwatchKey::Swatch))
-        .footer(None);
-    // A list drag is keyed by its browser ID. Each document has its own browser.
-    let out = ui.push_id(("swatch-rows", document), |ui| browser.show(ui)).inner;
+        .inner;
     app.ui.swatches_panel = model;
     let shown = shown_keys(&data);
-    if let Some((at, _, alt)) = out.used
-        && let Some(entry) = data.get(at.group).and_then(|g| g.entries.get(at.index))
-    {
-        apply(app, &entry.name, alt);
+    if let Some(out) = out {
+        if let Some((at, _, alt)) = out.used
+            && let Some(entry) = data.get(at.group).and_then(|g| g.entries.get(at.index))
+        {
+            apply(app, &entry.name, alt);
+        }
+        for event in out.events {
+            on_event(app, &shown, event);
+        }
     }
-    for event in out.events {
-        on_event(app, &shown, event);
+    if let Some(out) = footed {
+        on_footer(app, ui, foot, out);
     }
-    footer(app, ui);
 }
 
 /// The rows `drag` moves: the dragged rows of the grabbed row's kind (colour groups or swatches), in panel order.
@@ -761,36 +778,64 @@ const NEW_GROUP: usize = 5;
 /// Swatch and Delete. Alt-click on Delete deletes without asking; Cmd/Ctrl-click on New Swatch makes a spot color, and
 /// Cmd/Ctrl+Shift-click a global process color. Swatches dragged from the list and dropped on New Swatch are
 /// duplicated, and rows dropped on Delete are deleted, also with nothing selected.
-fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let sel = selected(app);
-    let kind = app.ui.swatches_panel.kind;
-    let del = actions::deletable(app, &sel);
-    let opts = actions::editable(app, &sel);
-    let group = actions::selected_group(app, &sel).filter(|_| opts.is_none());
-    let icon = |id: &'static str| IconSpec::svg(IconId::new(id));
-    let document = app.session.active().map(|state| state.uid);
-    let rows_drag = move |d: &PanelDrag| matches!(d, PanelDrag::Paint { rows: Some(rows), .. } if Some(rows.document) == document);
-    let edit = if group.is_some() {
-        FooterAction::new(icon("palette"), tl!("Edit or Apply Color Group"))
-    } else {
-        FooterAction::new(icon("dc-options"), tl!("Swatch Options")).enabled(opts.is_some())
-    };
-    // Libraries, Show Swatch Kinds and the edit action sit at the start edge; Delete at the end edge, then New Swatch
-    // and New Color Group before it.
-    let actions = [
-        FooterAction::new(icon("library"), tl!(SwatchLibraries::MENU))
-            .popup(PopupKind::Menu)
-            .pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
-        FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).popup(PopupKind::Menu).pressed(kind != Kind::All),
-        edit,
-        FooterAction::new(icon("trash-2"), tl!("Delete Swatch"))
-            .enabled(!del.is_empty())
-            .takes_drops_disabled(del.is_empty())
-            .accepts_drops::<PanelDrag>(rows_drag),
-        FooterAction::new(icon("dc-new-item"), tl!("New Swatch")).accepts_drops::<PanelDrag>(rows_drag),
-        FooterAction::new(icon("dc-folder"), tl!("New Color Group")),
-    ];
-    let out = FooterBar::actions(actions).at_start(EDIT + 1).show_footer(ui);
+struct Footer {
+    sel: Vec<String>,
+    kind: Kind,
+    del: Vec<String>,
+    opts: Option<String>,
+    group: Option<String>,
+    libraries_open: bool,
+    document: Option<u64>,
+}
+
+impl Footer {
+    /// The footer's state, read before the swatch browser borrows the app.
+    fn of(app: &VectorcraftApp) -> Self {
+        let sel = selected(app);
+        let del = actions::deletable(app, &sel);
+        let opts = actions::editable(app, &sel);
+        let group = actions::selected_group(app, &sel).filter(|_| opts.is_none());
+        Footer {
+            kind: app.ui.swatches_panel.kind,
+            libraries_open: library_panel::any_open::<SwatchLibraries>(&app.ui),
+            document: app.session.active().map(|state| state.uid),
+            sel,
+            del,
+            opts,
+            group,
+        }
+    }
+
+    /// The footer bar, in the room the panel keeps for it under the swatches.
+    fn show(&self, ui: &mut Ui) -> FooterOutput {
+        let icon = |id: &'static str| IconSpec::svg(IconId::new(id));
+        let document = self.document;
+        let rows_drag = move |d: &PanelDrag| matches!(d, PanelDrag::Paint { rows: Some(rows), .. } if Some(rows.document) == document);
+        let edit = if self.group.is_some() {
+            FooterAction::new(icon("palette"), tl!("Edit or Apply Color Group"))
+        } else {
+            FooterAction::new(icon("dc-options"), tl!("Swatch Options")).enabled(self.opts.is_some())
+        };
+        // Libraries, Show Swatch Kinds and the edit action sit at the start edge; Delete at the end edge, then New
+        // Swatch and New Color Group before it.
+        let actions = [
+            FooterAction::new(icon("library"), tl!(SwatchLibraries::MENU)).popup(PopupKind::Menu).pressed(self.libraries_open),
+            FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).popup(PopupKind::Menu).pressed(self.kind != Kind::All),
+            edit,
+            FooterAction::new(icon("trash-2"), tl!("Delete Swatch"))
+                .enabled(!self.del.is_empty())
+                .takes_drops_disabled(self.del.is_empty())
+                .accepts_drops::<PanelDrag>(rows_drag),
+            FooterAction::new(icon("dc-new-item"), tl!("New Swatch")).accepts_drops::<PanelDrag>(rows_drag),
+            FooterAction::new(icon("dc-folder"), tl!("New Color Group")),
+        ];
+        FooterBar::actions(actions).at_start(EDIT + 1).show_footer(ui)
+    }
+}
+
+/// Runs what the footer reported: a pressed action, a drop on New Swatch or Delete, or a menu it opened.
+fn on_footer(app: &mut VectorcraftApp, ui: &mut Ui, footer: Footer, out: FooterOutput) {
+    let Footer { sel, kind, del, opts, group, .. } = footer;
     match out.picked {
         Some(DELETE) if !del.is_empty() => actions::delete(app, del, out.mods.alt),
         Some(NEW) => actions::new_swatch(app, &sel, out.mods),
