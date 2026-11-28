@@ -7,6 +7,7 @@ mod affinity_corpus;
 mod assets;
 mod brands;
 mod bundle;
+mod cache_units;
 mod cursors;
 mod ico;
 mod layers;
@@ -36,12 +37,13 @@ commands:
   ui-commands     regenerate crates/mcp/src/ui_catalog.rs from desktop UI_COMMANDS; --check fails on drift
   pdf-deps        verify immutable shared PDF writer and patched Krilla sources
   layers          enforce the crate dependency layering (plan/architecture.md §3)
-  wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates and the web app
+  wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates, the web app and its plug-in worker
   test            the workspace tests (cargo nextest when installed, else cargo test), then the doctests
   ci              fmt --check, clippy -D warnings, test, doctests, no-bundled-fonts, pdf-deps, assets, brands, cursors (warnings only), ui-commands --check, layers, wasm (stops at first failure)
   ci shard        shard $GATE_SHARD of $GATE_SHARDS of ci (xtask/src/shards.rs): a test shard runs
                   the tests and doctests of its crates, the last shard the other steps
-  ci warm         build what every shard builds, without running it (fills the gate's cache)
+  ci warm         build what every shard builds, without running it (fills the gate's cache); with
+                  CRAFT_CACHE_UNITS set, appends Cargo's JSON messages for each build to that file
   shards          list the crates each shard tests; fails when a member is in no shard or in two,
                   or builds with other features in its shard than in the whole workspace
   corpus [--download | --affinity | --scripts]
@@ -219,7 +221,8 @@ fn cmd_layers() -> Result<(), String> {
 }
 
 /// Workspace packages that must build for wasm32: all L0–L5 crates, the egui
-/// shell, and the web app (its wasm-only code is compiled by nothing else). Each comes with its
+/// shell, and the web app and its plug-in worker (their wasm-only code is compiled by nothing
+/// else). Each comes with its
 /// package id, which `-p` takes where the name would be ambiguous: craft-libs builds against this
 /// repo's geom and pathops by git, so the graph can hold a second, older copy of a workspace crate.
 fn wasm_set() -> Result<Vec<(String, String)>, String> {
@@ -231,7 +234,7 @@ fn wasm_set() -> Result<Vec<(String, String)>, String> {
         .filter(|c| match layers::classify(&c.name) {
             Some(layers::Class::Layer(l)) => l <= 5 || layers::short_name(&c.name) == "ui-egui",
             Some(layers::Class::Standalone) => true,
-            _ => layers::short_name(&c.name) == "web",
+            _ => matches!(layers::short_name(&c.name), "web" | "plugin-worker"),
         })
         .map(|c| {
             let id = ids.get(c.name.as_str()).ok_or_else(|| format!("cargo metadata: no package id for {}", c.name))?.to_string();
@@ -250,7 +253,7 @@ fn cmd_wasm() -> Result<(), String> {
         c.args(["-p", id]);
     }
     let names: Vec<&str> = set.iter().map(|(name, _)| name.as_str()).collect();
-    run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), names.join(", ")))
+    cache_units::run(c, &format!("cargo check --target wasm32-unknown-unknown --keep-going ({} crates: {})", set.len(), names.join(", ")))
 }
 
 /// Whether `cargo nextest` is installed.
@@ -350,7 +353,11 @@ fn cmd_ci_shard() -> Result<(), String> {
 /// dependencies of every shard with the features that shard builds them with (cargo resolves
 /// features over the packages each command selects). The integration tests are left out: they
 /// build no dependency that the library tests do not, since both take the crate's dev-dependencies.
+///
+/// In a leg that saves the cache, every build records its units in `CRAFT_CACHE_UNITS`
+/// (xtask/src/cache_units.rs), xtask's own build included.
 fn cmd_ci_warm() -> Result<(), String> {
+    cache_units::record_xtask()?;
     let checked = shards::run()?;
     let mut steps: Vec<Step> = Vec::new();
     for shard in checked {
@@ -360,7 +367,7 @@ fn cmd_ci_warm() -> Result<(), String> {
                 Box::new(move || {
                     let mut c = cargo();
                     c.arg("test").args(shards::select(&crates)).args(["--lib", "--bins", "--no-run"]);
-                    run(c, &format!("cargo test --lib --bins --no-run ({})", shards::names(&crates)))
+                    cache_units::run(c, &format!("cargo test --lib --bins --no-run ({})", shards::names(&crates)))
                 }),
             ));
         }
@@ -370,7 +377,7 @@ fn cmd_ci_warm() -> Result<(), String> {
         Box::new(|| {
             let mut c = cargo();
             c.args(["clippy", "--workspace", "--all-targets", "--keep-going"]);
-            run(c, "cargo clippy --workspace --all-targets --keep-going")
+            cache_units::run(c, "cargo clippy --workspace --all-targets --keep-going")
         }),
     ));
     steps.push((
@@ -378,13 +385,13 @@ fn cmd_ci_warm() -> Result<(), String> {
         Box::new(|| {
             let mut c = cargo();
             c.args(["test", "-p", "vectorcraft-text", "--no-default-features", "--test", "without_bundled_fonts", "--no-run"]);
-            run(c, "cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts --no-run")?;
+            cache_units::run(c, "cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts --no-run")?;
             let mut c = cargo();
             c.args(["clippy", "-p", "vectorcraft-ui-egui", "--no-default-features", "--all-targets"]);
-            run(c, "cargo clippy -p vectorcraft-ui-egui --no-default-features --all-targets")?;
+            cache_units::run(c, "cargo clippy -p vectorcraft-ui-egui --no-default-features --all-targets")?;
             let mut c = cargo();
             c.args(["test", "-p", "vectorcraft-ui-egui", "--no-default-features", "--test", "install_fonts", "--no-run"]);
-            run(c, "cargo test -p vectorcraft-ui-egui --no-default-features --test install_fonts --no-run")
+            cache_units::run(c, "cargo test -p vectorcraft-ui-egui --no-default-features --test install_fonts --no-run")
         }),
     ));
     steps.push(("wasm", Box::new(cmd_wasm)));

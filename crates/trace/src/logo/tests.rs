@@ -632,9 +632,12 @@ fn a_large_odd_sized_image_never_overshoots_its_edges() {
 fn a_hostile_palette_is_bounded_and_near_duplicates_merge() {
     let img = render(64, 64, 0.7, |x, y| ((x - 32.0).hypot(y - 32.0) <= 20.0).then_some(RED));
     let many: Vec<String> = std::iter::once("#d22832".to_string()).chain((1..200_000u32).map(|i| format!("#{:06x}", i * 37 % 0xfffff0))).collect();
-    let started = std::time::Instant::now();
+    let named = many.len();
+    super::pipeline::NAMED_COMPARISONS.with(|n| n.set(0));
     let res = trace_within(&img, &TraceParams { logo_colors: many, ..logo_params() }, 100_000);
-    assert!(started.elapsed().as_secs() < 20, "palette handling took {:?}", started.elapsed());
+    // Each named color is compared with the ten or fewer kept so far, not with every one before it.
+    let comparisons = super::pipeline::NAMED_COMPARISONS.with(|n| n.get());
+    assert!(comparisons <= 10 * named, "{comparisons} comparisons for {named} named colors");
     if let Ok(r) = res {
         assert!(r.palette.len() <= 11);
     }

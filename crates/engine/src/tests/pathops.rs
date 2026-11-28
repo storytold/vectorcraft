@@ -1066,6 +1066,100 @@ fn clean_up_removes_junk() {
     assert!(d.node(unpainted).is_none() && d.node(stray).is_none() && d.node(empty).is_none());
 }
 
+/// A page-sized square under a ring (a compound path with a square hole), nothing selected.
+fn art_and_ring(s: &mut Session) -> (NodeId, NodeId) {
+    let art = rect(s, 0.0, 0.0, 100.0, 100.0);
+    let (outer, inner) = (rect(s, 10.0, 10.0, 80.0, 80.0), rect(s, 35.0, 35.0, 30.0, 30.0));
+    s.execute("select.set", &json!({"ids": [inner.0]})).unwrap();
+    s.execute("path.reverse", &json!({})).unwrap();
+    s.execute("select.set", &json!({"ids": [outer.0, inner.0]})).unwrap();
+    s.execute("object.compoundPath.make", &json!({})).unwrap();
+    let ring = s.doc().unwrap().selection.objects[0];
+    s.execute("select.none", &json!({})).unwrap();
+    (art, ring)
+}
+
+fn one_anchor_path(s: &mut Session) -> NodeId {
+    NodeId(s.execute("path.create", &json!({"anchors": [{"x": 5, "y": 5}]})).unwrap()["id"].as_u64().unwrap())
+}
+
+fn clip_group(s: &mut Session, ids: &[NodeId]) -> NodeId {
+    s.execute("select.set", &json!({"ids": ids.iter().map(|i| i.0).collect::<Vec<_>>()})).unwrap();
+    NodeId(s.execute("object.clippingMask.make", &json!({})).unwrap()["id"].as_u64().unwrap())
+}
+
+fn clip_path_of(s: &Session, id: NodeId) -> vectorcraft_doc::Node {
+    let n = node(s, id);
+    assert!(n.clips(), "{id:?} still clips");
+    (*n.children().unwrap()[0]).clone()
+}
+
+/// Unpainted Objects leaves a clipping layer's clipping path, which has no paint of its own.
+#[test]
+fn clean_up_keeps_a_layers_clipping_path() {
+    let mut s = session();
+    let (art, ring) = art_and_ring(&mut s);
+    let layer = s.doc().unwrap().current_layer().unwrap();
+    assert!(s.execute("layer.clippingMask.toggle", &json!({"id": layer.0})).unwrap()["clip"].as_bool().unwrap());
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], 0);
+    assert_eq!(clip_path_of(&s, layer).id, ring);
+    assert!(s.doc().unwrap().doc.node(art).is_some());
+}
+
+/// Stray Points leaves the one-anchor members of a compound path used as a clipping path.
+#[test]
+fn clean_up_keeps_the_members_of_a_compound_clipping_path() {
+    let mut s = session();
+    let (art, ring) = art_and_ring(&mut s);
+    let stray = one_anchor_path(&mut s);
+    let g = clip_group(&mut s, &[art, ring]);
+    s.edit("t", |d, _| {
+        let n = d.remove(stray)?;
+        d.children_mut(Some(ring))?.push(n);
+        Ok(())
+    })
+    .unwrap();
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], 0);
+    let clip = clip_path_of(&s, g);
+    assert_eq!(clip.id, ring);
+    assert!(clip.children().unwrap().iter().any(|c| c.id == stray));
+}
+
+/// No option removes a member of a group used as a clipping path, or empty type used as one.
+#[test]
+fn clean_up_keeps_a_group_or_type_used_as_a_clipping_path() {
+    let mut s = session();
+    let art = rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let top = rect(&mut s, 10.0, 10.0, 50.0, 50.0);
+    let g = clip_group(&mut s, &[art, top]);
+    let unpainted = rect(&mut s, 20.0, 20.0, 10.0, 10.0);
+    let stray = one_anchor_path(&mut s);
+    let empty = NodeId(s.execute("text.create", &json!({"x": 10, "y": 10, "text": ""})).unwrap()["id"].as_u64().unwrap());
+    let inner = s
+        .edit("t", |d, _| {
+            d.node_mut(unpainted).unwrap().appearance = Appearance::basic(Paint::None, Paint::None, 1.0).into();
+            let members = [top, unpainted, stray, empty].map(|id| d.remove(id)).into_iter().collect::<std::result::Result<Vec<_>, _>>()?;
+            let inner = d.alloc_id();
+            d.children_mut(Some(g))?.insert(0, std::sync::Arc::new(vectorcraft_doc::Node::group(inner, members)));
+            Ok(inner)
+        })
+        .unwrap();
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], 0);
+    let clip = clip_path_of(&s, g);
+    assert_eq!(clip.id, inner);
+    assert_eq!(clip.children().unwrap().iter().map(|c| c.id).collect::<Vec<_>>(), [top, unpainted, stray, empty]);
+    // Type of spaces on top of a clip group clips by nothing, and still stays its clipping path.
+    let art = rect(&mut s, 200.0, 0.0, 100.0, 100.0);
+    let blank = NodeId(s.execute("text.create", &json!({"x": 210, "y": 10, "text": "  "})).unwrap()["id"].as_u64().unwrap());
+    let g = clip_group(&mut s, &[art, blank]);
+    let r = s.execute("object.path.cleanUp", &json!({})).unwrap();
+    assert_eq!(r["removed"], 0);
+    assert_eq!(clip_path_of(&s, g).id, blank);
+}
+
 /// Offset Path, Simplify, Split Into Grid and Clean Up refuse a param of the wrong type with an
 /// error naming the param, and leave the document, the selection and the undo history as they were.
 /// Null keeps a param's default, and a distance still takes a string with a unit.
@@ -1953,6 +2047,31 @@ fn a_pathfinder_effect_keeps_the_options_in_force_when_applied() {
     let st = s.doc().unwrap();
     let mix = &st.doc.node(st.selection.objects[0]).unwrap().appearance.effects[1].params;
     assert_eq!(mix, &json!({"mixingRate": 50.0, "precision": 0.5, "removeRedundantPoints": true, "removeUnpainted": true}));
+}
+
+/// A Pathfinder effect given some of its options in `params` journals every option it used, so
+/// replaying the journal with other preferences gives the same effect and art.
+#[test]
+fn a_pathfinder_effect_given_some_options_journals_every_option_it_used() {
+    let mut s = session();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 0, "width": 100, "height": 100})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#ff0000"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 0, "y": 99.5, "width": 100, "height": 50})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("select.all", &json!({})).unwrap();
+    s.prefs.pathfinder = PathfinderOptions { precision: 1.0, remove_redundant_points: true, remove_unpainted: true };
+    s.execute("effect.apply", &json!({"effect": "pathfinder.divide", "params": {"precision": 0.25}})).unwrap();
+    let all = json!({"precision": 0.25, "removeRedundantPoints": true, "removeUnpainted": true});
+    assert_eq!(first_effect_params(&s), all);
+    let (id, p) = s.journal.last().unwrap().clone();
+    assert_eq!((id.as_str(), &p["params"]), ("effect.apply", &all), "the journal entry gives every option the effect used");
+    let mut replay = Session::new();
+    for (id, p) in &s.journal {
+        replay.execute(id, p).unwrap();
+    }
+    assert_eq!(replay.prefs.pathfinder, PathfinderOptions::default());
+    let doc = |s: &Session| serde_json::to_value(&*s.doc().unwrap().doc).unwrap();
+    assert_eq!(doc(&replay), doc(&s));
 }
 
 /// A live Pathfinder effect evaluates with its own options as the panel's operations do with

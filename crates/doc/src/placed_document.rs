@@ -17,15 +17,16 @@
 //! other stop there, showing their previews).
 
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_geom::{Affine, Rect};
+use vectorcraft_geom::{Affine, PathData, Rect, SubPath};
 
-use vectorcraft_color::Paint;
+use vectorcraft_color::{Color, Paint};
 
-use crate::{AppearanceItem, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeKind, PatternDef, PlacementOptions, Symbol};
+use crate::{Appearance, AppearanceItem, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeKind, PatternDef, PlacementOptions, Symbol};
 
 /// A placed document: an artboard of another VectorCraft file, a page of a PDF or `.ai` file, or
 /// an EPS file's art, shown as one locked object.
@@ -123,10 +124,25 @@ impl PlacedDocument {
     }
 
     /// The art the object shows, as plain objects with `n`'s id: one group, its resources named
-    /// as [`Document::with_placed_art`] adds them (nothing until that has read it).
+    /// as [`Document::with_placed_art`] adds them (nothing until that has read it). While
+    /// [`Crossed`] is on for this thread, its box crossed from corner to corner instead
+    /// ([`Self::crossed_art`]).
     pub fn art(&self, n: &Node) -> Vec<Node> {
+        if crossed() {
+            return vec![self.crossed_art(n)];
+        }
         let prefix = prefix(&self.key);
         read_cached(self).and_then(|e| self.art_node(n, &e, &prefix)).into_iter().collect()
+    }
+
+    /// The object's box crossed from corner to corner, as one group with `n`'s id: a path of the
+    /// box's outline and its two diagonals with a black 1 pt stroke. Outline mode without Document
+    /// Setup → Show Images in Outline Mode shows the object so, and its effects reshape this art.
+    pub fn crossed_art(&self, n: &Node) -> Node {
+        let q = self.corners();
+        let path = PathData::new(vec![SubPath::polyline(&q, true), SubPath::polyline(&[q[0], q[2]], false), SubPath::polyline(&[q[1], q[3]], false)]);
+        let stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+        Node::group(n.id, vec![Arc::new(Node::path(art_id(), path, stroke))])
     }
 
     /// Read `e`'s art placed as this object `n` shows it (`n`'s id), its resources renamed with
@@ -461,13 +477,43 @@ fn read_preview(p: &PlacedDocument, bytes: &Arc<Vec<u8>>) -> Option<Arc<ReadDocu
     doc.layers.clear();
     doc.swatches.clear();
     let mime = if bytes.starts_with(&[0xff, 0xd8]) { "image/jpeg" } else { "image/png" };
-    doc.images.insert("preview".into(), ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: None });
+    doc.images.insert("preview".into(), ImageBlob { mime: mime.into(), bytes: bytes.clone(), proxy: None, file_font: Default::default() });
     let xf = Affine::scale_non_uniform(frame.width() / w as f64, frame.height() / h as f64);
     let im = ImageObject { key: "preview".into(), width: w, height: h, xf, link: None, placement: Default::default(), pixels: None };
     let art = Node::new(art_id(), NodeKind::Group { children: vec![Arc::new(Node::new(art_id(), NodeKind::Image(Box::new(im))))], clip: false });
     let e = Arc::new(ReadDocument { key: p.key.clone(), preview: true, bytes: bytes.clone(), frame, art: Arc::new(art), doc: Arc::new(doc) });
     cache().insert(e.clone());
     Some(e)
+}
+
+thread_local! {
+    /// Whether [`PlacedDocument::art`] gives the crossed box on this thread ([`Crossed`]).
+    static CROSSED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// While alive, [`PlacedDocument::art`] on this thread gives each placed document's box crossed
+/// from corner to corner ([`PlacedDocument::crossed_art`]) when it was made with `true`, and the
+/// file's art when made with `false`; once dropped, the setting before it applies again. A
+/// renderer holds one while it draws or measures Outline mode without Document Setup → Show Images
+/// in Outline Mode, so that effects and live objects make their art from the crossed box.
+#[must_use]
+pub struct Crossed(bool);
+
+impl Crossed {
+    pub fn set(on: bool) -> Self {
+        Self(CROSSED.with(|c| c.replace(on)))
+    }
+}
+
+impl Drop for Crossed {
+    fn drop(&mut self) {
+        CROSSED.with(|c| c.set(self.0));
+    }
+}
+
+/// Whether [`PlacedDocument::art`] gives the crossed box on this thread ([`Crossed`]).
+pub fn crossed() -> bool {
+    CROSSED.with(Cell::get)
 }
 
 /// `p`'s file as read already (else its preview's), without reading it.
@@ -518,6 +564,9 @@ fn rename(n: &mut Node, prefix: &str) {
                 for r in &mut t.runs {
                     paint(&mut r.style.fill);
                     paint(&mut r.style.stroke);
+                }
+                if let Some(fonts) = &mut t.file_fonts {
+                    fonts.map_keys(|key| *key = format!("{prefix}{key}"));
                 }
             }
             NodeKind::Image(im) => {

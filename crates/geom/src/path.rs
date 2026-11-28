@@ -444,6 +444,59 @@ impl SubPath {
         }
         true
     }
+    /// Bend segment `seg` as the arrow keys do: its anchors stay and its handles go where
+    /// [`Self::nudged_handles`] puts them. A handle that keeps its direction leaves a smooth anchor
+    /// smooth; one that flips or grows out of its anchor makes it a corner, so the segment beside
+    /// it stays as it is. False, with nothing changed, when the bend changes nothing.
+    pub fn nudge_segment(&mut self, seg: usize, dv: kurbo::Vec2) -> bool {
+        let Some((h_out, h_in)) = self.nudged_handles(seg, dv) else { return false };
+        let n = self.anchors.len();
+        // Turned when the new handle doesn't point the way the old one did.
+        let turned = |a: &Anchor, old: Point, new: Point| (old - a.p).dot(new - a.p) <= 0.0;
+        if let Some(a) = self.anchors.get_mut(seg % n)
+            && h_out != a.h_out
+        {
+            let independent = turned(a, a.h_out, h_out);
+            a.set_handle(true, h_out, independent);
+        }
+        if let Some(b) = self.anchors.get_mut((seg + 1) % n)
+            && h_in != b.h_in
+        {
+            let independent = turned(b, b.h_in, h_in);
+            b.set_handle(false, h_in, independent);
+        }
+        true
+    }
+    /// The outgoing handle at the start and the incoming one at the end that segment `seg` gets
+    /// from the arrow keys' step `dv`. Each handle keeps its direction and changes length in
+    /// proportion to `dv` projected onto that direction, so the curve bulges toward `dv`: the
+    /// middle of the curve moves by `dv`'s length along `dv`, or less when the handles point
+    /// mostly across it. A handle can shrink through its anchor and come out the other way. A
+    /// retracted handle takes the direction from its anchor to the other handle's end. `None` when
+    /// there is no such segment, it is a straight line, or both handles are at right angles to
+    /// `dv`, so nothing changes.
+    pub fn nudged_handles(&self, seg: usize, dv: kurbo::Vec2) -> Option<(Point, Point)> {
+        if seg >= self.segment_count() || self.segment_is_line(seg) {
+            return None;
+        }
+        let c = self.segment(seg);
+        let direction = |anchor: Point, handle: Point, other: Point| {
+            let dir = if handle.distance(anchor) > EPS { handle - anchor } else { other - anchor };
+            let len = dir.hypot();
+            if len > EPS { dir / len } else { kurbo::Vec2::ZERO }
+        };
+        let (u0, u1) = (direction(c.p0, c.p1, c.p2), direction(c.p3, c.p2, c.p1));
+        let (d0, d1) = (dv.dot(u0), dv.dot(u1));
+        // Handles that change by k·d0 and k·d1 move the middle B(1/2) by 3/8·k·(d0·u0 + d1·u1),
+        // whose part along dv is 3/8·k·(d0² + d1²)/|dv|: one |dv| for k = 8/3·|dv|²/(d0² + d1²),
+        // kept to at most 8/3 so that handles nearly across dv don't grow without bound.
+        let sum = d0 * d0 + d1 * d1;
+        if sum <= EPS * EPS {
+            return None;
+        }
+        let k = 8.0 / 3.0 * (dv.hypot2() / sum).min(1.0);
+        Some((c.p1 + u0 * (k * d0), c.p2 + u1 * (k * d1)))
+    }
 
     /// Split segment `seg` at parameter `t`, inserting a new anchor. Returns the new anchor index.
     pub fn insert_anchor(&mut self, seg: usize, t: f64) -> usize {
@@ -620,9 +673,9 @@ impl PathData {
     /// segment with a control point that is not finite or past `f64::MAX / 16` in x or y is measured
     /// by its control points.
     ///
-    /// Walks the segments in place, without building the path: the same segments in the same order,
-    /// so the result is bit for bit `curve_bounds(&self.to_bezpath())` (a path of lone anchors, with
-    /// no segment, is `Rect::ZERO`, as there).
+    /// Walks the segments in place, without building the path: the same segments in the same order
+    /// as `curve_bounds(&self.to_bezpath())`. A subpath of one anchor has no segment, and the box
+    /// also holds that anchor's point, so a path of lone anchors measures the box around them.
     pub fn bounds(&self) -> Option<Rect> {
         if self.is_empty() {
             return None;
@@ -632,8 +685,26 @@ impl PathData {
         {
             return Some(Rect::from_points(a.p, a.p));
         }
+        Some(self.measured(|_| true).unwrap_or_default())
+    }
+    /// The box of what a stroke along the path draws, before the stroke's own reach: its segments,
+    /// as in [`PathData::bounds`], and the lone anchors a stroke draws. A lone anchor of an open
+    /// subpath draws nothing. A lone anchor of a closed subpath draws a dot when `dots` is set, as
+    /// a round or projecting cap does, and nothing otherwise. `None` when the path draws nothing.
+    pub fn drawn_bounds(&self, dots: bool) -> Option<Rect> {
+        self.measured(|sp| dots && sp.closed)
+    }
+    /// The box of the segments and of the lone anchors of the subpaths `lone` keeps.
+    fn measured(&self, lone: impl Fn(&SubPath) -> bool) -> Option<Rect> {
         let mut bbox: Option<Rect> = None;
         for sp in &self.subpaths {
+            if sp.segment_count() == 0
+                && lone(sp)
+                && let Some(a) = sp.anchors.first()
+            {
+                let lone = Rect::from_points(a.p, a.p);
+                bbox = Some(bbox.map_or(lone, |bb| bb.union(lone)));
+            }
             MEASURED_SEGMENTS.set(MEASURED_SEGMENTS.get().saturating_add(sp.segment_count() as u64));
             for i in 0..sp.segment_count() {
                 let c = sp.segment(i);
@@ -651,7 +722,7 @@ impl PathData {
                 bbox = Some(bbox.map_or(seg, |bb| bb.union(seg)));
             }
         }
-        Some(bbox.unwrap_or_default())
+        bbox
     }
     /// Bounds including control handles (used for quick culling).
     pub fn control_bounds(&self) -> Option<Rect> {
@@ -790,6 +861,58 @@ pub fn curve_bounds(path: &BezPath) -> Rect {
     path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb)).unwrap_or_default()
 }
 
+/// The box of what a stroke along `path` draws before the stroke's own reach, as
+/// [`PathData::drawn_bounds`] measures the path it stands for: the box of its segments, as in
+/// [`curve_bounds`], and with `dots` the point of each closed subpath that has no segment, which a
+/// round or projecting cap draws as a dot. `None` when the path draws nothing.
+pub fn drawn_curve_bounds(path: &BezPath, dots: bool) -> Option<Rect> {
+    let mut bbox = path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb));
+    if !dots {
+        return bbox;
+    }
+    let els = path.elements();
+    for (r, closed) in crate::bez::subpaths(path) {
+        if closed
+            && kurbo::segments(els[r.clone()].iter().copied()).next().is_none()
+            && let Some(p) = els[r.start].end_point()
+        {
+            let dot = Rect::from_points(p, p);
+            bbox = Some(bbox.map_or(dot, |bb| bb.union(dot)));
+        }
+    }
+    bbox
+}
+
+/// The box [`PathData::bounds`] measures for the path `path` stands for: its segments, as in
+/// [`curve_bounds`], and the point of each subpath that has no segment, a lone anchor, open or
+/// closed. `None` for a path with no elements.
+pub fn anchored_curve_bounds(path: &BezPath) -> Option<Rect> {
+    let mut bbox = path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb));
+    let mut add = |p: Point| {
+        let lone = Rect::from_points(p, p);
+        bbox = Some(bbox.map_or(lone, |bb| bb.union(lone)));
+    };
+    // The start of the current subpath while it has no segment. A `ClosePath` straight after the
+    // `MoveTo` adds no segment, unless the point is NaN (kurbo then closes with a line of its own,
+    // which `segments` measured).
+    let mut lone = None;
+    for el in path.elements() {
+        match el {
+            PathEl::MoveTo(p) => {
+                if let Some(q) = lone.replace(*p) {
+                    add(q);
+                }
+            }
+            PathEl::ClosePath => {}
+            _ => lone = None,
+        }
+    }
+    if let Some(q) = lone {
+        add(q);
+    }
+    bbox
+}
+
 /// The box of `seg` as kurbo's `bounding_box` measures it (its start, end and extrema), except
 /// that a segment with a control point whose x or y is not finite or is larger in size than
 /// `f64::MAX / 16` is measured by its control points. The box then holds every point the segment
@@ -820,7 +943,8 @@ mod tests {
     use super::*;
 
     /// `bounds` walks the anchors in place: bit for bit what the kurbo path it stands for gives,
-    /// for lines, curves, open and closed subpaths, lone anchors and empty subpaths.
+    /// joined with the point of each lone anchor, for lines, curves, open and closed subpaths, lone
+    /// anchors and empty subpaths.
     #[test]
     fn bounds_match_the_bezpath_bit_for_bit() {
         use proptest::prelude::*;
@@ -828,11 +952,10 @@ mod tests {
             if pd.is_empty() {
                 return None;
             }
-            if pd.anchor_count() == 1 {
-                let a = pd.subpaths.iter().find_map(|s| s.anchors.first())?;
-                return Some(Rect::from_points(a.p, a.p));
-            }
-            Some(curve_bounds(&pd.to_bezpath()))
+            let bp = pd.to_bezpath();
+            let segments = bp.segments().next().is_some().then(|| curve_bounds(&bp));
+            let lone = pd.subpaths.iter().filter(|s| s.segment_count() == 0).filter_map(|s| s.anchors.first()).map(|a| Rect::from_points(a.p, a.p));
+            lone.chain(segments).reduce(|bb, r| bb.union(r))
         }
         let bits = |r: Option<Rect>| r.map(|r| [r.x0, r.y0, r.x1, r.y1].map(f64::to_bits));
         let coord = || prop_oneof![(-1e3f64..1e3), Just(0.0), Just(1e-300), Just(-7.25)];
@@ -845,11 +968,29 @@ mod tests {
         let path = proptest::collection::vec(sub, 0..4).prop_map(PathData::new);
         proptest!(ProptestConfig::with_cases(2000), |(pd in path)| {
             prop_assert_eq!(bits(pd.bounds()), bits(reference(&pd)));
+            // The kurbo path the anchors stand for draws and measures the same boxes.
+            for dots in [false, true] {
+                prop_assert_eq!(bits(drawn_curve_bounds(&pd.to_bezpath(), dots)), bits(pd.drawn_bounds(dots)));
+            }
+            prop_assert_eq!(bits(anchored_curve_bounds(&pd.to_bezpath())), bits(pd.bounds()));
         });
-        // Two lone anchors: no segment, as the path has none.
+        // Two lone anchors: the path has no segment, and the box spans the two points.
         let lone = PathData::new(vec![SubPath::polyline(&[Point::new(5.0, 5.0)], false), SubPath::polyline(&[Point::new(9.0, 1.0)], true)]);
-        assert_eq!(lone.bounds(), Some(Rect::ZERO));
+        assert_eq!(lone.bounds(), Some(Rect::new(5.0, 1.0, 9.0, 5.0)));
         assert_eq!(bits(lone.bounds()), bits(reference(&lone)));
+        // A lone anchor beside a segment widens the segment's box to reach it.
+        let line = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(4.0, 2.0)], false);
+        let beside = PathData::new(vec![line.clone(), SubPath::polyline(&[Point::new(20.0, -3.0)], false)]);
+        let segment_only = PathData::single(line).bounds().unwrap_or_default();
+        let both = beside.bounds().unwrap_or_default();
+        assert!(both.x1 >= 20.0 && both.y0 <= -3.0, "{both:?} leaves out the lone anchor at (20, -3)");
+        assert_eq!(both.union(segment_only), both, "{both:?} leaves out part of the segment's box {segment_only:?}");
+        // What a stroke draws leaves out the open lone anchor, and a closed one without dots.
+        assert_eq!(beside.drawn_bounds(true), Some(segment_only), "an open lone anchor draws nothing");
+        let dot = PathData::new(vec![beside.subpaths[0].clone(), SubPath::polyline(&[Point::new(20.0, -3.0)], true)]);
+        assert_eq!(dot.drawn_bounds(true), dot.bounds(), "a closed lone anchor draws a dot");
+        assert_eq!(dot.drawn_bounds(false), Some(segment_only), "without dots, a closed lone anchor draws nothing");
+        assert_eq!(lone.drawn_bounds(false), None, "lone anchors alone draw nothing");
         // A NaN anchor differs from itself: kurbo closes such a subpath with a line of its own.
         let nan = Point::new(f64::NAN, 1.0);
         let closed = |pts: &[Point]| SubPath::polyline(pts, true);
@@ -858,7 +999,14 @@ mod tests {
             PathData::new(vec![closed(&[nan, Point::new(3.0, 4.0), Point::new(6.0, 1.0)])]),
         ] {
             assert_eq!(bits(pd.bounds()), bits(reference(&pd)));
+            assert_eq!(bits(anchored_curve_bounds(&pd.to_bezpath())), bits(pd.bounds()));
         }
+        // kurbo's own box leaves out the lone anchor, and measures a path of one anchor at the origin.
+        assert_eq!(anchored_curve_bounds(&beside.to_bezpath()), beside.bounds());
+        assert_ne!(Some(beside.to_bezpath().bounding_box()), beside.bounds());
+        let one = PathData::single(SubPath::polyline(&[Point::new(7.0, 8.0)], false));
+        assert_eq!(anchored_curve_bounds(&one.to_bezpath()), Some(Rect::new(7.0, 8.0, 7.0, 8.0)));
+        assert_eq!(anchored_curve_bounds(&BezPath::new()), None);
     }
 
     fn square() -> PathData {

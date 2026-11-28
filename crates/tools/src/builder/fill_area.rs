@@ -2,6 +2,7 @@
 //! closed path of that area with the current fill and stroke (`shapeBuilder.copyRegion`). The
 //! paths around the area stay as they are, and nothing needs to be selected.
 
+use vectorcraft_geom::kurbo::ParamCurveDeriv;
 use vectorcraft_geom::path::segment_bounds;
 use vectorcraft_geom::{ParamCurve, PathSeg};
 
@@ -56,6 +57,9 @@ pub struct AreaFinder {
     fits: bool,
     /// The map of every input, with the index of each of its shapes in `inputs`.
     full: Option<(BuilderMap, Vec<usize>)>,
+    /// The subpaths of clipped paths that a clipping mask could not cut ([`unmasked`]). They are in
+    /// no map, and an area one of them can cut where its masks show it is not filled.
+    unresolved: Vec<Unresolved>,
 }
 
 /// Does `r` hold `p`, edges included?
@@ -74,7 +78,8 @@ struct Reach<'a> {
     face: &'a PathData,
     bez: &'a vectorcraft_geom::kurbo::BezPath,
     zone: Rect,
-    /// How close (pt) to the outline a path may come and still change the area: the gap and 1 pt.
+    /// How close (pt) to the outline a path may come and still change the area: the gap and
+    /// [`CONTACT`].
     reach: f64,
 }
 
@@ -144,6 +149,121 @@ fn covers(s: &po::Shape, p: Point) -> bool {
 /// Does `outer` hold all of `inner`?
 fn within(inner: &Rect, outer: &Rect) -> bool {
     inner.x0 >= outer.x0 && inner.x1 <= outer.x1 && inner.y0 >= outer.y0 && inner.y1 <= outer.y1
+}
+
+/// The outlines of the clipping masks [`unmasked`] has read, by the clipping group or clipped
+/// layer: None for one whose mask clips to nothing, which hides all it clips.
+type Masks = std::collections::HashMap<NodeId, Option<(PathData, FillRule)>>;
+
+/// A subpath of a clipped path that a clipping mask could not cut ([`clip_to`]), with its bounds
+/// and the outlines of every clipping mask around the path: only a part of it inside all of them
+/// shows.
+type Unresolved = (PathData, Rect, Vec<(PathData, FillRule)>);
+
+/// `shape`, the outline of `leaf`, cut to where every clipping mask around `leaf` shows it
+/// ([`clip_to`]). A path in a mask is not cut by that mask. A subpath that a mask could not cut
+/// goes to `unresolved`, as far as the masks before it had cut it. None when the masks hide all of
+/// the rest.
+fn unmasked(doc: &Document, leaf: &Node, shape: po::Shape, masks: &mut Masks, unresolved: &mut Vec<Unresolved>) -> Option<po::Shape> {
+    let Some(line) = doc.ancestry(leaf.id) else { return Some(shape) };
+    let filled = leaf.appearance.has_drawn_fill();
+    let (mut out, mut around, mut cut) = (Some(shape), vec![], vec![]);
+    for a in line.iter().filter(|a| **a != leaf.id) {
+        let Some(n) = doc.node(*a).filter(|n| n.clips()) else { continue };
+        let Some(mask) = n.children().and_then(|c| c.first()) else { continue };
+        if line.contains(&mask.id) {
+            continue;
+        }
+        let outline = masks.entry(*a).or_insert_with(|| {
+            vectorcraft_effects::clip_outline(mask).map(|(bp, rule)| (PathData::from_bezpath(&bp), rule)).filter(|(p, _)| !p.is_empty())
+        });
+        // A mask that clips to nothing hides the subpaths no mask could cut as well.
+        let (m, rule) = outline.as_ref()?;
+        around.push(*a);
+        if let Some(s) = out.take() {
+            out = clip_to(s, filled, m, *rule, &mut cut);
+        }
+    }
+    if !cut.is_empty() {
+        let around: Vec<(PathData, FillRule)> = around.iter().filter_map(|a| masks.get(a).cloned().flatten()).collect();
+        unresolved.extend(cut.into_iter().filter_map(|path| path.bounds().map(|b| (path, b, around.clone()))));
+    }
+    out
+}
+
+/// How far (pt) the middle of a piece of an outline may lie from a mask's outline and still count
+/// as on the mask's edge, which [`clip_to`] keeps. It covers rounding only, so a piece just outside
+/// the mask is still left out.
+const ON_MASK: f64 = 1e-6;
+
+/// How far (pt) to each side of a piece [`shows_through`] looks for the mask's filled area: past
+/// [`ON_MASK`], and within a filled strip of the mask as narrow as this.
+const MASK_SIDE: f64 = 1e-4;
+
+/// Does the piece of an outline whose middle is `p`, running in direction `dir` there, show
+/// through `mask` filled with `rule`? A piece off the mask's outline shows when the filled area
+/// holds `p`. A piece on the outline ([`ON_MASK`]) shows when the filled area lies on one side of
+/// it ([`MASK_SIDE`]), so every side of a square clipped by the same square shows, and an outline
+/// of the mask that bounds no filled area (two copies of one outline under even-odd) hides it.
+fn shows_through(mask: &PathData, rule: FillRule, p: Point, dir: vectorcraft_geom::Vec2) -> bool {
+    if !mask.nearest(p).is_some_and(|(.., d)| d <= ON_MASK) {
+        return path_contains(mask, rule, p);
+    }
+    let len = dir.hypot();
+    if !(len > 0.0 && len.is_finite()) {
+        return false;
+    }
+    let side = dir.turn_90() * (MASK_SIDE / len);
+    path_contains(mask, rule, p + side) || path_contains(mask, rule, p - side)
+}
+
+/// `shape` cut to `mask` (filled with `rule`). With `filled` (the path's fill draws), its closed
+/// subpaths are cut to their overlap with the mask, whose edge then bounds the fill. Its other
+/// subpaths, and every subpath of a path without a fill, are cut to their pieces inside the mask or
+/// on its edge ([`shows_through`]), so a hidden part of an outline does not close an area. A
+/// subpath with more segments or crossings than [`po::addons::pathtools::crossings_on`] takes is
+/// left out of the shape and goes whole to `unresolved`, since the part of it that shows is not
+/// known. None when nothing of the rest is inside.
+pub(super) fn clip_to(shape: po::Shape, filled: bool, mask: &PathData, rule: FillRule, unresolved: &mut Vec<PathData>) -> Option<po::Shape> {
+    let (b, mb) = (shape.path.bounds()?, mask.bounds()?);
+    if !meet(&b, &mb) {
+        return None;
+    }
+    let (closed, lines): (Vec<SubPath>, Vec<SubPath>) = shape.path.subpaths.into_iter().partition(|sp| filled && sp.closed);
+    let had_closed = !closed.is_empty();
+    let mut subs = if had_closed { po::boolean(&PathData::new(closed), shape.rule, mask, rule, po::BoolOp::Intersect).subpaths } else { vec![] };
+    for sp in lines {
+        let one = PathData::new(vec![sp]);
+        // A subpath whose crossings with the mask are past what can be found is left out of the
+        // shape, so no part of it the mask hides bounds an area, and an area it can cut is not
+        // filled ([`AreaFinder::find`]).
+        let Some(crossed) = po::addons::pathtools::crossings_on(&one, &[mask]) else {
+            unresolved.push(one);
+            continue;
+        };
+        let places: Vec<(usize, f64)> = crossed.into_iter().map(|(_, s, t)| (s, t)).collect();
+        let Some(sp) = one.subpaths.first() else { continue };
+        let (cut, at) = po::addons::pathtools::insert_at(sp, &places);
+        subs.extend(cut.cut_at(&at).into_iter().filter(|piece| {
+            let n = piece.segment_count();
+            n > 0 && {
+                let seg = piece.segment(n / 2);
+                // Where the tangent vanishes (a cusp at the middle), the curve runs along its second
+                // derivative there, and a straight segment with that degenerate form along its chord.
+                let d1 = seg.deriv();
+                let dir = [d1.eval(0.5).to_vec2(), d1.deriv().eval(0.5).to_vec2(), seg.p3 - seg.p0]
+                    .into_iter()
+                    .find(|v| v.hypot2() > 0.0)
+                    .unwrap_or_default();
+                shows_through(mask, rule, seg.eval(0.5), dir)
+            }
+        }));
+    }
+    if subs.is_empty() {
+        return None;
+    }
+    let rule = if had_closed { FillRule::NonZero } else { shape.rule };
+    Some(po::Shape::new(PathData::new(subs), rule, shape.key))
 }
 
 /// The object directly in `scope` (the isolated object in isolation mode), or else directly in a
@@ -217,7 +337,8 @@ pub fn fill_area_roots(doc: &Document, isolation: Option<NodeId>, named: Option<
 impl AreaFinder {
     /// The finder over the paths of `roots` (layers or objects) that the Shape Builder takes:
     /// visible, unlocked paths, compound paths and Live Paint faces and edges that draw, not on a
-    /// locked artboard. Gaps up to `gap` close, and with `open_filled_as_closed` a filled open path
+    /// locked artboard. A path a clipping mask clips counts only where the mask shows it
+    /// ([`unmasked`]). Gaps up to `gap` close, and with `open_filled_as_closed` a filled open path
     /// bounds an area as if an invisible edge closed it. With `scope` (the isolated object in
     /// isolation mode), an area's new path goes directly above the object in `scope` that holds the
     /// front-most path along it, so it stays inside the isolated object.
@@ -225,11 +346,14 @@ impl AreaFinder {
         let roots = sorted_roots(doc, roots);
         let (shapes, leaves) = shape_builder_shapes(doc, &roots, open_filled_as_closed);
         let editable = doc.editable();
+        let mut masks = Masks::new();
+        let mut unresolved = vec![];
         let inputs: Vec<(po::Shape, Rect, NodeId)> = shapes
             .into_iter()
             .zip(leaves)
             .filter(|(_, l)| editable(l.id))
             .filter_map(|(s, l)| {
+                let s = unmasked(doc, l, s, &mut masks, &mut unresolved)?;
                 let b = s.path.bounds()?;
                 Some((s, b, outermost(doc, l.id, scope)))
             })
@@ -237,12 +361,52 @@ impl AreaFinder {
         let total = inputs.iter().map(|(_, b, _)| *b).reduce(|a, b| a.union(b));
         let gap = if gap.is_finite() { gap.clamp(0.0, SHAPE_BUILDER_MAX_GAP) } else { 0.0 };
         let segments: usize = inputs.iter().flat_map(|(s, ..)| &s.path.subpaths).map(|sp| sp.segment_count()).sum();
-        Self { inputs, total, gap, segments, fits: segments <= po::SHAPE_BUILDER_MAX_SEGMENTS, full: None }
+        Self { inputs, total, gap, segments, fits: segments <= po::SHAPE_BUILDER_MAX_SEGMENTS, full: None, unresolved }
     }
 
     /// The area under `p`: the smallest region of the map of the paths that holds `p`. None when
-    /// `p` is in no enclosed area.
+    /// `p` is in no enclosed area, or when a subpath that a clipping mask could not cut crosses the
+    /// area or comes within the gap of it where every mask around it may show it, since the part of
+    /// that subpath that shows may cut the area.
     pub fn find(&mut self, p: Point) -> Option<EnclosedArea> {
+        let area = self.find_mapped(p)?;
+        (!self.unresolved_cuts(&area.path, p)).then_some(area)
+    }
+
+    /// Does a subpath that a clipping mask could not cut cross the area with outline `area`, which
+    /// holds `p`, or come within the gap of it, give or take [`CONTACT`] ([`cuts`]), while the filled
+    /// area of every mask around it reaches that far too? A mask whose outline stays out of that
+    /// reach holds all of the area when it holds `p`, and none of it otherwise.
+    fn unresolved_cuts(&self, area: &PathData, p: Point) -> bool {
+        if self.unresolved.is_empty() {
+            return false;
+        }
+        let Some(b) = area.bounds() else { return true };
+        let contact = self.gap + CONTACT;
+        let zone = b.inflate(contact, contact);
+        let bez = area.to_bezpath();
+        let reach = Reach { face: area, bez: &bez, zone, reach: contact };
+        let mut budget = CUT_BUDGET;
+        self.unresolved.iter().any(|(path, pb, masks)| {
+            meet(pb, &zone)
+                && masks
+                    .iter()
+                    .all(|(m, rule)| m.bounds().is_some_and(|mb| meet(&mb, &zone)) && (cuts(m, &reach, &mut budget) || path_contains(m, *rule, p)))
+                && cuts(path, &reach, &mut budget)
+        })
+    }
+
+    /// The segments a search may look at: those of the inputs, and those of the subpaths no clipping
+    /// mask could cut and of their masks.
+    fn workload(&self) -> usize {
+        let count = |p: &PathData| p.subpaths.iter().map(|sp| sp.segment_count()).sum::<usize>();
+        self.unresolved
+            .iter()
+            .fold(self.segments, |n, (path, _, masks)| n.saturating_add(count(path)).saturating_add(masks.iter().map(|(m, _)| count(m)).sum()))
+    }
+
+    /// [`AreaFinder::find`] among the paths in the maps.
+    fn find_mapped(&mut self, p: Point) -> Option<EnclosedArea> {
         if let Some((map, picked)) = &self.full {
             return self.area_in(map, picked, &[], p);
         }
@@ -298,13 +462,15 @@ impl AreaFinder {
             let before = window;
             match bounds {
                 // A path left out that crosses the area or comes within its reach could cut it, and
-                // only the map of every path holds both.
+                // only the map of every path holds both. A bridge reaches at most `gap`, so a path
+                // farther than that from the outline, give or take [`CONTACT`], does not change it.
                 Some(rb) if within(&rb, &window) => {
-                    let reached = rb.inflate(reach, reach);
+                    let contact = self.gap + CONTACT;
+                    let reached = rb.inflate(contact, contact);
                     let mut budget = CUT_BUDGET;
                     let cut = any_left_out
                         && face.is_none_or(|(region, bez, _)| {
-                            let area = Reach { face: &region.path, bez, zone: reached, reach };
+                            let area = Reach { face: &region.path, bez, zone: reached, reach: contact };
                             self.inputs.iter().zip(&left_out).any(|((s, b, _), out)| *out && meet(b, &reached) && cuts(&s.path, &area, &mut budget))
                         });
                     if !cut {
@@ -540,7 +706,7 @@ impl FillAreaTool {
             return;
         }
         let mut finder = self.take_finder(cx);
-        if finder.segments > BACKGROUND_SEGMENTS {
+        if finder.workload() > BACKGROUND_SEGMENTS {
             match spawn_find(finder, p) {
                 Ok(done) => {
                     self.job = Some(HoverJob { key, p, done });

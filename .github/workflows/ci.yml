@@ -1,10 +1,14 @@
 name: CI
 
 # Quality gates for every push to main and every pull request (`cargo xtask ci`), through the
-# suite's shared gate workflow in craft-common-actions.
+# suite's shared gate workflow in craft-common-actions. Every night the gate runs a cold build:
+# the safety net for the workspace crates it keeps between runs (`cache-workspace-crates`), and a
+# fresh start for that cache entry.
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "37 3 * * *"
   pull_request:
   workflow_dispatch:
 
@@ -23,7 +27,10 @@ jobs:
     with:
       # Same craft-fonts commit as release.yml.
       craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
-      timeout-minutes: 90
+      # A cold `cache warm` leg (the nightly run, or any run after a toolchain or lockfile change)
+      # took 90 minutes to reach its last three steps on 2026-11-27 and was canceled there; with
+      # those steps and the save it needs about two hours.
+      timeout-minutes: 150
       # The gate's test binaries carry no debug info and no symbols (CARGO_PROFILE_TEST_DEBUG=0,
       # CARGO_PROFILE_TEST_STRIP=symbols), as photocraft's do: linking ~100 test binaries with line
       # tables ran the hosted runner out of resources, and it stopped mid-link with "received a
@@ -39,7 +46,69 @@ jobs:
       test-shards: 5
       shard-command: cargo xtask ci shard
       warm-command: cargo xtask ci warm
+      # The dependency cache also keeps the compiled workspace crates and test executables, so a
+      # pull request's shards rebuild only the crates its changes reach. Each main run's `cache
+      # warm` leg saves a rolling entry of its own, every leg restores the newest one, and
+      # `cache-prune` below deletes the one it replaced. The nightly run restores nothing and
+      # builds everything from source.
+      cache-workspace-crates: true
+      cold-build: ${{ github.event_name == 'schedule' }}
       packages: >-
         pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libxcursor-dev
         libxrandr-dev libxi-dev libfontconfig1-dev libfreetype-dev mesa-vulkan-drivers
         libgl1-mesa-dev
+
+  # Keeps one rolling gate entry on main, so the repository stays within its 10 GB Actions cache
+  # budget. It runs beside the gate and prunes each time the `cache warm` leg finishes saving. A
+  # failed prune warns instead of failing the run, and cache-prune.yml prunes again after every
+  # attempt, re-runs of failed jobs included. `watch-minutes` is longer than the gate's
+  # `timeout-minutes`, so the watch outlasts a cold `cache warm` leg.
+  cache-prune:
+    name: cache prune
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 170
+    permissions:
+      actions: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - name: Prune replaced cache entries
+        uses: storytold/craft-common-actions/actions/cache-prune@main
+        continue-on-error: true
+        with:
+          watch: true
+          watch-minutes: 160
+          saving-jobs: |
+            ^gate( / cache warm \(.*\))?$
+
+  # The nightly cold run never restores the rolling crates entry, so the old entry is only overlap
+  # while the cold run saves its own: two entries of about 4.6 GB, which with the others go over the
+  # 10 GB cache limit and get the corpus, SonarCloud and Windows ARM64 entries evicted. This deletes
+  # the old entries when the `cache warm` leg starts saving (scripts/ci-clear-rolling-cache.py).
+  # When the leg fails or is canceled, before its save or during it, this job fails too, so "Re-run
+  # failed jobs" runs it again beside the re-run leg. The leg starts after `gate / select legs` and a
+  # free runner: the script fails when the leg has not started within 120 minutes, and then waits
+  # up to 160 minutes from the leg's start. This job's timeout is longer than both together, so the
+  # script reports a leg that starts late with its own error before the job times out.
+  cold-cache-clear:
+    name: cold cache clear
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 290
+    permissions:
+      actions: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Delete the old rolling entries before the save
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci-clear-rolling-cache.py

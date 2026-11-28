@@ -573,7 +573,7 @@ impl Interp {
         let env = self.frame()?.var_env;
         if let Some(Env::Decl { bindings, .. }) = self.heap.env_mut(env) {
             let value = Value::String(Str::from_rc(uri));
-            bindings.insert(Rc::from(DEFAULT_NS_BINDING), Binding { value, mutable: true, deletable: false });
+            bindings.insert(Rc::from(DEFAULT_NS_BINDING), Binding::new(value, true, false));
         } else {
             self.xml_default_uri = uri;
         }

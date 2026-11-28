@@ -19,6 +19,11 @@ use super::{Blank, base_panel, point_in};
 /// test and the preview.
 pub const MAX_POLYGON_POINTS: usize = 1 << 16;
 
+/// How far apart two placements of a panel may turn a unit direction and still be one placement:
+/// above the rounding of up to [`super::MAX_PANELS`] turns, below the turn of a hinge a millionth
+/// of a degree from another ([`super::kept_angle`], 1.7e-8).
+const TURNED: f64 = 1e-10;
+
 type V3 = [f64; 3];
 
 fn sub(a: V3, b: V3) -> V3 {
@@ -105,14 +110,24 @@ impl Pose {
         let r_at = [dot(r[0], at), dot(r[1], at), dot(r[2], at)];
         Pose { m, t: add(self.turn(sub(at, r_at)), self.t) }
     }
+
+    /// This pose, taken about `origin` (a point less `origin` to its place less `origin`), in the
+    /// flat blank's own terms.
+    fn about(&self, origin: V3) -> Pose {
+        Pose { m: self.m, t: add(sub(self.t, self.turn(origin)), origin) }
+    }
 }
 
-/// A folded panel: where it is, its parent in the fold tree (`None` for the base and for a panel no
-/// chain of hinges joins to it, which stays flat where it is) and how many hinges lie between it
-/// and the base.
+/// A folded panel: where it is, the same about [`Folded::origin`] (`local`), its parent in the fold
+/// tree (`None` for the base and for a panel no chain of hinges joins to it, which stays flat where
+/// it is) and how many hinges lie between it and the base.
 #[derive(Clone, Debug)]
 pub struct FoldedPanel {
     pub pose: Pose,
+    /// Where the panel is with the flat blank moved so `origin` is at 0: it takes a flat point less
+    /// `origin` to its place less `origin`. Worked out in these terms, it keeps the rounding of a
+    /// blank far from the document's origin to the size of the blank.
+    pub local: Pose,
     pub parent: Option<usize>,
     pub depth: usize,
 }
@@ -141,6 +156,28 @@ pub struct Folded {
     pub hinges: Vec<FoldedHinge>,
     /// Pairs of panels (`a` < `b`) that pass through each other.
     pub collisions: Vec<(usize, usize)>,
+    /// The fold tree that panels folded flat onto each other stack by.
+    pub stack: Stack,
+    /// The middle of the blank's bounds (flat, see [`flat`]), which [`FoldedPanel::local`] is about.
+    pub origin: [f64; 3],
+}
+
+/// The fold tree that panels in one plane stack by: the tree from the blank's largest panel (its
+/// `root`), whichever panel is the base, so choosing another base moves the folded blank without
+/// changing which panel shows where they lie flat on each other. The base's own tree when the two
+/// join different panels.
+#[derive(Clone, Debug, Default)]
+pub struct Stack {
+    pub root: usize,
+    /// Each panel's parent in this tree.
+    pub parent: Vec<Option<usize>>,
+    /// The panels in breadth-first order from `root`, the panels not joined to it last.
+    pub order: Vec<usize>,
+    /// For each panel, the way from the hinge it is folded on into its parent, as folded: a vector
+    /// in the parent's plane, across the hinge to the side the fold took the parent to be on, as
+    /// long as the corners of the parent's bounds reach that way. `None` for `root` and the
+    /// panels not joined to it.
+    pub toward_parent: Vec<Option<[f64; 3]>>,
 }
 
 /// The panel of `blank` that `p` (document coordinates) lies in.
@@ -204,10 +241,25 @@ pub fn fold(blank: &Blank, base: Option<usize>, amount: f64, tolerance: f64) -> 
         });
     }
     let centers: Vec<Option<V3>> = blank.panels.iter().map(|p| point_in(&p.outline).map(flat)).collect();
-    let (panels, tree, order) = place(blank, &by_panel, &centers, base, amount);
+    // The corners of each panel's bounds (flat).
+    let corners: Vec<Option<[V3; 4]>> = blank
+        .panels
+        .iter()
+        .map(|p| p.outline.bounds().map(|b| [(b.x0, b.y0), (b.x1, b.y0), (b.x0, b.y1), (b.x1, b.y1)].map(|(x, y)| flat(Point::new(x, y)))))
+        .collect();
+    let origin = corners
+        .iter()
+        .flatten()
+        .flatten()
+        .fold(None, |b: Option<(V3, V3)>, c| {
+            Some(b.map_or((*c, *c), |(lo, hi)| ([lo[0].min(c[0]), lo[1].min(c[1]), 0.0], [hi[0].max(c[0]), hi[1].max(c[1]), 0.0])))
+        })
+        .map_or([0.0; 3], |(lo, hi)| scale(add(lo, hi), 0.5));
+    let placing = Placing { blank, by_panel: &by_panel, centers: &centers, corners: &corners, origin };
+    let (panels, tree, order, toward_parent) = place(&placing, base, amount);
     // Closing hinges are measured with every hinge at its full angle, so a blank that closes when
     // folded is not reported open part of the way there.
-    let full = if amount == 1.0 { None } else { Some(place(blank, &by_panel, &centers, base, 1.0).0) };
+    let full = if amount == 1.0 { None } else { Some(place(&placing, base, 1.0).0) };
     let measured = full.as_deref().unwrap_or(&panels);
     let hinges = blank
         .hinges
@@ -224,15 +276,64 @@ pub fn fold(blank: &Blank, base: Option<usize>, amount: f64, tolerance: f64) -> 
         })
         .collect();
     let collisions = collisions(blank, &panels, tolerance);
-    Some(Folded { base, panels, order, hinges, collisions })
+    let own = Stack { root: base, parent: panels.iter().map(|p| p.parent).collect(), order: order.clone(), toward_parent };
+    let stack = match base_panel(&blank.panels) {
+        Some(root) if root != base => {
+            let (placed, root_tree, root_order, toward) = place(&placing, root, amount);
+            // Whether the root's tree puts every panel where the base's does, moved with the root
+            // (which lies at the identity in its own): the same hinges do, and around a loop of
+            // panels another tree can leave out a fold that placed them. Each panel's turn is
+            // compared to within `TURNED` whatever its size or place, and its inside point by the
+            // poses about `origin` (`local`), to rounding at that distance from it.
+            let agrees = |r: &FoldedPanel| {
+                let near = |a: V3, b: V3| length(sub(a, b)) <= 1e-9 * (1.0 + length(a).max(length(b)));
+                placed.iter().zip(&panels).enumerate().all(|(i, (p, q))| {
+                    let joined = (i == root || p.parent.is_some(), i == base || q.parent.is_some());
+                    let at = centers.get(i).copied().flatten().map_or([0.0; 3], |c| sub(c, origin));
+                    let turned = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+                        .into_iter()
+                        .all(|e| length(sub(r.local.turn(p.local.turn(e)), q.local.turn(e))) <= TURNED);
+                    joined.0 == joined.1 && (!joined.0 || (turned && near(r.local.apply(p.local.apply(at)), q.local.apply(at))))
+                })
+            };
+            match panels.get(root) {
+                // The root's tree in the base's terms.
+                Some(r) if root_tree == tree || agrees(r) => Stack {
+                    root,
+                    parent: placed.iter().map(|p| p.parent).collect(),
+                    order: root_order,
+                    toward_parent: toward.into_iter().map(|v| v.map(|v| r.pose.turn(v))).collect(),
+                },
+                _ => own,
+            }
+        }
+        _ => own,
+    };
+    Some(Folded { base, panels, order, hinges, collisions, stack, origin })
 }
 
-/// The panels of `blank` placed by the fold tree from `base` with each hinge at `amount` of its
-/// angle, which hinges are in the tree, and the panels in breadth-first order (the panels not
-/// joined to the base last).
-fn place(blank: &Blank, by_panel: &[Vec<usize>], centers: &[Option<V3>], base: usize, amount: f64) -> (Vec<FoldedPanel>, Vec<bool>, Vec<usize>) {
+/// What [`place`] gives: the placed panels, which hinges are in the tree, the panels' order and
+/// [`Stack::toward_parent`].
+type Tree = (Vec<FoldedPanel>, Vec<bool>, Vec<usize>, Vec<Option<V3>>);
+
+/// What [`place`] places: the blank, each panel's hinges in order, each panel's inside point and
+/// bounds corners (flat), and the point the panels' local poses are about.
+struct Placing<'a> {
+    blank: &'a Blank,
+    by_panel: &'a [Vec<usize>],
+    centers: &'a [Option<V3>],
+    corners: &'a [Option<[V3; 4]>],
+    origin: V3,
+}
+
+/// The panels of the blank placed by the fold tree from `base` with each hinge at `amount` of its
+/// angle, which hinges are in the tree, the panels in breadth-first order (the panels not joined
+/// to the base last), and [`Stack::toward_parent`].
+fn place(placing: &Placing, base: usize, amount: f64) -> Tree {
+    let Placing { blank, by_panel, centers, corners, origin } = *placing;
     let n = blank.panels.len();
-    let mut panels: Vec<FoldedPanel> = vec![FoldedPanel { pose: Pose::IDENTITY, parent: None, depth: 0 }; n];
+    let mut panels: Vec<FoldedPanel> = vec![FoldedPanel { pose: Pose::IDENTITY, local: Pose::IDENTITY, parent: None, depth: 0 }; n];
+    let mut toward_parent: Vec<Option<V3>> = vec![None; n];
     let mut reached = vec![false; n];
     let mut tree = vec![false; blank.hinges.len()];
     let mut order = Vec::with_capacity(n);
@@ -257,7 +358,7 @@ fn place(blank: &Blank, by_panel: &[Vec<usize>], centers: &[Option<V3>], base: u
             // The parent on the left of the hinge's direction, the child on its right. The side is
             // read next to the hinge, so a parent with a notch or an arm past the hinge's line still
             // turns the child the right way; the panel's inside point is the fallback.
-            let left = match blank.panels.get(p).and_then(|panel| side_of(&panel.outline, from, to, len)) {
+            let left = match blank.panels.get(p).and_then(|panel| side_of(&panel.outline, from, to, len, flat(h.on))) {
                 Some(left) => left,
                 None => centers.get(p).copied().flatten().is_none_or(|c| cross(sub(to, from), sub(c, from))[2] >= 0.0),
             };
@@ -270,7 +371,15 @@ fn place(blank: &Blank, by_panel: &[Vec<usize>], centers: &[Option<V3>], base: u
                 continue;
             }
             if let Some(slot) = panels.get_mut(child) {
-                *slot = FoldedPanel { pose: parent.pose.turned_about(from, axis, theta), parent: Some(p), depth: parent.depth + 1 };
+                let local = parent.local.turned_about(sub(from, origin), axis, theta);
+                *slot = FoldedPanel { pose: local.about(origin), local, parent: Some(p), depth: parent.depth + 1 };
+            }
+            // Across the hinge, to its left: into the parent, as far as the corners of its bounds
+            // reach that way.
+            let into = [-axis[1], axis[0], 0.0];
+            let reach = corners.get(p).copied().flatten().map_or(0.0, |c| c.into_iter().map(|c| dot(sub(c, from), into)).fold(0.0, f64::max));
+            if let Some(slot) = toward_parent.get_mut(child) {
+                *slot = Some(parent.pose.turn(scale(into, reach)));
             }
             if let Some(r) = reached.get_mut(child) {
                 *r = true;
@@ -282,23 +391,27 @@ fn place(blank: &Blank, by_panel: &[Vec<usize>], centers: &[Option<V3>], base: u
         }
     }
     order.extend((0..n).filter(|&i| reached.get(i) == Some(&false)));
-    (panels, tree, order)
+    (panels, tree, order, toward_parent)
 }
 
 /// Whether `outline` lies on the left of the line from `from` to `to` (flat coordinates, `len` apart)
-/// next to its middle: `Some(true)` when a point just off the middle on the left is inside it and
-/// the matching point on the right is not, `Some(false)` the other way round, `None` when no offset
-/// tells them apart. The nearest offset is tried first.
-fn side_of(outline: &PathData, from: V3, to: V3, len: f64) -> Option<bool> {
+/// next to it: `true` when a point just off the line on the left is inside it and the matching
+/// point on the right is not, `false` the other way round. `on` (a point of the line where the
+/// panels meet: [`super::Hinge::on`]) is tried first, then the middle and points a quarter and an
+/// eighth of the way along. Every position is tried at the nearest offset before larger offsets;
+/// `None` when no point tells the sides apart.
+fn side_of(outline: &PathData, from: V3, to: V3, len: f64, on: V3) -> Option<bool> {
     let bp = outline.to_bezpath();
-    let mid = scale(add(from, to), 0.5);
     let left = [-(to[1] - from[1]) / len, (to[0] - from[0]) / len, 0.0];
     let doc = |v: V3| Point::new(v[0], -v[1]);
     let mut offsets = [1e-3, 0.25, len * 0.01];
     offsets.sort_by(f64::total_cmp);
+    let along = [0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875].map(|t| add(from, scale(sub(to, from), t)));
     offsets.into_iter().find_map(|off| {
-        let (l, r) = (bp.winding(doc(add(mid, scale(left, off)))) != 0, bp.winding(doc(sub(mid, scale(left, off)))) != 0);
-        (l != r).then_some(l)
+        std::iter::once(on).chain(along).find_map(|at| {
+            let (l, r) = (bp.winding(doc(add(at, scale(left, off)))) != 0, bp.winding(doc(sub(at, scale(left, off)))) != 0);
+            (l != r).then_some(l)
+        })
     })
 }
 
@@ -404,4 +517,30 @@ fn crossings(rings: &[Vec<V3>], normal: V3, offset: f64, u: V3, tolerance: f64) 
     at.retain(|x| x.is_finite());
     at.sort_by(f64::total_cmp);
     at.as_chunks::<2>().0.iter().map(|&[a, b]| (a, b)).collect()
+}
+
+#[cfg(test)]
+mod side_tests {
+    use super::*;
+    use vectorcraft_geom::SubPath;
+
+    #[test]
+    fn a_nearby_probe_at_another_position_precedes_a_remote_probe_at_the_hinge() {
+        let points = [
+            (-2.0, -1.0),
+            (-1.0, -1.0),
+            (-1.0, -0.0005),
+            (1.0, -0.0005),
+            (1.0, -1.0),
+            (101.0, -1.0),
+            (101.0, 0.0),
+            (-1.0, 0.0),
+            (-1.0, 0.2),
+            (1.0, 0.2),
+            (1.0, 0.3),
+            (-2.0, 0.3),
+        ];
+        let outline = PathData::single(SubPath::polyline(&points.map(|(x, y)| Point::new(x, y)), true));
+        assert_eq!(side_of(&outline, [0.0; 3], [100.0, 0.0, 0.0], 100.0, [0.0; 3]), Some(true));
+    }
 }

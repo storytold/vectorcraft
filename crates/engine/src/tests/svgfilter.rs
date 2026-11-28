@@ -35,6 +35,39 @@ const BLUR: &str = r#"<filter id="Soft"><feGaussianBlur stdDeviation="2"/></filt
 const SHIFT: &str = r#"<filter id="Shift"><feOffset dx="3" dy="3"/></filter>"#;
 
 #[test]
+fn byte_import_keeps_svg_encodings_and_uses_one_undo_step() {
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><filter id="café"><feOffset dx="3"/></filter></svg>"#;
+    let utf16: Vec<u8> = [0xff, 0xfe].into_iter().chain(svg.encode_utf16().flat_map(u16::to_le_bytes)).collect();
+    let latin1: Vec<u8> = format!("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>{svg}").chars().map(|c| c as u8).collect();
+    for bytes in [svg.as_bytes().to_vec(), utf16, latin1] {
+        let mut s = session();
+        let out = run(&mut s, "svgFilter.import", json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)}));
+        assert_eq!(out["added"], json!(["café"]));
+        assert_eq!(names(&mut s), ["café"]);
+        assert_eq!(steps(&s), 1);
+        run(&mut s, "edit.undo", json!({}));
+        assert!(names(&mut s).is_empty());
+    }
+}
+
+#[test]
+fn byte_import_refuses_invalid_oversized_and_compressed_files_without_an_edit() {
+    let mut s = session();
+    assert!(err(&mut s, "svgFilter.import", json!({"dataBase64": "!"})).contains("dataBase64"));
+    assert!(err(&mut s, "svgFilter.import", json!({"dataBase64": 3})).contains("must be a string"));
+    let mut inline = "é".repeat(8 << 20);
+    inline.push(' ');
+    assert!(err(&mut s, "svgFilter.import", json!({"svg": inline})).contains("larger than 16777216 bytes"));
+    assert!(names(&mut s).is_empty());
+    assert_eq!(steps(&s), 0);
+    for bytes in [vec![0xff], vec![b' '; (16 << 20) + 1], vectorcraft_svg::compress("<svg/>")] {
+        assert!(s.execute("svgFilter.import", &json!({"dataBase64": vectorcraft_format::base64_encode(&bytes)})).is_err());
+        assert!(names(&mut s).is_empty());
+        assert_eq!(steps(&s), 0);
+    }
+}
+
+#[test]
 fn filters_are_defined_edited_and_deleted_in_one_undo_step_each() {
     let mut s = session();
     assert_eq!(run(&mut s, "svgFilter.list", json!({}))["filters"], json!([]));
@@ -257,6 +290,24 @@ fn pasted_art_keeps_a_filter_another_of_its_name_would_replace() {
     run(&mut u, "edit.pasteInPlace", json!({}));
     let both = filter_effects(&u);
     assert_eq!(both, [("Shift".to_string(), SHIFT_MORE.to_string()), ("Shift".to_string(), SHIFT_MORE.to_string())]);
+}
+
+/// Pasted again, art whose filter was renamed takes the name the first paste gave it, so the
+/// same filter does not come in under a new name each time.
+#[test]
+fn pasting_a_renamed_filter_again_reuses_its_name() {
+    let mut s = session();
+    run(&mut s, "svgFilter.define", json!({"xml": SHIFT}));
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><defs>{SHIFT_MORE}</defs><rect width="30" height="30" filter="url(#Shift)"/></svg>"#
+    );
+    run(&mut s, "clipboard.importSvg", json!({"svg": svg}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    run(&mut s, "edit.pasteInPlace", json!({}));
+    let pasted = filter_effects(&s);
+    assert_eq!(pasted.len(), 2);
+    assert_eq!(pasted[0], pasted[1], "{pasted:?}");
+    assert_ne!(pasted[0].0, "Shift", "{pasted:?}");
 }
 
 /// A pasted filter at the size limit, which "Shift 2" would make too long to draw, keeps its own

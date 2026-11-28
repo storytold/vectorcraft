@@ -537,7 +537,7 @@ pub(super) fn break_line<'k>(
 ) -> (usize, bool) {
     let kinsoku = kinsoku.into();
     let settle = |tabbed: bool, checks: usize, chosen: (usize, bool), breaks: &[(usize, bool)]| {
-        craft_font_catalog::settle_line_break(tabbed, checks, i, chosen, breaks, fits)
+        craft::font_catalog::settle_line_break(tabbed, checks, i, chosen, breaks, fits)
     };
     // How many breaks a line measures as drawn one by one.
     let checks = |back: f64| if back > 0.0 { MAX_DRAWN_CHECKS_STEPPING_BACK } else { MAX_DRAWN_CHECKS };
@@ -582,6 +582,8 @@ pub(super) fn break_line<'k>(
     let first = i + g.get(i..).unwrap_or_default().iter().take_while(|h| h.len == 0).count();
     let mut j = i;
     while j < g.len() {
+        #[cfg(test)]
+        super::count_layout_work(1);
         let gl = &g[j];
         let mut cluster_end = j + 1;
         while g.get(cluster_end).is_some_and(|next| next.byte == gl.byte && (next.len == 0) == (gl.len == 0)) {

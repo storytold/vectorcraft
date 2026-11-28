@@ -5,17 +5,14 @@
 //! ([`vectorcraft_engine::cmd::recovery`]).
 
 use std::sync::Arc;
+use std::time::Duration;
 
+use craft::ui::dialog::{DialogResult, RecoveredDocument, RecoveryAnswer, RecoveryChoice, RecoveryDialog, StartupStage};
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::recovery::{self, RecoveryStore};
 
 use crate::VectorcraftApp;
 use crate::background::{self, Writer};
-use crate::state::Dialog;
-
-/// Dialog kind of the startup question. Fields: `copies` (`[{file, title, saved}]`, from
-/// `file.recovery.list`) and `discard` (Discard instead of Restore).
-pub const KIND: &str = "recovery";
 
 /// The timer's state.
 #[derive(Default)]
@@ -32,6 +29,15 @@ pub struct Timer {
     /// The restored documents whose linked files are still to be asked about, next first
     /// ([`ask_next`]).
     links: Vec<LinkQuestions>,
+    /// The copies the Recover Documents dialog still asks about, the one open now first; each is a
+    /// `file.recovery.list` row (`{file, title, saved}`).
+    pub(crate) offered: Vec<Value>,
+    /// The documents restored so far in this question round, with their notes ([`finish`]).
+    restored: Vec<(String, Vec<String>)>,
+    /// The errors of the copies that failed so far in this round.
+    errors: Vec<String>,
+    /// How many copies were discarded so far in this round.
+    discarded: usize,
 }
 
 /// The questions about the linked files of a restored document (by uid): the missing files, then
@@ -48,8 +54,8 @@ const NAMED: usize = 8;
 /// Each frame: the startup question once no other dialog is open, the timer and the heartbeat
 /// (`now`: app time in seconds) → in how many seconds they want the next frame (none while Data Recovery is off).
 pub fn frame(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
-    // A dialog already open at launch (the Safe Mode choice) is answered first.
-    if !app.recovery.checked && app.ui.dialog.is_none() {
+    // A modal already open at launch (the Safe Mode choice) is answered first.
+    if !app.recovery.checked && !app.any_dialog_open() {
         app.recovery.checked = true;
         offer(app);
     }
@@ -70,10 +76,10 @@ pub fn frame(app: &mut VectorcraftApp, now: f64) -> Option<f64> {
     Some(next.min(app.recovery.beat + recovery::HEARTBEAT_EVERY - now).max(1.0))
 }
 
-/// Ask about the copies a crash left behind, if any (the Recover Documents dialog). → whether it
+/// Ask about the copies a crash left behind, if any, one Recover Documents dialog per copy. → whether it
 /// asked.
 pub fn offer(app: &mut VectorcraftApp) -> bool {
-    if recovery::store(&app.session).is_none() || app.ui.dialog.is_some() {
+    if recovery::store(&app.session).is_none() {
         return false;
     }
     let Ok(r) = app.session.execute("file.recovery.list", &json!({})) else { return false };
@@ -82,12 +88,14 @@ pub fn offer(app: &mut VectorcraftApp) -> bool {
     if left.is_empty() {
         return false;
     }
-    app.ui.dialog = Some(Dialog::new(KIND, json!({ "copies": left })));
-    true
+    app.recovery.offered = left;
+    ask(app)
 }
 
 /// Start a recovery copy of every document that needs one when the interval has passed since the
-/// last (the first call only starts the clock) → how many were started.
+/// last (the first call only starts the clock) → how many were started. While a plug-in run holds
+/// the documents ([`vectorcraft_engine::cmd::plugin::FilterRun::begin_calls`]) the round waits for
+/// it to end, since its edits are undone when it fails or is canceled.
 pub fn tick(app: &mut VectorcraftApp, now: f64) -> usize {
     let prefs = &app.session.prefs;
     let Some(store) = recovery::store(&app.session).filter(|_| prefs.autosave_recovery) else {
@@ -97,6 +105,7 @@ pub fn tick(app: &mut VectorcraftApp, now: f64) -> usize {
     let interval = f64::from(prefs.autosave_interval.max(1)) * 60.0;
     match app.recovery.last {
         Some(t) if now >= t && now - t < interval => return 0,
+        Some(t) if now >= t && app.session.plugin_calls_open() => return 0,
         Some(t) if now >= t => app.recovery.last = Some(now),
         // First call, or a clock that went back: the interval starts now.
         _ => {
@@ -108,8 +117,11 @@ pub fn tick(app: &mut VectorcraftApp, now: f64) -> usize {
 }
 
 /// Start a recovery copy of every document that needs one and `pick` picks (by uid) → how many
-/// were started.
+/// were started. None while a plug-in run holds the documents ([`tick`]).
 fn write(app: &mut VectorcraftApp, store: &Arc<dyn RecoveryStore>, pick: impl Fn(u64) -> bool) -> usize {
+    if app.session.plugin_calls_open() {
+        return 0;
+    }
     recovery::forget_clean(&mut app.session);
     // The folder `store` writes to, named in a failure even when the preference changes meanwhile.
     let place = recovery::folder(&app.session);
@@ -215,41 +227,58 @@ fn named(app: &mut VectorcraftApp, folder: &str) {
     }
 }
 
-/// The startup dialog's OK (Restore) or Discard: every copy it lists.
-///
-/// After Restore the status bar shows how many documents were restored, followed by the first of
-/// the restored documents' notes: for each document in the dialog's order, the lines about its
-/// linked files, then what reading the copy left out, then its other warnings, each named with
-/// its document's title when more than one was restored. Hovering the message lists them all. The
-/// questions about the documents' linked files are asked one document at a time ([`ask_next`]).
-/// When a copy can't be restored, the status bar shows the error, and its hover lists the count
-/// and the notes of the documents that were restored.
-pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    app.ui.dialog = None;
-    let discard = d.bool("discard");
-    let id = if discard { "file.recovery.discard" } else { "file.recovery.restore" };
-    let files: Vec<String> =
-        d.fields.get("copies").and_then(Value::as_array).into_iter().flatten().filter_map(|c| c["file"].as_str()).map(str::to_string).collect();
-    let (mut done, mut errors, mut opened) = (vec![], vec![], vec![]);
-    for file in files {
-        match app.run(id, json!({ "file": file })) {
-            Ok(r) => {
-                for restored in r["restored"].as_array().into_iter().flatten() {
-                    opened.push(restored_notes(app, restored));
-                }
-                let failed = r["failed"].as_array().into_iter().flatten();
-                errors.extend(failed.filter_map(|f| f["error"].as_str()).map(str::to_string));
-                done.push(r);
-            }
-            Err(e) => errors.push(e),
-        }
+/// Answers for the copy the open dialog asks about (`Timer::offered[0]`): Recover restores it, Discard deletes
+/// it, and Escape or the close action keeps it and every later copy for the next launch. The next copy is asked
+/// about after each answer, and [`finish`] reports once none is left.
+fn answered(app: &mut VectorcraftApp, answer: DialogResult<RecoveryChoice>) {
+    if app.recovery.offered.is_empty() {
+        return;
     }
-    if discard {
-        if !errors.is_empty() {
-            return Err(errors.join("; "));
+    let copy = app.recovery.offered.remove(0);
+    let discard = match answer {
+        DialogResult::Ok(RecoveryChoice { answer: RecoveryAnswer::Recover, .. }) => false,
+        DialogResult::Ok(RecoveryChoice { answer: RecoveryAnswer::Discard, .. }) => true,
+        _ => {
+            app.recovery.offered.clear();
+            return finish(app);
         }
-        app.status(recovered_status(true, done.len()));
-        return Ok(json!(done));
+    };
+    let id = if discard { "file.recovery.discard" } else { "file.recovery.restore" };
+    match app.run(id, json!({ "file": copy["file"] })) {
+        Ok(r) => {
+            if discard {
+                app.recovery.discarded += 1;
+            }
+            for restored in r["restored"].as_array().into_iter().flatten() {
+                let opened = restored_notes(app, restored);
+                app.recovery.restored.push(opened);
+            }
+            let failed = r["failed"].as_array().into_iter().flatten();
+            app.recovery.errors.extend(failed.filter_map(|f| f["error"].as_str()).map(str::to_string));
+        }
+        Err(e) => app.recovery.errors.push(e),
+    }
+    if !ask(app) {
+        finish(app);
+    }
+}
+
+/// The status line after the last copy was answered.
+///
+/// After Recover the status bar shows how many documents were restored, followed by the first of the restored
+/// documents' notes: for each document in the dialog's order, the lines about its linked files, then what reading
+/// the copy left out, then its other warnings, each named with its document's title when more than one was
+/// restored. Hovering the message lists them all. The questions about the documents' linked files are asked one
+/// document at a time ([`ask_next`]). When a copy can't be restored, the status bar shows the error, and its hover
+/// lists the count and the notes of the documents that were restored.
+fn finish(app: &mut VectorcraftApp) {
+    let (opened, errors, discarded) =
+        (std::mem::take(&mut app.recovery.restored), std::mem::take(&mut app.recovery.errors), std::mem::take(&mut app.recovery.discarded));
+    if opened.is_empty() && errors.is_empty() {
+        if discarded > 0 {
+            app.status(recovered_status(true, discarded));
+        }
+        return ask_next(app);
     }
     let summary = recovered_status(false, opened.len());
     let titled = opened.len() > 1;
@@ -257,25 +286,45 @@ pub fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
     let notes: Vec<String> = opened
         .into_iter()
         .flat_map(|(title, notes)| {
-            notes.into_iter().map(move |n| if titled { crate::i18n::fill_once("{path}: {e}", &[("path", &title), ("e", &n)]) } else { n })
+            notes.into_iter().map(move |n| if titled { crate::i18n::fmt("{path}: {e}", &[("path", &title), ("e", &n)]) } else { n })
         })
         .collect();
-    let result = if errors.is_empty() {
+    if errors.is_empty() {
         let status = match notes.first() {
             Some(first) => crate::io::opened_after_notice(&summary, notes.len(), first),
             None => summary,
         };
         crate::io::show_with_notes(app, status, notes);
-        Ok(json!(done))
     } else {
         let e = errors.join("; ");
         if restored {
-            crate::io::show_with_notes(app, e.clone(), std::iter::once(summary).chain(notes).collect());
+            crate::io::show_with_notes(app, e, std::iter::once(summary).chain(notes).collect());
+        } else {
+            app.status(e);
         }
-        Err(e)
-    };
-    crate::dialogs::settle(app);
-    result
+    }
+    ask_next(app);
+}
+
+/// Each pass: takes the answer of the Recover Documents dialog, then asks the linked-file questions that wait.
+pub(crate) fn pump(app: &mut VectorcraftApp, _: &egui::Context) {
+    // Taken before acting: answering runs commands, which must not run inside the host.
+    let answer = app.dialogs().and_then(|d| d.with(|h| h.take::<RecoveryDialog>()));
+    if let Some(answer) = answer {
+        answered(app, answer);
+    }
+    ask_next(app);
+}
+
+/// Enqueues the dialog for the first copy still to ask about → whether there was one and a window to show it.
+fn ask(app: &VectorcraftApp) -> bool {
+    let (Some(copy), Some(dialogs)) = (app.recovery.offered.first(), app.dialogs()) else { return false };
+    // The store's clock stamped the copy: the page's on the web, where the document clock reads none.
+    let now = recovery::store(&app.session).and_then(|store| store.now()).and_then(|t| u64::try_from(t).ok()).unwrap_or(0);
+    let age = copy["saved"].as_u64().map_or(Duration::ZERO, |saved| Duration::from_secs(now.saturating_sub(saved)));
+    let document = RecoveredDocument::new(copy["file"].as_str().unwrap_or_default(), copy["title"].as_str().unwrap_or_default(), age);
+    dialogs.with(|h| h.enqueue(StartupStage::Recovery, RecoveryDialog::new(document)));
+    true
 }
 
 /// A document Restore just opened (`file.recovery.restore`'s entry `r`, the current document) →
@@ -292,10 +341,10 @@ fn restored_notes(app: &mut VectorcraftApp, r: &Value) -> (String, Vec<String>) 
     (r["title"].as_str().unwrap_or_default().to_string(), notes)
 }
 
-/// With no dialog open: the questions about the linked files of the next restored document that
-/// is still open, with that document made the current one (the answers change it).
+/// With no dialog open and no copy left to ask about: the questions about the linked files of the next restored
+/// document that is still open, with that document made the current one (the answers change it).
 pub(crate) fn ask_next(app: &mut VectorcraftApp) {
-    while app.ui.dialog.is_none() && !app.recovery.links.is_empty() {
+    while app.recovery.offered.is_empty() && !app.any_dialog_open() && !app.recovery.links.is_empty() {
         let q = app.recovery.links.remove(0);
         let Some(i) = app.session.documents().iter().position(|st| st.uid == q.uid) else { continue };
         crate::chrome::show_document(app, i);

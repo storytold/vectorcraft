@@ -3,6 +3,7 @@
 //! document holding its patterns, drawn here from plain shapes ([`PATTERN_LIBRARIES`]).
 //! `swatch.library.add` copies a pattern into the document with its swatch.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock};
 
 use vectorcraft_color::{Color, Paint, Swatch, SwatchLibrary};
@@ -14,6 +15,10 @@ use super::Result;
 use super::clipboard::Clipboard;
 use super::clipboard::resources::{Imported, SwatchChoices};
 use super::swatchlib::LibraryInfo;
+
+/// Names that swatches and patterns coming in under a numbered name skip, each with the library
+/// swatch it is reserved for ([`SwatchChoices::reserving`]).
+pub(crate) type Reserved = Arc<BTreeMap<String, Swatch>>;
 
 /// A built-in pattern library: a stable id, its menu name and the function that adds its patterns.
 pub struct BuiltinPatternLibrary {
@@ -96,17 +101,18 @@ pub(crate) type SwatchNames = Vec<(String, String)>;
 /// A global or spot color whose name `d` gives another color comes in under a free name, as Add
 /// to Swatches adds such a color, so that the pattern keeps the library's colors. Those colors
 /// merge instead when that reuses a pattern of `d` that keeping them would add again
-/// ([`probe_import`]).
-pub(crate) fn import(d: &mut Document, lib: &Document, name: &str) -> Result<(String, SwatchNames, SwatchNames)> {
+/// ([`probe_import`]). A swatch that comes in under a numbered name skips the names in
+/// `reserved`.
+pub(crate) fn import(d: &mut Document, lib: &Document, name: &str, reserved: &Reserved) -> Result<(String, SwatchNames, SwatchNames)> {
     let gathered = gather(lib, name);
     let had: std::collections::HashSet<String> = d.swatches_iter().map(|w| w.name.clone()).collect();
     // Without a color to merge or a pattern to reuse, the document is not copied.
     let imported = if !gathered.swatches.is_empty() && has_candidate(d, lib, name) {
-        let (_, probed, imported) = probe_import(d, lib, name, &gathered)?;
+        let (_, probed, imported) = probe_import(d, lib, name, &gathered, reserved)?;
         *d = probed;
         imported
     } else {
-        gathered.import_into(d, &SwatchChoices::add_all(), false)?
+        gathered.import_into(d, &SwatchChoices::add_all().reserving(reserved), false)?
     };
     let from = |to: &str| {
         let renamed = imported.renamed.iter().find(|r| r["kind"] == "swatch" && r["to"] == to).and_then(|r| r["from"].as_str());
@@ -138,9 +144,11 @@ pub(crate) fn brought_names(lib: &Document, name: &str) -> std::collections::Has
     gather(lib, name).swatches.into_iter().map(|w| w.name).collect()
 }
 
-/// The names in `lib` of pattern `name` and of the patterns its art brings.
-pub(crate) fn brought_patterns(lib: &Document, name: &str) -> std::collections::HashSet<String> {
-    gather(lib, name).patterns.into_iter().map(|p| p.name).collect()
+/// The names in `lib` of the swatches and patterns that pattern `name` of `lib` brings, itself
+/// included.
+pub(crate) fn brought_resource_names(lib: &Document, name: &str) -> std::collections::HashSet<String> {
+    let gathered = gather(lib, name);
+    gathered.swatches.into_iter().map(|w| w.name).chain(gathered.patterns.into_iter().map(|p| p.name)).collect()
 }
 
 /// The name pattern `name` has in the document `imported` went into.
@@ -154,8 +162,8 @@ pub(crate) fn imported_name(imported: &Imported, name: &str) -> String {
 /// name than its own, as [`import`] lists them. A pattern whose art uses no other resource is
 /// compared as [`existing_pattern`] does. One whose art uses other resources, such as a pattern it
 /// is painted with, is imported into a copy of `d` as [`probe_import`] does, so that those
-/// resources are compared too.
-pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str) -> Option<(String, SwatchNames)> {
+/// resources are compared too, with numbered names skipping `reserved`.
+pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str, reserved: &Reserved) -> Option<(String, SwatchNames)> {
     let gathered = gather(lib, name);
     let only_pattern = gathered.patterns.len() == 1
         && gathered.symbols.is_empty()
@@ -173,7 +181,7 @@ pub(crate) fn present_pattern(d: &Document, lib: &Document, name: &str) -> Optio
     if !has_candidate(d, lib, name) {
         return None;
     }
-    let (_, _, imported) = probe_import(d, lib, name, &gathered).ok()?;
+    let (_, _, imported) = probe_import(d, lib, name, &gathered, reserved).ok()?;
     if imported.added != 0 {
         return None;
     }
@@ -203,19 +211,73 @@ pub(crate) fn has_candidate(d: &Document, lib: &Document, name: &str) -> bool {
 /// another color comes in under a free name (Add). Those colors merge instead when Add would add
 /// the pattern again while merging reuses a pattern of `d`: such a pattern has its art linked to
 /// the document's own colors of those names, as pasting with Merge, or adding it from a library
-/// before, leaves it.
-pub(crate) fn probe_import(d: &Document, lib: &Document, name: &str, gathered: &Clipboard) -> Result<(SwatchChoices, Document, Imported)> {
+/// before, leaves it. A swatch or pattern that comes in under a numbered name skips the names in
+/// `reserved` ([`SwatchChoices::reserving`]). When that changed a name and the pattern would come
+/// in again, or would be reused only by merging colors, an import that does not skip them is used
+/// if it reuses a pattern of `d` (one pasted there), without merging in the second case, and uses
+/// none of those names that `d` does not use, other than for the swatch a name is reserved for.
+pub(crate) fn probe_import(
+    d: &Document,
+    lib: &Document,
+    name: &str,
+    gathered: &Clipboard,
+    reserved: &Reserved,
+) -> Result<(SwatchChoices, Document, Imported)> {
     let reused = |i: &Imported| d.pattern(&imported_name(i, name)).is_some();
-    let mut with_add = d.clone();
-    let added = gathered.import_into(&mut with_add, &SwatchChoices::add_all(), false)?;
-    if !reused(&added) && added.renamed.iter().any(|r| r["kind"] == "swatch") && has_candidate(d, lib, name) {
-        let mut merged = d.clone();
-        let found = gathered.import_into(&mut merged, &SwatchChoices::default(), false)?;
-        if reused(&found) {
-            return Ok((SwatchChoices::default(), merged, found));
+    let found = probe_skipping(d, lib, name, gathered, reserved)?;
+    // A reuse that merges colors gives the pattern the document's colors, so one that keeps the
+    // library's is tried too.
+    let merged = |i: &Imported| reused(i) && i.merged != 0;
+    if found.2.reserved_named && (!reused(&found.2) || merged(&found.2)) && has_candidate(d, lib, name) {
+        let pasted = probe_skipping(d, lib, name, gathered, &Reserved::default())?;
+        let better = !reused(&found.2) || !merged(&pasted.2);
+        if reused(&pasted.2) && better && !takes_reserved(d, &pasted.1, &pasted.2, gathered, reserved) {
+            return Ok(pasted);
         }
     }
-    Ok((SwatchChoices::add_all(), with_add, added))
+    Ok(found)
+}
+
+/// Whether `probed`, the import of `gathered` into a copy of `d` that `imported` describes, gives a
+/// name in `reserved` that `d` does not use to a pattern, or to a swatch other than the one the name
+/// is reserved for coming in under its own name.
+fn takes_reserved(d: &Document, probed: &Document, imported: &Imported, gathered: &Clipboard, reserved: &Reserved) -> bool {
+    let had: std::collections::HashSet<&str> =
+        d.swatches_iter().map(|w| w.name.as_str()).chain(d.swatch_groups.iter().map(|g| g.name.as_str())).collect();
+    let renamed_to = |n: &str| imported.renamed.iter().any(|r| r["kind"] == "swatch" && r["to"] == n && r["from"] != n);
+    let owner_only = |n: &str, owner: &Swatch| gathered.swatches.iter().filter(|w| w.name == n).all(|w| w == owner);
+    let swatch = probed
+        .swatches_iter()
+        .map(|w| w.name.as_str())
+        .filter(|n| !had.contains(n))
+        .any(|n| reserved.get(n).is_some_and(|owner| !owner_only(n, owner) || renamed_to(n)));
+    let patterns: std::collections::HashSet<&str> = d.patterns.iter().map(|p| p.name.as_str()).collect();
+    swatch || probed.patterns.iter().any(|p| !patterns.contains(p.name.as_str()) && reserved.contains_key(&p.name))
+}
+
+/// [`probe_import`] with numbered names skipping `reserved`.
+fn probe_skipping(
+    d: &Document,
+    lib: &Document,
+    name: &str,
+    gathered: &Clipboard,
+    reserved: &Reserved,
+) -> Result<(SwatchChoices, Document, Imported)> {
+    let reused = |i: &Imported| d.pattern(&imported_name(i, name)).is_some();
+    let (add, merge) = (SwatchChoices::add_all().reserving(reserved), SwatchChoices::default().reserving(reserved));
+    let mut with_add = d.clone();
+    let mut added = gathered.import_into(&mut with_add, &add, false)?;
+    if !reused(&added) && added.renamed.iter().any(|r| r["kind"] == "swatch") && has_candidate(d, lib, name) {
+        let mut merged = d.clone();
+        let mut found = gathered.import_into(&mut merged, &merge, false)?;
+        // Whether a reservation changed a name counts for either import.
+        found.reserved_named |= added.reserved_named;
+        if reused(&found) {
+            return Ok((merge, merged, found));
+        }
+        added.reserved_named |= found.reserved_named;
+    }
+    Ok((add, with_add, added))
 }
 
 /// The pattern of `d` that is pattern `name` of library `lib`: the same tile options and art under
