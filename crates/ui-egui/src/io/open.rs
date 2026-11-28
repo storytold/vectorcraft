@@ -242,9 +242,7 @@ fn ask_open(
     Ok(file_asks::ask(app, request, owner, move |app, picked| match picked {
         Picked::Contents(files) => {
             for (name, bytes) in &files {
-                if let Err(e) = open_bytes(app, name, bytes, None) {
-                    report_open_error(app, name, &e);
-                }
+                open_bytes_reporting(app, name, bytes);
             }
             Ok(Value::Null)
         }
@@ -305,10 +303,20 @@ fn permission_words(name: &str, commands: &[String], context: bool) -> String {
 /// `replace: true` doesn't skip asking about replacing, and the answer while it asks adds
 /// `approval: "personMustStartInstall"`: the person starts Install Plug-in… to install it.
 /// Every text from the manifest is shown with its hidden characters escaped and its length capped
-/// ([`permissions::display_text`]).
+/// ([`permissions::display_text`]). On the web a worker checks the module first
+/// ([`crate::plugin_runs::check_install`]) → `{pending: true}` while it does; the install then goes
+/// on, and the page runs none of the module's code.
 pub fn install_module(app: &mut VectorcraftApp, module: Value) -> Result<Value, String> {
-    let origin = if app.automation_asked() { dialogs::plugin::InstallOrigin::Automation } else { dialogs::plugin::InstallOrigin::Person };
-    let automated = origin == dialogs::plugin::InstallOrigin::Automation;
+    let automated = app.automation_asked();
+    install_module_as(app, module, automated)
+}
+
+/// [`install_module`], as automation's install when `automated`.
+pub(crate) fn install_module_as(app: &mut VectorcraftApp, module: Value, automated: bool) -> Result<Value, String> {
+    if let Some(r) = crate::plugin_runs::check_install(app, &module, automated) {
+        return r;
+    }
+    let origin = if automated { dialogs::plugin::InstallOrigin::Automation } else { dialogs::plugin::InstallOrigin::Person };
     let given = |k: &str| module.get(k).map(|v| (k.to_string(), v.clone()));
     let source = Value::Object(["path", "dataBase64", "name"].into_iter().filter_map(given).collect());
     let mut install = Value::Object(["path", "dataBase64", "name", "replace", "hash"].into_iter().filter_map(given).collect());
@@ -506,6 +514,17 @@ pub fn report_open_error(app: &mut VectorcraftApp, name: &str, e: &str) {
     app.status(format!("Couldn't open {name}: {e}"));
     let message = crate::i18n::fmt(tl!("Can't open “{name}”."), &[("name", name)]);
     dialogs::confirm::tell(app, &message, &crate::i18n::message(crate::i18n::current(), e));
+}
+
+/// [`open_bytes`] for a file the user asked to open, a failure reported ([`report_open_error`]),
+/// also one that a worker's check of a plug-in module finds after it returned
+/// ([`crate::plugin_runs::report_checks_as_opened`]).
+pub fn open_bytes_reporting(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) {
+    let from = crate::plugin_runs::checks_started(app);
+    match open_bytes(app, name, bytes, None) {
+        Ok(_) => crate::plugin_runs::report_checks_as_opened(app, from, name),
+        Err(e) => report_open_error(app, name, &e),
+    }
 }
 
 /// [`open_path`] for a file the user asked for, a failure reported ([`report_open_error`]). On

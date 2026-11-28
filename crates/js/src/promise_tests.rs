@@ -62,7 +62,7 @@ fn promise_statics_accept_registered_host_constructors_and_bound_targets() {
     let mut r = realm();
     let make: HostFunction = std::rc::Rc::new(|_| Ok(Data::Object(Vec::new())));
     r.define_host_classes(
-        vec![HostClass { name: "Thing".into(), parent: None, members: Vec::new(), index: None, construct: Some(make) }],
+        vec![HostClass { name: "Thing".into(), parent: None, members: Vec::new(), info: Vec::new(), index: None, construct: Some(make) }],
         Vec::new(),
     )
     .unwrap();
@@ -91,8 +91,11 @@ fn promise_statics_accept_registered_host_constructors_and_bound_targets() {
 #[test]
 fn promise_statics_reject_host_classes_registered_without_construct() {
     let mut r = realm();
-    r.define_host_classes(vec![HostClass { name: "Fixed".into(), parent: None, members: Vec::new(), index: None, construct: None }], Vec::new())
-        .unwrap();
+    r.define_host_classes(
+        vec![HostClass { name: "Fixed".into(), parent: None, members: Vec::new(), info: Vec::new(), index: None, construct: None }],
+        Vec::new(),
+    )
+    .unwrap();
     let result = r
         .run(
             "var log = []; \

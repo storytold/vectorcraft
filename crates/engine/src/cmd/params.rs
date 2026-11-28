@@ -260,6 +260,8 @@ thread_local! {
     pub(crate) static PARSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     /// Whether [`known`] is skipped on this thread ([`uncached`]).
     static UNCACHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The cells [`distance`] worked out on this thread: one for each pair of characters it compared.
+    pub(crate) static DISTANCE_CELLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Whether [`read_descriptions`] keeps what `doc` says.
@@ -330,6 +332,8 @@ fn no_required_id_beside_ids(doc: &str) -> bool {
 /// The edits (insert, delete, replace, swap of neighbours) that turn `a` into `b`, ignoring case.
 fn distance(a: &str, b: &str) -> usize {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().map(|c| c.to_ascii_lowercase()).collect(), b.chars().map(|c| c.to_ascii_lowercase()).collect());
+    #[cfg(test)]
+    DISTANCE_CELLS.with(|n| n.set(n.get().saturating_add(a.len().saturating_mul(b.len()))));
     let (mut before, mut prev): (Vec<usize>, Vec<usize>) = (Vec::new(), (0..=b.len()).collect());
     for (i, ca) in a.iter().enumerate() {
         let mut row = vec![i + 1];

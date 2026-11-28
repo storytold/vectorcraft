@@ -123,6 +123,18 @@ impl Reader<'_> {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many paths and objects the records on this thread have measured.
+    static MEASURED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// [`MEASURED`] of this thread.
+#[cfg(test)]
+pub(crate) fn on_path_measured() -> u64 {
+    MEASURED.get()
+}
+
 /// Give each group that a record of `found` names exactly its [`ObjectsOnPath`] record.
 pub(super) fn apply(doc: &mut Document, found: &OnPath) {
     if found.records.is_empty() {
@@ -174,11 +186,15 @@ fn apply_one(doc: &mut Document, found: &OnPath, at: &HashMap<NodeId, Vec<usize>
     if !tried.insert(g.id) {
         return None;
     }
+    #[cfg(test)]
+    MEASURED.set(MEASURED.get() + 1);
     attachable_path(children.iter().find(|c| c.id == path)?)?;
     let mut members = Vec::with_capacity(placed.len());
     for (id, place, angle) in placed {
         // The frame the object is drawn in: turned by its angle (the document's y points down)
         // about the center of its bounds.
+        #[cfg(test)]
+        MEASURED.set(MEASURED.get() + 1);
         let center = doc.node_at(place)?.geometric_bounds()?.center();
         members.push(Member { id, frame: Affine::rotate_about(angle, center), angle });
     }

@@ -917,6 +917,7 @@ impl<'a> Reader<'a> {
         }
         let Some(p) = self.envelopes.pop() else { return };
         let scale = self.space_scale();
+        let pages = self.pages_in_doc();
         let drawn = self.frames.last().filter(|f| f.children.len() == p.siblings + 1).and_then(|f| f.children.last());
         let Some(drawn) = drawn else {
             self.warn(crate::import::ai::envelope::drawn_note(p.typed));
@@ -959,8 +960,7 @@ impl<'a> Reader<'a> {
         (shown.visible, shown.opacity) = (true, 1.0);
         let mut plain = drawn.clone();
         (plain.visible, plain.opacity) = (true, 1.0);
-        let page = self.page_in_doc();
-        let mut alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+        let mut alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, &pages, &mut self.envelope_spent);
         // In Edit Contents, a grid that draws the contents elsewhere than the drawn art is checked
         // again moved onto that art.
         if !alike
@@ -969,7 +969,7 @@ impl<'a> Reader<'a> {
         {
             self.envelope_checks -= 1;
             (envelope.kind, shown.kind) = (kind.clone(), kind);
-            alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, page, &mut self.envelope_spent);
+            alike = crate::import::ai::envelope::drawn_alike(&shown, &plain, layer, &shared, &pages, &mut self.envelope_spent);
         }
         if !alike {
             self.warn(crate::import::ai::envelope::DRAWN);

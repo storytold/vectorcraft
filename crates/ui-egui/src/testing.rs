@@ -94,8 +94,11 @@ pub(crate) fn custom_dictionary() -> std::sync::MutexGuard<'static, ()> {
 /// Runs the test `name` (its path in the crate, such as `canvas::tests::a_test`) alone in a child test process, for a
 /// test that loads or removes a color profile. The loaded profiles are the whole process's, and the canvas's frame key
 /// holds their generation ([`vectorcraft_color::cms::profiles_generation`]), so a profile loaded in this process while
-/// another test renders changes that test's keys. In the child it returns `true`, and the test goes on. Here it waits
-/// for the child, fails when the child's test fails, and returns `false`.
+/// another test renders changes that test's keys. A test that assigns a profile to its front document, or changes
+/// Color Settings, also runs here: the active color settings ([`vectorcraft_color::cms::active`]) are the whole
+/// process's too, and another test converting a color while they are changed gets that profile's values. In the child
+/// it returns `true`, and the test goes on. Here it waits for the child, fails when the child's test fails, and returns
+/// `false`.
 pub(crate) fn in_own_process(name: &str) -> bool {
     const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
     if std::env::var_os(CHILD).is_some_and(|v| v == name) {
