@@ -857,7 +857,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Import Preferences",
             [],
             None,
-            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). Every value is checked first, as prefs.set checks it: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference (for scratchPrimary and scratchSecondary, a folder; the choices Startup and None are read) is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
+            "{path? | data?: the file's text} apply the preferences of a file prefs.export wrote (at most 1 MB). A present unsupported or malformed gpuBackend falls back to Automatic. Other values are checked first, as prefs.set checks them: another format, a newer version, an unknown preference, a value of the wrong type or out of range, or a folder preference (for scratchPrimary and scratchSecondary, a folder; the choices Startup and None are read) is an error, and nothing changes. Preferences the file leaves out keep their values; the open document's units stay as they are; no undo step; not a command.batch step → {imported: count}",
             always,
             import
         ),
@@ -955,7 +955,10 @@ fn import(s: &mut Session, p: &Value) -> Result<Value> {
     if bytes.len() > MAX_PREFS_FILE_BYTES {
         return Err(too_large());
     }
-    let values = read_prefs_file(&bytes).map_err(|e| bad(C, e))?;
+    let mut values = read_prefs_file(&bytes).map_err(|e| bad(C, e))?;
+    if let Some(value) = values.get_mut("gpuBackend") {
+        *value = validate("gpuBackend", value).unwrap_or_else(|_| json!("automatic"));
+    }
     let mut next = s.prefs.clone();
     next.set_values(&values).map_err(|e| bad(C, e))?;
     s.apply_prefs(next);

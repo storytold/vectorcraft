@@ -39,3 +39,49 @@ fn gpu_backend_defaults_validates_and_round_trips_platform_choices() {
         assert_eq!(saved.keyboard_increment, 4.0, "a malformed backend must not discard other preferences");
     }
 }
+
+fn imported_preferences(prefs: Value) -> Value {
+    json!({"data": json!({"format":"vectorcraft-preferences", "version":1, "prefs":prefs}).to_string()})
+}
+
+#[test]
+fn gpu_backend_import_keeps_other_values_when_the_backend_is_invalid() {
+    use vectorcraft_engine::cmd::prefscmds::GPU_BACKENDS;
+    let mut invalid = vec![Value::Null, json!(true), json!(1), json!(2.5), json!([]), json!({}), json!(""), json!("future")];
+    invalid.extend(
+        ["dx12", "vulkan", "gl", "metal"].into_iter().filter(|value| !GPU_BACKENDS.iter().any(|(id, _)| id == value)).map(|value| json!(value)),
+    );
+    for value in invalid {
+        let mut session = Session::new();
+        let before = session.prefs.to_json();
+        assert!(session.execute("prefs.set", &json!({"key":"gpuBackend", "value":&value})).is_err(), "{value}");
+        assert_eq!(session.prefs.to_json(), before, "strict prefs.set remains atomic for {value}");
+        let params = imported_preferences(json!({"gpuBackend":value, "keyboardIncrement":4}));
+        assert_eq!(session.execute("prefs.import", &params).unwrap(), json!({"imported":2}));
+        assert_eq!(session.prefs.gpu_backend, "automatic");
+        assert_eq!(session.prefs.keyboard_increment, 4.0);
+    }
+}
+
+#[test]
+fn gpu_backend_import_preserves_supported_choices_and_other_import_rules() {
+    use vectorcraft_engine::cmd::prefscmds::GPU_BACKENDS;
+    let mut session = Session::new();
+    for (id, label) in GPU_BACKENDS {
+        for value in [id.to_string(), id.to_ascii_uppercase(), label.to_string(), label.to_ascii_lowercase()] {
+            let params = imported_preferences(json!({"gpuBackend":value, "keyboardIncrement":4}));
+            assert_eq!(session.execute("prefs.import", &params).unwrap(), json!({"imported":2}));
+            assert_eq!(session.prefs.gpu_backend, *id, "offered IDs and labels retain the existing case-insensitive matching");
+            assert_eq!(session.prefs.keyboard_increment, 4.0);
+        }
+    }
+    let kept_backend = session.prefs.gpu_backend.clone();
+    session.execute("prefs.import", &imported_preferences(json!({"keyboardIncrement":5}))).unwrap();
+    assert_eq!(session.prefs.gpu_backend, kept_backend, "an omitted backend leaves the current choice alone");
+    assert_eq!(session.prefs.keyboard_increment, 5.0);
+    for prefs in [json!({"gpuBackend":"future", "keyboardIncrement":true}), json!({"gpuBackend":false, "noSuchPreference":4})] {
+        let before = session.prefs.to_json();
+        assert!(session.execute("prefs.import", &imported_preferences(prefs)).is_err());
+        assert_eq!(session.prefs.to_json(), before, "normalizing the backend must not bypass another invalid value");
+    }
+}
