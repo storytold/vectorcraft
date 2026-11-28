@@ -215,7 +215,7 @@ pub(crate) fn unmix(pix: &[Px], width: usize, height: usize, classes: &[[f64; 4]
     let flat = flat_classes(pix, &stands_for, width, height);
     let between = between_classes(pix, &flat, &mixed, width, height);
     let colors = area_colors(pix, classes, &flat, &between);
-    let of_class = (!colors.iter().all(Vec::is_empty)).then(|| {
+    let of_class = (!colors.iter().all(FlatColors::is_empty)).then(|| {
         pure.iter()
             .zip(pix)
             .map(|(&q, px)| q.or_else(|| (0..k).find(|&c| colors.get(c).is_some_and(|cs| near_area_color(px, cs)))))
@@ -511,8 +511,8 @@ fn between_classes(pix: &[Px], flat: &[Option<usize>], mixed: &HashMap<[u32; 4],
 /// color), the distinct colors of its flat areas: the flat areas that
 /// stand for it (`flat`) and those whose mix holds it most (`between`, [`between_classes`]). Empty for
 /// a class whose flat areas all come within `PURE` of it.
-fn area_colors(pix: &[Px], classes: &[[f64; 4]], flat: &[Option<usize>], between: &[[Option<usize>; 2]]) -> Vec<Vec<Px>> {
-    let mut colors: Vec<Vec<Px>> = vec![Vec::new(); classes.len()];
+fn area_colors(pix: &[Px], classes: &[[f64; 4]], flat: &[Option<usize>], between: &[[Option<usize>; 2]]) -> Vec<FlatColors> {
+    let mut colors: Vec<FlatColors> = vec![FlatColors::default(); classes.len()];
     let mut off_named = vec![false; classes.len()];
     let mut kept: HashSet<(usize, [u32; 4])> = HashSet::new();
     for (i, px) in pix.iter().enumerate() {
@@ -532,8 +532,56 @@ fn area_colors(pix: &[Px], classes: &[[f64; 4]], flat: &[Option<usize>], between
 }
 
 /// Whether `px` comes within [`PURE`] of one of `colors`.
-fn near_area_color(px: &Px, colors: &[Px]) -> bool {
-    colors.iter().any(|q| distance(px, q) < PURE)
+fn near_area_color(px: &Px, colors: &FlatColors) -> bool {
+    colors.near(px)
+}
+
+/// The colors of one class's flat areas, kept in cells `2 * PURE` wide on each channel, so a color
+/// within [`PURE`] of a pixel lies in the pixel's cell or, on each channel, the next cell on the side
+/// the pixel lies nearer: 16 cells in all.
+#[derive(Clone, Default)]
+struct FlatColors {
+    cells: HashMap<[i32; 4], Vec<Px>>,
+}
+
+impl FlatColors {
+    fn cell(px: &Px) -> [i32; 4] {
+        px.map(|v| (f64::from(v) / (2.0 * PURE)).floor() as i32)
+    }
+
+    fn push(&mut self, px: Px) {
+        self.cells.entry(Self::cell(&px)).or_default().push(px);
+    }
+
+    fn is_empty(&self) -> bool {
+        self.cells.is_empty()
+    }
+
+    fn clear(&mut self) {
+        self.cells.clear();
+    }
+
+    /// Whether one of the colors lies within [`PURE`] of `px`.
+    fn near(&self, px: &Px) -> bool {
+        if self.cells.is_empty() {
+            return false;
+        }
+        let at = Self::cell(px);
+        // On each channel, -1 or +1: the neighboring cell on the side of the cell's middle the pixel lies.
+        let side = [0, 1, 2, 3].map(|j| {
+            let pos = f64::from(px[j]) / (2.0 * PURE) - f64::from(at[j]);
+            if pos < 0.5 { -1 } else { 1 }
+        });
+        (0..16usize).any(|n| {
+            let mut key = at;
+            for (j, k) in key.iter_mut().enumerate() {
+                if (n >> j) & 1 == 1 {
+                    *k = k.saturating_add(side[j]);
+                }
+            }
+            self.cells.get(&key).is_some_and(|qs| qs.iter().any(|q| distance(px, q) < PURE))
+        })
+    }
 }
 
 /// How far apart two pixels are (in 0..1 premultiplied RGBA).
@@ -670,7 +718,7 @@ fn in_flat_area(pix: &[Px], width: usize, height: usize, x: usize, y: usize) -> 
 type Weights = Vec<(usize, f32)>;
 
 /// For each class, the colors of its flat areas that lie [`PURE`] or more from it ([`area_colors`]).
-type AreaColors = [Vec<Px>];
+type AreaColors = [FlatColors];
 
 /// A mix tried for a pixel: its squared error with its penalty, the penalty, and its classes with
 /// their weights (the first `n`).
@@ -1029,9 +1077,31 @@ mod tests {
         let flat = vec![Some(0); pix.len()];
         let between = vec![[None; 2]; pix.len()];
         let colors = area_colors(&pix, &classes, &flat, &between);
-        assert_eq!(colors[0].len(), 2, "{:?}", colors[0]);
+        assert_eq!(colors[0].cells.values().map(Vec::len).sum::<usize>(), 2);
         assert!(near_area_color(&level(225.0), &colors[0]));
-        assert!(!near_area_color(&level(225.0), &colors[0][..1]));
+        let mut only_222 = FlatColors::default();
+        only_222.push(level(222.0));
+        assert!(!near_area_color(&level(225.0), &only_222));
+    }
+
+    #[test]
+    fn flat_colors_find_what_a_scan_of_every_color_finds() {
+        let at = |r: f32, g: f32, b: f32, a: f32| [r / 255.0, g / 255.0, b / 255.0, a / 255.0];
+        let stored: Vec<Px> = (0..40u8).map(|n| at(f32::from(n) * 6.3, 255.0 - f32::from(n) * 2.9, f32::from(n % 7) * 3.1, 255.0)).collect();
+        let mut index = FlatColors::default();
+        for &q in &stored {
+            index.push(q);
+        }
+        assert!(stored.iter().all(|q| index.near(q)));
+        for r in (0..=255u8).step_by(3) {
+            for g in [0.0f32, 100.0, 140.0, 200.0, 254.0] {
+                for b in [0.0f32, 2.0, 5.0, 9.0, 18.0] {
+                    let px = at(f32::from(r), g, b, 255.0);
+                    let scan = stored.iter().any(|q| distance(&px, q) < PURE);
+                    assert_eq!(index.near(&px), scan, "{px:?}");
+                }
+            }
+        }
     }
 
     #[test]
