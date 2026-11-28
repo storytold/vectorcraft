@@ -25,7 +25,7 @@
 //! members and arguments throws a `RangeError`.
 
 use crate::builtins::native;
-use crate::heap::{Class, ENUMERABLE, Func, Key, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, WRITABLE, key};
+use crate::heap::{CONFIGURABLE, Class, ENUMERABLE, Func, Key, NativeKind, OBJECT_BYTES, ObjId, Object, PROP_BYTES, Prop, WRITABLE, key};
 use crate::host::Data;
 use crate::host_classes::{Access, Reflected};
 use crate::interp::{ErrorType, Interp, JsResult};
@@ -234,7 +234,15 @@ fn reflection(interp: &mut Interp, name: &str, properties: &[Info], methods: &[I
     let methods = info_array(interp, methods)?;
     interp.reserve_heap(2 * OBJECT_BYTES + 8 * PROP_BYTES)?;
     let find = native(interp, "find", find, 1, NativeKind::Plain, false)?;
-    interp.object_mut(find)?.extensible = false;
+    // `find` is frozen: in an ES2015 realm its `length` and `name` are made configurable, and
+    // they are fixed again here.
+    let o = interp.object_mut(find)?;
+    for k in ["length", "name"] {
+        if let Some(Prop::Data { flags, .. }) = o.props.get_mut(&key(k)) {
+            *flags &= !(CONFIGURABLE | WRITABLE);
+        }
+    }
+    o.extensible = false;
     interp.temp_roots.push(Value::Object(find));
     let r = interp.new_object();
     interp.temp_roots.push(Value::Object(r));

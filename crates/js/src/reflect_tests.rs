@@ -169,6 +169,18 @@ fn a_reflection_cannot_be_changed() {
 }
 
 #[test]
+fn a_reflections_find_is_frozen_in_an_es2015_realm() {
+    let mut r = Realm::with_options(Options { es2015: true, ..Options::default() }, Limits::default());
+    r.add_script_extensions().unwrap();
+    r.run("var f = ({a: 1}).reflect.find;").unwrap();
+    assert_eq!(text(&mut r, "Object.isFrozen(f) + ' ' + f.name + ' ' + f.length"), "true find 1");
+    for write in ["delete f.name", "delete f.length", "f.name = 'x'", "Object.defineProperty(f, 'name', {value: 'x'})"] {
+        assert!(thrown(&mut r, &format!("(function () {{ 'use strict'; {write}; }})();")).starts_with("TypeError"), "{write}");
+    }
+    assert_eq!(text(&mut r, "f.name"), "find");
+}
+
+#[test]
 fn a_very_wide_object_is_refused() {
     let mut r = realm();
     let wide = |n: usize| format!("var w = {{}}; for (var i = 0; i < {n}; i++) w['p' + i] = i;");
