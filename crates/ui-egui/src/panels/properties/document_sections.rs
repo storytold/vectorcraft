@@ -29,7 +29,7 @@ pub(super) fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
         Field::new(tl!("Units")).show(ui, |ui, _| {
             let entries: Vec<Entry<Unit>> = Unit::ALL.iter().map(|u| Entry::new(*u, u.label())).collect();
             let out = Select::new(tl!("Units"), Bind::given(units), &entries).show(ui);
-            if let Some(u) = out.value() {
+            if let Some(u) = out.events.committed() {
                 app.run("document.setUnits", json!({ "units": u.label() })).ok();
             }
         });
@@ -96,4 +96,43 @@ pub(super) fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+
+    #[test]
+    fn canceling_the_units_popup_leaves_the_document_unchanged() {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let initial = app.session.general_unit();
+        let index = Unit::ALL.iter().position(|unit| *unit == initial).unwrap();
+        let next = Unit::ALL[(index + 1) % Unit::ALL.len()];
+        let original = app.session.active().unwrap().doc.clone();
+        let revision = app.session.active().unwrap().revision;
+        let undo = app.session.active().unwrap().history.undo.len();
+        assert_eq!(original.units, initial);
+        let mut panel = Panel::new(app, document_sections);
+        panel.room(egui::vec2(400.0, 1000.0));
+        panel.click_role("Units", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "a highlighted choice does not edit document metadata");
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        {
+            let app = panel.app();
+            let state = app.session.active().unwrap();
+            assert_eq!(app.session.general_unit(), initial);
+            assert_eq!(state.doc, original);
+            assert_eq!(state.revision, revision);
+            assert_eq!(state.history.undo.len(), undo);
+        }
+        panel.click_role("Units", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(panel.app().session.active().unwrap().doc.units, next, "Enter applies the chosen document unit");
+        assert_eq!(panel.app().session.general_unit(), next);
+    }
 }

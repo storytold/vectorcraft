@@ -109,6 +109,10 @@ pub struct Services {
     pub check_application: Option<CheckApplicationFn>,
     /// Launch a native-picked application with one file argument; false only when absent.
     pub open_in_application: Option<OpenApplicationFn>,
+    /// Web: start the workers that check plug-ins being installed and run filters
+    /// ([`crate::plugin_runs`]). Without it a filter that would run on a thread of its own runs at
+    /// once where there are no threads, and a module is checked on the page.
+    pub plugin_workers: Option<Box<dyn crate::plugin_runs::Workers>>,
     /// Where Data Recovery keeps its copies when not in a folder (the web's browser storage;
     /// tests): installed into the session ([`vectorcraft_engine::cmd::recovery`]).
     pub recovery_store: Option<std::sync::Arc<dyn vectorcraft_engine::cmd::recovery::RecoveryStore>>,

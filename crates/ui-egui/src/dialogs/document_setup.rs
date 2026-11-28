@@ -316,7 +316,6 @@ fn bleed_row(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut CustomContext
     let bare_points = fields.bool("numbersWithoutUnitsArePoints").unwrap_or(true);
     let lengths = crate::fields::bare_points(LengthUnits::new(UnitKind::Points, unit_kind(unit), 72.0), bare_points);
     let parts = bleed_of(fields).map(|b| Mixed::Same(Some(b)));
-    // PLAN: assumed the linked fields' output reads as `out.edit.value()`, as the shape dialog uses it.
     let out = LinkedFields::<4>::new(tl!("Bleed:"), Bind::given(parts), Bind::bound(&mut linked))
         .mode(LinkMode::Equal)
         .layout(LinkedLayout::Columns)
@@ -324,7 +323,7 @@ fn bleed_row(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut CustomContext
         .range(0.0..=MAX_BLEED)
         .lengths(lengths)
         .show(ui);
-    if let Some([Mixed::Same(Some(t)), Mixed::Same(Some(b)), Mixed::Same(Some(l)), Mixed::Same(Some(r))]) = out.edit.value().copied() {
+    if let Some([Mixed::Same(Some(t)), Mixed::Same(Some(b)), Mixed::Same(Some(l)), Mixed::Same(Some(r))]) = out.edit.events.committed().copied() {
         fields.set("bleed", FieldValue::List([t, b, l, r].map(FieldValue::Number).to_vec()));
     }
     if fields.bool("bleedLinked") != Some(linked) {
@@ -397,7 +396,8 @@ fn grid_colors_row(setup: DocSetup) -> Param {
         let mut picked = None;
         let (mut wells, mut edits) = ([None; 2], [None; 2]);
         let shown = Stack::new().show(ui, |ui, _| {
-            picked = Select::new(tl!("Grid Colors:"), Bind::given(grid_preset_name(resolved).to_string()), &menu).show(ui).value().cloned();
+            picked =
+                Select::new(tl!("Grid Colors:"), Bind::given(grid_preset_name(resolved).to_string()), &menu).show(ui).events.committed().cloned();
             Row::new().show(ui, |ui, _| {
                 for (i, color) in resolved.iter().enumerate() {
                     let number = (i + 1).to_string();
@@ -411,7 +411,7 @@ fn grid_colors_row(setup: DocSetup) -> Param {
                     let [r, g, b, _] = color.to_rgba8(1.0);
                     let srgb = box_color(color);
                     wells[i] = Swatch::new(name.clone(), srgb).well().show(ui).clicked.then_some(srgb);
-                    edits[i] = HexField::hex(name, Bind::given(Rgba::rgb(r, g, b))).show(ui).value().copied();
+                    edits[i] = HexField::hex(name, Bind::given(Rgba::rgb(r, g, b))).show(ui).events.committed().copied();
                 }
             });
         });
@@ -548,7 +548,7 @@ fn typography() -> Vec<PropertyRow> {
 fn language_row(ui: &mut egui::Ui, fields: &mut DialogFields, _: &mut CustomContext) -> egui::Response {
     let languages: Vec<Entry<String>> = LANGUAGES.iter().map(|(l, _, _)| Entry::new(l.to_string(), l.to_string())).collect();
     let current = fields.text("language").unwrap_or_default().to_string();
-    let picked = Select::new(tl!("Language:"), Bind::given(current), &languages).show(ui).value().cloned();
+    let picked = Select::new(tl!("Language:"), Bind::given(current), &languages).show(ui).events.committed().cloned();
     if let Some(language) = picked {
         if let Some(q) = language_quotes(&language) {
             fields.set("quotes.double", q.double.iter().collect::<String>());
@@ -581,15 +581,18 @@ fn color(mode: ColorMode) -> Vec<PropertyRow> {
 #[cfg(test)]
 mod tests {
     use craft::theme::Srgba;
+    use craft::ui::contract::Role;
     use craft::ui::dialog::{DialogId, HeldOk, dialog_id};
     use craft::ui::patterns::form_dialogs::{DialogFields, HostedPropertiesDialog};
-    use egui::{Pos2, Rect, vec2};
+    use egui::{Key, Modifiers, Pos2, Rect, vec2};
     use serde_json::{Value, json};
     use vectorcraft_color::{Color, Paint, cms};
-    use vectorcraft_doc::{ColorMode, NodeId};
+    use vectorcraft_doc::setup::{GRID_COLOR_PRESETS, LANGUAGES};
+    use vectorcraft_doc::{ColorMode, NodeId, Quotes};
     use vectorcraft_engine::Session;
 
     use crate::VectorcraftApp;
+    use crate::tests::panel_harness::Panel;
 
     /// The dialog's id.
     fn id() -> DialogId {
@@ -654,6 +657,138 @@ mod tests {
 
     fn undo_steps(app: &VectorcraftApp) -> usize {
         app.session.active().unwrap().history.undo.len()
+    }
+
+    /// Document Setup open on `tab` over a 200 × 200 document, drawn in the panel harness.
+    fn setup_panel(tab: &str) -> Panel {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(vec2(1280.0, 1100.0));
+        panel.app().run("file.documentSetup", json!({})).unwrap();
+        set(&panel.app(), panel.ctx(), "tab", json!(tab));
+        panel.frame();
+        panel.frame();
+        panel
+    }
+
+    /// The dialog's values in the panel harness.
+    fn panel_values(panel: &Panel) -> serde_json::Map<String, Value> {
+        super::json_map(&fields(&panel.app()))
+    }
+
+    /// Clicks OK in the panel harness: the dialog closes with the values applied.
+    fn panel_ok(panel: &mut Panel) {
+        panel.click("OK");
+        let app = panel.app();
+        assert!(!is_open(&app), "{}", app.ui.status);
+    }
+
+    /// A language highlighted in the Language menu changes neither the language nor the quotes, and
+    /// Escape closes the menu with the dialog open and its values as they were.
+    #[test]
+    fn a_highlighted_language_changes_nothing_until_it_is_chosen() {
+        let mut panel = setup_panel("Type");
+        let before = panel_values(&panel);
+        panel.click_role("Language", Role::COMBO_BOX);
+        panel.key(Key::End, Modifiers::NONE);
+        assert_eq!(panel_values(&panel), before, "a highlighted language changes no field");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert!(is_open(&panel.app()), "Escape closes the menu, not the dialog");
+        assert_eq!(panel_values(&panel), before, "Escape leaves the language and quotes as they were");
+        panel_ok(&mut panel);
+        let setup = panel.app().session.active().unwrap().doc.setup.clone();
+        assert_eq!((setup.language.as_str(), setup.quotes), (LANGUAGES[0].0, Quotes::ENGLISH));
+    }
+
+    /// A language chosen with Enter brings its quotes, and OK applies both.
+    #[test]
+    fn a_language_chosen_with_enter_brings_its_quotes() {
+        let mut panel = setup_panel("Type");
+        let (language, _, quotes) = LANGUAGES[LANGUAGES.len() - 1];
+        panel.click_role("Language", Role::COMBO_BOX);
+        panel.key(Key::End, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        let values = panel_values(&panel);
+        assert_eq!(values["language"], json!(language));
+        assert_eq!(values["quotes.double"], json!(quotes.double.iter().collect::<String>()));
+        assert_eq!(values["quotes.single"], json!(quotes.single.iter().collect::<String>()));
+        panel_ok(&mut panel);
+        let setup = panel.app().session.active().unwrap().doc.setup.clone();
+        assert_eq!((setup.language.as_str(), setup.quotes), (language, quotes));
+    }
+
+    /// A preset highlighted in the Grid Colors menu changes no color, and Escape closes the menu with
+    /// the dialog open and the grid colors as they were.
+    #[test]
+    fn a_highlighted_grid_colors_preset_changes_nothing_until_it_is_chosen() {
+        let mut panel = setup_panel("Transparency");
+        let before = panel_values(&panel);
+        panel.click_role("Grid Colors:", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(panel_values(&panel), before, "a highlighted preset changes no field");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert!(is_open(&panel.app()), "Escape closes the menu, not the dialog");
+        assert_eq!(panel_values(&panel), before, "Escape leaves the grid colors as they were");
+        panel_ok(&mut panel);
+        assert_eq!(panel.app().session.active().unwrap().doc.setup.grid_colors, LIGHT.map(hex));
+    }
+
+    /// A Grid Colors preset chosen with Enter sets both colors, and OK applies them.
+    #[test]
+    fn a_grid_colors_preset_chosen_with_enter_sets_both_colors() {
+        let mut panel = setup_panel("Transparency");
+        panel.click_role("Grid Colors:", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        let medium = GRID_COLOR_PRESETS[1].1;
+        assert_eq!(dialog_grid(&panel.app()), medium.to_vec());
+        panel_ok(&mut panel);
+        assert_eq!(panel.app().session.active().unwrap().doc.setup.grid_colors, medium);
+    }
+
+    /// A hex code typed into a grid color's field changes no color while it is a draft; Tab commits
+    /// it, and OK applies it.
+    #[test]
+    fn a_grid_color_hex_draft_applies_once_committed() {
+        let mut panel = setup_panel("Transparency");
+        let before = panel_values(&panel);
+        panel.click_role("Grid Colors: 1", Role::TEXT_INPUT);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("123456");
+        assert_eq!(panel_values(&panel), before, "the typed draft changes no field");
+        panel.key(Key::Tab, Modifiers::NONE);
+        assert_eq!(dialog_grid(&panel.app()), ["#123456", LIGHT[1]].map(hex).to_vec());
+        panel_ok(&mut panel);
+        assert_eq!(panel.app().session.active().unwrap().doc.setup.grid_colors, ["#123456", LIGHT[1]].map(hex));
+    }
+
+    /// A bleed typed into Top changes no side while it is a draft; Tab commits it to the four linked
+    /// sides, and OK applies them.
+    #[test]
+    fn a_bleed_draft_applies_once_committed() {
+        let mut panel = setup_panel("General");
+        let before = panel_values(&panel);
+        panel.click("Top");
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("3");
+        assert_eq!(panel.value("Top").as_deref(), Some("3"), "the field holds the typed draft");
+        assert_eq!(panel_values(&panel), before, "the typed draft changes no field");
+        panel.key(Key::Tab, Modifiers::NONE);
+        assert_eq!(super::bleed_of(&fields(&panel.app())), [3.0; 4]);
+        panel_ok(&mut panel);
+        assert_eq!(panel.app().session.active().unwrap().doc.setup.bleed, [3.0; 4]);
+    }
+
+    /// A bleed draft still in the focused field when OK is clicked is applied.
+    #[test]
+    fn ok_applies_the_focused_bleed_draft() {
+        let mut panel = setup_panel("General");
+        panel.click("Top");
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("3");
+        panel_ok(&mut panel);
+        assert_eq!(panel.app().session.active().unwrap().doc.setup.bleed, [3.0; 4]);
     }
 
     fn check_source_document(edit_artboards: bool) {

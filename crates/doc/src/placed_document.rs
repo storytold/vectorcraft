@@ -17,15 +17,16 @@
 //! other stop there, showing their previews).
 
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use serde::{Deserialize, Serialize};
-use vectorcraft_geom::{Affine, Rect};
+use vectorcraft_geom::{Affine, PathData, Rect, SubPath};
 
-use vectorcraft_color::Paint;
+use vectorcraft_color::{Color, Paint};
 
-use crate::{AppearanceItem, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeKind, PatternDef, PlacementOptions, Symbol};
+use crate::{Appearance, AppearanceItem, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeKind, PatternDef, PlacementOptions, Symbol};
 
 /// A placed document: an artboard of another VectorCraft file, a page of a PDF or `.ai` file, or
 /// an EPS file's art, shown as one locked object.
@@ -123,10 +124,25 @@ impl PlacedDocument {
     }
 
     /// The art the object shows, as plain objects with `n`'s id: one group, its resources named
-    /// as [`Document::with_placed_art`] adds them (nothing until that has read it).
+    /// as [`Document::with_placed_art`] adds them (nothing until that has read it). While
+    /// [`Crossed`] is on for this thread, its box crossed from corner to corner instead
+    /// ([`Self::crossed_art`]).
     pub fn art(&self, n: &Node) -> Vec<Node> {
+        if crossed() {
+            return vec![self.crossed_art(n)];
+        }
         let prefix = prefix(&self.key);
         read_cached(self).and_then(|e| self.art_node(n, &e, &prefix)).into_iter().collect()
+    }
+
+    /// The object's box crossed from corner to corner, as one group with `n`'s id: a path of the
+    /// box's outline and its two diagonals with a black 1 pt stroke. Outline mode without Document
+    /// Setup → Show Images in Outline Mode shows the object so, and its effects reshape this art.
+    pub fn crossed_art(&self, n: &Node) -> Node {
+        let q = self.corners();
+        let path = PathData::new(vec![SubPath::polyline(&q, true), SubPath::polyline(&[q[0], q[2]], false), SubPath::polyline(&[q[1], q[3]], false)]);
+        let stroke = Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+        Node::group(n.id, vec![Arc::new(Node::path(art_id(), path, stroke))])
     }
 
     /// Read `e`'s art placed as this object `n` shows it (`n`'s id), its resources renamed with
@@ -364,6 +380,28 @@ pub type Loader = fn(&PlacedDocument, &[u8]) -> Option<(Document, Node, Rect)>;
 
 static LOADER: OnceLock<Loader> = OnceLock::new();
 
+std::thread_local! {
+    /// Open checks use previews rather than loading placed documents for drawing.
+    static PREVIEWS_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Restores whether only previews are used when an open check ends, including on unwind.
+struct PreviewsOnly(bool);
+
+impl Drop for PreviewsOnly {
+    fn drop(&mut self) {
+        PREVIEWS_ONLY.with(|p| p.set(self.0));
+    }
+}
+
+/// Run an open check using placed documents' previews instead of loading their art on this
+/// thread. Nested checks keep the scope active until the outer check ends. This prevents an
+/// open check and drawing from recursively loading each other's nested files.
+pub fn with_previews<T>(check: impl FnOnce() -> T) -> T {
+    let _scope = PreviewsOnly(PREVIEWS_ONLY.with(|p| p.replace(true)));
+    check()
+}
+
 /// Register how files are read (the first registration stays).
 pub fn set_loader(l: Loader) {
     // Already set: the same loader, registered by another session.
@@ -438,8 +476,12 @@ impl Cache {
 }
 
 /// `p`'s file (`bytes`) read, from the cache when it was read already: what the renderer draws a
-/// placed document from. `None` when it can't be read (or no loader is registered).
+/// placed document from. `None` when it can't be read, no loader is registered, or an open check
+/// uses [`with_previews`].
 pub fn read(p: &PlacedDocument, bytes: &Arc<Vec<u8>>) -> Option<Arc<ReadDocument>> {
+    if PREVIEWS_ONLY.with(std::cell::Cell::get) {
+        return None;
+    }
     if let Some(e) = cache().get(&p.key, false, Some(bytes)) {
         return Some(e);
     }
@@ -468,6 +510,36 @@ fn read_preview(p: &PlacedDocument, bytes: &Arc<Vec<u8>>) -> Option<Arc<ReadDocu
     let e = Arc::new(ReadDocument { key: p.key.clone(), preview: true, bytes: bytes.clone(), frame, art: Arc::new(art), doc: Arc::new(doc) });
     cache().insert(e.clone());
     Some(e)
+}
+
+thread_local! {
+    /// Whether [`PlacedDocument::art`] gives the crossed box on this thread ([`Crossed`]).
+    static CROSSED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// While alive, [`PlacedDocument::art`] on this thread gives each placed document's box crossed
+/// from corner to corner ([`PlacedDocument::crossed_art`]) when it was made with `true`, and the
+/// file's art when made with `false`; once dropped, the setting before it applies again. A
+/// renderer holds one while it draws or measures Outline mode without Document Setup → Show Images
+/// in Outline Mode, so that effects and live objects make their art from the crossed box.
+#[must_use]
+pub struct Crossed(bool);
+
+impl Crossed {
+    pub fn set(on: bool) -> Self {
+        Self(CROSSED.with(|c| c.replace(on)))
+    }
+}
+
+impl Drop for Crossed {
+    fn drop(&mut self) {
+        CROSSED.with(|c| c.set(self.0));
+    }
+}
+
+/// Whether [`PlacedDocument::art`] gives the crossed box on this thread ([`Crossed`]).
+pub fn crossed() -> bool {
+    CROSSED.with(Cell::get)
 }
 
 /// `p`'s file as read already (else its preview's), without reading it.
@@ -690,6 +762,22 @@ mod tests {
             children.push(Arc::new(Node::new(NodeId(52), NodeKind::PlacedDocument(Box::new(inner)))));
         }
         Some((d, Node::new(NodeId(0), NodeKind::Group { children, clip: false }), Rect::new(0.0, 0.0, 40.0, 20.0)))
+    }
+
+    /// Nested open checks skip both new and cached art, and restore ordinary reads afterward.
+    #[test]
+    fn open_checks_leave_placed_documents_for_drawing_afterward() {
+        set_loader(stub_loader);
+        let p = placed("open-check-1");
+        let bytes = Arc::new(b"leaf".to_vec());
+        with_previews(|| assert!(read(&p, &bytes).is_none()));
+        assert!(read(&p, &bytes).is_some());
+        with_previews(|| {
+            assert!(read(&p, &bytes).is_none());
+            with_previews(|| assert!(read(&p, &bytes).is_none()));
+            assert!(read(&p, &bytes).is_none());
+        });
+        assert!(read(&p, &bytes).is_some());
     }
 
     /// A color-masked image in a placed document's art keeps its masked pixels under the prefixed

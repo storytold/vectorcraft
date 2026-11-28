@@ -188,14 +188,15 @@ fn shown(text: &str) -> String {
 }
 
 /// The members of `app` this module adds.
-pub(super) fn app_members(link: &Link) -> Vec<(String, HostMember)> {
+pub(super) fn app_members(link: &Link) -> Vec<super::dom::Described> {
     let l = link.clone();
     let play = Rc::new(move |a: Vec<Data>| {
         let h = current(&l)?;
         h.charge_call(16 + a.iter().map(super::data_size).sum::<u64>())?;
         do_script(&h, &a)
     });
-    let mut members = vec![("doScript".to_string(), HostMember::Method(play))];
+    let info = super::dom::returns("undefined", &[("action", "string"), ("set", "string"), ("dialogs", "boolean")]);
+    let mut members = vec![("doScript".to_string(), HostMember::Method(play), info)];
     members.extend(["loadAction", "unloadAction"].map(|name| super::dom::later(link, "Application", name)));
     members
 }

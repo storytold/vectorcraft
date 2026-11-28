@@ -964,6 +964,8 @@ pub use variablecmds::utf16_order_without_mark;
 /// file: its size limit, its text, its cells and the data `graph.setData` takes from them.
 pub use graph::{MAX_GRAPH_DATA_FILE, graph_cell_text, graph_data_from_grid, graph_data_text, graph_grid_from_text};
 
+/// The kind of variable that drives an object's content (`variable.setBinding`).
+pub(crate) use variablecmds::content_kind;
 /// The Variables panel's sort (`variable.sort`) and its rows in that order.
 pub use variablecmds::{VariableSort, VariableSortKey, variable_order};
 
