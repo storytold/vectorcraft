@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vectorcraft_brush::stored_art::StoredArt;
-use vectorcraft_doc::links::{Align, Preserve, hash_bytes};
+use vectorcraft_doc::links::{Align, Preserve, hash_bytes, path_separators};
 use vectorcraft_doc::{
     Appearance, DataValue, Document, ImageBlob, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, PlacedDocument, PlacementOptions,
     StoredPlace, StoredRoot,
@@ -400,19 +400,51 @@ fn found_at(path: String) -> Option<Found> {
 /// [`fileio::document_path`] follows from the document's own file are looked at.
 fn locate(link: &LinkInfo, base: LinkBase) -> Option<Found> {
     let (relative, other) = (link.relative.as_deref(), base.doc != base.relative);
-    let stored = [
+    let mut stored = vec![
         (Some(link.path.as_str()), base.doc),
         (relative, base.relative),
         (relative.filter(|_| other), base.doc),
         (Some(link.name()), base.doc),
         (other.then_some(link.name()), base.relative),
     ];
+    // A file moved with its folders kept (a package's `Links` folder, written by another computer as
+    // an absolute path): the last folders of the stored path, from the document's folder.
+    let tails = path_tails(link);
+    stored.extend(tails.iter().map(|t| (Some(t.as_str()), base.doc)));
     let mut f = stored.into_iter().filter_map(|(p, from)| follow_from(p?, from, base.doc, fileio::document_path)).find_map(found_at)?;
     f.relative = base.relative.map(|from| {
         let from = absolute_path(from);
         Path::new(&from).parent().and_then(|dir| relative_path(Path::new(&f.path), dir))
     });
     Some(f)
+}
+
+/// The most folders of a link's stored path that [`path_tails`] keeps with its file name.
+const TAIL_FOLDERS: usize = 3;
+
+/// The file name of `link` after its last one, two or three folders (`Links/a.png`,
+/// `Art/Links/a.png`), `/`-separated and relative, shortest first. A folder that names a drive or
+/// a place (`C:`, `.`, `..`) or holds a control character ends them: they stay inside the folder
+/// they are looked for from.
+fn path_tails(link: &LinkInfo) -> Vec<String> {
+    // A network path or a URL names another computer: its folders mean nothing beside the document.
+    let p = link.path.as_str();
+    if p.starts_with(['/', '\\']) && p[1..].starts_with(['/', '\\'])
+        || p.contains("://")
+        || p.get(..5).is_some_and(|s| s.eq_ignore_ascii_case("file:"))
+    {
+        return vec![];
+    }
+    let parts: Vec<&str> = link.path.split(path_separators(&link.path)).filter(|p| !p.is_empty()).collect();
+    let Some((name, folders)) = parts.split_last() else { return vec![] };
+    let usable: Vec<&str> = folders
+        .iter()
+        .rev()
+        .take(TAIL_FOLDERS)
+        .take_while(|f| !matches!(**f, "." | "..") && !f.contains(':') && !f.chars().any(char::is_control))
+        .copied()
+        .collect();
+    (1..=usable.len()).map(|n| usable[..n].iter().rev().chain([name]).copied().collect::<Vec<_>>().join("/")).collect()
 }
 
 /// The files the links of `d` (a document looking from `base`) lead to now: where [`locate`]
