@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use vectorcraft_color::{Color, Paint};
 use vectorcraft_doc::marks::{MarkStyle, TrimMarks};
 use vectorcraft_doc::{Appearance, ImageObject, LiveShape, Node, NodeId, NodeKind, RasterColorModel, RasterEffectsSettings, Scaling};
-use vectorcraft_geom::{Affine, Anchor, PathData, Point, Rect, Vec2};
+use vectorcraft_geom::{Affine, Anchor, Homography, PathData, Point, Rect, Vec2};
 use vectorcraft_render::AntiAlias;
 use vectorcraft_render::encode::{RasterExportOptions, RasterFormat};
 
@@ -133,7 +133,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Create Object Mosaic…",
             ["Object"],
             None,
-            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt, 0.1..1000000; default the image's), percentages?: bool (width and height are percentages of the image's size, default 100), constrain?: \"width\"|\"height\"|null (Constrain Ratio: the mosaic keeps the image's proportions, the named side's size leads and the other side's is worked out from it, both growing or shrinking in proportion to keep the sizes within 0.1..1000000), useRatio?: bool|\"width\"|\"height\" (square tiles as drawn, spacing taken off: the count on the side named, or with true on the constrained side, columns by default, stays and the other is the count, 1..1000, whose tiles come closest to square), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles colored by the selected image's average tile colors → {id, tiles, columns, rows}",
+            "{columns=10, rows=10 (whole numbers, kept within 1..1000), width?, height? (new size in pt, 0.1..1000000; default the image's), percentages?: bool (width and height are percentages of the image's size, default 100), constrain?: \"width\"|\"height\"|null (Constrain Ratio: the mosaic keeps the image's proportions, the named side's size leads and the other side's is worked out from it, both growing or shrinking in proportion to keep the sizes within 0.1..1000000), useRatio?: bool|\"width\"|\"height\" (square tiles as drawn, spacing taken off: the count on the side named, or with true on the constrained side, columns by default, stays and the other is the count, 1..1000, whose tiles come closest to square), spacingX=0, spacingY=0 (pt between tiles), gray?: bool, deleteRaster?: bool} a group of rectangles colored by the selected image's average tile colors; on an image changed by Perspective Distort or Free Distort each tile is its cell placed between the image's corners, a four-sided shape, and spacing is measured at the mean length of the image's sides → {id, tiles, columns, rows}",
             has_image,
             object_mosaic
         ),
@@ -981,6 +981,9 @@ struct MosaicPlan {
     cols: u32,
     rows: u32,
     xf: Affine,
+    /// For a distorted image, the map from its pixels to the page that places the tiles instead of
+    /// `xf`.
+    warp: Option<Homography>,
     tile: (f64, f64),
     gap: (f64, f64),
     gray: bool,
@@ -1001,9 +1004,6 @@ fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
         .ok_or_else(|| bad(C, "select an image"))?;
     let node = st.doc.node(id).ok_or(EngineError::NoNode(id))?;
     let NodeKind::Image(im) = &node.kind else { return Err(bad(C, "select an image")) };
-    if node.is_distorted_image() {
-        return Err(super::xform::distorted_image_error(C, id));
-    }
     if !st.doc.images.get(&im.key).is_some_and(|b| !b.bytes.is_empty()) {
         return Err(bad(C, "the image has no embedded pixels"));
     }
@@ -1062,11 +1062,21 @@ fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
     };
     let resize = Affine::translate(b.origin().to_vec2()) * Affine::scale_non_uniform(nw / bw, nh / bh) * Affine::translate(-b.origin().to_vec2());
     let xf = resize * im.xf;
-    // Points per image pixel along each of the image's axes (the image may be turned).
-    let ppx = (xf * Point::new(1.0, 0.0) - xf * Point::ZERO).hypot().max(1e-9);
-    let ppy = (xf * Point::new(0.0, 1.0) - xf * Point::ZERO).hypot().max(1e-9);
-    let (sx, sy) = (f64_or(p, "spacingX", 0.0).max(0.0), f64_or(p, "spacingY", 0.0).max(0.0));
     let (iw, ih) = (im.width as f64, im.height as f64);
+    // A distorted image's tiles are its cells mapped between its corners, resized the same way.
+    let warp = node.image_map().filter(|_| node.is_distorted_image()).map(|h| Homography::from_affine(resize).then_after(&h));
+    // Points per image pixel along each of the image's axes (the image may be turned). A distorted
+    // image's sides change length along the way: each axis takes the mean of its two sides.
+    let (ppx, ppy) = match &warp {
+        Some(h) => {
+            let corner = |x: f64, y: f64| h.apply(Point::new(x, y)).ok_or_else(|| super::xform::distorted_image_error(C, id));
+            let [a, b, c, d] = [corner(0.0, 0.0)?, corner(iw, 0.0)?, corner(iw, ih)?, corner(0.0, ih)?];
+            ((a.distance(b) + d.distance(c)) / (2.0 * iw.max(1.0)), (a.distance(d) + b.distance(c)) / (2.0 * ih.max(1.0)))
+        }
+        None => ((xf * Point::new(1.0, 0.0) - xf * Point::ZERO).hypot(), (xf * Point::new(0.0, 1.0) - xf * Point::ZERO).hypot()),
+    };
+    let (ppx, ppy) = (ppx.max(1e-9), ppy.max(1e-9));
+    let (sx, sy) = (f64_or(p, "spacingX", 0.0).max(0.0), f64_or(p, "spacingY", 0.0).max(0.0));
     // Use Ratio: square tiles as drawn, spacing taken off, from the count on the kept side,
     // measured along the image's axes.
     match use_ratio {
@@ -1078,7 +1088,7 @@ fn mosaic_plan(s: &Session, p: &Value) -> Result<MosaicPlan> {
     // Spacing is in points; convert to image pixels along each axis.
     let gap = ((sx / ppx).min(tw * 0.9), (sy / ppy).min(th * 0.9));
     let delete = switch_or(p, "deleteRaster", false, C)?;
-    Ok(MosaicPlan { id, im: im.as_ref().clone(), cols, rows, xf, tile: (tw, th), gap, gray, delete })
+    Ok(MosaicPlan { id, im: im.as_ref().clone(), cols, rows, xf, warp, tile: (tw, th), gap, gray, delete })
 }
 
 /// The tile counts (columns, rows) `object.createObjectMosaic` would use with `p`, Use Ratio
@@ -1089,10 +1099,26 @@ pub fn mosaic_counts(s: &Session, p: &Value) -> Result<(u32, u32)> {
 
 fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "object.createObjectMosaic";
-    let MosaicPlan { id, im, cols, rows, xf, tile: (tw, th), gap: (gx, gy), gray, delete } = mosaic_plan(s, p)?;
+    let MosaicPlan { id, im, cols, rows, xf, warp, tile: (tw, th), gap: (gx, gy), gray, delete } = mosaic_plan(s, p)?;
     let blob = s.doc()?.doc.images.get(&im.key).ok_or_else(|| bad(C, "the image has no embedded pixels"))?;
     let raster = vectorcraft_trace::Raster::decode(&blob.bytes).map_err(|e| bad(C, e.to_string()))?;
     let colors = vectorcraft_trace::mosaic(&raster, cols, rows);
+    // Each tile's corners on the page, its cell less the spacing, through `warp` or `xf`.
+    let mut quads = Vec::with_capacity(colors.len());
+    for r in 0..rows {
+        for c in 0..cols {
+            let x0 = c as f64 * tw + gx / 2.0;
+            let y0 = r as f64 * th + gy / 2.0;
+            let cell = [Point::new(x0, y0), Point::new(x0 + tw - gx, y0), Point::new(x0 + tw - gx, y0 + th - gy), Point::new(x0, y0 + th - gy)];
+            let mut quad = cell.map(|q| xf * q);
+            if let Some(h) = &warp {
+                for (to, q) in quad.iter_mut().zip(cell) {
+                    *to = h.apply(q).ok_or_else(|| super::xform::distorted_image_error(C, id))?;
+                }
+            }
+            quads.push(quad);
+        }
+    }
     let (gid, n) = s.edit("Create Object Mosaic", |d, sel| {
         let mut tiles = vec![];
         for r in 0..rows {
@@ -1101,10 +1127,7 @@ fn object_mosaic(s: &mut Session, p: &Value) -> Result<Value> {
                 if ca == 0 {
                     continue;
                 }
-                let x0 = c as f64 * tw + gx / 2.0;
-                let y0 = r as f64 * th + gy / 2.0;
-                let quad = [Point::new(x0, y0), Point::new(x0 + tw - gx, y0), Point::new(x0 + tw - gx, y0 + th - gy), Point::new(x0, y0 + th - gy)]
-                    .map(|q| xf * q);
+                let quad = quads[(r * cols + c) as usize];
                 let color = if gray {
                     let l = (0.299 * cr as f32 + 0.587 * cg as f32 + 0.114 * cb as f32) / 255.0;
                     Color::rgb(l, l, l)

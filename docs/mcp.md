@@ -2371,6 +2371,11 @@ side that `constrain` works out as under 0.1 pt grows to 0.1 pt, and the other s
 on an image more than 10000000 times wider than tall (or taller than wide), no size keeps both sides in the range, and
 the call is refused with `` the image's proportions leave no size with both sides between 0.1 and 1000000 pt ``.
 
+On an image changed by Perspective Distort or Free Distort, each tile is its cell of the image's pixels placed between
+the image's corners, so the tiles are four-sided shapes that follow the perspective. A new size scales the tiles from
+the top left of the image's bounds, as it does for any image. The spacing and Use Ratio measure a pixel by the mean
+length of the image's two sides along each axis. This is VectorCraft's own rule.
+
 The result also gives the `columns` and `rows` the mosaic was made with, here for a 100 × 50 pt image:
 
 ```json
@@ -8492,8 +8497,8 @@ can place leaves the image at the parallelogram nearest them. A file whose `imag
 the corners where they are records none. Image info (`image.info`) gives a distorted image's resolution at its middle, and Link
 Info (`links.info`) gives its scale and rotation there.
 
-Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Create Object Mosaic
-(`object.createObjectMosaic`) and Place with Replace (`file.place` with `replace`) of anything but a text file refuse a
+Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`) and Place with Replace
+(`file.place` with `replace`) of anything but a text file refuse a
 distorted image with an error that names the distortion; Place with Replace does not refuse a clipping group that holds
 a distorted image of a DCS file's plates. Create Gradient Mesh (`object.mesh.create`) converts the other objects it is
 given and lists each distorted image it leaves as it is in `skipped`, with its `id` and the error as `reason`; with
