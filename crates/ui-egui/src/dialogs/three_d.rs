@@ -124,7 +124,7 @@ impl Session {
         let owned = self.owns_preview(app);
         let preview = std::mem::take(&mut self.preview);
         self.preview_owner = None;
-        if owned {
+        if owned && !finish_unchanged_preview(app) {
             preview.cancel(app);
         }
     }
@@ -254,6 +254,16 @@ fn ok(app: &mut VectorcraftApp, answer: &ParamResult) -> Result<(), String> {
         return Err(why);
     }
     let (cmd, p, _) = s.request(&answer.fields);
+    // OK must validate afresh: the live preview also caches refused requests.
+    s.preview = LivePreview::default();
+    match s.run_preview(app, cmd, &p) {
+        Some(Ok(())) if finish_unchanged_preview(app) => return Ok(()),
+        Some(Err(why)) => {
+            app.three_d_dialog = Some(s);
+            return Err(why);
+        }
+        _ => {}
+    }
     match std::mem::take(&mut s.preview).commit(app, cmd, p.clone()) {
         Ok(_) => {
             // Last Effect repeats applied effects, not edits.
@@ -410,6 +420,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     app.three_d_dialog = Some(s);
 }
 
+/// Ends an unchanged 3D interaction without advancing the revision or recording a temporary command as an action.
+fn finish_unchanged_preview(app: &mut VectorcraftApp) -> bool {
+    let Some(doc) = app.session.active_mut() else { return false };
+    let Some(interaction) = doc.interaction.as_mut() else { return false };
+    if !Arc::ptr_eq(&doc.doc, &interaction.doc) || doc.selection != *interaction.selection {
+        return false;
+    }
+    interaction.preview = None;
+    let _ = app.session.commit_interaction();
+    true
+}
+
 /// With Preview off, try changed values as a temporary interaction to expose engine refusals.
 fn try_values(app: &mut VectorcraftApp, label: &str, cmd: &str, params: &Value) -> Result<(), String> {
     app.begin_interaction(label)?;
@@ -417,12 +439,182 @@ fn try_values(app: &mut VectorcraftApp, label: &str, cmd: &str, params: &Value) 
         EngineError::BadParams { msg, .. } => msg,
         other => other.to_string(),
     });
-    let _ = app.session.cancel_interaction();
+    if !finish_unchanged_preview(app) {
+        let _ = app.session.cancel_interaction();
+    }
     verdict
 }
 
 #[cfg(test)]
 pub(crate) mod tests_support;
+
+#[cfg(test)]
+mod unchanged_tests {
+    use craft::ui::dialog::{HeldOk, StackDialog as _};
+
+    use super::tests_support::ThreeD;
+    use super::*;
+    use serde_json::json;
+
+    fn existing_effect(effect: &str) -> ThreeD {
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100})).unwrap();
+        app.run("effect.apply", json!({"effect": effect, "item": null, "params": {"rotationX": 12.345}})).unwrap();
+        let mut h = ThreeD::new(app);
+        h.settle();
+        h
+    }
+
+    #[test]
+    fn unchanged_three_d_dialog_approval_keeps_the_exact_document_and_history() {
+        for effect in [vectorcraft_effects::EXTRUDE, vectorcraft_effects::CLASSIC_EXTRUDE] {
+            for preview in [false, true] {
+                let mut h = existing_effect(effect);
+                let (document, undo, revision) = {
+                    let app = h.app();
+                    let st = app.session.active().unwrap();
+                    (st.doc.clone(), st.history.undo.len(), st.revision)
+                };
+                h.app().run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
+                h.settle();
+                h.set("preview", json!(preview));
+                h.ok();
+                let app = h.app();
+                let st = app.session.active().unwrap();
+                assert_eq!(st.history.undo.len(), undo, "unchanged approval adds no Undo (effect={effect}, preview={preview})");
+                assert_eq!(st.doc, document, "unchanged approval preserves the exact stored effect");
+                assert_eq!(st.revision, revision, "unchanged preview and approval do not change the revision");
+            }
+        }
+    }
+
+    #[test]
+    fn unchanged_three_d_dialog_preview_cancel_and_ok_record_no_action_steps() {
+        let effect = vectorcraft_effects::CLASSIC_EXTRUDE;
+        for preview in [false, true] {
+            for accept in [false, true] {
+                let mut h = existing_effect(effect);
+                let start = h.app().session.journal.len();
+                h.app().run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
+                h.settle();
+                h.set("preview", json!(preview));
+                if accept {
+                    h.ok();
+                } else {
+                    h.cancel();
+                }
+                assert!(
+                    h.app().session.journal_for_action(start).is_empty(),
+                    "unchanged dialog adds no recorded step (preview={preview}, accept={accept})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn refused_three_d_preview_confirmation_retries_the_same_draft() {
+        let effect = vectorcraft_effects::CLASSIC_EXTRUDE;
+        let mut h = existing_effect(effect);
+        let (document, selection, undo, redo, revision, start) = {
+            let app = h.app();
+            let st = app.session.active().unwrap();
+            (st.doc.clone(), st.selection.clone(), st.history.undo.len(), st.history.redo.len(), st.revision, app.session.journal.len())
+        };
+        h.app().run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
+        h.settle();
+        h.set("preview", json!(true));
+        let ctx = h.fixture.ctx().clone();
+        // Capture the actual held answer before the pump reports the engine refusal. The custom
+        // row accepts this draft, but the engine requires profile points for a custom bevel.
+        let answer = with_fields(&mut h.app(), |d| {
+            d.set_json_field(&ctx, "bevel", json!("custom")).unwrap();
+            assert!(d.confirm(&ctx).is_none());
+            d.take_ok().unwrap()
+        })
+        .unwrap();
+        h.settle();
+        let refusal = h.app().dialogs().unwrap().with(|host| host.held_state(answer.id));
+        assert!(matches!(&refusal, Some(HeldOk::Refused(why)) if why.as_str().contains("bevel custom needs bevelProfile")));
+        {
+            let app = h.app();
+            assert!(app.three_d_dialog.as_ref().unwrap().owns_preview(&app));
+        }
+        with_fields(&mut h.app(), |d| {
+            assert!(d.confirm(&ctx).is_none());
+            assert!(d.take_ok().is_none(), "native OK stays disabled for the refused draft");
+        })
+        .unwrap();
+        // Preview's refusal correctly disables native OK. Exercise its held callback directly,
+        // without clearing the refusal or weakening the dialog's validation.
+        for _ in 0..2 {
+            let why = ok(&mut h.app(), &answer).unwrap_err();
+            assert!(why.contains("bevel custom needs bevelProfile"), "{why}");
+            h.settle();
+            assert_eq!(h.fields(), answer.fields, "refusal preserves the draft");
+            let app = h.app();
+            assert!(app.three_d_dialog.is_some());
+            assert_eq!(app.dialogs().unwrap().with(|host| host.held_state(answer.id)), refusal);
+            let st = app.session.active().unwrap();
+            assert!(Arc::ptr_eq(&st.doc, &document));
+            assert_eq!(st.selection, selection);
+            assert_eq!(st.history.undo.len(), undo);
+            assert_eq!(st.history.redo.len(), redo);
+            assert_eq!(st.revision, revision);
+            assert_eq!(app.session.journal.len(), start);
+            assert!(app.session.journal_for_action(start).is_empty());
+        }
+        h.set("bevel", json!("none"));
+        h.set("rotationX", json!(25.0));
+        h.ok();
+        let app = h.app();
+        assert!(app.three_d_dialog.is_none(), "corrected values can be confirmed");
+        let st = app.session.active().unwrap();
+        assert!(st.interaction.is_none());
+        assert_ne!(st.doc, document);
+        assert_eq!(st.selection, selection);
+        assert_eq!(st.history.undo.len(), undo + 1);
+        assert_eq!(app.session.journal_for_action(start).len(), 1);
+    }
+
+    #[test]
+    fn three_d_dialog_changed_options_commit_once_or_cancel() {
+        for effect in [vectorcraft_effects::EXTRUDE, vectorcraft_effects::CLASSIC_EXTRUDE] {
+            for preview in [false, true] {
+                for accept in [false, true] {
+                    let mut h = existing_effect(effect);
+                    let (document, undo, start) = {
+                        let app = h.app();
+                        let st = app.session.active().unwrap();
+                        (st.doc.clone(), st.history.undo.len(), app.session.journal.len())
+                    };
+                    h.app().run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
+                    h.settle();
+                    h.set("preview", json!(preview));
+                    h.set("rotationX", json!(25.0));
+                    if accept {
+                        h.ok();
+                        {
+                            let app = h.app();
+                            let st = app.session.active().unwrap();
+                            assert_eq!(st.history.undo.len(), undo + 1, "a changed approval saves once");
+                            assert_ne!(st.doc, document);
+                            assert_eq!(app.session.journal_for_action(start).len(), 1, "only the committed change records an action step");
+                        }
+                        h.app().run("edit.undo", json!({})).unwrap();
+                    } else {
+                        h.cancel();
+                        assert!(h.app().session.journal_for_action(start).is_empty(), "cancel records no action step");
+                    }
+                    let app = h.app();
+                    let st = app.session.active().unwrap();
+                    assert_eq!(st.doc, document, "Cancel and Undo restore the exact effect");
+                    assert_eq!(st.history.undo.len(), undo);
+                }
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod drawing_tests {

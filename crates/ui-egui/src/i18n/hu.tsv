@@ -9869,7 +9869,9 @@ breakText	Glyphs	Glifák
 @msg	more than {MAX_IMPORT} presets	több mint {MAX_IMPORT} előbeállítás
 @msg	moved must be [[x,y]…]	moved: [[x,y]…] kell
 @msg	must be an object with `kind` and `value`	`kind` és `value` kulcsot tartalmazó objektum kell
-@msg	must have `kind` alert, confirm or prompt	a `kind` értéke alert, confirm vagy prompt kell legyen
+@msg	must have `kind` alert, confirm, prompt or window	a `kind` értéke alert, confirm, prompt vagy window kell legyen
+@msg	is a window's answer, whose `value` must be a list of steps	egy ablak válasza, amelynek `value` értéke lépések listája kell legyen
+@msg	has a step {i} that is not a valid click, change or close	{i}. lépése nem érvényes kattintás, módosítás vagy bezárás
 @msg	must have exactly `kind` and `value`	pontosan a `kind` és a `value` kulcsot kell tartalmaznia
 @msg	name (a toolbar's name) is required	name (egy eszköztár neve): kötelező
 @msg	name (a toolbar's name) must be a string	name (egy eszköztár neve): karakterlánc kell

@@ -54,6 +54,8 @@ pub mod permissions;
 pub mod registry;
 mod runtime;
 pub mod safe_mode;
+#[cfg(any(test, feature = "test-steady"))]
+pub mod steady;
 pub mod storage;
 pub mod wat;
 pub mod worker;

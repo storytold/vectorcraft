@@ -118,12 +118,21 @@ pub(crate) struct HostObj {
     pub(crate) handle: Rc<[f64]>,
 }
 
+/// The estimated bytes an object of a host class holds beyond [`crate::heap::OBJECT_BYTES`] for a
+/// handle of `len` numbers: the handle in its slot and the copy in the realm's index of the objects
+/// scripts hold.
+pub(crate) fn handle_bytes(len: usize) -> usize {
+    len.saturating_mul(2 * std::mem::size_of::<f64>())
+}
+
 /// A class the realm has.
 #[derive(Clone)]
 pub(crate) struct Entry {
     name: Rc<str>,
     proto: ObjId,
     ctor: ObjId,
+    /// Whether the class was registered with a `construct` function, so scripts can construct it.
+    constructible: bool,
     index: Option<HostFunction>,
     /// The class without a parent this class descends from (itself for such a class), as an index
     /// into the realm's classes.
@@ -274,10 +283,12 @@ impl Interp {
             }
             return Ok(Value::Object(id));
         }
-        self.reserve_heap(crate::heap::OBJECT_BYTES)?;
+        let extra = handle_bytes(handle.len());
+        self.reserve_heap(crate::heap::OBJECT_BYTES.saturating_add(extra))?;
         let mut o = Object::new(Class::Host(HostObj { class, handle: handle.into() }), Some(proto));
         o.extensible = false;
         let id = self.heap.alloc_object(o);
+        self.heap.bytes = self.heap.bytes.saturating_add(extra);
         self.host_objects.insert(made, id);
         Ok(Value::Object(id))
     }
@@ -285,6 +296,11 @@ impl Interp {
     /// Whether `id` is the constructor of a host class (its other functions are not constructors).
     pub(crate) fn is_host_constructor(&self, id: ObjId) -> bool {
         self.host_classes.iter().any(|e| e.ctor == id)
+    }
+
+    /// Whether `id` is the constructor of a host class registered with a `construct` function.
+    pub(crate) fn is_constructible_host_class(&self, id: ObjId) -> bool {
+        self.host_classes.iter().any(|e| e.ctor == id && e.constructible)
     }
 
     /// The name of the host class of `id`, when it is an object of a host class.
@@ -436,6 +452,7 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
         name: class.name.as_str().into(),
         proto,
         ctor,
+        constructible: class.construct.is_some(),
         index: class.index,
         family,
         parent: parent_class,

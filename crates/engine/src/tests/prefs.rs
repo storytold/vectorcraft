@@ -1266,6 +1266,22 @@ fn transform_pattern_tiles_is_the_transforms_default() {
     assert_eq!(tiles(&s), [0.5, 0.0, 0.0, 0.5, 5.0, 0.0]);
 }
 
+/// A transform of an object whose pattern is only in its linked opacity mask notes Transform
+/// Patterns in the journal too, so a replay moves the mask's tiles alike.
+#[test]
+fn transform_patterns_is_journaled_for_a_pattern_in_a_linked_mask() {
+    let mut s = new_doc();
+    // The mask art is the patterned square above the polygon.
+    let id = NodeId(s.execute("shape.polygon", &json!({"cx": 125, "cy": 125, "radius": 40, "sides": 6})).unwrap()["id"].as_u64().unwrap());
+    let art = patterned_square(&mut s);
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [id.0, art.0]})).unwrap();
+    set_pref(&mut s, "transformPatternTiles", json!(true));
+    s.execute("object.move", &json!({"ids": [id.0], "dx": 10, "dy": 0})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["patterns"], json!(true), "object.move");
+    s.execute("object.setLiveShape", &json!({"ids": [id.0], "polygonAngle": 20})).unwrap();
+    assert_eq!(s.journal.last().unwrap().1["patterns"], json!(true), "object.setLiveShape");
+}
+
 /// A 50 pt square at (100, 100) with a 1 pt stroke, filled with a 20 pt pattern, selected.
 fn patterned_square(s: &mut Session) -> NodeId {
     let tile = square(s, 0.0, 0.0);

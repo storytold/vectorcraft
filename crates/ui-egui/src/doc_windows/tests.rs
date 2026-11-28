@@ -191,6 +191,164 @@ fn float_in_window_moves_the_current_document_out_of_the_tabs() {
 }
 
 #[test]
+fn a_script_sees_each_window_at_its_own_size() {
+    let mut app = app_with(3);
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    frame(&mut app, &ctx, vec![]);
+    let uids: Vec<u64> = app.session.documents().iter().map(|d| d.uid).collect();
+    let shared = crate::script_runs::share_views(&mut app);
+    let width = |uid: u64| shared.iter().find(|((u, _), _)| *u == uid).map(|(_, v)| v.size[0]);
+    let (floating, tabbed) = (width(uids[2]).unwrap(), width(uids[0]).unwrap());
+    assert!(floating < tabbed, "the floating window is narrower than the main window: {floating} and {tabbed}");
+    assert_eq!(width(uids[1]), None, "a document never drawn has no view");
+}
+
+#[test]
+fn script_view_zoom_uses_each_windows_display_percentage_and_keeps_physical_bounds() {
+    for print_size in [true, false] {
+        let mut app = app_with(1);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.run("window.newWindow", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": print_size})).unwrap();
+        for (number, ppi, percent) in [(1, 96.0, 100.0), (2, 144.0, 200.0)] {
+            let v = view_mut(&mut app, (0, number)).unwrap();
+            v.shown_ppi = Some(crate::ScreenPpi::Read(Some(ppi)));
+            v.rotation = 0.0;
+            v.zoom = crate::state::zoom_from_display_percent(percent, crate::state::print_ppi(print_size, Some(ppi)));
+        }
+        let shared = crate::script_runs::share_views(&mut app);
+        for (number, (_, script_view)) in (1..).zip(&shared) {
+            let camera = view(&app, (0, number)).unwrap();
+            let width = f64::from(camera.rect.width()) * f64::from(app.ui_scaling()) / camera.zoom;
+            assert!((script_view.visible().width() - width).abs() < 1e-9);
+        }
+        app.session.script_frames = false;
+        let report = app
+            .session
+            .execute(
+                "script.run",
+                &json!({"source":
+                    "var vs = app.activeDocument.views; vc.log(vs[0].zoom); vc.log(vs[1].zoom); vs[0].zoom = 3; vs[1].zoom = 4;"
+                }),
+            )
+            .unwrap();
+        assert_eq!(report["log"], json!([1, 2]), "print size: {print_size}");
+        crate::script_runs::take_views(&mut app, &shared);
+        for (number, percent) in [(1, 300.0), (2, 400.0)] {
+            let shown = crate::state::zoom_display_percent(view(&app, (0, number)).unwrap().zoom, app.print_ppi_of(Some((0, number))));
+            assert!((shown - percent).abs() < 1e-9, "window {number}, print size {print_size}: {shown}");
+        }
+    }
+}
+
+#[test]
+fn script_view_center_changes_preserve_zoom_at_camera_limits() {
+    for zoom in [0.0313, 640.0] {
+        let mut app = app_with(1);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+        let v = view_mut(&mut app, (0, 1)).unwrap();
+        v.shown_ppi = Some(crate::ScreenPpi::Read(Some(96.0)));
+        v.zoom = zoom;
+        let shared = crate::script_runs::share_views(&mut app);
+        app.session.script_frames = false;
+        app.session.execute("script.run", &json!({"source": "app.activeDocument.views[0].centerPoint = [10, 20];"})).unwrap();
+        crate::script_runs::take_views(&mut app, &shared);
+        assert_eq!(view(&app, (0, 1)).unwrap().zoom, zoom);
+    }
+}
+
+#[test]
+fn script_view_zoom_refuses_values_outside_each_windows_camera_range() {
+    for ppi in [96.0, 144.0] {
+        let mut app = app_with(1);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+        view_mut(&mut app, (0, 1)).unwrap().shown_ppi = Some(crate::ScreenPpi::Read(Some(ppi)));
+        let shared = crate::script_runs::share_views(&mut app);
+        app.session.script_frames = false;
+        let requested = 640.0 / crate::state::zoom_baseline(Some(ppi)) * 1.1;
+        let source = format!("try {{ app.activeDocument.views[0].zoom = {requested}; vc.log('accepted'); }} catch (e) {{ vc.log(e.name); }}");
+        let report = app.session.execute("script.run", &json!({"source": source})).unwrap();
+        assert_eq!(report["log"], json!(["RangeError"]));
+        crate::script_runs::take_views(&mut app, &shared);
+    }
+}
+
+#[test]
+fn a_script_lists_and_changes_each_view_of_one_document() {
+    let mut app = app_with(1);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.newWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    let camera = serde_json::to_value(view(&app, (0, 1)).unwrap()).unwrap();
+    for number in [1, 2] {
+        let v = view_mut(&mut app, (0, number)).unwrap();
+        let rect = v.rect;
+        *v = serde_json::from_value(camera.clone()).unwrap();
+        v.rect = rect;
+    }
+    view_mut(&mut app, (0, 1)).unwrap().zoom = 1.0;
+    view_mut(&mut app, (0, 2)).unwrap().zoom = 2.0;
+    let shared = crate::script_runs::share_views(&mut app);
+    app.session.script_frames = false;
+    let count = app.session.execute("script.run", &json!({"source": "vc.log(app.activeDocument.views.length);"})).unwrap();
+    assert_eq!(count["log"], json!([2]));
+    let source = "var vs = app.activeDocument.views; vc.log(vs.length); vc.log(vs[0] !== vs[1]); \
+        vc.log(vs[0].bounds[2] - vs[0].bounds[0] > vs[1].bounds[2] - vs[1].bounds[0]); \
+        vs[0].zoom = 3; vs[1].zoom = 4; vs[0].centerPoint = [10, 20]; vs[1].centerPoint = [30, 40]; \
+        vs[1].screenMode = ScreenMode.FULLSCREEN;";
+    let report = app.session.execute("script.run", &json!({"source": source})).unwrap();
+    assert_eq!(report["log"], json!([2, true, true]));
+    show_window(&mut app, (0, 1));
+    crate::script_runs::take_views(&mut app, &shared);
+    assert_eq!(view(&app, (0, 1)).unwrap().zoom, 3.0);
+    assert_eq!(view(&app, (0, 2)).unwrap().zoom, 4.0);
+    assert_ne!(view(&app, (0, 1)).unwrap().center, view(&app, (0, 2)).unwrap().center);
+    assert_eq!(app.ui.screen_mode, 2);
+}
+
+#[test]
+fn a_script_retains_view_identity_after_renumbering_and_reusing_a_window_number() {
+    let mut app = app_with(1);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": false})).unwrap();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.run("window.newWindow", json!({})).unwrap();
+    frame(&mut app, &ctx, vec![]);
+    view_mut(&mut app, (0, 1)).unwrap().zoom = 1.0;
+    view_mut(&mut app, (0, 2)).unwrap().zoom = 2.0;
+    crate::script_runs::share_views(&mut app);
+    app.session.script_frames = true;
+    let source = "var vs = app.activeDocument.views, closed = vs[0], kept = vs[1]; alert('ready'); \
+        vc.log(kept.zoom); kept.zoom = 5; \
+        try { closed.zoom = 9; vc.log('retargeted'); } catch (e) { vc.log(e.message); } vc.log(vs.length);";
+    app.session.execute("script.run", &json!({"source": source})).unwrap();
+    assert!(app.session.script_pump().is_none());
+    assert!(app.session.script_dialog().is_some(), "the script waits after retaining both views");
+    close_window(&mut app, (0, 1)).unwrap();
+    assert_eq!(windows(&app), [(0, 1)], "the remaining view is renumbered");
+    new_window(&mut app).unwrap();
+    view_mut(&mut app, (0, 2)).unwrap().zoom = 7.0;
+    let shared = crate::script_runs::share_views(&mut app);
+    assert!(app.session.script_answer(vectorcraft_engine::script::DialogAnswer::Ok));
+    let report = app.session.script_pump().expect("the resumed script ends").unwrap();
+    crate::script_runs::take_views(&mut app, &shared);
+    assert_eq!(report["log"], json!([2, "Stale view", 2]));
+    assert_eq!(view(&app, (0, 1)).unwrap().zoom, 5.0, "the retained view is the one that remained");
+    assert_eq!(view(&app, (0, 2)).unwrap().zoom, 7.0, "the new view is not an earlier handle's target");
+}
+
+#[test]
 fn a_press_in_another_documents_window_or_the_main_window_makes_its_document_current() {
     let mut app = app_with(3);
     let ctx = crate::testing::ui_context();

@@ -29,8 +29,8 @@
 //! or test file cannot be read, or when no ES5 test runs.
 //!
 //! A fifth test reads the ECMAScript 2015 subset that `Options::es2015` covers (`let`, `const`,
-//! arrow functions, templates, default and rest parameters, and from ECMAScript 2020 optional
-//! chains and `??`) without and with that option, and
+//! arrow functions, templates, default and rest parameters, classes, `super` and `new.target`,
+//! and from ECMAScript 2020 optional chains and `??`) without and with that option, and
 //! prints both counts; its failures with the option go to `es2015-failures.txt`.
 //!
 //! A sixth test runs the tests under the folders [`ES2015_COLLECTION_BUILT_INS`] names (`Map`, `Set`,
@@ -797,6 +797,10 @@ const ES2015_FOLDERS: &[&str] = &[
     "expressions/template-literal",
     "expressions/tagged-template",
     "rest-parameters",
+    "statements/class",
+    "expressions/class",
+    "expressions/super",
+    "expressions/new.target",
     "expressions/object",
     "computed-property-names",
     "expressions/optional-chaining",
@@ -823,6 +827,9 @@ const ES2015_FEATURES: &[&str] = &[
     "template",
     "default-parameters",
     "rest-parameters",
+    "class",
+    "super",
+    "new.target",
     "computed-property-names",
     "__proto__",
     "optional-chaining",

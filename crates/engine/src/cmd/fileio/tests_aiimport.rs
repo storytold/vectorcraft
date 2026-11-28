@@ -82,6 +82,60 @@ fn an_illustrator_ai_file_opens_from_its_editing_data() {
     assert_ne!(names(&s.doc().unwrap().doc.layers), ["Art", "Hidden"]);
 }
 
+/// The sample `.ai` with its private data `private` cut into streams of `size` bytes, each
+/// deflated on its own, and `content` more in its page's content stream dictionary.
+fn deflated_streams(private: &[u8], size: usize, content: &str) -> Vec<u8> {
+    let parts: Vec<Vec<u8>> = private
+        .chunks(size)
+        .map(|part| {
+            let mut e = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+            e.write_all(part).unwrap();
+            e.finish().unwrap()
+        })
+        .collect();
+    let parts: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+    ai::ai_with_parts(&parts, ai::page_pdf(), content, "/Filter /FlateDecode ")
+}
+
+/// A `.ai` whose private data streams are cut inside the compression's marker and inside the
+/// compressed data opens with its layers.
+#[test]
+fn ai_private_data_cut_anywhere_opens_with_its_layers() {
+    let private = compressed(&ai::sample_data());
+    for size in [7, 1000] {
+        let mut s = Session::new();
+        let r = open(&mut s, "art.ai", &deflated_streams(&private, size, ""), json!({})).unwrap();
+        assert!(r["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("weren't read")), "{r}");
+        check_sample(&s);
+    }
+}
+
+/// A `.ai` whose private data streams hold more than 256 MiB, once their own compression is undone,
+/// opens with its layers when the editing data they hold is within the limit on it, also when its
+/// PDF part can't be read (#4366): the streams are read one after the other as the data is
+/// decoded, without a limit of their own.
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn ai_private_data_past_256_mib_opens_with_its_layers() {
+    let data = ai::sample_data();
+    let at = data.windows(13).position(|w| w == b"%%PageTrailer").unwrap();
+    // A comment line the reader skips, so the data stays valid while it grows past 256 MiB.
+    let mut program = Vec::with_capacity(data.len() + (257 << 20));
+    program.extend_from_slice(&data[..at]);
+    program.push(b'%');
+    program.resize(at + (257 << 20), b'x');
+    program.push(b'\n');
+    program.extend_from_slice(&data[at..]);
+    for content in ["", REFUSED_CONTENT] {
+        let file = deflated_streams(&program, 64 << 20, content);
+        assert!(file.len() < 4 << 20, "the filler deflates");
+        let mut s = Session::new();
+        let r = open(&mut s, "art.ai", &file, json!({})).unwrap();
+        assert!(r["warnings"].as_array().unwrap().iter().all(|w| !w.as_str().unwrap().contains("weren't read")), "{content}: {r}");
+        check_sample(&s);
+    }
+}
+
 /// Opening a `.ai` or a PDF whose PDF part reads, or a `.ai` saved without PDF compatibility,
 /// reads and checks the file once, on any thread, for the document it may carry, its pages, its
 /// editing data and its File Info, with pages picked or not.

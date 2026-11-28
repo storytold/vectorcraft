@@ -104,6 +104,8 @@ fn canceled_custom_numbers_and_variation_choices_do_not_reach_the_brush() {
         ("6 pt. Flat", "angle", "Angle:", "30", 30.0, "/angle"),
         ("Bristle Round", "density", "Bristle Density:", "88", 88.0, "/density"),
         ("Confetti", "hueJitter", "Hue Jitter", "30", 30.0, "/hue_jitter"),
+        ("Confetti", "saturationJitter", "Saturation Jitter", "30", 30.0, "/saturation_jitter"),
+        ("Confetti", "brightnessJitter", "Brightness Jitter", "30", 30.0, "/brightness_jitter"),
     ] {
         let mut app = app();
         app.run("brush.options", json!({"name": brush, "params": {}})).unwrap();
@@ -278,13 +280,16 @@ fn dialog_fields_become_brush_options_params() {
         vec![
             (
                 vec![json!({"sizeMode": "fixed", "sizeMin": 5000, "spacingMode": "pressure", "scatterMode": "random", "rotationMode": "random",
-                    "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift", "hueJitter": 400})],
+                    "rotationMin": -400, "rotationRelativeTo": "path", "colorization": "hueShift", "hueJitter": 400, "saturationJitter": 400,
+                    "brightnessJitter": 400})],
                 vec![
                     ("/size", Is(json!([5000.0, 140.0]))),
                     ("/rotation/0", Is(json!(-180.0))),
                     ("/modes", Is(json!(["fixed", "pressure", "random", "random"]))),
                     ("/rotation_relative_to_path", Is(json!(true))),
                     ("/hue_jitter", Is(json!(180.0))),
+                    ("/saturation_jitter", Is(json!(100.0))),
+                    ("/brightness_jitter", Is(json!(100.0))),
                     ("/colorization/method", Is(json!("hueShift"))),
                     ("/colorization/key", Object),
                 ],
@@ -899,6 +904,32 @@ fn options_of_selected_object_set_one_paths_art_brush_settings() {
     assert_eq!(own_options(&app, a), json!({"width": 50.0}));
 }
 
+/// Options of Selected Object shows a scatter path's hue, saturation and brightness jitter, and OK
+/// sets them on that path only.
+#[test]
+fn options_of_selected_object_set_one_paths_scatter_jitter() {
+    let mut app = app();
+    let a = brushed_line(&mut app, 50.0, "Confetti");
+    let b = brushed_line(&mut app, 100.0, "Confetti");
+    select(&mut app, &[a]);
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    set(&mut app, json!({"hueJitter": 45, "saturationJitter": 30, "brightnessJitter": 20}));
+    confirm(&mut app).unwrap();
+    assert_eq!(own_options(&app, a), json!({"hue_jitter": 45.0, "saturation_jitter": 30.0, "brightness_jitter": 20.0}));
+    assert_eq!(own_options(&app, b), json!({}));
+    let brush = app.run("brush.get", json!({"name": "Confetti"})).unwrap();
+    assert_eq!(
+        (brush["hue_jitter"].clone(), brush["saturation_jitter"].clone(), brush["brightness_jitter"].clone()),
+        (json!(0.0), json!(0.0), json!(0.0)),
+        "the brush keeps its own"
+    );
+    // Opened again, it shows the path's own values.
+    app.run("ui.brushObjectOptions", json!({})).unwrap();
+    assert_eq!(fields_of(&app).number("saturationJitter"), Some(30.0));
+    assert_eq!(fields_of(&app).number("hueJitter"), Some(45.0));
+    assert_eq!(fields_of(&app).number("brightnessJitter"), Some(20.0));
+}
+
 #[test]
 fn options_of_selected_object_change_only_the_values_edited_on_each_path() {
     let mut app = app();
@@ -966,9 +997,10 @@ fn options_of_selected_object_show_what_a_path_can_set_for_each_type() {
         assert!(keys.iter().any(|k| k == key), "{key} in {keys:?}");
     }
     assert!(!keys.iter().any(|k| k.ends_with("Tile")), "{keys:?}");
-    // Scatter: the four values with their modes, the rotation reference and the hue jitter.
+    // Scatter: the four values with their modes, the rotation reference and the hue, saturation and
+    // brightness jitter.
     let keys = object_keys("scatter");
-    for key in ["sizeMin", "spacingMin", "scatterMin", "rotationMin", "rotationRelativeTo", "hueJitter"] {
+    for key in ["sizeMin", "spacingMin", "scatterMin", "rotationMin", "rotationRelativeTo", "hueJitter", "saturationJitter", "brightnessJitter"] {
         assert!(keys.iter().any(|k| k == key), "{key} in {keys:?}");
     }
     let p = brushed_line(&mut app, 80.0, "Diamonds");

@@ -758,7 +758,7 @@ ends the wait, so the sampler can be shown again. The BSDs and headless sessions
 | `invoke_menu` | `{command, params?}` | Invokes a menu item by command id. UI commands such as `view.*` and `window.*` are in `command_list` with `ui: true`; running them needs the desktop app (`--connect`). The app refuses `attributes.openUrl`, `file.export.svg.browser`, `file.saveForWeb.browser` and `file.showPackage` for every control and MCP request, since each opens another app, so the headless error for them does not suggest `--connect`. |
 | `open_panel` | `{panel}` | Remote only. `panel` is a panel id (`layers`, `swatches`, `colorGuide`, …, as `window.panel` takes) or its display label (`"Color Guide"`), in any case. |
 | `screenshot` | `{path?, scale?, artboard?, window?, max_side?, traceViews?}` | Returns MCP image content (`image/png`, base64) plus a text block. Renders the artboard with the pixels of a PNG `export` with `background: "white"` at the same scale; `traceViews:true` draws Image Trace objects in the view set with `imageTrace.setView`, as in the app's window; `window:true` captures the app window (remote only), as `ui_screenshot` does, and `max_side` (1–4096, window captures only) scales the returned image down as described for `ui_screenshot`. With `path` the backend (the headless session or the app) writes the PNG there too; a window capture written there keeps its full size with `max_side`. An app that does not send the image back writes a window capture without `path` to a file in a new folder inside the system's temporary folder (on Unix only the user can open it); the server reads the file and then removes the folder, also when the capture or the read fails. |
-| `open_file` | `{path, importer?, params?}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, PICT (`.pct`/`.pic`/`.pict`, and a version 2 picture of any extension), HP-GL (`.plt`/`.hpgl`/`.hgl`/`.hpg`, and a file of an extension no other format reads that starts with plotter instructions), PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), HEIC/HEIF (`.heic`/`.heif`), JPEG XL (`.jxl`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a PSD or PSB file with its layers as layers, or as its merged image through `run_command document.open` with `layers: false`; a JPEG XL file as its first frame), CDR drawings of versions 1 to 27 (`.cdr`, `.cdt`), CMX files with 32-bit coordinates (`.cmx`). Templates (`.vctemplate`, `.ait`, `.cdt`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). A file of an extension only an installed importer plug-in lists opens with that importer ([Plug-ins](#plug-ins)); `importer: "plugin.<id>"` opens the file with the importer it names, which must list the file's extension, also one a built-in format reads (in the app, as File › Open With does), and `params` gives that importer's parameters (their defaults when omitted). `run_command document.formats` lists the formats. |
+| `open_file` | `{path, importer?, params?}` | Opens any readable file as a new active document: `.vectorcraft`/`.drawcraft`, `.vctemplate`, `.svg`/`.svgz`, `.pdf`/`.ai`, `.ait`, `.eps`/`.epsf`, `.ps`, `.dxf`, `.emf`, `.wmf`, PICT (`.pct`/`.pic`/`.pict`, and a version 2 picture of any extension), HP-GL (`.plt`/`.hpgl`/`.hgl`/`.hpg`, and a file of an extension no other format reads that starts with plotter instructions), PNG (`.png`/`.pns`), JPEG, GIF, WebP, TIFF, BMP (`.bmp`/`.dib`/`.rle`), Targa (`.tga`/`.vda`/`.icb`/`.vst`), PCX, Pixar (`.pxr`), JPEG 2000 (`.jpf`/`.jpx`/`.jp2`/`.j2k`/`.j2c`/`.jpc`), HEIC/HEIF (`.heic`/`.heif`), JPEG XL (`.jxl`), PSD (`.psd`/`.pdd`)/PSB (an image opens as a document of its pixel size; a PSD or PSB file with its layers as layers, or as its merged image through `run_command document.open` with `layers: false`; a JPEG XL file as its first frame), CDR drawings of versions 1 to 27 (`.cdr`, `.cdt`), CMX files with 32-bit coordinates (`.cmx`), layered raster `.pcraft` documents (as one image at the canvas size; a warning says when only the smaller preview could be read). Templates (`.vctemplate`, `.ait`, `.cdt`) open as a new untitled document. PDF, `.ai` and SVG files saved with Preserve Editing reopen as the document they carry. The reply is `document.open`'s: its `warnings` say what didn't come in as it was (an EPS whose PostScript can't be read opens as its preview, and the warning names the PostScript error, the operator and the procedure). A file of an extension only an installed importer plug-in lists opens with that importer ([Plug-ins](#plug-ins)); `importer: "plugin.<id>"` opens the file with the importer it names, which must list the file's extension, also one a built-in format reads (in the app, as File › Open With does), and `params` gives that importer's parameters (their defaults when omitted). `run_command document.formats` lists the formats. |
 | `save_file` | `{path?, compress?, version?, preview?, precision?, options?}` | Runs `document.save`: the document's own file in its own format (native `.vectorcraft` unless it was opened from or saved as SVG, PDF or a restorable `.ai`; then `warnings` say what that format loses). A path's extension picks the format (`.vectorcraft`, `.vctemplate`, `.pdf`, `.svg`, `.svgz`, `.ai`: a PDF carrying the native document, which reopens editable; `.eps`: by default one file whose bounding box fits the visible art, the first artboard when no art shows; `options.useArtboards: true` makes the chosen artboard the page and, with two or more chosen, the file at the path is the central file of the visible art and each artboard is also written to `<name>_<artboard>.eps` beside it, listed in the reply's `files`). For a native file, `compress: true` gzips it (default: the `useCompression` preference, Preferences › File Handling › Use Compression), `version` (1 to 4) writes it for an older VectorCraft (1 and 2 are never compressed, and `version: 2` with `compress: true` is an error), `preview: true` embeds a PNG of the first artboard, and `precision` (0 to 9) rounds path anchors and handles to that many decimal places for that save only (colors, transforms and type stay exact). `options` passes the format's save options as `run_command document.formats` lists them. When `compress`, `version`, `preview` or `precision` is given both at the top level and in `options` with different values, the call is an error (`` `compress: true` and `options.compress: false` disagree: give the option once ``) and nothing is written. A key in `options` that no save format takes is an error, and nothing is written (see Parameter keys). The save drops each option the written format doesn't read. The reply's `warnings` then name each such option given (for example `` `compress` was not used: SVG files don't read it `` for an `.svg` path, and `` `options.preview` was not used: … `` for a key in `options`; a PDF-compatible `.ai` file reads `compress` but not `version`, `preview`, `precision`, `outlineText`, `hiddenObjects`, `transparentImages` or `preserveEditing`, and a legacy `.ai` file reads only its own options). For a `.ai` file, these warnings name the kind of `.ai` written: a legacy .ai (version 7) for `aiVersion: "7"`, a non-PDF-compatible .ai for `pdfCompatible: false`, and a PDF-compatible .ai otherwise, including a save that reuses the options the document was last saved with. `run_command document.save` and the other save commands refuse any option given beside the path and in `options` with different values, and give the same warnings for each key given beside the path or in `options` that the file doesn't read. The headless session and the app receive the same `app.save` params, and the app is also sent `wait: true`: the call returns once the file is written, or with the error (such as a path outside the write root), even with Background Save on. When the save asks first (the question before replacing a file that opened with losses, or on macOS and Linux the file dialog for an untitled document without `path`), the reply is `{pending}` or `"cancelled"` as before, and the save that runs after the answer uses the Background Save preference. Location refusals return `READ_ONLY_LOCATION: <reason>` without a fallback panel for automation; see [Save location errors](#save-location-errors). In the desktop app, a save that runs in the background shows in the progress window after 0.4 s with a moving bar. `file.cancelSave` stops every such save before it replaces its file → `{cancelled: n}`: the file stays as it was, and the document keeps its file and format and stays modified. A save whose file was already being replaced finishes and is reported as saved. `file.saveInBackground` closes the window while the saves go on → `{hidden: n}`. |
 | `export` | `{path?, format?, scale?, artboard?, range?, selection?, outlineText?, options?}` | `svg`, `svgz`, `pdf`, `ai` (the PDF-compatible `.ai` that Save writes, which carries the document when every artboard is written in order), `eps`, `dxf`, `emf`, `wmf`, `hpgl` (a `.plt` plot file for plotters and cutters), `png`, `jpg`, `webp`, `gif`, `png8` (an indexed `.png`), `tiff`, `bmp`, `tga`, `psd` (layered), `txt` (the document's text), `vectorcraft` or `template` (a native template). The tool's `format` enum and `document.formats` list them, generated from the engine's format table. When `format` is omitted, it comes from the path's extension. PDF and `.ai` write one page per artboard: all of them, or `artboard` (0-based) / `range` (`"1-3, 5"`, 1-based). SVG and SVGZ write one file per chosen artboard. EPS writes one file of the visible art; with `artboard`, `range`, `options.artboards` or `options: {"useArtboards": true}` it writes one file per chosen artboard, after a central file of the visible art when there are two or more, and `useArtboards: false` keeps the one file. Rasters, DXF, EMF, WMF and HP-GL write one artboard, or one file per chosen artboard with `options: {"useArtboards": true}`. Rasters also take `options: {"rect": [x, y, width, height]}` (page points, y down): that area of the page at the given `ppi`/`scale`, without an artboard and without changing the document; it is refused with `artboard`, `artboards`, `range` or `useArtboards`, with a non-positive or non-finite size, and for non-raster formats. `options` carries more format options (e.g. `{"quality": 80}` for JPEG). `selection: true` exports the selected objects cropped to their bounds (the reply adds their `bounds`, and reports `format` and the encoder's `warnings` as a whole-document export does); `outlineText: true` writes SVG text as paths. Template layers are left out, live effects are kept, and exporting `vectorcraft` never changes the document's path. Without `path` the bytes come back as `dataBase64`. Both backends run the same `document.export` call. |
 | `add_text` | `{text, x?, y?, width?, height?, fit?, fitMinPercent?, path?, mode?, pathEffect?, size?, font?, color?, justify?, vertical?}` | Point type at (x, y) (`justify`: `left`, `center` or `right` starts, centres or ends each line on x); area type with `width`/`height` (`fit`: `none`, `autoHeight`, `shrinkText`, as `text.areaOptions`); or `path` + `mode` (`area`/`onPath`) to flow text in or along a path, with `pathEffect` for type on a path (`rainbow`, `skew`, `3dRibbon`, `stairStep`, `gravity`; SVG export writes type on a path with any effect other than `rainbow` as outlines, with a warning). An invalid effect is rejected before editing. `justify` (also `auto`, `justifyAll`) aligns the paragraphs of every kind, as `text.setStyle` does later. `vertical: true` uses the existing vertical writing mode for every kind (default `false`, horizontal). Returns `{id}`, with `overflow: true` when the text doesn't fit its frame or path. |
@@ -767,7 +767,7 @@ ends the wait, so the sampler can be shown again. The BSDs and headless sessions
 | `transform` | `{ids?, dx?, dy?, rotate?, scale?, scaleX?, scaleY?, reflect?, shear?, origin?, copy?}` | Runs move, rotate, scale, reflect, shear in that order. `rotate` is in degrees counter-clockwise; a positive `shear` moves the top to the right. With `copy`, the first step duplicates. A `scale`, `reflect` or `shear` that its command would refuse returns that error before any step runs; nothing changes and no undo step is recorded. The same holds for a step that is neither a number nor null, a `reflect` that is not a string, a `copy` that is not true or false, and an `origin` that is not two numbers. A null `rotate`, `scale`, `scaleX`, `scaleY`, `shear`, `reflect`, `copy` or `origin` is left out; a null `dx` or `dy` counts as 0, so it still runs the move. |
 | `create_graph` | `{type?, x, y, width, height, csv? \| series?, categories?, rows?}` | The nine Illustrator graph types: column, stacked column, bar, stacked bar, line, area, scatter, pie and radar. An empty CSV cell or a `null` in `rows` is a blank value; a number in straight quotes is a label. Edit later with `graph.setData` / `graph.setType` via `run_command`. `graph.column {design, columnType: vertical\|uniform\|repeating\|sliding, each, fractions: chop\|scale}` draws the columns or bars of the series picked with Group Selection (or `seriesIndexes`, or all of them) with a graph design saved by `graph.design`; with no `design` it returns the series' current design and options. Type in the design that holds a `%` followed by two digits shows each column's value, with at least the first digit's places before the decimal point and the second digit's places after it. |
 | `text_wrap` | `{ids?, offset?, invert?, release?}` | Area type below the objects (same layer) flows around them. `offset` is in points, from -1000 to 1000 (default 6). An offset outside that range or not a number, or an `invert` or `release` that is not true or false, is an error and changes nothing; `object.textWrap.make` and `object.textWrap.options` refuse the same values. |
-| `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy` and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. Settings that change without an undo step stay as they are when `undo` or `redo` brings back a step that did not change them: the perspective grid's view options and active plane, the grid preferences (`gridlineEvery`, `gridSubdivisions`), the export settings (`assets.settings.set`), and the current brush and symbol. A step that changed one of them, such as a perspective grid preset that shows the grid, takes that change back. The point Automatic Plane Positioning holds comes back with the step, and is let go when the active plane kept is another one. `inspect_document` lists the undo steps as `history`. `run_command` with `edit.clearHistory` removes every undo and redo step of the active document and returns `{cleared}`, the number of steps removed; the document stays as it is, and the command records no undo step. `run_command` with `edit.newDocumentFromState` and `{index?, created?}` makes a new document holding the art as it was at that state and makes it the active document, and returns `{index, title}`. `index` is a row of the History panel, with 0 the oldest state kept, and an omitted or null `index` uses the current state. An `index` that names no state fails with `no history state N`, one that is not a whole number with `` `index` must be a whole number ``, and either changes nothing. `created` is File Info's created date in Unix seconds or null, and defaults to now. The new document takes the next `Untitled-N` name, is marked unsaved, has nothing selected and has no steps to undo or redo. It is out of symbol, opacity-mask and pattern editing, and the art drawn in a pattern's tile is stored in the pattern, as `object.pattern.done` stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step. When a command keeps a drag whose preview Real-time Drawing off had not applied yet (`edit.undo`, `edit.redo`, `edit.clearHistory`, `edit.newDocumentFromState` and the other commands that end a drag first), and applying that preview gives a warning, the command's result carries it as `previewWarning`, and as `warning` too when the command gives no warning of its own; the app's status bar shows `warning`. Any other command that changes the document during a tool's drag, from `run_command`, a panel or a menu, records its own undo step before the drag's. The command acts on the document without the drag's preview, and the drag then continues from the command's result: with Real-time Drawing on, the drag's preview is applied again at once, and with it off, the release applies it as before. The release records the drag's step after the command's, `undo` takes back the drag first and the command next, and Escape cancels only the drag. The drag acts on the objects it started with, so a selection the command makes (`select.all`, `edit.duplicate`) does not change what the drag moves, and the drag's release and Escape set the selection as they do without the command (with Real-time Drawing on, so does each move of the drag); a command that records no undo step, such as `select.none`, adds no step. When the command deletes or changes the art being dragged, the drag continues with the art the command left, and a drag left with nothing to change records no step. A warning or an error from the drag's preview applied again after the command is in the command's result as `previewWarning`. Typing in progress is kept as a step of its own before the command. Two cases run the command inside the drag, which then keeps the command's edit as part of its own step: a press of the Quick Pen (an edit to its path ends the path), and `object.transform` with `copy` during an Alt-drag, which copies the art as the drag's move left it. A command run while a dialog's or a panel's preview is open runs inside that preview. While the Type tool edits type, `undo` and `redo` put its caret, with no characters selected, at the end of the text the step changed: after the text it puts back or retypes, or where the text it takes out was. A step that changes no characters, such as a formatting change, leaves the caret and the selection where they are. |
+| `undo` / `redo` | `{}` | Many calls that change nothing record no undo step, for example `object.align` with nothing to move, `object.move` by 0 without `copy`, `path.moveAnchors` by 0, `layer.setProps` with every row already as given and `object.showAll` with nothing hidden. `undo` (`edit.undo`) after such a call undoes the step before it. Settings that change without an undo step stay as they are when `undo` or `redo` brings back a step that did not change them: the perspective grid's view options and active plane, the grid preferences (`gridlineEvery`, `gridSubdivisions`), the export settings (`assets.settings.set`), and the current brush and symbol. A step that changed one of them, such as a perspective grid preset that shows the grid, takes that change back. The point Automatic Plane Positioning holds comes back with the step, and is let go when the active plane kept is another one. `inspect_document` lists the undo steps as `history`. `run_command` with `edit.clearHistory` removes every undo and redo step of the active document and returns `{cleared}`, the number of steps removed; the document stays as it is, and the command records no undo step. `run_command` with `edit.newDocumentFromState` and `{index?, created?}` makes a new document holding the art as it was at that state and makes it the active document, and returns `{index, title}`. `index` is a row of the History panel, with 0 the oldest state kept, and an omitted or null `index` uses the current state. An `index` that names no state fails with `no history state N`, one that is not a whole number with `` `index` must be a whole number ``, and either changes nothing. `created` is File Info's created date in Unix seconds or null, and defaults to now. The new document takes the next `Untitled-N` name, is marked unsaved, has nothing selected and has no steps to undo or redo. It is out of symbol, opacity-mask and pattern editing, and the art drawn in a pattern's tile is stored in the pattern, as `object.pattern.done` stores it. The source document and its steps stay as they are, except that typing or a drag in progress is first kept as a step. When a command keeps a drag whose preview Real-time Drawing off had not applied yet (`edit.undo`, `edit.redo`, `edit.clearHistory`, `edit.newDocumentFromState` and the other commands that end a drag first), and applying that preview gives a warning, the command's result carries it as `previewWarning`, and as `warning` too when the command gives no warning of its own; the app's status bar shows `warning`. Any other command that changes the document during a tool's drag, from `run_command`, a panel or a menu, records its own undo step before the drag's. The command acts on the document without the drag's preview, and the drag then continues from the command's result: with Real-time Drawing on, the drag's preview is applied again at once, and with it off, the release applies it as before. The release records the drag's step after the command's, `undo` takes back the drag first and the command next, and Escape cancels only the drag. The drag acts on the objects it started with, so a selection the command makes (`select.all`, `edit.duplicate`) does not change what the drag moves, and the drag's release and Escape set the selection as they do without the command (with Real-time Drawing on, so does each move of the drag); a command that records no undo step, such as `select.none`, adds no step. When the command deletes or changes the art being dragged, the drag continues with the art the command left, and a drag left with nothing to change records no step. A warning or an error from the drag's preview applied again after the command is in the command's result as `previewWarning`. Typing in progress is kept as a step of its own before the command. Two cases run the command inside the drag, which then keeps the command's edit as part of its own step: a press of the Quick Pen (an edit to its path ends the path), and `object.transform` with `copy` during an Alt-drag, which copies the art as the drag's move left it. A command run while a dialog's or a panel's preview is open runs inside that preview. While the Type tool edits type, `undo` and `redo` put its caret, with no characters selected, at the end of the text the step changed: after the text it puts back or retypes, or where the text it takes out was. A step that changes no characters, such as a formatting change, leaves the caret and the selection where they are. |
 
 For example, create editable Japanese area type with the engine's vertical writing mode:
 
@@ -2371,6 +2371,11 @@ side that `constrain` works out as under 0.1 pt grows to 0.1 pt, and the other s
 on an image more than 10000000 times wider than tall (or taller than wide), no size keeps both sides in the range, and
 the call is refused with `` the image's proportions leave no size with both sides between 0.1 and 1000000 pt ``.
 
+On an image changed by Perspective Distort or Free Distort, each tile is its cell of the image's pixels placed between
+the image's corners, so the tiles are four-sided shapes that follow the perspective. A new size scales the tiles from
+the top left of the image's bounds, as it does for any image. The spacing and Use Ratio measure a pixel by the mean
+length of the image's two sides along each axis. This is VectorCraft's own rule.
+
 The result also gives the `columns` and `rows` the mosaic was made with, here for a 100 × 50 pt image:
 
 ```json
@@ -2432,7 +2437,8 @@ undo history as they were: the options `copy`, `strokes`, `corners`, `patterns`,
 `object.transformAgain` and `object.setBounds`; `anchors`, `releaseOutside` and `drawBehind` in `object.transform`; `big` in `object.nudge`;
 `absolute` in `object.rotate`; `proportional` in `object.setBounds`; `patterns` in `object.align`, `object.distribute`
 and `object.distributeSpacing`; `visible`, `locked`, `isolate` and `knockoutShape` in `object.setProps`; and
-`invertPie`, `makeSidesEqual` and `relativeRadii` in `object.setLiveShape`. A null is read as a key left out.
+`invertPie`, `makeSidesEqual`, `relativeRadii`, `strokes` and `patterns` in `object.setLiveShape`. A null is read as a
+key left out.
 
 They also refuse a string or another value that is not a number with `` `opacity` must be a number, not "50" ``,
 naming the key, and leave the document and its undo history as they were: `opacity` in `object.setProps`; `radius` and
@@ -2715,7 +2721,12 @@ not UTF-8. The language is ES5.1, except that identifiers take the characters Un
 declarations scoped to their block, arrow functions, template literals and tagged templates, default and rest
 parameters, spread in array literals, calls and `new`, `for`-`of` loops, array and object destructuring in `var`,
 `let` and `const` declarations, assignments, parameters and `catch` clauses (with defaults, holes and rest elements),
-and shorthand and computed property names in object literals (https://262.ecma-international.org/11.0/). Spread,
+shorthand and computed property names in object literals, and classes with `extends`, `static` members, accessors and
+computed method names, `super` calls and properties and `new.target` (https://262.ecma-international.org/11.0/). A
+class can extend a class, a function, `null` or the built-in constructors `Object`, `Function`, `Array`, `String`,
+`Number`, `Boolean`, `RegExp`, `Date` and the error types. A class can name another built-in constructor in
+`extends`, but `new` on that class throws a `TypeError` when it reaches the built-in constructor, a rule that is
+VectorCraft's own. Spread,
 `for`-`of` and array patterns use the iterator protocol. A loop or pattern left early, by `break`, `return`, a
 `continue` to an outer loop or an exception, calls the iterator's `return` method when it has one. An iterator is not
 closed when its `next()` throws or gives a result that is not an object, when reading the result's `done` or `value`
@@ -2732,7 +2743,7 @@ an own empty `name` otherwise, as the 12th edition gives it (https://262.ecma-in
 20.2.4.2). A function's `length` can be redefined. The built-in functions get their names the first time a run reads
 ECMAScript 2015, and keep them in later `.jsx` runs of an engine that `#targetengine` keeps. A `.js` script also has
 generator functions (ECMA-262 11th edition, sections 14.4 and 25.4, https://262.ecma-international.org/11.0/):
-`function*` declarations and expressions, `*name() {…}` methods in object literals, `yield`, and `yield*`, which
+`function*` declarations and expressions, `*name() {…}` methods in object literals and classes, `yield`, and `yield*`, which
 passes `next`, `throw` and `return` on to the iterator it delegates to. Calling a generator function returns a
 generator object whose `next`, `return` and `throw` run its body to the next `yield`; `return` runs the body's
 `finally` blocks, and resuming a generator while its body runs throws a `TypeError`. Each resumption takes fuel and
@@ -2814,7 +2825,21 @@ other files through `$`:
   `DocumentPreviewMode.PixelPreview` throws an error that says it is not available yet, and no document is made.
   `showOptionsDialog` true throws `Dialog unavailable` with no document made. A `Document` (https://ai-scripting.docsforadobe.dev/jsobjref/Document/) has `name`,
   `width`, `height`, `rulerUnits`, `documentColorSpace`, `rulerOrigin`, `convertCoordinate(point, source,
-  destination)`, `pageItems` and `selection`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
+  destination)`, `pageItems`, `selection` and `views`. `views` (https://ai-scripting.docsforadobe.dev/jsobjref/Views/)
+  lists each window, tab, or tiled pane the desktop app has drawn for the document, in view-number order. Each view
+  uses the size of the area it last drew the document in. A document the app has not drawn yet, and every document without a window (headless),
+  has none. `views` has `length`, `[i]` and `index(i)`. The view (https://ai-scripting.docsforadobe.dev/jsobjref/View/) has `typename`,
+  `parent`, `bounds` (`[left, top, right, bottom]` of the part of the document the canvas shows, the box around a
+  rotated canvas), `centerPoint`, `zoom` and `screenMode`, in the run's coordinate system. `zoom` is 1 at the window's
+  displayed 100%. With Display Print Size at 100% Zoom off, the range is 0.0313 to 640 (VectorCraft's own range).
+  With it enabled, the app divides these limits by the window's scale at 100% (the screen points per inch used for
+  that window divided by 72). A zoom outside that range, or a `centerPoint` outside the canvas after
+  coordinate conversion, throws a `RangeError`. A `centerPoint` that is not two numbers throws a `TypeError`. `screenMode` reads Normal as
+  `ScreenMode.MULTIWINDOW`, Full Screen Mode with Menu Bar as `ScreenMode.DESKTOP` and Full Screen Mode and
+  Presentation Mode as `ScreenMode.FULLSCREEN` (VectorCraft's own mapping); the screen mode is the app's, so setting it
+  on one view sets it on every view. Changing a view runs no command, adds
+  no undo step and stays when the run fails. A view object keeps its target when windows are renumbered. While its
+  document remains open, closing its window makes it throw `Stale view`. `pageItems` (https://ai-scripting.docsforadobe.dev/jsobjref/PageItems/)
   lists every object in the document's layers, the objects inside groups, compound paths, blends, envelopes, repeats
   and intertwines included, and has `length`, `[i]`, `index(key)`, `getByName(name)` and `removeAll()`; `i in` either
   collection is true for each
@@ -2977,6 +3002,8 @@ own rules:
   the combinator calls the iterator's `return` method if present; the original exception remains the rejection reason
   even when `return` throws. An iterator whose step threw or finished is not closed. The promises `then` and the
   statics make are always plain `Promise` objects; `Symbol.species` and subclasses are not read.
+  The statics accept registered host class constructors and bound constructors as `this`; ordinary host functions
+  still give a `TypeError`.
 - A promise rejected with no rejection handler that still has none when the run ends successfully is reported: the
   report's `unhandledRejections` lists the first 20 as `{message, messageOrigin, line, column, file?}`, where it was
   rejected (the `throw`, or the call of its reject function or of `Promise.reject`), `unhandledRejectionCount` counts
@@ -3231,10 +3258,12 @@ app's own errors, syntax errors and limits. The status bar shows a `script` mess
 - `console` is `{lines, droppedLines, truncatedLines}`: the run's own output, `vc.log` lines and uncaught error, as
   text.
 - `dialogs` lists the run's dialogs in the order they opened, as `{kind, message, title, errorIcon, answer}` for
-  `alert`, `{kind, message, title, noAsDefault, answer}` for `confirm` and `{kind, message, title, preset, answer}`
-  for `prompt`. `answer` is `"ok"`, `true`, `false`, the prompt's text, `null` for Cancel, `"stop"` for a dialog the
-  run ended at, or `"missing"` for a dialog `answers` had no answer for. `dialogCount` counts every dialog, and
-  `dialogsTruncated` is true when the list stopped at its limit.
+  `alert`, `{kind, message, title, noAsDefault, answer}` for `confirm`, `{kind, message, title, preset, answer}`
+  for `prompt` and `{kind, title, controls, events, answer}` for a ScriptUI dialog's `show()` (kind `window`).
+  `answer` is `"ok"`, `true`, `false`, the prompt's text, `null` for Cancel, the number `show()` returned, `"stop"`
+  for a dialog the run ended at, `"missing"` for a dialog `answers` had no answer or no step for, or `"error"` for a
+  `show()` that ended with an error. `dialogCount` counts every dialog, and `dialogsTruncated` is true when the list
+  stopped at its limit.
 
 ```json
 {"name":"run_command","arguments":{"command":"script.run","params":{"source":"vc.run('shape.rectangle', {x: 0, y: 0, width: 10, height: 10});"}}}
@@ -3283,6 +3312,133 @@ empty object are the same.
 
 ```sh
 vectorcraft-cli run --cmd script.run --params '{"source": "if (confirm(\"Add a frame?\")) vc.log(prompt(\"Name\", \"Frame\"));", "answers": [{"kind": "confirm", "value": true}, {"kind": "prompt", "value": "Border"}]}'
+```
+
+The help pages https://extendscript.docsforadobe.dev/user-interface-tools/window-object/,
+https://extendscript.docsforadobe.dev/user-interface-tools/control-objects/ and
+https://extendscript.docsforadobe.dev/user-interface-tools/types-of-controls/ describe ScriptUI's `Window` and its
+controls. `vc.api.has("scriptui")` is true. A script builds a modal dialog and shows it:
+
+- `new Window("dialog"[, title, bounds, properties])` makes a dialog. Another type (`palette`, `window`) throws
+  an `Error` that says it is not available yet.
+- `new Window` and `add` also take a resource specification in place of the type, as
+  https://extendscript.docsforadobe.dev/user-interface-tools/resource-specifications/ describes it:
+  `"dialog { text: 'Settings', g: Group { label: StaticText { text: 'Name:' }, ok: Button { text: 'OK' } } }"`, or
+  `"[name:] Class { ... }"` for `add`. The other arguments are not read. Inside the braces, `properties` gives the
+  creation properties, each `name: Class { ... }` adds that control through `add`, with its limits, and sets it as
+  the container's property `name`, a list's `items` gives its item texts, and every other `name: value` sets that
+  property. A value is `null`, `true`, `false`, a quoted string, a number, an inline array or an inline object,
+  and the commas between properties may be left out. A malformed specification throws a `SyntaxError`, and one longer than 1 MiB or nested more than 64
+  deep throws a `RangeError` (VectorCraft's own limits).
+- `container.add(type[, bounds, ...])` adds a control to the dialog, a `group` or a `panel` and returns it. The
+  types are `group`, `panel`, `statictext`, `edittext`, `button`, `checkbox`, `radiobutton`, `dropdownlist`,
+  `listbox`, `slider` and `progressbar`. After `bounds`, a text control takes its text and `properties` (`name`,
+  and `multiline` and `readonly` for `edittext`), a list takes an array of item texts, a `slider` takes its value,
+  minimum and maximum (0 and 100 when left out), and a `progressbar` its value and maximum. A `group` takes
+  `properties` right after `bounds`, or fourth when the third argument is not an object, and a list may take
+  `properties` right after `bounds` in place of its items, with the item texts in `properties.items`; a list given
+  items both ways throws a `TypeError`. The `alignment` in `properties`,
+  and a container's `orientation`, `alignChildren`, `spacing` and `margins` there, are the control's first values
+  (VectorCraft's own rule). A `listbox` with `multiselect` and the other control types (`tabbedpanel`, `tab`,
+  `scrollbar`, `image`, `iconbutton`, `treeview` and the rest) throw that they are not available yet, and an
+  unknown type throws too. An `edittext` with `noecho` in its `properties` makes `show()` throw that a field that
+  hides its text is not available yet, before the dialog opens.
+- A list's `add("item", text)` adds an item, `find(text)` gives the first item with that text or `null`,
+  `remove(what)` removes the item given by its index, the item itself or its text, `removeAll()` removes them all,
+  `items` lists them and `selection` is the selected item or `null`; setting it to an item or an index selects it.
+  An item has `text`, `index` and `selected`.
+- A control has `text`, `value`, `enabled`, `visible`, `name`, `bounds`, `preferredSize`, `size`, `minimumSize`,
+  `maximumSize`, `alignment`, `parent`, `window`, `show()`, `hide()` and `notify([event])`. Each size starts as an
+  object whose `width` and `height` are -1, so a script can set one side, as in `preferredSize.width = 100`; a side
+  of 0 or less is left to the layout (VectorCraft's own starting values). A container also has `children`,
+  `orientation` (`row`, `column` or `stack`; a group starts as a row and the dialog and a panel as a column),
+  `alignChildren`, `spacing` (10 to start), `margins` (15 to start, 0 for a group), `findElement(name)` and
+  `remove(what)`, which removes the control given by its index, the control itself or its text. Removing an item
+  or a control that is not there does nothing. A removed control has no `parent`, it and the controls it holds have
+  no `window`, and its events no longer reach the containers it was in, also when a handler removes it while its
+  event runs; `add`, `remove` and `removeAll` on it, or on a control it holds, throw an `Error`. When a `text`
+  getter changes the list or container while `remove(text)` looks for a match, `remove` throws an `Error` and
+  removes nothing. The dialog has `defaultElement`, `cancelElement`, `close([result])`
+  and `hide()`. `center()`, `layout.layout()` and `layout.resize()` do nothing.
+- Radio buttons added one after another in a container form a set: setting one's `value` to true, or clicking it,
+  sets the others in the set to false. A control of another kind between two radio buttons starts a new set, as
+  the JavaScript Tools Guide describes radio buttons
+  (https://raw.githubusercontent.com/Adobe-CEP/CEP-Resources/master/ExtendScript-Toolkit/Guides/JavaScript%20Tools%20Guide%20CC.pdf).
+- `notify("onClick")`, `notify("onChange")` and `notify("onChanging")` run the handlers that the person's click or
+  change would run: a click turns a check box over and turns a radio button on, then runs `onClick` and the
+  `click` listeners. `notify` does not close the dialog, even for the default or cancel button. `notify()` gives a
+  click for a button, a check box and a radio button, and a change for the others.
+- `addEventListener(type, handler[, capture])` registers a function for `click`, `change`, `changing` or `show`,
+  and `removeEventListener` with the same arguments removes it, so that it does not run even when the event it was
+  waiting for is already running; a function registered twice for the same type and phase runs once. `show` can
+  be registered only on the dialog, and on a control it throws an `Error`. A window or control takes at most 256
+  handlers, past which `addEventListener` throws a `RangeError` (VectorCraft's own
+  limit). A handler gets an event with `type`, `target`, `currentTarget`, `eventPhase`, `bubbles`, `cancelable`
+  (always false), `detail` (1 for a click), `stopPropagation()` and `preventDefault()`, which does nothing. The
+  containers above the control run their `capture` handlers first, then the control runs its `onClick`,
+  `onChange` or `onChanging` and its own handlers, then the containers run their other handlers, from the nearest
+  out, until a handler calls `stopPropagation()`. The other documented event types (`focus`, `mouseover`,
+  `keydown` and the rest) throw that they are not available yet, and a handler that is not a function throws a
+  `TypeError`.
+- `Window.alert`, `Window.confirm` and `Window.prompt` open the same dialogs as `alert`, `confirm` and `prompt`.
+
+`show()` opens the dialog, runs `onShow` and the `show` handlers, and waits for the person. A click runs the
+control's `onClick` and `click` handlers; a check box turns its value over first, and a radio button turns on and
+the other radio buttons of its set off. An edit field gives its text when it loses the keyboard focus, at Enter in
+a one-line field, or before a click on another control, and a slider gives its value when it is let go: each runs
+`onChanging` and then `onChange`. A list's new selection runs `onChange`. Handlers run in the run's instructions,
+and a handler that does not end stops the run at its limit. `show()` returns the number given to `close(result)`
+(0 when left out), 1 when the default button is clicked and 2 when the cancel button is clicked, and 0 for the
+close box. The default or cancel button closes the dialog only when it has no `onClick` and no `click` handler of
+its own and no `capture` handler on a container stopped the click; `click` handlers on the containers that do not
+capture do not keep it from closing (VectorCraft's own rule). `onClose` runs before the dialog closes, and
+returning `false` keeps it open. The default button is `defaultElement`, else a button named or titled OK, and the
+cancel button is `cancelElement`, else a button named or titled Cancel, in any case; a button found by its name or
+title counts only while it is enabled and visible. A `show()` inside a handler while a dialog is showing, or of a
+dialog that is showing, throws an `Error`. In the app, a `show()` inside a callback of a built-in function, a handler
+that `notify` runs included, also throws an `Error`, and so do `alert`, `confirm`, `prompt` and the file dialogs called
+from a handler; in a run with nobody to ask, such a `show()` takes a `window` answer, and `alert`, `confirm` and
+`prompt` in a handler take their answers from `answers`. A shown dialog can be shown again after it closes.
+
+`show()` checks the dialog: at most 512 controls, nested at most 16 deep, 1,024 list items in all and 16 KiB of
+text a control, past which it throws a `RangeError`, a size or a place that is not a finite number, which throws
+too, and a slider's minimum above its maximum. When a getter changes a list's items or an item's text after the
+list was read, or adds or removes a control after the controls were read, it reads the dialog again, and throws an
+`Error` when the dialog changes again. It lays the controls out from each container's `orientation`,
+`alignChildren`, `spacing` and `margins` and each control's `alignment`, `preferredSize` (each side of `size` that
+is above 0 takes the place of `preferredSize`'s), `minimumSize`, `maximumSize` and `bounds`, which places it in its
+container. A control whose `visible` is false, and every control in it, takes no room in the layout. Sizes and places
+are kept within 8,192 pixels. These limits are VectorCraft's own.
+
+In the app, the dialog (kind `scriptWindow`) draws the controls where they were laid out and has a Stop button,
+which ends the run as `script.stop` does. It stays open while one of its handlers runs and closes when `show()`
+returns. Enter outside a field clicks the default button, also with the keyboard focus on a slider or another
+control that Enter does not click. Escape clicks the
+cancel button, or closes the dialog when it has none. Quitting while it waits, or while one of its handlers runs,
+asks whether to stop the script, and Cancel shows it again with the events it has not given the script yet. When a
+handler takes the run past the growth limit, the question to continue opens over the dialog, and Continue shows the
+dialog again with those events and the text typed in its fields. An event that waits for the script goes to the control
+it was given to, and a typed text stays in its field, also after a handler adds controls before that one.
+`ui.dialog.set` with `event` (`click`, `change` or `close`), `control` (a control's index in the dialog, its name, or
+the text of a control without a name) and `value`, then `ui.dialog.confirm`, gives the script that event; a click or a close first gives the
+script the text still typed in the dialog's fields. When the dialog holds events the script has not taken yet, the
+confirmed event goes after them. When one of those texts is longer than 16 KiB, the script gets
+no event and every field keeps its text: `ui.dialog.confirm`, `ui.dialog.cancel` and `ui.dialog.set` with `action`
+return an error, and Escape shows it in the status bar. Such a text stays in its field when the field loses the
+focus too, with the error in the status bar. A disabled or hidden control, a value out of a list's range, a
+list index that is not a whole number and a click on a control that takes none are errors, and the dialog stays
+open.
+
+A run with nobody to ask takes `{kind: "window", value: [step, ...]}` from `answers` for each `show()`. A step is
+`{control, event: "click"}`, `{control, event: "change", value}` or `{event: "close"}`, where `control` is a
+control's `name`, or the text of a control without a name, and `value` is an edit field's text, a slider's number (kept in its range), or a
+list's item index (a whole number, such as `2` or `2.0`) or `null`. The dialog takes the next step each time it
+waits. The run ends with an error that the script cannot catch, and every document goes back, when no step is
+left, when a step names a control the dialog does not have or that cannot take it, or when the dialog closes, or
+an error in a handler ends `show()`, with steps it did not use.
+
+```sh
+vectorcraft-cli run --cmd script.run --params '{"source": "var w = new Window(\"dialog\", \"Frame\"); var name = w.add(\"edittext\", undefined, \"Frame\", {name: \"name\"}); w.add(\"button\", undefined, \"OK\"); w.add(\"button\", undefined, \"Cancel\"); if (w.show() == 1) vc.log(name.text);", "answers": [{"kind": "window", "value": [{"control": "name", "event": "change", "value": "Border"}, {"control": "OK", "event": "click"}]}]}'
 ```
 
 The help pages https://extendscript.docsforadobe.dev/file-system-access/file-object/ and
@@ -3801,12 +3957,18 @@ underlines clipping-path names.
 
 ## Object selection
 
-`select.set {ids}` replaces the selection, `select.add {ids}` adds to it, and
-`select.toggle {id}` or `select.toggle {ids}` toggles each target.
+`select.set {ids}` replaces the selection, `select.add {ids}` adds to it,
+`select.toggle {id}` or `select.toggle {ids}` toggles each target, and `select.remove {id}` or `select.remove {ids}`
+takes each target out of the selection.
+`select.remove` also takes out an object inside a selected group or compound path and keeps the rest of the group
+selected: the outermost selected object around it leaves the selection, and the objects inside it on the way down to
+the target are selected in its place, except hidden and locked objects and a Shaper Group's original shapes. Direct Selection's Shift-click on the fill of a path inside a selected group runs
+it, and a Shift-drag from there moves nothing. A Shift-click on an anchor of such a path runs `select.anchors` with mode
+`toggle`, which deselects only that anchor: the path's other anchors and the group's other objects stay selected.
 Every id must be a non-negative integer naming an existing object.
 A malformed or unknown id is an error naming that value; the entire selection is left unchanged.
-All three commands return `{count, ids}` for the resulting selection, in selection order.
-An empty array clears the selection for `select.set` and leaves it alone for Add and Toggle.
+All four commands return `{count, ids}` for the resulting selection, in selection order.
+An empty array clears the selection for `select.set` and leaves it alone for Add, Toggle and Remove.
 
 `select.key {id}` makes `id` the key object that Align aligns to and Distribute Spacing spaces from (`object.align` without `to`, `object.distributeSpacing` with `spacing`), and `select.key {}` cancels it.
 The id must name a selected top-level object.
@@ -4245,8 +4407,22 @@ installed again or removed. `toolbar.reset {toolbar}` takes the buttons off with
 the workspace, and toolbars saved before command buttons existed load without any. Command buttons are VectorCraft's
 own.
 
+`toolbar.renameCommand {command, toolbar, label?}` (Rename Button… in the button's context menu) gives a button a
+label of its own, and `toolbar.addCommand` takes the same optional `label`. Spaces at the ends of the label are
+dropped, and it has at most 64 characters; an empty label, on either command, gives the button its command's label
+again. Without `label`, or with a null one, `toolbar.renameCommand` opens the Rename Button dialog and answers null.
+The dialog keeps its OK from closing it while the label is refused, and an OK after switching workspaces is refused.
+Otherwise it answers
+`{command, label}`, with `label` null for the command's own, and `window.toolbar.list` reports `labels`
+({command: label}) for each toolbar. The hover text still shows the command's name and shortcut, and a screen reader
+says the label and then the command's name, or only the label when it is the command's label or name. Control
+characters and characters that change the direction of text show as `\u{…}` escapes on the button. A longer label, a
+label that is not text or a button the toolbar does not have is an error and changes nothing. Labels are kept with the
+toolbar, Manage Toolbars' copy keeps them, and `toolbar.removeCommand` and `toolbar.reset` drop them with the buttons.
+
 ```json
 {"name":"invoke_menu","arguments":{"command":"toolbar.addCommand","params":{"command":"object.group","toolbar":"Toolbar 1"}}}
+{"name":"invoke_menu","arguments":{"command":"toolbar.renameCommand","params":{"command":"object.group","toolbar":"Toolbar 1","label":"Grp"}}}
 ```
 
 ## Help search
@@ -4715,7 +4891,32 @@ already walks Image Trace. Short agent entry points:
   and the brush's name, so a stroke draws the same colors on every redraw, after Save and Open, and in export. Hue
   jitter does not change where the copies go or their size and rotation. A value outside the range is clamped, as
   the brush's other values are. A brush saves `hue_jitter` only when it is above 0, and a brush without the key
-  reads as 0; `brush.get` shows it for every scatter brush. `brush.new` and `brush.options` take a bristle brush name of at most 31 characters:
+  reads as 0; `brush.get` shows it for every scatter brush. A scatter brush's `saturation_jitter` (0 to 100
+  percent, VectorCraft's own range; 0, the default, leaves every copy's colors as they are) moves the saturation of
+  each copy's solid fills and strokes, its type's characters included, by that copy's own amount between minus and
+  plus that many percentage points, after the colorization and the hue jitter. A color keeps its hue and brightness
+  and moves in its own model: RGB in the HSB of its values, CMYK over its C, M and Y with its K kept, and Lab by
+  moving its chroma (the length of a and b) by that many units with its lightness and hue angle kept, with a and b
+  kept within 127. The saturation stops at none, which gives a gray, and at full. Colors without a hue (as for
+  `hue_jitter`) stay as they are, gradients and patterns stay, and a moved color loses its swatch link. The amounts
+  depend only on the stroke's path and the brush's name, and they are drawn apart from the hue jitter's, so turning
+  saturation jitter on does not change the hue jitter's amounts. A stroke draws the same colors on every redraw,
+  after Save and Open, and in export, and the copies keep their places, sizes and rotations. A value outside the
+  range is clamped. A brush saves `saturation_jitter` only when it is above 0, a brush without the key reads as 0,
+  and `brush.get` shows it for every scatter brush. A scatter brush's `brightness_jitter` (0 to 100 percent,
+  VectorCraft's own range; 0, the default, leaves every copy's colors as they are) moves the brightness of each
+  copy's solid fills and strokes, its type's characters included, by that copy's own amount between minus and plus
+  that many percentage points, after the colorization and the hue and saturation jitter. A color keeps its hue and
+  saturation and moves in its own model: RGB in the HSB of its values, Gray by that much less or more ink, Lab by
+  moving its lightness by that many units with its a and b kept, and CMYK by changing its K over the brightness its
+  C, M and Y leave, with C, M and Y changing only when the color goes brighter than they show with no K (they then
+  lose their K). The brightness stops at black and at full. Unlike the hue and saturation jitter, white, black and
+  grays move too. Gradients and patterns stay, and a moved color loses its swatch link. The amounts depend only on
+  the stroke's path and the brush's name, and they are drawn apart from the hue and saturation jitter's, so turning
+  brightness jitter on does not change their amounts. A stroke draws the same colors on every redraw, after Save and
+  Open, and in export, and the copies keep their places, sizes and rotations. A value outside the range is clamped.
+  A brush saves `brightness_jitter` only when it is above 0, a brush without the key reads as 0, and `brush.get`
+  shows it for every scatter brush. `brush.new` and `brush.options` take a bristle brush name of at most 31 characters:
   `brush.new` refuses a longer one, counting the number it adds to a taken name, and `brush.options` refuses a
   longer `newName`. `brush.duplicate` does not check the length. A bristle brush that already has a longer name
   keeps it, and `brush.options` without a new name, or with a `newName` that only trims the white space around the
@@ -4737,7 +4938,7 @@ already walks Image Trace. Short agent entry points:
   keep their settings. The fields a path can set are VectorCraft's own choice: calligraphic `angle` (counter-clockwise from
   level), `roundness`, `size`, `variation` and `modes`; scatter `size`, `spacing`, `scatter`, `rotation`
   (counter-clockwise), `modes`,
-  `rotation_relative_to_path` and `colorization`; art `width`, `width_mode`, `width_max`, `flip_along`, `flip_across`,
+  `rotation_relative_to_path`, `colorization`, `hue_jitter`, `saturation_jitter` and `brightness_jitter`; art `width`, `width_mode`, `width_max`, `flip_along`, `flip_across`,
   `overlap` and `colorization`; pattern `scale`, `spacing`, `fit`, `flip_along`, `flip_across` and `colorization`.
   Values outside their ranges are clamped as in `brush.options`, a `colorization` object changes only the fields it
   gives, a `null` item of an array (`size: [40, null]`) keeps each path's own item, else the brush's, and a setting
@@ -5760,6 +5961,11 @@ See [Revolve](revolve.md) for the scope and limitations.
 {"name":"run_command","arguments":{"command":"effect.setParams","params":{"index":0,"item":null,"params":{"expandVisibleOnly":true}}}}
 {"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{}}}
 ```
+
+Approving an existing 3D effect's options without changing its values preserves the exact stored effect,
+document revision and Undo history, with Preview on or off. `effect.setParams` returns an empty `ids` array when
+only its 3D parameters are being set and they equal the current values after validation, including omitted defaults and equivalent JSON number
+representations. A changed option still saves in one step; invalid parameters are still refused.
 
 ## 3D lighting presets
 
@@ -7035,6 +7241,7 @@ and `layerRows`, the rows highlighted in the panel.
   draws and is clicked in outline, Ctrl/Cmd-click its eye), `dimImages` (0–100, or false) and `color` (an index 0–26,
   `#rrggbb` or a preset name; a hex color with an alpha part, `#rrggbbaa` or `#rgba`, is an error, and so it is in
   `layer.new` and `layer.newSublayer`). Several rows change in one undo step (a drag down the eye or lock column).
+  When every row already has every option given, the call records no undo step.
   A ruler guide's row has its own eye and lock: `ids` may name ruler guides (their `id` in `guide.list`), which take
   `visible` and `locked`. They can be changed while the guide's layer is hidden or locked, and the guide shows
   or can be edited only when its layer allows it as well. Alt-click on a guide row's eye or lock acts on the other
@@ -7692,6 +7899,19 @@ request that leaves the anchor as it is records no undo step, and `link: true` w
 ("`link` and `independent` cannot both be true"), as is an x or y of 1e9 pt or more in size with `link: true`
 ("x and y must be finite"). `object.blend.spine.moveAnchor` takes `link` with `handle` in the
 same way for a blend's spine point; without `handle` it is refused. These rules are VectorCraft's own.
+`path.moveHandles {handles: [{id, subpath?, anchor, which}], dx, dy, independent?}` moves several direction handles,
+on one path or several, by the same offset as one undo step. An anchor with one handle listed places it as
+`path.setHandle` does, so a smooth anchor turns its other handle in line at its own length; an anchor with both handles
+listed moves both and becomes a corner. `independent: true` makes the anchor of every listed handle a corner and leaves
+its other handle where it is. A handle listed twice moves once, and a move by 0, 0 that makes no anchor a corner leaves
+the document as it is and records no undo step. An empty or missing `handles`, a `which` other than `"in"` or `"out"`,
+an object that is not a path, a missing subpath or anchor, a `dx` or `dy` that is missing, not a number or 1e9 pt or
+more in size, and an `independent` that is not true or false are refused, and the document does not change. With Direct
+Selection, a click on the end of a direction handle of a path picks that handle, a Shift-click adds it to the picked
+handles or takes it away, and Escape lets them go; picked handles show ringed. A Shift-press on a handle moves it only
+once the pointer has moved 3 pixels, so a Shift-click leaves it where it is. Dragging one of two or more picked handles
+moves all of them by the offset of the dragged one (`path.moveHandles`), which snaps as a single handle's drag does,
+and Alt sends `independent`; the handles stay picked after the drag. These rules are VectorCraft's own.
 `path.insertAnchor` keeps the direct-selected anchors and selected segments of the path on the same points: those
 after the new anchor on its subpath are numbered one higher, and a selected segment that the new anchor splits stays
 selected as its two halves, with the new anchor as an end of both that moves with them. Undo restores the path and
@@ -8492,8 +8712,8 @@ can place leaves the image at the parallelogram nearest them. A file whose `imag
 the corners where they are records none. Image info (`image.info`) gives a distorted image's resolution at its middle, and Link
 Info (`links.info`) gives its scale and rotation there.
 
-Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Create Object Mosaic
-(`object.createObjectMosaic`) and Place with Replace (`file.place` with `replace`) of anything but a text file refuse a
+Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`) and Place with Replace
+(`file.place` with `replace`) of anything but a text file refuse a
 distorted image with an error that names the distortion; Place with Replace does not refuse a clipping group that holds
 a distorted image of a DCS file's plates. Create Gradient Mesh (`object.mesh.create`) converts the other objects it is
 given and lists each distorted image it leaves as it is in `skipped`, with its `id` and the error as `reason`; with
@@ -8678,6 +8898,14 @@ midpoint; any finite value is brought into 0 to 360). With both, the length appl
 0° and keeps its place under `lineAngle`; `lineLength` points it to the right. A length that isn't a number above 0,
 and a line that would reach past the coordinate limit (±4,000,000 pt), are errors that change no line. Each call is
 one undo step.
+
+A new `rectangleAngle`, `ellipseAngle`, `polygonAngle`, `polygonRadius` or `sideLength`, `makeSidesEqual`, `lineLength`
+or `lineAngle` moves, scales or turns the object as a transform does: a linked opacity mask and placed gradients go
+with the shape, pattern tiles go with it when `patterns` (or General › Transform Pattern Tiles) is on, and strokes and
+effects scale when `strokes` (or Scale Strokes & Effects) is on. Corner radii in the mask keep their size, as the
+shape's own do, whatever Scale Corners is set to. A line takes the turn and even scale that take its old ends to its new
+ones; a line whose ends met takes none. The bounding box keeps its angle. An object named more than once in `ids` or
+`items` moves once. A new `sides` or pie leaves the rest of the object where it is.
 
 A live rectangle's Rectangle Angle and a live ellipse's Ellipse Angle are `rectangleAngle` and `ellipseAngle`
 (degrees counterclockwise, 0 for a shape drawn level; any number is read modulo 360). The help page
@@ -10149,7 +10377,8 @@ them (with `allArtboards: true`, the colors as Paste on All Artboards brings the
 copied artboards), and `swatchConflict` answers: `"merge"` (the default: the objects take the document's swatch), `"add"` (the
 pasted swatch comes in renamed) or one answer per name. When a merged swatch turns a pie's wedge from light to dark
 or back, the legend labels in that pie's wedges take the contrast a redraw gives them (white on a dark wedge, black on
-a light one), unless the legend labels have a fill of their own. Pasting back into the document the objects came from
+a light one), unless the legend labels have a fill of their own. The same applies to a pie in the art of a symbol,
+pattern, brush or graph design that the paste brings in. Pasting back into the document the objects came from
 uses its resources as they are now and raises no conflict.
 
 Placement: `edit.paste {center}` centres the objects on a point (the app passes the view centre), else offsets them
@@ -12089,6 +12318,17 @@ bits, and alpha is kept. Colors are converted to sRGB in XYB-encoded images and 
 or the embedded ICC profile describes one the decoder knows; other images with an embedded ICC profile keep their
 samples as stored. CMYK files are refused, and an image past the pixel allowance is refused from its header, before
 its pixels are decoded. `file.place {path}` links the file like any image. VectorCraft doesn't write JPEG XL.
+
+Layered raster `.pcraft` documents open and place as one image, stored as PNG and sized by the document's resolution.
+The image is the file's full-size composite when it has one. Without one, the layers are combined at the canvas size
+when the document is RGB at 8 or 16 bits and every visible layer is a raster layer that blends Normal, with no
+clipping, layer effects, vector mask, frame, advanced blending options or feathered layer mask; hidden layers are not
+read, and an RGB ICC profile the document names is kept. Otherwise the composite preview comes in at the canvas's
+size (at 1 ppi when that would take less), and when it has fewer pixels than the canvas the reply's `warnings` name both sizes and why the layers were not
+combined. A full-size composite or preview the file names but doesn't hold or can't be decoded is an error.
+`file.place {path}` links the file like any image, and `links.update` and `links.relink` read it again the same way;
+their `warnings`, and those of `links.replaceEmbedded`, say when only the preview was read. VectorCraft doesn't write
+`.pcraft` files.
 
 ```json
 {"name":"export","arguments":{"path":"/tmp/poster.psd","options":{"ppi":300,"maxEditability":true}}}
@@ -15874,6 +16114,9 @@ Tools:
   `addon.pathtools.shape.set`. A double-click on the canvas places a shape with the last settings. A new shape's
   center and the point dragged out from it snap as drawn points do. Options
   (`tool.setOption`, or the panel with no shape selected) are the next shape's numbers, as the commands take them.
+  Canceling a Parametric Shape panel edit or Shape menu choice restores its opening value: a selected shape's edit is
+  one undo step that the cancel takes back, and with no shape selected the tool keeps its opening option. With no
+  shape selected, a highlighted Shape menu entry applies only once it is chosen.
 - **Corner Tool** (`cornerTool`, or the UI command `addon.pathtools.cornerTool`, which also shows the Anchor Inspector
   panel with its Corners section): edits the app's Live Corners on any path, selected or not. Over an anchor where two
   sides meet at an angle the anchor shows; a click runs `addon.pathtools.cornerSet` with the tool's `radius` (pt, 10)
@@ -16120,16 +16363,20 @@ Commands:
   60,000,000 pairs of segments to compare in all, when the curves are too tangled to find where they cross, or when
   checking `points` against the paths would take more than 60,000,000 comparisons. These rules are VectorCraft's own.
   → `{ids, removed}`: the paths left of those trimmed, and the stretches removed.
-- `addon.pathtools.shape.create {center, kind?, width?, height?, rotation?, count?, a?, b?, radius?}` draws a parametric
-  shape with the current paint, selected. `kind`: `rectangle`, `ellipse`, `polygon` (default), `star`, `ring`, `arrow`,
-  `cross`, `heart`, `gear` or `bubble` (a speech bubble). `width` and `height` are 0.01 to 16,384 pt (100);
-  `rotation` is in degrees clockwise (0: upright, a polygon's first corner up); `count` is a polygon's sides, a star's
+- `addon.pathtools.shape.create {center, kind?, width?, height?, rotation?, count?, a?, b?, radius?, sliceStart?,
+  sliceEnd?}` draws a parametric shape with the current paint, selected. `kind`: `rectangle`, `ellipse`, `polygon`
+  (default), `star`, `ring`, `arrow`, `cross`, `heart`, `gear` or `bubble` (a speech bubble). `width` and `height`
+  are 0.01 to 16,384 pt (100); `rotation` is in degrees clockwise (0: upright, a polygon's first corner up); `count` is a polygon's sides, a star's
   points or a gear's teeth (3 to 1,000); `radius` rounds the corners (0 to 16,384 pt; no corner passes the middle of a
   side). `a` and `b` are the kind's own values, fractions of its size: star, inner radius (0.01 to 1, 0.5); ring, the
   hole (0.01 to 0.99, 0.5); arrow, head length and shaft width (0.05 to 0.95, 0.4 each); cross, the bar's offset (−0.9
   to 0.9, 0; negative is up) and the arms' thickness (0.05 to 0.95, 1/3); heart, the notch's depth and the point's
   roundness (0 to 1; 0.4 and 0); gear, tooth height (0.01 to 0.9, 0.2); bubble, the tail's height (0.05 to 0.9, 0.25)
-  and where its tip is across (−1 to 1, −0.4). → `{id, shape}`.
+  and where its tip is across (−1 to 1, −0.4). `sliceStart` and `sliceEnd` (0 to 360, both 0) cut a rectangle,
+  ellipse, polygon, star or ring as a slice: the angles are degrees clockwise from the shape's top, measured as if the
+  shape were as high as it is wide (45° is a rectangle's top right corner), and the slice runs clockwise from the start
+  to the end and back through the center; a ring's slice runs back along its hole. The same start and end leave the
+  whole shape, rounded corners are rounded before the cut, and the other kinds ignore both values. → `{id, shape}`.
 - `addon.pathtools.shape.set {id, …}` changes a parametric shape's numbers (the same keys; a new `kind` takes its own
   defaults for the values not given) and redraws it in place. With `reference` (0 to 8 on the 9-point grid of the
   bounding box as `object.setBounds` measures it, rotated with rotated objects) and no `center`, that point of the box
@@ -17253,6 +17500,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Existing 3D effect options: unchanged validated parameters preserve the stored effect, document revision and Undo, including defaults and equivalent numeric JSON. |
 | 2026-11-27 | Shape Control bar: canceled numeric edits restore future-tool settings and coupled radii along with selected artwork; retired edits cannot overwrite a different tool. Native scrub, keyboard, next-shape and Undo cases covered. Scores and estimates unchanged. |
 | 2026-11-27 | Anchor Inspector: Cancel restores Corner radius/kind and Shared Edge diameter/coincidence tool values; accepted settings leave document history unchanged. Native numeric and menu cases covered. Scores and estimates unchanged. |
 | 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
