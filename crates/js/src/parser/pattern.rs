@@ -209,8 +209,8 @@ impl Parser<'_> {
     }
 
     /// An assignment's, `++`'s or `--`'s target without the call that ECMAScript 5.1 code may
-    /// assign to: an identifier (in strict code neither `eval` nor `arguments`), a property or an
-    /// E4X name standing alone.
+    /// assign to: an identifier (in strict code neither `eval` nor `arguments`), a property (a
+    /// super property included) or an E4X name standing alone.
     fn check_simple_target(&self, expr: ExprId, message: &str) -> Result<()> {
         let inner = self.ast.unparenthesized(expr);
         match self.ast.expr(inner) {
@@ -220,7 +220,7 @@ impl Parser<'_> {
                 }
                 Ok(())
             }
-            Some(Expr::Member { .. } | Expr::Index { .. } | Expr::XmlScopeName(_)) => Ok(()),
+            Some(Expr::Member { .. } | Expr::Index { .. } | Expr::XmlScopeName(_) | Expr::SuperMember(_) | Expr::SuperIndex(_)) => Ok(()),
             _ => Err(self.error_at_offset(self.ast.expr_span(expr).start, message)),
         }
     }

@@ -1290,6 +1290,11 @@ fn subclasses_inherit_and_reach_the_superclass_through_super() {
     truth("class A { constructor(...a) { this.n = a.length; } } class B extends A {} new B(1, 2, 3).n === 3");
     truth("class A { static s() { return 1; } } class B extends A { static s() { return super.s() + 1; } } B.s() === 2");
     truth("class A {} class B extends A { m() { super.x = 5; return this.x; } } var b = new B(); b.m() === 5 && !A.prototype.hasOwnProperty('x')");
+    // A super property is a target of destructuring and of `for-of` as well.
+    truth(
+        "class A {} class B extends A { m() { [super.x, super['y']] = [1, 2]; ({ z: super.z } = { z: 3 }); for (super.w of [4]) {} \
+           return this.x * 1000 + this.y * 100 + this.z * 10 + this.w; } } new B().m() === 1234 && !A.prototype.hasOwnProperty('x')",
+    );
     truth(
         "class A { get v() { return this.w; } } class B extends A { constructor() { super(); this.w = 7; } get v() { return super.v + 1; } } new B().v === 8",
     );
