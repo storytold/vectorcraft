@@ -239,8 +239,12 @@ impl Interp {
     /// gets `true` as a third argument.
     pub(crate) fn host_index(&mut self, f: &HostFunction, id: ObjId, k: Data, probe: bool) -> JsResult<Value> {
         self.use_fuel()?;
-        let Some(this) = self.host_ref_of(id)? else { return Ok(Value::Undefined) };
-        let mut args = vec![this, k];
+        let Class::Host(h) = &self.object(id)?.class else { return Ok(Value::Undefined) };
+        let name: Rc<str> = match self.host_classes.get(h.class as usize) {
+            Some(e) => format!("{}[]", e.name).into(),
+            None => return Err(Abrupt::Internal("host class out of range".into())),
+        };
+        let Some(mut args) = self.read_indexer_args(&name, id, k)? else { return Ok(Value::Undefined) };
         if probe {
             args.push(Data::Bool(true));
         }

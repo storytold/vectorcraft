@@ -841,6 +841,24 @@ fn the_handles_of_host_objects_given_to_the_host_count_toward_the_data_limits() 
 }
 
 #[test]
+fn the_object_an_indexer_reads_counts_toward_the_data_limits() {
+    let mut r = realm(100_000_000);
+    let index: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let class = HostClass { name: "List".into(), parent: None, members: Vec::new(), index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("long".into(), host_ref("List", &[0.0; 1024])), ("short".into(), host_ref("List", &[0.0]))]).unwrap();
+    r.set_data_limits(DataLimits { depth: 64, bytes: 16 << 20, entries: 1_000 });
+    let probe = "var m = 'none'; try { long[0]; } catch (e) { m = e.name + '|' + e.message; } m";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("RangeError|") && out.contains("too many entries"), "{out}");
+    // A long name given to the indexer counts too.
+    r.set_data_limits(DataLimits { depth: 64, bytes: 1_000, entries: 1_000 });
+    let probe = "var m = 'none'; try { short[new Array(600).join('x')]; } catch (e) { m = e.name + '|' + e.message; } m";
+    let JsValue::String(out) = r.run(probe).unwrap() else { panic!("not a string") };
+    assert!(out.starts_with("RangeError|") && out.contains("too large"), "{out}");
+    assert_eq!(r.run("short[0] + short.name").unwrap(), JsValue::Number(2.0));
+}
+
+#[test]
 fn a_host_class_constructor_called_with_new_cannot_wait() {
     let mut r = realm(1_000_000);
     let could: Rc<Cell<Option<bool>>> = Rc::default();

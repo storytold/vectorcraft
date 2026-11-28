@@ -307,6 +307,23 @@ impl Interp {
         self.host_ref_of(id)?.ok_or_else(|| Abrupt::Internal("host object without a class".into()))
     }
 
+    /// The arguments an indexer named `name` gets for `object[k]`: the object of a host class `id`
+    /// and the key `k`, charged to the data limits as the arguments of a member call are. `None`
+    /// when `id` is not an object of a host class.
+    pub(crate) fn read_indexer_args(&mut self, name: &Rc<str>, id: ObjId, k: Data) -> JsResult<Option<Vec<Data>>> {
+        if self.host_ref_size(id)?.is_none() {
+            return Ok(None);
+        }
+        let mut reading =
+            Reading { limits: self.data_limits, bytes: 0, entries: 0, ancestors: Vec::new(), path: Vec::new(), function: name.clone(), hosted: true };
+        let this = self.read_host_ref(id, &mut reading)?;
+        if let Data::String(s) = &k {
+            reading.path.push(Step::Index(0));
+            self.charge_reading(&mut reading, s.encode_utf16().count().saturating_mul(3).saturating_add(2))?;
+        }
+        Ok(Some(vec![this, k]))
+    }
+
     fn read_array(&mut self, id: ObjId, length: u32, r: &mut Reading) -> JsResult<Data> {
         self.charge_entries(r, length as usize)?;
         let mut items = Vec::with_capacity(length as usize);
