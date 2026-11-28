@@ -981,7 +981,9 @@ mod tests {
         let mut app = app();
         open(&mut app);
         set(&app, "artboards", json!(5)).unwrap();
-        set(&app, "artboardLayout", json!({"layout": "gridByColumn", "rows": 3.6, "spacing": 10})).unwrap();
+        // Rows that are not a whole number are refused, as `file.new` refuses them.
+        assert!(set(&app, "artboardLayout", json!({"layout": "gridByColumn", "rows": 3.6, "spacing": 10})).is_err());
+        set(&app, "artboardLayout", json!({"layout": "gridByColumn", "rows": 4, "spacing": 10})).unwrap();
         assert_eq!(fields(&app)["artboardLayout"]["rows"], json!(4));
         create(&mut app);
         let st = app.session.active().unwrap();

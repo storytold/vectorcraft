@@ -895,7 +895,8 @@ pub(crate) fn anchor_from_json(v: &Value, cmd: &str) -> Result<Anchor> {
     };
     let mut anchor = Anchor::with_handles(p, handle("in")?, handle("out")?);
     match v.get("smooth").filter(|b| !b.is_null()) {
-        None | Some(Value::Bool(false)) => {}
+        None => {}
+        Some(Value::Bool(false)) => anchor.kind = AnchorKind::Corner,
         Some(Value::Bool(true)) => anchor.kind = AnchorKind::Smooth,
         Some(_) => return Err(bad(cmd, "anchor `smooth` must be true or false")),
     }
