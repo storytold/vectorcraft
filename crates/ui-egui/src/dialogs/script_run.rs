@@ -744,15 +744,17 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
             Err(e) if !listed.is_null() => Err(e),
             now => Ok(now.unwrap_or(Value::Null)),
         }
-        .and_then(|now| if now == listed {
-            let stored =
-                if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
-            let run = |app: &mut VectorcraftApp| crate::script_runs::run_chosen(app, params).map(drop);
-            let automated = automated || app.automation_asked();
-            stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run)))
-        } else {
-            app.status(CHANGED_SINCE_WARNING);
-            warn(app, params, now, scope, automated).map(drop)
+        .and_then(|now| {
+            if now == listed {
+                let stored =
+                    if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
+                let run = |app: &mut VectorcraftApp| crate::script_runs::run_chosen(app, params).map(drop);
+                let automated = automated || app.automation_asked();
+                stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run)))
+            } else {
+                app.status(CHANGED_SINCE_WARNING);
+                warn(app, params, now, scope, automated).map(drop)
+            }
         });
         if let Err(e) = ran {
             app.status(e);
