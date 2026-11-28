@@ -317,3 +317,37 @@ fn the_app_and_a_run_with_nobody_to_ask_give_the_same_results() {
     assert_eq!(framed["dialogs"], headless["dialogs"]);
     assert_eq!(framed["log"], json!([true, "p", "done"]));
 }
+
+/// Only the person at the keyboard turns off the external script warning: Yes from automation, set
+/// as the answer or given in a pass automation drives, is refused, the warning stays on and the
+/// question opens again; No is taken from automation.
+#[test]
+fn only_the_person_turns_off_the_external_script_warning() {
+    let mut app = app();
+    app.session.prefs.show_external_script_warning = true;
+    // The warning before the run itself is answered by the person.
+    start(&mut app, "app.preferences.setBooleanPreference('ShowExternalJSXWarning', false); vc.log('done');");
+    if is_open::<script_run::RunQuestion>(&app) {
+        let id = open_id(&app, script_run::KIND);
+        script_run::with_host(&app, |host, ctx| host.confirm_by_id(ctx, id)).unwrap();
+        pump(&mut app);
+    }
+    assert!(until_dialog(&mut app));
+    assert_eq!(set(&app, NOTICE_KIND, "answer", json!("yes")).unwrap_err(), script_run::WARNING_BY_PERSON);
+    assert!(is_open::<ScriptNotice>(&app), "the question stays open");
+    assert!(app.session.script_dialog().is_some(), "the run still waits");
+
+    script_run::forget::<ScriptNotice>(&app);
+    app.ui.answering_control = true;
+    let yes = script_run::ScriptAnswer { kind: "confirm".into(), answer: "yes", value: String::new() };
+    script_run::settle_notice(&mut app, craft::ui::dialog::DialogResult::Ok(yes));
+    app.ui.answering_control = false;
+    assert_eq!(app.ui.status, script_run::WARNING_BY_PERSON);
+    assert!(is_open::<ScriptNotice>(&app), "the question opens again");
+    assert!(app.session.script_dialog().is_some(), "the run still waits");
+
+    set(&app, NOTICE_KIND, "answer", json!("no")).unwrap();
+    assert!(confirm(&mut app, NOTICE_KIND), "No is taken from automation");
+    assert!(!until_dialog(&mut app));
+    assert!(app.session.prefs.show_external_script_warning, "the warning stays on");
+}

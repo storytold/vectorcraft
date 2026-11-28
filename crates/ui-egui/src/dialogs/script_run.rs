@@ -67,6 +67,8 @@ pub const PICKER_KIND: &str = "scriptFiles";
 
 /// Why Allow Once and Always Allow are refused to automation.
 pub(crate) const BY_PERSON: &str = "Only the person at the keyboard can allow a script's file access";
+/// Why Yes to turning off the external script warning is refused to automation.
+pub(crate) const WARNING_BY_PERSON: &str = "Only the person at the keyboard can turn off the external script warning";
 
 /// The note the file dialog shows when the person picked more files than a script is given.
 const PICKED_LEFT_OUT: &str = "A script is given at most 2,048 files: the files picked after them were left out";
@@ -273,6 +275,9 @@ impl StackDialog for ScriptNotice {
                 let Some(answer) = answers_for(&self.kind).split(", ").find(|answer| *answer == wanted) else {
                     return Err(format!("`answer` for this {} dialog must be one of: {}", self.kind, answers_for(&self.kind)));
                 };
+                if answer == "yes" && self.message == WARNING_OFF_QUESTION {
+                    return Err(WARNING_BY_PERSON.into());
+                }
                 self.answer = Some(answer);
             }
             _ => return Err(FieldRefusal::Unknown.message(field)),
@@ -663,6 +668,16 @@ pub(crate) fn settle_notice(app: &mut VectorcraftApp, result: DialogResult<Scrip
             ScriptAnswer { kind, answer, value: String::new() }
         }
     };
+    // Only the person at the keyboard turns off the external script warning: Yes from a pass
+    // automation drives is refused, the warning stays on, and the question opens again.
+    let warning_off = app.session.script_dialog().is_some_and(|d| d.message == WARNING_OFF_QUESTION);
+    if warning_off && answer.answer == "yes" && app.automation_is_acting() {
+        app.status(WARNING_BY_PERSON);
+        if let Some(d) = app.session.script_dialog() {
+            open_notice(app, &d);
+        }
+        return;
+    }
     if let Err(e) = give(app, &answer) {
         app.status(e);
         if let Some(d) = app.session.script_dialog() {
