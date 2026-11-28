@@ -51,7 +51,7 @@ const ROWS: &[Row] = &[
     (&["mirrorCut"], None, &["axis", "keep"]),
     (&["puppetWarp"], None, &["showMesh", "expand"]),
     (&["arc"], None, &["closed", "lengthX", "lengthY", "reference", "baseAlong", "slope", "fillArc"]),
-    (&[crate::three_point_arc::ID], None, &["direction"]),
+    (&[crate::three_point_arc::ID], None, &["direction", "join", "tangentSnap"]),
     (&["spiral"], None, &["decay", "segments", "clockwise"]),
     // The grids' Tool Options: the dividers and switches the drag uses, the Default Size and
     // Reference Point a click's dialog opens with.

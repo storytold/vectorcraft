@@ -1504,6 +1504,91 @@ fn join_pair(d: &mut Document, (a, sa): (NodeId, usize), (b, sb): (NodeId, usize
     Ok(compound_or_self(d, a))
 }
 
+/// An end of an open subpath of an editable path (not a guide) at `at`: the path, the subpath and
+/// whether the end is the subpath's first anchor. In isolation mode (`scope`), only a path inside
+/// the isolated node counts. Among several, one in or inside the selection `selected` comes first,
+/// then the last in paint order.
+pub(super) fn open_end_at(d: &Document, scope: Option<NodeId>, selected: &[NodeId], at: Point) -> Option<(NodeId, usize, bool)> {
+    let editable = d.editable();
+    let mut found: Option<((NodeId, usize, bool), bool)> = None;
+    d.walk(|n| {
+        let NodeKind::Path { path, guide: false, .. } = &n.kind else { return };
+        if !editable(n.id) {
+            return;
+        }
+        let chain = d.ancestry(n.id).unwrap_or_default();
+        if scope.is_some_and(|s| !chain.contains(&s)) {
+            return;
+        }
+        let chosen = chain.iter().any(|id| selected.contains(id));
+        for (si, sp) in path.subpaths.iter().enumerate().filter(|(_, sp)| !sp.closed) {
+            let Some((first, last)) = end_points(sp) else { continue };
+            let end = if last.distance(at) < 1e-6 {
+                false
+            } else if first.distance(at) < 1e-6 {
+                true
+            } else {
+                continue;
+            };
+            if found.is_none_or(|(_, was)| chosen || !was) {
+                found = Some(((n.id, si, end), chosen));
+            }
+        }
+    });
+    found.map(|(end, _)| end)
+}
+
+/// `sp`, an open subpath whose end (its first anchor when `at_first`) lies on an end of `arc`
+/// (its first anchor when `arc_at_start`), with `arc` added there: one subpath running the way
+/// `sp` runs. The anchor where they meet is `sp`'s, with its handle on the arc's side taken from
+/// the arc.
+fn splice(sp: &SubPath, at_first: bool, arc: &SubPath, arc_at_start: bool) -> SubPath {
+    let mut arc = arc.clone();
+    if arc_at_start == at_first {
+        arc.reverse();
+    }
+    let mut out = sp.clone();
+    if at_first {
+        let meet = arc.anchors.pop();
+        if let (Some(meet), Some(first)) = (meet, out.anchors.first_mut()) {
+            first.h_in = meet.h_in;
+        }
+        arc.anchors.extend(out.anchors);
+        out.anchors = arc.anchors;
+    } else {
+        if !arc.anchors.is_empty() {
+            let meet = arc.anchors.remove(0);
+            if let Some(last) = out.anchors.last_mut() {
+                last.h_out = meet.h_out;
+            }
+        }
+        out.anchors.extend(arc.anchors);
+    }
+    out
+}
+
+/// The arc `arc` joined to the open path ends `start` (at its first anchor) and `end` (at its
+/// last), as [`open_end_at`] gives them, at least one of them. The arc joins the path at `start`
+/// first, keeping that path's direction and look, and then, when `end` is an end of another open
+/// subpath, that subpath joins it as Join joins two paths; when `end` is the other end of the same
+/// subpath, the subpath closes. Returns what to select: the joined path, or its compound path.
+pub(super) fn join_arc(d: &mut Document, arc: &SubPath, start: Option<(NodeId, usize, bool)>, end: Option<(NodeId, usize, bool)>) -> Result<NodeId> {
+    let err = || EngineError::Other("join needs open paths".into());
+    let ((id, si, at_first), arc_at_start, rest) = match (start, end) {
+        (Some(s), e) => (s, true, e),
+        (None, Some(e)) => (e, false, None),
+        (None, None) => return Err(err()),
+    };
+    let path = path_mut(d, id)?;
+    let sp = path.subpaths.get_mut(si).filter(|sp| !sp.closed && !sp.anchors.is_empty()).ok_or_else(err)?;
+    *sp = splice(sp, at_first, arc, arc_at_start);
+    match rest {
+        // The arc's far end is the first anchor of the joined subpath when it was added before it.
+        Some((other, osi, other_first)) => join_pair(d, (id, si), (other, osi), (at_first, !other_first), None),
+        None => Ok(compound_or_self(d, id)),
+    }
+}
+
 pub(super) type AnchorTargets = Vec<(NodeId, Vec<(usize, usize)>)>;
 
 pub(super) fn anchor_targets(s: &Session) -> Result<AnchorTargets> {
