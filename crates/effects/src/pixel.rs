@@ -1192,6 +1192,35 @@ pub(super) fn gaussian(px: &mut [Px16], w: usize, sigma: f64) {
     }
 }
 
+/// Feather's fade over `coverage`, a `w` × `h` mask of how much of each pixel the shape covers:
+/// how much of each pixel's art to keep, by how far inside the shape it is, eased from none on the
+/// outline to all of it `radius` pixels in, and none outside. The art already holds the coverage,
+/// so the fade doesn't. `None` when the grid is too small or too large to measure.
+pub fn feather_fade(coverage: &[u8], w: usize, h: usize, radius: f64) -> Option<Vec<u8>> {
+    if coverage.len() != w.checked_mul(h)? {
+        return None;
+    }
+    // Only a clear pixel is outside: a pixel the outline crosses is partly inside, however little
+    // it covers, so a silhouette thinner than a pixel keeps its ink.
+    let outside: Vec<bool> = coverage.iter().map(|&a| a == 0).collect();
+    let d2 = vectorcraft_trace::squared_distances(&outside, w, h)?;
+    let radius = radius.max(0.5);
+    Some(
+        coverage
+            .iter()
+            .zip(d2)
+            .map(|(&a, d2)| {
+                // The covered part of the pixel ends its coverage past the edge of the nearest clear
+                // pixel, whose centre is a pixel away; it fades as the middle of that part does.
+                let cover = f64::from(a) / 255.0;
+                let depth = f64::from(d2).sqrt() - 1.0 + cover / 2.0;
+                let t = (depth / radius).clamp(0.0, 1.0);
+                if a == 0 { 0 } else { (255.0 * t * t * (3.0 - 2.0 * t)).round() as u8 }
+            })
+            .collect(),
+    )
+}
+
 /// Gaussian-blur `data`, `w` × `h` premultiplied RGBA8 pixels, in place (σ = `sigma` pixels). Does
 /// nothing when the sizes don't match.
 pub fn gaussian_rgba(data: &mut [u8], w: usize, h: usize, sigma: f64) {

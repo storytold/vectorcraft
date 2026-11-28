@@ -627,6 +627,27 @@ fn blur_glow_and_feather_soften() {
     assert_eq!(lum(feather.pixel(26, 50)), WHITE, "feather stays inside");
 }
 
+/// Feather fades the object out to nothing at its outline, with no hard edge left there, and in to
+/// the full object a radius inside it, darkening all the way in (#9761).
+#[test]
+fn feather_fades_to_nothing_at_the_outline() {
+    let feather = render(&doc_with(Rect::new(20.0, 20.0, 80.0, 80.0), Color::BLACK, vec![("stylize.feather", json!({"radius": 10}))]));
+    let row: Vec<u32> = (20..=50).map(|x| lum(feather.pixel(x, 50))).collect();
+    assert!(row[0] > WHITE * 9 / 10, "the pixel on the outline is nearly clear: {row:?}");
+    assert!(row[10] < WHITE / 10, "a radius in, the object is nearly solid: {row:?}");
+    assert!(row.windows(2).all(|w| w[1] <= w[0]), "it darkens all the way in: {row:?}");
+}
+
+#[test]
+fn feather_keeps_a_silhouette_thinner_than_a_pixel() {
+    // A strip under half a pixel wide covers no pixel half: it still shows, not wiped out as all outline.
+    let strip = Rect::new(20.0, 20.0, 20.4, 80.0);
+    let ink = |fx: Vec<(&str, serde_json::Value)>| WHITE - lum(render(&doc_with(strip, Color::BLACK, fx)).pixel(20, 50));
+    let (plain, feathered) = (ink(vec![]), ink(vec![("stylize.feather", json!({"radius": 0.1}))]));
+    assert!(plain > 0, "the strip draws: {plain}");
+    assert!(feathered > plain / 4, "feathered it keeps its ink: {feathered} of {plain}");
+}
+
 #[test]
 fn an_outer_glow_blurs_a_solid_silhouette_of_faint_art() {
     // GUARDS: the glow's strength comes from where the art is, not how opaque it is (a glow round a glow relies on it).

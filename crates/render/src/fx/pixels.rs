@@ -271,7 +271,7 @@ impl Renderer {
                 RasterFx::Feather { radius } => {
                     effects::pixel::gaussian_rgba(pm.data_as_u8_slice_mut(), wz, hz, radius / 2.0 / px);
                     if let Some((g, rule)) = outline {
-                        self.clip_pixels(&mut pm, &frame, g, rule);
+                        self.feather_pixels(&mut pm, &frame, g, rule, radius / px);
                     }
                 }
                 RasterFx::Pixel(p) => p.apply(pm.data_as_u8_slice_mut(), wz, hz, &space),
@@ -589,6 +589,27 @@ impl Renderer {
         m.render(&mut mask, &mut self.resources);
         for (p, c) in pm.data_mut().iter_mut().zip(mask.data()) {
             let keep = |v: u8| ((v as u32 * c.a as u32 + 127) / 255) as u8;
+            *p = vello_cpu::color::PremulRgba8 { r: keep(p.r), g: keep(p.g), b: keep(p.b), a: keep(p.a) };
+        }
+    }
+
+    /// Feather's fade: `pm` within the silhouette `g`, clear on the outline and full `radius`
+    /// pixels inside it, by each pixel's distance from the outline. The blurred content alone is
+    /// still half opaque on the outline, so clipping it there left a hard edge (#9761). A grid too
+    /// large to measure is clipped as before.
+    fn feather_pixels(&mut self, pm: &mut vello_cpu::Pixmap, frame: &Frame, g: &BezPath, rule: FillRule, radius: f64) {
+        let mut m = frame.offscreen_context(pm.width(), pm.height());
+        m.set_transform(frame.view);
+        m.set_fill_rule(fill_rule(rule));
+        m.set_paint(peniko::Color::BLACK);
+        m.fill_path(g);
+        m.flush();
+        let mut mask = vello_cpu::Pixmap::new(pm.width(), pm.height());
+        m.render(&mut mask, &mut self.resources);
+        let coverage: Vec<u8> = mask.data().iter().map(|c| c.a).collect();
+        let fade = effects::pixel::feather_fade(&coverage, pm.width() as usize, pm.height() as usize, radius).unwrap_or(coverage);
+        for (p, a) in pm.data_mut().iter_mut().zip(fade) {
+            let keep = |v: u8| ((v as u32 * a as u32 + 127) / 255) as u8;
             *p = vello_cpu::color::PremulRgba8 { r: keep(p.r), g: keep(p.g), b: keep(p.b), a: keep(p.a) };
         }
     }
