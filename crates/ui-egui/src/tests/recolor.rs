@@ -480,6 +480,29 @@ fn a_process_library_swatch_hides_the_tint_of_a_rows_own_spot_swatch() {
     assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "C").is_some(), "the CMYK sliders");
 }
 
+/// With Limit to Library and a Global Adjust, a row shows Tint only when the library's swatch
+/// nearest its adjusted new color is a spot color: `recolor.apply` adjusts the color before it
+/// snaps it to the library.
+#[test]
+fn a_global_adjust_picks_the_library_swatch_that_decides_the_tint() {
+    let mut app = app();
+    let lib = library_of(
+        &mut app,
+        &[
+            json!({"name": "Red Ink", "color": {"c": 0, "m": 1, "y": 1, "k": 0}, "spot": true}),
+            json!({"name": "Dark Red", "color": {"c": 0, "m": 1, "y": 1, "k": 0.5}}),
+        ],
+    );
+    art(&mut app, &["cmyk 0 100 100 0"]);
+    let mut h = assign_harness(app, json!({"library": lib}));
+    set(h.state_mut(), "__sel", json!([0]));
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "T").is_some(), "without an adjust the row takes Red Ink: Tint");
+    set(h.state_mut(), "globalAdjust", json!({"brightness": -50.0}));
+    h.run_steps(2);
+    assert!(h.query_by_role_and_label(egui::accesskit::Role::Slider, "T").is_none(), "the darker red snaps to the process swatch: no Tint");
+}
+
 /// A row picked from a spot swatch of the color group being edited shows Tint while OK leaves the
 /// swatch its color, and not once another row gives the swatch a new color: `recolor.apply` then
 /// links the row's art to nothing.

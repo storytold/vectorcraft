@@ -2081,10 +2081,11 @@ fn mode_id(m: Mode) -> String {
 }
 
 /// What decides how `recolor.apply` links the art of the rows to swatches, read once for all rows:
-/// Limit to Library's palette and color swatches, and the names of the color group's global swatches
-/// that OK's rewrite gives another color ([`rewritten_to_another`]).
+/// Limit to Library's palette and color swatches, the Global Adjust, and the names of the color
+/// group's global swatches that OK's rewrite gives another color ([`rewritten_to_another`]).
 struct RowLinks {
     library: Option<(vectorcraft_color::recolor::Palette, Vec<vectorcraft_color::swatch::Swatch>)>,
+    adjust: GlobalAdjust,
     rewritten: Vec<String>,
 }
 
@@ -2093,14 +2094,14 @@ impl RowLinks {
         let lib = d.str("limitTo");
         let library = if lib.is_empty() { None } else { limit_palette_before_preview(app, &lib).zip(limit_swatches(app, &lib)) };
         let rewritten = rewritten_to_another(app, d, library.as_ref().map(|(palette, _)| palette));
-        Self { library, rewritten }
+        Self { library, adjust: global_adjust(adjust_values(d)), rewritten }
     }
 
     /// The library swatch (Limit to Library) that `recolor.apply` gives new color `c`: the first
-    /// swatch of the library color nearest `c`.
+    /// swatch of the library color nearest `c` after the Global Adjust.
     fn library_swatch(&self, c: &Color) -> Option<&vectorcraft_color::swatch::Swatch> {
         let (palette, swatches) = self.library.as_ref()?;
-        let near = palette.nearest(*c);
+        let near = palette.nearest(self.adjust.apply(*c));
         swatches.iter().find(|w| w.paint.color() == Some(near))
     }
 }
