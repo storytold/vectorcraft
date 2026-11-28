@@ -260,7 +260,7 @@ pub(super) struct SelectionWidgets {
 
 impl SelectionWidgets {
     fn new(layout: Layout) -> Self {
-        SelectionWidgets { common: Common::new(), layout, presses: vec![] }.label("Selection widgets")
+        SelectionWidgets { common: Common::new(), layout, presses: vec![] }.label(tl!("Selection widgets"))
     }
 }
 

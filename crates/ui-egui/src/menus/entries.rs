@@ -9,7 +9,7 @@ use super::{Node, Serialize, Value, VectorcraftApp, unbound};
 /// draw it in the UI language: an effect's own name (Pathfinder › Add), an object's name, a
 /// spelling suggestion, or [`display_label`].
 pub fn shown_label(app: &VectorcraftApp, id: &str, p: &Value, label: &str) -> String {
-    effect_item_label(id, p)
+    effect_item_label(id, p, crate::i18n::current())
         .or_else(|| unlock_item_label(app, id, p, crate::i18n::current()))
         .or_else(|| spelling_item_label(id, p))
         .unwrap_or_else(|| display_label(app, id, label))

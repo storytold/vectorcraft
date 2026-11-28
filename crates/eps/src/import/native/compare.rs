@@ -1,5 +1,5 @@
 use super::build::Frame;
-use super::slots::OUTLINE_REACH;
+use super::slots::{OUTLINE_REACH, drawn_box};
 use super::{Arc, Document, Node, NodeKind, Rect};
 
 /// `doc` with its layers that don't print hidden, when it has any.
@@ -756,12 +756,14 @@ fn differing_pixels(
 }
 
 /// Where the type that shows in `nodes` is, in pixels of `region` drawn at `scale` (with a margin
-/// for the strokes round it). The type in a live envelope isn't: the envelope draws it bent, away
-/// from its text object's box, and is weighed as the art it draws, as its drawn art would be.
+/// for the strokes round it): where it draws ([`drawn_box`]), so that type made from the text
+/// document that differs from the page's counts as type whatever its alignment. The type in a
+/// live envelope isn't: the envelope draws it bent, away from its text object's box, and is
+/// weighed as the art it draws, as its drawn art would be.
 fn type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<Rect>) {
     for n in nodes.iter().filter(|n| n.visible) {
         if let NodeKind::Text(_) = n.kind
-            && let Some(b) = n.visual_bounds()
+            && let Some(b) = drawn_box(n)
         {
             let px =
                 |r: Rect| Rect::new((r.x0 - region.x0) * scale, (r.y0 - region.y0) * scale, (r.x1 - region.x0) * scale, (r.y1 - region.y0) * scale);
@@ -780,7 +782,7 @@ fn all_type_areas(nodes: &[Arc<Node>], region: Rect, scale: f64, out: &mut Vec<R
     for n in nodes {
         let placed = matches!(&n.kind, NodeKind::Image(im) if im.link.is_some());
         if (placed || matches!(n.kind, NodeKind::Text(_)))
-            && let Some(b) = n.visual_bounds()
+            && let Some(b) = drawn_box(n)
         {
             let b = b.inflate(OUTLINE_REACH, OUTLINE_REACH);
             out.push(Rect::new((b.x0 - region.x0) * scale, (b.y0 - region.y0) * scale, (b.x1 - region.x0) * scale, (b.y1 - region.y0) * scale));

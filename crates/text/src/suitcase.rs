@@ -65,6 +65,19 @@ pub(crate) fn read_fonts(path: &Path) -> Vec<Vec<u8>> {
     sfnt_resources(&fork).into_iter().map(<[u8]>::to_vec).collect()
 }
 
+/// [`read_fonts`] reading the fork no further than one byte past `max_len` (at most the longest
+/// fork read), with the bytes read: no fonts, and true, when the fork is longer.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn read_fonts_within(path: &Path, max_len: u64) -> (Vec<Vec<u8>>, u64, bool) {
+    let max_len = max_len.min(MAX_FORK);
+    let Some(fork) = read_fork_within(path, max_len.saturating_add(1)) else { return (vec![], 0, false) };
+    let n = fork.len() as u64;
+    if n > max_len {
+        return (vec![], n, true);
+    }
+    (sfnt_resources(&fork).into_iter().map(<[u8]>::to_vec).collect(), n, false)
+}
+
 /// Whether the file at `path` is a suitcase font: nothing in its data fork and something in its
 /// resource fork.
 pub(crate) fn is_suitcase(path: &Path) -> bool {
@@ -84,9 +97,15 @@ pub(crate) fn fork_len(path: &Path) -> u64 {
 
 #[cfg(target_os = "macos")]
 fn read_fork(path: &Path) -> Option<Vec<u8>> {
+    read_fork_within(path, MAX_FORK)
+}
+
+/// The first `max` bytes of the resource fork of the file at `path`.
+#[cfg(target_os = "macos")]
+fn read_fork_within(path: &Path, max: u64) -> Option<Vec<u8>> {
     use std::io::Read;
     let mut fork = Vec::new();
-    std::fs::File::open(fork_path(path)).ok()?.take(MAX_FORK).read_to_end(&mut fork).ok()?;
+    std::fs::File::open(fork_path(path)).ok()?.take(max).read_to_end(&mut fork).ok()?;
     Some(fork)
 }
 
@@ -98,6 +117,11 @@ pub(crate) fn fork_len(_: &Path) -> u64 {
 #[cfg(not(target_os = "macos"))]
 fn read_fork(_: &Path) -> Option<Vec<u8>> {
     let _ = MAX_FORK;
+    None
+}
+
+#[cfg(all(not(target_os = "macos"), not(target_arch = "wasm32")))]
+fn read_fork_within(_: &Path, _: u64) -> Option<Vec<u8>> {
     None
 }
 

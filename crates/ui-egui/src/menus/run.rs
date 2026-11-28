@@ -1219,6 +1219,7 @@ fn run_ui_part13(app: &mut VectorcraftApp, id: &str, p: &Value) -> Option<Result
         "plugin.hideRuns" => Ok(crate::plugin_runs::hide_all(app)),
         "imageTrace.cancelRuns" => Ok(crate::trace_runs::cancel_all(app)),
         "imageTrace.hideRuns" => Ok(crate::trace_runs::hide_all(app)),
+        "retype.cancelSearch" => Ok(crate::retype_runs::cancel(app)),
         "ui.checkScript" => crate::dialogs::script_check::command(app, p),
         "ui.runScript" => crate::dialogs::script_run::command(app, p),
         crate::scripts_menu::COMMAND => crate::scripts_menu::run(app, p),

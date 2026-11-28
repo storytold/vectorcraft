@@ -7,7 +7,7 @@ use std::ops::RangeInclusive;
 
 use craft::theme::variant::Tone;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, Entry, Politeness, Props as _, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldAnswer, HeldOk, StackDialog, dialog_id};
 use craft::ui::form::{Field, FieldGroup};
 use craft::ui::layout_components::Row;
@@ -175,6 +175,8 @@ pub(crate) struct OptionForm {
     lengths: LengthUnits,
     /// The Preview check box.
     pub(super) preview: bool,
+    /// The current document does not own this dialog's preview.
+    pub(super) preview_paused: bool,
     /// Whether the dialog's container is open.
     open: bool,
     /// The OK the dialog filed for [`pump`] to answer.
@@ -202,6 +204,7 @@ pub(super) fn open(app: &mut VectorcraftApp, spec: &'static OptionSpec, values: 
         extra,
         lengths,
         preview: false,
+        preview_paused: false,
         open: true,
         held: HeldAnswer::new(),
         requests: HostRequests::new(),
@@ -249,8 +252,9 @@ impl StackDialog for OptionForm {
         // The app accepted the held OK: this pass closes the dialog with it. A measuring run closes nothing.
         let finish = self.held.is_accepted() && !measuring;
         let answers = if measuring { Vec::new() } else { self.requests.take_answers() };
-        let OptionForm { spec, values, lengths, preview, open, held, requests, .. } = self;
+        let OptionForm { spec, values, lengths, preview, preview_paused, open, held, requests, .. } = self;
         let (spec, lengths) = (*spec, *lengths);
+        let show_pause = *preview && *preview_paused;
         let title = (spec.title)();
         let refusal = held.refusal().map(|(reason, refused)| (reason.clone(), refused.clone()));
         let mut form = FormDialog::new(word(&title), Bind::bound(&mut *values))
@@ -273,6 +277,12 @@ impl StackDialog for OptionForm {
             }
             if let Some((reason, _)) = refusal.as_ref().filter(|(_, refused)| *refused == *values) {
                 Notice::new(Tone::Bad, reason.clone()).layout(NoticeLayout::Inline).show(ui);
+            }
+            if show_pause {
+                Notice::new(Tone::Info, tl!("Preview is paused. Return to the document this dialog was opened for.").to_owned())
+                    .layout(NoticeLayout::Inline)
+                    .announce(Politeness::Polite)
+                    .show(ui);
             }
             if finish {
                 form.request_close_as(CloseReason::Activated);

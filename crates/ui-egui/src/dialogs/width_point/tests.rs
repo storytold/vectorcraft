@@ -851,6 +851,57 @@ fn second_document(app: &mut VectorcraftApp, id: u64) {
     app.run("stroke.widthProfile.set", json!({"ids": [other], "points": points})).unwrap();
 }
 
+struct SavedFile(std::path::PathBuf);
+
+impl Drop for SavedFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn exercise_reverted_point(prospective: bool) {
+    let (mut app, id) = if prospective { creation_app() } else { app() };
+    app.services.read = Some(Box::new(|path: &str| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path: &str, bytes: &[u8]| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    let path = SavedFile(std::env::temp_dir().join(format!("vc-ui-width-point-revert-{}-{prospective}.vectorcraft", std::process::id())));
+    app.run("file.saveAs", json!({"path": path.0})).unwrap();
+    assert!(path.0.is_file());
+    let saved = points(&app, id);
+    let state = app.session.active().unwrap();
+    let (document, reverts) = (state.uid, state.reverts);
+    app.run("shape.rectangle", json!({"x": 30, "y": 30, "width": 10, "height": 10})).unwrap();
+    let target = if prospective { json!({"id": id, "t": 0.4}) } else { json!({"id": id, "index": 1}) };
+    app.run("ui.widthPointEdit", target.clone()).unwrap();
+    set(&app, "side1", json!(7));
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let state = app.session.active().unwrap();
+    assert_eq!((state.uid, state.reverts), (document, reverts + 1));
+    assert_eq!(points(&app, id), saved, "the reloaded path still looks like the original target");
+    let undo = state.history.undo.len();
+    let accepted = ok(&mut app);
+
+    assert_eq!(points(&app, id), saved, "the old Width Point draft leaves the reloaded path alone");
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    assert!(accepted.is_err() && is_open(&app));
+    cancel(&app);
+    app.run("ui.widthPointEdit", target).unwrap();
+    set(&app, "side1", json!(7));
+    ok(&mut app).unwrap();
+    assert_ne!(points(&app, id), saved);
+    assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+}
+
+#[test]
+fn existing_width_point_draft_cannot_edit_a_reverted_path() {
+    exercise_reverted_point(false);
+}
+
+#[test]
+fn prospective_width_point_draft_cannot_edit_a_reverted_path() {
+    exercise_reverted_point(true);
+}
+
 #[test]
 fn ok_and_delete_act_only_in_the_document_the_dialog_opened_in() {
     for opened in [json!({"indices": [1, 3]}), json!({"index": 2})] {
