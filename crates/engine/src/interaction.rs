@@ -4,6 +4,9 @@ use super::{Affine, Arc, Document, NodeId, Selection, Value};
 #[derive(Clone, Debug)]
 pub struct Interaction {
     pub label: String,
+    /// The built-in effect the last preview applied or edited ([`crate::Session::edit_effect`]):
+    /// the step the interaction records keeps it when `label` is the effect's name.
+    pub(crate) effect: Option<&'static str>,
     pub doc: Arc<Document>,
     /// The selection the previews start from (shared, so a preview frame copies nothing).
     pub selection: Arc<Selection>,
@@ -151,6 +154,9 @@ pub struct UndoGroup {
     pub(crate) steps: Vec<BatchSteps>,
     /// The undo step's name; else the first edit's.
     pub(crate) label: Option<String>,
+    /// The isolated object when the group began: a canceled group isolates it again when the
+    /// group's edits removed it ([`crate::DocState::restore_isolation`]).
+    pub(crate) isolation: Option<NodeId>,
 }
 
 /// A `command.batch` journal entry's number and the steps of it that belong to an undo group, each
@@ -169,6 +175,9 @@ pub struct UndoScope {
     /// that the group's undo step keeps, as they were when the scope began; `None` when the scope
     /// opened the group.
     pub(crate) joined: Option<(Arc<Document>, Selection, Option<Arc<Document>>)>,
+    /// The isolated object when the scope began: canceling a joined scope isolates it again when
+    /// the scope's edits removed it.
+    pub(crate) isolation: Option<NodeId>,
     /// The new-art colors and the group's color-mode history metadata at the scope's start.
     /// Only used when cancelling a joined scope that converted those colors.
     pub(crate) paint: vectorcraft_tools::PaintDefaults,

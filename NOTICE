@@ -154,6 +154,17 @@ Copyright (C) 2016 Santhosh Thottingal, used under the MIT license option.
 Original copyright and full license notices are preserved in each hyph-*.tex file.
 Source: hyphenation/tex-hyphen, commit 5684c0f51c0b81133db2efbe60a408b4155a3ff5.
 
+FOGRA51 and FOGRA52 characterization data (crates/color/data/):
+Source: Fogra Forschungsgesellschaft Druck e.V., www.fogra.org,
+https://fogra.org/en/downloads/work-tools/characterisation-data. The files are distributed
+unmodified. Fogra's terms: "Free use and redistribution of the Fogra characterisation data is
+permitted, including redistribution as part of commercial and non-commercial software, provided
+that the data are distributed unmodified and Fogra is identified as the source. The designation
+FOGRAxx may be used solely to identify the respective reference data. Such use does not imply
+certification, approval or endorsement by Fogra." VectorCraft's Coated CMYK (FOGRA51) and
+Uncoated CMYK (FOGRA52) working spaces are computed from this data by VectorCraft's own code;
+they are not Fogra profiles.
+
 
 JPEG encoder dependency notices
 

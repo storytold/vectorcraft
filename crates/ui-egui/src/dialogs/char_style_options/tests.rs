@@ -126,6 +126,177 @@ fn styled(app: &mut VectorcraftApp, attrs: Value, text: &str) -> u64 {
     id
 }
 
+fn options_in_the_first_of_two_documents() -> VectorcraftApp {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    styled(&mut app, json!({"size": 12.0}), "Other document");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    open(&mut app, "Body");
+    app
+}
+
+#[test]
+fn the_style_preview_stays_in_its_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    let opening = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, other, "Preview leaves the other document's Body style unchanged");
+    assert!(!app.session.in_interaction());
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    pump(&mut app);
+    assert!(app.session.doc().unwrap().doc.char_styles.iter().any(|style| style.name == "Revised"));
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, opening);
+}
+
+/// After File > Revert the draft neither previews on nor commits to the restored document, and OK is refused.
+#[test]
+fn style_options_refuse_their_draft_after_file_revert() {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    let dir = vectorcraft_testkit::TempDir::new("char-style-options-revert");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+    open(&mut app, "Body");
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, restored, "Preview leaves the restored document's Body style unchanged");
+    assert!(!ok::<Existing>(&mut app), "the dialog stays open with the refusal");
+    assert_eq!(app.session.doc().unwrap().doc, restored, "OK leaves the restored document's Body style unchanged");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    let refusal = with_dialog::<Existing, _>(&app, |host, id| host.held_state(id));
+    assert!(matches!(refusal, Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")));
+}
+
+#[test]
+fn a_style_options_confirmation_stays_in_its_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "preview", json!(false));
+    set::<Existing>(&app, "name", json!("Revised"));
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = app.session.doc().unwrap().doc.clone();
+    let closed = ok::<Existing>(&mut app);
+
+    assert_eq!(app.session.doc().unwrap().doc, other, "OK leaves the other document's Body style unchanged");
+    assert!(!closed, "the same draft remains available");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(ok::<Existing>(&mut app));
+    assert!(app.session.doc().unwrap().doc.char_styles.iter().any(|style| style.name == "Revised"));
+}
+
+#[test]
+fn cancelling_style_options_leaves_the_other_documents_gesture() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.session.begin_interaction("Another gesture").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+
+    cancel::<Existing>(&mut app);
+
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
+fn switching_back_leaves_a_new_gesture_in_the_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.session.begin_interaction("Another gesture").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert!(!ok::<Existing>(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+fn options_with_a_newer_gesture() -> VectorcraftApp {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    open(&mut app, "Body");
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    let resets = app.session.tool_resets();
+    app.session.cancel_interaction().unwrap();
+    app.session.begin_interaction("Character Style Options").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    assert_eq!(app.session.tool_resets(), resets);
+    app
+}
+
+#[test]
+fn cancelling_style_options_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
+fn style_options_preview_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
+fn style_options_confirmation_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    assert!(!ok::<Existing>(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn a_first_style_preview_preserves_an_existing_gesture() {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    open(&mut app, "Body");
+    app.session.begin_interaction("Character Style Options").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
 #[test]
 fn unchanged_basic_fields_preserve_original_keys() {
     for attrs in [

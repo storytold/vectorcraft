@@ -447,6 +447,12 @@ pub(crate) fn apply_one(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &Geo
     budget.fits(Budget::of(&out)).then_some(out)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The subpaths the Offset Path effect has offset on this thread.
+    pub(crate) static OFFSET_SUBPATHS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Does geometry effect `id` build within the anchors it is given?
 fn builds_within(id: &str) -> bool {
     matches!(id, "distort.freeDistort" | "distort.roughen" | "distort.transform" | "distort.twist" | "distort.zigZag") || id.starts_with("warp.")
@@ -472,6 +478,8 @@ fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomCont
             if off.abs() < 1e-9 {
                 return path.clone();
             }
+            #[cfg(test)]
+            OFFSET_SUBPATHS.with(|n| n.set(n.get() + path.subpaths.len()));
             vectorcraft_pathops::offset_path(path, off, join(p, "joins"), num(p, "miterLimit", 4.0).clamp(1.0, 500.0))
         }
         // Outline Object returns the geometry unchanged. Type reaches every geometry effect as its

@@ -273,6 +273,35 @@ fn fill_area_takes_art_in_nested_clipping_groups_only_where_every_mask_shows_it(
     assert_eq!(stack(&s), vec![outer, id_of(&r)]);
 }
 
+/// A clipped open path with more segments than the mask can be cut against is not known to show or
+/// hide anywhere inside its mask: a square it crosses inside the mask is not filled across it. A
+/// square it stays clear of, and a square it crosses where its mask hides it, are still filled.
+#[test]
+fn fill_area_does_not_fill_across_a_clipped_path_its_mask_cannot_cut() {
+    // The path's y, its mask's left edge and width, the click and whether the square is filled.
+    for (y, (mx, mw), click, fills) in
+        [(50.0, (-50.0, 200.0), [50, 25], false), (150.0, (-50.0, 200.0), [50, 50], true), (50.0, (200.0, 100.0), [50, 25], true)]
+    {
+        let mut s = session();
+        rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+        let n = vectorcraft_pathops::addons::pathtools::MAX_CROSSING_SEGMENTS + 1;
+        let pts: Vec<Point> = (0..=n).map(|k| Point::new(-20.0 + 340.0 * k as f64 / n as f64, y)).collect();
+        let look = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+        let huge = insert_path(&mut s, PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false)), look);
+        clip_by(&mut s, &[huge], mx, -50.0, mw, 250.0);
+        deselect(&mut s);
+        let (undo, kids) = (undo_len(&s), stack(&s));
+        let r = s.execute("shapeBuilder.copyRegion", &json!({"point": click}));
+        if fills {
+            let r = r.unwrap_or_else(|e| panic!("y {y}, mask at {mx}: {e:?}"));
+            assert!((area(&s, id_of(&r)) - 10_000.0).abs() < 1.0, "{}", area(&s, id_of(&r)));
+        } else {
+            assert!(r.is_err(), "the path crosses the square where its mask shows it");
+            assert_eq!((undo_len(&s), stack(&s)), (undo, kids));
+        }
+    }
+}
+
 /// In isolation mode only the isolated group's paths bound areas, for the command and the tool: a
 /// click in an area that art outside the group encloses adds nothing, and the new path goes inside
 /// the group, above the path along the area.
@@ -910,6 +939,26 @@ fn fill_area_tool_hovers_a_large_document_on_another_thread() {
     assert!(!s.tool_waiting(), "the press waited for the search");
     s.pointer(&PointerEvent::new(PointerKind::Up, 310.0, 300.0), v).unwrap();
     assert_eq!(undo_len(&s), undo + 1);
+}
+
+/// A clipped path with more segments than its mask can be cut against is in no map, but a search
+/// still checks it against the area, so the hover over a square beside it runs on another thread.
+#[test]
+fn fill_area_tool_hovers_beside_a_clipped_path_its_mask_cannot_cut_on_another_thread() {
+    let mut s = session();
+    rect(&mut s, 0.0, 0.0, 100.0, 100.0);
+    let n = vectorcraft_pathops::addons::pathtools::MAX_CROSSING_SEGMENTS + 1;
+    let pts: Vec<Point> = (0..=n).map(|k| Point::new(-20.0 + 140.0 * k as f64 / n as f64, 150.0)).collect();
+    let look = vectorcraft_doc::Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0);
+    let huge = insert_path(&mut s, PathData::single(vectorcraft_geom::SubPath::polyline(&pts, false)), look);
+    clip_by(&mut s, &[huge], -50.0, -50.0, 200.0, 250.0);
+    deselect(&mut s);
+    let v = ViewInfo::default();
+    s.select_tool("fillArea", v).unwrap();
+    s.pointer(&PointerEvent::new(PointerKind::Move, 50.0, 50.0), v).unwrap();
+    assert!(s.tool_waiting(), "the search runs on another thread");
+    s.tool_poll(v, true).unwrap();
+    assert_eq!(s.overlays(v).len(), 1, "the square is outlined");
 }
 
 /// A press that is dropped before the release (a long or canceled touch) takes the new path back

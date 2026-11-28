@@ -1109,7 +1109,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     let prefs = &app.session.prefs;
     let hold = HoldSetting::new(prefs.hold_shortcuts, prefs.key_hold_delay(), min..=max);
     app.shortcuts_dialog = Some(ShortcutsDialogState {
-        state: DialogState::new().with_tab("tools"),
+        state: DialogState::new(),
         keymap: None,
         window: None,
         hold,
@@ -1141,6 +1141,7 @@ fn accept(def: &CommandDef, binding: &Binding) -> Result<(), String> {
 fn options() -> Options {
     Options::default().with(|o| {
         o.area_tabs = true;
+        o.own_areas = true;
         o.areas = vec![Area::new("tools", "Tools", is_tool), Area::new("menu", MENU_COMMANDS, |def| !is_tool(def))];
         o.summary = false;
         o.accept = Some(Box::new(accept));
@@ -1275,9 +1276,20 @@ fn with_set_at(app: &mut VectorcraftApp, path: &str, then: SetReader) -> Result<
     if crate::dialogs::shortcut_import::is_kys(path) {
         return crate::dialogs::shortcut_import::command(app, &json!({ "path": path }));
     }
-    let read = app.services.read.as_ref().ok_or("no file reader")?;
-    let bytes = read(path)?;
+    let bytes = match (&app.services.read_head, &app.services.read) {
+        (Some(read), _) => read(path, (craft::keymap::MAX_EXPORT_BYTES + 1).max(vectorcraft_engine::cmd::shortcutset::READ_LIMIT))?,
+        (None, Some(read)) => read(path)?,
+        _ => return Err("no file reader".into()),
+    };
     then(app, path, &bytes)
+}
+
+/// Bound the original JSON file before parsing or serializing its normalized form.
+fn shortcut_json(bytes: &[u8]) -> Result<Value, String> {
+    if bytes.len() > craft::keymap::MAX_EXPORT_BYTES {
+        return Err(craft::keymap::ProfileError::TooLarge.to_string());
+    }
+    serde_json::from_slice(bytes).map_err(|e| e.to_string())
 }
 
 /// The dialog's Import…: a set another app saved as text opens its review; a JSON set waits for
@@ -1289,7 +1301,7 @@ fn import_into_dialog(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Res
     if crate::dialogs::shortcut_import::is_text_set(name, bytes) {
         return crate::dialogs::shortcut_import::open(app, name, bytes);
     }
-    let v: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let v = shortcut_json(bytes)?;
     let text = keymap_json(&v)?;
     if let Some(open) = app.shortcuts_dialog.as_mut() {
         open.pending_import = Some(text);
@@ -1657,7 +1669,7 @@ fn import_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) -> Result<Va
     if crate::dialogs::shortcut_import::is_text_set(name, bytes) {
         return crate::dialogs::shortcut_import::open(app, name, bytes);
     }
-    let v: Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let v = shortcut_json(bytes)?;
     import_set(app, &v)
 }
 
@@ -1760,6 +1772,84 @@ mod tests {
             Ok(())
         }));
         written
+    }
+
+    fn imported_json() -> Vec<u8> {
+        br#"{"format":"vectorcraft-shortcuts","version":1,"set":"Studio","overrides":{}}"#.to_vec()
+    }
+
+    /// A valid set padded past the shared file limit must not become acceptable after JSON
+    /// normalization. The real dialog's browser pick leaves its draft and saved preferences alone.
+    #[test]
+    fn the_shortcut_dialog_refuses_oversized_browser_json_before_normalization() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        use craft::ui::testing::{Fixture, Room};
+
+        let (mut app, _) = app();
+        open(&mut app);
+        let prefs = serde_json::to_value(&app.session.prefs).unwrap();
+        let overrides = app.shortcut_overrides.clone();
+        let saved = app.ui.shortcut_sets.clone();
+        let app = Rc::new(RefCell::new(app));
+        let shown = Rc::clone(&app);
+        let mut fixture = Fixture::new(move |ui| show(&mut shown.borrow_mut(), ui));
+        fixture.in_room(Room::Window);
+        app.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
+        let picker = crate::tests::picks::scripted(&mut app.borrow_mut());
+        fixture.settle();
+        let import = fixture.by_label("Import…").expect("the shortcut dialog's Import button");
+        fixture.click(&import).settle();
+        assert_eq!(picker.requests().len(), 1);
+        let mut large = imported_json();
+        large.resize(craft::keymap::MAX_EXPORT_BYTES + 1, b' ');
+        picker.answer_contents(&[("Studio.json", &large)]);
+        crate::file_asks::poll(&mut app.borrow_mut());
+        {
+            let app = app.borrow();
+            assert!(app.ui.status.contains("shortcut set file too large"), "{}", app.ui.status);
+            let draft = app.shortcuts_dialog.as_ref().unwrap();
+            assert!(draft.pending_import.is_none());
+            assert_eq!(app.shortcut_overrides, overrides);
+            assert_eq!(serde_json::to_value(&app.ui.shortcut_sets).unwrap(), serde_json::to_value(&saved).unwrap());
+            assert_eq!(serde_json::to_value(&app.session.prefs).unwrap(), prefs);
+        }
+        fixture.settle();
+        let import = fixture.by_label("Import…").unwrap();
+        fixture.click(&import).settle();
+        picker.answer_contents(&[("Studio.json", &imported_json())]);
+        crate::file_asks::poll(&mut app.borrow_mut());
+        assert!(app.borrow().shortcuts_dialog.as_ref().unwrap().pending_import.is_some(), "a small set still reaches the draft");
+    }
+
+    /// Direct automation uses the same raw-file bound and a bounded native read when available.
+    #[test]
+    fn shortcut_import_refuses_oversized_native_json_and_accepts_small_json() {
+        let (mut app, _) = app();
+        let prefs = serde_json::to_value(&app.session.prefs).unwrap();
+        let saved = serde_json::to_value(&app.ui.shortcut_sets).unwrap();
+        let requested = std::rc::Rc::new(std::cell::Cell::new(0));
+        let seen = requested.clone();
+        app.services.read = Some(Box::new(|_| panic!("a bounded reader is available")));
+        app.services.read_head = Some(Box::new(move |path, cap| {
+            seen.set(cap);
+            let mut bytes = imported_json();
+            if path == "/large.json" {
+                bytes.resize(cap, b' ');
+            } else if path == "/limit.json" {
+                bytes.resize(craft::keymap::MAX_EXPORT_BYTES, b' ');
+            }
+            Ok(bytes)
+        }));
+        let error = app.run("shortcuts.import", json!({"path": "/large.json"})).unwrap_err();
+        assert_eq!(error, "shortcut set file too large");
+        assert_eq!(requested.get(), (craft::keymap::MAX_EXPORT_BYTES + 1).max(vectorcraft_engine::cmd::shortcutset::READ_LIMIT));
+        assert_eq!(serde_json::to_value(&app.session.prefs).unwrap(), prefs);
+        assert_eq!(serde_json::to_value(&app.ui.shortcut_sets).unwrap(), saved);
+        let result = app.run("shortcuts.import", json!({"path": "/small.json"})).unwrap();
+        assert_eq!(result["set"], "Studio");
+        assert!(app.run("shortcuts.import", json!({"path": "/limit.json"})).is_ok(), "the exact byte limit is allowed");
     }
 
     /// A plug-in installed while the menus are walked doesn't leave a snapshot under the revision
@@ -2159,6 +2249,31 @@ mod tests {
             let out = crate::testing::app_frame(&mut app, &ctx, raw());
             assert_eq!(out.platform_output.num_completed_passes, 1, "frame {frame} after the first is drawn again");
         }
+    }
+
+    #[test]
+    fn the_dialog_opens_with_only_tools_and_menu_commands() {
+        use egui::accesskit::Role;
+
+        let mut app = crate::testing::windowed(VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        let ctx = app.ui_ctx.clone().unwrap();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 1000.0));
+        let raw = || egui::RawInput { screen_rect: Some(screen), ..Default::default() };
+        for _ in 0..3 {
+            crate::testing::app_frame(&mut app, &ctx, raw());
+        }
+        open(&mut app);
+        for _ in 0..3 {
+            crate::testing::app_frame(&mut app, &ctx, raw());
+        }
+        let nodes = crate::testing::app_frame(&mut app, &ctx, raw()).platform_output.accesskit_update.expect("dialog access tree").nodes;
+        let (_, areas) = nodes.iter().find(|(_, n)| n.role() == Role::TabList && n.label() == Some("Show:")).expect("area tabs");
+        let labels: Vec<_> = areas
+            .children()
+            .iter()
+            .filter_map(|child| nodes.iter().find(|(id, n)| id == child && n.role() == Role::Tab).and_then(|(_, n)| n.label()))
+            .collect();
+        assert_eq!(labels, ["Tools", "Menu Commands"]);
     }
 
     /// An open dialog lists a live-effect plug-in installed while it is open, with the shortcut its

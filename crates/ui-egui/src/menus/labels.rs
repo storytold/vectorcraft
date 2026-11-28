@@ -100,6 +100,11 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
             Some((e, _)) => format!("Last Effect: {}", vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str())),
             None => label.into(),
         },
+        // Repeat Pathfinder is named after the Shape Mode or Pathfinder operation that ran last.
+        "pathfinder.repeat" => match last_pathfinder_label(app) {
+            Some(name) => format!("Repeat {name}"),
+            None => label.into(),
+        },
         // Apply Last Filter and Last Filter… are named after the filter that ran last.
         crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => match crate::dialogs::plugin::last_filter_name(app) {
             Some(name) if id == crate::dialogs::plugin::APPLY_LAST => format!("Apply {name}"),
@@ -128,6 +133,11 @@ fn command_label(app: &VectorcraftApp, id: &str, label: &str) -> Option<String> 
         _ => return None,
     };
     Some(text)
+}
+
+/// The Pathfinder panel's name for the Shape Mode or Pathfinder operation that ran last.
+fn last_pathfinder_label(app: &VectorcraftApp) -> Option<&'static str> {
+    app.last_pathfinder.as_deref().and_then(crate::panels::pathfinder::operation_label)
 }
 
 /// Does the menu item `id` show a name that is user, file or system data rather than an interface
@@ -197,9 +207,13 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
         "window.toolbarAdvanced" => crate::i18n::tr(lang, label).to_string(),
         "effect.last" => match &app.last_effect {
             Some((e, _)) => {
-                let name = vectorcraft_effects::effect_info(e).map(|i| i.label).unwrap_or(e.as_str());
-                fmt(tl!("Last Effect: {name}"), &[("name", crate::i18n::tr_id(lang, e, name))])
+                let name = crate::i18n::effect_menu_label(lang, e).unwrap_or_else(|| e.clone());
+                fmt(tl!("Last Effect: {name}"), &[("name", &name)])
             }
+            None => crate::i18n::tr_id(lang, id, label).to_string(),
+        },
+        "pathfinder.repeat" => match last_pathfinder_label(app) {
+            Some(name) => fmt(tl!("Repeat {name}"), &[("name", tl!(name))]),
             None => crate::i18n::tr_id(lang, id, label).to_string(),
         },
         // The filter's name is the plug-in's own text, never translated.
@@ -218,17 +232,19 @@ pub fn display_label(app: &VectorcraftApp, id: &str, label: &str) -> String {
     }
 }
 
-/// The label of an Effect menu item in the UI language, by the effect's own id. Every effect item
-/// runs `effect.apply` or `effect.dialog`, so the command id can't tell them apart; an `@id` row
-/// for the effect id (for example `pathfinder.add`) wins over the plain row of the English label.
-/// `None` when the catalog has no such row, and the plain translation applies.
-pub(super) fn effect_item_label(id: &str, p: &Value) -> Option<String> {
+/// The label of an Effect menu item in `lang`, by the effect's own id
+/// ([`crate::i18n::effect_menu_label`]). Every effect item runs `effect.apply` or `effect.dialog`,
+/// so the command id can't tell them apart. `None` for any other item, and for a plug-in effect,
+/// whose item shows the plug-in's own text.
+pub(crate) fn effect_item_label(id: &str, p: &Value, lang: crate::i18n::Lang) -> Option<String> {
     if !matches!(id, "effect.apply" | "effect.dialog") {
         return None;
     }
     let effect = p.get("effect")?.as_str()?;
-    let shown = crate::i18n::tr_id(crate::i18n::current(), effect, "");
-    (!shown.is_empty()).then(|| shown.to_string())
+    if vectorcraft_plugins::effect::plugin_id(effect).is_some() {
+        return None;
+    }
+    crate::i18n::effect_menu_label(lang, effect)
 }
 
 /// The label of an item of the canvas context menu's Unlock submenu (`layer.setProps` with one id
