@@ -92,3 +92,20 @@ fn pixel_preview_compares_a_document_pixel_with_a_device_pixel() {
         }
     }
 }
+
+#[test]
+fn out_of_range_saved_ui_scaling_keeps_actual_size_correct() {
+    let (a, b) = (Point::new(100.0, 100.0), Point::new(228.0, 100.0));
+    for (saved, expected) in [(0.5, 0.75), (3.0, 2.0), (0.0, 1.0), (f64::NAN, 1.0)] {
+        let (mut app, ctx, jobs) = shown(1.0, 1.5);
+        app.run("view.actualSize", json!({})).unwrap();
+        frame(&mut app, &ctx, (1.0, 1.5), vec![]);
+        let before = device_length(rendered(&jobs), a, b);
+        app.session.prefs.ui_scaling = saved;
+        let scale = crate::app::root_env(&app.session.prefs, 1.0, None).scale.0;
+        assert_eq!(scale, expected, "interface scale from saved value {saved}");
+        frame(&mut app, &ctx, (1.0, scale), vec![]);
+        let length = device_length(rendered(&jobs), a, b);
+        assert!((length - before).abs() < 1e-4, "saved scale {saved} changes 128 pt from {before} to {length} pixels");
+    }
+}

@@ -1014,6 +1014,17 @@ pub(super) fn paints_apart(look: &Node) -> bool {
     }
     let mut paths = vec![];
     leaves(look, &mut paths);
+    // A gradient or pattern instance (`Bb … BB`) wraps only the last path of a compound path, the paths before it
+    // keep the default paint: many paths alike, then one that paints with a gradient, are one compound path's
+    // subpaths and its paint (see `compound`), not several paints.
+    if let [rest @ .., last] = paths.as_slice()
+        && rest.len() >= 2
+        && rest.windows(2).all(|w| matches!(w, [a, b] if a.appearance == b.appearance))
+        && last.appearance.items.iter().any(|i| matches!(i.paint(), Paint::Gradient(_) | Paint::Pattern { .. }))
+        && rest.iter().all(|p| p.appearance.items.iter().all(|i| !matches!(i.paint(), Paint::Gradient(_) | Paint::Pattern { .. })))
+    {
+        return false;
+    }
     paths.windows(2).any(|w| matches!(w, [a, b] if a.appearance != b.appearance))
 }
 
@@ -1477,7 +1488,7 @@ fn painted_bounds(object: &Node, appearance: &Appearance) -> Option<Rect> {
     let mut out = None;
     for item in &appearance.items {
         let painted = match item {
-            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => path.bounds(),
+            AppearanceItem::Fill(f) if f.visible && !f.paint.is_none() => path.drawn_bounds(false),
             AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() => vectorcraft_effects::stroke::outline_region(&path, rule, s).bounds(),
             _ => None,
         };
@@ -1752,6 +1763,14 @@ pub(crate) fn parse_art_style(section: &[u8], name: &str) -> Option<ParsedStyle>
     crate::import::ai::style::art_styles(section).remove(name).map(|style| ParsedStyle { style })
 }
 
+/// The color type takes from art style `parsed` when a character's fill or stroke names it (key 5
+/// of its paint, `ate`): a style of one paint whose paint is a color with a swatch, at its tint and
+/// linked to that swatch ([`crate::import::ai::style::ArtStyle::simple_color`]). `None` for any
+/// other style.
+pub(crate) fn parsed_type_color(parsed: &ParsedStyle) -> Option<&Paint> {
+    parsed.style.simple_color.as_ref().map(|(paint, _)| paint)
+}
+
 /// Art style `parsed` as the reader reads it ([`StyleRead`]): [`appearance_from_art_style`], with a
 /// style's one gradient fill as `own_gradient`, the object's own gradient, as [`styled`] reads it on
 /// objects other than type. A stroke that names a brush is read with that brush's name, as [`styled`]
@@ -1971,6 +1990,31 @@ mod tests {
 
     fn square(id: u64, fill: Paint) -> Arc<Node> {
         Arc::new(Node::path(NodeId(id), shapes::rectangle(Rect::new(0.0, 0.0, 10.0, 10.0)), Appearance::basic(fill, Paint::None, 0.0)))
+    }
+
+    /// A lone anchor, which a fill does not paint, does not move what the fill paints when the
+    /// arrowheads are placed against the drawn look: a filled line with a head and a stray anchor
+    /// well outside it still fits a look of the line and its head alone.
+    #[test]
+    fn a_lone_anchor_does_not_move_the_painted_box_heads_are_placed_by() {
+        use vectorcraft_doc::{ArrowAlign, Arrowhead, CustomArrowhead, FillLayer, StrokeLayer};
+        use vectorcraft_geom::{Point, SubPath};
+        let wedge = PathData::single(SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(3.0, 2.0), Point::new(3.0, -1.0)], true));
+        let mut stroke = StrokeLayer::new(Paint::solid(vectorcraft_doc::color::Color::BLACK), 2.0);
+        stroke.end_arrow = Some(Arrowhead::Custom(Arc::new(CustomArrowhead::new("Wedge".into(), wedge))));
+        stroke.arrow_align = ArrowAlign::Tip;
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Fill(FillLayer::new(Paint::solid(vectorcraft_doc::color::Color::BLACK))));
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let line = SubPath::polyline(&[Point::new(0.0, 50.0), Point::new(100.0, 50.0)], false);
+        let plain = Node::path(NodeId(1), PathData::single(line.clone()), appearance.clone());
+        let want = painted_bounds(&plain, &appearance).unwrap();
+        let look =
+            Node::path(NodeId(2), shapes::rectangle(want), Appearance::basic(Paint::solid(vectorcraft_doc::color::Color::BLACK), Paint::None, 0.0));
+        let stray = SubPath::new(vec![vectorcraft_geom::Anchor::corner(Point::new(50.0, 200.0))], false);
+        let object = Node::path(NodeId(3), PathData::new(vec![line, stray]), appearance.clone());
+        let placed = heads_placed(&object, &look, appearance, Affine::IDENTITY).expect("the heads fit the look");
+        assert!(placed.items.iter().any(|i| matches!(i, AppearanceItem::Stroke(s) if s.arrow_align == ArrowAlign::Tip)));
     }
 
     /// The outline check works from one budget for the object: a look of the outline drawn twice

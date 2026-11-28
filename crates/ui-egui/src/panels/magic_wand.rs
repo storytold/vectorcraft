@@ -44,8 +44,10 @@ fn row(app: &mut VectorcraftApp, ui: &mut Ui, o: &Value, label: &'static str, fl
             app.run("magicWand.set", json!({ flag: now })).ok();
         }
         if let Some((key, field)) = tol {
-            Field::new(tl!("Tolerance:")).id_salt(key).enabled(on).show(ui, |ui, _| {
-                if let Some(n) = field().enabled(on).show(ui).value().copied().flatten() {
+            let caption = tl!("Tolerance:");
+            Field::new(caption).id_salt(key).enabled(on).show(ui, |ui, _| {
+                let name = format!("{caption} {label}");
+                if let Some(n) = field().label(name).keeps_name(true).enabled(on).show(ui).value().copied().flatten() {
                     app.run("magicWand.set", json!({ key: n })).ok();
                 }
             });
@@ -113,6 +115,19 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_tolerance_field_has_its_own_accessible_name() {
+        use craft::ui::contract::Role;
+        use craft::ui::testing::Fixture;
+
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+        let mut fixture = Fixture::new(move |ui| show(&mut app, ui));
+        fixture.settle();
+        let names: Vec<_> = fixture.by_role(Role::SPIN_BUTTON).into_iter().filter_map(|field| fixture.tree().name_of(field.node)).collect();
+        assert_eq!(names, ["Tolerance: Fill Color", "Tolerance: Stroke Color", "Tolerance: Stroke Weight", "Tolerance: Opacity"]);
+        assert_eq!(fixture.texts().iter().filter(|run| run.text == "Tolerance:").count(), 4);
+    }
 
     #[test]
     fn color_tolerance_fields_go_to_100_in_a_cmyk_document() {
