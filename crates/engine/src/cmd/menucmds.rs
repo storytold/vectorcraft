@@ -675,6 +675,9 @@ fn transform_each_as(s: &mut Session, p: &Value, label: &str) -> Result<Value> {
                 // Five draws whatever the scales are, so a seed gives the moves and the rotation
                 // the same values whether a side is scaled or not.
                 let [r_sh, r_sv, r_mh, r_mv, r_rot] = [rng.next(), rng.next(), rng.next(), rng.next(), rng.next()];
+                // The same horizontal and vertical scale take one share, so the object scales
+                // evenly (#9320).
+                let r_sv = if sh == sv { r_sh } else { r_sv };
                 k_sh = k_sh.map(|v| 1.0 + (v - 1.0) * r_sh);
                 k_sv = k_sv.map(|v| 1.0 + (v - 1.0) * r_sv);
                 k_mh = mh * (r_mh * 2.0 - 1.0);

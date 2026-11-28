@@ -513,6 +513,24 @@ fn eps_save_transparency_follows_the_color_preview() {
     assert_eq!(dialog(&mut app).bool("embedFonts"), Some(true));
 }
 
+#[test]
+fn a_native_save_options_draft_cannot_redirect_its_path_to_another_drawing() {
+    let (mut app, written, _) = desktop("original.vectorcraft");
+    assert_eq!(save_as(&mut app, "file.saveAs").as_deref(), Some(KIND));
+    let draft_path = dialog(&mut app).text("path").unwrap().to_owned();
+    app.run("file.new", json!({"width": 200, "height": 120})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 30, "height": 20})).unwrap();
+    assert!(!ok(&mut app));
+    assert_eq!(dialog(&mut app).text("path"), Some(draft_path.as_str()));
+    assert!(written.borrow().is_empty());
+    assert!(app.session.active().unwrap().path.is_none());
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(ok(&mut app), "{}", app.ui.status);
+    assert_eq!(written.borrow()[0].0, draft_path);
+    assert!(app.session.documents()[1].path.is_none());
+}
+
 /// #4931: a native file's Version is a menu of the versions VectorCraft writes, the current one
 /// first and chosen, each named by the releases that read it. An older version without
 /// compression saves plain, whatever Use Compression held.
@@ -556,4 +574,45 @@ fn a_refused_save_says_so_in_an_alert() {
     assert!(written.borrow().is_empty());
     let st = app.session.active().unwrap();
     assert!(st.is_dirty() && st.path.is_none(), "not saved");
+}
+
+#[test]
+fn native_save_options_do_not_write_a_copy_after_file_revert() {
+    use craft::ui::dialog::HeldOk;
+
+    for accepted_before_revert in [false, true] {
+        let (mut app, written, _) = desktop("revision-copy.vectorcraft");
+        let dir = vectorcraft_testkit::TempDir::new("save-options-revert");
+        let source = dir.join("source.vectorcraft");
+        let record_outcome = app.services.write.take();
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": source})).unwrap();
+        app.services.write = record_outcome;
+        app.run("shape.ellipse", json!({"x": 10, "y": 10, "width": 15, "height": 15})).unwrap();
+        assert_eq!(save_as(&mut app, "file.saveAs").as_deref(), Some(KIND));
+        let (ctx, id) = (app.ui_ctx.clone().unwrap(), top(&mut app));
+        assert!(!host(&app, |h| h.confirm_by_id(&ctx, id)));
+        assert_eq!(host(&app, |h| h.held_state(id)), Some(HeldOk::Waiting));
+        if accepted_before_revert {
+            super::super::host::pump(&mut app, &ctx);
+            assert_eq!(host(&app, |h| h.held_state(id)), Some(HeldOk::Accepted));
+            assert!(host(&app, |h| h.confirm_by_id(&ctx, id)));
+        }
+        assert!(written.borrow().is_empty());
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        super::super::host::pump(&mut app, &ctx);
+        assert!(written.borrow().is_empty(), "the old options must not write restored contents");
+        if accepted_before_revert {
+            assert!(app.ui.status.contains("document was reverted"));
+        } else {
+            assert!(matches!(host(&app, |h| h.held_state(id)), Some(HeldOk::Refused(_))));
+            host(&app, |h| h.cancel_by_id(&ctx, id));
+            super::super::host::pump(&mut app, &ctx);
+        }
+        assert_eq!(save_as(&mut app, "file.saveAs").as_deref(), Some(KIND));
+        assert!(ok(&mut app));
+        assert_eq!(written.borrow()[0].0, "revision-copy.vectorcraft");
+    }
 }

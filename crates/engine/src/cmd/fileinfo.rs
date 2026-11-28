@@ -213,7 +213,7 @@ enum Merge {
     Append,
 }
 
-/// File Info › Import: `file.info.applyTemplate {path?|name?|data?, mode, apply?, base?}`.
+/// File Info › Import: `file.info.applyTemplate {path?|name?|data?|dataBase64?, mode, apply?, base?}`.
 pub(crate) fn apply_template(s: &mut Session, p: &Value) -> Result<Value> {
     let mode = match text_param(p, "mode", APPLY)? {
         Some("replace") => Merge::Replace,
@@ -236,15 +236,14 @@ pub(crate) fn apply_template(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// The bytes of the template `p` names: `path`, `name` (in the metadata templates folder) or
-/// `data`, exactly one, at most [`MAX_TEMPLATE_FILE`] long.
+/// Reads one template source from `p` up to [`MAX_TEMPLATE_FILE`] bytes.
 fn template_bytes(s: &Session, p: &Value) -> Result<Vec<u8>> {
-    let given = [text_param(p, "path", APPLY)?, text_param(p, "name", APPLY)?, text_param(p, "data", APPLY)?];
+    let given = [text_param(p, "path", APPLY)?, text_param(p, "name", APPLY)?, text_param(p, "data", APPLY)?, text_param(p, "dataBase64", APPLY)?];
     // At most one byte past the limit is read, so a huge file is never read whole.
     let read = |path: &str| super::fileio::read_file_head(path, MAX_TEMPLATE_FILE + 1);
     let bytes = match given {
-        [Some(path), None, None] => read(path)?,
-        [None, Some(name), None] => {
+        [Some(path), None, None, None] => read(path)?,
+        [None, Some(name), None, None] => {
             let dir = s.metadata_templates_dir().ok_or_else(|| bad(APPLY, "no metadata templates folder here"))?;
             let mut path = template_path(dir, name, APPLY)?;
             // A template `file.info.templates` lists: by its `file` first, then by its `name` with
@@ -268,9 +267,15 @@ fn template_bytes(s: &Session, p: &Value) -> Result<Vec<u8>> {
             // The app's own folder: no root applies.
             crate::file_access::unconfined(|| read(&path))?
         }
-        [None, None, Some(data)] if data.len() > MAX_TEMPLATE_FILE => return Err(too_big(APPLY)),
-        [None, None, Some(data)] => data.as_bytes().to_vec(),
-        _ => return Err(bad(APPLY, "give one of `path`, `name` and `data`")),
+        [None, None, Some(data), None] if data.len() > MAX_TEMPLATE_FILE => return Err(too_big(APPLY)),
+        [None, None, Some(data), None] => data.as_bytes().to_vec(),
+        [None, None, None, Some(data)] => {
+            if data.len() > MAX_TEMPLATE_FILE.div_ceil(3) * 4 {
+                return Err(too_big(APPLY));
+            }
+            vectorcraft_format::base64_decode(data).ok_or_else(|| bad(APPLY, "dataBase64 is not base64"))?
+        }
+        _ => return Err(bad(APPLY, "give one of `path`, `name`, `data` or `dataBase64`")),
     };
     if bytes.len() > MAX_TEMPLATE_FILE {
         return Err(too_big(APPLY));

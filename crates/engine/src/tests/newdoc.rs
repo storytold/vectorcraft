@@ -893,6 +893,167 @@ fn a_profiles_normal_character_style_is_the_default_font() {
 }
 
 #[test]
+fn an_open_document_takes_another_profiles_default_fill_stroke_and_font() {
+    use vectorcraft_color::Paint;
+    let (mut s, dir) = with_profiles("apply-defaults");
+    const GLOW: &str = r#"<filter id="Glow7653"><feOffset dx="3" dy="3"/></filter>"#;
+    // The CMYK Print profile: no fill and a 0.25 pt stroke of the global swatch Laser Red, with
+    // the SVG filter Glow7653, and red type in Source Serif 4 at 9 pt.
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    s.execute("swatch.new", &json!({"name": "Laser Red", "color": "#ff0000", "global": true})).unwrap();
+    s.execute("svgFilter.define", &json!({"xml": GLOW})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("paint.setStroke", &json!({"swatch": "Laser Red"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 0.25})).unwrap();
+    s.execute("svgFilter.apply", &json!({"name": "Glow7653"})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Default Graphic Style"})).unwrap();
+    let serif =
+        s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Serif", "font": "Source Serif 4", "size": 9, "color": "#ff0000"})).unwrap();
+    s.execute("charStyle.redefine", &json!({"name": "[Normal Character Style]", "id": serif["id"]})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+
+    // An RGB document made without a profile, with another filter named Glow7653, type in the
+    // default font and a rectangle linked to its Default Graphic Style.
+    s.execute("file.new", &json!({"colorMode": "rgb"})).unwrap();
+    s.execute("svgFilter.define", &json!({"xml": r#"<filter id="Glow7653"><feOffset dx="9" dy="9"/></filter>"#})).unwrap();
+    let before = s.execute("text.create", &json!({"x": 20, "y": 40, "text": "Before"})).unwrap();
+    let linked = s.execute("shape.rectangle", &json!({"x": 20, "y": 80, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    s.execute("graphicStyle.apply", &json!({"name": "Default Graphic Style"})).unwrap();
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let default_font = first_run(&s, &before["id"]);
+
+    let steps = s.doc().unwrap().history.undo.len();
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "print"})).unwrap();
+    assert_eq!((r["name"].clone(), r["changed"].clone()), (json!("Print"), json!(true)), "{r}");
+    assert_eq!(s.doc().unwrap().history.undo.len(), steps + 1, "one undo step");
+    // The swatch comes along, in the document's color mode, and the style paints with it.
+    let d = &s.doc().unwrap().doc;
+    let red = d.swatches.iter().find(|w| w.name == "Laser Red").cloned().expect("the style's swatch");
+    assert!(matches!(red.paint, Paint::Solid { color: vectorcraft_color::Color::Rgb { .. }, .. }), "{:?}", red.paint);
+    let stroke = s.paint.stroke.clone();
+    assert!(matches!(&stroke, Paint::Solid { swatch: Some(w), .. } if w == "Laser Red"), "{stroke:?}");
+    // The profile's filter keeps its definition under a free name; the document's keeps its own.
+    let style = d.graphic_style("Default Graphic Style").cloned().unwrap();
+    let filter = style.appearance.effects.iter().find(|e| e.id == "svg.filter").cloned().expect("the style's filter");
+    assert_ne!(filter.params["name"], "Glow7653", "{filter:?}");
+    assert!(filter.params["xml"].as_str().is_some_and(|x| x.contains("dx=\"3\"")), "{filter:?}");
+    assert!(d.svg_filters.iter().any(|f| f.name == "Glow7653" && f.xml.contains("dx=\"9\"")));
+    // New art takes the profile's look; so does the rectangle linked to the style.
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 0.25));
+    let id = s.execute("shape.rectangle", &json!({"x": 60, "y": 80, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!(look(&s, id), (Paint::None, stroke.clone(), Some(0.25)));
+    assert_eq!(look(&s, linked), (Paint::None, stroke.clone(), Some(0.25)));
+    // New type starts in the profile's font, and type in [Normal Character Style] follows it.
+    let made = s.execute("text.create", &json!({"x": 20, "y": 160, "text": "After"})).unwrap();
+    for id in [&made["id"], &before["id"]] {
+        let st = first_run(&s, id);
+        assert_eq!((st.font_family.as_str(), st.size), ("Source Serif 4", 9.0));
+        // The profile's CMYK red is converted to the document's color mode.
+        assert!(
+            matches!(st.fill, Paint::Solid { color: vectorcraft_color::Color::Rgb { r, g, b }, .. } if r > 0.8 && g < 0.3 && b < 0.3),
+            "a converted red: {:?}",
+            st.fill
+        );
+    }
+    // Again: nothing changes and no undo step is recorded.
+    let step = s.doc().unwrap().history.step();
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "Print"})).unwrap();
+    assert_eq!(r["changed"], false, "{r}");
+    assert_eq!(s.doc().unwrap().history.step(), step);
+
+    // A category without a profile file gives the shipped defaults back.
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    let print_paint = s.paint.clone();
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "Web"})).unwrap();
+    assert_eq!(r["changed"], true, "{r}");
+    assert_eq!(s.paint, vectorcraft_tools::PaintDefaults::default());
+    let st = first_run(&s, &before["id"]);
+    assert_eq!((st.font_family, st.size), (default_font.font_family.clone(), default_font.size));
+    // Undo goes back to the Print profile's defaults in the document and for new art; Redo
+    // brings the shipped ones again.
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(first_run(&s, &before["id"]).font_family, "Source Serif 4");
+    assert_eq!(s.paint, print_paint);
+    s.execute("edit.redo", &json!({})).unwrap();
+    assert_eq!(s.paint, vectorcraft_tools::PaintDefaults::default());
+    s.execute("edit.undo", &json!({})).unwrap();
+
+    // An unknown profile is an error and changes nothing.
+    let step = s.doc().unwrap().history.step();
+    assert!(s.execute("file.newProfiles.applyDefaults", &json!({"name": "Posters"})).is_err());
+    assert!(s.execute("file.newProfiles.applyDefaults", &json!({})).is_err());
+    assert_eq!(s.doc().unwrap().history.step(), step);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// With New Art Has Basic Appearance off, the selected object's look does not replace the profile's
+/// defaults that Use Profile Defaults has just set.
+#[test]
+fn profile_defaults_stay_with_an_unrelated_object_selected() {
+    use vectorcraft_color::Paint;
+    let (mut s, dir) = with_profiles("apply-defaults-selected");
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    s.execute("paint.setFill", &json!({"none": true})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 0.25})).unwrap();
+    s.execute("graphicStyle.redefine", &json!({"name": "Default Graphic Style"})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+
+    s.execute("file.new", &json!({})).unwrap();
+    s.execute("prefs.set", &json!({"key": "newArtBasic", "value": false})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 20, "y": 20, "width": 30, "height": 30})).unwrap();
+    s.execute("paint.setFill", &json!({"color": "#00ff00"})).unwrap();
+    s.execute("stroke.set", &json!({"weight": 4})).unwrap();
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "Print"})).unwrap();
+    assert_eq!(r["changed"], true, "{r}");
+    assert_eq!((s.paint.fill.clone(), s.paint.stroke_width), (Paint::None, 0.25));
+    let id = s.execute("shape.rectangle", &json!({"x": 60, "y": 80, "width": 30, "height": 30})).unwrap()["id"].as_u64().unwrap();
+    assert_eq!((look(&s, id).0, look(&s, id).2), (Paint::None, Some(0.25)));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A profile whose [Normal Character Style] is set in one of its composite fonts gives the open
+/// document that composite font too, in place of the document's of the same name.
+#[test]
+fn profile_defaults_bring_the_composite_font_of_the_default_font() {
+    let font = |roman: f64| {
+        json!({"name": "CF Profile 7653", "parts": {
+            "kanji": {"font": "Source Sans 3"},
+            "roman": {"font": "JetBrains Mono", "size": roman},
+        }})
+    };
+    let (mut s, dir) = with_profiles("apply-defaults-composite");
+    s.execute("file.newProfiles.edit", &json!({"name": "Print"})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font(50.0)]})).unwrap();
+    let t = s.execute("text.create", &json!({"x": 10, "y": 80, "text": "Ab", "font": "CF Profile 7653", "size": 12})).unwrap();
+    s.execute("charStyle.redefine", &json!({"name": "[Normal Character Style]", "id": t["id"]})).unwrap();
+    s.execute("document.save", &json!({})).unwrap();
+
+    s.execute("file.new", &json!({"colorMode": "cmyk"})).unwrap();
+    s.execute("type.compositeFonts.set", &json!({"fonts": [font(100.0)]})).unwrap();
+    let profile = |s: &Session| s.doc().unwrap().doc.composite_fonts.iter().find(|f| f.name == "CF Profile 7653").map(|f| f.parts.roman.size);
+    assert_eq!(profile(&s), Some(100.0));
+    let r = s.execute("file.newProfiles.applyDefaults", &json!({"name": "Print"})).unwrap();
+    assert_eq!(r["changed"], true, "{r}");
+    assert_eq!(profile(&s), Some(50.0), "the profile's definition");
+    let made = s.execute("text.create", &json!({"x": 20, "y": 160, "text": "Ab"})).unwrap();
+    assert_eq!(first_run(&s, &made["id"]).font_family, "CF Profile 7653");
+    let missing = s.execute("text.fonts", &json!({})).unwrap().as_array().unwrap().iter().filter(|f| f["missing"] == true).count();
+    assert_eq!(missing, 0);
+    // Again: nothing changes.
+    let step = s.doc().unwrap().history.step();
+    assert_eq!(s.execute("file.newProfiles.applyDefaults", &json!({"name": "Print"})).unwrap()["changed"], false);
+    assert_eq!(s.doc().unwrap().history.step(), step);
+    // Undone, the document's own definition is back.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert_eq!(profile(&s), Some(100.0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn profile_errors_name_the_file_by_its_name_outside_the_read_roots() {
     let (mut s, dir) = with_profiles("errors");
     let elsewhere = dir.with_extension("elsewhere");

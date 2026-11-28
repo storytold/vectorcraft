@@ -120,7 +120,7 @@ fn sliders_row(table: Vec<AdjustField>) -> Param {
     Param::custom("sliders", tl!("Adjustments"), move |ui, fields, _| {
         let values: Vec<f64> = table.iter().map(|f| fields.number(f.key).unwrap_or(f.default)).collect();
         let edit = AdjustSliders::new(tl!("Adjustments"), &table, Bind::given(values)).show(ui);
-        if let Some(now) = edit.value() {
+        if let Some(now) = edit.events.landed() {
             for (field, value) in table.iter().zip(now) {
                 fields.set(field.key, *value);
             }
@@ -177,14 +177,148 @@ pub(super) fn curve_body(ui: &mut Ui, levels: u32, pts: &[(f32, f32)]) -> (Respo
                 (0..=levels).map(|k| curve_at(&unit, k as f32 / scale) * scale).collect()
             })
             .show(ui);
-        if let Some(points) = graph.value().and_then(Curve::points) {
+        if let Some(points) = graph.events.landed().and_then(Curve::points) {
             edited = Some(points_text(points.iter().copied()));
         }
         Field::new(tl!("Points")).show(ui, |ui, _| {
-            if let Some(typed) = TextField::new(tl!("Points"), Bind::given(text.clone())).id_salt("points").show(ui).value() {
+            if let Some(typed) = TextField::new(tl!("Points"), Bind::given(text.clone())).id_salt("points").show(ui).events.landed() {
                 edited = Some(typed.clone());
             }
         });
     });
     (shown.output, edited)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use craft::ui::testing::Fixture;
+    use egui::{Key, Modifiers};
+    use std::{cell::RefCell, rc::Rc};
+
+    #[test]
+    fn graph_escape_restores_the_curve_during_a_held_drag() {
+        for levels in [255, 100] {
+            let original = format!("0,0 {},{} {levels},{levels}", levels / 2, levels / 2);
+            let stored = Rc::new(RefCell::new(original.clone()));
+            let shown = Rc::clone(&stored);
+            let mut fixture = Fixture::new(move |ui| {
+                let value = Value::String(shown.borrow().clone());
+                let pts = curve_points_of(levels, Some(&value));
+                if let Some(text) = curve_body(ui, levels, &pts).1 {
+                    *shown.borrow_mut() = text;
+                }
+            });
+            fixture.room(egui::vec2(480.0, 600.0)).settle();
+            let from = fixture.by_label("Point 2 of 3").expect("the interior curve point").center();
+            let by = egui::vec2(0.0, -30.0);
+            fixture.drag_hold_at(from, by).settle();
+            assert_ne!(*stored.borrow(), original, "a held graph drag previews its new points");
+            fixture.key(Key::Escape, Modifiers::NONE).settle();
+            fixture.release_at(from + by).settle();
+            assert_eq!(*stored.borrow(), original, "Escape before release restores the opening curve");
+
+            let from = fixture.by_label("Point 2 of 3").unwrap().center();
+            fixture.drag_hold_at(from, by).settle();
+            let committed = stored.borrow().clone();
+            assert_ne!(committed, original);
+            fixture.release_at(from + by).settle();
+            assert_eq!(*stored.borrow(), committed, "releasing the drag keeps the new curve");
+            fixture.key(Key::Escape, Modifiers::NONE).settle();
+            assert_eq!(*stored.borrow(), committed, "Escape after release leaves the committed curve");
+        }
+    }
+
+    #[test]
+    fn brightness_slider_escape_restores_hosted_fields_and_the_live_effect() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use serde_json::json;
+        use vectorcraft_doc::NodeId;
+
+        fn draw(app: &mut crate::VectorcraftApp, ui: &mut Ui) {
+            if let Some(dialogs) = app.dialogs() {
+                dialogs.with(|host| host.run(ui));
+            }
+            super::super::host::pump(app, ui.ctx());
+        }
+
+        fn brightness(app: &crate::VectorcraftApp, id: NodeId) -> f64 {
+            app.session
+                .active()
+                .unwrap()
+                .doc
+                .node(id)
+                .unwrap()
+                .appearance
+                .effects
+                .iter()
+                .find(|effect| effect.id == "adjust.brightnessContrast")
+                .unwrap()
+                .params["brightness"]
+                .as_f64()
+                .unwrap()
+        }
+
+        let mut app = crate::testing::windowed(crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let id = NodeId(app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 60, "height": 40})).unwrap()["id"].as_u64().unwrap());
+        let original = app.session.active().unwrap().doc.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let mut panel = Panel::new(app, draw);
+        panel.room(egui::vec2(800.0, 600.0));
+        panel.app().run("effect.dialog", json!({"effect": "adjust.brightnessContrast", "item": null})).unwrap();
+        panel.frame();
+        let dialog = panel.app().effect_dialogs.effect.as_ref().unwrap().id;
+        assert_eq!(brightness(&panel.app(), id), 0.0, "the default live effect starts at zero brightness");
+        panel.drag_hold_role("Brightness", Role::SLIDER, egui::vec2(35.0, 0.0));
+        let proposed = brightness(&panel.app(), id);
+        assert_ne!(proposed, 0.0, "dragging updates the live preview");
+        assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog)["brightness"], proposed);
+        panel.key(Key::Escape, Modifiers::NONE);
+        panel.release();
+        assert_eq!(super::super::tests_warp::json_fields(&panel.app(), dialog)["brightness"], 0.0);
+        assert_eq!(brightness(&panel.app(), id), 0.0, "Escape restores the previous preview");
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+
+        panel.click_role("Brightness", Role::SPIN_BUTTON);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("25");
+        panel.key(Key::Enter, Modifiers::NONE);
+        assert!(panel.app().effect_dialogs.effect.is_none(), "Enter confirms the valid brightness and closes the dialog");
+        assert_eq!(brightness(&panel.app(), id), 25.0);
+        assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo + 1);
+        panel.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+    }
+
+    #[test]
+    fn points_escape_restores_the_curve_after_live_typing() {
+        // The same body edits Curves in 255 levels and each Duotone tone in 100 levels.
+        for levels in [255, 100] {
+            let original = format!("0,0 {levels},{levels}");
+            let changed = format!("0,0 {},{levels} {levels},{levels}", levels / 2);
+            let stored = Rc::new(RefCell::new(original.clone()));
+            let shown = Rc::clone(&stored);
+            let mut fixture = Fixture::new(move |ui| {
+                let value = Value::String(shown.borrow().clone());
+                let pts = curve_points_of(levels, Some(&value));
+                if let Some(text) = curve_body(ui, levels, &pts).1 {
+                    *shown.borrow_mut() = text;
+                }
+            });
+            fixture.room(egui::vec2(480.0, 600.0)).settle();
+            let points = fixture.by_label("Points").expect("curve Points field");
+            fixture.click(&points).key(Key::A, Modifiers::COMMAND).type_text(&changed).settle();
+            assert_eq!(*stored.borrow(), changed, "typing updates the live curve");
+            fixture.key(Key::Escape, Modifiers::NONE).settle();
+            assert_eq!(*stored.borrow(), original, "Escape restores the curve before typing began");
+
+            let points = fixture.by_label("Points").unwrap();
+            fixture.click(&points).key(Key::A, Modifiers::COMMAND).type_text(&changed).key(Key::Enter, Modifiers::NONE).settle();
+            assert_eq!(*stored.borrow(), changed, "a committed edit keeps the new curve");
+            fixture.key(Key::Escape, Modifiers::NONE).settle();
+            assert_eq!(*stored.borrow(), changed, "Escape after commit cannot undo the accepted curve");
+        }
+    }
 }

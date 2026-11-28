@@ -696,7 +696,7 @@ fn three_d_graphics_accepts_artwork_only_from_its_document() {
 
     fn with_artwork(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let st = app.session.active().unwrap();
-        let payload = PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+        let payload = PanelDrag::Art { document: st.uid, reverts: st.reverts, ids: st.selection.objects.clone() };
         ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
             let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
             List::<usize>::new("Artwork")
@@ -1107,6 +1107,40 @@ fn the_lighting_widget_selects_a_light_and_moves_it_behind_the_object() {
     fixture.click(&to_front);
     assert_eq!(behind(), [json!(false), json!(false)]);
     assert_eq!(undo_len(&app.borrow()), history + 2);
+}
+
+/// The lights' list, buttons and sphere are one group and the selected light's settings another, a stack gap apart;
+/// the rows inside the first group are a row gap apart.
+#[test]
+fn the_light_settings_are_a_stack_gap_below_the_sphere_and_its_button() {
+    let gaps = Rc::new(std::cell::Cell::new((0.0, 0.0)));
+    let seen = Rc::clone(&gaps);
+    Fixture::new(move |ui| {
+        let gap = craft::ui::runtime::env::Env::of(ui).tokens.space.gap;
+        seen.set((gap.row, gap.stack));
+    })
+    .frame(vec![]);
+    let (row, stack) = gaps.get();
+    assert!(row > 0.0 && stack > row, "the interface resolved its gaps: row {row}, stack {stack}");
+    let (_app, fixture) = lighting(json!({}));
+    let tree = fixture.tree();
+    let rect = |name: &str, role: craft::ui::contract::Role| {
+        tree.keys()
+            .into_iter()
+            .find(|key| tree.name_of(*key) == Some(name) && tree.role_of(*key) == Some(role))
+            .and_then(|key| fixture.target(key))
+            .unwrap_or_else(|| panic!("the panel shows {name}"))
+            .rect
+    };
+    let (sphere, button, settings) = (
+        rect("Lights", craft::ui::contract::Role::GROUP),
+        rect("Move Light to Back", craft::ui::contract::Role::BUTTON),
+        rect("Light Settings", craft::ui::contract::Role::GROUP),
+    );
+    let below_button = settings.min.y - button.max.y;
+    assert!((below_button - stack).abs() < 0.01, "the settings are {below_button} below the button, the stack gap is {stack}");
+    let below_sphere = button.min.y - sphere.max.y;
+    assert!((below_sphere - row).abs() < 0.01, "the button is {below_sphere} below the sphere, the row gap is {row}");
 }
 
 /// A light the pointer took has the keyboard focus: the arrow keys raise and lower it and turn it
