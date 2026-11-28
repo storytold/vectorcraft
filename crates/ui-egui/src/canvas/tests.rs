@@ -1191,6 +1191,45 @@ fn the_art_renders_within_the_largest_texture_side() {
     assert_eq!(pixel_region(&view, 1024), None, "more than the display's largest texture");
 }
 
+/// On a display of 2 pixels a point, a canvas whose corner falls between device pixels still draws
+/// its art's frame on whole device pixels at its own size, so each frame pixel covers one device
+/// pixel and a stroke's edges stay sharp instead of spreading over two device pixels.
+#[test]
+fn the_art_lands_on_whole_device_pixels() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":400,"height":300})).unwrap();
+    app.canvas.worker_started = true; // every frame on this thread
+    let ctx = crate::testing::ui_context();
+    ctx.set_pixels_per_point(2.0);
+    let mut shapes = vec![];
+    // The first frame sets the pixels a point, the second draws at them.
+    for _ in 0..2 {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(pos2(31.3, 19.7), vec2(800.3, 600.35))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        shapes = flat_shapes(out.shapes);
+    }
+    let ppp = ctx.pixels_per_point();
+    assert_eq!(ppp, 2.0);
+    let rect = app.canvas_view().unwrap().rect;
+    let off_grid = |c: f32| ((c * ppp) - (c * ppp).round()).abs() > 0.01;
+    assert!(off_grid(rect.min.x) || off_grid(rect.min.y), "the canvas {rect:?} starts between device pixels");
+    let tex = app.canvas.texture.as_ref().expect("a rendered frame");
+    let (tid, size) = (tex.id(), tex.size());
+    let drawn = shapes
+        .iter()
+        .find_map(|s| match s {
+            Shape::Mesh(m) if m.texture_id == tid => Some(m.calc_bounds()),
+            _ => None,
+        })
+        .expect("the frame is drawn");
+    for (c, what) in [(drawn.min.x, "left"), (drawn.min.y, "top")] {
+        assert!(!off_grid(c), "the frame's {what} edge {c} is not on a device pixel");
+    }
+    assert!((drawn.width() * ppp - size[0] as f32).abs() < 0.01, "{} device pixels across for {} frame pixels", drawn.width() * ppp, size[0]);
+    assert!((drawn.height() * ppp - size[1] as f32).abs() < 0.01, "{} device pixels down for {} frame pixels", drawn.height() * ppp, size[1]);
+}
+
 /// `rgb` as the display transform `t` shows it.
 fn convert8(t: &craft::color_ui::display::DisplayTransform, rgb: [u8; 3]) -> [u8; 3] {
     let mut px = [rgb[0], rgb[1], rgb[2], 255];

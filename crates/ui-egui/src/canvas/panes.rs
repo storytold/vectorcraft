@@ -19,7 +19,7 @@ use serde_json::json;
 use vectorcraft_geom::{Affine, Point};
 
 use super::BodyKind;
-use super::raster::{backdrop, cache_key, frame_options, frame_ppp, frame_view, pixel_region, placed_key, plugin_key};
+use super::raster::{backdrop, cache_key, frame_options, frame_ppp, frame_view, pixel_region, placed_key, plugin_key, snapped_rect};
 use crate::doc_windows::Win;
 use crate::state::View;
 use crate::{CacheKey, VectorcraftApp};
@@ -141,6 +141,7 @@ impl PaneSource {
     pub(super) fn new(app: &mut VectorcraftApp, ctx: &egui::Context, w: Win, cv: &CanvasView) -> Option<PaneSource> {
         let env = Env::of_root(ctx);
         let ppp = ctx.pixels_per_point();
+        let device_ppp = ppp;
         let space = cv.rect;
         let v = crate::doc_windows::view(app, w).copied()?;
         let st = app.session.documents().get(w.0)?;
@@ -165,7 +166,12 @@ impl PaneSource {
             Some([x0, y0, x1, y1]) => {
                 egui::Rect::from_two_pos(cv.to_screen(Point::new(x0 as f64, y0 as f64)), cv.to_screen(Point::new(x1 as f64, y1 as f64)))
             }
-            None => space,
+            // The frame's own pixel size, centered on the pane and on whole device pixels, so each
+            // of its pixels covers one device pixel.
+            None => {
+                let size = egui::vec2(pw as f32 / ppp, ph as f32 / ppp);
+                snapped_rect(space.center() - size / 2.0, size, device_ppp)
+            }
         };
         let frame = PaneFrame {
             key: PaneKey { slot: (st.uid, w.1) },

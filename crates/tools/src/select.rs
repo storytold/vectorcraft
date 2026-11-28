@@ -262,6 +262,9 @@ fn distance_overlays(cx: &ToolContext, to: DistanceTo) -> Vec<Overlay> {
 /// it snaps to the original too.
 pub(crate) struct MoveSnap {
     bounds: Option<Rect>,
+    /// The selection's geometric bounds, which Smart Guides line up with the other art's geometric
+    /// bounds and space evenly between them, whether Use Preview Bounds is on or off (#6436).
+    edges: Option<Rect>,
     targets: Option<Targets>,
     points: Option<Targets>,
     /// The targets and points for a copy, gathered with the others before the previews move the
@@ -300,6 +303,7 @@ impl MoveSnap {
         let points = |exclude: &[NodeId]| if cx.snap_to_grid { None } else { Targets::snap_to_point(cx, exclude) };
         Self {
             bounds: selection_bounds(cx),
+            edges: guides.then(|| cx.doc.bounds_of(&cx.selection.objects, false)).flatten(),
             targets: guides.then(|| for_move(cx, &cx.selection.objects)),
             points: points(&cx.selection.objects),
             copy_targets: guides.then(|| for_move(cx, &[])),
@@ -312,7 +316,7 @@ impl MoveSnap {
     /// Snap to Grid and Snap to Pixel alone, for a move whose box is `bounds`: the grid lands an
     /// edge of the box on a gridline, and pixels put its top-left on whole pixels.
     pub(crate) fn grid_only(bounds: Option<Rect>) -> Self {
-        Self { bounds, targets: None, points: None, copy_targets: None, copy_points: None, rulers: None, by_edge: false }
+        Self { bounds, edges: None, targets: None, points: None, copy_targets: None, copy_points: None, rulers: None, by_edge: false }
     }
 
     /// The ruler guides stopped showing since the move began (View › Hide Guides, or Trim View,
@@ -353,7 +357,7 @@ impl MoveSnap {
         // The grabbed anchor landed on a path or a crossing, which a ruler guide does not pull
         // it off.
         let mut on_path = false;
-        if let (Some(t), Some(b)) = (targets, self.bounds) {
+        if let (Some(t), Some(b)) = (targets, self.edges) {
             // The point the selection was grabbed by, near another object's anchor or centre,
             // lands on it, rather than the bounds lining up a little beside it (#955).
             if t.has_point_near(start + d, cx.snap_tol()) {
@@ -434,7 +438,7 @@ impl MoveSnap {
             d = q - start;
             guides = ov;
         }
-        if let (Some(t), Some(b)) = (targets, self.bounds) {
+        if let (Some(t), Some(b)) = (targets, self.edges) {
             if t.has_point_near(start + d, cx.snap_tol()) {
                 let (q, ov) = t.snap_point_along(start + d, u, cx.snap_tol());
                 d = q - start;
