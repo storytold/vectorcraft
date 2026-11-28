@@ -758,7 +758,8 @@ fn cull_bounds_in(symbols: &SymbolBoxes, n: &Node, after_reshape: bool, brush: b
             let a = live_content_reach(symbols, n);
             vectorcraft_geom::union_opt(Some(b.inflate(a, a)), placed_live_effect_bounds(symbols, n))
         }
-        // A radial repeat rotates each copy before applying the source's geometry effects.
+        // A radial or mirror repeat rotates or reflects each copy before applying the source's
+        // geometry effects.
         NodeKind::Repeat(_) => {
             let b = n.visual_bounds_with(symbols)?;
             let a = live_content_reach(symbols, n);
@@ -856,13 +857,14 @@ fn own_box(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     })
 }
 
-/// A radial repeat's copies or a spine-aligned blend's steps, measured after rotation. Geometry
-/// effects run on the placed shapes, so their reach on the source need not cover what they paint.
+/// A radial or mirror repeat's copies or a spine-aligned blend's steps, measured after they are
+/// rotated or reflected. Geometry effects run on the placed shapes, so their reach on the source
+/// need not cover what they paint.
 /// Without effects, the renderer keeps the quick bounds without evaluating the copies or steps.
 fn placed_live_effect_bounds(symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
     match &n.kind {
         NodeKind::Blend { spec, .. } if spec.orientation == vectorcraft_doc::BlendOrientation::AlignToPath => {}
-        NodeKind::Repeat(r) if matches!(r.kind, vectorcraft_doc::RepeatKind::Radial { .. }) => {}
+        NodeKind::Repeat(r) if matches!(r.kind, vectorcraft_doc::RepeatKind::Radial { .. } | vectorcraft_doc::RepeatKind::Mirror { .. }) => {}
         _ => return None,
     }
     let mut has_effects = false;
