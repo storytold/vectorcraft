@@ -215,10 +215,10 @@ impl FunctionBudget {
         true
     }
 
-    /// The evaluations taken from it (tests).
+    /// The evaluations taken from it since the last call (tests).
     #[cfg(any(test, feature = "read-count"))]
-    pub(crate) fn spent(&self) -> usize {
-        self.taken.get()
+    pub(crate) fn take_spent(&self) -> usize {
+        self.taken.take()
     }
 }
 

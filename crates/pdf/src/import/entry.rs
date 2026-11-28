@@ -391,7 +391,12 @@ fn read_opened(
             merge_order(&mut order, &mut known, &marked);
         }
         b.begin_page(scan);
-        craft::pdf::interpret_page(page, &mut ctx, &mut b).map_err(|e| PdfError::Parse(e.to_string()))?;
+        let drawn = craft::pdf::interpret_page(page, &mut ctx, &mut b);
+        // The page's shadings take their evaluations while it is drawn: they count even when the
+        // import stops on this page or a later one.
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, b.function_budget.take_spent(), 0);
+        drawn.map_err(|e| PdfError::Parse(e.to_string()))?;
         if incomplete.load(Ordering::Relaxed) {
             return Err(crate::import_scan::incomplete_content());
         }
@@ -485,8 +490,6 @@ fn read_opened(
             }
         }
     }
-    #[cfg(any(test, feature = "read-count"))]
-    note_work(bytes, b.function_budget.spent(), 0);
     if only_text && !art_boxes {
         return Err(PdfError::PlaceholderOnly);
     }
