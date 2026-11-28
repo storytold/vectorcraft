@@ -3123,7 +3123,7 @@ mod wayland {
             assert_eq!(read_capped(pipe_with(&[0u8; 9], true).0, 8, Duration::ZERO), Err("the clipboard's data is larger than 0 MiB".to_string()));
             // More than a pipe holds, from an app that is still sending.
             let (from, to) = std::io::pipe().unwrap();
-            assert!(Sends::default().start(to, vec![0u8; (2 << 20) + 1].into()));
+            assert!(Sends { idle: LONG, ..Sends::default() }.start(to, vec![0u8; (2 << 20) + 1].into()));
             assert_eq!(read_capped(from, 2 << 20, LONG), Err("the clipboard's data is larger than 2 MiB".to_string()));
             // A pipe that can't be read: the write end.
             let (_, to) = std::io::pipe().unwrap();
@@ -3177,8 +3177,8 @@ mod wayland {
 
         #[test]
         fn a_copys_data_is_sent_through_the_pipe_and_closed() {
-            let sends = Sends::default();
-            assert_eq!(sends.idle, IDLE_WAIT);
+            assert_eq!(Sends::default().idle, IDLE_WAIT);
+            let sends = Sends { idle: LONG, ..Sends::default() };
             let (from, to) = std::io::pipe().unwrap();
             let data: Arc<[u8]> = vec![7u8; 300_000].into();
             assert!(sends.start(to, data.clone()));
