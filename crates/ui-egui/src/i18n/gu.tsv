@@ -3999,6 +3999,15 @@ arrowhead	Feather	પીંછું
 	Show East Asian Options	પૂર્વ એશિયન વિકલ્પો બતાવો
 	Show Edges	કિનારીઓ બતાવો
 	Show External Script Warning	બાહ્ય સ્ક્રિપ્ટ ચેતવણી બતાવો
+	Script File Access	સ્ક્રિપ્ટની ફાઇલ ઍક્સેસ
+	No script has kept file access.	કોઈ સ્ક્રિપ્ટ પાસે સાચવેલ ફાઇલ ઍક્સેસ નથી.
+	Read file	ફાઇલ વાંચો
+	Read and write file	ફાઇલ વાંચો અને લખો
+	Read and write folder	ફોલ્ડર વાંચો અને લખો
+	Revoke	પરવાનગી પાછી ખેંચો
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	પરવાનગી પાછી ખેંચવાથી સ્ક્રિપ્ટના દરેક સંસ્કરણ માટે સાચવેલ ઍક્સેસ દૂર થાય છે. ફોલ્ડરની ઍક્સેસમાં તેની અંદરનું બધું આવે છે.
+@msg	Script file access revoked	સ્ક્રિપ્ટની ફાઇલ ઍક્સેસ પાછી ખેંચી
+@msg	The script file access was already revoked	સ્ક્રિપ્ટની ફાઇલ ઍક્સેસ પહેલેથી પાછી ખેંચાઈ હતી
 	Show Find Field	શોધ ફીલ્ડ બતાવો
 	Show Font Height Options	ફોન્ટ ઊંચાઈ વિકલ્પો બતાવો
 	Show Font Names in English	ફોન્ટ નામો અંગ્રેજીમાં બતાવો
@@ -5666,6 +5675,11 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	No objects are selected.	કોઈ ઑબ્જેક્ટ પસંદ કરેલ નથી.
 	Open a document to mark its fold lines.	તેની ફોલ્ડ લાઇન્સ ચિહ્નિત કરવા દસ્તાવેજ ખોલો.
 	Remove Fold Line Role	લાઇન પ્રકાર દૂર કરો
+	Fold Angle	ફોલ્ડ ખૂણો
+	Set Fold Angle…	ફોલ્ડ ખૂણો સેટ કરો…
+	Set Fold Angle	ફોલ્ડ ખૂણો સેટ કરો
+	Reset Fold Angle	ફોલ્ડ ખૂણો રીસેટ કરો
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	એવી ક્રીઝ, આંશિક કટ અથવા પર્ફોરેશન લાઇન પસંદ કરો જે લૉક કે છુપાયેલી ન હોય
 	Check	ચેક કરો
 	Check Fold Lines	ફોલ્ડ લાઇન્સ ચેક કરો
 @msg	No cut lines are in the selection.	પસંદગીમાં કોઈ કટ લાઇન નથી.

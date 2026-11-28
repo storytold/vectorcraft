@@ -4815,6 +4815,14 @@ axis	Both	Båda
 	The script asks to read and write a folder you choose, with everything in it.	Skriptet ber om att läsa och skriva en mapp som du väljer, med allt innehåll.
 	Allow Once	Tillåt en gång
 	Always Allow This Script	Tillåt alltid det här skriptet
+	No script has kept file access.	Inget skript har sparad filåtkomst.
+	Read file	Läs fil
+	Read and write file	Läs och skriv fil
+	Read and write folder	Läs och skriv mapp
+	Revoke	Återkalla
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Återkalla tar bort åtkomsten som sparats för varje version av skriptet. Åtkomst till en mapp omfattar allt i den.
+@msg	Script file access revoked	Skriptets filåtkomst har återkallats
+@msg	The script file access was already revoked	Skriptets filåtkomst var redan återkallad
 	Deny	Neka
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ett skript kan ändra de öppna dokumenten och skriva filer genom de kommandon det kör. Kör bara skript du litar på.
 	Do not show this warning again	Visa inte den här varningen igen
@@ -5013,6 +5021,7 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` för ett skripts fildialog måste vara ett av: once, always, deny, stop
 @msg	choose a file or folder first, or deny	välj först en fil eller mapp, eller neka
 @msg	the script file permissions could not be saved: {e}	skriptens filbehörigheter kunde inte sparas: {e}
+@msg	the script file permissions could not be read: {e}	skriptens filbehörigheter kunde inte läsas: {e}
 @msg	this script's file access can be allowed only once	det här skriptets filåtkomst kan bara tillåtas en gång
 @msg	Only the person at the keyboard can allow a script's file access	Bara personen vid tangentbordet kan tillåta ett skripts filåtkomst
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Ett skript får högst 2 048 filer: filerna som valdes efter dem utelämnades
@@ -6817,6 +6826,8 @@ arrowhead	Feather	Fjäder
 	VectorCraft Default	VectorCraft-standard
 	VectorCraft Defaults	VectorCraft-standardvärden
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft allmän CMYK (SWOP-liknande)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft bestruken CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft obestruken CMYK (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	VectorCraft-färgrutor (.vcswatches)
 	Vertical Align	Vertikal justering
 	Vertical Area Type	Vertikal områdestext
@@ -7551,6 +7562,35 @@ axis	Y Axis	Y-axel
 @msg	`inputs` lists `{shown}` twice	`inputs` anger `{shown}` två gånger
 @msg	`inputs` needs `api` 2 or later	`inputs` kräver `api` 2 eller senare
 @msg	`inputs` needs the permission `doc.read`	`inputs` kräver behörigheten `doc.read`
+@msg	only a filter declares `writes`	bara ett filter anger `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` anger en okänd objekttyp `{shown}`: använd type, image eller symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` anger `{shown}` två gånger
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` anger `{shown}`, som `inputs` inte anger
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` kräver `api` {WRITES_API} eller senare
+@msg	`writes` needs the permission `doc.write`	`writes` kräver behörigheten `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} är varken text, en bild eller en symbolinstans
+@msg	the text of type given as `truncated` can't be changed	texten i ett textobjekt som getts som `truncated` kan inte ändras
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	måste vara en lista med högst {MAX_INPUT_RUNS} poster
+@msg	type needs at least one run	text behöver minst ett textavsnitt
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte text (gräns {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} stycken (gräns {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	mer än {MAX_INPUT_TEXT_TOTAL} byte text i hela utdatan
+@msg	unknown key '{k}'	okänd nyckel '{k}'
+@msg	must be a list of 6 numbers	måste vara en lista med 6 tal
+@msg	a number is out of range (limit ±{MAX_COORD})	ett tal ligger utanför intervallet (gräns ±{MAX_COORD})
+@msg	flattens the object to a line or a point	plattar till objektet till en linje eller en punkt
+@msg	an object flattened to a line or a point can't be placed again	ett objekt som plattats till en linje eller en punkt kan inte placeras igen
+@msg	must be a number from 0 to 1	måste vara ett tal från 0 till 1
+@msg	must be the name of a symbol	måste vara namnet på en symbol
+@msg	'{shown}' is not a symbol in this document	'{shown}' är ingen symbol i det här dokumentet
+@msg	a run must be {{"text", "style", "inline"?}}	ett textavsnitt måste vara {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` innehåller tecknet för en grafik i texten
+@msg	inline graphics can't be added, removed, reordered or changed	grafik i texten kan inte läggas till, tas bort, ordnas om eller ändras
+@msg	the characters of threaded type can't be changed	tecknen i länkad text kan inte ändras
+@msg	the characters of type with ruby can't be changed	tecknen i text med ruby kan inte ändras
+@msg	expected {count} paragraph styles, one per paragraph	{count} styckestilar förväntades, en per stycke
+@msg	the document has no Kinsoku set named '{shown}'	dokumentet har ingen Kinsoku-uppsättning med namnet '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	måste vara 1-{MAX_FAMILY} utskrivbara tecken
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Läsa objekten den får, och dokumentets inställningar, ritytor, lager och färgrutor
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` måste ange olika avsnitt: settings, artboards, layers eller swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` gäller ett filter eller en liveeffekt med `commands`, med `api` 3 eller senare och behörigheten `doc.read`
@@ -9736,6 +9776,21 @@ digits	Hindi	Hindi
 @msg	outlineText {v}: true or false	outlineText {v}: true eller false
 @msg	output intent profile: {e}	profil för utgångsavsikt: {e}
 @msg	output size ({what} is {len} bytes, limit {max})	utdatastorlek ({what} är {len} byte, gräns {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} rad {line}, kolumn {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	minnesbudget
+@msg	call depth	anropsdjup
+@msg	run(input, params) returned no output object	run(input, params) returnerade inget utdataobjekt
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" kräver `script`: namnet på pluginets .js-fil bredvid manifestet
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` måste vara namnet på en .js-fil i manifestets mapp: 1-128 byte, ingen mapp, inget `:`, får inte börja med `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` är skriptets text och anges bara i den JSON som dataBase64 i plugin.install tar: en .vcplugin-fil namnger sitt skript i `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifestet för ett JavaScript-plugin anger `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" är för ett objektfilter (`kind` "filter"), inte `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	ett JavaScript-plugin kan inte ange behörigheten `{name}`: av värdens behörigheter får det ange `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifestet för en WebAssembly-modul utelämnar `runtime`: "js" är för ett JavaScript-plugin
+@msg	a JavaScript plug-in makes no command calls	ett JavaScript-plugin anropar inga kommandon
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) tar två tal
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) tar en nivå, 0 (fel), 1 (varning), 2 (information) eller 3 (felsökning), och en sträng
 @msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1}-filer är CMYK, och ”{name}” är en RGB-profil
 @msg	output.destination: {e}	output.destination: {e}
 @msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: ingen RGB- eller CMYK-profil heter ”{name}”
@@ -10937,6 +10992,11 @@ digits	Hindi	Hindi
 	No objects are selected.	Inga objekt är markerade.
 	Open a document to mark its fold lines.	Öppna ett dokument för att markera dess falslinjer.
 	Remove Fold Line Role	Ta bort linjetyp
+	Fold Angle	Falsvinkel
+	Set Fold Angle…	Ange falsvinkel…
+	Set Fold Angle	Ange falsvinkel
+	Reset Fold Angle	Återställ falsvinkel
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	markera en biglinje, halvskärlinje eller perforeringslinje som varken är låst eller dold
 	Check	Kontrollera
 	Check Fold Lines	Kontrollera falslinjer
 @msg	No cut lines are in the selection.	Det finns inga skärlinjer i markeringen.

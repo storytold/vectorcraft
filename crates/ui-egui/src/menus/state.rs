@@ -2,7 +2,7 @@ use super::run::{normalize_panel, toolbar_double, toolbar_panel};
 use super::slots::{perspective_grid, recent_slot, saved_selection_name, saved_selection_slot, saved_view, saved_view_slot};
 use super::{Brightness, Value, VectorcraftApp};
 use crate::i18n::LangExt as _;
-use craft::keymap::Chord;
+use craft::keymap::{Chord, CommandRef};
 use craft::ui::runtime::commands;
 
 /// Checked state for toggle items.
@@ -190,17 +190,33 @@ pub fn plugin_revision() -> u64 {
 /// the window's keymap, under the user's set in use (Edit → Keyboard Shortcuts). `None` before the
 /// window's first frame.
 pub fn shortcut_of(app: &VectorcraftApp, key: &str) -> Option<Chord> {
-    let ctx = app.ui_ctx.as_ref()?;
-    let command = crate::keymap::command_of(key);
-    let window = commands::keymap(ctx)?;
-    let (now, built) = (&*app.shortcut_overrides, window.overrides());
-    if now.len() == built.len() && now.iter().all(|(k, texts)| built.get(k) == Some(texts)) {
-        return commands::chord(ctx, &command);
-    }
+    command_shortcuts(app)(&crate::keymap::command_of(key))
+}
+
+/// The shortcut each command shows, as [`shortcut_of`] reads it, for a caller that asks for many: the
+/// keymap is read once. `None` for every command before the window's first frame.
+pub(crate) fn command_shortcuts(app: &VectorcraftApp) -> impl Fn(&CommandRef) -> Option<Chord> + '_ {
+    let ctx = app.ui_ctx.as_ref();
+    let window = ctx.and_then(commands::keymap);
     // The window's keymap takes a change of the set (`shortcuts.set`) from its next frame; the set is read until then.
-    let mut keymap = (*window).clone();
-    keymap.set_overrides(now.clone());
-    keymap.bindings(&command).into_iter().find(|b| b.trigger.press == craft::keymap::PressKind::Single).map(|b| b.trigger.chord)
+    let pending = window.as_ref().and_then(|window| {
+        let (now, built) = (&*app.shortcut_overrides, window.overrides());
+        if now.len() == built.len() && now.iter().all(|(k, texts)| built.get(k) == Some(texts)) {
+            return None;
+        }
+        let mut keymap = (**window).clone();
+        keymap.set_overrides(now.clone());
+        Some(keymap)
+    });
+    move |command| {
+        let ctx = ctx.filter(|_| window.is_some())?;
+        match &pending {
+            None => commands::chord(ctx, command),
+            Some(keymap) => {
+                keymap.bindings(command).into_iter().find(|b| b.trigger.press == craft::keymap::PressKind::Single).map(|b| b.trigger.chord)
+            }
+        }
+    }
 }
 
 /// Is a command currently enabled?
@@ -290,10 +306,12 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
         "file.cancelPlace" => crate::placing::can_cancel(app),
+        crate::dialogs::failed_plugins::COMMAND => vectorcraft_engine::cmd::plugin::failed_load_count(&app.session) > 0,
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
         "imageTrace.hideRuns" => crate::trace_runs::any_shown(app),
+        "retype.cancelSearch" => crate::retype_runs::any_running(app),
         "file.place"
         | "file.export.svg"
         | "file.export.png"

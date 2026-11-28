@@ -4,7 +4,20 @@ use super::traits::{FaceKeys, FontTraits};
 use super::{Arc, GlyphId, HashMap, Location, LocationRef, MetadataProvider, Size, StringId};
 
 /// The most glyphs one [`outline_points`] lookup reads, composite components included.
-const MAX_OUTLINE_VISITS: usize = 65_536;
+pub(crate) const MAX_OUTLINE_VISITS: usize = 65_536;
+
+#[cfg(test)]
+thread_local! {
+    /// How many glyphs [`outline_points`] read on this thread ([`outline_glyphs_read`]).
+    static OUTLINE_GLYPHS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many glyphs [`outline_points`] lookups have read on this thread, composite components
+/// included.
+#[cfg(test)]
+pub(crate) fn outline_glyphs_read() -> usize {
+    OUTLINE_GLYPHS_READ.get()
+}
 
 /// Unhinted TrueType contour points in glyph order, including transformed composite components.
 /// A point cap, a depth bound and `visits`, the number of glyphs the whole lookup may still read,
@@ -20,6 +33,8 @@ fn outline_points(font: &skrifa::FontRef<'_>, gid: GlyphId, depth: usize, visits
         return None;
     }
     *visits = visits.checked_sub(1)?;
+    #[cfg(test)]
+    OUTLINE_GLYPHS_READ.set(OUTLINE_GLYPHS_READ.get() + 1);
     let glyph = font.loca(None).ok()?.get(gid, &font.glyf().ok()?)?.into_glyph()?;
     match glyph {
         Glyph::Simple(simple) => {

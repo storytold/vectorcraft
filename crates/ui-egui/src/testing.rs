@@ -52,15 +52,27 @@ pub(crate) fn app_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, ra
 pub(crate) fn part_frame(
     app: &mut crate::VectorcraftApp,
     ctx: &egui::Context,
+    raw: egui::RawInput,
+    draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui),
+) -> egui::FullOutput {
+    let mut out = part_frame_uploads(app, ctx, raw, draw);
+    out.textures_delta.clear();
+    out
+}
+
+/// [`part_frame`] with the frame's texture uploads kept in the output, for a test that reads them. The test clears
+/// `textures_delta` once it has read it.
+pub(crate) fn part_frame_uploads(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
     mut raw: egui::RawInput,
     mut draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui),
 ) -> egui::FullOutput {
     app.adopt_context(ctx);
     app.raw_input(ctx, &mut raw);
     embed::before_input(ctx, |out| app.frame_input(out));
-    let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
+    let out = ctx.run_ui(raw, |ui| draw(app, ui));
     run_fired(app, ctx);
-    out.textures_delta.clear();
     out
 }
 
@@ -77,6 +89,27 @@ pub(crate) fn run_fired(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
 pub(crate) fn custom_dictionary() -> std::sync::MutexGuard<'static, ()> {
     static HELD: std::sync::Mutex<()> = std::sync::Mutex::new(());
     HELD.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Runs the test `name` (its path in the crate, such as `canvas::tests::a_test`) alone in a child test process, for a
+/// test that loads or removes a color profile. The loaded profiles are the whole process's, and the canvas's frame key
+/// holds their generation ([`vectorcraft_color::cms::profiles_generation`]), so a profile loaded in this process while
+/// another test renders changes that test's keys. In the child it returns `true`, and the test goes on. Here it waits
+/// for the child, fails when the child's test fails, and returns `false`.
+pub(crate) fn in_own_process(name: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+    if std::env::var_os(CHILD).is_some_and(|v| v == name) {
+        return true;
+    }
+    let output =
+        std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", name, "--nocapture"]).env(CHILD, name).output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{name} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
 }
 
 /// The default proof view, held: View › Proof Colors, Overprint Preview and Separations Preview are the whole process's

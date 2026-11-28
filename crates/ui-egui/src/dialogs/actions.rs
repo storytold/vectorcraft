@@ -243,9 +243,7 @@ pub(crate) fn key_and_color(ui: &mut Ui, options: &mut ActionOptions) {
     let modifier = if crate::keymap::platform() == craft::keymap::Platform::Mac { "⌘" } else { "Ctrl" };
     Field::new(label("Function Key:")).show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
-            if let Some(key) = Select::new(label("Function Key:"), Bind::given(options.key), &keys).show(ui).value().copied() {
-                options.key = key;
-            }
+            Select::new(label("Function Key:"), Bind::bound(&mut options.key), &keys).show(ui);
             Checkbox::new(Bind::bound(&mut options.cmd)).label(modifier).show(ui);
             Checkbox::new(Bind::bound(&mut options.shift)).label(label("Shift")).show(ui);
         });
@@ -255,9 +253,7 @@ pub(crate) fn key_and_color(ui: &mut Ui, options: &mut ActionOptions) {
     let colors: Vec<Entry<ActionColor>> =
         ActionColor::ALL.into_iter().map(|color| Entry::new(color, label_color_label(color.label_color(), &words))).collect();
     Field::new(label("Color:")).show(ui, |ui, _| {
-        if let Some(color) = Select::new(label("Color:"), Bind::given(options.color), &colors).show(ui).value().copied() {
-            options.color = color;
-        }
+        Select::new(label("Color:"), Bind::bound(&mut options.color), &colors).show(ui);
     });
 }
 
@@ -363,13 +359,13 @@ fn push_app_data(app: &VectorcraftApp) {
     }
 }
 
-/// The folder picks the open Batch dialog asked for: each goes to the app's folder request, whose
-/// answer is written into the dialog.
+/// Files the folder picks the Batch dialog asked for with the identity of that opening.
 fn ask_batch_folders(app: &mut VectorcraftApp) {
     let Some(dialogs) = app.dialogs() else { return };
-    let asked = dialogs.with(|host| host.get_mut::<BatchDialog>().map(BatchDialog::take_asked).unwrap_or_default());
-    for which in asked {
-        super::action_batch::ask_folder(app, which);
+    let asked = dialogs.with(|host| host.get_mut::<BatchDialog>().map(BatchDialog::take_asked));
+    let Some((owner, folders)) = asked else { return };
+    for which in folders {
+        super::action_batch::ask_folder(app, owner.clone(), which);
     }
 }
 

@@ -383,21 +383,21 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
             "stylize.dropShadow",
             "Drop Shadow…",
             STYLIZE,
-            "{mode: blend mode (\"multiply\"), opacity: % (75), x: pt (7), y: pt (7), blur: pt (5), shade: \"color\"|\"darkness\" (\"color\"), color: \"#rrggbb\" (\"#000000\"), darkness: % (100)} (shade \"darkness\": use d = darkness / 100 on the source colors before document color conversion and blur; RGB channels become max(0, channel - d), CMYK keeps C/M/Y and sets K to min(1, K + d), and Gray sets its black component to min(1, K + d). The near-100% endpoint is gray black. Shadow opacity remains separate)",
+            "{mode: blend mode (\"multiply\"; normal, darken, multiply, colorBurn, lighten, screen, colorDodge, overlay, softLight, hardLight, difference, exclusion, hue, saturation, color or luminosity, in any letter case), opacity: % (75), x: pt (7), y: pt (7), blur: pt (5), shade: \"color\"|\"darkness\" (\"color\"), color: \"#rrggbb\" (\"#000000\"), darkness: % (100)} (shade \"darkness\": use d = darkness / 100 on the source colors before document color conversion and blur; RGB channels become max(0, channel - d), CMYK keeps C/M/Y and sets K to min(1, K + d), and Gray sets its black component to min(1, K + d). The near-100% endpoint is gray black. Shadow opacity remains separate)",
             json!({"mode": "multiply", "opacity": 75.0, "x": 7.0, "y": 7.0, "blur": 5.0, "shade": "color", "color": "#000000", "darkness": 100.0}),
         ),
         r(
             "stylize.innerGlow",
             "Inner Glow…",
             STYLIZE,
-            "{mode: blend mode (\"screen\"), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffffff\"), source: \"center\"|\"edge\" (\"edge\")}",
+            "{mode: blend mode (\"screen\"; one of Drop Shadow's modes), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffffff\"), source: \"center\"|\"edge\" (\"edge\")}",
             json!({"mode": "screen", "opacity": 75.0, "blur": 5.0, "color": "#ffffff", "source": "edge"}),
         ),
         r(
             "stylize.outerGlow",
             "Outer Glow…",
             STYLIZE,
-            "{mode: blend mode (\"screen\"), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffff00\")}",
+            "{mode: blend mode (\"screen\"; one of Drop Shadow's modes), opacity: % (75), blur: pt (5), color: \"#rrggbb\" (\"#ffff00\")}",
             json!({"mode": "screen", "opacity": 75.0, "blur": 5.0, "color": "#ffff00"}),
         ),
         r("stylize.feather", "Feather…", STYLIZE, "{radius: pt (5)}", json!({"radius": 5.0})),
@@ -930,6 +930,12 @@ pub fn effect_catalog() -> Vec<EffectInfo> {
 pub(crate) fn catalog_index() -> &'static std::collections::HashMap<&'static str, EffectInfo> {
     static INDEX: std::sync::OnceLock<std::collections::HashMap<&'static str, EffectInfo>> = std::sync::OnceLock::new();
     INDEX.get_or_init(|| effect_catalog().into_iter().map(|e| (e.id, e)).collect())
+}
+
+/// The id and menu label of built-in effect `id`, as the catalog holds them (no plug-in
+/// effects).
+pub fn built_in_effect(id: &str) -> Option<(&'static str, &'static str)> {
+    catalog_index().get(id).map(|e| (e.id, e.label))
 }
 
 /// Catalogue entry for `id` (built-in, or an installed plug-in effect).

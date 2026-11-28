@@ -5442,6 +5442,14 @@ theme	Appearance	Giao diện
 	The script asks to read and write a folder you choose, with everything in it.	Tập lệnh yêu cầu đọc và ghi một thư mục bạn chọn, cùng mọi thứ bên trong.
 	Allow Once	Cho phép một lần
 	Always Allow This Script	Luôn cho phép tập lệnh này
+	No script has kept file access.	Không có tập lệnh nào được giữ quyền truy cập tệp.
+	Read file	Đọc tệp
+	Read and write file	Đọc và ghi tệp
+	Read and write folder	Đọc và ghi thư mục
+	Revoke	Thu hồi
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Thu hồi gỡ quyền truy cập đã giữ cho mọi phiên bản của tập lệnh. Quyền truy cập một thư mục bao gồm mọi thứ bên trong.
+@msg	Script file access revoked	Đã thu hồi quyền truy cập tệp của tập lệnh
+@msg	The script file access was already revoked	Quyền truy cập tệp của tập lệnh đã được thu hồi trước đó
 	Deny	Từ chối
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Tập lệnh có thể thay đổi các tài liệu đang mở và ghi tệp thông qua các lệnh mà nó chạy. Chỉ chạy những tập lệnh bạn tin cậy.
 	Do not show this warning again	Không hiện lại cảnh báo này
@@ -5639,6 +5647,7 @@ liquify-list-end	{0}, {1}	{0} và {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` cho hộp thoại tệp của tập lệnh phải là một trong: once, always, deny, stop
 @msg	choose a file or folder first, or deny	hãy chọn một tệp hoặc thư mục trước, hoặc từ chối
 @msg	the script file permissions could not be saved: {e}	không thể lưu quyền truy cập tệp của các tập lệnh: {e}
+@msg	the script file permissions could not be read: {e}	không thể đọc quyền truy cập tệp của các tập lệnh: {e}
 @msg	this script's file access can be allowed only once	quyền truy cập tệp của tập lệnh này chỉ có thể được cho phép một lần
 @msg	Only the person at the keyboard can allow a script's file access	Chỉ người ngồi tại bàn phím mới có thể cho phép tập lệnh truy cập tệp
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Một tập lệnh nhận tối đa 2.048 tệp: các tệp được chọn sau đó đã bị bỏ qua
@@ -7202,6 +7211,35 @@ axis	Y Axis	Trục Y
 @msg	`inputs` lists `{shown}` twice	`inputs` liệt kê `{shown}` hai lần
 @msg	`inputs` needs `api` 2 or later	`inputs` cần `api` 2 trở lên
 @msg	`inputs` needs the permission `doc.read`	`inputs` cần quyền `doc.read`
+@msg	only a filter declares `writes`	chỉ bộ lọc mới khai báo `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` nêu một loại đối tượng không xác định `{shown}`: dùng type, image hoặc symbolInstance
+@msg	`writes` lists `{shown}` twice	`writes` liệt kê `{shown}` hai lần
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` liệt kê `{shown}`, nhưng `inputs` không liệt kê
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` cần `api` {WRITES_API} trở lên
+@msg	`writes` needs the permission `doc.write`	`writes` cần quyền `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} không phải là văn bản, hình ảnh hay thực thể ký hiệu
+@msg	the text of type given as `truncated` can't be changed	không thể thay đổi văn bản của đối tượng văn bản được đưa vào dưới dạng `truncated`
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	phải là danh sách có tối đa {MAX_INPUT_RUNS} mục
+@msg	type needs at least one run	văn bản cần ít nhất một đoạn chạy
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte văn bản (giới hạn {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} đoạn văn (giới hạn {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	hơn {MAX_INPUT_TEXT_TOTAL} byte văn bản trên toàn bộ đầu ra
+@msg	unknown key '{k}'	khóa không xác định '{k}'
+@msg	must be a list of 6 numbers	phải là danh sách gồm 6 số
+@msg	a number is out of range (limit ±{MAX_COORD})	một số nằm ngoài phạm vi (giới hạn ±{MAX_COORD})
+@msg	flattens the object to a line or a point	làm dẹt đối tượng thành một đường hoặc một điểm
+@msg	an object flattened to a line or a point can't be placed again	không thể đặt lại một đối tượng đã bị dẹt thành đường hoặc điểm
+@msg	must be a number from 0 to 1	phải là một số từ 0 đến 1
+@msg	must be the name of a symbol	phải là tên của một ký hiệu
+@msg	'{shown}' is not a symbol in this document	'{shown}' không phải là ký hiệu trong tài liệu này
+@msg	a run must be {{"text", "style", "inline"?}}	một đoạn chạy phải có dạng {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` chứa ký tự của một đồ họa nội dòng
+@msg	inline graphics can't be added, removed, reordered or changed	không thể thêm, xóa, sắp xếp lại hoặc thay đổi đồ họa nội dòng
+@msg	the characters of threaded type can't be changed	không thể thay đổi ký tự của văn bản chuỗi
+@msg	the characters of type with ruby can't be changed	không thể thay đổi ký tự của văn bản có ruby
+@msg	expected {count} paragraph styles, one per paragraph	cần {count} kiểu đoạn văn, mỗi đoạn một kiểu
+@msg	the document has no Kinsoku set named '{shown}'	tài liệu không có bộ Kinsoku nào tên '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	phải có 1-{MAX_FAMILY} ký tự in được
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Đọc các đối tượng được trao cho nó, cùng các thiết lập, bảng vẽ, lớp và mẫu màu của tài liệu
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` phải liệt kê các phần khác nhau: settings, artboards, layers hoặc swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` dành cho bộ lọc, hoặc hiệu ứng trực tiếp có `commands`, ở `api` 3 trở lên và có quyền `doc.read`
@@ -7212,6 +7250,21 @@ axis	Y Axis	Trục Y
 @msg	time budget	ngân sách thời gian
 @msg	memory budget (the selection is too large to hand over)	ngân sách bộ nhớ (vùng chọn quá lớn để chuyển giao)
 @msg	output size ({what} is {len} bytes, limit {max})	kích thước đầu ra ({what} là {len} byte, giới hạn {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} dòng {line}, cột {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	ngân sách bộ nhớ
+@msg	call depth	độ sâu lời gọi
+@msg	run(input, params) returned no output object	run(input, params) không trả về đối tượng đầu ra nào
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" cần `script`: tên tệp .js của plug-in, nằm cạnh manifest
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` phải là tên một tệp .js trong thư mục của manifest: 1-128 byte, không có thư mục, không có `:`, không bắt đầu bằng `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` là văn bản của tập lệnh, chỉ được cung cấp trong JSON mà dataBase64 của plugin.install nhận: tệp .vcplugin nêu tên tập lệnh của nó trong `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifest của plug-in JavaScript cho `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" dành cho bộ lọc đối tượng (`kind` "filter"), không phải `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	plug-in JavaScript không thể liệt kê quyền `{name}`: trong các quyền của máy chủ, nó có thể liệt kê `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifest của mô-đun WebAssembly bỏ qua `runtime`: "js" dành cho plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	plug-in JavaScript không gọi lệnh
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) nhận hai số
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) nhận một mức, 0 (lỗi), 1 (cảnh báo), 2 (thông tin) hoặc 3 (gỡ lỗi), và một chuỗi
 @msg	the plug-in's grant can't be removed from the plug-in store	không thể xóa quyền của plug-in khỏi kho plug-in
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	quyền `{shown}` được dành cho một API plug-in sau này; máy chủ này không cấp quyền đó
 @msg	unknown permission `{shown}`	quyền không xác định `{shown}`
@@ -8584,6 +8637,11 @@ breakText	Glyphs	Glyph
 	No objects are selected.	Không có đối tượng nào được chọn.
 	Open a document to mark its fold lines.	Mở tài liệu để đánh dấu các đường gấp của nó.
 	Remove Fold Line Role	Bỏ loại đường
+	Fold Angle	Góc gấp
+	Set Fold Angle…	Đặt góc gấp…
+	Set Fold Angle	Đặt góc gấp
+	Reset Fold Angle	Đặt lại góc gấp
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	hãy chọn một đường cấn, đường cắt một phần hoặc đường đục lỗ không bị khóa và không bị ẩn
 	Check	Kiểm tra
 	Check Fold Lines	Kiểm tra đường gấp
 @msg	No cut lines are in the selection.	Vùng chọn không có đường cắt nào.

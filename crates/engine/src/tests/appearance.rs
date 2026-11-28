@@ -270,6 +270,39 @@ fn brushed_strokes_profiled_reads_the_strokes_stroke_set_edits() {
     assert_eq!(s.brushed_strokes_profiled(), None, "an object without a stroke row takes a plain stroke");
 }
 
+/// `edited_strokes_profiled` reads the same strokes, with or without a brush: one profiled member
+/// counts, and a group's own uniform stroke, which `stroke.set` edits instead, hides its members'
+/// profiles. With an object without a stroke row among the targets the answer is false, since a
+/// profile from `stroke.set` would give that object a plain stroke. Type without an Appearance row
+/// is left out.
+#[test]
+fn edited_strokes_profiled_reads_the_strokes_stroke_set_edits() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 100.0), rect(&mut s, 250.0));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    assert!(!s.edited_strokes_profiled(), "neither has a profile");
+    run(&mut s, "stroke.set", json!({"ids": [b.0], "profile": "lens"}));
+    run(&mut s, "select.set", json!({"ids": [a.0, b.0]}));
+    assert!(s.edited_strokes_profiled(), "the second one has a profile");
+    let g = NodeId(run(&mut s, "object.group", json!({"ids": [a.0, b.0]}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert!(s.edited_strokes_profiled(), "a group without its own stroke: its members'");
+    run(&mut s, "appearance.addStroke", json!({"ids": [g.0]}));
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert!(!s.edited_strokes_profiled(), "the group's own uniform stroke");
+    let c = rect(&mut s, 400.0);
+    run(&mut s, "appearance.removeItem", json!({"ids": [c.0], "index": 1}));
+    run(&mut s, "select.set", json!({"ids": [b.0]}));
+    assert!(s.edited_strokes_profiled(), "the profiled member alone");
+    run(&mut s, "select.set", json!({"ids": [b.0, c.0]}));
+    assert!(!s.edited_strokes_profiled(), "an object without a stroke row");
+    let t = NodeId(run(&mut s, "text.create", json!({"x": 10, "y": 50, "text": "Hi"}))["id"].as_u64().unwrap());
+    run(&mut s, "select.set", json!({"ids": [t.0, b.0]}));
+    assert!(s.edited_strokes_profiled(), "type is left out");
+    run(&mut s, "select.set", json!({"ids": []}));
+    assert!(!s.edited_strokes_profiled(), "nothing selected");
+}
+
 /// A compound shape's own stroke is the one `stroke.set` edits: brushed members do not count.
 #[test]
 fn brushed_strokes_profiled_reads_a_compound_shapes_own_stroke() {

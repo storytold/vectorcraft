@@ -252,6 +252,61 @@ fn rename_opens_the_name_field_of_the_selected_object() {
     assert_eq!(name(&app), before);
 }
 
+#[test]
+fn inline_rename_does_not_change_a_saved_layer_after_file_revert() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    let (mut app, layer, _) = two_rects();
+    let saved = "Saved Layer";
+    app.run("layer.setProps", json!({"id": layer.0, "name": saved})).unwrap();
+    let folder = vectorcraft_testkit::TempDir::new("layers-inline-rename-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("shape.rectangle", json!({"x": 120, "y": 30, "width": 30, "height": 30})).unwrap();
+
+    let mut panel = Panel::new(app, show);
+    let rename = |panel: &mut Panel, text: &str| {
+        panel.app().run("ui.rename", json!({"id": layer.0})).unwrap();
+        panel.frame();
+        panel.frame();
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text(text);
+        assert_eq!(panel.value_role(saved, Role::TEXT_INPUT).as_deref(), Some(text), "the actual inline editor shows the draft");
+    };
+    let shown_name = |panel: &Panel| panel.app().session.active().unwrap().doc.node(layer).unwrap().display_name();
+    rename(&mut panel, "Discarded Layer");
+    assert_eq!(shown_name(&panel), saved, "typing has not renamed the live layer");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    let stale_editor = panel.shows_value("Discarded Layer");
+    let undo = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+        assert_eq!(st.doc.node(layer).unwrap().display_name(), saved);
+        undo_len(&app)
+    };
+    panel.key(Key::Enter, Modifiers::NONE);
+    assert_eq!(shown_name(&panel), saved, "Enter cannot commit the discarded inline rename to the restored layer");
+    assert!(!stale_editor, "the restored layer shows no discarded inline edit");
+    assert_eq!(undo_len(&panel.app()), undo);
+
+    rename(&mut panel, "Fresh Layer");
+    panel.key(Key::Enter, Modifiers::NONE);
+    assert_eq!(shown_name(&panel), "Fresh Layer");
+    assert_eq!(undo_len(&panel.app()), undo + 1, "a fresh inline rename commits once");
+}
+
 /// Without a selection Rename names the current layer; it refuses several objects and a row the panel doesn't list,
 /// and asks for no field then.
 #[test]
@@ -481,6 +536,40 @@ fn isolation_keeps_a_confirmed_delete_to_the_rows_listed() {
     app.session.execute("object.exitIsolation", &json!({"all": true})).unwrap();
     app.run("ui.layerDelete", ok).unwrap();
     assert!(app.session.active().unwrap().doc.node(sub).is_none());
+}
+
+#[test]
+fn delete_selection_approval_does_not_remove_restored_layer_art() {
+    let (app, [_, sub, _, _, art, _]) = nested();
+    let mut app = crate::testing::windowed(app);
+    let file = std::env::temp_dir().join(format!("vectorcraft-layer-delete-revert-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("layer.setProps", json!({"id": sub.0, "name": "Edited sublayer"})).unwrap();
+    assert!(app.run("ui.layerDelete", json!({"ids": [sub.0]})).unwrap().is_null());
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert_eq!(st.doc.node(sub).unwrap().name.as_deref(), Some("Sub"));
+    assert!(st.doc.node(art).is_some());
+    let undo = undo_len(&app);
+
+    let confirm = craft::ui::dialog::dialog_id(crate::dialogs::confirm::KIND);
+    crate::tests::picks::answer_dialog(&mut app, confirm, &[], true);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.node(sub).is_some() && st.doc.node(art).is_some(), "old approval cannot delete restored artwork");
+    assert_eq!(undo_len(&app), undo);
+    assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+
+    assert!(app.run("ui.layerDelete", json!({"ids": [sub.0]})).unwrap().is_null());
+    crate::tests::picks::answer_dialog(&mut app, confirm, &[], true);
+    let st = app.session.active().unwrap();
+    assert!(st.doc.node(sub).is_none() && st.doc.node(art).is_none(), "a fresh confirmation still deletes the requested layer");
 }
 
 /// A document put in isolation mode opens its isolated row at once, and showing the documents again opens nothing.

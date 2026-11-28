@@ -9,6 +9,7 @@
 
 use std::collections::BTreeSet;
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::{LengthUnits, UnitKind};
 use serde_json::{Value, json};
@@ -65,7 +66,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     }
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let lengths = general_lengths(app);
-    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| dialog(fields.text("radii") == Some("relative"), lengths));
+    let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |fields| {
+        dialog(fields.text("radii") == Some("relative"), lengths).values(Bind::bound(fields))
+    });
     open_held(app, dialog, ok).ok_or("no window")?;
     Ok(Value::Null)
 }
@@ -115,21 +118,51 @@ fn ok(app: &mut VectorcraftApp, result: &ParamResult) -> Result<(), String> {
     if let Some(k) = f.text("kind") {
         p["kind"] = json!(k);
     }
-    if let Some(mut r) = f.number("radius") {
-        if relative {
-            let id = NodeId(json_field(f, "id").as_u64().unwrap_or(0));
-            let st = app.session.active().ok_or("no document")?;
-            if let Some(lc) = st.doc.node(id).and_then(LiveCorners::of) {
-                let corners: BTreeSet<usize> = serde_json::from_value(json_field(f, "corners")).unwrap_or_default();
-                if let Some(k) = corners.iter().next() {
-                    let max = lc.corner(*k).map(|c| c.max_radius()).unwrap_or(0.0);
-                    r = (r / 100.0).clamp(0.0, 1.0) * max;
-                }
+    let Some(r) = f.number("radius") else {
+        return app.run("object.setLiveShape", p).map(|_| ());
+    };
+    if !relative {
+        p["radius"] = json!(r);
+        return app.run("object.setLiveShape", p).map(|_| ());
+    }
+    // Relative: the percentage is of each corner's own maximum, so corners with different
+    // maximums (a star's points and its inner corners) get different lengths. Corners of the
+    // same length share one `object.setLiveShape`; several run as one undo step.
+    let id = NodeId(json_field(f, "id").as_u64().unwrap_or(0));
+    let st = app.session.active().ok_or("no document")?;
+    let mut lengths: Vec<(f64, Vec<usize>)> = vec![];
+    if let Some(lc) = st.doc.node(id).and_then(LiveCorners::of) {
+        let corners: BTreeSet<usize> = serde_json::from_value(json_field(f, "corners")).unwrap_or_default();
+        for k in corners {
+            let len = (r / 100.0).clamp(0.0, 1.0) * lc.corner(k).map(|c| c.max_radius()).unwrap_or(0.0);
+            match lengths.iter_mut().find(|(l, _)| (*l - len).abs() < 1e-9) {
+                Some((_, ks)) => ks.push(k),
+                None => lengths.push((len, vec![k])),
             }
         }
-        p["radius"] = json!(r);
     }
-    app.run("object.setLiveShape", p).map(|_| ())
+    match &lengths[..] {
+        [] => {
+            p["radius"] = json!(r);
+            app.run("object.setLiveShape", p).map(|_| ())
+        }
+        [(len, _)] => {
+            p["radius"] = json!(len);
+            app.run("object.setLiveShape", p).map(|_| ())
+        }
+        _ => {
+            let commands: Vec<Value> = lengths
+                .iter()
+                .map(|(len, ks)| {
+                    let mut step = p.clone();
+                    step["corners"] = json!(ks);
+                    step["radius"] = json!(len);
+                    json!({"command": "object.setLiveShape", "params": step})
+                })
+                .collect();
+            app.run("command.batch", json!({"label": "Live Shape", "commands": commands})).map(|_| ())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -276,5 +309,75 @@ mod tests {
         let n = app.session.active().unwrap().doc.node(NodeId(id)).unwrap().clone();
         assert!(matches!(&n.kind, NodeKind::Path { live: Some(l), .. } if matches!(**l, LiveShape::Path { .. })));
         assert_eq!(crate::panels::corner_radius(&app, &n), Some(5.0));
+    }
+
+    /// Relative rounding gives each corner the percentage of its own maximum: a star's point and
+    /// the inner corner beside it differ, and OK rounds both as one undo step.
+    #[test]
+    fn relative_radius_is_a_percentage_of_each_corners_own_maximum() {
+        let (mut app, _) = app();
+        let id = app.run("shape.star", json!({"cx": 200, "cy": 200, "radius1": 60, "radius2": 30})).unwrap()["id"].as_u64().unwrap();
+        app.run("object.setLiveShape", json!({"id": id, "radius": 1})).unwrap();
+        let lc = |app: &VectorcraftApp| {
+            let n = app.session.active().unwrap().doc.node(NodeId(id)).unwrap().clone();
+            let c = LiveCorners::of(&n).unwrap();
+            (c.radii_relative(), c.radius(0), c.radius(1), c.corner(0).unwrap().max_radius(), c.corner(1).unwrap().max_radius())
+        };
+        let (_, _, _, max0, max1) = lc(&app);
+        assert!((max0 - max1).abs() > 1.0, "the corners' maximums differ: {max0} and {max1}");
+        let steps = |app: &VectorcraftApp| app.session.doc().unwrap().history.undo.len();
+        let n = steps(&app);
+        app.run("ui.corners", json!({"id": id, "corners": [0, 1]})).unwrap();
+        set(&app, "radii", json!("relative"));
+        set(&app, "radius", json!(50));
+        confirm(&mut app);
+        assert!(!is_open(&app));
+        let (relative, f0, f1, _, _) = lc(&app);
+        assert!(relative);
+        assert!((f0 - 0.5).abs() < 1e-9 && (f1 - 0.5).abs() < 1e-9, "stored fractions: {f0} and {f1}");
+        assert_eq!(steps(&app), n + 1, "one undo step");
+        // The same values again change nothing and record no step.
+        app.run("ui.corners", json!({"id": id, "corners": [0, 1]})).unwrap();
+        set(&app, "radius", json!(50));
+        confirm(&mut app);
+        assert_eq!(steps(&app), n + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(!lc(&app).0, "undo brings back absolute radii");
+    }
+
+    #[test]
+    fn a_live_radius_edit_applies_to_the_corners_that_opened_the_dialog() {
+        use craft::ui::testing::Fixture;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let (app, id) = app();
+        let app = Rc::new(RefCell::new(app));
+        let shown = app.clone();
+        let mut fixture = Fixture::new(move |ui| {
+            let mut app = shown.borrow_mut();
+            let dialogs = app.dialogs().unwrap();
+            dialogs.with(|host| host.run(ui));
+            super::super::host::pump(&mut app, ui.ctx());
+        });
+        fixture.room(egui::vec2(880.0, 720.0));
+        let undo = {
+            let mut app = app.borrow_mut();
+            app.ui_ctx = Some(fixture.ctx().clone());
+            app.run("ui.corners", json!({"id": id, "corners": [1, 3]})).unwrap();
+            app.session.active().unwrap().history.undo.len()
+        };
+        fixture.settle();
+        let radius = fixture.by_label("Radius:").or_else(|| fixture.by_label("Radius")).expect("the Corners radius field");
+        fixture.click(&radius).key(egui::Key::A, egui::Modifiers::COMMAND).type_text("12").key(egui::Key::Tab, egui::Modifiers::NONE).settle();
+        let ok = fixture.by_label("OK").expect("the Corners confirmation button");
+        fixture.click(&ok).settle();
+
+        let mut app = app.borrow_mut();
+        assert_eq!(corners(&app, id).0, [0.0, 12.0, 0.0, 12.0], "OK applies the typed radius only to the opening corners");
+        assert!(!is_open(&app));
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        app.run("edit.undo", json!({})).unwrap();
+        assert_eq!(corners(&app, id).0, [0.0; 4]);
     }
 }

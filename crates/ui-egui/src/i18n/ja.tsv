@@ -5806,6 +5806,14 @@ variable-list-end	{0}, {1}	{0}、{1}
 	The script asks to read and write a folder you choose, with everything in it.	スクリプトが、選択したフォルダーとその中身すべての読み書きを求めています。
 	Allow Once	今回のみ許可
 	Always Allow This Script	このスクリプトを常に許可
+	No script has kept file access.	ファイルアクセスを保持しているスクリプトはありません。
+	Read file	ファイルの読み取り
+	Read and write file	ファイルの読み取りと書き込み
+	Read and write folder	フォルダーの読み取りと書き込み
+	Revoke	許可を取り消す
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	「許可を取り消す」は、スクリプトのすべてのバージョンに保持されたアクセスを削除します。フォルダーへのアクセスには、その中のすべてが含まれます。
+@msg	Script file access revoked	スクリプトのファイルアクセスを取り消しました
+@msg	The script file access was already revoked	スクリプトのファイルアクセスはすでに取り消されています
 	Deny	拒否
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない
@@ -5980,6 +5988,7 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	スクリプトのファイルダイアログの `answer` は once、always、deny、stop のいずれかにしてください
 @msg	choose a file or folder first, or deny	先にファイルまたはフォルダーを選択するか、拒否してください
 @msg	the script file permissions could not be saved: {e}	スクリプトのファイル許可を保存できませんでした: {e}
+@msg	the script file permissions could not be read: {e}	スクリプトのファイル許可を読み込めませんでした: {e}
 @msg	this script's file access can be allowed only once	このスクリプトのファイルアクセスは 1 回だけ許可できます
 @msg	Only the person at the keyboard can allow a script's file access	スクリプトのファイルアクセスを許可できるのはキーボードの前にいる人だけです
 @msg	A script is given at most 2,048 files: the files picked after them were left out	スクリプトに渡せるファイルは 2,048 個までのため、それ以降に選んだファイルは除外されました
@@ -7248,6 +7257,35 @@ axis	Y Axis	Y 軸
 @msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
 @msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
 @msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+@msg	only a filter declares `writes`	`writes` を宣言できるのはフィルターだけです
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` に不明なオブジェクトの種類 `{shown}` があります。type、image、symbolInstance のいずれかを使ってください
+@msg	`writes` lists `{shown}` twice	`writes` に `{shown}` が 2 回指定されています
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` に指定された `{shown}` は `inputs` に指定されていません
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` には `api` {WRITES_API} 以上が必要です
+@msg	`writes` needs the permission `doc.write`	`writes` には権限 `doc.write` が必要です
+@msg	{_1} is not type, an image or a symbol instance	{_1} はテキスト、画像、シンボルインスタンスのいずれでもありません
+@msg	the text of type given as `truncated` can't be changed	`truncated` として渡されたテキストの文字列は変更できません
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	{MAX_INPUT_RUNS} 項目以下のリストにしてください
+@msg	type needs at least one run	テキストには 1 つ以上のランが必要です
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	テキストが {bytes} バイトあります (上限 {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落が {paragraphs} 個あります (上限 {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	出力全体のテキストが {MAX_INPUT_TEXT_TOTAL} バイトを超えています
+@msg	unknown key '{k}'	不明なキー '{k}'
+@msg	must be a list of 6 numbers	6 つの数値のリストにしてください
+@msg	a number is out of range (limit ±{MAX_COORD})	数値が範囲外です (上限 ±{MAX_COORD})
+@msg	flattens the object to a line or a point	オブジェクトが線または点につぶれます
+@msg	an object flattened to a line or a point can't be placed again	線または点につぶれたオブジェクトは配置し直せません
+@msg	must be a number from 0 to 1	0 から 1 までの数値にしてください
+@msg	must be the name of a symbol	シンボルの名前にしてください
+@msg	'{shown}' is not a symbol in this document	'{shown}' はこのドキュメントのシンボルではありません
+@msg	a run must be {{"text", "style", "inline"?}}	ランは {{"text", "style", "inline"?}} にしてください
+@msg	`text` holds the character of an inline graphic	`text` にインライングラフィックの文字が含まれています
+@msg	inline graphics can't be added, removed, reordered or changed	インライングラフィックは追加、削除、並べ替え、変更できません
+@msg	the characters of threaded type can't be changed	スレッドテキストの文字は変更できません
+@msg	the characters of type with ruby can't be changed	ルビのあるテキストの文字は変更できません
+@msg	expected {count} paragraph styles, one per paragraph	段落スタイルは段落ごとに 1 つ、計 {count} 個必要です
+@msg	the document has no Kinsoku set named '{shown}'	ドキュメントに '{shown}' という名前の禁則処理セットはありません
+@msg	must be 1-{MAX_FAMILY} printable characters	印刷可能な 1-{MAX_FAMILY} 文字にしてください
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	渡されたオブジェクトと、ドキュメントの設定、アートボード、レイヤー、スウォッチの読み取り
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` には重複しないセクションを指定してください: settings、artboards、layers、swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` は、`api` 3 以降で権限 `doc.read` を持つフィルターまたは `commands` のあるライブ効果専用です
@@ -7258,6 +7296,21 @@ axis	Y Axis	Y 軸
 @msg	time budget	時間予算
 @msg	memory budget (the selection is too large to hand over)	メモリ予算 (選択範囲が大きすぎて渡せません)
 @msg	output size ({what} is {len} bytes, limit {max})	出力サイズ ({what} は {len} バイト、上限 {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}、{script} {line} 行 {column} 列)
+@msg	{reason} ({id}, {script})	{reason} ({id}、{script})
+@msg	memory budget	メモリ予算
+@msg	call depth	呼び出しの深さ
+@msg	run(input, params) returned no output object	run(input, params) が出力オブジェクトを返しませんでした
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" には `script` が必要です: マニフェストと同じ場所にあるプラグインの .js ファイルの名前
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` はマニフェストのフォルダーにある .js ファイルの名前にしてください: 1-128 バイト、フォルダーなし、`:` なし、`.` で始まらないこと
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` はスクリプトのテキストで、plugin.install の dataBase64 が受け取る JSON でだけ指定します: .vcplugin ファイルはスクリプトを `script` で指定します
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript プラグインのマニフェストは `runtime` "js" を指定します
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" はオブジェクトフィルター (`kind` "filter") 用で、`kind` "{kind}" 用ではありません
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript プラグインは権限 `{name}` を指定できません: ホストの権限のうち指定できるのは `progress` です
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly モジュールのマニフェストでは `runtime` を省略します: "js" は JavaScript プラグイン用です
+@msg	a JavaScript plug-in makes no command calls	JavaScript プラグインはコマンドを呼び出しません
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) には数値を 2 つ指定します
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) にはレベル 0 (エラー)、1 (警告)、2 (情報)、3 (デバッグ) のいずれかと文字列を指定します
 @msg	the plug-in's grant can't be removed from the plug-in store	プラグインの許可をプラグインストアから削除できません
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
@@ -10550,6 +10603,11 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Fold Angle	折り角度
+	Set Fold Angle…	折り角度を設定…
+	Set Fold Angle	折り角度を設定
+	Reset Fold Angle	折り角度をリセット
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ロックも非表示もされていない筋入れ線、半抜き線またはミシン目線を選択してください
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ツールバーのツールとそのキーの働きを、ヒントの代わりにカードで表示。ツールヒントを表示がオンのときに使用
 	Selects whole objects and groups to move, resize or rotate them.	オブジェクトやグループ全体を選択して、移動、サイズ変更、回転を行います。
