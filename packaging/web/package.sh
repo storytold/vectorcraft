@@ -30,7 +30,7 @@ rm -rf "$WORK"
 mkdir -p "$WORK/$NAME"
 cp -R "$SITE/." "$WORK/$NAME/"
 # Sample server configs (MIME type, caching, compression); harmless where unused.
-cp "$HERE/_headers" "$HERE/.htaccess" "$WORK/$NAME/"
+cp "$HERE/_headers" "$HERE/.htaccess" "$HERE/nginx.conf" "$WORK/$NAME/"
 cp "$HERE/README.md" "$WORK/$NAME/HOSTING.md"
 copy_docs "$WORK/$NAME"
 rm -f "$DIST/$NAME.zip"
