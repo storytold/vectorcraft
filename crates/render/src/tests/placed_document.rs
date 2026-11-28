@@ -9,8 +9,9 @@ use crate::*;
 
 /// Every file reads as a 40×20 artboard filled blue; a file whose bytes start with `loop` also
 /// places itself (the same key) in its middle, one whose bytes start with `cut` also shows an
-/// image whose pixels can't be decoded over its left half, and one whose bytes start with `bad`
-/// can't be read.
+/// image whose pixels can't be decoded over its left half, one whose bytes start with `pict` also
+/// shows a linked red image over its left half (its own Show Images in Outline Mode off), and one
+/// whose bytes start with `bad` can't be read.
 fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     if bytes.starts_with(b"bad") {
         return None;
@@ -31,6 +32,22 @@ fn blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)>
             pixels: None,
         };
         children.push(Arc::new(Node::new(NodeId(3), NodeKind::Image(Box::new(im)))));
+    }
+    if bytes.starts_with(b"pict") {
+        let raw = [255u8, 0, 0, 255].repeat(16);
+        let red = craft_image_codecs::Image::from_raw(4, 4, craft_image_codecs::ChannelLayout::Rgba, craft_image_codecs::SampleType::U8, raw).ok()?;
+        let png = craft_image_codecs::encode(&red, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).ok()?;
+        d.images.insert("pict-image".into(), ImageBlob::new("image/png", png.to_vec()));
+        let im = vectorcraft_doc::ImageObject {
+            key: "pict-image".into(),
+            width: 4,
+            height: 4,
+            xf: Affine::scale(5.0),
+            link: Some(LinkInfo::new("/art/red.png")),
+            placement: Default::default(),
+            pixels: None,
+        };
+        children.push(Arc::new(Node::new(NodeId(4), NodeKind::Image(Box::new(im)))));
     }
     if bytes.starts_with(b"loop") {
         d.images.insert(p.key.clone(), ImageBlob::new("application/json", bytes.to_vec()));
@@ -68,31 +85,43 @@ fn placed_node(id: u64, key: &str, width: f64, height: f64, xf: Affine) -> Node 
 /// Held shut, [`gated_blue_page`] makes the background worker wait before reading a file, so a
 /// frame drawn meanwhile shows the placeholders whatever the scheduler does (#5152: a fast worker
 /// could finish between scheduling a bitmap and the frame looking it up again).
-static GATE_SHUT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static GATE_SHUT: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
+/// Signaled when the gate opens.
+static GATE_OPENED: std::sync::Condvar = std::sync::Condvar::new();
 /// The thread drawing while the gate is shut: it never waits (a file read there is drawn exactly).
 static GATE_HOLDER: std::sync::Mutex<Option<std::thread::ThreadId>> = std::sync::Mutex::new(None);
 
-/// [`blue_page`] once the gate opens (at most 10 s), except on the thread that shut it. Every test
-/// here registers it: the first registration stays, so all of them must agree (open, it is
+/// [`blue_page`] once the gate opens, except on the thread that shut it. Every test here
+/// registers it: the first registration stays, so all of them must agree (open, it is
 /// `blue_page`).
 fn gated_blue_page(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
     let here = std::thread::current().id();
     let holder = *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    let t = std::time::Instant::now();
-    while holder != Some(here) && GATE_SHUT.load(std::sync::atomic::Ordering::SeqCst) && t.elapsed().as_secs() < 10 {
-        std::thread::sleep(std::time::Duration::from_millis(1));
+    if holder != Some(here) {
+        let mut shut = GATE_SHUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        while *shut {
+            shut = GATE_OPENED.wait(shut).unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
     }
     blue_page(p, bytes)
 }
 
-/// Shut the gate for the calling thread's frames.
-fn shut_gate() {
-    *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::thread::current().id());
-    GATE_SHUT.store(true, std::sync::atomic::Ordering::SeqCst);
+/// The gate shut by [`shut_gate`]; dropping it opens the gate, also when the test fails while it
+/// is shut.
+struct Gate;
+
+impl Drop for Gate {
+    fn drop(&mut self) {
+        *GATE_SHUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = false;
+        GATE_OPENED.notify_all();
+    }
 }
 
-fn open_gate() {
-    GATE_SHUT.store(false, std::sync::atomic::Ordering::SeqCst);
+/// Shut the gate for the calling thread's frames, until the [`Gate`] is dropped.
+fn shut_gate() -> Gate {
+    *GATE_HOLDER.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::thread::current().id());
+    *GATE_SHUT.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+    Gate
 }
 
 /// Held by the tests that draw placed documents from bitmaps, which share the bitmaps, their
@@ -112,12 +141,9 @@ fn render(d: &Document, progressive: bool) -> Rendered {
     Renderer::new().render(d, 100, 100, Affine::IDENTITY, &opts)
 }
 
-/// Wait for the background bitmaps (at most 10 s).
+/// Wait for the background bitmaps.
 fn settle() {
-    let t = std::time::Instant::now();
-    while placed_document::busy() && t.elapsed().as_secs() < 10 {
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
+    placed_document::wait_idle();
     assert!(!placed_document::busy(), "bitmaps still coming");
 }
 
@@ -127,6 +153,266 @@ fn a_placed_document_draws_exactly_with_its_own_art() {
     let r = render(&d, false);
     assert_eq!(&r.pixel(50, 30)[..3], &[0, 0, 255], "blue inside the box");
     assert_eq!(&r.pixel(95, 95)[..3], &[255, 255, 255], "nothing outside");
+}
+
+#[test]
+fn outline_mode_draws_a_placed_document_as_its_box_crossed_unless_the_setup_shows_images() {
+    let outline = |d: &Document| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+        Renderer::new().render(d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let inked = |r: &Rendered, x: u32, y: u32| r.pixel(x, y)[0] < 200;
+    // The box is (10, 10)–(90, 50): (20, 15) is on its diagonal from the top left. The file places
+    // itself again in the box (30, 20)–(70, 40), whose top edge passes (50, 20) and whose diagonal
+    // from the top left passes (35, 22).
+    let mut d = doc_with("outline-cross-1", b"loop");
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "the box is crossed from corner to corner");
+    assert!(!inked(&r, 50, 20), "none of the file's art is drawn");
+    // The file's own setup has Show Images in Outline Mode off; this document's setting applies
+    // to the art inside it.
+    d.setup.outline_images = true;
+    let r = outline(&d);
+    assert!(!inked(&r, 20, 15), "with Show Images in Outline Mode it is not crossed");
+    assert!(inked(&r, 50, 20), "and its art is drawn in outline");
+    assert!(!inked(&r, 35, 22), "nor is the file it places");
+    // A drop shadow does not change what Outline mode shows.
+    let mut d = doc_with("outline-cross-2", b"loop");
+    let params = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a placed document with a drop shadow is crossed");
+    assert!(!inked(&r, 50, 20), "and none of the file's art is drawn");
+    // The same in a clip group, whose members Outline mode draws one by one.
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut clip = Node::path(NodeId(71), shapes::rectangle(Rect::new(0.0, 0.0, 100.0, 100.0)), Appearance::default());
+    if let NodeKind::Path { clipping, .. } = &mut clip.kind {
+        *clipping = true;
+    }
+    let group = Node::new(NodeId(70), NodeKind::Group { children: vec![Arc::new(clip), placed], clip: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group).unwrap();
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a clipped placed document with a drop shadow is crossed");
+    assert!(!inked(&r, 50, 20), "and none of its file's art is drawn");
+    // A color adjustment changes no geometry either.
+    let mut d = doc_with("outline-cross-3", b"loop");
+    let params = serde_json::json!({"brightness": 50});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "adjust.brightnessContrast".into(),
+        params,
+        visible: true,
+    });
+    let r = outline(&d);
+    assert!(inked(&r, 20, 15), "a placed document with a color adjustment is crossed");
+    assert!(!inked(&r, 50, 20), "and none of its file's art is drawn");
+    // A Transform effect reshapes the crossed box: it is drawn moved 40 points down to
+    // (10, 50)–(90, 90), its bottom edge at y = 90 and crossed ((20, 55) is on its diagonal), with
+    // nothing where the box was and none of the file's art ((50, 60) is the top edge of the box the
+    // file places in itself, moved).
+    let mut d = doc_with("outline-cross-4", b"loop");
+    assert!(inked(&outline(&d), 20, 15), "first drawn crossed");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the box is drawn moved");
+    assert!(inked(&r, 20, 55), "crossed");
+    assert!(!inked(&r, 50, 60), "without the file's art");
+    assert!(!inked(&r, 20, 15), "and nothing is drawn where the box was");
+    // The same when the box was first drawn crossed with a drop shadow.
+    let mut d = doc_with("outline-cross-5", b"loop");
+    let shadow = serde_json::json!({"x": 4, "y": 4, "blur": 1, "opacity": 100});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect {
+        id: "stylize.dropShadow".into(),
+        params: shadow,
+        visible: true,
+    });
+    assert!(inked(&outline(&d), 20, 15), "first drawn crossed with a drop shadow");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let r = outline(&d);
+    assert!(inked(&r, 50, 89) || inked(&r, 50, 90), "the box is drawn moved after a drop shadow");
+    assert!(inked(&r, 20, 55), "and crossed");
+}
+
+#[test]
+fn outline_mode_reshapes_the_crossed_box_of_a_placed_document_by_its_groups_effects() {
+    let outline = |r: &mut Renderer, d: &Document| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+        r.render(d, 100, 100, Affine::IDENTITY, &opts)
+    };
+    let inked = |r: &Rendered, x: u32, y: u32| r.pixel(x, y)[0] < 200;
+    // The box (10, 10)–(90, 50) in a group whose Transform effect moves it 40 points down: crossed at
+    // (10, 50)–(90, 90), whose diagonal from the top left passes (20, 55). The file places itself in
+    // its middle: moved, the top edge of that box passes (50, 60).
+    let mut d = doc_with("outline-group-1", b"loop");
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut group = Node::group(NodeId(80), vec![placed]);
+    let params = serde_json::json!({"moveV": 40});
+    group.appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, group).unwrap();
+    // Exporting the document as PDF, SVG or EPS reads the file.
+    d.with_placed_art();
+    let mut r = Renderer::new();
+    let crossed = outline(&mut r, &d);
+    assert!(inked(&crossed, 20, 55), "the moved box is crossed");
+    assert!(!inked(&crossed, 50, 60), "without the file's art");
+    assert!(!inked(&crossed, 20, 15), "and nothing is drawn where the box was");
+    // With Show Images in Outline Mode the same renderer draws the file's art moved, not the art it
+    // kept for the crossed box, and back again without it.
+    d.setup.outline_images = true;
+    let shown = outline(&mut r, &d);
+    assert!(!inked(&shown, 20, 55), "with Show Images in Outline Mode the box is not crossed");
+    assert!(inked(&shown, 50, 60), "and the file's art is drawn moved");
+    assert!(shown.pixels == outline(&mut Renderer::new(), &d).pixels, "as a new renderer draws it");
+    d.setup.outline_images = false;
+    assert!(outline(&mut r, &d).pixels == crossed.pixels, "crossed again as at first");
+}
+
+#[test]
+fn a_template_layer_in_outline_mode_draws_a_placed_documents_art_its_effects_reshape() {
+    // A template layer stays in Preview in Outline mode: the file's blue art moved 40 points down
+    // by a Transform effect fills (10, 50)–(90, 90), and is not crossed.
+    let mut d = doc_with("outline-template-1", b"blue");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    if let NodeKind::Layer { template, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+        *template = true;
+    }
+    // Exporting the document as PDF, SVG or EPS reads the file.
+    d.with_placed_art();
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let [red, _, blue, _] = r.pixel(50, 80);
+    assert!(blue > red, "the file's art fills the moved box: {:?}", r.pixel(50, 80));
+    // The same with the Transform effect on the template layer itself.
+    let effect = d.node_mut(NodeId(50)).unwrap().appearance.effects.pop().unwrap();
+    Arc::make_mut(&mut d.layers[0]).appearance.effects.push(effect);
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let [red, _, blue, _] = r.pixel(50, 80);
+    assert!(blue > red, "the layer's effect moves the file's art: {:?}", r.pixel(50, 80));
+}
+
+#[test]
+fn outline_mode_draws_the_crossed_box_its_effects_move_into_view_after_a_preview_frame() {
+    // A file that can't be read, in the box (10, 10)–(90, 50), moved 40 points down by a Transform
+    // effect: crossed at (10, 50)–(90, 90). The view shows the document from y = 55 down, below
+    // where the box is without the effect; the moved box's diagonal from the top left passes
+    // (30, 60), the pixel (30, 5).
+    let mut d = doc_with("outline-cull-1", b"bad");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let view = Affine::translate((0.0, -55.0));
+    let preview = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let outline = RenderOptions { outline: true, ..preview.clone() };
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, view, &preview);
+    let crossed = r.render(&d, 100, 100, view, &outline);
+    assert!(crossed.pixel(30, 5)[0] < 200, "the moved box is drawn crossed after a frame in Preview");
+    assert!(crossed.pixels == Renderer::new().render(&d, 100, 100, view, &outline).pixels, "as a new renderer draws it");
+    // In Preview, a layer whose Preview is off draws in outline: the same.
+    if let NodeKind::Layer { preview, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+        *preview = false;
+    }
+    let r = Renderer::new().render(&d, 100, 100, view, &preview);
+    assert!(r.pixel(30, 5)[0] < 200, "the moved box is drawn crossed in a layer whose Preview is off");
+    // And in a sublayer whose Preview is off, in a layer whose Preview is on.
+    if let NodeKind::Layer { preview, .. } = &mut Arc::make_mut(&mut d.layers[0]).kind {
+        *preview = true;
+    }
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut sub = Node::layer(NodeId(90), "Sublayer", vectorcraft_doc::LayerColor::Preset(1));
+    if let NodeKind::Layer { children, preview, .. } = &mut sub.kind {
+        children.push(placed);
+        *preview = false;
+    }
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, sub).unwrap();
+    let mut r = Renderer::new();
+    r.render(&d, 100, 100, view, &outline);
+    let r = r.render(&d, 100, 100, view, &preview);
+    assert!(r.pixel(30, 5)[0] < 200, "the moved box is drawn crossed in a sublayer whose Preview is off");
+}
+
+#[test]
+fn a_group_is_measured_again_when_show_images_in_outline_mode_changes_for_a_sublayer_in_it() {
+    // As above, in a sublayer whose Preview is off, held in a group. With Show Images in Outline
+    // Mode the file that can't be read draws nothing; turned off, the sublayer draws the moved box
+    // crossed, and the same renderer measures the group again.
+    let mut d = doc_with("outline-cull-2", b"bad");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut sub = Node::layer(NodeId(90), "Sublayer", vectorcraft_doc::LayerColor::Preset(1));
+    if let NodeKind::Layer { children, preview, .. } = &mut sub.kind {
+        children.push(placed);
+        *preview = false;
+    }
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, Node::group(NodeId(91), vec![Arc::new(sub)])).unwrap();
+    let view = Affine::translate((0.0, -55.0));
+    let preview = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let mut r = Renderer::new();
+    d.setup.outline_images = true;
+    r.render(&d, 100, 100, view, &preview);
+    d.setup.outline_images = false;
+    let crossed = r.render(&d, 100, 100, view, &preview);
+    assert!(crossed.pixel(30, 5)[0] < 200, "the moved box is drawn crossed");
+    assert!(crossed.pixels == Renderer::new().render(&d, 100, 100, view, &preview).pixels, "as a new renderer draws it");
+}
+
+#[test]
+fn a_group_with_a_drop_shadow_measures_a_sublayer_in_it_in_the_sublayers_own_mode() {
+    // As above, in a sublayer whose Preview is off, held in a group with a Drop Shadow effect: the
+    // sublayer draws the moved box crossed, and the group's cull bounds reach it.
+    let mut d = doc_with("outline-cull-3", b"bad");
+    let params = serde_json::json!({"moveV": 40});
+    d.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let placed = d.remove(NodeId(50)).unwrap();
+    let mut sub = Node::layer(NodeId(90), "Sublayer", vectorcraft_doc::LayerColor::Preset(1));
+    if let NodeKind::Layer { children, preview, .. } = &mut sub.kind {
+        children.push(placed);
+        *preview = false;
+    }
+    let shadow = serde_json::json!({"x": 0, "y": 0, "blur": 0, "opacity": 0});
+    let mut g = Node::group(NodeId(91), vec![Arc::new(sub)]);
+    g.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: shadow, visible: true });
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, g).unwrap();
+    let view = Affine::translate((0.0, -55.0));
+    let preview = RenderOptions { background: Some([255, 255, 255, 255]), ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, view, &preview);
+    assert!(r.pixel(30, 5)[0] < 200, "the moved box is drawn crossed in a group with a drop shadow");
+}
+
+#[test]
+fn an_edit_in_outline_mode_redraws_where_the_effects_move_the_crossed_box() {
+    // A file that can't be read, in the box (10, 10)–(90, 50): a Transform effect added to it moves
+    // the crossed box 40 points down, to (10, 50)–(90, 90).
+    let old = doc_with("outline-changed-1", b"bad");
+    let mut new = old.clone();
+    let params = serde_json::json!({"moveV": 40});
+    new.node_mut(NodeId(50)).unwrap().appearance.effects.push(vectorcraft_doc::Effect { id: "distort.transform".into(), params, visible: true });
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+    let mut r = Renderer::new();
+    r.render(&old, 100, 100, Affine::IDENTITY, &opts);
+    match r.changed(&old, &new, &opts) {
+        crate::changed::Changed::Area(a) => assert!(a.y1 >= 89.0, "the area reaches the moved box: {a:?}"),
+        other => panic!("an area, not {other:?}"),
+    }
+}
+
+#[test]
+fn outline_mode_shows_a_linked_image_in_a_placed_document_by_this_documents_setup() {
+    // The file's red image is (10, 10)–(50, 50) here; (35, 30) is inside it, off its diagonals and
+    // off the placed box's.
+    let mut d = doc_with("outline-pict-1", b"pict");
+    d.setup.outline_images = true;
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+    let r = Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts);
+    let [red, green, blue, _] = r.pixel(35, 30);
+    assert!(red == green && green == blue && (50..=58).contains(&red), "the image's gray pixels, not crossed: {:?}", r.pixel(35, 30));
 }
 
 #[test]
@@ -155,6 +441,82 @@ fn an_enveloped_placed_document_shows_its_file_once_read() {
     let after = r.render(&d, 100, 100, Affine::IDENTITY, &opts).pixels;
     assert!(after != before, "the file's art shows");
     assert!(after == Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
+}
+
+#[test]
+fn outline_mode_warps_an_enveloped_placed_documents_crossed_box() {
+    let outline = |r: &mut Renderer, d: &Document| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+        r.render(d, 100, 100, Affine::IDENTITY, &opts).pixels
+    };
+    // An Arc warp of the box (10, 10)–(90, 50), once holding the placed document and once holding
+    // its crossed box as a plain path.
+    let envelope = |content: Arc<Node>| {
+        let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+        Node::new(
+            NodeId(60),
+            NodeKind::Envelope {
+                content: vec![content],
+                kind: Box::new(kind),
+                fidelity: 50.0,
+                editing: false,
+                options: Default::default(),
+                frame: Box::new(Affine::IDENTITY),
+            },
+        )
+    };
+    let mut d = doc_with("outline-envelope-1", b"loop");
+    let placed = d.remove(NodeId(50)).unwrap();
+    let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("a placed document") };
+    let crossed = p.crossed_art(&placed);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, envelope(placed)).unwrap();
+    // Exporting the document as PDF, SVG or EPS reads the file.
+    d.with_placed_art();
+    let mut boxed = d.clone();
+    boxed.remove(NodeId(60)).unwrap();
+    boxed.insert(Some(l), 0, envelope(Arc::new(crossed))).unwrap();
+    let mut r = Renderer::new();
+    let warped = outline(&mut r, &d);
+    assert!(warped == outline(&mut Renderer::new(), &boxed), "the envelope warps the crossed box");
+    // With Show Images in Outline Mode the same renderer warps the file's art, and the crossed box
+    // again without it.
+    d.setup.outline_images = true;
+    let shown = outline(&mut r, &d);
+    assert!(shown != warped, "the file's art is warped");
+    assert!(shown == outline(&mut Renderer::new(), &d), "as a new renderer draws it");
+    d.setup.outline_images = false;
+    assert!(outline(&mut r, &d) == warped, "the crossed box again");
+}
+
+#[test]
+fn outline_mode_draws_each_step_of_a_blend_of_placed_documents_crossed() {
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+    let inked = |r: &Rendered, x: u32, y: u32| r.pixel(x, y)[0] < 200;
+    // A blend of the 40×20 file placed at (5, 5) and at (55, 75), with one step between them: its box
+    // is (30, 40)–(70, 60), and its diagonal from the top left passes (60, 55). The file's art is a
+    // rectangle the size of the box.
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("outline-blend-1".into(), ImageBlob::new("application/json", b"blue".to_vec()));
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
+    let ends = vec![
+        Arc::new(placed_node(51, "outline-blend-1", 40.0, 20.0, Affine::translate((5.0, 5.0)))),
+        Arc::new(placed_node(52, "outline-blend-1", 40.0, 20.0, Affine::translate((55.0, 75.0)))),
+    ];
+    let spec = vectorcraft_doc::live::BlendSpec { spacing: vectorcraft_doc::live::BlendSpacing::Steps(1), ..Default::default() };
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, Node::new(NodeId(60), NodeKind::Blend { children: ends, spec: Box::new(spec) })).unwrap();
+    // Exporting the document as PDF, SVG or EPS reads the file.
+    d.with_placed_art();
+    let mut r = Renderer::new();
+    let crossed = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert!(inked(&crossed, 60, 55), "the step between the ends is crossed");
+    assert!(inked(&crossed, 15, 10) && inked(&crossed, 65, 80), "and so are the ends");
+    assert!(crossed.pixels == Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
+    d.setup.outline_images = true;
+    let shown = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert!(!inked(&shown, 60, 55), "with Show Images in Outline Mode the step is not crossed");
+    assert!(inked(&shown, 50, 40), "and its file's art is drawn in outline");
 }
 
 #[test]
@@ -327,9 +689,9 @@ fn a_ready_bitmap_draws_again_where_its_file_shows() {
     let mut r = Renderer::new();
     let generation = placed_document::generation();
     // The first frame shows the placeholders: the worker waits until it is drawn.
-    shut_gate();
+    let gate = shut_gate();
     let before = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
-    open_gate();
+    drop(gate);
     settle();
     let made = placed_document::made_between(generation, placed_document::generation()).expect("known");
     let files = |keys: &[&str]| keys.iter().map(|k| k.to_string()).collect::<std::collections::HashSet<_>>();
@@ -426,9 +788,10 @@ fn a_placed_document_kept_as_its_preview_draws_the_preview() {
 fn a_document_that_places_itself_draws_a_few_levels_deep_then_stops() {
     let _serial = serial();
     let d = doc_with("loop-1", b"loop");
-    let t = std::time::Instant::now();
+    placed_document::reset_deepest();
     let r = render(&d, false);
-    assert!(t.elapsed().as_secs() < 10);
+    let deepest = placed_document::deepest();
+    assert!((2..=vectorcraft_doc::placed_document::MAX_DEPTH).contains(&deepest), "drawn {deepest} levels deep");
     assert_eq!(&r.pixel(50, 30)[..3], &[0, 0, 255]);
     // On screen too.
     render(&d, true);

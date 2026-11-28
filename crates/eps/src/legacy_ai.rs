@@ -130,7 +130,7 @@ const STROKES: &str =
 const IMAGE_ALPHA: &str = "transparent image pixels are written over white";
 const LIVE: &str = "symbols, blends, envelopes, meshes, repeats, placed documents, intertwines and distorted images are written as their art";
 const DEEP_DISTORTED: &str =
-    "images changed by Perspective Distort or Free Distort more than 8 deep in symbols and live objects are written as the nearest parallelogram";
+    "images changed by Perspective Distort or Free Distort nested 8 deep in symbols and live objects are written as the nearest parallelogram";
 const GRAPHS: &str = "graphs are written as their art, without their data or settings";
 /// The warning for an image left out because it can't be decoded: the note raster exports give
 /// (`vectorcraft-engine`'s `rasterfx::undecoded_warning`).

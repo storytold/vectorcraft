@@ -67,7 +67,6 @@ mod patch;
 mod pdfx;
 mod piece_info;
 mod post;
-mod presets;
 mod print;
 mod settings;
 mod streams;
@@ -75,15 +74,20 @@ mod surface;
 mod syntax;
 
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
-pub use encrypt::Encryption;
 pub use export::{check_page_sizes, export, export_with_report, page_areas};
 pub use file_info::{FileInfo, MAX_TEMPLATE_BYTES, file_info, metadata_template, read_template};
-#[cfg(any(test, feature = "read-count"))]
-pub use import::imports_of;
 pub use import::{
     INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, RESHAPED_TEXT_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE,
     holds_outlines, import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
+#[cfg(any(test, feature = "read-count"))]
+pub use import::{form_content_of, function_evaluations_of, imports_of};
+#[cfg(any(test, feature = "read-count"))]
+pub use import_scan::form_content_limit;
+#[cfg(any(test, feature = "read-count"))]
+pub use import_shading::function_evaluation_limit;
+pub use marks::{leaves_out_bleed, page_bleed, printer_marks};
+pub use output::ActiveProfiles;
 #[cfg(any(test, feature = "read-count"))]
 pub use pages::reads_of;
 pub use pages::{
@@ -92,11 +96,13 @@ pub use pages::{
 };
 pub use piece_info::{PRIVATE_CHUNK, PrivateData};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};
-pub use presets::*;
 pub use print::*;
 pub use settings::*;
 
 use vectorcraft_doc::Document;
+
+/// The application's name, which the built-in presets and their descriptions carry.
+pub const APP: &str = "VectorCraft";
 
 /// Export options: the Save PDF settings plus what one export run decides (pages, title, date).
 #[derive(Clone, Debug, Default)]
@@ -261,9 +267,15 @@ pub enum PdfError {
     PlaceholderOnly,
 }
 
-impl From<craft_pdf::write::WriteError> for PdfError {
-    fn from(error: craft_pdf::write::WriteError) -> Self {
+impl From<craft::pdf::write::WriteError> for PdfError {
+    fn from(error: craft::pdf::write::WriteError) -> Self {
         Self::Write(error.to_string())
+    }
+}
+
+impl From<SettingsError> for PdfError {
+    fn from(e: SettingsError) -> Self {
+        Self::BadSetting(e.message)
     }
 }
 

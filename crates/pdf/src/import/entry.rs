@@ -224,11 +224,11 @@ pub(crate) fn read(bytes: &[u8], opts: &ImportOptions) -> Result<ImportReport, P
 }
 
 #[cfg(test)]
-pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+pub(crate) fn import_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft::pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     vectorcraft_doc::depth::with_deep_stack(|| read_with_reader_options(bytes, opts, reader))
 }
 
-fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft_pdf::OpenOptions) -> Result<ImportReport, PdfError> {
+fn read_with_reader_options(bytes: &[u8], opts: &ImportOptions, reader: &craft::pdf::OpenOptions) -> Result<ImportReport, PdfError> {
     let original = crate::pages::open_with_options(bytes, opts.password.as_deref(), reader)?;
     read_opened(bytes, opts, reader, &original)
 }
@@ -241,6 +241,34 @@ static IMPORTS: std::sync::Mutex<std::collections::BTreeMap<usize, usize>> = std
 #[cfg(any(test, feature = "read-count"))]
 pub fn imports_of(bytes: &[u8]) -> usize {
     IMPORTS.lock().ok().and_then(|i| i.get(&(bytes.as_ptr() as usize)).copied()).unwrap_or(0)
+}
+
+/// The work the imports of each buffer took, by its address (tests): the function evaluations of
+/// its function-based shadings, and the bytes of form content its pages' scans walked.
+#[cfg(any(test, feature = "read-count"))]
+static WORK: std::sync::Mutex<std::collections::BTreeMap<usize, (usize, usize)>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// Adds `evaluations` and `form_content` to the work of the imports of `bytes` (tests).
+#[cfg(any(test, feature = "read-count"))]
+fn note_work(bytes: &[u8], evaluations: usize, form_content: usize) {
+    if let Ok(mut work) = WORK.lock() {
+        let (e, f) = work.entry(bytes.as_ptr() as usize).or_default();
+        (*e, *f) = (e.saturating_add(evaluations), f.saturating_add(form_content));
+    }
+}
+
+/// How many function evaluations the function-based shadings of `bytes`, at its address, have
+/// taken in its imports on any thread (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn function_evaluations_of(bytes: &[u8]) -> usize {
+    WORK.lock().ok().and_then(|w| w.get(&(bytes.as_ptr() as usize)).map(|w| w.0)).unwrap_or(0)
+}
+
+/// How many bytes of form content the pages of `bytes`, at its address, have walked in its imports
+/// on any thread, up to [`crate::import_scan::form_content_limit`] a page (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn form_content_of(bytes: &[u8]) -> usize {
+    WORK.lock().ok().and_then(|w| w.get(&(bytes.as_ptr() as usize)).map(|w| w.1)).unwrap_or(0)
 }
 
 /// The notes on the fonts the file draws with that aren't available: type in a font the file
@@ -270,7 +298,7 @@ fn warn_missing_fonts(b: &mut Builder, doc: &Document) {
 }
 
 /// The widest bleed of `pages` on each side (`[top, bottom, left, right]`, see [`crate::pages::bleed`]).
-fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft_pdf::syntax::page::Page<'d>>) -> [f64; 4] {
+fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft::pdf::syntax::page::Page<'d>>) -> [f64; 4] {
     pages.fold([0.0; 4], |widest, page| {
         let bleed = crate::pages::bleed(page);
         std::array::from_fn(|i| widest[i].max(bleed[i]))
@@ -281,8 +309,8 @@ fn widest_bleed<'p, 'd: 'p>(pages: impl Iterator<Item = &'p craft_pdf::syntax::p
 fn read_opened(
     bytes: &[u8],
     opts: &ImportOptions,
-    reader: &craft_pdf::OpenOptions,
-    original: &craft_pdf::syntax::Pdf,
+    reader: &craft::pdf::OpenOptions,
+    original: &craft::pdf::syntax::Pdf,
 ) -> Result<ImportReport, PdfError> {
     #[cfg(any(test, feature = "read-count"))]
     if let Ok(mut imports) = IMPORTS.lock() {
@@ -344,7 +372,12 @@ fn read_opened(
         b.page = ab;
         // The first id of this page's art.
         let first_id = b.next;
-        let mut scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream())?;
+        #[cfg(any(test, feature = "read-count"))]
+        crate::import_scan::FORM_CONTENT_WALKED.set(0);
+        let scan = scan_page(page, &mut ocgs, all_on, &mut b.fonts, pdf.decode_limits().max_decoded_stream());
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, 0, crate::import_scan::FORM_CONTENT_WALKED.take());
+        let mut scan = scan?;
         // The walk's ink names pick between spaces of inks that look the same to the interpreter. A
         // page keeps them only when it uses such an ink and the interpreter draws as many paths
         // there as the walk counts.
@@ -358,7 +391,12 @@ fn read_opened(
             merge_order(&mut order, &mut known, &marked);
         }
         b.begin_page(scan);
-        craft_pdf::interpret_page(page, &mut ctx, &mut b).map_err(|e| PdfError::Parse(e.to_string()))?;
+        let drawn = craft::pdf::interpret_page(page, &mut ctx, &mut b);
+        // The page's shadings take their evaluations while it is drawn: they count even when the
+        // import stops on this page or a later one.
+        #[cfg(any(test, feature = "read-count"))]
+        note_work(bytes, b.function_budget.take_spent(), 0);
+        drawn.map_err(|e| PdfError::Parse(e.to_string()))?;
         if incomplete.load(Ordering::Relaxed) {
             return Err(crate::import_scan::incomplete_content());
         }
@@ -576,12 +614,12 @@ fn is_only_text(nodes: &[Arc<Node>]) -> bool {
 fn reopen_with_groups_on(
     bytes: &[u8],
     opts: &ImportOptions,
-    reader: &craft_pdf::OpenOptions,
-    original: &craft_pdf::syntax::Pdf,
+    reader: &craft::pdf::OpenOptions,
+    original: &craft::pdf::syntax::Pdf,
     picked: &[usize],
     ocgs: &mut Ocgs,
     route: bool,
-) -> Result<(Option<craft_pdf::syntax::Pdf>, bool, Vec<String>), PdfError> {
+) -> Result<(Option<craft::pdf::syntax::Pdf>, bool, Vec<String>), PdfError> {
     // Content that is off imports as hidden layers: an update of the file turns every group on
     // (unless a form is hidden by its own group: its art couldn't be told apart).
     let hide = route && ocgs.skips_any();

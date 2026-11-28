@@ -1,3 +1,9 @@
+//! Copy and Cut while text is selected in a label, such as a Document Info value or an Info panel readout. The key
+//! stage leaves the Copy or Cut event in egui's input then, for the labels to copy their text. When no label of the
+//! window copies anything in that pass (the selected text is in another window, or its label is not drawn), the
+//! command runs in the next pass, on the selection it was given.
+
+use craft::ui::runtime::windows::WindowHost;
 use egui::text_selection::LabelSelectionState;
 use serde_json::json;
 use vectorcraft_doc::{NodeId, Selection};
@@ -7,7 +13,7 @@ use crate::VectorcraftApp;
 /// A Copy or Cut command left to the labels, with the active document (its `uid`) and the
 /// selection it was given then.
 #[derive(Clone, Default)]
-pub(super) struct LeftToLabels {
+struct LeftToLabels {
     id: &'static str,
     given: Option<(u64, Selection)>,
 }
@@ -22,53 +28,52 @@ fn copies_before_labels_id(viewport: egui::ViewportId) -> egui::Id {
     egui::Id::unique(("copies-before-labels", viewport))
 }
 
-/// The texts copied in this pass of the current viewport so far.
-fn copies(ctx: &egui::Context) -> usize {
-    ctx.output(|o| o.commands.iter().filter(|c| matches!(c, egui::OutputCommand::CopyText(_))).count())
-}
-
-/// Note the texts copied in this pass so far (the art's, by a Copy or Cut that labels left to this
-/// pass): a copy at the end of the pass beyond them is the labels'.
-pub(super) fn note_copies_before_labels(ctx: &egui::Context) {
-    let (id, n) = (copies_before_labels_id(ctx.viewport_id()), copies(ctx));
-    ctx.data_mut(|d| d.insert_temp(id, n));
-}
-
 /// The Copy or Cut command to run in the next pass: the labels it was left to copied nothing.
 fn after_labels_id() -> egui::Id {
     egui::Id::unique("copy-after-labels")
 }
 
-/// Set when a label in a window of its own (a floating panel's) copied its selected text: the
-/// window then sends the Copy or Cut on to the main window ([`crate::panel_docking::forward_keys`]).
-/// It lasts until the main window's next pass starts.
-fn copied_in_window_id() -> egui::Id {
-    egui::Id::unique("labels-copied-in-window")
+/// The texts copied in this pass of the current viewport so far.
+fn copies(ctx: &egui::Context) -> usize {
+    ctx.output(|o| o.commands.iter().filter(|c| matches!(c, egui::OutputCommand::CopyText(_))).count())
 }
 
-/// Watch the labels' copies from the next pass on ([`leave_to_labels`]). egui runs a plugin only
-/// from the pass after the one that adds it.
-pub(super) fn watch_label_copies(ctx: &egui::Context) {
+/// First in a pass: the Copy or Cut an earlier pass left to labels that copied nothing runs now, on the selection it
+/// was given ([`run_after_labels`]). Watches the labels' copies from the next pass on: egui runs a plugin only from
+/// the pass after the one that adds it.
+pub(crate) fn run_left_by_labels(app: &mut VectorcraftApp, ctx: &egui::Context) {
     if ctx.plugin_opt::<CopyAfterLabels>().is_none() {
         ctx.add_plugin(CopyAfterLabels);
     }
+    if let Some(c) = ctx.data_mut(|d| d.remove_temp::<LeftToLabels>(after_labels_id())) {
+        run_after_labels(app, c);
+    }
 }
 
-/// Copy or Cut `command` (`edit.copy`, `edit.cut`) while text is selected in a label, such as a
-/// Document Info value or an Info panel readout: egui copies that text when the Copy or Cut event
-/// reaches the labels, so the event is left in the input for them (→ true). When no label of this
-/// viewport copies anything in this pass (the selected text is in another window, or its label is
-/// not drawn), `command` runs in the next pass ([`take_command_after_labels`]), on the selection of
-/// `app`'s active document now ([`run_after_labels`]).
-pub(crate) fn leave_to_labels(app: &VectorcraftApp, ctx: &egui::Context, command: &'static str) -> bool {
+/// After the pass's input, once the text it copied has gone out: a Copy or Cut event still in the input while text
+/// is selected in a label, and no text field has the keys, is the labels'. The texts copied so far are noted, so a
+/// copy at the end of the pass beyond them is the labels' ([`CopyAfterLabels`]). The labels' text, or the art copied
+/// in the next pass when they copy nothing, replaces what an earlier Copy or Cut has not written yet. Every window
+/// calls it in its own pass, the OS windows of floating panels and documents included: the key stage of each window
+/// leaves its Copy or Cut to the labels while text is selected in a label of any window.
+pub(crate) fn leave_to_labels(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    let viewport = ctx.viewport_id();
+    let n = copies(ctx);
+    ctx.data_mut(|d| d.insert_temp(copies_before_labels_id(viewport), n));
+    let command = ctx.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Copy => Some("edit.copy"),
+            egui::Event::Cut => Some("edit.cut"),
+            _ => None,
+        })
+    });
     let selected = ctx.with_plugin(|s: &mut LabelSelectionState| s.has_selection()).unwrap_or(false);
-    if !selected || ctx.plugin_opt::<CopyAfterLabels>().is_none() {
-        return false;
-    }
-    let id = waiting_id(ctx.viewport_id());
+    let Some(command) = command.filter(|_| selected && !WindowHost::of(ctx).typing() && ctx.plugin_opt::<CopyAfterLabels>().is_some()) else {
+        return;
+    };
     let given = active_selection(app);
-    ctx.data_mut(|d| d.insert_temp(id, LeftToLabels { id: command, given }));
-    true
+    ctx.data_mut(|d| d.insert_temp(waiting_id(viewport), LeftToLabels { id: command, given }));
+    app.drop_unwritten_formats();
 }
 
 /// The `uid` of `app`'s active document and its selection.
@@ -76,24 +81,14 @@ fn active_selection(app: &VectorcraftApp) -> Option<(u64, Selection)> {
     app.session.active().map(|st| (st.uid, st.selection.clone()))
 }
 
-/// The Copy or Cut command left to this viewport's labels in this pass, if any.
-pub(super) fn left_to_labels(ctx: &egui::Context) -> Option<&'static str> {
-    let id = waiting_id(ctx.viewport_id());
-    ctx.data(|d| d.get_temp::<LeftToLabels>(id)).map(|c| c.id)
-}
-
-/// The Copy or Cut command an earlier pass left to labels that copied nothing.
-pub(super) fn take_command_after_labels(ctx: &egui::Context) -> Option<LeftToLabels> {
-    ctx.data_mut(|d| d.remove_temp::<LeftToLabels>(after_labels_id()))
-}
-
 /// Run Copy or Cut `c`, which labels left to this pass, on the selection it was given. A selection
 /// made in the same frame after it (a Select All) comes back after it, without the objects a Cut
 /// removed and with the pieces it left of a path it split. With another document active by now,
-/// or none, it does not run.
-pub(super) fn run_after_labels(app: &mut VectorcraftApp, c: LeftToLabels) {
+/// or none, it does not run. The text it copies goes out now, so it is not taken for a label's copy.
+fn run_after_labels(app: &mut VectorcraftApp, c: LeftToLabels) {
     let Some((doc, given)) = c.given else {
         crate::menus::invoke(app, c.id, json!({}));
+        app.flush_clipboard_out();
         return;
     };
     match active_selection(app) {
@@ -122,18 +117,7 @@ pub(super) fn run_after_labels(app: &mut VectorcraftApp, c: LeftToLabels) {
         }
         _ => crate::menus::invoke(app, c.id, json!({})),
     }
-}
-
-/// Note that a floating panel's window copied its label text, as [`CopyAfterLabels`] does.
-#[cfg(test)]
-pub(crate) fn note_copied_in_window(ctx: &egui::Context) {
-    ctx.data_mut(|d| d.insert_temp(copied_in_window_id(), true));
-}
-
-/// Did a label in another window copy its selected text since the last call? The Copy or Cut that
-/// window sends on is then its own and copies nothing more.
-pub(crate) fn take_copied_in_window(ctx: &egui::Context) -> bool {
-    ctx.data_mut(|d| d.remove_temp::<bool>(copied_in_window_id())).unwrap_or(false)
+    app.flush_clipboard_out();
 }
 
 /// Runs after egui's label text selection at the end of each pass, when the labels have copied
@@ -145,33 +129,16 @@ impl egui::Plugin for CopyAfterLabels {
         "CopyAfterLabels"
     }
 
-    /// The windows of their own run their passes inside the main window's pass, and their Copy or
-    /// Cut is sent on in that pass: a copy noted before it is not theirs.
-    fn on_begin_pass(&mut self, ui: &mut egui::Ui) {
-        if ui.ctx().viewport_id() == egui::ViewportId::ROOT {
-            take_copied_in_window(ui.ctx());
-        }
-    }
-
     fn on_end_pass(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx();
+        let viewport = ctx.viewport_id();
         // The art a Copy or Cut copied earlier in this pass is not the labels' copy.
-        let before_id = copies_before_labels_id(ctx.viewport_id());
-        let before = ctx.data_mut(|d| d.remove_temp::<usize>(before_id)).unwrap_or(0);
-        let copied = copies(ctx) > before;
-        // A field with the keyboard copies its own text, and its window sends nothing on.
-        if ctx.viewport_id() != egui::ViewportId::ROOT
-            && copied
-            && ctx.memory(|m| m.focused().is_none())
-            && ctx.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy | egui::Event::Cut)))
-        {
-            ctx.data_mut(|d| d.insert_temp(copied_in_window_id(), true));
-        }
-        let id = waiting_id(ctx.viewport_id());
-        let Some(command) = ctx.data_mut(|d| d.remove_temp::<LeftToLabels>(id)) else {
+        let before = ctx.data_mut(|d| d.remove_temp::<usize>(copies_before_labels_id(viewport))).unwrap_or(0);
+        let Some(command) = ctx.data_mut(|d| d.remove_temp::<LeftToLabels>(waiting_id(viewport))) else {
             return;
         };
-        if !copied {
+        // In a pass egui discards too: its rerun gets no input, so nothing leaves the command to the labels again.
+        if copies(ctx) == before {
             ctx.data_mut(|d| d.insert_temp(after_labels_id(), command));
             ctx.request_repaint();
         }

@@ -19,7 +19,6 @@ pub mod edit;
 pub mod embed;
 mod features;
 mod file_font;
-mod fontconfig;
 mod fontdb;
 mod harakat;
 pub mod hyphen;
@@ -38,17 +37,19 @@ pub mod thread;
 
 pub use bitmap::GlyphImage;
 pub use context_alternates::{ContextAlternate, ContextAlternates, alternate_changes, alternates_in_context, is_alternate_feature};
-pub use craft_fonts::{CRAFT_FONTS, CraftFont, WEB_FONTS, WebFont};
+pub use craft_fonts::{CRAFT_FONTS, EmbeddedFace, WEB_FONTS, WebFont};
+#[cfg(target_arch = "wasm32")]
+pub use craft_fonts::{SERVED_FONTS, ServedFace};
 pub use features::{
     EXTRA_FEATURES, LIGATURE_TRACKING_LIMITS, MAX_FEATURE_VALUE, MAX_STYLE_FEATURES, OtFeatures, explicit_ligatures, ligatures_suppressed_by,
 };
 pub use file_font::{FILE_FONT_UPEM, FileFontInfo, FileGlyph, MAX_FILE_GLYPHS, build_file_font};
 pub use fontdb::{
     CompositeCoverage, FALLBACK_FAMILY, FontClass, FontDb, FontFace, FontLikeness, FontMatch, FontTraits, GENERIC_FAMILIES, GlyphAlternate,
-    GlyphCategory, GlyphCategoryKind, GlyphOrigin, IcfMargins, JoiningPosition, LentCompositeFonts, MAX_FILE_FACES, OutlineFormat, PlatformFontFiles,
-    RECENTLY_ADDED_WITHIN, RecentlyAdded, StylisticSet, Substitution, SubstitutionKind, WantedFont, WantedFonts, app_font_dir, is_font_file,
-    is_generic_family, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs, set_user_font_dirs_confined, style_weight,
-    system_font_dirs, user_font_dirs,
+    GlyphCategory, GlyphCategoryKind, GlyphOrigin, IcfMargins, InstalledFace, JoiningPosition, LentCompositeFonts, MAX_FILE_FACES, OutlineFormat,
+    PlatformFontFiles, RECENTLY_ADDED_WITHIN, RecentlyAdded, StylisticSet, Substitution, SubstitutionKind, UnloadedFile, WantedFont, WantedFonts,
+    app_font_dir, is_font_file, is_generic_family, is_suitcase, set_app_font_dir, set_platform_font_files, set_user_font_dirs,
+    set_user_font_dirs_confined, style_weight, system_font_dirs, user_font_dirs,
 };
 pub use hyphen::{hyphenation_exceptions, set_hyphenation_exceptions};
 pub use layout::{envelope_ink, layout_inputs, register_envelope_ink};

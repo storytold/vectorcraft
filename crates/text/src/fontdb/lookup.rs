@@ -1,16 +1,19 @@
+use craft::font_catalog::{FaceInfo, Match, Source};
+
+#[cfg(not(target_arch = "wasm32"))]
+use super::MetadataProvider;
 #[cfg(not(target_arch = "wasm32"))]
 use super::PathBuf;
 use super::build::{instanced, style_distance, style_italic, style_weight};
-use super::cache::Catalog;
 use super::face::{FALLBACK_FAMILY, FontFace, MAX_LIVE_INSTANCES, Variation, VariationAxis};
 use super::glyph_pen::{FlipPen, svg_drawn};
 #[cfg(not(target_arch = "wasm32"))]
 use super::names::SYSTEM_FALLBACKS;
 use super::names::{norm, norm_chars, script_families};
 #[cfg(not(target_arch = "wasm32"))]
-use super::scan::{enumerate_faces, font_files};
+use super::scan::{enumerate_faces, file_face_names, font_files};
 use super::traits::{Alias, FontMatch, FontTraits, regular_rank};
-use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, MetadataProvider, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
+use super::{Arc, BezPath, CANONICAL_CACHE_MAX, Color, ColourContent, FontDb, GlyphImage, NEXT_ID, OUTLINE_CACHE_MAX, Ordering};
 
 fn has_file_fonts(n: &vectorcraft_doc::Node) -> bool {
     matches!(&n.kind, vectorcraft_doc::NodeKind::Text(t) if t.file_fonts.is_some())
@@ -30,6 +33,17 @@ fn merge_traits(traits: &mut FontTraits, other: &FontTraits) {
     }
 }
 
+/// A family's traits from its `loaded` faces with its `installed` ones merged in, or either alone.
+fn with_installed(loaded: Option<FontTraits>, installed: Option<FontTraits>) -> FontTraits {
+    match (loaded, installed) {
+        (Some(mut traits), Some(found)) => {
+            merge_traits(&mut traits, &found);
+            traits
+        }
+        (loaded, installed) => loaded.or(installed).unwrap_or_default(),
+    }
+}
+
 /// The traits of the loaded faces of each family, or of `only` that family, keyed by the family's
 /// name in ASCII lowercase: the first face's, with the other faces merged in ([`merge_traits`]).
 fn loaded_traits(faces: &[Arc<FontFace>], only: Option<&str>) -> std::collections::HashMap<String, FontTraits> {
@@ -45,29 +59,46 @@ fn loaded_traits(faces: &[Arc<FontFace>], only: Option<&str>) -> std::collection
     found
 }
 
-/// A family's traits from its `loaded` faces with what the scan in `catalog` found for `key` (its
-/// name in ASCII lowercase) merged in, or the scan's alone when none is loaded.
-fn scanned_traits(loaded: Option<FontTraits>, catalog: &Catalog, key: &str) -> FontTraits {
-    let scanned = catalog.get(key).and_then(|c| c.traits);
-    match loaded {
-        None => scanned.unwrap_or_default(),
-        Some(mut traits) => {
-            if let Some(found) = scanned {
-                merge_traits(&mut traits, &found);
-            }
-            traits
+impl FontDb {
+    /// The traits of the installed `family`: variable when any of its faces is; the rest those
+    /// of its face nearest an upright Regular ([`regular_rank`]), read from the tables of that
+    /// face's file as the face's own when loaded, without loading it. `None` when it isn't
+    /// installed, and on wasm.
+    // PLAN: decision q358 C reads these from the catalog's scan records. `FaceInfo::family_class` and `panose` give the class's OS/2 inputs, but not the names, Unicode ranges and Thai characters `FontTraits::of` (traits.rs) also reads, nor the x-height, cap height, average width and italic angle of `FontLikeness`; once the records carry those, this reads `FaceInfo` and the file read goes.
+    fn installed_traits(&self, family: &str) -> Option<FontTraits> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = family;
+            None
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let faces = self.catalog.styles(family);
+            let off = |f: &craft::font_catalog::FaceInfo| (f.italic, (f.weight - 400.0).abs());
+            let nearest = faces.iter().min_by(|a, b| {
+                let ((ai, aw), (bi, bw)) = (off(a), off(b));
+                ai.cmp(&bi).then(aw.total_cmp(&bw))
+            })?;
+            let read = file_face_names(nearest.path.as_deref()?);
+            let mut traits =
+                read.iter().filter(|s| s.family.eq_ignore_ascii_case(&nearest.family)).map(|s| s.traits).min_by_key(|t| regular_rank(&t.likeness))?;
+            traits.variable = faces.iter().any(|f| f.variable);
+            Some(traits)
         }
     }
-}
 
-impl FontDb {
+    /// Is `family` an installed family's own name (any ASCII case)?
+    fn is_installed(&self, family: &str) -> bool {
+        self.catalog.family(family).is_some_and(|f| f.eq_ignore_ascii_case(family))
+    }
+
     /// The family's own name and the style for a name given in a document: any of a family's
     /// names (`ヒラギノ角ゴシック` is Hiragino Sans), a legacy family name (`Hiragino Sans W6` with its
     /// legacy style names the W6 face), a full name (name ID 4) or a PostScript name
     /// (`HiraginoSans-W6`, as PDF and `.ai` files name fonts). Case and anything but letters and
     /// digits are ignored. An unknown name is returned unchanged.
     pub fn canonical(&self, family: &str, style: &str) -> (String, String) {
-        if self.is_loaded(family) || self.read_catalog().contains_key(&family.to_ascii_lowercase()) {
+        if self.is_loaded(family) || self.is_installed(family) {
             return (family.to_string(), style.to_string());
         }
         // The lock is held until the answer is kept, and [`FontDb::changed`] waits for it: an
@@ -89,25 +120,26 @@ impl FontDb {
     /// family among the loaded faces' and the installed fonts' other names.
     fn canonical_alias(&self, family: &str, style: &str) -> (String, String) {
         let key = norm(family);
-        let mut found: Vec<Alias> =
+        let found: Vec<Alias> =
             self.read_faces().iter().flat_map(|f| Alias::of(&f.family, &f.style, &f.keys)).filter(|(k, _)| *k == key).map(|(_, a)| a).collect();
-        if let Some(v) = self.aliases.read().unwrap_or_else(|e| e.into_inner()).get(&key) {
-            found.extend(v.iter().cloned());
-        }
+        // The installed face the name gives: by a family name in its family, by a legacy family
+        // name with its legacy style, by a full or PostScript name whatever the style.
+        let installed = self.catalog.resolve(family, style);
         let ns = norm(style);
         // A family and style split from a PostScript name by an importer that didn't have the font
         // (`Honoka-Mincho` → Honoka, Mincho): once it is installed, the face of that PostScript
         // name, which is its own family and style (ほのか明朝, Regular).
-        if found.is_empty() && !ns.is_empty() {
+        if found.is_empty() && installed.is_none() && !ns.is_empty() {
             let joined = format!("{key}{ns}");
             let face = |a: &Alias| a.paired.is_none() && a.style.is_some();
-            let ps =
-                self.read_faces().iter().flat_map(|f| Alias::of(&f.family, &f.style, &f.keys)).find(|(k, a)| *k == joined && face(a)).map(|(_, a)| a);
-            let ps = ps.or_else(|| {
-                self.aliases.read().unwrap_or_else(std::sync::PoisonError::into_inner).get(&joined).and_then(|v| v.iter().find(|a| face(a)).cloned())
-            });
-            if let Some(a) = ps {
-                return (a.family, a.style.unwrap_or_else(|| style.to_string()));
+            let ps = self
+                .read_faces()
+                .iter()
+                .flat_map(|f| Alias::of(&f.family, &f.style, &f.keys))
+                .find(|(k, a)| *k == joined && face(a))
+                .map(|(_, a)| (a.family, a.style.unwrap_or_else(|| style.to_string())));
+            if let Some(answer) = ps.or_else(|| self.cataloged_postscript(&joined).map(|f| (f.family, f.style))) {
+                return answer;
             }
         }
         // A family name keeps the style asked for; a legacy pair names its face; a full or
@@ -115,31 +147,39 @@ impl FontDb {
         if let Some(a) = found.iter().find(|a| a.style.is_none()) {
             return (a.family.clone(), style.to_string());
         }
+        if let Some(installed_family) = self.catalog.family(family) {
+            return (installed_family, style.to_string());
+        }
         if let Some(a) = found.iter().find(|a| a.paired.as_ref().is_some_and(|p| *p == ns) || a.paired.is_none()) {
             return (a.family.clone(), a.style.clone().unwrap_or_else(|| style.to_string()));
         }
-        match found.first() {
-            Some(a) => (a.family.clone(), style.to_string()),
-            None => (family.to_string(), style.to_string()),
+        match (installed, found.first()) {
+            (Some((face, Match::Exact)), _) => (face.family, face.style),
+            (_, Some(a)) => (a.family.clone(), style.to_string()),
+            // A legacy family name whose legacy style isn't the one asked for: the face of the
+            // PostScript name it reads as, if any, else its family in the style asked for.
+            (Some((face, _)), None) => match self.cataloged_postscript(family) {
+                Some(named) => (named.family, named.style),
+                None => (face.family, style.to_string()),
+            },
+            (None, None) => (family.to_string(), style.to_string()),
         }
     }
 
     /// The kind of `family` (whether it sets Japanese, its class), for font menu filters: from a
-    /// loaded face, else from the system font scan. Variable when any of its faces, loaded or
-    /// scanned, is: a family may install static files beside a variable one. Cheap: no font file
-    /// is read, and a loaded family doesn't start the scan. A composite font takes its base font's.
-    /// Its likeness is the one of its face nearest an upright Regular, loaded or scanned.
+    /// loaded face, else from the installed fonts. Variable when any of its faces, loaded or
+    /// installed, is: a family may install static files beside a variable one. No font is loaded:
+    /// of an installed family, the tables of the file of its face nearest Regular are read, and a
+    /// loaded family doesn't start the scan. A composite font takes its base font's. Its likeness
+    /// is the one of its face nearest an upright Regular, loaded or installed.
     pub fn family_traits(&self, family: &str) -> FontTraits {
         if let Some((base, _)) = self.composite_base(family) {
             return self.family_traits(&base);
         }
-        let key = family.to_ascii_lowercase();
-        let loaded = loaded_traits(&self.read_faces(), Some(family)).remove(&key);
-        match loaded {
-            None => scanned_traits(None, &self.read_catalog(), &key),
-            // What the scan found so far, without starting it.
-            Some(_) => scanned_traits(loaded, &self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner), &key),
-        }
+        let loaded = loaded_traits(&self.read_faces(), Some(family)).remove(&family.to_ascii_lowercase());
+        // Of a loaded family, what the scan found once it has run, without starting it.
+        let installed = if loaded.is_none() || self.catalog.is_ready() { self.installed_traits(family) } else { None };
+        with_installed(loaded, installed)
     }
 
     /// The name [`family_traits`](Self::family_traits) takes `family`'s traits by, in ASCII
@@ -158,8 +198,7 @@ impl FontDb {
     /// [`family_traits`](Self::family_traits), a family of another kind ([`FontTraits::class`])
     /// counting 2 further. A family that shares none of those numbers with `family` comes after
     /// every family that shares one in its group. Families equally far keep their order in
-    /// `families`. Reads no font
-    /// file, as `family_traits` does not.
+    /// `families`. Loads no font, as `family_traits` does not.
     pub fn similar_families(&self, family: &str, families: &[String]) -> Vec<String> {
         let base = self.family_traits(family);
         let script = |t: &FontTraits| {
@@ -171,20 +210,17 @@ impl FontDb {
                 2
             }
         };
-        // Every family's traits from one pass over the loaded faces and one look at the scan, as
+        // Every family's traits from one pass over the loaded faces and the installed fonts, as
         // `family_traits` finds them; composite fonts are resolved before any lock is held.
         let keys: Vec<String> = families.iter().map(|f| self.traits_key(f)).collect();
         let loaded = loaded_traits(&self.read_faces(), None);
-        let catalog = if keys.iter().all(|k| loaded.contains_key(k)) {
-            self.catalog.read().unwrap_or_else(std::sync::PoisonError::into_inner)
-        } else {
-            self.read_catalog()
-        };
+        // Only loaded families: what the scan found once it has run, without starting it.
+        let installed = keys.iter().any(|k| !loaded.contains_key(k)) || self.catalog.is_ready();
         let mut keyed: Vec<(bool, f32, &String)> = families
             .iter()
             .zip(&keys)
             .map(|(f, key)| {
-                let traits = scanned_traits(loaded.get(key).copied(), &catalog, key);
+                let traits = with_installed(loaded.get(key).copied(), if installed { self.installed_traits(key) } else { None });
                 let d = if f.eq_ignore_ascii_case(family) {
                     -1.0
                 } else {
@@ -226,12 +262,8 @@ impl FontDb {
         if let Some(f) = loaded(self) {
             return Some(f);
         }
-        self.ensure_catalog();
-        let face = self.aliases.read().unwrap_or_else(|e| e.into_inner()).get(&key).and_then(|v| {
-            v.iter().find(|a| a.paired.is_none() && a.style.is_some()).map(|a| (a.family.clone(), a.style.clone().unwrap_or_default()))
-        });
-        let (family, style) = face?;
-        self.face(&family, &style)?;
+        let face = self.cataloged_postscript(name)?;
+        self.face(&face.family, &face.style)?;
         loaded(self)
     }
 
@@ -245,11 +277,10 @@ impl FontDb {
         let Some(first) = self.find_postscript(name) else { return vec![] };
         let key = norm(name);
         let mut families: Vec<String> = vec![first.family.clone()];
-        if let Some(v) = self.aliases.read().unwrap_or_else(|e| e.into_inner()).get(&key) {
-            for a in v.iter().filter(|a| a.paired.is_none() && a.style.is_some()) {
-                if families.len() < MAX_POSTSCRIPT_FACES && !families.iter().any(|f| f.eq_ignore_ascii_case(&a.family)) {
-                    families.push(a.family.clone());
-                }
+        let named = |f: &&FaceInfo| f.postscript_name.as_deref().is_some_and(|p| norm(p) == key);
+        for f in self.catalog.faces().iter().filter(named) {
+            if families.len() < MAX_POSTSCRIPT_FACES && !families.iter().any(|known| known.eq_ignore_ascii_case(&f.family)) {
+                families.push(f.family.clone());
             }
         }
         for family in &families {
@@ -266,17 +297,28 @@ impl FontDb {
     /// case). Documents name fonts this way, and a family can hold hyphens
     /// ("Rounded-X-Mplus-1c-black" is Rounded-X M+ 1c, black), so the name can't be split.
     pub fn by_postscript_name(&self, name: &str) -> Option<(String, String)> {
-        self.ensure_catalog();
-        self.postscript.read().unwrap_or_else(|e| e.into_inner()).get(&norm(name)).cloned()
+        self.cataloged_postscript(name).map(|f| (f.family, f.style))
     }
 
-    /// Load the files of the installed `family`, adding all their faces at once
-    /// ([`Self::add_fonts`]). Returns whether the family is loaded now: by this call, or by another
+    /// The cataloged face of PostScript name `name`: an installed face before a bundled face of another family with the
+    /// same name, as the installed faces alone answered before the bundled ones were cataloged.
+    fn cataloged_postscript(&self, name: &str) -> Option<FaceInfo> {
+        let face = self.catalog.by_postscript_name(name)?;
+        if face.source != Source::Bundled {
+            return Some(face);
+        }
+        let key = norm(name);
+        let named = |f: &&FaceInfo| f.source != Source::Bundled && f.postscript_name.as_deref().is_some_and(|p| norm(p) == key);
+        Some(self.catalog.faces().iter().find(named).cloned().unwrap_or(face))
+    }
+
+    /// Load the files of the installed `family`, every cataloged version of its faces included,
+    /// adding all their faces at once ([`Self::add_fonts`]). Returns whether the family is loaded now: by this call, or by another
     /// thread meanwhile.
     #[cfg(not(target_arch = "wasm32"))]
     fn load_cataloged(&self, family: &str) -> bool {
-        let mut paths: Vec<PathBuf> =
-            self.read_catalog().get(&family.to_ascii_lowercase()).map(|c| c.faces.iter().map(|cf| cf.path.clone()).collect()).unwrap_or_default();
+        let faces = self.catalog.styles(family);
+        let mut paths: Vec<PathBuf> = faces.iter().flat_map(|f| self.catalog.versions(f)).filter_map(|f| f.path).collect();
         paths.sort();
         paths.dedup();
         let files = paths.into_iter().flat_map(|p| font_files(&p).into_iter().map(move |data| (data, Some(p.clone()))));
@@ -324,7 +366,7 @@ impl FontDb {
         if let Some(f) = self.read_faces().iter().find(same) {
             return Some(f.clone());
         }
-        // Not loaded: the family's installed files may hold it (the catalog doesn't list versions).
+        // Not loaded: another installed file of the family may hold it.
         self.load_family_files(&face.family);
         let found = self.read_faces().iter().find(same).cloned();
         Some(found.unwrap_or(face))
@@ -361,7 +403,7 @@ impl FontDb {
     #[cfg(not(target_arch = "wasm32"))]
     fn is_cataloged(&self, family: &str, style: &str) -> bool {
         let ns = norm(style);
-        self.read_catalog().get(&family.to_ascii_lowercase()).is_some_and(|c| c.faces.iter().any(|cf| norm(&cf.style) == ns))
+        self.catalog.styles(family).iter().any(|f| norm(&f.style) == ns)
     }
 
     /// The loaded face with [`FontFace::id`] `id` (the face a laid-out glyph came from), an
@@ -505,7 +547,7 @@ impl FontDb {
     /// Is `family` available as a loaded or installed font, excluding composite fonts?
     pub fn has_installed_family(&self, family: &str) -> bool {
         let (family, _) = self.canonical(family, "");
-        self.is_loaded(&family) || self.read_catalog().contains_key(&family.to_ascii_lowercase())
+        self.is_loaded(&family) || self.is_installed(&family)
     }
 
     pub(crate) fn is_loaded(&self, family: &str) -> bool {
@@ -624,8 +666,6 @@ impl FontDb {
                 return false;
             }
         }
-        // The first scan done before its count is read, so the first miss is remembered too.
-        self.ensure_catalog();
         let scans = self.sys.lock().unwrap_or_else(|e| e.into_inner()).scans;
         let covered = |db: &FontDb| db.read_faces().iter().any(|f| f.covers(c));
         for fam in SYSTEM_FALLBACKS {
@@ -640,7 +680,7 @@ impl FontDb {
             }
             sys.file_searches += 1;
         }
-        let mut paths: Vec<PathBuf> = self.read_catalog().values().flat_map(|c| c.faces.iter().map(|cf| cf.path.clone())).collect();
+        let mut paths: Vec<PathBuf> = self.catalog.faces().iter().filter_map(|f| f.path.clone()).collect();
         paths.sort();
         paths.dedup();
         for p in paths {
@@ -681,11 +721,12 @@ impl FontDb {
     /// would otherwise push out the outlines the canvas keeps there.
     pub fn outline_uncached(&self, face: &FontFace, gid: u32) -> BezPath {
         let mut pen = FlipPen(BezPath::new());
-        if let Ok(font) = craft_font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations()) {
+        if let Ok(font) = craft::font_catalog::FontOutline::from_bytes(face.data(), face.index(), face.variations()) {
             // As before, keep the prefix emitted before a malformed glyph reports an error.
             let _ = font.draw_to(gid, &mut pen);
         }
-        pen.0
+        // An outline past MAX_OUTLINE_ELEMENTS comes back empty.
+        pen.finish()
     }
 
     /// Glyph `gid`'s colour bitmap (`sbix`, `CBDT`) in `face`, cached per (face, glyph).
@@ -1001,7 +1042,7 @@ mod shared_outline_tests {
             .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old);
         assert!(result.is_err());
         assert!(!old.0.elements().is_empty());
-        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
+        let shared = craft::font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
         let mut streamed = FlipPen(BezPath::new());
         assert!(shared.draw_to(gid, &mut streamed).is_err());
         assert_eq!(streamed.0, old.0);
@@ -1023,7 +1064,7 @@ mod shared_outline_tests {
             .draw(DrawSettings::unhinted(Size::unscaled(), skrifa::instance::LocationRef::default()), &mut old)
             .unwrap();
         assert!(old.0.elements().len() > 100_000);
-        let shared = craft_font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
+        let shared = craft::font_catalog::FontOutline::from_bytes(&bytes, 0, &[]).unwrap();
         let mut streamed = FlipPen(BezPath::new());
         shared.draw_to(0, &mut streamed).unwrap();
         assert_eq!(streamed.0, old.0);

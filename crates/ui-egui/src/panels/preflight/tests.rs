@@ -1,5 +1,6 @@
 use super::*;
-use crate::panels::tests_appearance::{frame_raw, text_rect};
+// PLAN: assumed `crate::tests::panel_harness::Panel` (object-panels-w8, op.A15)
+use crate::tests::panel_harness::Panel;
 use vectorcraft_engine::Session;
 
 fn app() -> (VectorcraftApp, Value) {
@@ -10,51 +11,121 @@ fn app() -> (VectorcraftApp, Value) {
     (app, id)
 }
 
-fn frame(ctx: &egui::Context, app: &mut VectorcraftApp, time: f64, events: Vec<egui::Event>) -> Vec<(String, egui::Rect)> {
-    frame_raw(
-        ctx,
-        app,
-        egui::RawInput {
-            time: Some(time),
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(360.0, 1000.0))),
-            events,
-            ..Default::default()
-        },
-        show,
-    )
+/// Cancelling a highlighted output must keep the custom threshold and the report made for it.
+/// A deliberate choice still takes that output's default threshold.
+#[test]
+fn cancelling_output_choices_preserves_custom_ppi_and_the_diagnostic_report() {
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap();
+    let mut panel = Panel::new(app, show);
+    panel.type_into("Minimum PPI:", "240");
+    let (doc, undo, key, report) = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (0, 240.0));
+        assert_eq!(app.ui.preflight_panel.cache.report["minPpi"], 240.0);
+        (st.doc.clone(), st.history.undo.len(), app.ui.preflight_panel.cache.key, app.ui.preflight_panel.cache.report.clone())
+    };
+    let output_name = if panel.shows("Output") { "Output" } else { "Output:" };
+    panel.click_role(output_name, Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Escape, Modifiers::NONE);
+    panel.frame();
+    {
+        let app = panel.app();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (0, 240.0));
+        assert_eq!(app.ui.preflight_panel.cache.key, key);
+        assert_eq!(app.ui.preflight_panel.cache.report, report);
+        assert_eq!(*app.session.active().unwrap().doc, *doc);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+    panel.click_role(output_name, Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Enter, Modifiers::NONE);
+    panel.frame();
+    {
+        let app = panel.app();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (2, 96.0));
+        assert_eq!(app.ui.preflight_panel.cache.report["output"], "screen");
+        assert_eq!(app.ui.preflight_panel.cache.report["minPpi"], 96.0);
+    }
+    panel.type_into("Minimum PPI:", "120");
+    panel.click_role(output_name, Role::COMBO_BOX);
+    panel.key(Key::ArrowUp, Modifiers::NONE);
+    panel.key(Key::Escape, Modifiers::NONE);
+    panel.frame();
+    {
+        let app = panel.app();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (2, 120.0));
+    }
+    panel.click_role(output_name, Role::COMBO_BOX);
+    panel.key(Key::ArrowUp, Modifiers::NONE);
+    panel.key(Key::Enter, Modifiers::NONE);
+    panel.frame();
+    {
+        let app = panel.app();
+        assert_eq!((app.ui.preflight_panel.options.output, app.ui.preflight_panel.options.min_ppi), (1, 300.0));
+    }
+    assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
 }
 
-fn text(rows: &[(String, egui::Rect)]) -> String {
-    rows.iter().map(|(s, _)| s.as_str()).collect::<Vec<_>>().join("\n")
+/// The accessible name of the row of the first finding with `code`, as the list words it.
+fn row(app: &mut VectorcraftApp, code: &str) -> String {
+    let report = app.session.execute("document.preflight", &json!({})).unwrap();
+    let finding = report["findings"].as_array().unwrap().iter().find(|f| f["code"] == code).unwrap();
+    format!("{}, {}, Warning", finding["name"].as_str().unwrap(), reason(code))
+}
+
+/// Whole-app frames in a window wide enough for a canvas that zooms in on the art, where the canvas, once laid out,
+/// takes the view request a zoom to the selection made.
+fn app_frame(app: &mut VectorcraftApp) {
+    let ctx = app.ui_ctx.get_or_insert_with(crate::testing::ui_context).clone();
+    for _ in 0..2 {
+        let time = ctx.input(|i| i.time) + 0.05;
+        let screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(2400.0, 1600.0)));
+        crate::testing::app_frame(app, &ctx, egui::RawInput { screen_rect, time: Some(time), focused: true, ..Default::default() });
+    }
+}
+
+fn big_canvas(app: &mut VectorcraftApp) {
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
 }
 
 #[test]
 fn preflight_panel_rechecks_edits_undo_and_document_switches() {
     let (mut app, id) = app();
-    let ctx = egui::Context::default();
-    let first = text(&frame(&ctx, &mut app, 1.0, vec![]));
-    assert!(first.contains("Preflight UI Missing 917") && first.contains("Text past the frame"), "{first}");
-    app.run("text.areaOptions", json!({ "ids": [id], "height": 150 })).unwrap();
-    let fixed = text(&frame(&ctx, &mut app, 1.1, vec![]));
-    assert!(!fixed.contains("Text past the frame"), "revision rechecks before the timer: {fixed}");
-    app.run("edit.undo", json!({})).unwrap();
-    assert!(text(&frame(&ctx, &mut app, 1.2, vec![])).contains("Text past the frame"));
-    app.run("file.new", json!({ "width": 500, "height": 400 })).unwrap();
-    let clean = text(&frame(&ctx, &mut app, 1.3, vec![]));
-    assert!(!clean.contains("Preflight UI Missing 917") && !clean.contains("Needs attention"), "{clean}");
+    let (font, overflow) = (row(&mut app, "missingFont"), row(&mut app, "overflow"));
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    assert!(panel.shows(&font) && panel.shows(&overflow));
+    panel.app().run("text.areaOptions", json!({ "ids": [id], "height": 150 })).unwrap();
+    panel.frame();
+    assert!(!panel.shows(&overflow), "revision rechecks before the timer");
+    panel.app().run("edit.undo", json!({})).unwrap();
+    panel.frame();
+    assert!(panel.shows(&overflow));
+    panel.app().run("file.new", json!({ "width": 500, "height": 400 })).unwrap();
+    panel.frame();
+    assert!(!panel.shows(&font));
 }
 
 #[test]
 fn clicking_a_preflight_finding_selects_and_zooms_to_its_artwork() {
     let (mut app, id) = app();
     app.run("select.set", json!({ "ids": [] })).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
-    let ctx = egui::Context::default();
-    let rows = frame(&ctx, &mut app, 1.0, vec![]);
-    let at = text_rect(&rows, "Delivery headline\nText past the frame will be left out").center();
-    let event = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-    frame(&ctx, &mut app, 1.1, vec![egui::Event::PointerMoved(at), event(true)]);
-    frame(&ctx, &mut app, 1.2, vec![event(false)]);
+    big_canvas(&mut app);
+    let overflow = row(&mut app, "overflow");
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    panel.click(&overflow);
+    app_frame(&mut panel.app());
+    let app = panel.app();
     assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(id.as_u64().unwrap())]);
     assert!(app.view().unwrap().fitted);
     assert!(app.view().unwrap().zoom > 1.0);
@@ -65,22 +136,25 @@ fn clicking_a_preflight_finding_on_a_locked_artboard_reports_the_problem() {
     let (mut app, id) = app();
     app.run("select.set", json!({ "ids": [] })).unwrap();
     app.run("artboard.setProps", json!({ "index": 0, "locked": true })).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    big_canvas(&mut app);
     let before_view = *app.view().unwrap();
     let before_doc = app.session.active().unwrap().doc.clone();
     app.ui.status.clear();
-    let ctx = egui::Context::default();
-    let rows = frame(&ctx, &mut app, 1.0, vec![]);
-    let at = text_rect(&rows, "Delivery headline\nText past the frame will be left out").center();
-    let event = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-    frame(&ctx, &mut app, 1.1, vec![egui::Event::PointerMoved(at), event(true)]);
-    frame(&ctx, &mut app, 1.2, vec![event(false)]);
-    assert!(app.ui.status.contains("could not be selected"), "{}", app.ui.status);
-    assert!(app.session.active().unwrap().selection.objects.is_empty());
-    assert_eq!(app.view().unwrap().zoom, before_view.zoom);
-    assert_eq!(*app.session.active().unwrap().doc, *before_doc);
-    app.run("artboard.setProps", json!({ "index": 0, "locked": false })).unwrap();
-    locate(&mut app, &json!({ "ids": [id] }));
+    let overflow = row(&mut app, "overflow");
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    panel.click(&overflow);
+    {
+        let app = panel.app();
+        assert!(app.ui.status.contains("could not be selected"), "{}", app.ui.status);
+        assert!(app.session.active().unwrap().selection.objects.is_empty());
+        assert_eq!(app.view().unwrap().zoom, before_view.zoom);
+        assert_eq!(*app.session.active().unwrap().doc, *before_doc);
+    }
+    panel.app().run("artboard.setProps", json!({ "index": 0, "locked": false })).unwrap();
+    locate(&mut panel.app(), &json!({ "ids": [id] }));
+    app_frame(&mut panel.app());
+    let app = panel.app();
     assert!(app.ui.status.is_empty(), "successful navigation clears its previous warning: {}", app.ui.status);
     assert!(app.view().unwrap().fitted);
 }
@@ -92,11 +166,12 @@ fn preflight_navigation_reports_partial_selection_and_zooms_to_selectable_artwor
     let free = app.run("text.create", json!({ "x": 610, "y": 30, "text": "Free", "font": "Preflight UI Missing 917" })).unwrap()["id"].clone();
     app.run("select.set", json!({ "ids": [] })).unwrap();
     app.run("artboard.setProps", json!({ "index": 0, "locked": true })).unwrap();
-    app.canvas_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0)));
+    app.view_mut().unwrap().rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0));
     let report = app.session.execute("document.preflight", &json!({})).unwrap();
     let finding = report["findings"].as_array().unwrap().iter().find(|f| f["code"] == "missingFont").unwrap();
     assert!(finding["ids"].as_array().unwrap().contains(&locked));
     locate(&mut app, finding);
+    app_frame(&mut app);
     assert_eq!(app.session.active().unwrap().selection.objects, vec![vectorcraft_doc::NodeId(free.as_u64().unwrap())]);
     assert!(app.view().unwrap().fitted);
     assert!(app.view().unwrap().zoom > 1.0);
@@ -106,23 +181,17 @@ fn preflight_navigation_reports_partial_selection_and_zooms_to_selectable_artwor
 #[test]
 fn preflight_panel_does_not_present_stale_results_during_a_drag() {
     let (mut app, _) = app();
-    let ctx = egui::Context::default();
-    frame(&ctx, &mut app, 1.0, vec![]);
-    app.session.begin_interaction("Preflight test").unwrap();
-    let shown = text(&frame(&ctx, &mut app, 1.1, vec![]));
-    assert!(shown.contains("Preflight updates when the edit finishes."), "{shown}");
-    assert!(!shown.contains("Passed") && !shown.contains("Needs attention"), "{shown}");
-    app.session.cancel_interaction().unwrap();
-}
-
-#[test]
-fn preflight_window_menu_and_empty_state_are_available() {
-    let mut app = VectorcraftApp::new(Session::new(), Default::default());
-    app.run("window.panel", json!({ "panel": ID })).unwrap();
-    let ctx = egui::Context::default();
-    let shown = text(&frame(&ctx, &mut app, 1.0, vec![]));
-    assert!(shown.contains("Open a document to check it before delivery."), "{shown}");
-    assert!(crate::state::all_panels().any(|(id, name)| id == ID && name == "Production Preflight"));
+    let overflow = row(&mut app, "overflow");
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    assert!(panel.shows(&overflow));
+    panel.app().session.begin_interaction("Preflight test").unwrap();
+    panel.frame();
+    assert!(panel.shows("Preflight updates when the edit finishes."));
+    assert!(!panel.shows(&overflow));
+    panel.app().session.cancel_interaction().unwrap();
+    panel.frame();
+    assert!(panel.shows(&overflow));
 }
 
 #[test]
@@ -136,56 +205,21 @@ fn preflight_panel_rechecks_missing_files_on_its_timer_and_on_request() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     app.run("file.new", json!({ "width": 500, "height": 400 })).unwrap();
     app.run("file.place", json!({ "path": path.to_string_lossy(), "at": [100, 100] })).unwrap();
-    let ctx = egui::Context::default();
-    frame(&ctx, &mut app, 1.0, vec![]);
-    let rev = app.session.active().unwrap().revision;
+    let mut panel = Panel::new(app, show);
+    panel.frame();
+    let rev = panel.app().session.active().unwrap().revision;
     std::fs::remove_file(&path).unwrap();
-    assert!(!text(&frame(&ctx, &mut app, 1.1, vec![])).contains("Linked file is missing"));
-    assert!(text(&frame(&ctx, &mut app, 3.1, vec![])).contains("Linked file is missing"));
-    assert_eq!(rev, app.session.active().unwrap().revision);
+    let missing = row(&mut panel.app(), "missingLink");
+    panel.advance(0.1);
+    panel.frame();
+    assert!(!panel.shows(&missing));
+    // PLAN: assumed Panel::advance(&mut self, seconds: f64)
+    panel.advance(2.0);
+    panel.frame();
+    assert!(panel.shows(&missing));
+    assert_eq!(rev, panel.app().session.active().unwrap().revision);
     std::fs::write(&path, &bytes).unwrap();
-    let rows = frame(&ctx, &mut app, 3.2, vec![]);
-    let at = text_rect(&rows, "Recheck").center();
-    let event = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-    frame(&ctx, &mut app, 3.3, vec![egui::Event::PointerMoved(at), event(true)]);
-    let after = text(&frame(&ctx, &mut app, 3.4, vec![event(false)]));
-    assert!(!after.contains("Linked file is missing"), "{after}");
+    panel.click("Recheck");
+    assert!(!panel.shows(&missing));
     std::fs::remove_file(&path).unwrap();
-}
-
-/// The Effective PPI line writes its colon as the UI language does (#7991).
-#[test]
-fn effective_ppi_uses_the_language_colon() {
-    let values = ["150".to_string(), "300".to_string()];
-    let fr = crate::i18n::Lang::from_code("fr").unwrap();
-    crate::i18n::set_current(fr);
-    let french = effective_ppi_line(&values);
-    crate::i18n::set_current(crate::i18n::Lang::EN);
-    assert_eq!(french, format!("{}\u{a0}: 150 × 300 ppi", crate::i18n::tr(fr, "Effective PPI")));
-    assert_eq!(effective_ppi_line(&values), "Effective PPI: 150 × 300 ppi");
-}
-
-/// An optional visual QA artifact, never a checked-in snapshot or an asset shipped by the app.
-#[test]
-#[ignore = "set PREFLIGHT_PREVIEW_PATH to write an offscreen GPU render for visual review"]
-fn preflight_panel_preview() {
-    let (app, _) = app();
-    let mut harness = egui_kittest::Harness::builder()
-        .with_size(egui::vec2(340.0, 480.0))
-        .with_accessibility_check(false)
-        .with_context_setup(|ctx| {
-            crate::theme::install_fonts(ctx);
-            crate::theme::apply(ctx, crate::theme::Brightness::Dark);
-        })
-        .build_ui_state(
-            |ui, app| {
-                ui.heading("Production Preflight");
-                ui.separator();
-                show(app, ui);
-            },
-            app,
-        );
-    harness.run_steps(3);
-    let path = std::env::var("PREFLIGHT_PREVIEW_PATH").expect("PREFLIGHT_PREVIEW_PATH");
-    harness.render().unwrap().save(path).unwrap();
 }

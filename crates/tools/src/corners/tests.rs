@@ -355,13 +355,24 @@ fn alt_click_cycles_the_kind_and_double_click_opens_the_dialog() {
             assert_eq!(a, vec![Action::Exec("object.setLiveShape".into(), want.clone())], "{tool}");
         }
     }
-    // A double-click on a widget opens Corners for the shown corners; elsewhere it doesn't.
+    // With Direct Selection, a double-click on a widget opens Corners for the shown corners;
+    // elsewhere it doesn't.
     let cx1 = cx(&d, &part, &p);
     let a = crate::create("directSelection").pointer(&cx1, &PointerEvent::new(PointerKind::DoubleClick, 110.0, 110.0));
     assert_eq!(a, vec![Action::Dialog(DIALOG.into(), json!({"id": id.0, "corners": [0]}))]);
     let cx2 = cx(&d, &whole, &p);
-    let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
+    let a = crate::create("directSelection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
     assert_eq!(a, vec![Action::Dialog(DIALOG.into(), json!({"id": id.0, "corners": [0, 1, 2, 3]}))]);
+    // With the Selection tool, it shows the Transform panel instead, on any of the widgets.
+    for at in [(110.0, 110.0), (190.0, 110.0), (190.0, 190.0), (110.0, 190.0)] {
+        let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, at.0, at.1));
+        assert_eq!(a, vec![Action::Panel("transform".into())], "{at:?}");
+    }
+    // With the shape widgets hidden, the same double-click isolates the shape, as off the widgets.
+    let mut hidden = cx(&d, &whole, &p);
+    hidden.shape_widgets = false;
+    let a = crate::create("selection").pointer(&hidden, &PointerEvent::new(PointerKind::DoubleClick, 190.0, 110.0));
+    assert_eq!(a, vec![Action::Exec("object.isolate".into(), json!({"id": id.0}))]);
     // Off the widgets, the Selection tool's double-click isolates the shape (Double Click To
     // Isolate) instead.
     let a = crate::create("selection").pointer(&cx2, &PointerEvent::new(PointerKind::DoubleClick, 150.0, 150.0));
@@ -526,4 +537,78 @@ fn a_pen_path_shows_widgets_on_its_corners_only() {
     let w = CornerWidgets::for_tool(&cx(&d, &s, &p), true).unwrap();
     assert_eq!(w.corners(), [1, 2]);
     assert_eq!(pts(&w)[0], Point::new(290.0, 110.0));
+}
+
+/// The bounds of the cut `w` gives for the pointer at `at`, rounded to 1e-6.
+fn hovered_bounds(w: &CornerWidgets, d: &Document, at: Point) -> Option<(NodeId, [f64; 4])> {
+    let (id, cut) = w.hovered_cut(d, at, 5.0)?;
+    let b = vectorcraft_geom::Shape::bounding_box(&cut);
+    Some((id, [b.x0, b.y0, b.x1, b.y1].map(|v| (v * 1e6).round() / 1e6)))
+}
+
+/// #1232: the pointer within a press's reach of a widget gives the cut of the corner that widget
+/// controls, for each corner of a rounded rectangle, the first one included; nothing away from
+/// the widgets.
+#[test]
+fn a_widget_under_the_pointer_gives_its_corners_cut() {
+    let (d, id) = live_rect(20.0, Affine::translate((100.0, 100.0)));
+    let w = CornerWidgets::of(&d, &selected(id), 1.0, false).unwrap();
+    assert_eq!(pts(&w), [Point::new(120.0, 120.0), Point::new(180.0, 120.0), Point::new(180.0, 180.0), Point::new(120.0, 180.0)]);
+    let cuts = [[100.0, 100.0, 120.0, 120.0], [180.0, 100.0, 200.0, 120.0], [180.0, 180.0, 200.0, 200.0], [100.0, 180.0, 120.0, 200.0]];
+    for (at, cut) in pts(&w).into_iter().zip(cuts) {
+        assert_eq!(hovered_bounds(&w, &d, at + Vec2::new(3.0, -3.0)), Some((id, cut)), "{at:?}");
+    }
+    assert_eq!(hovered_bounds(&w, &d, Point::new(127.0, 120.0)), None, "past a press's reach");
+    assert_eq!(hovered_bounds(&w, &d, Point::new(150.0, 150.0)), None);
+}
+
+/// #1232: a square corner has no cut to give, and a plain path cut in one corner gives that
+/// corner's cut from its own widget, with the corners Direct Selection shows, for each corner
+/// kind.
+#[test]
+fn a_square_corner_gives_no_cut_and_a_plain_paths_corner_gives_its_own() {
+    let (d, id) = live_rect(0.0, Affine::translate((100.0, 100.0)));
+    let w = CornerWidgets::of(&d, &selected(id), 1.0, false).unwrap();
+    assert_eq!(hovered_bounds(&w, &d, Point::new(110.0, 110.0)), None);
+    for kind in [CornerKind::Round, CornerKind::InvertedRound, CornerKind::Chamfer] {
+        let (mut d, id) = doc_with_rect();
+        if let Some(NodeKind::Path { path, live, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+            vectorcraft_doc::corners::set_corners(path, live, &[2].into(), Some(30.0), Some(kind));
+        }
+        let w = CornerWidgets::of(&d, &selected(id), 1.0, true).unwrap();
+        assert_eq!(w.corners(), [0, 1, 2, 3], "{kind:?}");
+        assert_eq!(hovered_bounds(&w, &d, Point::new(110.0, 110.0)), None, "{kind:?}: the square top-left corner");
+        let at = pts(&w)[2];
+        assert_eq!(hovered_bounds(&w, &d, at), Some((id, [170.0, 170.0, 200.0, 200.0])), "{kind:?}");
+    }
+}
+
+/// #1232: a live polygon's widget gives its corner's cut, and a widget hidden by Hide Corner
+/// Widget for angles greater than gives none at its place.
+#[test]
+fn a_polygons_widget_gives_its_cut_and_a_hidden_widget_gives_none() {
+    let live =
+        LiveShape::Polygon { radius: 80.0, sides: 6, xf: Affine::translate((200.0, 200.0)), radii: vec![], kinds: vec![], radii_relative: false };
+    let (mut d, id) = doc_with(live.to_path(), Some(live));
+    if let Some(NodeKind::Path { path, live, .. }) = d.node_mut(id).map(|n| &mut n.kind) {
+        vectorcraft_doc::corners::set_corners(path, live, &[0].into(), Some(10.0), None);
+    }
+    let w = CornerWidgets::of(&d, &selected(id), 1.0, false).unwrap();
+    let at = pts(&w)[0];
+    let (got, b) = hovered_bounds(&w, &d, at).unwrap();
+    assert_eq!(got, id);
+    // The arc of a 10 pt radius at a 120° corner spans 10 pt between its ends.
+    let (wide, high) = (b[2] - b[0], b[3] - b[1]);
+    assert!(wide.max(high) <= 10.5 && wide.max(high) > 5.0, "{b:?}");
+    let centre = Point::new((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0);
+    assert!(centre.distance(at) < 15.0, "{b:?} {at:?}");
+    // Sheared by 30°: the rectangle's 120° corners (1 and 3) hide above 100°.
+    let shear = Affine::translate((100.0, 100.0)) * Affine::new([1.0, 0.0, 30f64.to_radians().tan(), 1.0, 0.0, 0.0]);
+    let (d, id) = live_rect(10.0, shear);
+    let all = CornerWidgets::of(&d, &selected(id), 1.0, false).unwrap();
+    let shown = all.clone().within_angle(100.0).unwrap();
+    assert_eq!(shown.corners(), [0, 2]);
+    assert!(hovered_bounds(&shown, &d, pts(&all)[0]).is_some());
+    assert!(hovered_bounds(&all, &d, pts(&all)[1]).is_some(), "shown, the 120° corner has a cut");
+    assert_eq!(hovered_bounds(&shown, &d, pts(&all)[1]), None, "hidden, it gives none");
 }

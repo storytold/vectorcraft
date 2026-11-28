@@ -613,9 +613,7 @@ fn a_normal_exit_or_another_failure_does_not_restart() {
     assert_eq!(finish(Err("a bug".into()), &startup), Err("a bug".into()));
 }
 
-/// A log folder of its own for each test, and the guard that keeps other tests from starting a
-/// program while it runs: the test releases the start file's lock and takes it again, and a child
-/// starting meanwhile would keep it held (`crate::no_spawns`).
+/// A log folder of its own for each test.
 struct TestDir(tempfile::TempDir);
 
 impl std::ops::Deref for TestDir {
@@ -632,10 +630,23 @@ impl AsRef<std::path::Path> for TestDir {
     }
 }
 
-fn start_dir(tag: &str) -> (TestDir, std::sync::RwLockReadGuard<'static, ()>) {
-    let spawns = crate::no_spawns();
-    let dir = tempfile::Builder::new().prefix(&format!("vectorcraft-gpu-start-{tag}-")).tempdir().unwrap();
-    (TestDir(dir), spawns)
+fn start_dir(tag: &str) -> TestDir {
+    TestDir(tempfile::Builder::new().prefix(&format!("vectorcraft-gpu-start-{tag}-")).tempdir().unwrap())
+}
+
+/// A start that ends frees the start file even while another handle to it is open, as a child
+/// process that is starting holds one: the next start reads the file instead of taking it for
+/// another copy of the app that is starting.
+#[test]
+fn an_ended_start_frees_the_start_file_while_a_copy_of_its_handle_is_open() {
+    let dir = start_dir("copy");
+    let starting = Startup::default();
+    starting.track(&dir, None, false);
+    let copy = starting.start.lock().unwrap().as_ref().map(|start| start.file.try_clone().unwrap());
+    assert!(copy.is_some(), "the start holds the file");
+    starting.ended();
+    assert!(StartFile::open(&dir).unwrap().is_some(), "an ended start frees the start file");
+    drop(copy);
 }
 
 /// What a start in `dir` leaves out; it then ends without crashing.
@@ -661,7 +672,7 @@ fn issue_2243() -> Vec<Candidate> {
 /// it, without a status-bar note.
 #[test]
 fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
-    let (dir, _spawns) = start_dir("crash");
+    let dir = start_dir("crash");
     let c = issue_2243();
     let first = Startup::default();
     assert_eq!(first.track(&dir, None, false), LeftOut::default());
@@ -691,7 +702,7 @@ fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
 /// an error, a restart on another adapter), leaves nothing out of the next.
 #[test]
 fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
-    let (dir, _spawns) = start_dir("shown");
+    let dir = start_dir("shown");
     let c = issue_2243();
     for end in [Startup::presented as fn(&Startup), Startup::ended] {
         let first = Startup::default();
@@ -714,7 +725,7 @@ fn a_start_that_showed_its_first_frame_or_ended_is_cleared() {
 /// macOS, where wgpu has none.
 #[test]
 fn a_crash_while_listing_lists_opengl_alone() {
-    let (dir, _spawns) = start_dir("listing");
+    let dir = start_dir("listing");
     let first = Startup::default();
     first.track(&dir, None, false);
     drop(first);
@@ -740,7 +751,7 @@ fn a_crash_while_listing_lists_opengl_alone() {
 /// start shows its first frame on the adapter that crashed, the adapter counts again.
 #[test]
 fn wgpu_backend_or_adapter_name_ignores_the_crashes() {
-    let (dir, _spawns) = start_dir("explicit");
+    let dir = start_dir("explicit");
     let c = issue_2243();
     let first = Startup::default();
     first.track(&dir, None, false);
@@ -760,7 +771,7 @@ fn wgpu_backend_or_adapter_name_ignores_the_crashes() {
 /// are ignored: the start goes on with nothing left out.
 #[test]
 fn a_damaged_or_unreadable_start_file_is_ignored() {
-    let (dir, _spawns) = start_dir("damaged");
+    let dir = start_dir("damaged");
     std::fs::create_dir_all(&dir).unwrap();
     let damaged: [&[u8]; 9] = [
         b"",
@@ -826,4 +837,18 @@ fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
 fn pci_ids_reject_a_sign_in_the_hex_digits() {
     assert_eq!(pci_ids("PCI\\VEN_+10DE&DEV_2204"), None);
     assert_eq!(pci_ids("PCI\\VEN_10DE&DEV_+2204"), None);
+}
+
+/// #9183: a Mac lists one adapter. A start ended from outside before its first frame left it
+/// recorded as crashed, and the next start left it out and had nothing to draw on. It is tried
+/// again when nothing else is left; an adapter a restart left out after it failed stays out, and
+/// with another adapter to try, the one that crashed is still left out.
+#[test]
+fn an_adapter_that_crashed_an_earlier_start_is_tried_again_when_no_other_is_left() {
+    let mac = [gpu("Apple M6", Backend::Metal, DeviceType::IntegratedGpu)];
+    let crashed = vec![mac[0].key.clone()];
+    assert_eq!(order_leaving_out(&mac, PowerPreference::LowPower, &[], None, None, &[], &crashed), (vec![0], true));
+    assert_eq!(order_leaving_out(&mac, PowerPreference::LowPower, &[], None, None, &crashed, &crashed), (vec![], false));
+    let two = [gpu("Apple M6", Backend::Metal, DeviceType::IntegratedGpu), gpu("llvmpipe", Backend::Gl, DeviceType::Cpu)];
+    assert_eq!(order_leaving_out(&two, PowerPreference::LowPower, &[], None, None, &[], &crashed), (vec![1], false));
 }

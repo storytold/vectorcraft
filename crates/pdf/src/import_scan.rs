@@ -16,12 +16,12 @@ use std::collections::{HashMap, HashSet};
 use siphasher::sip128::{Hasher128, SipHasher13};
 
 use crate::import_color::items;
-use craft_pdf::interpret::CacheKey;
-use craft_pdf::syntax::Pdf;
-use craft_pdf::syntax::content::TypedIter;
-use craft_pdf::syntax::content::ops::TypedInstruction;
-use craft_pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
-use craft_pdf::syntax::page::{Page, Resources};
+use craft::pdf::interpret::CacheKey;
+use craft::pdf::syntax::Pdf;
+use craft::pdf::syntax::content::TypedIter;
+use craft::pdf::syntax::content::ops::TypedInstruction;
+use craft::pdf::syntax::object::{Array, Dict, FromBytes, MaybeRef, Name, Object, ObjectIdentifier, Stream, dict_or_stream};
+use craft::pdf::syntax::page::{Page, Resources};
 
 use crate::PdfError;
 use crate::import_color::ink_names;
@@ -127,7 +127,7 @@ impl Ocgs {
     /// lists that array's groups as its sublayers; an array starting with a label lists its
     /// groups under the label, which isn't a group (they go under `parent`). A group listed twice
     /// stays where it is first listed. `seen`: the entries read so far.
-    fn nest(&mut self, order: &Array<'_>, parent: Option<usize>, depth: usize, xref: &craft_pdf::syntax::xref::XRef, seen: &mut usize) {
+    fn nest(&mut self, order: &Array<'_>, parent: Option<usize>, depth: usize, xref: &craft::pdf::syntax::xref::XRef, seen: &mut usize) {
         let mut prev = None;
         for item in items(order) {
             *seen += 1;
@@ -170,7 +170,7 @@ impl Ocgs {
         if let Some(i) = self.index.get(&id) {
             return *i;
         }
-        let name = d.get::<craft_pdf::syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
+        let name = d.get::<craft::pdf::syntax::object::String<'_>>(b"Name").map(|s| text_string(s.as_bytes())).unwrap_or_default();
         let print = usage(d, b"Print", b"PrintState") != Some(false);
         // A view state applies when the configuration says so on opening; an off one hides the
         // group all the same (it says how the group is meant to be seen).
@@ -193,7 +193,7 @@ impl Ocgs {
 
     /// The group content marked with `/OC` (`d`: the group or membership dictionary, `id` its
     /// object) belongs to: a membership dictionary's first group.
-    fn group_of(&mut self, d: &Dict<'_>, id: ObjectIdentifier, xref: &craft_pdf::syntax::xref::XRef) -> Option<usize> {
+    fn group_of(&mut self, d: &Dict<'_>, id: ObjectIdentifier, xref: &craft::pdf::syntax::xref::XRef) -> Option<usize> {
         if d.get::<Name<'_>>(b"Type").is_some_and(|t| t.as_ref() == b"OCMD") {
             let first = d.get::<Array<'_>>(b"OCGs").and_then(|a| items(&a).find_map(|i| i.as_obj_ref())).or_else(|| d.get_ref(b"OCGs"))?;
             let id = ObjectIdentifier::from(first);
@@ -474,7 +474,7 @@ pub(crate) struct Walker<'w, 'p> {
     ocgs: &'w mut Ocgs,
     /// The groups that are off for the interpreter (none once [`all_on`] turned them on).
     off: HashSet<ObjectIdentifier>,
-    xref: &'p craft_pdf::syntax::xref::XRef,
+    xref: &'p craft::pdf::syntax::xref::XRef,
     pub(crate) fonts: &'w mut FontNames,
     /// The font dictionaries ([`Dict::cache_key`]) whose fonts were noted: a form drawn again with
     /// the same resources isn't read for its fonts again.
@@ -1147,8 +1147,23 @@ fn embeds_glyphs(f: &Dict<'_>) -> bool {
 /// found are noted in `fonts` (their cache key → base font name, and whether the file carries its
 /// glyphs).
 pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &mut FontNames, max_form_bytes: usize) -> Result<Scan, PdfError> {
-    let scan = walk_page(page, ocgs, all_on, fonts, max_form_bytes).out;
+    let walked = walk_page(page, ocgs, all_on, fonts, max_form_bytes);
+    #[cfg(any(test, feature = "read-count"))]
+    FORM_CONTENT_WALKED.with(|n| n.set(n.get().saturating_add(walked.form_content)));
+    let scan = walked.out;
     if scan.cut { Err(incomplete_content()) } else { Ok(scan) }
+}
+
+#[cfg(any(test, feature = "read-count"))]
+thread_local! {
+    /// The bytes of form content [`scan_page`] walked on this thread (tests).
+    pub(crate) static FORM_CONTENT_WALKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The bytes of form content a page's scan walks before it refuses the page (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn form_content_limit() -> usize {
+    MAX_FORM_CONTENT
 }
 
 pub(crate) fn walk_page<'w, 'p>(

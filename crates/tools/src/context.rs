@@ -228,8 +228,16 @@ pub struct ToolContext<'a> {
     pub shape_widgets: bool,
     /// Which paint proxy is in front (true = Fill): the one the Gradient tool edits.
     pub fill_active: bool,
-    /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator.
+    /// The selected gradient stop (`gradient.selectStop`), marked on the gradient annotator. For
+    /// an Eyedropper pick armed for a stop of the gradient a tool paints with, only a stop still
+    /// selected on that gradient.
     pub gradient_stop: Option<usize>,
+    /// Is [`Self::paint`]'s paint behind the proxy in front ([`Self::fill_active`]) the color the
+    /// active tool, or the tool an armed one-shot pick returns to, paints with (the Live Paint
+    /// Bucket's fill and stroke, the Shape Builder's fill), or was the pick armed for a stop of
+    /// that tool's paint? A pick armed for such a stop then ends once [`Self::gradient_stop`] no
+    /// longer names it, also after the stop was cleared or the other proxy came to the front.
+    pub tool_paints: bool,
     /// The Appearance panel's active fill/stroke (paint-order index into the first selected
     /// object's stack); paint tools show and edit that item.
     pub appearance_item: Option<usize>,
@@ -284,10 +292,17 @@ pub struct ToolContext<'a> {
     /// General → Double Click To Isolate: a double-click on a group with the Selection tool
     /// isolates it.
     pub double_click_isolate: bool,
-    /// Selection & Anchor Display → Command Click to Select Objects Behind: Cmd/Ctrl-click with the
-    /// Selection tool selects the object under the selected one, the next click the one under
-    /// that.
+    /// General → Double-Click Adds Anchor Points: a plain double-click on a path segment with Direct
+    /// Selection adds an anchor there.
+    pub double_click_adds_anchor: bool,
+    /// Selection & Anchor Display → Command Click to Select Objects Behind: once a Cmd/Ctrl press
+    /// with the Selection tool has armed it ([`Self::behind_armed`]), a Cmd/Ctrl-click selects the
+    /// object under the selected one, the next click the one under that.
     pub select_behind: bool,
+    /// A Cmd/Ctrl press with the Selection tool came before, and Cmd/Ctrl has been held since: the
+    /// next Cmd/Ctrl-click over the selection selects behind ([`Self::select_behind`]). The first
+    /// press is lent to Direct Selection or Group Selection.
+    pub behind_armed: bool,
     /// Selection & Anchor Display → Highlight anchors on mouse over: Direct Selection marks the
     /// anchor under the pointer.
     pub highlight_anchors: bool,
@@ -452,16 +467,20 @@ impl ToolContext<'_> {
             clip_outlines: false,
             area_type_interior: false,
             ignore_layer_preview: false,
+            unfilled_interiors: false,
         }
     }
 
     /// [`Self::hit_options`] for the selection tools (Selection, Direct Selection, Group
-    /// Selection): a clipping path is also hit on its outline ([`HitOptions::clip_outlines`]).
+    /// Selection): a clipping path is also hit on its outline ([`HitOptions::clip_outlines`]), and
+    /// where nothing else is hit, an unfilled closed path is hit inside unless Object Selection by
+    /// Path Only is on ([`HitOptions::unfilled_interiors`]).
     /// Only for what a press or a hover selects: a double-click, loaded text or a guide's release
     /// acts on what is drawn and takes [`Self::hit_options`].
     ///
     /// [`HitOptions::clip_outlines`]: vectorcraft_doc::hit::HitOptions::clip_outlines
+    /// [`HitOptions::unfilled_interiors`]: vectorcraft_doc::hit::HitOptions::unfilled_interiors
     pub fn selection_hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
-        vectorcraft_doc::hit::HitOptions { clip_outlines: true, ..self.hit_options() }
+        vectorcraft_doc::hit::HitOptions { clip_outlines: true, unfilled_interiors: true, ..self.hit_options() }
     }
 }
