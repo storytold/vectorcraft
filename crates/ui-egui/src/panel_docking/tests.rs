@@ -1024,3 +1024,37 @@ fn a_docked_column_is_never_narrower_than_the_panel_minimum() {
     h.frames(3);
     assert!(body_width(&h, "Properties") >= PANEL_MIN_WIDTH - 0.5, "saved 100 pt wide: {}", body_width(&h, "Properties"));
 }
+
+/// A tab group dragged out of the icon column by its grip floats as an expanded panel: its tabs show
+/// in the window, and a click on each tab shows that panel.
+#[test]
+fn a_group_dragged_out_of_the_icon_column_floats_expanded_and_its_tabs_switch() {
+    for (icon, tabs) in [("stroke", ["gradient", "transparency", "stroke"]), ("transform", ["align", "pathfinder", "transform"])] {
+        let mut h = Harness::new();
+        h.click(h.icon(icon).expect("the icon column is drawn").center());
+        h.frames(2);
+        let tab = h.tab(icon).expect("the flyout's tabs are drawn");
+        let grip = h
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.label() == Some("Move tab group"))
+            .filter_map(|(_, node)| node.bounds())
+            .map(|b| Rect::from_min_max(pos2(b.x0 as f32, b.y0 as f32), pos2(b.x1 as f32, b.y1 as f32)))
+            .filter(|grip| (grip.center().y - tab.center().y).abs() < 20.0)
+            .last()
+            .expect("the flyout's grip");
+        h.drag(grip.center(), h.canvas().center());
+        h.frames(2);
+        let layout = h.layout();
+        let window = floating_window(&layout, icon).unwrap_or_else(|| panic!("{icon}: the group floats"));
+        assert_eq!(window_panels(window).len(), 3, "{icon}: the whole group floats");
+        assert!(!window.column.iconic, "{icon}: the window is expanded");
+        assert!(in_iconic_column(&layout, "swatches"), "{icon}: the icon column stays collapsed");
+        for panel in tabs {
+            let tab = h.tab(panel).unwrap_or_else(|| panic!("{icon}: the {panel} tab is drawn"));
+            h.click(tab.center());
+            h.frames(1);
+            assert!(showing(&h.app.ui, panel), "{icon}: a click on the {panel} tab shows it");
+        }
+    }
+}
