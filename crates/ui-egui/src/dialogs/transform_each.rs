@@ -445,6 +445,15 @@ pub(crate) fn reference_point(ui: &mut Ui, fields: &mut DialogFields) -> Respons
     shown.response
 }
 
+/// The reference point picker with its name beside it, for a full-width row that draws no label of its own.
+fn labelled_reference_point(ui: &mut Ui, fields: &mut DialogFields) -> Response {
+    let shown = Row::new().show(ui, |ui, _| {
+        reference_point(ui, fields);
+        Text::new(tl!("Reference Point")).show(ui);
+    });
+    shown.output
+}
+
 /// The dialog's rows: Scale, Move and Rotate in one row, then the options.
 fn dialog_params(lengths: LengthUnits) -> Vec<Param> {
     vec![
@@ -464,7 +473,7 @@ fn dialog_params(lengths: LengthUnits) -> Vec<Param> {
                 Ok(())
             })
             .full_width(),
-        Param::custom("reference", tl!("Reference Point"), |ui, f, _| reference_point(ui, f))
+        Param::custom("reference", tl!("Reference Point"), |ui, f, _| labelled_reference_point(ui, f))
             .on_set(|f, key, value| {
                 let at = value.as_i64().filter(|at| (0..=8).contains(at)).ok_or_else(|| FieldRefusal::Rejects(&value).message(key))?;
                 f.set(key, at);
