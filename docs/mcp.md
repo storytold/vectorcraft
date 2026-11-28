@@ -13165,7 +13165,10 @@ The em box and ICF box are those of the font of the part that sets the sample's 
 custom set that holds that character), the cap height and x-height those of the face the Roman letters are drawn in (a fallback face when the part's font lacks the character), Max Ascent/Descent the highest
 ascent and lowest descent of the faces the sample uses, and Max Ascender the top of its tallest glyph; each takes its
 part's size, baseline and vertical scale. Zoom draws it at 25% to 800% of 36 pt. The
-sample text, the zoom steps and the size are VectorCraft's own. OK runs `type.compositeFonts.set` with every font as one
+sample text, the zoom steps and the size are VectorCraft's own. Highlighting a Zoom choice previews it in the sample;
+Enter or a click accepts it, and Escape restores the percentage from when the menu opened. A later `ui.dialog.set`
+edit of `zoom` is preserved when the older popup is canceled. These Zoom interactions change only the sample preview,
+without editing the document or its Undo history. OK runs `type.compositeFonts.set` with every font as one
 undo step; a refused font keeps the dialog open. `ui.dialog.set` takes `custom`, `entry` and `char` (the index of the
 character picked in the set) as soon as the dialog opens, and `sample` (true or false), `zoom` (25, 50, 75, 100, 200,
 400 or 800) and `lineIcfBox`, `lineEmBox`, `lineBaseline`, `lineCapHeight`, `lineAscentDescent`, `lineAscender` and
