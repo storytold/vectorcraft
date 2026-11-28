@@ -91,13 +91,16 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 
 /// What the object model keeps for one run: its coordinate system, the last list of a document's
 /// page items, kept while that document is unchanged, whether a call's own savepoint
-/// ([`atomically`]) is open, and the settings of each `DocumentPreset` the run made.
+/// ([`atomically`]) is open, and the settings of each `DocumentPreset` the run made with the bytes
+/// they hold.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
     items: RefCell<Option<ItemList>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    /// The bytes the values assigned to `presets` hold ([`MAX_PRESET_BYTES`]).
+    preset_bytes: Cell<u64>,
 }
 
 impl State {
@@ -541,17 +544,31 @@ fn done_unless_refused(r: std::result::Result<Data, HostError>) -> std::result::
 /// commands changed it (commands given ids select them first), direct-selected anchors, segments,
 /// ruler guides, slices, the key, a Layers panel target and an object chosen inside a dynamic
 /// symbol instance or an Objects on Path group included, less the objects that are now deleted,
-/// hidden or locked.
+/// hidden or locked; the current layer, which selecting art changes, is put back too while it is
+/// still a layer that can be edited. With `keep_selection`, `f`'s commands and the putting back are
+/// kept together or put back together ([`atomically`]), so an error in putting the selection back
+/// leaves the document as it was.
 fn on_doc<T>(
     h: &Host,
     uid: u64,
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, before) = {
+    if keep_selection { atomically(h, |h| on_doc_once(h, uid, true, f)) } else { on_doc_once(h, uid, false, f) }
+}
+
+/// [`on_doc`] without its savepoint.
+fn on_doc_once<T>(
+    h: &Host,
+    uid: u64,
+    keep_selection: bool,
+    f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
+) -> std::result::Result<T, HostError> {
+    let (index, active, before, layer) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-        (index, s.active_index(), s.documents()[index].selection.clone())
+        let st = &s.documents()[index];
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.layer_rows.clone()))
     };
     let switch = active != Some(index);
     if switch {
@@ -567,6 +584,7 @@ fn on_doc<T>(
         if let Some(doc) = doc {
             restored = restore_selection(h, &doc, &before);
         }
+        restored = restored.and(restore_layer(h, uid, layer));
     }
     // The document that was active is active again before any error is given: `f`'s error first,
     // then the selection's, then the switch back's.
@@ -578,6 +596,30 @@ fn on_doc<T>(
     restored?;
     back?;
     Ok(v)
+}
+
+/// Makes the layer `layer` gives (the current layer and the highlighted Layers panel rows before an
+/// edit) current in the active document `uid` again, when selecting art made another layer current
+/// and that layer is still one that can be edited. It runs `layer.setCurrent`, and `layer.highlight`
+/// for rows that keep that layer current, so a replay of the run's commands ends with the same
+/// current layer. A refused command changes nothing ([`done_unless_refused`]).
+fn restore_layer(h: &Host, uid: u64, layer: (Option<NodeId>, Vec<NodeId>)) -> std::result::Result<(), HostError> {
+    let (was, rows) = layer;
+    let (back, keeps) = {
+        let s = h.session.borrow();
+        let Some(st) = s.active().filter(|st| st.uid == uid) else { return Ok(()) };
+        let back = was.filter(|l| st.active_layer != Some(*l) && st.doc.node(*l).is_some_and(|n| n.is_layer()) && st.doc.is_editable(*l));
+        let keeps = rows.last().is_some_and(|r| back.is_some() && st.doc.layer_containing(*r) == back);
+        (back, keeps)
+    };
+    let Some(back) = back else { return Ok(()) };
+    if !done_unless_refused(command(h, "layer.setCurrent", &json!({"id": back.0})))? {
+        return Ok(());
+    }
+    if keeps && rows != [back] {
+        done_unless_refused(command(h, "layer.highlight", &json!({"ids": rows.iter().map(|r| r.0).collect::<Vec<_>>()})))?;
+    }
+    Ok(())
 }
 
 /// Runs `id` with `params` on the item's document, its selection kept.
@@ -808,7 +850,10 @@ impl NewDoc<'_> {
             let mode = match d {
                 Data::String(s) if s == "DocumentPreviewMode.DefaultPreview" => "default",
                 Data::String(s) if s == "DocumentPreviewMode.PixelPreview" => "pixel",
-                Data::String(s) if s == "DocumentPreviewMode.OverprintPreview" => "overprint",
+                // Overprint Preview is a view of the whole app, which a script cannot turn on.
+                Data::String(s) if s == "DocumentPreviewMode.OverprintPreview" => {
+                    return Err(HostError::Error("previewMode OverprintPreview is not available yet".into()));
+                }
                 _ => return Err(HostError::Type("previewMode must be a DocumentPreviewMode value".into())),
             };
             p.insert("previewMode".into(), json!(mode));
@@ -917,9 +962,11 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
         Some(_) => return Err(HostError::Type("showOptionsDialog must be true or false".into())),
     }
     // The document starts from the first preset of the profile's category (Print: Letter).
+    // It is looked up in that category, so a saved preset of the same name is not used instead.
     let first = profile.and_then(|n| crate::cmd::newdoc::category(&h.session.borrow(), n)?.into_iter().next());
-    if let Some(first) = first {
+    if let (Some(first), Some(category)) = (first, profile) {
         p.insert("preset".into(), json!(first.name));
+        p.insert("presetCategory".into(), json!(category));
     }
     p.insert("profile".into(), profile.map_or(Value::Null, |n| json!(n)));
     if let Some(m) = mode {
@@ -963,6 +1010,9 @@ fn new_preset(h: &Host) -> Answer {
 
 /// The most `DocumentPreset` objects one run can make.
 const MAX_PRESETS: usize = 10_000;
+
+/// The most bytes the values assigned to one run's `DocumentPreset` objects can hold together.
+const MAX_PRESET_BYTES: u64 = 64 << 20;
 
 /// The settings a `DocumentPreset` has, each a property a script reads and assigns.
 const PRESET_FIELDS: &[&str] = &[
@@ -1011,11 +1061,20 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
     let l = link.clone();
     let set: HostFunction = Rc::new(move |a: Vec<Data>| {
         let h = current(&l)?;
-        let value = arg(&a, 1).clone();
-        h.charge_call(16 + data_size(&value))?;
+        let size = data_size(arg(&a, 1));
+        h.charge_call(16 + size)?;
         let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
+        // The run's presets keep their values outside the script's heap: the value replaced is
+        // taken off what they hold before the new one is counted.
+        let old = fields.iter().find(|(k, _)| k == key).map_or(0, |(_, v)| data_size(v));
+        let held = h.dom.preset_bytes.get().saturating_sub(old).saturating_add(size);
+        if held > MAX_PRESET_BYTES {
+            return Err(HostError::Range(format!("a script's DocumentPresets can hold at most {} MiB of settings", MAX_PRESET_BYTES >> 20)));
+        }
+        h.dom.preset_bytes.set(held);
+        let value = arg(&a, 1).clone();
         match fields.iter_mut().find(|(k, _)| k == key) {
             Some((_, v)) => *v = value,
             None => fields.push((key.to_string(), value)),
@@ -1786,9 +1845,10 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     if in_compound(h, item) {
         return Err(HostError::Error(COMPOUND_MEMBER_ORDER.into()));
     }
+    // The ruler guides at the top of a layer stay above its art, as Arrange keeps them.
     let (before, after) = with_doc(h, item.doc, |_, st| {
         let at = st.doc.position(item.id);
-        let count = at.and_then(|(p, ..)| st.doc.children(p).map(Vec::len)).unwrap_or(0);
+        let count = at.and_then(|(p, ..)| st.doc.children(p).map(|c| vectorcraft_doc::Node::guide_run_start(c))).unwrap_or(0);
         (at.map(|(_, i, _)| i), count)
     });
     let Some(i) = before else { return Err(HostError::Error(STALE_ITEM.into())) };

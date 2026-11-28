@@ -174,8 +174,10 @@ impl Indices {
         if self.lo >= self.hi {
             return Ok(None);
         }
+        // The object may have become one of a host class with an indexer meanwhile, whose
+        // elements are not properties: the rest of the range is then visited index by index.
         if self.sparse.as_ref().is_some_and(|s| s.epoch != interp.heap.index_epoch) {
-            self.sparse = Some(self.gather(interp)?);
+            self.sparse = if interp.host_indexer(self.obj)?.is_some() { None } else { Some(self.gather(interp)?) };
         }
         let k = match &mut self.sparse {
             None if self.ascending => self.lo,

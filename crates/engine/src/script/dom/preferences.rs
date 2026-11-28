@@ -123,9 +123,7 @@ fn text_number(t: &str) -> f64 {
         _ => 0,
     };
     if radix != 0 {
-        let digits = t.get(2..).unwrap_or("");
-        let whole = digits.chars().try_fold(0.0_f64, |n, c| c.to_digit(radix).map(|d| n * f64::from(radix) + f64::from(d)));
-        return whole.filter(|_| !digits.is_empty()).unwrap_or(f64::NAN);
+        return radix_number(t.get(2..).unwrap_or(""), radix).unwrap_or(f64::NAN);
     }
     match t.strip_prefix(['+', '-']).unwrap_or(t) {
         "Infinity" => {
@@ -138,6 +136,44 @@ fn text_number(t: &str) -> f64 {
         rest if rest.bytes().all(|b| b.is_ascii_digit() || matches!(b, b'.' | b'e' | b'E' | b'+' | b'-')) => t.parse().unwrap_or(f64::NAN),
         _ => f64::NAN,
     }
+}
+
+/// The whole number `digits` writes in base `radix` (16, 8 or 2), rounded once to the nearest
+/// number, ties to the even one, and infinite past the largest; `None` when it is empty or holds a
+/// character that is not a digit of that base.
+fn radix_number(digits: &str, radix: u32) -> Option<f64> {
+    if digits.is_empty() {
+        return None;
+    }
+    let width = radix.trailing_zeros();
+    // The first 64 bits from the leading 1, how many bits come after them, and whether any of
+    // those is 1.
+    let (mut top, mut taken, mut past, mut sticky) = (0u64, 0u32, 0u64, false);
+    for c in digits.chars() {
+        let d = c.to_digit(radix)?;
+        for bit in (0..width).rev().map(|i| (d >> i) & 1 == 1) {
+            if taken == 0 && !bit {
+                continue;
+            }
+            if taken < 64 {
+                top = (top << 1) | u64::from(bit);
+                taken += 1;
+            } else {
+                past = past.saturating_add(1);
+                sticky |= bit;
+            }
+        }
+    }
+    if taken <= 53 {
+        return Some(top as f64);
+    }
+    // Keep 53 bits; the dropped ones round them to the nearest, ties to even.
+    let drop = taken - 53;
+    let (kept, rest, half) = (top >> drop, top & ((1u64 << drop) - 1), 1u64 << (drop - 1));
+    let up = rest > half || (rest == half && (sticky || kept & 1 == 1));
+    let kept = kept + u64::from(up);
+    let exp = i32::try_from(u64::from(drop).saturating_add(past)).unwrap_or(i32::MAX).min(2000);
+    Some(kept as f64 * 2f64.powi(exp))
 }
 
 #[allow(clippy::cast_precision_loss)]

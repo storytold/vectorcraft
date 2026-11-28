@@ -145,13 +145,16 @@ impl Interp {
         if let Some(&id) = self.host_objects.get(&made)
             && is_made(&self.heap, &self.host_classes, id, &made)
         {
-            // An object of another class of the family becomes one of `class`.
+            // An object of another class of the family becomes one of `class`. Its indexer and the
+            // indices its prototypes hold can change with it, so a list of the indices it has is
+            // made again ([`crate::heap::Heap::index_epoch`]).
             let o = self.object_mut(id)?;
             if let Class::Host(h) = &mut o.class
                 && h.class != class
             {
                 h.class = class;
                 o.proto = Some(proto);
+                self.heap.index_epoch = self.heap.index_epoch.wrapping_add(1);
             }
             return Ok(Value::Object(id));
         }

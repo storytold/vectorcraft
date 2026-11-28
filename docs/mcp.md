@@ -2636,11 +2636,12 @@ app through the global object `vc`, and writes to the Script Console and runs ot
   columns for the other layouts), and `addDocument(startupPreset, presetSettings?, showOptionsDialog?)`, which runs `file.new`
   with the New Document profile `startupPreset` names (`Print`, `Web`, `Mobile`, `Video`, another profile of
   `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
-  `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
+  `file.newPresets` lists for that profile (a saved preset of the same name is not used), and the settings of a `new DocumentPreset()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
   starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
   `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
-  the preset it is given holds one of them with a value other than `null`, and makes no document. A
+  the preset it is given holds one of them with a value other than `null`, and makes no document; it does the same
+  for a `previewMode` of `DocumentPreviewMode.OverprintPreview`. A
   `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
   `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
   automation roots in force; when `file.new` reports a `profileError`, `addDocument` throws an error that names the
@@ -9005,7 +9006,9 @@ and goes back to Document Setup, whose OK runs `document.setup`; its Cancel goes
 
 ## New Document
 
-`file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`), `name`, `width`/`height`
+`file.new` takes everything New Document sets: `preset` (a name from `file.newPresets`, a saved preset before a
+built-in one of the same name; with `presetCategory`, a category of `file.newPresets`, the preset of that name in
+that category), `name`, `width`/`height`
 (points, or lengths such as `"210 mm"`), `units`, `orientation`, `artboards` with `artboardLayout {layout, columns,
 rows, spacing, rightToLeft}` (`rows` gives a `gridByColumn` layout that many rows, at most one for each artboard, in place of `columns`, and is
 an error with another layout; a preset keeps the rows, and `file.newPresets` lists them as set even when there are

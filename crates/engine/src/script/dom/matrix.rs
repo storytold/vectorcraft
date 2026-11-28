@@ -96,15 +96,19 @@ fn then(m: Matrix, n: Matrix) -> Matrix {
 }
 
 /// `x·y + z·w + t`. When both products and their sum are finite, and a product below the range of
-/// normal numbers is the only term that is not 0, the sum is taken as numbers are. Otherwise the
-/// products are summed past the range of a number and rounded at the end, so a finite value is not
-/// lost to a product too large or too small for a number.
+/// normal numbers is the only term that is not 0, the sum is taken as numbers are, unless adding
+/// `t` to the rounded sum of the products can come within a step of 2^1024. Otherwise the products
+/// are summed past the range of a number and rounded at the end, so a finite value is not lost to
+/// a product too large or too small for a number, and a sum is not taken past the largest number,
+/// or kept below it, by a rounding on the way.
 fn products_sum(x: f64, y: f64, z: f64, w: f64, t: f64) -> f64 {
     let (p, q) = (x * y, z * w);
     let lost = |v: f64, a: f64, b: f64| a != 0.0 && b != 0.0 && v.abs() < f64::MIN_POSITIVE;
     let alone = |a: f64, b: f64| (a == 0.0 || b == 0.0) && t == 0.0;
     let plain = p + q;
-    if plain.is_finite() && (!lost(p, x, y) || alone(z, w)) && (!lost(q, z, w) || alone(x, y)) {
+    let near_overflow = |v: f64| v.abs() >= pow2(1023);
+    let overflow_safe = t == 0.0 || !(near_overflow(plain) || near_overflow(plain + t));
+    if plain.is_finite() && overflow_safe && (!lost(p, x, y) || alone(z, w)) && (!lost(q, z, w) || alone(x, y)) {
         return plain + t;
     }
     // Each product is split into its rounded value and the part that rounding drops, both exact.
@@ -355,6 +359,18 @@ fn products_difference(a: f64, d: f64, b: f64, c: f64) -> Wide {
 /// The determinant of `m`'s linear part.
 fn determinant(m: Matrix) -> Wide {
     products_difference(m[0], m[3], m[1], m[2])
+}
+
+/// The square root of the size of `m`'s determinant: the factor by which `m` scales lengths on
+/// average. It is infinite only when that factor is too large for a number.
+pub(super) fn area_scale(m: Matrix) -> f64 {
+    let d = determinant(m);
+    let (mut v, mut e) = (d.m.abs(), d.e);
+    if e % 2 != 0 {
+        v *= 2.0;
+        e -= 1;
+    }
+    Wide::new(v.sqrt(), e / 2).value()
 }
 
 pub(super) fn singular(m: Matrix) -> bool {

@@ -677,6 +677,39 @@ fn a_host_class_constructor_called_with_new_cannot_wait() {
 }
 
 #[test]
+fn new_on_a_host_constructor_that_gives_a_value_other_than_an_object_throws() {
+    let mut r = realm(1_000_000);
+    let make: HostFunction = Rc::new(|_| Ok(Data::Undefined));
+    with_thing(&mut r, Some(make));
+    let out = r.run("var e; try { new Thing(); } catch (x) { e = x; } [e instanceof TypeError, typeof Thing()].join()").unwrap();
+    assert_eq!(out, JsValue::String("true,undefined".into()));
+}
+
+#[test]
+fn an_array_method_visits_every_element_after_its_object_takes_a_class_with_an_indexer() {
+    let mut r = realm(10_000_000);
+    // `Base` has a length of 5,000, an element `0` on its prototype and no indexer; `Indexed`, of
+    // the same family, gives `list[i]` for each index. `upgrade()` gives the same object as an
+    // `Indexed`.
+    let length: HostFunction = Rc::new(|_| Ok(Data::Number(5_000.0)));
+    let zero: HostFunction = Rc::new(|_| Ok(Data::Number(0.0)));
+    let upgrade: HostFunction = Rc::new(|_| Ok(host_ref("Indexed", &[1.0])));
+    let members = vec![
+        ("length".to_string(), HostMember::Get(length)),
+        ("0".to_string(), HostMember::Get(zero)),
+        ("upgrade".to_string(), HostMember::Method(upgrade)),
+    ];
+    let base = HostClass { name: "Base".into(), parent: None, members, index: None, construct: None };
+    let index: HostFunction = Rc::new(|a| Ok(a.get(1).cloned().unwrap_or(Data::Undefined)));
+    let indexed = HostClass { name: "Indexed".into(), parent: Some("Base".into()), members: Vec::new(), index: Some(index), construct: None };
+    r.define_host_classes(vec![base, indexed], vec![("list".into(), host_ref("Base", &[1.0]))]).unwrap();
+    let out = r
+        .run("var n = 0; Array.prototype.forEach.call(list, function () { if (n === 0) list.upgrade(); n++; }); [list instanceof Indexed, n].join()")
+        .unwrap();
+    assert_eq!(out, JsValue::String("true,5000".into()));
+}
+
+#[test]
 fn array_methods_visit_every_element_of_a_long_host_list() {
     let mut r = realm(10_000_000);
     // `list[i]` is `i` below 5,000, past the span the array methods visit without listing.

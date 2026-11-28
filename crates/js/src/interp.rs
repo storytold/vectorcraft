@@ -2407,6 +2407,11 @@ impl Interp {
                 let v = self.call_data(&host, &name, &Value::Undefined, &args, &read);
                 self.constructing = was;
                 let v = v?;
+                // `new` gives an object ([[Construct]]): a constructor that gives another value
+                // is a TypeError.
+                if !matches!(v, Value::Object(_)) {
+                    return Err(self.type_error(&format!("the constructor {name} did not give an object")));
+                }
                 if let (Some(callee), Value::Object(o)) = (f.as_object(), &v)
                     && matches!(self.object(*o)?.class, Class::Ordinary)
                     && let Some(Prop::Data { value: Value::Object(proto), .. }) = self.find_property(callee, &key("prototype"))?

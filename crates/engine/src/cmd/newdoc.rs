@@ -799,6 +799,18 @@ pub fn find(s: &Session, name: &str) -> Option<DocSettings> {
         .or_else(|| CATEGORIES.iter().flat_map(|c| builtin(c, s.default_units())).find(|p| p.name.eq_ignore_ascii_case(name)))
 }
 
+/// The preset the `preset` param of `cmd` names, looked up in the category `presetCategory` names
+/// when it is given ([`category`]) and with [`find`] otherwise; the starting settings without
+/// `preset`.
+fn preset_param(s: &Session, p: &Value, cmd: &str) -> Result<DocSettings> {
+    let Some(name) = str_param(p, "preset") else { return Ok(s.default_settings()) };
+    let found = match str_param(p, "presetCategory") {
+        Some(c) => category(s, c).and_then(|ps| ps.into_iter().find(|q| q.name.eq_ignore_ascii_case(name.trim()))),
+        None => find(s, name),
+    };
+    found.ok_or_else(|| bad(cmd, format!("no preset called `{name}` (see file.newPresets)")))
+}
+
 impl Session {
     /// New Document's starting settings: Letter in Preferences ▸ Units ▸ General.
     fn default_settings(&self) -> DocSettings {
@@ -812,10 +824,7 @@ const RECENT: usize = 12;
 /// `file.new`: a new document from a preset and/or explicit settings.
 pub(crate) fn file_new(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "file.new";
-    let base = match str_param(p, "preset") {
-        Some(name) => find(s, name).ok_or_else(|| bad(C, format!("no preset called `{name}` (see file.newPresets)")))?,
-        None => s.default_settings(),
-    };
+    let base = preset_param(s, p, C)?;
     // A preset keeps its name in Recent unless its size changed (turning it doesn't count).
     let sorted = |d: &DocSettings| (d.width.min(d.height), d.width.max(d.height), d.units);
     let size = str_param(p, "preset").map(|_| sorted(&base));
@@ -900,10 +909,7 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
         .map(str::trim)
         .filter(|n| !n.is_empty() && n.chars().count() <= 64)
         .ok_or_else(|| bad(C, "give the preset a name (1–64 characters)"))?;
-    let base = match str_param(p, "preset") {
-        Some(from) => find(s, from).ok_or_else(|| bad(C, format!("no preset called `{from}` (see file.newPresets)")))?,
-        None => s.default_settings(),
-    };
+    let base = preset_param(s, p, C)?;
     let mut preset = base.with_params(p, C)?;
     preset.name = name.to_string();
     let saved = &mut s.prefs.new_doc_presets;

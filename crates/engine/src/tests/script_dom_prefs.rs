@@ -201,8 +201,15 @@ fn missing_keys_read_as_empty_values_and_getters_convert() {
          vc.log([isNaN(p.getRealPreference('x')), p.getIntegerPreference('x')]);\
          vc.log([p.getStringPreference('b'), p.getRealPreference('b'), p.getBooleanPreference('i'), p.getStringPreference('i')]);\
          var n = []; ['0x10', '0B101', '0o17', '-0x10', '0x', ' -Infinity ', '1e3', '.5', 'inf', '1_0'].forEach(function (t) {\
-         p.setStringPreference('n', t); n.push(String(p.getRealPreference('n'))); }); vc.log(n.join(' '));",
+         p.setStringPreference('n', t); n.push(String(p.getRealPreference('n'))); }); vc.log(n.join(' '));\
+         p.setStringPreference('n', '0x200000000000018'); var r = [p.getRealPreference('n') === Math.pow(2, 57) + 32];\
+         p.setStringPreference('n', '0x' + new Array(301).join('f')); r.push(String(p.getRealPreference('n')));\
+         p.setStringPreference('n', '0b' + new Array(60).join('0') + '1' + new Array(53).join('0') + '1'); r.push(p.getRealPreference('n') === Math.pow(2, 53));\
+         vc.log(r);",
     );
+    // Each whole number in base 16, 8 or 2 is rounded once: 2^57 + 24 to 2^57 + 32, 1,200 bits to
+    // Infinity, and 2^53 + 1 after leading zeros to 2^53 (ties to even).
+    assert_eq!(out.pop(), Some(json!([true, "Infinity", true])));
     assert_eq!(out.pop(), Some(json!("16 5 15 NaN NaN -Infinity 1000 0.5 NaN NaN")));
     assert_eq!(
         out,
@@ -415,6 +422,22 @@ fn concatenation_keeps_a_finite_result_whose_products_leave_the_range_of_a_numbe
             json!(true)
         ]
     );
+}
+
+#[test]
+fn a_concatenated_translation_next_to_the_largest_number_is_rounded_once() {
+    let mut s = Session::new();
+    let out = log(
+        &mut s,
+        "function mat(v) { return {mValueA: v[0], mValueB: v[1], mValueC: v[2], mValueD: v[3], mValueTX: v[4], mValueTY: v[5]}; }\
+         var a = Math.pow(2, 969), b = Math.pow(2, 970);\
+         function tx(f, t) { try { return app.concatenateMatrix(mat([1, 0, 0, 1, Number.MAX_VALUE, f]), mat([1, 0, 1, 1, t, 0])).mValueTX === Number.MAX_VALUE; }\
+         catch (e) { return e.name; } }\
+         vc.log(tx(-a, b)); vc.log(tx(a, a));",
+    );
+    // MAX + 2^969 is below the halfway point to 2^1024, and MAX + 2^970 is that point, which rounds
+    // to 2^1024.
+    assert_eq!(out, vec![json!(true), json!("RangeError")]);
 }
 
 #[test]

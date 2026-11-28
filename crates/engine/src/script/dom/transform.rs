@@ -18,7 +18,8 @@
 //!   that says so.
 //! - `changeLineWidths` is 100 (stroke weights stay, also the default) or the transformation's own
 //!   scale in percent, the square root of the area it scales by (stroke weights and effects scale
-//!   with it, as Scale Strokes & Effects does); any other value throws an error that says so.
+//!   with it, as Scale Strokes & Effects does); any other value, and a scale other than 100 with
+//!   positions left as they are, throws an error that says so.
 //! - A locked object, one inside a locked layer or group, a group that holds one, and an object on
 //!   a locked artboard are refused with nothing changed, and so are a scale of 0, a matrix whose
 //!   determinant is 0 and a transformation that would take the object past the canvas.
@@ -78,8 +79,10 @@ fn line_widths(d: &Data, m: Matrix) -> std::result::Result<bool, HostError> {
         Data::Undefined => return Ok(false),
         d => number(d, "changeLineWidths")?,
     };
-    let own = (m[0] * m[3] - m[1] * m[2]).abs().sqrt() * 100.0;
-    if (lw - own).abs() <= 1e-9 * own.max(1.0) {
+    // The determinant is taken past the range of a number, so a scale whose square is too large
+    // for one still has its own value.
+    let own = matrix::area_scale(m) * 100.0;
+    if own.is_finite() && (lw - own).abs() <= 1e-9 * own.max(1.0) {
         return Ok((own - 100.0).abs() > 1e-9);
     }
     if (lw - 100.0).abs() <= 1e-9 {
@@ -118,6 +121,16 @@ fn on_page(m: Matrix, o: Point) -> Affine {
     Affine::translate(o.to_vec2()) * page * Affine::translate(-o.to_vec2())
 }
 
+/// Whether the object `id` of `d` stays within the canvas under `xf` (page coordinates), symbol
+/// instances measured by their art as [`vectorcraft_doc::Document::bounds_of`] measures them.
+fn fits(d: &vectorcraft_doc::Document, id: vectorcraft_doc::NodeId, xf: Affine) -> bool {
+    d.node(id).is_some_and(|n| {
+        let mut n = n.clone();
+        n.transform(xf, false);
+        n.geometric_bounds_with(&d.symbol_boxes()).is_none_or(crate::sanity::rect_in_range)
+    })
+}
+
 /// Applies `m` (Y up) to the item `this` names, about the point `about` names (`None`: the matrix
 /// acts as a move, which needs no point), with `opts`.
 fn apply(h: &Host, a: &[Data], m: Matrix, about: Option<&Data>, opts: &Options) -> Answer {
@@ -152,14 +165,20 @@ fn apply(h: &Host, a: &[Data], m: Matrix, about: Option<&Data>, opts: &Options) 
         (None, _) => Point::ORIGIN,
     };
     let xf = on_page(m, o);
+    if opts.strokes && !opts.objects {
+        return Err(HostError::Error("changeLineWidths other than 100 with changePositions false is not available yet".into()));
+    }
     if let Some(r) = bounds.filter(|_| opts.objects) {
+        // The transformed corners of the bounds hold the transformed object. When one of them is
+        // past the canvas, the transformed object itself is measured.
         let corners = [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x0, r.y1), Point::new(r.x1, r.y1)];
-        if corners.iter().map(|p| xf * *p).any(|p| !(p.x.abs() <= crate::MAX_COORD && p.y.abs() <= crate::MAX_COORD)) {
+        let inside = |p: Point| p.x.abs() <= crate::MAX_COORD && p.y.abs() <= crate::MAX_COORD;
+        if !corners.iter().all(|p| inside(xf * *p)) && !with_doc(h, item.doc, |_, st| fits(&st.doc, item.id, xf)) {
             return Err(HostError::Range("the transformation would take the object past the canvas".into()));
         }
     }
     let c = xf.as_coeffs();
-    let identity = c.iter().zip([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]).all(|(v, i)| (v - i).abs() <= 1e-12);
+    let identity = xf == Affine::IDENTITY;
     let changes = if opts.objects { !identity } else { opts.patterns && uses_pattern && !identity };
     if changes {
         let p = json!({"ids": [item.id.0], "matrix": c, "objects": opts.objects, "patterns": opts.patterns, "strokes": opts.strokes});

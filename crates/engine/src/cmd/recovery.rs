@@ -419,7 +419,8 @@ impl FolderStore {
 
     /// Does `path` still name `file`? On Unix the two must be the same file (device and inode); on
     /// Windows they must be the same file (volume serial number and file index); elsewhere `path`
-    /// must exist. When either file can't be read, it does not.
+    /// must exist. A link at `path` is not followed, so it names the link and not `file`. When
+    /// either file can't be read, it does not.
     pub(crate) fn still_named(file: &std::fs::File, path: &std::path::Path) -> bool {
         #[cfg(unix)]
         {
@@ -431,8 +432,19 @@ impl FolderStore {
         }
         #[cfg(windows)]
         {
+            use std::os::windows::fs::OpenOptionsExt as _;
+            // FILE_FLAG_OPEN_REPARSE_POINT opens a link itself rather than its target, and
+            // FILE_FLAG_BACKUP_SEMANTICS lets a folder be opened, as `same_file::Handle::from_path`
+            // opens one.
+            const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+            const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
             let opened = file.try_clone().and_then(same_file::Handle::from_file);
-            match (opened, same_file::Handle::from_path(path)) {
+            let named = std::fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
+                .open(path)
+                .and_then(same_file::Handle::from_file);
+            match (opened, named) {
                 (Ok(a), Ok(b)) => a == b,
                 _ => false,
             }

@@ -857,6 +857,59 @@ fn document_preset_applies_only_its_given_fields() {
 }
 
 #[test]
+fn a_startup_preset_uses_its_own_size_beside_a_saved_preset_of_the_same_name() {
+    let mut s = Session::new();
+    s.execute("file.newPresets.save", &json!({"name": "Letter", "width": 300, "height": 200})).unwrap();
+    let first = crate::cmd::newdoc::category(&s, "Print").unwrap().remove(0);
+    assert_eq!(first.name, "Letter");
+    let out = log(&mut s, "var d = app.documents.addDocument('Print'); vc.log([d.width, d.height]);");
+    assert_eq!((out[0][0].as_f64(), out[0][1].as_f64()), (Some(first.width), Some(first.height)), "{out:?}");
+}
+
+#[test]
+fn overprint_preview_is_refused_before_a_document_is_made() {
+    let mut s = Session::new();
+    let e =
+        failure(&mut s, "var p = new DocumentPreset(); p.previewMode = DocumentPreviewMode.OverprintPreview; app.documents.addDocument('Print', p);");
+    assert!(e.contains("OverprintPreview is not available yet"), "{e}");
+    assert!(s.documents().is_empty());
+}
+
+#[test]
+fn document_presets_hold_a_limited_amount_of_data() {
+    let mut s = Session::new();
+    // A 4 MiB string: replacing one preset's value does not add up, 17 presets holding it do.
+    let out = log(
+        &mut s,
+        "var t = 'x'; for (var k = 0; k < 22; k++) t += t; var p = new DocumentPreset();\
+         for (var k = 0; k < 20; k++) p.title = t; vc.log(p.title.length);",
+    );
+    assert_eq!(out, vec![json!(4 << 20)]);
+    let e = failure(
+        &mut s,
+        "var t = 'x'; for (var k = 0; k < 22; k++) t += t;\
+         for (var k = 0; k < 17; k++) { var p = new DocumentPreset(); p.title = t; }",
+    );
+    assert!(e.contains("DocumentPresets can hold at most"), "{e}");
+}
+
+#[test]
+fn moving_art_on_another_layer_keeps_the_current_layer() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    let a = s.active().unwrap().current_layer().unwrap();
+    s.execute("layer.new", &json!({})).unwrap();
+    let b = s.active().unwrap().current_layer().unwrap();
+    assert_ne!(a, b);
+    rect(&mut s, 10.0, 20.0, 30.0, 40.0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.active_mut().unwrap().active_layer = Some(a);
+    log(&mut s, "var i = app.activeDocument.pageItems[0]; i.left = i.left + 5; i.translate(5, 0);");
+    assert_eq!(s.active().unwrap().current_layer(), Some(a));
+    assert!(s.active().unwrap().selection.objects.is_empty());
+}
+
+#[test]
 fn headless_add_document_dialog_fails_without_creating() {
     let mut s = Session::new();
     let e = failure(&mut s, "app.documents.addDocument('Print', new DocumentPreset(), true);");

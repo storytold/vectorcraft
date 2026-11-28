@@ -146,9 +146,53 @@ fn transforms_that_change_nothing_add_no_undo_step() {
         &mut s,
         "var i = app.activeDocument.pageItems[0]; i.translate(); i.translate(0, 0); i.rotate(0); i.rotate(360);\
          i.resize(100, 100); i.transform(app.getIdentityMatrix()); i.translate(10, 0, false, false, false, false);\
-         i.translate(7000000, 0, false, false, false, false);",
+         i.translate(7000000, 0, false, false, false, false);\
+         i.transform(app.getScaleMatrix(Math.pow(2, 600) * 100), false, false, false, false, 100);",
     );
     assert_eq!(undo_steps(&s), steps);
+}
+
+#[test]
+fn a_scale_whose_square_is_too_large_for_a_number_keeps_its_own_line_width() {
+    let (mut s, _, _) = doc();
+    let call = "app.activeDocument.pageItems[0].transform(app.getScaleMatrix(Math.pow(2, 600) * 100), false, false, false, false, 70);";
+    let e = failure(&mut s, call);
+    assert!(e.contains("other than 100 or the scale itself"), "{e}");
+}
+
+#[test]
+fn a_move_too_small_to_round_away_moves_the_object() {
+    let (mut s, _, _) = doc();
+    let steps = undo_steps(&s);
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0], l = i.left; i.translate(5e-13, 0); vc.log(i.left > l);");
+    assert_eq!(out, vec![json!(true)]);
+    assert_eq!(undo_steps(&s), steps + 1);
+}
+
+#[test]
+fn a_transformation_whose_bounds_reach_past_the_canvas_is_kept_when_the_art_does_not() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    // A diagonal line through the origin, 0.6 of the canvas limit out each way.
+    let a = 0.6 * crate::MAX_COORD;
+    let line = NodeId(s.execute("shape.line", &json!({"x1": -a, "y1": a, "x2": a, "y2": -a})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.none", &json!({})).unwrap();
+    // On the page (Y down), x' = x + y about the center: the line becomes upright at x = 0, while
+    // a corner of its bounds would go to 1.2 times the limit.
+    log(
+        &mut s,
+        "var m = {mValueA: 1, mValueB: 0, mValueC: -1, mValueD: 1, mValueTX: 0, mValueTY: 0};\
+         app.activeDocument.pageItems[0].transform(m);",
+    );
+    let r = s.active().unwrap().doc.bounds_of(&[line], false).unwrap();
+    assert!(r.width() < 1e-6 && (r.height() - 2.0 * a).abs() < 1e-3, "{r:?}");
+    // The same shear twice takes the line itself past the canvas.
+    let e = failure(
+        &mut s,
+        "var m = {mValueA: 1, mValueB: 0, mValueC: -2, mValueD: 1, mValueTX: 0, mValueTY: 0};\
+         app.activeDocument.pageItems[0].transform(m);",
+    );
+    assert!(e.contains("past the canvas"), "{e}");
 }
 
 #[test]
@@ -208,6 +252,8 @@ fn bad_arguments_throw_and_change_nothing() {
         ("rotate(5, true, true, true, true, 'Transformation.NOPE')", "Transformation value"),
         ("rotate(5, true, true, true, true, 3)", "Transformation value"),
         ("resize(1e9, 1e9)", "past the canvas"),
+        // Stroke weights cannot scale while the object stays where it is.
+        ("resize(50, 50, false, false, false, false, 50)", "with changePositions false is not available yet"),
     ] {
         let e = failure(&mut s, &format!("app.activeDocument.pageItems[0].{call};"));
         assert!(e.contains(says), "{call}: {e}");
