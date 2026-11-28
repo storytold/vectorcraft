@@ -55,6 +55,15 @@ pub fn specs() -> Vec<CommandSpec> {
             set_handle
         ),
         cmd!(
+            "path.moveHandles",
+            "Move Direction Handles",
+            [],
+            None,
+            "{handles: [{id, subpath?, anchor, which: \"in\"|\"out\"}, ...], dx, dy, independent?: bool} move several direction handles by (dx, dy) as one undo step; an anchor with one handle listed moves it as path.setHandle does (a smooth anchor turns its other handle in line at its own length), and an anchor with both handles listed moves both and becomes a corner; independent (default false) makes every listed handle's anchor a corner and leaves its other handle; a handle listed twice moves once; an empty list, a missing or unknown path, subpath or anchor, or a which other than \"in\" or \"out\" is refused",
+            has_doc,
+            move_handles
+        ),
+        cmd!(
             "path.moveAnchor",
             "Move Anchor Point",
             [],
@@ -578,6 +587,82 @@ fn set_handle(s: &mut Session, p: &Value) -> Result<Value> {
         if symmetric {
             let opposite = a.p - (pos - a.p);
             if out { a.h_in = opposite } else { a.h_out = opposite }
+        }
+        Ok(())
+    })?;
+    ok()
+}
+
+/// `path.moveHandles`: the listed direction handles move by `(dx, dy)` together, as one undo step.
+/// Each anchor with one listed handle places it as `path.setHandle` does; an anchor with both
+/// listed moves both and becomes a corner. A move by nothing, with no anchor to make a corner,
+/// records no undo step.
+fn move_handles(s: &mut Session, p: &Value) -> Result<Value> {
+    const C: &str = "path.moveHandles";
+    let list = match p.get("handles") {
+        None | Some(Value::Null) => return Err(bad(C, "missing handles")),
+        Some(v) => v.as_array().ok_or_else(|| bad(C, "`handles` must be an array"))?,
+    };
+    if list.is_empty() {
+        return Err(bad(C, "`handles` is empty"));
+    }
+    let d = Vec2::new(f64_req(p, "dx", C)?, f64_req(p, "dy", C)?);
+    if !(d.x.abs() < 1e9 && d.y.abs() < 1e9) {
+        return Err(bad(C, "dx and dy must be finite"));
+    }
+    let independent = switch_or(p, "independent", false, C)?;
+    if s.script_running() {
+        return Err(EngineError::Busy);
+    }
+    // Each anchor with the sides of it listed: (incoming, outgoing).
+    let mut anchors: BTreeMap<(NodeId, usize, usize), (bool, bool)> = BTreeMap::new();
+    let doc = &s.doc()?.doc;
+    for (i, h) in list.iter().enumerate() {
+        if !h.is_object() {
+            return Err(bad(C, format!("handles[{i}] must be an object")));
+        }
+        let id = object_param(h, "id", C)?.ok_or_else(|| bad(C, format!("handles[{i}]: missing id")))?;
+        let si = usize_opt(h, "subpath", C)?.unwrap_or(0);
+        let ai = index_opt(h, "anchor", C)?.ok_or_else(|| bad(C, format!("handles[{i}]: missing anchor")))?;
+        let out = match str_param(h, "which") {
+            Some("out") => true,
+            Some("in") => false,
+            _ => return Err(bad(C, format!("handles[{i}]: `which` must be \"in\" or \"out\""))),
+        };
+        let n = doc.node(id).ok_or(EngineError::NoNode(id))?;
+        let NodeKind::Path { path, .. } = &n.kind else { return Err(bad(C, format!("handles[{i}]: object {id} is not a path"))) };
+        if path.subpaths.get(si).and_then(|sp| sp.anchors.get(ai)).is_none() {
+            return Err(bad(C, format!("handles[{i}]: object {id} has no anchor {ai} in subpath {si}")));
+        }
+        let e = anchors.entry((id, si, ai)).or_default();
+        if out { e.1 = true } else { e.0 = true }
+    }
+    // A move by nothing changes only the kind of anchors that become corners: those with both
+    // handles listed, or every listed one with `independent`.
+    if d == Vec2::ZERO {
+        let corners = anchors.iter().any(|(&(id, si, ai), &(inn, out))| {
+            (independent || (inn && out))
+                && doc
+                    .node(id)
+                    .and_then(|n| n.path_data())
+                    .and_then(|pd| pd.subpaths.get(si)?.anchors.get(ai))
+                    .is_some_and(|a| a.kind != AnchorKind::Corner)
+        });
+        if !corners {
+            return ok();
+        }
+    }
+    s.edit("Reshape", |doc, _| {
+        for (&(id, si, ai), &(inn, out)) in &anchors {
+            let a = path_mut(doc, id)?.anchor_mut(si, ai).ok_or_else(|| EngineError::Other("no such anchor".into()))?;
+            if inn && out {
+                a.kind = AnchorKind::Corner;
+                a.h_in += d;
+                a.h_out += d;
+            } else {
+                let h = if out { a.h_out } else { a.h_in };
+                a.set_handle(out, h + d, independent);
+            }
         }
         Ok(())
     })?;
