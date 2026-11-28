@@ -2867,7 +2867,8 @@ other files through `$`:
   `Not found`; `"name" in pageItems` is false then, and assigning to such a name throws `Not found` too
   (VectorCraft's own rule). A read with the text of a number that is not an array index, such as
   `pageItems["-1"]`, `pageItems[1.5]` or `documents["NaN"]`, looks for an object of that name and gives `undefined`
-  when nothing has it, and `"-1" in pageItems` is true when an object has that name; `index(key)` takes a number as
+  when nothing has it. This applies only to the text JavaScript writes for that number: `pageItems["1.50"]` is a
+  plain name and throws `Not found` when nothing has it. `"-1" in pageItems` is true when an object has that name; `index(key)` takes a number as
   a position only (VectorCraft's own rule). `JSON.stringify` does not read `toJSON` from a collection this way. `name` and `note`
   take a number or a Boolean as the text `String(value)` gives. `String(object)` gives
   `[PathItem Logo]` for a page item named `Logo` (`[PathItem ]` with no name), `[Document <name>]`,
