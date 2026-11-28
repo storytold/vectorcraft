@@ -583,7 +583,7 @@ pub(super) fn brush_object_options(s: &mut Session, p: &Value) -> Result<Value> 
                 merged.insert(k.clone(), next);
             }
             keep_drawn_modes(b, &was, &params, &mut merged);
-            keep_largest_width(b, &was, &params, &mut merged);
+            keep_second_value(b, &was, &params, &mut merged);
             b.stroke_options_that_differ(&merged).map_err(|e| bad(C, e))?
         };
         options.get_or_insert_with(|| next.clone());
@@ -646,27 +646,34 @@ fn keep_drawn_modes(
     merged.insert("modes".into(), Value::Array(kept));
 }
 
-/// Keep the largest width a stroke of art brush `b` draws with (with its own settings `was`) when
-/// `params` sets `width` and no `width_max`. Without a `width_max` of its own the largest width is
-/// the width, so without this a changed width would also change the largest width.
-fn keep_largest_width(
+/// Keep the second value a stroke of brush `b` draws with (with its own settings `was`) when
+/// `params` sets the first and not the second: an art brush's `width` and `width_max`, a pattern
+/// brush's `scale` and `scale_max`. Without a second value of its own the second value is the
+/// first, so without this a changed first value would also change the second.
+fn keep_second_value(
     b: &Brush,
     was: &serde_json::Map<String, Value>,
     params: &serde_json::Map<String, Value>,
     merged: &mut serde_json::Map<String, Value>,
 ) {
-    if params.get("width").is_none_or(Value::is_null) || params.get("width_max").is_some_and(|m| !m.is_null()) {
+    let (first, second) = match b.kind {
+        BrushKind::Art(_) => ("width", "width_max"),
+        BrushKind::Pattern(_) => ("scale", "scale_max"),
+        _ => return,
+    };
+    if params.get(first).is_none_or(Value::is_null) || params.get(second).is_some_and(|m| !m.is_null()) {
         return;
     }
-    let art = |o: &serde_json::Map<String, Value>| match b.with_stroke_options(o).ok().map(|b| b.kind) {
-        Some(BrushKind::Art(a)) => Some(a),
+    // The first value, the second value of its own, and whether the value follows the pen.
+    let values = |o: &serde_json::Map<String, Value>| match b.with_stroke_options(o).ok().map(|b| b.kind) {
+        Some(BrushKind::Art(a)) => Some((a.width, a.width_max, a.width_mode.is_some_and(|m| m.follows_pen()))),
+        Some(BrushKind::Pattern(p)) => Some((p.scale, p.scale_max, p.scale_mode.is_some_and(|m| m.follows_pen()))),
         _ => None,
     };
-    let (Some(before), Some(after)) = (art(was), art(merged)) else { return };
-    let follows_pen = |a: &brush::ArtBrush| a.width_mode.is_some_and(|m| m.follows_pen());
-    // Only a width that followed the pen has a largest width, and only one that still does uses it.
-    if before.width_max.is_none() && follows_pen(&before) && follows_pen(&after) && after.width != before.width {
-        merged.insert("width_max".into(), json!(before.width));
+    let (Some(before), Some(after)) = (values(was), values(merged)) else { return };
+    // Only a value that followed the pen has a second value, and only one that still does uses it.
+    if before.1.is_none() && before.2 && after.2 && after.0 != before.0 {
+        merged.insert(second.into(), json!(before.0));
     }
 }
 

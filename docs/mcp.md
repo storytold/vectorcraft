@@ -4943,13 +4943,15 @@ already walks Image Trace. Short agent entry points:
   level), `roundness`, `size`, `variation` and `modes`; scatter `size`, `spacing`, `scatter`, `rotation`
   (counter-clockwise), `modes`,
   `rotation_relative_to_path`, `colorization`, `hue_jitter`, `saturation_jitter` and `brightness_jitter`; art `width`, `width_mode`, `width_max`, `flip_along`, `flip_across`,
-  `overlap` and `colorization`; pattern `scale`, `spacing`, `fit`, `flip_along`, `flip_across` and `colorization`.
+  `overlap` and `colorization`; pattern `scale`, `scale_mode`, `scale_max`, `spacing`, `fit`, `flip_along`,
+  `flip_across` and `colorization`.
   Values outside their ranges are clamped as in `brush.options`, a `colorization` object changes only the fields it
   gives, a `null` item of an array (`size: [40, null]`) keeps each path's own item, else the brush's, and a setting
   equal to the brush's own value is dropped. The dialog sends only the items and fields changed in it, so editing one
   end of a range leaves each selected path's other end as it was. A mode that `params` does not set (no `modes`, or
   a `null` item) stays the one each path draws with, so a changed calligraphic variation or scatter range does not
   change it. An art `width` without a `width_max` keeps the largest width of each path whose width follows the pen,
+  a pattern `scale` without a `scale_max` (omitted or `null`) keeps the second scale of each path whose scale follows the pen,
   and a calligraphic path's `modes: null` (modes that follow its values) stays when another value changes. The dialog
   changes nothing when another document has become the active one. `reset: true` clears a path's settings. The command
   refuses `params` together with `reset`, a selection with no brushed path, paths whose brushes are of different
@@ -4988,6 +4990,19 @@ already walks Image Trace. Short agent entry points:
   uses the wheel (the Paintbrush with a brush on Stylus Wheel whose range the wheel can change, or the Blob Brush or
   the Eraser with a value on it and a variation above 0), so there a Paintbrush stroke drawn with another brush keeps
   no wheel. The web build does not read it. `.ai` brush definitions read and write the wheel as variation code 3.
+- Pattern brush scale from the pen: a pattern brush's `scale_mode` (`brush.new`, `brush.options`,
+  `brush.objectOptions`; `null` for Fixed) takes `pressure`, `tilt`, `bearing`, `rotation` and
+  `stylusWheel`, and `scale_max` (1..10000%) is the second scale. `brush.new` without a `scale_mode` makes a
+  Fixed brush; `brush.options` without one keeps the brush's mode, and `brush.objectOptions` without one keeps
+  each path's mode. The tiles go from `scale` where the pen reads 0 to
+  `scale_max` where it reads 1, over the ranges an Art brush's `width_mode` uses, and half way on a stroke drawn
+  without that input; without a `scale_max` both ends are `scale`. Each side, start and end tile is as tall as the
+  scale at each point of the stroke, and the tile and the gap after it are as long as the scale at the tile's
+  middle. A corner tile takes the scale at its corner. Stretch to Fit then stretches the tiles and gaps of each run
+  to fill it, Add Space to Fit shares the space left between the tiles, and Approximate Path centers the tiles on
+  the run. Another mode, such as `random`, is read as Fixed. A brush with a fixed scale draws as before, and a
+  brush or stroke without the new fields saves without them. `.ai` files do not read or write the pattern scale's
+  mode.
 - Freehand Fidelity: the `fidelity` of `path.freehand` and `brush.freehand` is in points, 1.5 pt when left out. A
   value must be from 0.000015625 pt (0.01 / 640) to 100 / 0.0313 pt (about 3194.89 pt), and a value outside that range
   is rejected with an error. The Pencil and the Paintbrush give Fidelity in screen pixels, 0.01 to 100 px, and send it
