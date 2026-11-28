@@ -1,4 +1,4 @@
-use super::bounds::{cull_bounds, effected_path_carrying, node_bezpath, rasterize_stage};
+use super::bounds::{cull_bounds, dotted, drawn_box, effected_path_carrying, node_bezpath, rasterize_stage};
 use super::entries::{Content, Drawn, FX_RASTER_BUDGET, FxGeom, Inputs, ItemGeom, Kept, KeptImage, Made, Reads, Shadow, ShadowEntry};
 use super::pixels::FilterReach;
 use super::predicates::{evaluates_live, is_container, rasterize_bounds, reads_outside, shifted};
@@ -453,7 +453,7 @@ impl Renderer {
         let rfx = effects::raster_effects(&paints.appearance.effects);
         // Document-space reach of the painted geometry (strokes, arrowheads…).
         let outset = n.appearance.outset();
-        let reach = g.bounding_box().inflate(outset, outset);
+        let reach = drawn_box(g, paints.appearance.painted_strokes().any(dotted)).unwrap_or_default().inflate(outset, outset);
         let bounds = rasterize_bounds(f.symbols, n, &rfx);
         // Under Rasterize the content reaches as far as its fills' and strokes' raster effects paint.
         let reach = bounds.map_or(reach, |b| reach.union(b));
