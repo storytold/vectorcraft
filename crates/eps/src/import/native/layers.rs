@@ -246,7 +246,18 @@ fn holds_type_envelope(nodes: &[Arc<Node>]) -> bool {
 /// error, what was decoded and read of the editing copy, for [`layered_ai_from`] once the PDF part
 /// is imported. `names`: the encoding of names that aren't UTF-8.
 pub fn ai_layers_alone(private: &[u8], pages: &[(f64, f64)], unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), AiLayers> {
-    let data = match ai::decode_private(private) {
+    ai_layers_alone_decoded(ai::decode_private(private), pages, unit, names)
+}
+
+/// [`ai_layers_alone`] of an editing copy already decoded (`decoded`, as [`decode_ai_private`]
+/// gives it, or why it can't be).
+pub fn ai_layers_alone_decoded(
+    decoded: Result<Vec<u8>, String>,
+    pages: &[(f64, f64)],
+    unit: f64,
+    names: ai::NameEncoding,
+) -> Result<(Document, Vec<String>), AiLayers> {
+    let data = match decoded {
         Ok(data) => data,
         Err(why) => return Err(AiLayers { data: Err(why), structure: None, alone: None, text: Box::default() }),
     };
@@ -291,8 +302,21 @@ pub struct AiLayers {
 impl AiLayers {
     /// The editing copy `private` (as [`layered_ai`] takes it), decoded.
     pub fn decode(private: &[u8]) -> Self {
-        Self { data: ai::decode_private(private), structure: None, alone: None, text: Box::default() }
+        Self::decoded(ai::decode_private(private))
     }
+
+    /// An editing copy already decoded (`decoded`, as [`decode_ai_private`] gives it, or why it
+    /// can't be).
+    pub fn decoded(decoded: Result<Vec<u8>, String>) -> Self {
+        Self { data: decoded, structure: None, alone: None, text: Box::default() }
+    }
+}
+
+/// A `.ai`'s editing copy read from its `AIPrivateData` or `AIPDFPrivateData` streams one after the
+/// other (`private`), decoded as it is read: the streams aren't joined first, so they are under the
+/// limits of the decoded data alone.
+pub fn decode_ai_private(private: impl std::io::Read) -> Result<Vec<u8>, String> {
+    ai::decode_private_from(private)
 }
 
 /// The id of the artboard of `doc` that the editing copy `private` (as [`layered_ai`] takes it)
@@ -300,8 +324,13 @@ impl AiLayers {
 /// restored from the document a `.ai` file carries beside that copy: `None` when the copy names
 /// the first artboard, names none, can't be decoded, or names an artboard `doc` doesn't have.
 pub fn ai_opened_artboard(private: &[u8], doc: &Document) -> Option<u32> {
-    let data = ai::decode_private(private).ok()?;
-    active_page(ai::active_artboard(&data), doc)
+    ai_opened_artboard_decoded(&ai::decode_private(private).ok()?, doc)
+}
+
+/// [`ai_opened_artboard`] of an editing copy already decoded (`data`, as [`decode_ai_private`]
+/// gives it).
+pub fn ai_opened_artboard_decoded(data: &[u8], doc: &Document) -> Option<u32> {
+    active_page(ai::active_artboard(data), doc)
 }
 
 /// `doc` (a file read as its page or PDF part, in place of its layers) with the variables, data
@@ -586,8 +615,12 @@ pub fn ai_alone(private: &[u8]) -> Result<(Document, Vec<String>), String> {
 
 /// [`ai_alone`], with the names that aren't UTF-8 read in `names`.
 pub fn ai_alone_with(private: &[u8], names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
-    let data = ai::decode_private(private)?;
-    build_from(ai::read_in(&data, true, names)?, &data, None, Page::Artboard, false, false, 1.0)
+    ai_alone_decoded(&ai::decode_private(private)?, names)
+}
+
+/// [`ai_alone_with`] of an editing copy already decoded (`data`, as [`decode_ai_private`] gives it).
+pub fn ai_alone_decoded(data: &[u8], names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
+    build_from(ai::read_in(data, true, names)?, data, None, Page::Artboard, false, false, 1.0)
 }
 
 /// [`ai_alone`] for a `.ai` whose PDF part can't be read, its first page `page` (width and height)
@@ -596,8 +629,13 @@ pub fn ai_alone_with(private: &[u8], names: ai::NameEncoding) -> Result<(Documen
 /// large, as [`layered_ai`] reads it. A page turned a quarter (`/Rotate 90`) is measured either
 /// way round. `names`: the encoding of names that aren't UTF-8.
 pub fn ai_alone_on_page(private: &[u8], page: (f64, f64), unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
-    let data = ai::decode_private(private)?;
-    build_on_page(&data, page, unit, names)
+    ai_alone_on_page_decoded(&ai::decode_private(private)?, page, unit, names)
+}
+
+/// [`ai_alone_on_page`] of an editing copy already decoded (`data`, as [`decode_ai_private`] gives
+/// it).
+pub fn ai_alone_on_page_decoded(data: &[u8], page: (f64, f64), unit: f64, names: ai::NameEncoding) -> Result<(Document, Vec<String>), String> {
+    build_on_page(data, page, unit, names)
 }
 
 /// Does the editing data (or a program in the legacy format) have layers?

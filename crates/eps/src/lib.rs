@@ -52,8 +52,9 @@ pub use ai_editing::{AiEditingOptions, AiEditingOutput, CREATOR_VERSION, export_
 #[cfg(any(test, feature = "work-count"))]
 pub use import::blend_work;
 pub use import::{
-    AiLayers, Imported, NameEncoding, POSTSCRIPT_ERRORS, ai_alone, ai_alone_on_page, ai_alone_with, ai_layers_alone, ai_opened_artboard,
-    family_style, import, import_ai, import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
+    AiLayers, Imported, NameEncoding, POSTSCRIPT_ERRORS, ai_alone, ai_alone_decoded, ai_alone_on_page, ai_alone_on_page_decoded, ai_alone_with,
+    ai_layers_alone, ai_layers_alone_decoded, ai_opened_artboard, ai_opened_artboard_decoded, decode_ai_private, family_style, import, import_ai,
+    import_names, import_trusting, import_with, is_loss, layered_ai, layered_ai_from, page,
 };
 pub use legacy_ai::{HiddenObjects, LegacyAiOptions, LegacyAiOutput, export_legacy_ai, writes_image_mask};
 pub use print::{PrintFonts, PrintJob, PrintPage, print};

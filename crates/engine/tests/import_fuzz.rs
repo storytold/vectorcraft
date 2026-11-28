@@ -4825,6 +4825,53 @@ proptest! {
         prop_assert!(!opened);
     }
 
+    /// A `.ai` whose private data is cut into streams anywhere, each deflated or not and some
+    /// damaged, opens or is refused without a panic, and its streams read one after the other give
+    /// what joining them gives.
+    #[test]
+    fn ai_private_data_cut_into_streams_anywhere_never_panics(
+        sizes in prop::collection::vec(1usize..400, 1..6),
+        damage in prop::collection::vec((0usize..4_000, any::<u8>()), 0..4),
+        deflate in any::<bool>(),
+    ) {
+        let private = [b"%AI24_ZStandard_Data".as_slice(), &zstd(&editing_text())].concat();
+        let mut parts: Vec<Vec<u8>> = vec![];
+        let mut rest = private.as_slice();
+        for size in sizes.iter().cycle() {
+            if rest.is_empty() {
+                break;
+            }
+            let (part, after) = rest.split_at((*size).min(rest.len()));
+            parts.push(if deflate { deflated(part) } else { part.to_vec() });
+            rest = after;
+        }
+        let total: usize = parts.iter().map(Vec::len).sum();
+        for (at, b) in damage {
+            let mut at = at % total.max(1);
+            for part in &mut parts {
+                if let Some(x) = part.get_mut(at) {
+                    *x = b;
+                    break;
+                }
+                at -= part.len();
+            }
+        }
+        let parts: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+        let filter = if deflate { "/Filter /FlateDecode " } else { "" };
+        let bytes = vectorcraft_testkit::ai::ai_with_parts(&parts, vectorcraft_testkit::ai::page_pdf(), "", filter);
+        let read_all = |r: &mut dyn std::io::Read| {
+            let mut data = vec![];
+            r.read_to_end(&mut data).map(|_| data).map_err(|e| e.to_string())
+        };
+        let (joined, streamed) = catch_quiet(|| {
+            let opened = vectorcraft_pdf::open_pdf(&bytes, None).ok();
+            (opened.as_ref().and_then(|o| o.illustrator_data()), opened.as_ref().and_then(|o| o.read_illustrator_data(read_all)))
+        })
+        .expect("the private data read panicked");
+        prop_assert_eq!(streamed, joined.map(Ok));
+        survive("a .ai whose private data is cut into streams", || vectorcraft_engine::cmd::fileio::load("x.ai", &bytes).ok().map(|l| l.doc))?;
+    }
+
     /// A `.ai` whose strokes have any width (0, which draws a hairline, negative, huge, not a number) on a
     /// path, on a gradient-filled path that `1 BB` strokes and on type in any rendering mode,
     /// damaged or hostile.
