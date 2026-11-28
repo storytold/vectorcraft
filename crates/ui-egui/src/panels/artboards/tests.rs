@@ -1315,3 +1315,30 @@ fn artboard_options_groups_are_a_section_gap_apart() {
         assert!((gap - row).abs() < 0.01, "{upper} to {lower}: {gap} apart, the row gap is {row}");
     }
 }
+
+/// The list fills the panel above its footer, so the footer's buttons sit at the bottom of the panel and follow its
+/// height, as the Layers panel's do, and a list longer than the panel scrolls above them (#6085).
+#[test]
+fn the_list_fills_the_panel_and_the_bottom_bar_follows_its_height() {
+    use crate::tests::panel_harness::Panel;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 36})).unwrap();
+    let mut panel = Panel::new(app, show);
+    // The bottom of the footer's New Artboard button in a panel `h` points tall.
+    let bar_bottom = |panel: &mut Panel, h: f32| {
+        panel.room(egui::vec2(300.0, h));
+        panel.frame();
+        panel.frame();
+        panel.rect("New Artboard").bottom()
+    };
+    let short = bar_bottom(&mut panel, 300.0);
+    assert!(short <= 300.0, "the buttons end inside a 300 pt panel, not below it: {short}");
+    assert!(short > 300.0 - 40.0, "the buttons sit at the bottom of a 300 pt panel: {short}");
+    // The 36th row lies at or below the footer: the rows overflow the panel and scroll above it.
+    let footer_top = panel.rect("New Artboard").top();
+    let hidden = !panel.shows("Artboard 36") || panel.rect("Artboard 36").top() >= footer_top;
+    assert!(hidden, "the 36 rows overflow a 300 pt panel and scroll above the buttons at {footer_top}");
+    let tall = bar_bottom(&mut panel, 700.0);
+    assert!(tall <= 700.0, "the buttons end inside a 700 pt panel: {tall}");
+    assert!(tall - short > 350.0, "the buttons follow the panel's height: {short} -> {tall}");
+}
