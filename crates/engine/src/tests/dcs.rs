@@ -56,7 +56,7 @@ fn single_file(plates: &[(&str, String)], extra: &str) -> Vec<u8> {
 }
 
 /// Cyan solid on the top row, PANTONE 185 C at 50% on the left column.
-fn two_plates() -> Vec<u8> {
+pub(crate) fn two_plates() -> Vec<u8> {
     single_file(
         &[("Cyan", plate_eps([0, 0, 255, 255])), ("PANTONE 185 C", plate_eps([127, 255, 127, 255]))],
         "%%DocumentCustomColors: (PANTONE 185 C)\n%%CMYKCustomColor: 0 .91 .76 0 (PANTONE 185 C)\n",
@@ -265,6 +265,33 @@ fn update_and_relink_draw_the_files_clipping_path_through_a_distorted_images_cor
         other => panic!("a plain group of the image: {other:?}"),
     }
     assert_eq!(node(&s).image_corners().unwrap(), corners);
+}
+
+/// Place with Replace of an image changed by Perspective Distort or Free Distort by a DCS file puts
+/// the file's image between the corners and draws its clipping path through them.
+#[test]
+fn place_with_replace_draws_the_files_clipping_path_through_a_distorted_images_corners() {
+    let dir = temp_dir("replace-distorted-clip");
+    let path = write(&dir, "pic.eps", &two_plates());
+    let mut s = session();
+    let png = crate::tests_links::png(4, 4, [255, 0, 0]);
+    let r = s.execute("file.place", &json!({ "name": "a.png", "dataBase64": vectorcraft_format::base64_encode(&png), "at": [100, 100] })).unwrap();
+    let old = NodeId(r["ids"][0].as_u64().unwrap());
+    s.execute("object.distort", &json!({ "corners": [[100, 100], [160, 104], [150, 140], [96, 136]] })).unwrap();
+    let corners = s.doc().unwrap().doc.node(old).unwrap().image_corners().unwrap();
+    let r = s.execute("file.place", &json!({ "path": path, "replace": true })).unwrap();
+    let group = NodeId(r["ids"][0].as_u64().unwrap());
+    let id = NodeId(r["image"].as_u64().unwrap());
+    let node = s.doc().unwrap().doc.node(id).unwrap().clone();
+    assert!(node.is_distorted_image());
+    assert_eq!(node.image_corners().unwrap(), corners);
+    let NodeKind::Group { children, clip: true } = &s.doc().unwrap().doc.node(group).unwrap().kind else { panic!("a clipping group") };
+    let NodeKind::Path { path, clipping: true, .. } = &children[0].kind else { panic!("a clipping path") };
+    let anchors: Vec<_> = path.anchors().map(|(_, _, a)| a.p).collect();
+    // The left half of the 2 × 2 pixels, where the corners put it.
+    let map = node.image_map().unwrap();
+    let want = [(0.0, 0.0), (1.0, 0.0), (1.0, 2.0), (0.0, 2.0)].map(|(x, y)| map.apply(vectorcraft_geom::Point::new(x, y)).unwrap());
+    assert!(anchors.len() == want.len() && want.iter().all(|w| anchors.iter().any(|a| a.distance(*w) < 1e-6)), "{anchors:?} vs {want:?}");
 }
 
 #[test]

@@ -602,6 +602,53 @@ fn relink_and_update_follow_the_clipping_path_of_a_linked_psd() {
     assert_eq!(clip_group(&s.doc().unwrap().doc, group), (squared, true, NodeId(image)), "links.update reads the clipping path again");
 }
 
+/// Place with Replace of an image changed by Perspective Distort or Free Distort by a clipped PSD
+/// file with many more pixels keeps its corners when the image is tiny: the new image's transform
+/// is the old one scaled down to the new pixel size, which is invertible however small it is.
+#[test]
+fn replacing_a_tiny_distorted_image_by_a_large_clipped_psd_keeps_its_corners() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-replace-tiny-distorted");
+    let plane = vec![255u8; 2000 * 2000];
+    let zero = vec![0u8; 2000 * 2000];
+    let big = psd(1, 3, (2000, 2000), 8, 3, &[], &triangle_resources(), &[], &raw(&[&plane, &zero, &zero]));
+    let cut = write_file(&dir, "big.psd", &big);
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let png = crate::tests_links::png(4, 4, [0, 0, 255]);
+    let r = s
+        .execute("file.place", &json!({"name": "a.png", "dataBase64": vectorcraft_format::base64_encode(&png), "rect": [100, 100, 0.001, 0.001]}))
+        .unwrap();
+    let old = NodeId(r["ids"][0].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [old.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[100, 100], [100.001, 100.0001], [100.0009, 100.001], [99.9998, 100.0008]]})).unwrap();
+    assert!(s.doc().unwrap().doc.node(old).unwrap().is_distorted_image(), "the old image is distorted");
+    let corners = s.doc().unwrap().doc.node(old).unwrap().image_corners().unwrap();
+    let r = s.execute("file.place", &json!({"path": cut, "replace": true})).unwrap();
+    let image = s.doc().unwrap().doc.node(NodeId(r["image"].as_u64().unwrap())).unwrap().clone();
+    assert!(image.is_distorted_image());
+    assert_eq!(image.image_corners().unwrap(), corners);
+}
+
+/// Place with Replace of a clipped PSD file's image changed by Perspective Distort or Free Distort
+/// by a DCS file keeps the image's corners: the DCS file's image fills them.
+#[test]
+fn replacing_a_distorted_clipped_psd_by_a_dcs_file_keeps_its_corners() {
+    let dir = vectorcraft_testkit::TempDir::new("psd-replace-distorted-dcs");
+    let cut = write_file(&dir, "cut.psd", &red_psd(&triangle_resources()));
+    let dcs = write_file(&dir, "pic.eps", &crate::tests::dcs::two_plates());
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 100, "height": 50})).unwrap();
+    let r = s.execute("file.place", &json!({"path": cut, "at": [50, 25]})).unwrap();
+    let (group, image) = (NodeId(r["ids"][0].as_u64().unwrap()), NodeId(r["image"].as_u64().unwrap()));
+    s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[0, 0], [100, 8], [90, 50], [6, 44]]})).unwrap();
+    let corners = s.doc().unwrap().doc.node(image).unwrap().image_corners().unwrap();
+    let r = s.execute("file.place", &json!({"path": dcs, "replace": true})).unwrap();
+    let new = s.doc().unwrap().doc.node(NodeId(r["image"].as_u64().unwrap())).unwrap().clone();
+    assert!(new.is_distorted_image(), "the DCS file's image takes the corners");
+    assert_eq!(new.image_corners().unwrap(), corners);
+}
+
 /// links.relink follows the clipping path of a linked PSD file for an image changed by Perspective
 /// Distort or Free Distort too: the new file's clipping path is mapped through the image's corners,
 /// a clip group of the old file's clipping path loses it when the new file names none, and a later

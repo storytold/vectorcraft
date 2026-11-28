@@ -456,6 +456,30 @@ fn placed_embedded_files_bring_their_slices_with_the_art_in_one_undo_step() {
     }
 }
 
+/// A file placed with Replace over an image changed by Perspective Distort or Free Distort takes
+/// its corners, and its slices cover what the corners put their part of the pixels on.
+#[test]
+fn slices_placed_over_a_distorted_image_follow_its_corners() {
+    let f = with_resource(&psd(false), 1050, &v6(&[user("a", [0, 0, 10, 10])], &[]));
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
+    let png = crate::tests_links::png(4, 4, [0, 0, 255]);
+    s.execute("file.place", &json!({"name": "a.png", "dataBase64": b64(&png), "at": [100, 100]})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[100, 100], [160, 104], [150, 140], [96, 136]]})).unwrap();
+    let r = s.execute("file.place", &json!({"name": "poster.psd", "dataBase64": b64(&f), "replace": true})).unwrap();
+    assert_eq!(r["slices"].as_array().map(Vec::len), Some(1), "{r}");
+    let d = &s.doc().unwrap().doc;
+    let image = d.node(vectorcraft_doc::NodeId(r["ids"][0].as_u64().unwrap())).unwrap();
+    assert!(image.is_distorted_image());
+    let vectorcraft_doc::NodeKind::Image(im) = &image.kind else { panic!("an image") };
+    // The top left quarter of the 20 × 20 px canvas.
+    let (w, h) = (f64::from(im.width) / 2.0, f64::from(im.height) / 2.0);
+    let want = image.image_map().unwrap().map_rect_bbox(Rect::new(0.0, 0.0, w, h)).unwrap();
+    let got = slices(&s)[0].0;
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    assert!(near(got.x0, want.x0) && near(got.y0, want.y0) && near(got.x1, want.x1) && near(got.y1, want.y1), "{got:?} vs {want:?}");
+}
+
 #[test]
 fn linked_files_are_placed_without_their_slices() {
     let dir = std::env::temp_dir().join(format!("vc-psd-slices-{}", std::process::id()));

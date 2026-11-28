@@ -1045,9 +1045,10 @@ fn distort_refuses_a_folded_image_and_crop_and_trace_refuse_a_distorted_one() {
         ("imageTrace.make", json!({})),
         ("object.createObjectMosaic", json!({})),
         ("object.mesh.create", json!({})),
+        // Vector art has no pixels to put between the corners.
         (
             "file.place",
-            json!({"replace": true, "name": "b.png", "dataBase64": vectorcraft_format::base64_encode(&crate::tests_links::png(2, 2, [0, 0, 255]))}),
+            json!({"replace": true, "name": "b.svg", "dataBase64": vectorcraft_format::base64_encode(b"<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9'><rect width='9' height='9'/></svg>")}),
         ),
     ] {
         let e = s.execute(cmd, &params).unwrap_err().to_string();

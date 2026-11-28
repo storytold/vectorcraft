@@ -812,6 +812,47 @@ fn relink_embed_and_unembed_keep_a_distorted_images_corners() {
     assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
 }
 
+/// Place with Replace of a distorted image by an image file keeps its corners, in one undo step:
+/// the new file's pixels fill them, the new image is linked to that file, and its transform is the
+/// old image's scaled to the new pixel size. Undo brings the old image back between the same
+/// corners.
+#[test]
+fn place_with_replace_keeps_a_distorted_images_corners() {
+    let dir = Folder::new("distorted-place-replace");
+    let (photo, other) = (dir.file("photo.png"), dir.file("other.png"));
+    write(&photo, &png(20, 10, RED));
+    write(&other, &png(60, 20, BLUE));
+    let mut s = session();
+    let id = place(&mut s, &photo);
+    s.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    // Around the artboard's center, where `centre_colour` looks.
+    s.execute("object.distort", &json!({"corners": [[150, 100], [250, 110], [260, 200], [140, 190]]})).unwrap();
+    let node = |s: &Session, id: NodeId| s.doc().unwrap().doc.node(id).cloned();
+    let before = node(&s, id).unwrap().image_corners().unwrap();
+    let old_xf = image(&s, id).xf;
+    let undo_len = |s: &Session| s.doc().unwrap().history.undo.len();
+    let undo = undo_len(&s);
+
+    let r = s.execute("file.place", &json!({"path": other, "replace": true})).unwrap();
+    let new = NodeId(r["ids"][0].as_u64().unwrap());
+    assert_eq!(undo_len(&s), undo + 1);
+    assert!(node(&s, id).is_none(), "the old image is replaced");
+    let n = node(&s, new).unwrap();
+    assert!(n.is_distorted_image());
+    assert_eq!(n.image_corners().unwrap(), before);
+    let im = image(&s, new);
+    assert_eq!((im.width, im.height), (60, 20));
+    assert_eq!(im.link.as_ref().map(|l| l.path.as_str()), Some(other.as_str()));
+    let want = old_xf * vectorcraft_geom::Affine::scale_non_uniform(20.0 / 60.0, 10.0 / 20.0);
+    assert!(im.xf.as_coeffs().iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-9), "{:?} against {want:?}", im.xf);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), BLUE));
+
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(node(&s, new).is_none());
+    assert_eq!(node(&s, id).unwrap().image_corners().unwrap(), before);
+    assert!(near(centre_colour(&s.doc().unwrap().doc), RED));
+}
+
 /// Unembed into a folder keeps a distorted image's corners, in one undo step.
 #[test]
 fn unembed_to_a_folder_keeps_a_distorted_images_corners() {
