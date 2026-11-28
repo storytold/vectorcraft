@@ -3,6 +3,44 @@ use super::history::{History, HistoryEntry};
 use super::interaction::{Interaction, LastTransform, UndoGroup};
 use super::{Arc, Document, NodeId, NodeKind, Selection, Value, cmd, file_access};
 
+/// A document's window as the desktop app shows it ([`crate::Session::window_views`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowView {
+    /// The document point at the centre of the canvas.
+    pub center: vectorcraft_geom::Point,
+    /// The zoom is 1 at the window's displayed 100%.
+    pub zoom: f64,
+    /// The camera uses this scale at the window's displayed 100%.
+    pub zoom_baseline: f64,
+    /// The view's rotation in degrees, clockwise on screen.
+    pub rotation: f64,
+    /// The canvas's width and height in document points at a zoom of 1.
+    pub size: [f64; 2],
+    /// View › Screen Mode: 0 Normal, 1 Full Screen Mode with Menu Bar, 2 Full Screen Mode, 3
+    /// Presentation Mode (`view.screenMode`).
+    pub screen_mode: u8,
+}
+
+impl WindowView {
+    /// The physical camera scale stays within these limits.
+    pub const ZOOM_RANGE: (f64, f64) = (0.0313, 640.0);
+
+    /// `zoom_range` returns this window's allowed displayed zoom ratios.
+    pub fn zoom_range(&self) -> (f64, f64) {
+        let (min, max) = Self::ZOOM_RANGE;
+        (min / self.zoom_baseline, max / self.zoom_baseline)
+    }
+
+    /// The part of the document the canvas shows: the box around its four corners, which a
+    /// rotated view turns.
+    pub fn visible(&self) -> vectorcraft_geom::Rect {
+        let (sin, cos) = self.rotation.to_radians().sin_cos();
+        let (w, h) = (self.size[0] / self.zoom / 2.0, self.size[1] / self.zoom / 2.0);
+        let (x, y) = (w * cos.abs() + h * sin.abs(), w * sin.abs() + h * cos.abs());
+        vectorcraft_geom::Rect::new(self.center.x - x, self.center.y - y, self.center.x + x, self.center.y + y)
+    }
+}
+
 /// Per-document editing state.
 #[derive(Clone, Debug)]
 pub struct DocState {
@@ -501,7 +539,9 @@ impl DocState {
     /// Lock Guides `guides_locked`. `record` is the record of the selection before, in the same
     /// document: the objects that leave the selection are taken out of its paints and the objects
     /// that join it are read into them, unless that reads more objects than reading the selection
-    /// again would, or the paints left can't be told apart without reading them again.
+    /// again would, counting the contents of groups and containers on both sides
+    /// ([`cmd::SelectionPaints::reads_no_more_than`]), or the paints left can't be told apart
+    /// without reading them again.
     pub(crate) fn record_selection(&mut self, record: Option<SelectionRecord>, guides_locked: bool) {
         if !objects_only(&self.selection) {
             self.selection_record = None;
@@ -514,7 +554,8 @@ impl DocState {
                     let (kept, removed) = kept_from(&r.objects, objects);
                     let gone = left_out(&removed, objects);
                     let joined = left_out(&objects[kept..], &r.objects);
-                    if gone.len() + joined.len() > objects.len() || !p.remove(&self.doc, &gone) {
+                    let changed = [gone.as_slice(), joined.as_slice()].concat();
+                    if !cmd::SelectionPaints::reads_no_more_than(&self.doc, &changed, objects) || !p.remove(&self.doc, &gone) {
                         r.paints = None;
                     } else {
                         p.add(&self.doc, &joined);

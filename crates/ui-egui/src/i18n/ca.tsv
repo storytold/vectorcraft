@@ -3212,6 +3212,9 @@ digits	Malayalam	Malaiàlam
 	Only Web Colors	Només colors web
 	Opacity	Opacitat
 	Show Opacity	Mostra l’opacitat
+	Show Hex Field	Mostra el camp hex
+	Hex or CSS color	Color hex o CSS
+	Parse Color	Analitza el color
 	Opacity & Mask Define Knockout Shape	L’opacitat i la màscara defineixen la forma d’exclusió
 	Opacity Mask	Màscara d’opacitat
 	Opacity Mask Info	Informació de la màscara d’opacitat
@@ -6216,6 +6219,7 @@ digits	Malayalam	Malaiàlam
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` ha de ser hue, saturation, brightness, red, green o blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` ha de ser none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` ha de ser un color hex (#rgb, #rgba, #rrggbb o #rrggbbaa) o un color CSS rgb(), hsl() o oklch() de 48 caràcters com a màxim
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte
@@ -6623,7 +6627,9 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	is a confirm's answer, whose `value` must be true or false	és la resposta d'un confirm, i el seu `value` ha de ser true o false
 @msg	is longer than 16 KiB	ocupa més de 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	és la resposta d'un prompt, i el seu `value` ha de ser una cadena o null
-@msg	must have `kind` alert, confirm or prompt	ha de tenir `kind` alert, confirm o prompt
+@msg	must have `kind` alert, confirm, prompt or window	ha de tenir `kind` alert, confirm, prompt o window
+@msg	is a window's answer, whose `value` must be a list of steps	és la resposta d’una finestra, el `value` de la qual ha de ser una llista de passos
+@msg	has a step {i} that is not a valid click, change or close	té un pas {i} que no és un clic, un canvi ni un tancament vàlid
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` només és per a una execució sense ningú a qui preguntar: a l'aplicació, la persona respon cada quadre de diàleg
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` ha de ser un nombre enter d’1 a {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` està imbricat en més de 64 nivells

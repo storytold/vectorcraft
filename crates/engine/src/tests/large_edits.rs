@@ -748,3 +748,43 @@ fn deselecting_objects_one_at_a_time_looks_up_only_the_removed_objects() {
     assert!(walks.max(more_walks) <= MOST_TREE_WALKS, "walked the tree {walks} and {more_walks} times");
     assert!(more_lookups <= lookups * 5 / 2, "{lookups} lookups for 1,000 objects, {more_lookups} for 2,000");
 }
+
+/// Taking a group of 10,000 squares out of a selection that keeps two squares reads the two
+/// squares' paints again instead of taking the group's 10,000 out of them.
+#[test]
+fn deselecting_a_large_group_reads_the_objects_left() {
+    let mut s = session(3, |d, k| match k {
+        0 => Node::group(d.alloc_id(), (0..10_000).map(|i| Arc::new(square(d, i + 2))).collect()),
+        _ => square(d, k - 1),
+    });
+    let ids = layer(&s, 0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.add", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    assert!(selected(&s, &ids));
+    let read = || crate::cmd::PAINTS_READ.with(std::cell::Cell::get);
+    let before = read();
+    s.execute("select.toggle", &json!({"id": ids[0].0})).unwrap();
+    assert!(selected(&s, &ids[1..]));
+    let fills = read() - before;
+    assert!(fills <= 100, "read or took out {fills} fills");
+}
+
+/// Taking a group of one square out of a selection that keeps a group of 10,000 squares takes the
+/// one square out of the paints instead of reading the 10,000 again.
+#[test]
+fn deselecting_a_small_group_beside_a_large_one_takes_out_only_its_objects() {
+    let mut s = session(2, |d, k| match k {
+        0 => Node::group(d.alloc_id(), vec![Arc::new(square(d, 0))]),
+        _ => Node::group(d.alloc_id(), (0..10_000).map(|i| Arc::new(square(d, i + 1))).collect()),
+    });
+    let ids = layer(&s, 0);
+    s.execute("select.none", &json!({})).unwrap();
+    s.execute("select.add", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    assert!(selected(&s, &ids));
+    let read = || crate::cmd::PAINTS_READ.with(std::cell::Cell::get);
+    let before = read();
+    s.execute("select.toggle", &json!({"id": ids[0].0})).unwrap();
+    assert!(selected(&s, &ids[1..]));
+    let fills = read() - before;
+    assert!(fills <= 100, "read or took out {fills} fills");
+}

@@ -285,6 +285,89 @@ fn with_characters_selected_an_id_takes_the_opacity() {
     assert_eq!(node(&s, t), before, "the characters keep their paint");
 }
 
+/// While the Type tool has characters selected, a null `id` or `ids` names no object: the paint goes
+/// to the selected characters only, as without the key.
+#[test]
+fn with_characters_selected_a_null_id_paints_the_characters() {
+    let runs = |key: Option<&str>| {
+        let mut s = session();
+        let r = s.execute("text.create", &json!({"x": 10, "y": 150, "text": "Hello"})).unwrap();
+        let t = NodeId(r["id"].as_u64().unwrap());
+        select(&mut s, &[t]);
+        select_characters(&mut s, t);
+        let mut p = json!({"color": "#ff0000"});
+        if let Some(key) = key {
+            p[key] = Value::Null;
+        }
+        s.execute("paint.setFill", &p).unwrap();
+        match &node(&s, t).kind {
+            NodeKind::Text(t) => t.runs.clone(),
+            _ => panic!("not type"),
+        }
+    };
+    let characters = runs(None);
+    assert!(characters.len() > 1, "only the selected characters take the paint");
+    for key in ["id", "ids"] {
+        assert_eq!(runs(Some(key)), characters, "{key}: null");
+    }
+}
+
+/// An opacity for characters selected while the Type tool is typing is refused before the typing
+/// session ends: the session goes on, and no undo step is recorded.
+#[test]
+fn an_opacity_for_characters_leaves_the_typing_session_running() {
+    let mut s = session();
+    let v = ViewInfo::default();
+    s.select_tool("type", v).unwrap();
+    for kind in [PointerKind::Down, PointerKind::Up] {
+        s.pointer(&PointerEvent::new(kind, 50.0, 250.0), v).unwrap();
+    }
+    s.tool_text("Hello", v).unwrap();
+    s.set_tool_option("select", &json!({"start": 0, "end": 2}));
+    assert!(crate::cmd::typing_in_progress(&s));
+    let undo = undo_labels(&s).len();
+    let e = s.execute("paint.setFill", &json!({"opacity": 40})).unwrap_err();
+    assert!(e.to_string().contains("type characters have no opacity of their own"), "{e}");
+    assert!(crate::cmd::typing_in_progress(&s), "the typing session goes on");
+    assert_eq!(undo_labels(&s).len(), undo, "no undo step");
+}
+
+/// With an opacity alone, the reply counts only the objects that took it: a selected object without
+/// that fill item is left out, and one already at that opacity still counts. With a paint, every
+/// target counts.
+#[test]
+fn an_opacity_alone_counts_the_objects_that_took_it() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    select(&mut s, &[a]);
+    s.execute("appearance.removeItem", &json!({"index": 0})).unwrap();
+    assert!(node(&s, a).appearance.fill().is_none());
+    select(&mut s, &[a, b]);
+    assert_eq!(s.execute("paint.setFill", &json!({"opacity": 40})).unwrap()["objects"], 1);
+    assert_eq!(s.execute("paint.setFill", &json!({"opacity": 40})).unwrap()["objects"], 1, "already at 40%");
+    assert_eq!(s.execute("paint.setFill", &json!({"color": "#ff0000", "opacity": 40})).unwrap()["objects"], 2);
+}
+
+/// With a layer targeted, `paint.proxies` reads the art the command edits: a locked object's fill
+/// row does not count, so the proxy answers null when the edit finds no fill to take the opacity.
+#[test]
+fn a_targeted_layers_proxy_leaves_out_locked_art() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    select(&mut s, &[b]);
+    s.execute("appearance.removeItem", &json!({"index": 0})).unwrap();
+    select(&mut s, &[a]);
+    s.execute("object.lock", &json!({})).unwrap();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.target", &json!({"id": layer.0})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+    let e = s.execute("paint.setFill", &json!({"opacity": 40})).unwrap_err();
+    assert!(e.to_string().contains("no target has that fill or stroke to take the opacity"), "{e}");
+    s.execute("object.unlockAll", &json!({})).unwrap();
+    s.execute("layer.target", &json!({"id": layer.0})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 100.0, "the unlocked fill counts");
+}
+
 /// A type object whose characters take the paint is left alone beside a rectangle that takes the
 /// opacity, with no error; alone, it answers the characters error.
 #[test]
@@ -371,6 +454,63 @@ fn an_object_in_a_symbol_instance_refuses_an_opacity() {
     }
     assert_eq!(*s.doc().unwrap().doc, *doc);
     assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+}
+
+/// With an object selected in a dynamic symbol instance, a bad `target` is refused whether `id` and
+/// `ids` are left out or given as null, and leaves the document alone; a good one with a null `id`
+/// still paints the object.
+#[test]
+fn an_object_in_a_symbol_instance_refuses_a_bad_target() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    let inst = s.execute("symbol.new", &json!({"name": "One", "ids": [id.0], "type": "dynamic"})).unwrap()["id"].clone();
+    s.execute("symbol.instance.selectPart", &json!({"id": inst, "path": []})).unwrap();
+    let doc = s.doc().unwrap().doc.clone();
+    for p in [
+        json!({"color": "#ff0000", "target": "content"}),
+        json!({"color": "#ff0000", "target": "content", "id": null}),
+        json!({"color": "#ff0000", "target": "content", "ids": null}),
+    ] {
+        let e = s.execute("paint.setFill", &p).unwrap_err();
+        assert!(e.to_string().contains("`target` must be"), "{p}: {e}");
+        assert_eq!(*s.doc().unwrap().doc, *doc, "{p}");
+    }
+    assert_eq!(s.execute("paint.setFill", &json!({"color": "#ff0000", "target": "object", "id": null})).unwrap()["objects"], 1);
+    assert_ne!(*s.doc().unwrap().doc, *doc);
+}
+
+/// A bad `target` is refused when `id` or `ids` names an object, and a bad `target` or `aligned`
+/// while the Type tool has characters selected; each leaves the document alone. A good `target`
+/// with an `id` still paints the object.
+#[test]
+fn a_bad_target_is_refused_with_an_id_or_selected_characters() {
+    let mut s = session();
+    let r = rect(&mut s, 10.0);
+    select(&mut s, &[r]);
+    let doc = s.doc().unwrap().doc.clone();
+    for cmd in ["paint.setFill", "paint.setStroke"] {
+        for p in [
+            json!({"color": "#ff0000", "target": "content", "id": r.0}),
+            json!({"color": "#ff0000", "target": "content", "ids": [r.0]}),
+            json!({"opacity": 40, "target": "content", "id": r.0}),
+            json!({"opacity": 40, "target": "content", "ids": [r.0]}),
+        ] {
+            let e = s.execute(cmd, &p).unwrap_err();
+            assert!(e.to_string().contains("`target` must be"), "{cmd} {p}: {e}");
+            assert_eq!(*s.doc().unwrap().doc, *doc, "{cmd} {p}");
+        }
+    }
+    assert_eq!(s.execute("paint.setFill", &json!({"color": "#ff0000", "target": "object", "id": r.0})).unwrap()["objects"], 1);
+    assert_ne!(*s.doc().unwrap().doc, *doc);
+    let t = text(&mut s);
+    select(&mut s, &[t]);
+    select_characters(&mut s, t);
+    let doc = s.doc().unwrap().doc.clone();
+    for p in [json!({"color": "#ff0000", "target": "content"}), json!({"color": "#ff0000", "aligned": "yes"})] {
+        assert!(s.execute("paint.setFill", &p).is_err(), "{p}");
+        assert_eq!(*s.doc().unwrap().doc, *doc, "{p}");
+    }
 }
 
 /// A gradient mesh point picked with the Mesh tool takes a fill opacity itself, and the proxy shows

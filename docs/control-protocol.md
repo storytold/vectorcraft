@@ -280,11 +280,11 @@ Color Wheel panel (`window.panel {panel: "colorWheel"}`): a hue ring around a sa
 pick runs the commands the Color panel's sliders run: `paint.setFill` or `paint.setStroke` with `keepModel`,
 `paint.editGradient` for a gradient's selected stop, and `paint.freeform.setPoint` for a freeform gradient's selected
 point (the first stop or point when none is selected). `ui.colorWheel {view?, channel?, sliders?, gamut?, harmony?,
-harmonyRule?, opacity?, vision?}` shows the wheel or the box (a color field with a channel strip at its right), picks the box's
+harmonyRule?, opacity?, hexField?, vision?}` shows the wheel or the box (a color field with a channel strip at its right), picks the box's
 channel, shows OKLCH Sliders, HSL Sliders or neither, grays out the colors the CMYK space cannot print, shows the
 other colors of a harmony rule as markers on the wheel's ring, checks or unchecks Show Opacity (an opacity row under
-the wheel or the box), and shows or hides the color vision row; it returns the settings, and `ui.inspect` reports them
-as `ui.color_wheel`.
+the wheel or the box) and Show Hex Field (a field for a hex or CSS color), and shows or hides the color vision row; it
+returns the settings, and `ui.inspect` reports them as `ui.color_wheel`.
 The key `sliders` takes (`"oklch"`, `"hsl"` or `"none"`; `"oklch"` is an error while the active document's RGB space, its assigned
 profile or else the working RGB space, is not sRGB), and the settings carry it too.
 
@@ -503,9 +503,18 @@ button is dimmed while that item is. A missing `toolbar` is an error for both an
 command the toolbar has no button for, a tool's id included, is not an error: it answers with the toolbar's command
 buttons unchanged. A command that is no longer installed keeps its button, dimmed, and `toolbar.removeCommand` still
 takes it off.
+`toolbar.renameCommand {command, toolbar, label?}` (Rename Button… in the button's context menu, which opens a
+dialog; without `label` the command opens that dialog and returns null) gives a button a label of its own, and
+`toolbar.addCommand` takes the same optional `label`. The label loses the spaces at its ends and has at most 64
+characters; an empty one, on either command, gives the button its command's label again. The hover text still shows
+the command's name and shortcut, and a screen reader says the label and then the command's name, or only the label
+when it is the command's label or name. A longer label, a
+label that is not text or a button the toolbar does not have is an error and changes nothing. `toolbar.removeCommand`
+and `toolbar.reset` drop a button's label with it.
 `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with it.
-`window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, commands, shown flag,
-two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once docked).
+`window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, commands, labels,
+shown flag, two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once
+docked).
 `window.toolbar.dock {name, side?, order?}` docks a toolbar as a column of the dock along the window's left or right
 edge, and `window.toolbar.float {name, x?, y?}` floats it again; dragging its title bar does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:
 switching workspaces shows that workspace's toolbars, Reset Workspace keeps them, and New Workspace starts the new

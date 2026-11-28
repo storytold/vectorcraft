@@ -600,21 +600,40 @@ pub const SLANT_INSTANCES: usize = 4096;
 impl crate::Node {
     /// Does a visible stroke of this object, of an object in it or of an object in a symbol
     /// instance's art from `symbols`, placed by `a`, stop at the corners of a segment at a slant
-    /// ([`Appearance::has_slanted_stroke_corners`])? Past [`SLANT_INSTANCES`] instances it answers
-    /// yes.
+    /// ([`Appearance::has_slanted_stroke_corners`])? The strokes of a group or layer without a
+    /// clipping path count along the paths and compound paths in it, which they paint along
+    /// ([`crate::Node::painted_by_container`]). Past [`SLANT_INSTANCES`] instances it answers yes.
     pub fn has_slanted_stroke_corners(&self, symbols: &crate::SymbolBoxes, a: vectorcraft_geom::Affine) -> bool {
-        self.slanted_corners(symbols, a, &std::cell::Cell::new(SLANT_INSTANCES))
+        self.slanted_corners(symbols, a, &std::cell::Cell::new(SLANT_INSTANCES), &[])
     }
 
-    /// [`Self::has_slanted_stroke_corners`] with `left` instances still to look into.
-    fn slanted_corners(&self, symbols: &crate::SymbolBoxes, a: vectorcraft_geom::Affine, left: &std::cell::Cell<usize>) -> bool {
+    /// [`Self::has_slanted_stroke_corners`] with `left` instances still to look into, and the
+    /// appearances of the groups and layers around this object whose strokes paint along it in
+    /// `around`.
+    fn slanted_corners(
+        &self,
+        symbols: &crate::SymbolBoxes,
+        a: vectorcraft_geom::Affine,
+        left: &std::cell::Cell<usize>,
+        around: &[&Appearance],
+    ) -> bool {
         if let crate::NodeKind::SymbolInstance { symbol, xf } = &self.kind {
             let Some(l) = left.get().checked_sub(1) else { return true };
             left.set(l);
-            return symbols.measure_art(symbol, |art| art.slanted_corners(symbols, a * *xf, left)).unwrap_or(false);
+            return symbols.measure_art(symbol, |art| art.slanted_corners(symbols, a * *xf, left, &[])).unwrap_or(false);
         }
-        (self.appearance.has_cornered_stroke() && self.stroke_path().is_some_and(|bp| self.appearance.has_slanted_stroke_corners(&bp, a)))
-            || self.children().is_some_and(|c| c.iter().any(|c| c.slanted_corners(symbols, a, left)))
+        let slanted = |ap: &Appearance| ap.has_cornered_stroke() && self.stroke_path().is_some_and(|bp| ap.has_slanted_stroke_corners(&bp, a));
+        let shaped = matches!(self.kind, crate::NodeKind::Path { .. } | crate::NodeKind::Compound { .. });
+        if slanted(&self.appearance) || shaped && around.iter().any(|ap| slanted(ap)) {
+            return true;
+        }
+        let plain =
+            matches!(self.kind, crate::NodeKind::Group { clip: false, .. } | crate::NodeKind::Layer { clip: false, .. }) && !self.is_compound_shape();
+        let mut inner: Vec<&Appearance> = if plain { around.to_vec() } else { vec![] };
+        if plain && self.appearance.has_cornered_stroke() {
+            inner.push(&self.appearance);
+        }
+        self.children().is_some_and(|c| c.iter().any(|c| c.slanted_corners(symbols, a, left, &inner)))
     }
 }
 

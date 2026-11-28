@@ -54,7 +54,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Update Links",
             [],
             None,
-            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. Images and placed documents inside symbols, graph designs, patterns, opacity masks and the art of stored brushes have ids of their own, as links.list gives them; those that show the same content as one read again are read again too. An image changed by Perspective Distort or Free Distort keeps its corners, with the file's pixels between them, and its Placement Options do not apply; the clipping path its file names is drawn through the corners, and a clip group of the old file's clipping path gets the new one, or becomes a plain group when the file names none. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns]}",
+            "{ids?: [image or placed document ids] (default: the linked images whose file was modified or is showing its preview, and placed documents whose file was modified)} read their linked files again; each keeps its bounds. Images and placed documents inside symbols, graph designs, patterns, opacity masks and the art of stored brushes have ids of their own, as links.list gives them; those that show the same content as one read again are read again too. An image changed by Perspective Distort or Free Distort keeps its corners, with the file's pixels between them, and its Placement Options do not apply; the clipping path its file names is drawn through the corners, and a clip group of the old file's clipping path gets the new one, or becomes a plain group when the file names none. One undo step → {updated: [ids], missing: [ids], warnings?: [a DCS file's spot plate whose ink a swatch of the document already names, as file.place warns; a .pcraft file read only as its reduced preview, after the file's name]}",
             has_doc,
             update
         ),
@@ -81,7 +81,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Image",
             [],
             None,
-            "{ids: [canvas image ids], dataBase64: raster file bytes} replace the images with embedded pixels, keeping their ids and fitting their new aspect ratio inside their old bounds. Distorted images keep their corners. One undo step → {replaced: [ids]}",
+            "{ids: [canvas image ids], dataBase64: raster file bytes} replace the images with embedded pixels, keeping their ids and fitting their new aspect ratio inside their old bounds. Distorted images keep their corners. One undo step → {replaced: [ids], warnings?: [a .pcraft document read only as its reduced preview]}",
             has_doc,
             replace_embedded
         ),
@@ -636,11 +636,12 @@ pub(crate) fn store_image(d: &mut Document, key: &str, full: ImageBlob, linked: 
     d.images.insert(key.to_string(), blob);
 }
 
-/// Whether `bytes` are a PNG, JPEG, GIF or WebP file: the formats [`fileio::raster_image`] keeps
-/// as they are after reading only their header.
+/// Whether `bytes` are a PNG, JPEG, GIF or WebP file, the formats [`fileio::raster_image`] keeps
+/// as they are after reading only their header, or a `.pcraft` document, whose full-size composite
+/// or preview it keeps the same way.
 pub(crate) fn kept_unread(bytes: &[u8]) -> bool {
     use craft_image_codecs::Format as F;
-    matches!(craft_image_codecs::detect(bytes), Some(F::Png | F::Jpeg | F::Gif | F::WebP))
+    matches!(craft_image_codecs::detect(bytes), Some(F::Png | F::Jpeg | F::Gif | F::WebP)) || fileio::is_pcraft(bytes)
 }
 
 /// `blob`, an image [`fileio::raster_image`] read from a file, ready to keep. When `unread` (the
@@ -1275,8 +1276,13 @@ fn replace_embedded(s: &mut Session, p: &Value) -> Result<Value> {
     let bytes = vectorcraft_format::base64_decode(data).ok_or_else(|| bad(C, "bad dataBase64"))?;
     let mut img = fileio::raster_image(&bytes)?;
     img.blob = readable_and_kept(img.blob, kept_unread(&bytes), false)?;
+    let note = img.note.clone();
     s.edit("Replace Image", |d, _| install_with(d, &ids, None, img, Some(Preserve::Fit), None, false))?;
-    Ok(json!({ "replaced": ids_json(&ids) }))
+    let mut out = json!({ "replaced": ids_json(&ids) });
+    if let Some(note) = note {
+        out["warnings"] = json!([note]);
+    }
+    Ok(out)
 }
 
 /// Distorted image `n` shows the file read for `link` (`img`) and keeps its corners: the new pixels
@@ -2089,7 +2095,8 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
         }
     }
     let updated: Vec<u64> = reads.iter().flat_map(|(g, _)| ids_json(&g.ids)).collect();
-    let warnings = spot_swatch_notes(&st.doc, reads.iter().map(|(_, read)| read));
+    let mut warnings = spot_swatch_notes(&st.doc, reads.iter().map(|(_, read)| read));
+    warnings.extend(file_notes(reads.iter().map(|(_, read)| read)));
     if !reads.is_empty() {
         s.edit("Update Links", |d, _| {
             editing_brush_art(d, |d| reads.into_iter().try_for_each(|(g, read)| install_read(d, &g.ids, read, None, Some(&g))))
@@ -2100,6 +2107,22 @@ fn update_where(s: &mut Session, ids: Option<Vec<NodeId>>, path: Option<&str>) -
         out["warnings"] = json!(warnings);
     }
     Ok(out)
+}
+
+/// The notes of the images in `reads` that leave part of their file out ([`RasterImage::note`], a
+/// `.pcraft` document read as its reduced preview), each after its file's name, once per file.
+fn file_notes<'a>(reads: impl Iterator<Item = &'a Read>) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    for read in reads {
+        let Read::Image((link, img)) = read else { continue };
+        let Some(note) = &img.note else { continue };
+        let name = Path::new(&link.path).file_name().map_or_else(|| link.path.clone(), |n| n.to_string_lossy().into_owned());
+        let note = format!("{name}: {note}");
+        if !out.contains(&note) {
+            out.push(note);
+        }
+    }
+    out
 }
 
 /// The warnings for the spot plates of the DCS files in `reads` whose ink a swatch of `d` already
@@ -2354,6 +2377,7 @@ fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     let unpreserved = preserve.and_then(|_| unpreserved_note(&doc, &reads));
     drop(doc);
     let mut warnings = spot_swatch_notes(&s.doc()?.doc, reads.iter().map(|(_, read)| read));
+    warnings.extend(file_notes(reads.iter().map(|(_, read)| read)));
     warnings.extend(unpreserved);
     if !reads.is_empty() {
         s.edit("Relink", |d, _| editing_brush_art(d, |d| reads.into_iter().try_for_each(|(ids, read)| install_read(d, &ids, read, preserve, None))))?;

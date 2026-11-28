@@ -36,6 +36,8 @@ pub(crate) enum Op {
     Swap,
     /// `a b c` → `b c a`.
     Rot3,
+    /// Pushes a copy of the value `n` places under the top one (`Pick(0)` is `Dup`).
+    Pick(u32),
     /// Pushes the value of the variable `names[i]`.
     GetVar(u32),
     /// Pushes the value of the variable and the `this` a call to it gets.
@@ -223,6 +225,68 @@ pub(crate) enum Op {
     ToStr,
     /// Pushes the template object of `templates[i]`, the same object for each evaluation.
     TemplateObject(u32),
+    /// Starts (`true`) or ends (`false`) a class's heritage and computed keys in code that is not
+    /// strict mode code: the code between runs as strict mode code (ECMA-262 2015 section 10.2.1).
+    StrictClass(bool),
+    /// `[superclass]` → `constructor prototype`: makes a class's prototype object and its
+    /// constructor from `functions[ctor]`, the superclass on the stack when `heritage` is true
+    /// (ECMA-262 2015 section 14.5.14).
+    ClassStart {
+        ctor: u32,
+        heritage: bool,
+    },
+    /// `constructor prototype key` → `constructor prototype`: defines the method, getter (`kind` 1)
+    /// or setter (`kind` 2) made from `functions[func]` under the key, on the constructor when
+    /// `is_static` is true and otherwise on the prototype.
+    ClassMethod {
+        func: u32,
+        kind: u8,
+        is_static: bool,
+    },
+    /// `object` → `object`: defines the enumerable method, getter (`kind` 1) or setter (`kind`
+    /// 2) made from `functions[func]` under `names[name]` on an object literal's object, its home
+    /// object (section 12.2.6.8).
+    InitMethod {
+        func: u32,
+        kind: u8,
+        name: u32,
+    },
+    /// `object key` → `object`: [`Op::InitMethod`] under a computed key, already a name or a
+    /// Symbol.
+    InitMethodKey {
+        func: u32,
+        kind: u8,
+    },
+    /// `this key` → `this home key`: the key as a property name, with the prototype of the
+    /// running method's home object between, for a `super` property (section 12.3.5.3).
+    SuperRef,
+    /// `this home key` → the property's value, read from the home object with `this` as the
+    /// receiver.
+    SuperGet,
+    /// `this home key` → `value this`, for a call.
+    SuperGetThis,
+    /// `this home key value` → `value`, written through the home object with `this` as the
+    /// receiver.
+    SuperSet,
+    /// `this home key` → `this home key this home key`.
+    SuperDup,
+    /// `this home key` → the old or new value: `++` or `--` on a `super` property.
+    SuperInc {
+        prefix: bool,
+        dec: bool,
+    },
+    /// Pushes the constructor `super(…)` calls: the prototype of the running class constructor.
+    SuperCtor,
+    /// `constructor arg…` → the object it constructs, with the running constructor's
+    /// `new.target`.
+    SuperCall(u32),
+    /// `constructor array` → the object it constructs, with the array's elements as arguments.
+    SuperCallSpread,
+    /// `value` → `value`: binds the running derived constructor's `this` to the value; a
+    /// `ReferenceError` when it is bound already.
+    BindThis,
+    /// Pushes `new.target`.
+    NewTarget,
     /// `value` → its Iterator Record (GetIterator, ECMA-262 11th edition section 7.4.1).
     GetIterator,
     /// `record` → `record value`, or jumps with `record` when the iterator is done.
@@ -361,9 +425,16 @@ pub(crate) struct Code {
     pub(crate) arrow: bool,
     /// The code reads `this` or calls `eval`, itself or in an arrow function inside it.
     pub(crate) uses_this: bool,
-    /// The function has default, rest or destructured parameters: its parameters start
-    /// uninitialized, its code initializes them and then enters its body with [`Op::BodyEnv`].
+    /// The function has parameters with default values or destructured parameters: its
+    /// parameters start uninitialized, its code initializes them and then enters its body with
+    /// [`Op::BodyEnv`].
     pub(crate) param_init: bool,
+    /// The code is a class constructor's: calling it without `new` is a `TypeError`.
+    pub(crate) class_ctor: bool,
+    /// The code is a derived class constructor's: its `this` is bound by `super(…)`.
+    pub(crate) derived: bool,
+    /// The code reads `new.target`, itself or in an arrow function inside it.
+    pub(crate) uses_new_target: bool,
     /// The names the destructured parameters bind, which start uninitialized beside the
     /// parameters. A destructured parameter's own entry in `params` is a name no script can
     /// write.
@@ -375,8 +446,9 @@ pub(crate) struct Code {
     /// and 14.1.20): a declaration's or a named function expression's name, with
     /// [`crate::Options::es2015`].
     pub(crate) own_name: Option<Key>,
-    /// The code is a method's, a getter's or a setter's, read with [`crate::Options::es2015`]:
-    /// its functions have no `prototype` and cannot be constructed (section 14.3.8).
+    /// The code is a method's, a getter's or a setter's, read with [`crate::Options::es2015`], or
+    /// a class method's or accessor's: its functions have no `prototype` and cannot be
+    /// constructed (section 14.3.8).
     pub(crate) method: bool,
     /// The code is a generator function's: a call makes a generator object ([`Op::GeneratorStart`]),
     /// and it is not a constructor.
@@ -424,6 +496,12 @@ impl Code {
         let offset = self.positions.get(pc).copied().unwrap_or(self.span.0);
         self.source.lines.line_column(offset)
     }
+
+    /// The parameters are plain names, without default values or a rest parameter, so outside
+    /// strict mode code the `arguments` object follows them (ECMA-262 2015 section 9.2.12).
+    pub(crate) fn simple_params(&self) -> bool {
+        !self.param_init && self.rest.is_none()
+    }
 }
 
 /// What an instruction does to the stack on each way out of it.
@@ -459,6 +537,10 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::Dup2 => e(2, 4),
         Op::Swap | Op::ToKey => e(2, 2),
         Op::Rot3 => e(3, 3),
+        Op::Pick(n) => {
+            let below = n.checked_add(1).ok_or("operand too large")?;
+            e(below, below.checked_add(1).ok_or("operand too large")?)
+        }
         Op::GetVarThis(_) => e(0, 2),
         Op::SetVar(_) | Op::GetMember(_) | Op::DeleteMember(_) | Op::IncMember { .. } => e(1, 1),
         Op::Neg | Op::Plus | Op::BitNot | Op::Not | Op::Typeof | Op::ToNumber | Op::ArrayHole | Op::ForInStart | Op::CheckObject => e(1, 1),
@@ -491,11 +573,25 @@ fn effect(op: Op, finally_tables: &[Vec<u32>]) -> Result<Effect, String> {
         Op::XmlScopeRef => e(1, 2),
         Op::ForEachValue(n) => e(n + 2, n + 3),
         Op::SetDefaultNamespace => e(1, 0),
-        Op::PushBlock(_) | Op::CopyEnv | Op::BodyEnv => e(0, 0),
+        Op::PushBlock(_) | Op::CopyEnv | Op::BodyEnv | Op::StrictClass(_) => e(0, 0),
         Op::InitVar(_) | Op::AnnexB(_) => e(1, 0),
         Op::LoadParam(_) | Op::TemplateObject(_) => e(0, 1),
         Op::ArraySpread | Op::NewSpread => e(2, 1),
         Op::CallSpread(_) => e(3, 1),
+        Op::ClassStart { heritage, .. } => e(u32::from(heritage), 2),
+        Op::ClassMethod { .. } => e(3, 2),
+        Op::InitMethod { .. } => e(1, 1),
+        Op::InitMethodKey { .. } => e(2, 1),
+        Op::SuperRef => e(2, 3),
+        Op::SuperGet => e(3, 1),
+        Op::SuperGetThis => e(3, 2),
+        Op::SuperSet => e(4, 1),
+        Op::SuperDup => e(3, 6),
+        Op::SuperInc { .. } => e(3, 1),
+        Op::SuperCtor | Op::NewTarget => e(0, 1),
+        Op::SuperCall(n) => e(n.checked_add(1).ok_or("operand too large")?, 1),
+        Op::SuperCallSpread => e(2, 1),
+        Op::BindThis => e(1, 1),
         Op::ToStr | Op::GetIterator | Op::IterSkip | Op::RequireObjectCoercible => e(1, 1),
         Op::IterStep(t) => Effect { pops: 1, next: Some(2), jumps: vec![(t, 1)] },
         Op::IterValue(n) | Op::IterRest(n) => e(n.checked_add(1).ok_or("operand too large")?, n.checked_add(2).ok_or("operand too large")?),
@@ -540,7 +636,13 @@ fn check_indices(op: Op, code: &Code) -> Result<(), String> {
         | Op::InitVar(i)
         | Op::LoadParam(i)
         | Op::AnnexB(i) => check(i, code.names.len(), "name"),
-        Op::Closure(i) => check(i, code.functions.len(), "function"),
+        Op::Closure(i) | Op::ClassStart { ctor: i, .. } | Op::ClassMethod { func: i, .. } | Op::InitMethodKey { func: i, .. } => {
+            check(i, code.functions.len(), "function")
+        }
+        Op::InitMethod { func, name, .. } => {
+            check(func, code.functions.len(), "function")?;
+            check(name, code.names.len(), "name")
+        }
         Op::PushBlock(i) => check(i, code.scopes.len(), "scope"),
         Op::TemplateObject(i) => check(i, code.templates.len(), "template"),
         Op::RegExp(i) => check(i, code.regexps.len(), "regular expression"),

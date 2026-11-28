@@ -16,7 +16,7 @@ fn session() -> (Session, NodeId, NodeId) {
 
 #[test]
 fn selection_commands_reject_invalid_ids_without_changing_state() {
-    for command in ["select.set", "select.add", "select.toggle"] {
+    for command in ["select.set", "select.add", "select.toggle", "select.remove"] {
         let (mut s, a, b) = session();
         s.execute("select.set", &json!({"ids": [b.0, a.0]})).unwrap();
         s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 0]], "mode": "add"})).unwrap();
@@ -37,7 +37,7 @@ fn selection_commands_reject_invalid_ids_without_changing_state() {
 
 #[test]
 fn selection_commands_require_an_id_array() {
-    for command in ["select.set", "select.add", "select.toggle"] {
+    for command in ["select.set", "select.add", "select.toggle", "select.remove"] {
         let (mut s, _, _) = session();
         for params in [json!({}), json!({"ids": null}), json!({"ids": 2}), json!({"ids": "2"}), json!({"ids": true})] {
             let selection = s.active().unwrap().selection.clone();
@@ -78,13 +78,52 @@ fn toggle_and_add_handle_each_listed_id_in_order() {
 #[test]
 fn single_id_toggle_validates_before_mutating() {
     let (mut s, a, _) = session();
-    for invalid in [json!(999), json!(-1), json!(2.5), json!("2"), Value::Null, json!(true)] {
-        let selection = s.active().unwrap().selection.clone();
-        assert!(matches!(s.execute("select.toggle", &json!({"id": invalid})), Err(EngineError::BadParams { .. })));
-        assert_eq!(s.active().unwrap().selection, selection);
+    for command in ["select.toggle", "select.remove"] {
+        for invalid in [json!(999), json!(-1), json!(2.5), json!("2"), Value::Null, json!(true)] {
+            let selection = s.active().unwrap().selection.clone();
+            assert!(matches!(s.execute(command, &json!({"id": invalid})), Err(EngineError::BadParams { .. })), "{command}: {invalid}");
+            assert_eq!(s.active().unwrap().selection, selection);
+        }
+        // A malformed array must not silently fall back to a valid single id.
+        assert!(s.execute(command, &json!({"ids": "bad", "id": a.0})).is_err());
     }
-    // A malformed array must not silently fall back to a valid single id.
-    assert!(s.execute("select.toggle", &json!({"ids": "bad", "id": a.0})).is_err());
+}
+
+/// Direct Selection's Shift-click on a member of a selected group: `select.remove` deselects the
+/// member and keeps the group's other objects selected, and `select.anchors` with mode toggle on
+/// one of the member's anchors deselects only that anchor.
+#[test]
+fn remove_and_anchor_toggle_open_a_selected_group() {
+    let (mut s, a, b) = session();
+    let c = NodeId(s.execute("shape.rectangle", &json!({"x": 40, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [a.0, b.0, c.0]})).unwrap();
+    let group = NodeId(s.execute("object.group", &json!({})).unwrap()["id"].as_u64().unwrap());
+    let reset = |s: &mut Session| s.execute("select.set", &json!({"ids": [group.0]})).unwrap();
+    reset(&mut s);
+    assert_eq!(s.execute("select.remove", &json!({"id": b.0})).unwrap(), json!({"count": 2, "ids": [a.0, c.0]}));
+    assert_eq!(s.execute("select.remove", &json!({"id": b.0})).unwrap(), json!({"count": 2, "ids": [a.0, c.0]}), "b is not selected");
+    assert_eq!(s.execute("select.remove", &json!({"ids": [c.0]})).unwrap(), json!({"count": 1, "ids": [a.0]}));
+    // A member selected beside its group (as Group Selection leaves it) leaves the selection with the group.
+    s.execute("select.set", &json!({"ids": [group.0, b.0]})).unwrap();
+    assert_eq!(s.execute("select.remove", &json!({"id": b.0})).unwrap(), json!({"count": 2, "ids": [a.0, c.0]}));
+    reset(&mut s);
+    s.execute("select.anchors", &json!({"id": a.0, "anchors": [[0, 1]], "mode": "toggle"})).unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert_eq!(sel.objects, [a, b, c]);
+    assert_eq!(sel.partial(a), Some(&[(0, 0), (0, 2), (0, 3)].into()), "the other anchors of a stay selected");
+    assert_eq!((sel.partial(b), sel.partial(c)), (None, None), "b and c stay selected whole");
+    // A second Shift-click, on an anchor of b, deselects only that anchor of b.
+    s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 2]], "mode": "toggle"})).unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert_eq!(sel.objects, [a, b, c]);
+    assert_eq!(sel.partial(a), Some(&[(0, 0), (0, 2), (0, 3)].into()));
+    assert_eq!(sel.partial(b), Some(&[(0, 0), (0, 1), (0, 3)].into()), "the other anchors of b stay selected");
+    assert_eq!(sel.partial(c), None);
+    // An anchor of a path that is not selected joins the selection by itself.
+    let d = NodeId(s.execute("shape.rectangle", &json!({"x": 60, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": d.0, "anchors": [[0, 1]], "mode": "toggle"})).unwrap();
+    assert_eq!(s.active().unwrap().selection.partial(d), Some(&[(0, 1)].into()));
 }
 
 #[test]

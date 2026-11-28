@@ -558,6 +558,21 @@ fn on_screen_a_placed_document_shows_a_placeholder_then_its_bitmap() {
 }
 
 #[test]
+fn a_bitmap_that_panics_while_made_on_the_drawing_thread_stops_being_pending() {
+    let _serial = serial();
+    let d = doc("inline-panic-1");
+    let Some(NodeKind::PlacedDocument(p)) = d.node(NodeId(50)).map(|n| &n.kind) else { panic!("a placed document") };
+    let Some(blob) = d.images.get("inline-panic-1") else { panic!("the file's bytes") };
+    let made = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        placed_document::make_here(p, blob.clone(), 1.0, Box::new(|_| panic!("the job fails")));
+    }));
+    assert!(made.is_err(), "the panic reaches the caller");
+    assert!(!placed_document::pending_for("inline-panic-1"), "nothing waits for the bitmap");
+    assert!(placed_document::failed_for("inline-panic-1"), "and it is not asked for again");
+    settle();
+}
+
+#[test]
 fn copies_of_one_placed_document_share_its_bitmap() {
     let _serial = serial();
     let mut d = doc("shared-1");

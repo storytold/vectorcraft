@@ -29,6 +29,25 @@ pub(crate) fn windowed(mut app: crate::VectorcraftApp) -> crate::VectorcraftApp 
     app
 }
 
+/// Waits until the process's lookup of the installed CJK faces has ended: fontconfig's scan on Linux, which
+/// [`crate::ui_fonts`]'s loader starts the first time a CJK character has no glyph. Nothing waits on macOS and Windows.
+/// While the scan runs, Japanese, Chinese and Korean text draws without glyphs; the pass after it ends registers the
+/// face it found, and the next frame lays the text out again, wider or narrower, moving the controls around it. A test
+/// that measures controls in one frame and clicks them in a later one calls this first; then each new context
+/// registers its face after its first pass, and the controls hold still from the second frame on.
+pub(crate) fn wait_for_cjk_fonts() {
+    use craft::ui::fonts::{FontCandidates as _, SystemCandidates};
+    // `pending` starts the scan when it has not started.
+    if !SystemCandidates.pending() {
+        return;
+    }
+    let (ended, wait) = std::sync::mpsc::channel();
+    SystemCandidates.wake_when_ready(craft::host::Wake::new(move || {
+        let _ = ended.send(());
+    }));
+    let _ = wait.recv();
+}
+
 /// A context with the runtime, the app's interface fonts and its root theme installed.
 pub(crate) fn ui_context() -> egui::Context {
     let ctx = egui::Context::default();
