@@ -42,6 +42,9 @@ fn uncalibrated_cmyk_marks_nothing() {
 /// color settings stay the same; the panel keeps drawing through the change.
 #[test]
 fn the_grid_is_computed_again_after_a_profile_is_loaded() {
+    if !crate::testing::in_own_process("panels::tests_color_wheel_gamut::the_grid_is_computed_again_after_a_profile_is_loaded") {
+        return;
+    }
     let mut p = Panel::new(app("#3366cc", "box", true));
     /// Unregisters the profile when dropped, also after a failed assertion.
     struct Unregister(&'static str);

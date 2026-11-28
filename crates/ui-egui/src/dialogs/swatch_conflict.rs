@@ -56,7 +56,7 @@ const CHOICES: [(Choice, &str, &str); 2] = [
 ];
 
 /// The question about the swatches a paste brings that the document names differently. Its answer is the value
-/// [`take`] hands the paste: `command`, `params` (with `swatchConflict`), `deferred`, `asked` and `doc`.
+/// [`take`] hands the paste: `command`, `params` (with `swatchConflict`), `deferred`, `asked` and `drawing`.
 struct SwatchConflictDialog {
     id: DialogId,
     /// The conflicts as `clipboard.conflicts` lists them: `[{name, document, clipboard, spot}]`.
@@ -70,15 +70,15 @@ struct SwatchConflictDialog {
     /// The paste command and its parameters.
     command: String,
     params: Value,
-    /// The uid of the document the question is about.
-    doc: Option<u64>,
+    /// The drawing and content generation the question is about.
+    drawing: Option<(u64, u64)>,
     /// The deferred paste waiting on the answer ([`defer`]).
     deferred: Option<u64>,
     open: bool,
 }
 
 impl SwatchConflictDialog {
-    fn new(conflicts: Vec<Value>, command: &str, params: &Value, doc: Option<u64>) -> Self {
+    fn new(conflicts: Vec<Value>, command: &str, params: &Value, drawing: Option<(u64, u64)>) -> Self {
         SwatchConflictDialog {
             id: dialog_id(KIND),
             conflicts,
@@ -88,7 +88,7 @@ impl SwatchConflictDialog {
             choices: Map::new(),
             command: command.to_owned(),
             params: Some(params).filter(|p| p.is_object()).cloned().unwrap_or_else(|| json!({})),
-            doc,
+            drawing,
             deferred: None,
             open: true,
         }
@@ -115,7 +115,7 @@ impl SwatchConflictDialog {
         }
         let mut params = self.params.clone();
         params["swatchConflict"] = Value::Object(self.choices.clone());
-        Some(json!({"command": self.command, "params": params, "deferred": self.deferred, "asked": self.conflicts, "doc": self.doc}))
+        Some(json!({"command": self.command, "params": params, "deferred": self.deferred, "asked": self.conflicts, "drawing": self.drawing}))
     }
 }
 
@@ -220,8 +220,9 @@ pub fn ask(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Re
     if params.get("swatchConflict").is_some() {
         return None;
     }
-    let conflicts = found(app, params).filter(|a| !a.is_empty())?;
-    let dialog = SwatchConflictDialog::new(conflicts, command, params, app.session.active().map(|doc| doc.uid));
+    let conflicts = found(app, command, params).filter(|a| !a.is_empty())?;
+    let drawing = app.session.active().map(|doc| (doc.uid, doc.reverts));
+    let dialog = SwatchConflictDialog::new(conflicts, command, params, drawing);
     let Some(host) = app.dialogs() else { return Some(Err(NO_WINDOW.into())) };
     host.with(|h| h.open(dialog));
     Some(Ok(json!({ "dialog": KIND })))
@@ -233,14 +234,15 @@ pub(crate) fn id(app: &VectorcraftApp) -> Option<DialogId> {
     app.dialogs()?.with(|h| h.get_by_id::<SwatchConflictDialog>(id).map(|_| id))
 }
 
-/// What the question `id` answered this pass. A question about another document than the active one, with no
-/// deferred paste to go back to, answers Cancel.
+/// What the question `id` answered this pass. An immediate question whose drawing is inactive or
+/// reverted answers Cancel. Placing checks deferred answers against their original drawing.
 pub(crate) fn take(app: &VectorcraftApp, id: DialogId) -> Taken {
     let Some(host) = app.dialogs() else { return Taken::Open };
     match host.with(|h| h.take_by_id::<SwatchConflictDialog>(id)) {
         Some(Answer::Ok(value)) => {
-            let elsewhere = value["deferred"].is_null() && value["doc"].as_u64() != app.session.active().map(|doc| doc.uid);
-            if elsewhere { Taken::Cancelled } else { Taken::Answered(value) }
+            let drawing = app.session.active().map(|doc| (doc.uid, doc.reverts));
+            let retired = value["deferred"].is_null() && value["drawing"] != json!(drawing);
+            if retired { Taken::Cancelled } else { Taken::Answered(value) }
         }
         Some(_) => Taken::Cancelled,
         None => Taken::Open,
@@ -258,18 +260,22 @@ pub(crate) fn defer(app: &VectorcraftApp, chain: u64) {
     }
 }
 
-/// Whether the conflicts the paste with `params` raises are no longer the `asked` ones (another profile converts
-/// the pasted swatches meanwhile): it asks about them again.
-pub(crate) fn changed(app: &mut VectorcraftApp, params: &Value, asked: &Value) -> bool {
-    found(app, params).is_some_and(|now| Value::Array(now) != *asked)
+/// Whether the conflicts paste `command` with `params` raises are no longer the `asked` ones (another profile
+/// converts the pasted swatches meanwhile): it asks about them again.
+pub(crate) fn changed(app: &mut VectorcraftApp, command: &str, params: &Value, asked: &Value) -> bool {
+    found(app, command, params).is_some_and(|now| Value::Array(now) != *asked)
 }
 
-/// The swatch conflicts pasting with `params` raises (`clipboard.conflicts`), with the swatches as
-/// the paste brings them: converted from another profile when it converts.
-fn found(app: &mut VectorcraftApp, params: &Value) -> Option<Vec<Value>> {
+/// The swatch conflicts paste `command` with `params` raises (`clipboard.conflicts`), with the
+/// swatches as the paste brings them: converted from another profile when it converts, and for
+/// Paste on All Artboards without the backgrounds of copied artboards, which it leaves behind.
+fn found(app: &mut VectorcraftApp, command: &str, params: &Value) -> Option<Vec<Value>> {
     let mut q = json!({});
     if let Some(m) = params.get("profileMismatch") {
         q["profileMismatch"] = m.clone();
+    }
+    if command == "edit.pasteOnAllArtboards" {
+        q["allArtboards"] = json!(true);
     }
     let found = app.session.execute("clipboard.conflicts", &q).ok()?;
     found["swatches"].as_array().cloned()

@@ -266,6 +266,36 @@ fn random_selections_match_a_walk_of_the_document() {
     }
 }
 
+/// With an Appearance row active and many objects selected, the opacity proxy (read on every repaint of the Color
+/// Wheel panel) and `first_edited` match only the targets they read against the first object's stack, not every
+/// target, and still answer with the first object's row.
+#[test]
+fn an_active_row_matches_only_the_targets_read() {
+    use super::super::appearance::{ItemTarget, first_edited, stacks_matched};
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 612, "height": 792})).unwrap();
+    let ids: Vec<NodeId> = (0..30).map(|i| rect(&mut s, f64::from(i) * 25.0, "#ff0000", "#0000ff")).collect();
+    s.execute("paint.setFill", &json!({"ids": [ids[0].0], "opacity": 40})).unwrap();
+    s.execute("select.set", &json!({"ids": ids.iter().map(|id| id.0).collect::<Vec<_>>()})).unwrap();
+    let fill = s.active().unwrap().doc.node(ids[0]).unwrap().appearance.items.iter().position(|it| it.is_fill()).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": fill})).unwrap();
+    assert_eq!(s.appearance_item(), Some(fill));
+
+    let before = stacks_matched();
+    assert!((s.proxy_opacity(false).unwrap() - 0.4).abs() < 1e-6, "the first object's fill opacity");
+    assert!(stacks_matched() - before <= 1, "proxy_opacity matched {} stacks for {} targets", stacks_matched() - before, ids.len());
+
+    let row = ItemTarget::Item { index: fill, explicit: false, aligned: true };
+    let before = stacks_matched();
+    assert_eq!(first_edited(&s, row, None, &ids), Some((ids[0], row)));
+    assert!(stacks_matched() - before <= 1, "first_edited matched {} stacks for {} targets", stacks_matched() - before, ids.len());
+
+    // Reading every target still matches each one but the first.
+    let before = stacks_matched();
+    assert_eq!(row.per_target(&s, &ids).len(), ids.len());
+    assert_eq!(stacks_matched() - before, ids.len() as u64 - 1);
+}
+
 /// The CPU time this thread has used, from Linux's scheduler statistics; `None` elsewhere.
 fn thread_cpu() -> Option<std::time::Duration> {
     let stat = std::fs::read_to_string("/proc/thread-self/schedstat").ok()?;

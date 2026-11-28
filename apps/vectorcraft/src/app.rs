@@ -243,14 +243,3 @@ pub(crate) fn open_files(app: &mut VectorcraftApp, files: Vec<String>) {
         }
     }
 }
-
-/// Tell the macOS input method to drop its composition (the Type tool kept the marked text as
-/// typed). winit's IME toggle only clears its own copy, so the IME would type it again.
-#[cfg(target_os = "macos")]
-fn discard_marked_text() {
-    if let Some(mtm) = objc2::MainThreadMarker::new()
-        && let Some(ic) = objc2_app_kit::NSTextInputContext::currentInputContext(mtm)
-    {
-        ic.discardMarkedText();
-    }
-}
