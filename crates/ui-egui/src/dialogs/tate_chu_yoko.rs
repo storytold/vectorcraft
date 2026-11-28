@@ -39,6 +39,7 @@ fn rows(lengths: LengthUnits) -> Vec<Param> {
 /// Open Tate-chu-yoko Settings on the characters the Character panel acts on.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     crate::panels::character::text_style(app).ok_or("select some type first")?;
+    let target = crate::panels::character::format_target_kept(app)?;
     let active = app.session.active().ok_or("no document")?;
     let (document, reverts) = (active.uid, active.reverts);
     let (up, right) = crate::panels::character::shared_tcy_offsets(app);
@@ -65,7 +66,7 @@ pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         if active.reverts != reverts {
             return Err(tl!("The document was reverted. Reopen this dialog to continue.").to_owned());
         }
-        crate::panels::character::run_format(app, Value::Object(p)).map(|_| ())
+        crate::panels::character::run_format_at_target(app, Value::Object(p), &target).map(|_| ())
     })
     .ok_or("no window")?;
     Ok(Value::Null)
@@ -204,6 +205,32 @@ mod tests {
         driver::set(&mut app, "tcyLeftRight", json!(6));
         driver::ok(&mut app);
         assert_eq!(offsets(&app, id), [(0.0, 6.0), (0.0, 0.0)]);
+    }
+
+    #[test]
+    fn tate_chu_yoko_approval_keeps_its_opening_text_target() {
+        let (mut app, id) = app();
+        let select = |app: &mut VectorcraftApp, anchor, caret| {
+            app.session.set_tool_option("textSelection", &json!({"editing": id, "anchor": anchor, "caret": caret}));
+        };
+        app.session.select_tool("type", Default::default()).unwrap();
+        select(&mut app, 0, 2);
+        let undo = app.session.active().unwrap().history.undo.len();
+        app.run("ui.tateChuYokoSettings", json!({})).unwrap();
+        driver::set(&mut app, "tcyLeftRight", json!(6));
+
+        select(&mut app, 2, 4);
+        assert_eq!(crate::panels::character::text_editing(&app), Some((NodeId(id), 2, 4)));
+        let dialog = craft::ui::dialog::dialog_id(KIND);
+        crate::tests::picks::answer_dialog(&mut app, dialog, &[], true);
+        assert_eq!(offsets(&app, id), [(0.0, 0.0)], "the new text range keeps its formatting");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog)), Some(craft::ui::dialog::HeldOk::Refused(_))));
+
+        select(&mut app, 0, 2);
+        assert!(crate::dialogs::tests::confirm(&mut app));
+        assert_eq!(offsets(&app, id), [(0.0, 6.0), (0.0, 0.0)]);
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
     }
 
     #[test]

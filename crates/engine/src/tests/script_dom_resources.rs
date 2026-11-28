@@ -414,11 +414,13 @@ fn resources_refuse_objects_of_another_document() {
     s.execute("file.new", &json!({"width": 200, "height": 200})).unwrap();
     rect(&mut s, 0.0, 0.0, 10.0, 10.0);
     let before = resources(&s);
+    // `app.documents` lists the active document, the new one, first: the document with the symbol
+    // is `documents[1]`.
     for script in [
-        "var a = app.documents[0], b = app.documents[1]; b.symbolItems.add(a.symbols[0]);",
-        "var a = app.documents[0], b = app.documents[1]; a.graphicStyles[0].applyTo(b.pageItems[0]);",
-        "var a = app.documents[0], b = app.documents[1]; b.swatchGroups.add().addSwatch(a.swatches.getByName('Black'));",
-        "var a = app.documents[0], b = app.documents[1]; a.symbols.add(b.pageItems[0]);",
+        "var a = app.documents[1], b = app.documents[0]; b.symbolItems.add(a.symbols[0]);",
+        "var a = app.documents[1], b = app.documents[0]; a.graphicStyles[0].applyTo(b.pageItems[0]);",
+        "var a = app.documents[1], b = app.documents[0]; b.swatchGroups.add().addSwatch(a.swatches.getByName('Black'));",
+        "var a = app.documents[1], b = app.documents[0]; a.symbols.add(b.pageItems[0]);",
     ] {
         let e = failure(&mut s, script);
         assert!(e.contains("Cross-document"), "{script}: {e}");

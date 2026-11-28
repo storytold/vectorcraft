@@ -4365,6 +4365,8 @@ arrowhead	Feather	પીંછું
 	Tangent Circle	સ્પર્શક વર્તુળ
 	Tangent Circle Tool	સ્પર્શક વર્તુળ ટૂલ
 	No tangent circle here	અહીં કોઈ સ્પર્શક વર્તુળ નથી
+	Ask For Circle Radius	વર્તુળની ત્રિજ્યા પૂછો
+	Auto-Update Default	ડિફૉલ્ટ આપમેળે અપડેટ કરો
 	Tangent Circle…	સ્પર્શક વર્તુળ…
 	Taper	ટેપર
 	Target	લક્ષ્ય
@@ -5179,6 +5181,7 @@ antiAlias	Sharp	શાર્પ
 	Place Brush Art	બ્રશ આર્ટ પ્લેસ કરો
 	Replace Brush Art	બ્રશ આર્ટ બદલો
 	Replace Pattern Art	પેટર્ન આર્ટ બદલો
+	Place Pattern Art	પેટર્ન આર્ટ પ્લેસ કરો
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	સ્ટ્રોક્સ આ બ્રશ વાપરે છે. તે સ્ટ્રોક્સ પર નવી આર્ટ લાગુ કરવી છે કે તેમને જેમ છે તેમ રાખીને નવી આર્ટવાળી બ્રશની નકલ ઉમેરવી છે?
 	Apply to Strokes	સ્ટ્રોક્સ પર લાગુ કરો
 	Leave Strokes	સ્ટ્રોક્સ જેમ છે તેમ રાખો

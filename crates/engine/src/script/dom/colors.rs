@@ -169,6 +169,7 @@ pub(super) fn classes(link: &Link) -> Vec<HostClass> {
             name: (*name).into(),
             parent: None,
             members: Vec::new(),
+            info: Vec::new(),
             index: None,
             construct: Some(make(name, components)),
         })
@@ -177,6 +178,7 @@ pub(super) fn classes(link: &Link) -> Vec<HostClass> {
         name: "cmykColor".into(),
         parent: None,
         members: Vec::new(),
+        info: Vec::new(),
         index: None,
         construct: Some(make("CMYKColor", CLASSES[1].1)),
     });

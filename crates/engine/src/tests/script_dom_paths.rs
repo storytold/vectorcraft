@@ -434,13 +434,15 @@ fn a_spot_color_without_a_spot_of_the_document_is_refused() {
     for (source, part) in [
         ("app.documents[0].pathItems[0].fillColor = new SpotColor();", "SpotColor.spot must be a Spot; a color read"),
         ("var c = new SpotColor(); c.spot = 5; app.documents[0].pathItems[0].fillColor = c;", "SpotColor.spot must be a Spot"),
-        ("var a = app.documents[0], c = new SpotColor(); c.spot = a.swatches.getByName('Ink'); a.pathItems[0].fillColor = c;", "must be a Spot"),
+        // `app.documents` lists the active document, the new one, first: the document with `Ink` is
+        // `documents[1]`.
+        ("var a = app.documents[1], c = new SpotColor(); c.spot = a.swatches.getByName('Ink'); a.pathItems[0].fillColor = c;", "must be a Spot"),
         (
-            "var a = app.documents[0], c = new SpotColor(); c.spot = a.spots.getByName('Ink'); c.tint = 101; a.pathItems[0].fillColor = c;",
+            "var a = app.documents[1], c = new SpotColor(); c.spot = a.spots.getByName('Ink'); c.tint = 101; a.pathItems[0].fillColor = c;",
             "SpotColor.tint",
         ),
         (
-            "var a = app.documents[0], b = app.documents[1], c = new SpotColor(); c.spot = a.spots.getByName('Ink'); b.pathItems[0].fillColor = c;",
+            "var a = app.documents[1], b = app.documents[0], c = new SpotColor(); c.spot = a.spots.getByName('Ink'); b.pathItems[0].fillColor = c;",
             "Cross-document",
         ),
     ] {

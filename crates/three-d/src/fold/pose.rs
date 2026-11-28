@@ -398,8 +398,8 @@ fn place(placing: &Placing, base: usize, amount: f64) -> Tree {
 /// next to it: `true` when a point just off the line on the left is inside it and the matching
 /// point on the right is not, `false` the other way round. `on` (a point of the line where the
 /// panels meet: [`super::Hinge::on`]) is tried first, then the middle and points a quarter and an
-/// eighth of the way along, each with the nearest offset first; `None` when no point tells the
-/// sides apart.
+/// eighth of the way along. Every position is tried at the nearest offset before larger offsets;
+/// `None` when no point tells the sides apart.
 fn side_of(outline: &PathData, from: V3, to: V3, len: f64, on: V3) -> Option<bool> {
     let bp = outline.to_bezpath();
     let left = [-(to[1] - from[1]) / len, (to[0] - from[0]) / len, 0.0];
@@ -407,8 +407,8 @@ fn side_of(outline: &PathData, from: V3, to: V3, len: f64, on: V3) -> Option<boo
     let mut offsets = [1e-3, 0.25, len * 0.01];
     offsets.sort_by(f64::total_cmp);
     let along = [0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875].map(|t| add(from, scale(sub(to, from), t)));
-    std::iter::once(on).chain(along).find_map(|at| {
-        offsets.into_iter().find_map(|off| {
+    offsets.into_iter().find_map(|off| {
+        std::iter::once(on).chain(along).find_map(|at| {
             let (l, r) = (bp.winding(doc(add(at, scale(left, off)))) != 0, bp.winding(doc(sub(at, scale(left, off)))) != 0);
             (l != r).then_some(l)
         })
@@ -517,4 +517,30 @@ fn crossings(rings: &[Vec<V3>], normal: V3, offset: f64, u: V3, tolerance: f64) 
     at.retain(|x| x.is_finite());
     at.sort_by(f64::total_cmp);
     at.as_chunks::<2>().0.iter().map(|&[a, b]| (a, b)).collect()
+}
+
+#[cfg(test)]
+mod side_tests {
+    use super::*;
+    use vectorcraft_geom::SubPath;
+
+    #[test]
+    fn a_nearby_probe_at_another_position_precedes_a_remote_probe_at_the_hinge() {
+        let points = [
+            (-2.0, -1.0),
+            (-1.0, -1.0),
+            (-1.0, -0.0005),
+            (1.0, -0.0005),
+            (1.0, -1.0),
+            (101.0, -1.0),
+            (101.0, 0.0),
+            (-1.0, 0.0),
+            (-1.0, 0.2),
+            (1.0, 0.2),
+            (1.0, 0.3),
+            (-2.0, 0.3),
+        ];
+        let outline = PathData::single(SubPath::polyline(&points.map(|(x, y)| Point::new(x, y)), true));
+        assert_eq!(side_of(&outline, [0.0; 3], [100.0, 0.0, 0.0], 100.0, [0.0; 3]), Some(true));
+    }
 }

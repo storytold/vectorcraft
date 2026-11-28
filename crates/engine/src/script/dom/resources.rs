@@ -62,11 +62,12 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::swatch::{self, Swatch};
 use vectorcraft_color::{Color, Paint};
-use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, Realm, RunError, host_ref};
+use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMember, MemberInfo, Realm, RunError, host_ref};
 
 use super::{
-    Answer, CROSS_DOCUMENT, Doc, Host, Item, Link, NOT_FOUND, arg, class, colors, command, current, data_size, doc_of, doc_ref, editable, find_doc,
-    float, given, handle_of, item_of, item_ref, later, named, num, on_doc, page_items, text, this_doc, typename_of, whole, with_doc,
+    Answer, CROSS_DOCUMENT, Described, Doc, Host, Item, Link, NOT_FOUND, arg, class, colors, command, current, data_size, doc_of, doc_ref, editable,
+    find_doc, float, given, handle_of, item_of, item_ref, later, named, num, on_doc, page_items, returns, text, this_doc, typed, typename_of, whole,
+    with_doc,
 };
 use crate::{DocState, Document, NodeId, NodeKind};
 
@@ -1090,91 +1091,104 @@ fn doc_symbol_items(h: &Host, _: Kind, a: &[Data]) -> Answer {
 
 /// The members `Document` gets: one collection for each kind, `symbolItems`, and `gradients` and
 /// `patterns`, which are not available yet.
-pub(super) fn document_members(l: &Link) -> Vec<(String, HostMember)> {
+pub(super) fn document_members(l: &Link) -> Vec<Described> {
     let mut m = named(vec![
-        ("swatches", kget(l, Kind::Swatch, doc_collection)),
-        ("spots", kget(l, Kind::Spot, doc_collection)),
-        ("swatchGroups", kget(l, Kind::Group, doc_collection)),
-        ("symbols", kget(l, Kind::Symbol, doc_collection)),
-        ("graphicStyles", kget(l, Kind::Style, doc_collection)),
-        ("brushes", kget(l, Kind::Brush, doc_collection)),
-        ("symbolItems", kget(l, Kind::Symbol, doc_symbol_items)),
+        ("swatches", kget(l, Kind::Swatch, doc_collection), collection("Swatches")),
+        ("spots", kget(l, Kind::Spot, doc_collection), collection("Spots")),
+        ("swatchGroups", kget(l, Kind::Group, doc_collection), collection("SwatchGroups")),
+        ("symbols", kget(l, Kind::Symbol, doc_collection), collection("Symbols")),
+        ("graphicStyles", kget(l, Kind::Style, doc_collection), collection("GraphicStyles")),
+        ("brushes", kget(l, Kind::Brush, doc_collection), collection("Brushes")),
+        ("symbolItems", kget(l, Kind::Symbol, doc_symbol_items), collection("SymbolItems")),
     ]);
     m.extend(["gradients", "patterns"].into_iter().map(|n| later(l, "Document", n)));
     m
 }
 
+/// What `reflect` tells of a member whose value is the collection class `name`.
+fn collection(name: &str) -> MemberInfo {
+    MemberInfo { collection: true, ..typed(name) }
+}
+
 /// The members `SymbolItem` adds to `PageItem`'s.
-pub(super) fn symbol_item_members(l: &Link) -> Vec<(String, HostMember)> {
-    named(vec![("symbol", kproperty(l, Kind::Symbol, sitem_symbol, sitem_set_symbol))])
+pub(super) fn symbol_item_members(l: &Link) -> Vec<Described> {
+    named(vec![("symbol", kproperty(l, Kind::Symbol, sitem_symbol, sitem_set_symbol), typed("Symbol"))])
 }
 
 /// The collection classes, and one class for each kind of resource.
 pub(super) fn classes(l: &Link) -> Vec<HostClass> {
     let mut out = Vec::new();
     for kind in KINDS {
+        let one = kind.class();
         let mut m = named(vec![
-            ("typename", typename_of(kind.collection())),
-            ("length", kget(l, kind, coll_length)),
-            ("parent", kget(l, kind, coll_parent)),
-            ("index", kmethod(l, kind, coll_index)),
-            ("getByName", kmethod(l, kind, coll_by_name)),
+            ("typename", typename_of(kind.collection()), typed("string")),
+            ("length", kget(l, kind, coll_length), typed("number")),
+            ("parent", kget(l, kind, coll_parent), typed("Document")),
+            ("index", kmethod(l, kind, coll_index), returns(one, &[("itemKey", "*")])),
+            ("getByName", kmethod(l, kind, coll_by_name), returns(one, &[("name", "string")])),
         ]);
         if kind != Kind::Brush {
-            m.push(("removeAll".into(), kmethod(l, kind, coll_remove_all)));
+            m.push(("removeAll".into(), kmethod(l, kind, coll_remove_all), returns("undefined", &[])));
         }
         match kind {
             Kind::Swatch => {
-                m.push(("add".into(), kmethod(l, kind, swatches_add)));
-                m.push(("getSelected".into(), kmethod(l, kind, swatches_selected)));
+                m.push(("add".into(), kmethod(l, kind, swatches_add), returns(one, &[])));
+                m.push(("getSelected".into(), kmethod(l, kind, swatches_selected), returns("Array", &[])));
             }
-            Kind::Spot => m.push(("add".into(), kmethod(l, kind, spots_add))),
-            Kind::Group => m.push(("add".into(), kmethod(l, kind, groups_add))),
-            Kind::Symbol => m.push(("add".into(), kmethod(l, kind, symbols_add))),
+            Kind::Spot => m.push(("add".into(), kmethod(l, kind, spots_add), returns(one, &[]))),
+            Kind::Group => m.push(("add".into(), kmethod(l, kind, groups_add), returns(one, &[]))),
+            Kind::Symbol => m.push((
+                "add".into(),
+                kmethod(l, kind, symbols_add),
+                returns(one, &[("sourceArt", "PageItem"), ("registrationPoint", "SymbolRegistrationPoint")]),
+            )),
             Kind::Style | Kind::Brush => {}
         }
         out.push(class(kind.collection(), None, m, Some(kfunction(l, kind, coll_at))));
 
-        let mut m = named(vec![("typename", kget(l, kind, res_typename)), ("parent", kget(l, kind, res_parent))]);
+        let mut m = named(vec![("typename", kget(l, kind, res_typename), typed("string")), ("parent", kget(l, kind, res_parent), typed("*"))]);
         if kind == Kind::Brush {
-            m.push(("name".into(), kget(l, kind, res_name)));
+            m.push(("name".into(), kget(l, kind, res_name), typed("string")));
         } else {
-            m.push(("name".into(), kproperty(l, kind, res_name, res_set_name)));
-            m.push(("remove".into(), kmethod(l, kind, res_remove)));
+            m.push(("name".into(), kproperty(l, kind, res_name, res_set_name), typed("string")));
+            m.push(("remove".into(), kmethod(l, kind, res_remove), returns("undefined", &[])));
         }
         let extra = match kind {
-            Kind::Swatch => vec![("color", kproperty(l, kind, swatch_color, set_swatch_color))],
+            Kind::Swatch => vec![("color", kproperty(l, kind, swatch_color, set_swatch_color), typed("Color"))],
             Kind::Spot => vec![
-                ("color", kproperty(l, kind, spot_color, set_swatch_color)),
-                ("colorType", kproperty(l, kind, spot_color_type, spot_set_color_type)),
-                ("spotKind", kget(l, kind, spot_kind)),
-                ("getInternalColor", kmethod(l, kind, spot_internal)),
+                ("color", kproperty(l, kind, spot_color, set_swatch_color), typed("Color")),
+                ("colorType", kproperty(l, kind, spot_color_type, spot_set_color_type), typed("ColorModel")),
+                ("spotKind", kget(l, kind, spot_kind), typed("SpotColorKind")),
+                ("getInternalColor", kmethod(l, kind, spot_internal), returns("Array", &[])),
             ],
             Kind::Group => vec![
-                ("addSwatch", kmethod(l, kind, group_add_swatch)),
-                ("addSpot", kmethod(l, kind, group_add_spot)),
-                ("getAllSwatches", kmethod(l, kind, group_all)),
-                ("removeAll", kmethod(l, kind, group_remove_all)),
+                ("addSwatch", kmethod(l, kind, group_add_swatch), returns("undefined", &[("swatch", "Swatch")])),
+                ("addSpot", kmethod(l, kind, group_add_spot), returns("undefined", &[("spot", "Spot")])),
+                ("getAllSwatches", kmethod(l, kind, group_all), returns("Array", &[])),
+                ("removeAll", kmethod(l, kind, group_remove_all), returns("undefined", &[])),
             ],
-            Kind::Symbol => vec![("duplicate", kmethod(l, kind, symbol_duplicate))],
-            Kind::Style => vec![("applyTo", kmethod(l, kind, style_apply_to)), ("mergeTo", kmethod(l, kind, style_merge_to))],
-            Kind::Brush => vec![("applyTo", kmethod(l, kind, brush_apply_to))],
+            Kind::Symbol => vec![("duplicate", kmethod(l, kind, symbol_duplicate), returns("Symbol", &[]))],
+            Kind::Style => vec![
+                ("applyTo", kmethod(l, kind, style_apply_to), returns("undefined", &[("artItem", "PageItem")])),
+                ("mergeTo", kmethod(l, kind, style_merge_to), returns("undefined", &[("artItem", "PageItem")])),
+            ],
+            Kind::Brush => vec![("applyTo", kmethod(l, kind, brush_apply_to), returns("undefined", &[("artItem", "PageItem")]))],
         };
         m.extend(named(extra));
-        out.push(class(kind.class(), None, m, None));
+        out.push(class(one, None, m, None));
     }
     let k = Kind::Symbol;
     out.push(class(
         "SymbolItems",
         None,
         named(vec![
-            ("typename", typename_of("SymbolItems")),
-            ("length", kget(l, k, sitems_length)),
-            ("parent", kget(l, k, sitems_parent)),
-            ("index", kmethod(l, k, sitems_index)),
-            ("getByName", kmethod(l, k, sitems_by_name)),
-            ("add", kmethod(l, k, sitems_add)),
-            ("removeAll", kmethod(l, k, sitems_remove_all)),
+            ("typename", typename_of("SymbolItems"), typed("string")),
+            ("length", kget(l, k, sitems_length), typed("number")),
+            ("parent", kget(l, k, sitems_parent), typed("Document")),
+            ("index", kmethod(l, k, sitems_index), returns("SymbolItem", &[("itemKey", "*")])),
+            ("getByName", kmethod(l, k, sitems_by_name), returns("SymbolItem", &[("name", "string")])),
+            ("add", kmethod(l, k, sitems_add), returns("SymbolItem", &[("symbol", "Symbol")])),
+            ("removeAll", kmethod(l, k, sitems_remove_all), returns("undefined", &[])),
         ]),
         Some(kfunction(l, k, sitems_at)),
     ));

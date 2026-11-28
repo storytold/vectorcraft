@@ -46,13 +46,13 @@ use vectorcraft_doc::pattern::pattern_paint;
 use vectorcraft_doc::{GraphicStyle, LineCap, LineJoin};
 use vectorcraft_geom::path::{Anchor, AnchorKind, FillRule, PathData, SubPath};
 use vectorcraft_geom::{Point, Rect};
-use vectorcraft_js::{Data, HostClass, HostError, HostItem, HostMember, Realm, RunError, host_ref};
+use vectorcraft_js::{Data, HostClass, HostError, HostItem, MemberInfo, Realm, RunError, host_ref};
 use vectorcraft_tools::params::gradient_params;
 
 use super::{
-    Answer, Coords, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable, find_doc,
-    float, frame, get, given, handle_of, id_of, id_parts, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get,
-    point_method, point_property, property, this_doc, typename_of, whole, with_doc,
+    Answer, Coords, Described, Doc, Item, Link, NOT_FOUND, STALE_ITEM, arg, boolean, class, colors, command, coordinate, doc_of, edit_item, editable,
+    float, frame, get, given, handle_of, item_of, item_rect, later, method, named, num, number, on_doc, pair, point, point_get, point_method,
+    point_property, property, returns, this_doc, typed, typename_of, whole, with_doc,
 };
 use crate::{DocState, NodeId, NodeKind};
 
@@ -99,11 +99,9 @@ fn this_path(h: &super::Host, a: &[Data]) -> std::result::Result<Item, HostError
     path_of(h, arg(a, 0))
 }
 
-/// The path of the run `run`, document `uid` and id parts `high` and `low`, as a handle gives them.
-fn path_at(h: &super::Host, run: f64, uid: f64, high: f64, low: f64) -> std::result::Result<Item, HostError> {
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-    let id = id_of(high, low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-    path_of(h, &path_ref(h, Item { doc, id }))
+/// The path a page item handle ([`super::node_handle`]) names, as the handle of its points gives it.
+fn path_at(h: &super::Host, handle: &[f64]) -> std::result::Result<Item, HostError> {
+    path_of(h, &host_ref("PathItem", handle))
 }
 
 /// Reads the path of `item` with `f`.
@@ -118,8 +116,12 @@ fn read_path<T>(h: &super::Host, item: Item, f: impl FnOnce(&DocState, &crate::d
 }
 
 fn path_ref(h: &super::Host, item: Item) -> Data {
-    let [high, low] = id_parts(item.id);
-    host_ref("PathItem", &[float(h.run), float(item.doc.uid), high, low])
+    host_ref("PathItem", &path_handle(h, item))
+}
+
+/// The page item handle of the path `item` ([`super::node_handle`]).
+fn path_handle(h: &super::Host, item: Item) -> [f64; 5] {
+    with_doc(h, item.doc, |_, st| super::node_handle(h, st, item.id))
 }
 
 /// How many points a path with the subpaths `subs` has.
@@ -193,7 +195,9 @@ fn write_path(h: &super::Host, item: Item, subs: Vec<SubPath>) -> std::result::R
 }
 
 /// Writes the waiting point changes of a path ([`edit_points`]) with one `path.setAnchors`, unless
-/// the path has those points already.
+/// the path has those points already. The changes are written once: when the write fails, they are
+/// dropped and the error says so, so the call that wrote them throws and later calls do not try
+/// again.
 pub(super) fn flush(h: &super::Host) -> std::result::Result<(), HostError> {
     let Some((item, subs)) = h.dom.pending.borrow_mut().take() else { return Ok(()) };
     let same = {
@@ -204,13 +208,27 @@ pub(super) fn flush(h: &super::Host) -> std::result::Result<(), HostError> {
     match same {
         Some(true) => return Ok(()),
         Some(false) => {}
-        None => return Err(HostError::Error(STALE_ITEM.into())),
+        None => return Err(unwritten(HostError::Error(STALE_ITEM.into()))),
     }
     let subpaths: Vec<Value> =
         subs.iter().map(|sp| json!({"anchors": sp.anchors.iter().map(anchor_json).collect::<Vec<_>>(), "closed": sp.closed})).collect();
-    edit_item(h, item, "path.setAnchors", &json!({"id": item.id.0, "subpaths": subpaths}))?;
+    edit_item(h, item, "path.setAnchors", &json!({"id": item.id.0, "subpaths": subpaths})).map_err(unwritten)?;
     Ok(())
 }
+
+/// `e`, the error of a failed write of waiting point changes, saying that the changes were dropped.
+fn unwritten(e: HostError) -> HostError {
+    let lost = |m: String| format!("{UNWRITTEN}: {m}");
+    match e {
+        HostError::Error(m) => HostError::Error(lost(m)),
+        HostError::Type(m) => HostError::Type(lost(m)),
+        HostError::Range(m) => HostError::Range(lost(m)),
+        e => e,
+    }
+}
+
+/// The start of the error of a failed write of waiting point changes ([`unwritten`]).
+const UNWRITTEN: &str = "The point changes of a path were not written";
 
 /// The object whose paint the path `n` with id `id` shows: its compound path or compound shape
 /// when it is a member of one, since the paint commands paint that owner in its place.
@@ -527,8 +545,7 @@ fn items_add(h: &super::Host, a: &[Data]) -> Answer {
 
 fn path_points(h: &super::Host, a: &[Data]) -> Answer {
     let item = this_path(h, a)?;
-    let [high, low] = id_parts(item.id);
-    Ok(host_ref("PathPoints", &[float(h.run), float(item.doc.uid), high, low]))
+    Ok(host_ref("PathPoints", &path_handle(h, item)))
 }
 
 fn path_closed(h: &super::Host, a: &[Data]) -> Answer {
@@ -1071,8 +1088,10 @@ fn path_resize(h: &super::Host, a: &[Data]) -> Answer {
 
 fn points_path(h: &super::Host, a: &[Data]) -> std::result::Result<Item, HostError> {
     let Some(handle) = handle_of(arg(a, 0), "PathPoints") else { return Err(HostError::Type("this is not a PathPoints".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a PathPoints".into())) };
-    path_at(h, *run, *uid, *high, *low)
+    if handle.len() != 5 {
+        return Err(HostError::Type("this is not a PathPoints".into()));
+    }
+    path_at(h, &handle)
 }
 
 fn points_length(h: &super::Host, a: &[Data]) -> Answer {
@@ -1086,8 +1105,9 @@ fn points_parent(h: &super::Host, a: &[Data]) -> Answer {
 }
 
 fn point_ref(h: &super::Host, item: Item, i: usize) -> Data {
-    let [high, low] = id_parts(item.id);
-    host_ref("PathPoint", &[float(h.run), float(item.doc.uid), high, low, float(i as u64)])
+    let mut handle = path_handle(h, item).to_vec();
+    handle.push(float(i as u64));
+    host_ref("PathPoint", &handle)
 }
 
 fn points_at(h: &super::Host, a: &[Data]) -> Answer {
@@ -1138,8 +1158,11 @@ fn points_remove_all(h: &super::Host, a: &[Data]) -> Answer {
 /// The path and the index of the point `this` names, which must still be in the path.
 pub(super) fn this_point(h: &super::Host, a: &[Data]) -> std::result::Result<(Item, usize), HostError> {
     let Some(handle) = handle_of(arg(a, 0), "PathPoint") else { return Err(HostError::Type("this is not a PathPoint".into())) };
-    let [run, uid, high, low, i] = handle.as_slice() else { return Err(HostError::Type("this is not a PathPoint".into())) };
-    let item = path_at(h, *run, *uid, *high, *low)?;
+    let [path @ .., i] = handle.as_slice() else { return Err(HostError::Type("this is not a PathPoint".into())) };
+    if path.len() != 5 {
+        return Err(HostError::Type("this is not a PathPoint".into()));
+    }
+    let item = path_at(h, path)?;
     let i = whole(*i).and_then(|i| usize::try_from(i).ok()).ok_or_else(|| HostError::Error(STALE_POINT.into()))?;
     let n = read_points(h, item, point_count)?;
     if i >= n {
@@ -1245,31 +1268,57 @@ fn pt_remove(h: &super::Host, a: &[Data]) -> Answer {
 // ---- Registration ----
 
 /// The members `PathItem` adds to `PageItem`'s.
-pub(super) fn path_item_members(l: &Link) -> Vec<(String, HostMember)> {
+pub(super) fn path_item_members(l: &Link) -> Vec<Described> {
+    let translate = [
+        ("deltaX", "number"),
+        ("deltaY", "number"),
+        ("transformObjects", "boolean"),
+        ("transformFillPatterns", "boolean"),
+        ("transformFillGradients", "boolean"),
+        ("transformStrokePattern", "boolean"),
+    ];
+    let rotate = [
+        ("angle", "number"),
+        ("changePositions", "boolean"),
+        ("changeFillPatterns", "boolean"),
+        ("changeFillGradients", "boolean"),
+        ("changeStrokePattern", "boolean"),
+        ("rotateAbout", "Transformation"),
+    ];
+    let resize = [
+        ("scaleX", "number"),
+        ("scaleY", "number"),
+        ("changePositions", "boolean"),
+        ("changeFillPatterns", "boolean"),
+        ("changeFillGradients", "boolean"),
+        ("changeStrokePattern", "boolean"),
+        ("changeLineWidths", "number"),
+        ("scaleAbout", "Transformation"),
+    ];
     let mut m = named(vec![
-        ("pathPoints", point_get(l, path_points)),
-        ("closed", point_property(l, path_closed, path_set_closed)),
-        ("evenodd", property(l, path_evenodd, path_set_evenodd)),
-        ("area", get(l, path_area)),
-        ("length", get(l, path_length)),
-        ("guides", get(l, path_guides)),
-        ("clipping", get(l, path_clipping)),
-        ("setEntirePath", point_method(l, path_set_entire)),
-        ("filled", property(l, path_filled, path_set_filled)),
-        ("fillColor", property(l, path_fill_color, path_set_fill_color)),
-        ("fillOverprint", property(l, path_fill_overprint, path_set_fill_overprint)),
-        ("stroked", property(l, path_stroked, path_set_stroked)),
-        ("strokeColor", property(l, path_stroke_color, path_set_stroke_color)),
-        ("strokeOverprint", property(l, path_stroke_overprint, path_set_stroke_overprint)),
-        ("strokeWidth", property(l, path_stroke_width, path_set_stroke_width)),
-        ("strokeCap", property(l, path_stroke_cap, path_set_stroke_cap)),
-        ("strokeJoin", property(l, path_stroke_join, path_set_stroke_join)),
-        ("strokeMiterLimit", property(l, path_miter, path_set_miter)),
-        ("strokeDashes", property(l, path_dashes, path_set_dashes)),
-        ("strokeDashOffset", property(l, path_dash_offset, path_set_dash_offset)),
-        ("translate", method(l, path_translate)),
-        ("rotate", method(l, path_rotate)),
-        ("resize", method(l, path_resize)),
+        ("pathPoints", point_get(l, path_points), MemberInfo { collection: true, ..typed("PathPoints") }),
+        ("closed", point_property(l, path_closed, path_set_closed), typed("boolean")),
+        ("evenodd", property(l, path_evenodd, path_set_evenodd), typed("boolean")),
+        ("area", get(l, path_area), typed("number")),
+        ("length", get(l, path_length), typed("number")),
+        ("guides", get(l, path_guides), typed("boolean")),
+        ("clipping", get(l, path_clipping), typed("boolean")),
+        ("setEntirePath", point_method(l, path_set_entire), returns("undefined", &[("pathPoints", "Array")])),
+        ("filled", property(l, path_filled, path_set_filled), typed("boolean")),
+        ("fillColor", property(l, path_fill_color, path_set_fill_color), typed("Color")),
+        ("fillOverprint", property(l, path_fill_overprint, path_set_fill_overprint), typed("boolean")),
+        ("stroked", property(l, path_stroked, path_set_stroked), typed("boolean")),
+        ("strokeColor", property(l, path_stroke_color, path_set_stroke_color), typed("Color")),
+        ("strokeOverprint", property(l, path_stroke_overprint, path_set_stroke_overprint), typed("boolean")),
+        ("strokeWidth", property(l, path_stroke_width, path_set_stroke_width), MemberInfo { min: Some(0.0), max: Some(1000.0), ..typed("number") }),
+        ("strokeCap", property(l, path_stroke_cap, path_set_stroke_cap), typed("StrokeCap")),
+        ("strokeJoin", property(l, path_stroke_join, path_set_stroke_join), typed("StrokeJoin")),
+        ("strokeMiterLimit", property(l, path_miter, path_set_miter), MemberInfo { min: Some(1.0), max: Some(500.0), ..typed("number") }),
+        ("strokeDashes", property(l, path_dashes, path_set_dashes), typed("Array")),
+        ("strokeDashOffset", property(l, path_dash_offset, path_set_dash_offset), typed("number")),
+        ("translate", method(l, path_translate), returns("undefined", &translate)),
+        ("rotate", method(l, path_rotate), returns("undefined", &rotate)),
+        ("resize", method(l, path_resize), returns("undefined", &resize)),
     ]);
     m.extend(["selectedPathPoints", "polarity", "resolution"].into_iter().map(|n| later(l, "PathItem", n)));
     m
@@ -1282,18 +1331,72 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "PathItems",
             None,
             named(vec![
-                ("typename", typename_of("PathItems")),
-                ("length", get(l, items_length)),
-                ("parent", get(l, items_parent)),
-                ("index", method(l, items_index)),
-                ("getByName", method(l, items_by_name)),
-                ("removeAll", method(l, items_remove_all)),
-                ("add", method(l, items_add)),
-                ("rectangle", method(l, items_rectangle)),
-                ("roundedRectangle", method(l, items_rounded_rectangle)),
-                ("ellipse", method(l, items_ellipse)),
-                ("polygon", method(l, items_polygon)),
-                ("star", method(l, items_star)),
+                ("typename", typename_of("PathItems"), typed("string")),
+                ("length", get(l, items_length), typed("number")),
+                ("parent", get(l, items_parent), typed("Document")),
+                ("index", method(l, items_index), returns("PathItem", &[("itemKey", "*")])),
+                ("getByName", method(l, items_by_name), returns("PathItem", &[("name", "string")])),
+                ("removeAll", method(l, items_remove_all), returns("undefined", &[])),
+                ("add", method(l, items_add), returns("PathItem", &[])),
+                (
+                    "rectangle",
+                    method(l, items_rectangle),
+                    returns("PathItem", &[("top", "number"), ("left", "number"), ("width", "number"), ("height", "number"), ("reversed", "boolean")]),
+                ),
+                (
+                    "roundedRectangle",
+                    method(l, items_rounded_rectangle),
+                    returns(
+                        "PathItem",
+                        &[
+                            ("top", "number"),
+                            ("left", "number"),
+                            ("width", "number"),
+                            ("height", "number"),
+                            ("horizontalRadius", "number"),
+                            ("verticalRadius", "number"),
+                            ("reversed", "boolean"),
+                        ],
+                    ),
+                ),
+                (
+                    "ellipse",
+                    method(l, items_ellipse),
+                    returns(
+                        "PathItem",
+                        &[
+                            ("top", "number"),
+                            ("left", "number"),
+                            ("width", "number"),
+                            ("height", "number"),
+                            ("reversed", "boolean"),
+                            ("inscribed", "boolean"),
+                        ],
+                    ),
+                ),
+                (
+                    "polygon",
+                    method(l, items_polygon),
+                    returns(
+                        "PathItem",
+                        &[("centerX", "number"), ("centerY", "number"), ("radius", "number"), ("sides", "number"), ("reversed", "boolean")],
+                    ),
+                ),
+                (
+                    "star",
+                    method(l, items_star),
+                    returns(
+                        "PathItem",
+                        &[
+                            ("centerX", "number"),
+                            ("centerY", "number"),
+                            ("radius", "number"),
+                            ("innerRadius", "number"),
+                            ("points", "number"),
+                            ("reversed", "boolean"),
+                        ],
+                    ),
+                ),
             ]),
             Some(super::function(l, items_at)),
         ),
@@ -1301,12 +1404,12 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             "PathPoints",
             None,
             named(vec![
-                ("typename", typename_of("PathPoints")),
-                ("length", point_get(l, points_length)),
-                ("parent", point_get(l, points_parent)),
-                ("index", point_method(l, points_index)),
-                ("add", point_method(l, points_add)),
-                ("removeAll", point_method(l, points_remove_all)),
+                ("typename", typename_of("PathPoints"), typed("string")),
+                ("length", point_get(l, points_length), typed("number")),
+                ("parent", point_get(l, points_parent), typed("PathItem")),
+                ("index", point_method(l, points_index), returns("PathPoint", &[("itemKey", "*")])),
+                ("add", point_method(l, points_add), returns("PathPoint", &[])),
+                ("removeAll", point_method(l, points_remove_all), returns("undefined", &[])),
             ]),
             Some(super::point_function(l, points_at)),
         ),
@@ -1315,13 +1418,13 @@ pub(super) fn classes(l: &Link) -> Vec<HostClass> {
             None,
             {
                 let mut m = named(vec![
-                    ("typename", typename_of("PathPoint")),
-                    ("parent", point_get(l, pt_parent)),
-                    ("anchor", point_property(l, pt_anchor, pt_set_anchor)),
-                    ("leftDirection", point_property(l, pt_left, pt_set_left)),
-                    ("rightDirection", point_property(l, pt_right, pt_set_right)),
-                    ("pointType", point_property(l, pt_type, pt_set_type)),
-                    ("remove", point_method(l, pt_remove)),
+                    ("typename", typename_of("PathPoint"), typed("string")),
+                    ("parent", point_get(l, pt_parent), typed("PathItem")),
+                    ("anchor", point_property(l, pt_anchor, pt_set_anchor), typed("Array")),
+                    ("leftDirection", point_property(l, pt_left, pt_set_left), typed("Array")),
+                    ("rightDirection", point_property(l, pt_right, pt_set_right), typed("Array")),
+                    ("pointType", point_property(l, pt_type, pt_set_type), typed("PointType")),
+                    ("remove", point_method(l, pt_remove), returns("undefined", &[])),
                 ]);
                 m.push(later(l, "PathPoint", "selected"));
                 m

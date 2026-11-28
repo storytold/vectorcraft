@@ -252,6 +252,61 @@ fn rename_opens_the_name_field_of_the_selected_object() {
     assert_eq!(name(&app), before);
 }
 
+#[test]
+fn inline_rename_does_not_change_a_saved_layer_after_file_revert() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    let (mut app, layer, _) = two_rects();
+    let saved = "Saved Layer";
+    app.run("layer.setProps", json!({"id": layer.0, "name": saved})).unwrap();
+    let folder = vectorcraft_testkit::TempDir::new("layers-inline-rename-revert");
+    let path = folder.join("drawing.vectorcraft");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+    app.run("shape.rectangle", json!({"x": 120, "y": 30, "width": 30, "height": 30})).unwrap();
+
+    let mut panel = Panel::new(app, show);
+    let rename = |panel: &mut Panel, text: &str| {
+        panel.app().run("ui.rename", json!({"id": layer.0})).unwrap();
+        panel.frame();
+        panel.frame();
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text(text);
+        assert_eq!(panel.value_role(saved, Role::TEXT_INPUT).as_deref(), Some(text), "the actual inline editor shows the draft");
+    };
+    let shown_name = |panel: &Panel| panel.app().session.active().unwrap().doc.node(layer).unwrap().display_name();
+    rename(&mut panel, "Discarded Layer");
+    assert_eq!(shown_name(&panel), saved, "typing has not renamed the live layer");
+    let opening = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        (st.uid, st.reverts)
+    };
+
+    panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+    panel.frame();
+    let stale_editor = panel.shows_value("Discarded Layer");
+    let undo = {
+        let app = panel.app();
+        let st = app.session.active().unwrap();
+        assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+        assert_eq!(st.doc.node(layer).unwrap().display_name(), saved);
+        undo_len(&app)
+    };
+    panel.key(Key::Enter, Modifiers::NONE);
+    assert_eq!(shown_name(&panel), saved, "Enter cannot commit the discarded inline rename to the restored layer");
+    assert!(!stale_editor, "the restored layer shows no discarded inline edit");
+    assert_eq!(undo_len(&panel.app()), undo);
+
+    rename(&mut panel, "Fresh Layer");
+    panel.key(Key::Enter, Modifiers::NONE);
+    assert_eq!(shown_name(&panel), "Fresh Layer");
+    assert_eq!(undo_len(&panel.app()), undo + 1, "a fresh inline rename commits once");
+}
+
 /// Without a selection Rename names the current layer; it refuses several objects and a row the panel doesn't list,
 /// and asks for no field then.
 #[test]

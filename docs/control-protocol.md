@@ -491,8 +491,20 @@ toolbars Tab hid are turned off. A toolbar's ••• button
 button (Add Tool…) opens a menu of every tool under the drawer's headings: a click on a tool runs `toolbar.addTool
 {tool, toolbar}`, which puts it at the end, and the tools under its Remove Tool heading run `toolbar.removeTool
 {tool, toolbar}`; the tools already in the toolbar are dimmed under their headings. The drawer has no Show section
-there. `window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with
-it. `window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, shown flag,
+there. The same menu's Add Command submenu searches the Command Palette's results other than tools, and a pick runs
+`toolbar.addCommand {command, toolbar}`, which puts a command button at the end of the toolbar, after its tools;
+`toolbar.addCommand {command, toolbar, at}` moves one to place `at` among the command buttons (Move Up and Move Down
+in the button's context menu), and `toolbar.removeCommand {command, toolbar}` takes one off (Remove Command in the
+menu, Remove from Toolbar in the context menu). `command` is a palette result's id: a command's id, or
+`plugin:<id>`, `effect:<id>` or `panel:<id>`. A click on the button runs what the command's menu item runs, and the
+button is dimmed while that item is. A missing `toolbar` is an error for both and changes nothing. For
+`toolbar.addCommand`, an unknown command, a tool, a command that needs params a click does not give
+(`toolbar.addTool`) or a place past the end is also an error and changes nothing. `toolbar.removeCommand` with a
+command the toolbar has no button for, a tool's id included, is not an error: it answers with the toolbar's command
+buttons unchanged. A command that is no longer installed keeps its button, dimmed, and `toolbar.removeCommand` still
+takes it off.
+`window.floatTools {tool, toolbar}` floats one of its groups, and a group torn off it shows and hides with it.
+`window.toolbar.list` returns the toolbars (`ui.custom_toolbars` in `ui.inspect`: name, slots, commands, shown flag,
 two-column flag, top-left corner, the groups torn off it, and `dock` and `dock_right` while docked or once docked).
 `window.toolbar.dock {name, side?, order?}` docks a toolbar as a column of the dock along the window's left or right
 edge, and `window.toolbar.float {name, x?, y?}` floats it again; dragging its title bar does the same (see the docking section in `docs/mcp.md`). They are kept with the workspace they were made in:

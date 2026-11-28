@@ -546,3 +546,30 @@ fn lighting_presets_cancel_restores_an_existing_custom_light_rig() {
     h.cancel();
     assert_eq!(doc(&h), before);
 }
+
+/// The color well named Color, with the color it shows.
+fn color_well(h: &ThreeD) -> Option<String> {
+    use craft::ui::contract::Role;
+    let tree = h.fixture.tree();
+    let well = h.fixture.by_role(Role::COLOR_WELL).into_iter().find(|t| tree.name_of(t.node) == Some("Color"));
+    well.and_then(|t| tree.value_of(t.node).map(str::to_owned))
+}
+
+/// The light color of 3D and Materials and the custom shading color of 3D (Classic) show as color wells with the
+/// stored color.
+#[test]
+fn the_light_color_and_the_custom_shading_color_are_color_wells() {
+    let mut h = drawn(SQUARE, REVOLVE);
+    h.set("__page", json!("lighting"));
+    h.set("lightColor", json!("#ff8040"));
+    assert_eq!(color_well(&h).as_deref(), Some("#ff8040"), "the light color is a well that shows the light's color");
+    h.cancel();
+
+    let mut h = drawn(SQUARE, CLASSIC_EXTRUDE);
+    h.set("__page", json!("lighting"));
+    h.set("surface", json!("plastic"));
+    h.set("shadingColor", json!("custom"));
+    h.set("shadingCustom", json!("#336699"));
+    assert_eq!(color_well(&h).as_deref(), Some("#336699"), "the custom shading color is a well that shows the color");
+    h.cancel();
+}
