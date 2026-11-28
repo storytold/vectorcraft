@@ -15,15 +15,18 @@
 
 use std::sync::Arc;
 
-use craft::ui::dialog::DialogResult;
+use craft::ui::buttons::Button;
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesTab, PropertyRow};
 use craft::ui::runtime::env::Label;
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::text::DEFAULT_TAB_INTERVAL;
 use vectorcraft_doc::{HyphenationOptions, JustificationOptions, TabAlign, TabStop, Unit};
+use vectorcraft_engine::cmd::textstyles::NORMAL_PARA;
 
 use super::char_style_options::{
-    Values, canonical_map, drive, general_rows, reason, rows, select, style_dialog, text, to_fields, tri_state, value_of,
+    Refusals, Values, canonical_map, general_rows, pump_in_opening_document, rows, select, style_dialog, text, to_fields, tri_state, value_of,
 };
 use crate::VectorcraftApp;
 
@@ -599,8 +602,6 @@ fn seed_editors(fields: &mut DialogFields) {
     }
 }
 
-// PLAN: the stop list is a Select over the stops and the buttons are egui buttons: the List and button
-// components' signatures are not in the bundle.
 /// The Add, Delete Tab and Clear All Tabs buttons, which also keep the editors and the stop they edit in step.
 fn tabs_buttons(unit: Unit) -> Param {
     Param::custom("tabs", tl!("Tabs"), move |ui, fields, _| {
@@ -608,10 +609,10 @@ fn tabs_buttons(unit: Unit) -> Param {
         let (rows, _, _) = tab_rows(fields);
         let can_add = new_tab_position(&rows, unit).is_some();
         let (mut add, mut delete, mut clear) = (false, false, false);
-        let line = ui.horizontal(|ui| {
-            add = ui.add_enabled(can_add, egui::Button::new(tl!("Add"))).clicked();
-            delete = ui.add_enabled(!rows.is_empty(), egui::Button::new(tl!("Delete Tab"))).clicked();
-            clear = ui.add_enabled(!rows.is_empty(), egui::Button::new(tl!("Clear All Tabs"))).clicked();
+        let line = Row::new().wrap(true).show(ui, |ui, _| {
+            add = clicked(&Button::new(tl!("Add")).enabled(can_add).show(ui));
+            delete = clicked(&Button::new(tl!("Delete Tab")).enabled(!rows.is_empty()).show(ui));
+            clear = clicked(&Button::new(tl!("Clear All Tabs")).enabled(!rows.is_empty()).show(ui));
         });
         if add {
             add_tab(fields, unit);
@@ -621,7 +622,7 @@ fn tabs_buttons(unit: Unit) -> Param {
             clear_tabs(fields);
         }
         seed_editors(fields);
-        line.response
+        line.output
     })
     .companions(["__tabSel", "__tabEdited", "__tabShown", "__tabAlign", "__tabPosition", "__tabLeader", "__tabAlignOn"])
 }
@@ -730,7 +731,7 @@ pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTa
         tl!("East Asian Composition Settings"),
     ];
     let bodies = [
-        general_rows(edited_attrs(fields, opening)),
+        general_rows(edited_attrs(fields, opening), opening.style == NORMAL_PARA),
         basic_rows(),
         tabs_rows(fields, opening),
         composition_rows(),
@@ -764,6 +765,8 @@ pub(crate) fn hosted(key: &'static str, title: &'static str, opening: &Arc<Openi
 pub(crate) struct ParaStyleOptions {
     inner: HostedPropertiesDialog,
     opening: Arc<Opening>,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
 }
 
 impl ParaStyleOptions {
@@ -782,10 +785,16 @@ style_dialog!(ParaStyleOptions, KIND);
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     crate::panels::character::end_typing(app);
     let unit = app.session.general_unit();
-    let doc = &app.session.active().ok_or("no document open")?.doc;
-    let def = doc.para_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no style `{name}`"))?;
-    let opening = Arc::new(Opening::new(name, def.attrs.clone(), unit, vertical_text(app)));
-    let dialog = ParaStyleOptions { inner: hosted(KIND, tl!("Paragraph Style Options"), &opening, name).previews(), opening };
+    let state = app.session.active().ok_or("no document open")?;
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
+    // [Normal Paragraph Style] has no definition until it is first redefined: it sets nothing.
+    let attrs = match doc.para_styles.iter().find(|s| s.name == name) {
+        Some(def) => def.attrs.clone(),
+        None if name == NORMAL_PARA => Map::new(),
+        None => return Err(format!("no style `{name}`")),
+    };
+    let opening = Arc::new(Opening::new(name, attrs, unit, vertical_text(app)));
+    let dialog = ParaStyleOptions { inner: hosted(KIND, tl!("Paragraph Style Options"), &opening, name).previews(), opening, document };
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(json!({"dialog": KIND}))
 }
@@ -809,24 +818,19 @@ pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 /// The dialog's frame work: previews the values, commits at OK, and rolls the preview back at Cancel.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    let Some(dialogs) = app.dialogs() else { return };
-    let Some(frame) = dialogs.with(|host| host.get_mut::<ParaStyleOptions>().map(ParaStyleOptions::frame)) else {
-        if matches!(dialogs.with(|host| host.take::<ParaStyleOptions>()), Some(DialogResult::Cancel)) {
-            std::mem::take(&mut app.para_style_preview).cancel(app);
-        }
-        return;
+    let refusals = Refusals {
+        busy: "finish the active edit before applying Paragraph Style Options",
+        elsewhere: "switch back to the document where Paragraph Style Options was opened",
+        closed: "the document where Paragraph Style Options was opened has closed",
     };
-    let live = std::mem::take(&mut app.para_style_preview);
-    let (live, done) = drive(app, live, tl!("Paragraph Style Options"), "paraStyle.edit", &frame);
-    app.para_style_preview = live;
-    if let Some(done) = done {
-        let answer = done.map(drop).map_err(|why| reason(&why));
-        dialogs.with(|host| {
-            if let Some(d) = host.get_mut::<ParaStyleOptions>() {
-                d.hosted_mut().answer_ok(answer);
-            }
-        });
-    }
+    pump_in_opening_document::<ParaStyleOptions>(
+        app,
+        |app| &mut app.para_style_preview,
+        |d| (d.document, d.frame()),
+        ParaStyleOptions::hosted_mut,
+        (tl!("Paragraph Style Options"), "paraStyle.edit"),
+        &refusals,
+    );
 }
 
 #[cfg(test)]

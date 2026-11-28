@@ -59,7 +59,8 @@ impl Session {
             histories_seen: None,
             tool: vectorcraft_tools::create("selection"),
             lender: None,
-            back_to_bucket: false,
+            back_to_painter: None,
+            stop_pick: None,
             held_input: Default::default(),
             input_count: 0,
             edit_started_by: None,
@@ -69,11 +70,16 @@ impl Session {
             selection_at_lend: None,
             lent_selection: None,
             last_selection_tool: None,
+            last_part_selection_tool: None,
+            press_lent: None,
+            behind_armed: None,
+            hover_lent: None,
             last_view: ViewInfo::default(),
             preview_memo: Default::default(),
             depth: 0,
             replaying: false,
             shape_drawn: false,
+            prefs_resets: Vec::new(),
             tool_panic: None,
             tool_resets: 0,
             tool_set_since_reset: false,
@@ -103,13 +109,19 @@ impl Session {
             profile_dir: None,
             color_settings_file: None,
             plugin_dir: None,
+            plugin_loads: Default::default(),
+            plugin_loads_in_background: false,
             scripts_dir: None,
+            startup_scripts_dir: None,
+            script_listing_clock: Default::default(),
             metadata_templates_dir: None,
             new_doc_profile_dir: None,
             proof_setup_dir: None,
             proof_setup_saves: 0,
             script_data_dir: None,
             plugin_output: None,
+            plugin_checked: Vec::new(),
+            plugin_calling: None,
             plugin_install_approval: None,
             plugin_grants_from_requests: false,
             recent_urls: vec![],
@@ -118,6 +130,7 @@ impl Session {
             journal_note: Default::default(),
             note_depth: 1,
             journal_query: false,
+            defaults_only_ran: None,
             explicit_undo_group: None,
             batch_stash: None,
             batch_steps: None,
@@ -131,12 +144,14 @@ impl Session {
             place_queue_loads: 0,
             image_hand_off: None,
             trace_hand_off: None,
+            retype_hand_off: None,
             place_cursor_requests: false,
             package_hand_off: None,
             screens_hand_off: None,
             recovery: Default::default(),
             in_tool_actions: false,
             settled_warnings: None,
+            held_interaction: None,
             previewing: false,
             decoded_images: Default::default(),
             envelope_defaults: None,
@@ -168,8 +183,14 @@ impl Session {
             script_console: Default::default(),
             script_runs: 0,
             script_frames: false,
+            script_queue: Default::default(),
+            script_queue_scope: None,
+            script_queue_then: None,
+            startup_loading: None,
+            startup_failures: vec![],
             script_high_water: Default::default(),
             script_in_run: false,
+            window_views: vec![],
             script_copy_first: cfg!(target_arch = "wasm32"),
         }
     }
@@ -210,6 +231,8 @@ impl Session {
             return;
         }
         self.press_type_selection = None;
+        self.press_lent = None;
+        self.behind_armed = None;
         let view = self.last_view;
         // The edit the tool computes on another thread and the input held for it belong to the
         // document being left. The switch goes on whatever they did, as for the deactivation.
@@ -239,11 +262,29 @@ impl Session {
         self.reset_tool_for_doc_switch();
     }
 
+    /// The tab indices of the open documents from the front: the current document first, then
+    /// the others from the one that was current most recently to the one current longest ago
+    /// (tab order among documents that have not been current).
+    pub fn front_order(&self) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..self.docs.len()).collect();
+        order.sort_by_key(|&i| (Some(i) != self.active, std::cmp::Reverse(self.docs[i].activated)));
+        order
+    }
+
+    /// Marks the document in tab `index` as the one current most recently ([`Session::front_order`]).
+    fn stamp_activated(&mut self, index: usize) {
+        let next = self.docs.iter().map(|d| d.activated).max().unwrap_or(0) + 1;
+        if let Some(st) = self.docs.get_mut(index) {
+            st.activated = next;
+        }
+    }
+
     pub fn set_active(&mut self, index: usize) -> bool {
         if index < self.docs.len() {
             let switched = self.active != Some(index);
             if switched {
                 self.reset_tool_for_doc_switch();
+                self.stamp_activated(index);
             }
             self.active = Some(index);
             if switched {
@@ -368,6 +409,7 @@ impl Session {
         self.docs.push(st);
         let i = self.docs.len() - 1;
         self.active = Some(i);
+        self.stamp_activated(i);
         self.sync_opened_composite_fonts(i);
         self.sync_front_profiles();
         if self.depth == 0
@@ -411,11 +453,14 @@ impl Session {
         st.history.limit = old.history.limit;
         // Same open document (caches keyed by uid stay valid); a new revision redraws it.
         st.uid = old.uid;
+        st.activated = old.activated;
         // Work started for the content being thrown away is dropped when it finishes.
         st.reverts = old.reverts + 1;
         st.opened_as_tab = old.opened_as_tab;
         st.revision = old.revision + 1;
         st.format = old.format;
+        // What scripts' commands did to the document stays until the person saves it.
+        st.by_script = old.by_script.clone();
         st.save_options = old.save_options.clone();
         // The remembered artboard pick follows the artboards it named when the file read back has
         // the artboards the document had at the save, in the same order and with the same ids (a
@@ -493,6 +538,9 @@ impl Session {
             return true;
         }
         self.active = if self.docs.is_empty() { None } else { Some(index.min(self.docs.len() - 1)) };
+        if let Some(i) = self.active {
+            self.stamp_activated(i);
+        }
         self.sync_front_composite_fonts();
         self.sync_front_profiles();
         true

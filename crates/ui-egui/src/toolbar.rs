@@ -12,10 +12,10 @@ use craft::behavior::dock::{Action, DockEdge};
 use craft::behavior::geometry::BoxState;
 use craft::behavior::overlay::Side;
 use craft::behavior::{EditEvent, IconId, Mixed};
-use craft::color_ui::ui::PaintChip;
+use craft::color_ui::ui::{PaintChip, PaintChipSize};
 use craft::draw::ui::transform::{SizeUnit, TransformField, TransformFields, TransformGroups, TransformRow, TransformSource};
 use craft::theme::ControlSize;
-use craft::ui::buttons::{Button, IconButton};
+use craft::ui::buttons::{ActiveLook, Button, IconButton};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, BodyCx, Entry, Gap, Props as _, Show as _, ShowContainer as _, Tracked};
 use craft::ui::display::Divider;
@@ -23,7 +23,7 @@ use craft::ui::docking::{DockGrid, GroupAt};
 use craft::ui::form::Field;
 use craft::ui::layout_components::Row;
 use craft::ui::pickers::{Anchor9, ReferencePointLook, Select};
-use craft::ui::rails::{LastUsed, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
+use craft::ui::rails::{LastUsed, RailDensity, RailFooter, RailTool, SlotId, ToolRail, ToolSlot};
 use craft::ui::runtime::commands::{self, CommandRef};
 use craft::ui::text::NumberField;
 use egui::{Pos2, Ui, Vec2};
@@ -127,7 +127,7 @@ pub(crate) fn strips_follow(app: &mut VectorcraftApp, owner: &Owner, shown: bool
 
 /// The Basic toolbar: (category, slots); each slot is a flyout group (first = default).
 pub const BASIC: &[(&str, &[&[&str]])] = &[
-    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "enclosingLasso", "magicWand"]]),
+    ("Select", &[&["selection"], &["directSelection", "groupSelection"], &["lasso", "enclosingLasso", "polygonalLasso", "magicWand"]]),
     (
         "Shapes",
         &[
@@ -143,7 +143,7 @@ pub const BASIC: &[(&str, &[&[&str]])] = &[
             &["pencil", "smooth", "pathEraser", "join"],
             &["eraser", "scissors", "knife", "trimAtCrossings", "mirrorCut", "lineCut", "rectCut"],
             &["paintbrush", "blobBrush"],
-            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen"],
+            &["pen", "addAnchor", "deleteAnchor", "anchorPoint", "quickPen", "smartPen"],
             &["curvature"],
         ],
     ),
@@ -260,7 +260,13 @@ pub(crate) fn dock_grid(app: &VectorcraftApp, owner: &Owner) -> DockGrid {
         Owner::Strip(parent, first) => strip_tools(app, parent, first).len(),
         _ => groups_of(app, owner).len() + 1,
     };
-    DockGrid::rail(cells)
+    DockGrid::rail(cells).density(rail_density(app, owner))
+}
+
+/// How tightly the rail of `owner` packs its buttons: the Tools panel's packs them tight under Window › Toolbars ›
+/// Compact.
+fn rail_density(app: &VectorcraftApp, owner: &Owner) -> RailDensity {
+    if matches!(owner, Owner::Tools) && app.ui.toolbar_compact { RailDensity::Dense } else { RailDensity::Regular }
 }
 
 /// The groups of several tools of the Tools panel's toolbar (`toolbar` none) or of the toolbar made
@@ -387,7 +393,12 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
     let located = locate::wanted(&app.ui, &home);
     let holds = |tool: &str| model.slots.iter().any(|slot| slot.tools.iter().any(|t| t.id == tool));
     let reveal = matches!(at, GroupAt::Show(_)).then(|| locate::take_reveal(&mut app.ui, &home, holds)).flatten();
-    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used).opens(opens).tips(&cards);
+    // The current tool in production's pressed fill, with no accent edge.
+    let mut rail = ToolRail::new(tl!("Tools"), &model.slots, &current, &model.last_used)
+        .opens(opens)
+        .tips(&cards)
+        .active_look(ActiveLook::Pressed)
+        .density(rail_density(app, &owner));
     if let Some(tool) = &located {
         rail = rail.mark(tool);
     }
@@ -470,7 +481,8 @@ fn show_rail(app: &mut VectorcraftApp, ui: &mut Ui, owner: Owner, at: GroupAt, m
 /// Reflect and Shear tools' are their Object › Transform dialogs, the selection tools' are the
 /// Move dialog, and the Pencil, Paintbrush, Smooth, Blob Brush, Eraser, Shape Builder and Objects
 /// on Path tools' are their Tool Options, as are the Line Segment, Arc, Rectangular Grid and Polar Grid tools'
-/// ([`crate::dialogs::shapes::open_options`]) and the Circle tool's ([`crate::dialogs::circle_options::open`]). The Type on a Path and Vertical Type on a Path
+/// ([`crate::dialogs::shapes::open_options`]), the Circle tool's ([`crate::dialogs::circle_options::open`]) and the
+/// Curvature Circle tool's ([`crate::dialogs::curvature_circle_options::open`]). The Type on a Path and Vertical Type on a Path
 /// tools' are Type on a Path Options for the selected type on a path.
 pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::Value, String> {
     match tool {
@@ -511,6 +523,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
         // The Circle tool: what it shows while a circle is drawn, where its anchors go and how
         // the third point is placed.
         vectorcraft_tools::circle::ID => Ok(crate::dialogs::circle_options::open(app)),
+        // The Curvature Circle tool: how near a path pulls the pointer, the radius label, where
+        // the circle's anchors go and whether a circular arc gives its own radius.
+        vectorcraft_tools::curvature_circle::ID => crate::dialogs::curvature_circle_options::open(app),
         // The Three-Point Arc tool: whether the third point gives a direction.
         vectorcraft_tools::three_point_arc::ID => Ok(crate::dialogs::three_point_arc_options::open(app)),
         // The Flare tool: its options, which draw the next flare (OK draws none); with flares
@@ -549,8 +564,9 @@ pub fn open_options(app: &mut VectorcraftApp, tool: &str) -> Result<serde_json::
 }
 
 /// The active tool's options in the Control bar: Mirror & Cut's axis and the side it keeps, Puppet
-/// Warp's mesh and pins (set through `tool.setOption`). The Artboard tool's options are drawn by
-/// [`crate::panels::artboards::control_bar`]. The bar's rows drop the controls that do not fit.
+/// Warp's mesh and pins, the Circle tool's From Center (set through `tool.setOption`). The Artboard
+/// tool's options are drawn by [`crate::panels::artboards::control_bar`]. The bar's rows drop the
+/// controls that do not fit.
 pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     // PLAN: assumed `addons::shapes::control_bar(app, ui)` and `dimension::controls(app, ui)` lose their `reserve` (chrome-w16 ranks).
     if crate::addons::shapes::control_bar(app, ui) {
@@ -572,6 +588,9 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return crop_options(app, ui);
     }
+    if app.session.tool_id() == vectorcraft_tools::circle::ID {
+        return circle_options(app, ui);
+    }
     if app.session.tool_id() != "mirrorCut" {
         return;
     }
@@ -586,6 +605,16 @@ pub fn control_bar_options(app: &mut VectorcraftApp, ui: &mut Ui) {
         if let Some(value) = picked {
             app.run("tool.setOption", json!({ "key": key, "value": value })).ok();
         }
+    }
+}
+
+/// The Circle tool's Control bar: From Center (the first point is the circle's center and the
+/// outline passes through the second), set through `tool.setOption`.
+fn circle_options(app: &mut VectorcraftApp, ui: &mut Ui) {
+    let on = app.session.tool_options()["fromCenter"].as_bool().unwrap_or(false);
+    let picked = Checkbox::new(Bind::given(on)).label(tl!("From Center")).id_salt("fromCenter").show(ui).value().copied();
+    if let Some(value) = picked.filter(|value| *value != on) {
+        app.run("tool.setOption", json!({ "key": "fromCenter", "value": value })).ok();
     }
 }
 
@@ -708,7 +737,8 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         Row::new().wrap(true).show(ui, |ui, _| {
             for (label, cmd, paint) in &chips {
                 let shown = Mixed::Same(well_paint(paint, &|_| None));
-                let out = PaintChip::new(*label, Bind::given(shown), fallback).popover(false).size(ControlSize::Sm).tooltip(*label).show(ui);
+                let out =
+                    PaintChip::new(*label, Bind::given(shown), fallback).popover(false).chip_size(PaintChipSize::Swatch).tooltip(*label).show(ui);
                 if let Some(mods) = out.clicked {
                     clicked = Some((*cmd, mods.cmd));
                 }
@@ -728,9 +758,14 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
         (vectorcraft_engine::DrawMode::Behind, "dc-draw-behind", "Draw Behind", "behind"),
         (vectorcraft_engine::DrawMode::Inside, "dc-draw-inside", "Draw Inside", "inside"),
     ];
-    let mode_button = |ui: &mut Ui, icon: &'static str, name: &str, on: bool| {
+    // `on` is the pressed state of one of the three side-by-side buttons; the single one-column button has none.
+    let mode_button = |ui: &mut Ui, icon: &'static str, name: &str, on: Option<bool>| {
         let tip = format!("{} (Shift+D)", tl!(name));
-        let button = IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip).selected(on);
+        let button = IconButton::new(IconId::new(icon)).label(tip.clone()).tooltip(tip);
+        let button = match on {
+            Some(on) => button.selected(on),
+            None => button,
+        };
         // Small in two columns, where the three sit side by side in the rail's width.
         let button = if two { button.size(ControlSize::Sm) } else { button };
         button.show(ui).clicked()
@@ -742,15 +777,16 @@ fn bottom_controls(app: &mut VectorcraftApp, ui: &mut Ui, footer: RailFooter) {
                 // Side by side, each one a click away, a tight gap apart to fit the rail's width.
                 Row::new().gap(Gap::Tight).show(ui, |ui, _| {
                     for (mode, icon, name, id) in modes {
-                        if mode_button(ui, icon, name, app.session.draw_mode == mode) {
+                        if mode_button(ui, icon, name, Some(app.session.draw_mode == mode)) {
                             run = Some(("view.drawMode", json!({ "mode": id })));
                         }
                     }
                 });
-            } else if let Some((mode, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
-                && mode_button(ui, icon, name, mode != vectorcraft_engine::DrawMode::Normal)
+            } else if let Some((_, icon, name, _)) = modes.into_iter().find(|m| m.0 == app.session.draw_mode)
+                && mode_button(ui, icon, name, None)
             {
-                // One column: the current mode's button, which cycles them.
+                // One column: the current mode's button, named for it, which cycles them; it is always the
+                // current mode, so it has no pressed state.
                 run = Some(("view.drawMode", json!({})));
             }
         }

@@ -7,6 +7,7 @@ use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::patterns::panels::Inspector;
 
 use craft::ui::runtime::commands::CommandRef;
+use craft::ui::sections::HeaderStrength;
 use egui::Ui;
 use serde_json::json;
 use vectorcraft_doc::{LiveShape, Node, NodeKind};
@@ -21,7 +22,13 @@ pub struct PropertiesUi {
     pub global_edit_open: bool,
     /// The panel's More Options popover is open.
     pub more_options_open: bool,
+    /// The cache of `appearance_section::edited_strokes_profiled`, keyed by (document uid, revision,
+    /// active Appearance row).
+    pub edited_profiled: Option<(ProfiledKey, bool)>,
 }
+
+/// The key of [`PropertiesUi::edited_profiled`]: (document uid, revision, active Appearance row).
+type ProfiledKey = (u64, u64, Option<usize>);
 
 /// Two equal columns: the Quick Actions and the paired buttons of the sections.
 const HALVES: [ColumnWidth; 2] = [ColumnWidth::fill(1.0); 2];
@@ -37,7 +44,7 @@ pub(crate) struct QuickAction {
 /// The panel for what is selected: the selection's kind as its heading, then its sections (Edit
 /// Artboards' with the Artboard tool, the document's with nothing selected).
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let inspector = Inspector::new(tl!("Properties")).empty(tl!("No document open"));
+    let inspector = Inspector::new(tl!("Properties")).title_strength(HeaderStrength::Quiet).empty(tl!("No document open"));
     let Some(key) = target_key(app) else {
         inspector.show(ui, |_, _| {});
         return;
@@ -115,7 +122,7 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
     }
     appearance_section::appearance_section(app, ui);
     section(tl!("Align")).show(ui, |ui, _| {
-        Row::new().show(ui, |ui, _| {
+        Row::new().wrap(true).show(ui, |ui, _| {
             super::align::align_buttons(app, ui);
             // The rest (Distribute Objects, Distribute Spacing, Align To) is the Align panel's.
             more_options(ui, "align", tl!("More Align options"));
@@ -139,17 +146,29 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
     if anchors != crate::chrome::AnchorControls::None {
         section(tl!("Anchor Point")).show(ui, |ui, _| crate::chrome::anchor_buttons(app, ui, anchors));
     }
-    let actions = quick_actions(app);
     section(tl!("Quick Actions")).show(ui, |ui, _| {
         if is_image {
             crate::panels::image_trace::trace_button(app, ui);
         }
-        Grid::new(&HALVES).show(ui, |ui, _| {
-            for a in &actions {
-                Button::command(a.command).label(a.label).show(ui);
-            }
-        });
+        quick_action_buttons(app, ui);
         appearance_section::global_edit_row(app, ui);
+    });
+}
+
+fn quick_action_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
+    // Several images and nothing else: Embed and Unembed… for them, first.
+    let images = crate::place::SeveralImages::selected(app);
+    Grid::new(&HALVES).show(ui, |ui, _| {
+        if let Some(images) = &images {
+            for action in images.shown(app) {
+                if Button::new(action.label()).show(ui).clicked() {
+                    images.run(app, action);
+                }
+            }
+        }
+        for action in quick_actions(app) {
+            Button::command(action.command).label(action.label).show(ui);
+        }
     });
 }
 
@@ -164,7 +183,13 @@ pub(crate) fn quick_actions(app: &mut VectorcraftApp) -> Vec<QuickAction> {
     let n_sel = super::selection_len(app);
     let first = first_selected(app);
     let kind = first.as_deref().map(|n| &n.kind);
-    let is_group = matches!(kind, Some(NodeKind::Group { .. }));
+    let (has_group, all_vector) = app.session.active().map_or((false, false), |st| {
+        let kinds = || st.selection.objects.iter().map(|id| st.doc.node(*id).map(|node| &node.kind));
+        (
+            kinds().any(|kind| matches!(kind, Some(NodeKind::Group { .. }))),
+            kinds().all(|kind| matches!(kind, Some(NodeKind::Path { guide: false, .. } | NodeKind::Compound { .. }))),
+        )
+    });
     let is_live = matches!(kind, Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
     // Blend Options for one selected blend, Merge Live Paint for a Live Paint group selected with more to merge into
     // it, as the Properties panel overview lists them
@@ -183,11 +208,12 @@ pub(crate) fn quick_actions(app: &mut VectorcraftApp) -> Vec<QuickAction> {
     };
     add(n_sel > 1, tl!("Group"), "object.group");
     add(n_sel > 1, tl!("Make Clipping Mask"), "object.clippingMask.make");
+    add(n_sel > 1 && all_vector, tl!("Unite"), "object.pathfinder.unite");
     add(merge_live_paint, tl!("Merge Live Paint"), "livePaint.merge");
     add(blend_options, tl!("Blend Options"), "ui.blendOptions");
     add(repeat_options, tl!("Repeat Options"), "object.repeat.options");
-    add(is_group, tl!("Ungroup"), "object.ungroup");
-    add(is_group, tl!("Isolate Group"), "object.isolate");
+    add(has_group, tl!("Ungroup"), "object.ungroup");
+    add(n_sel == 1 && has_group, tl!("Isolate Group"), "object.isolate");
     add(is_live, tl!("Expand Shape"), "object.expandShape");
     // A dynamic symbol instance with appearance changes of its own: Reset shows the symbol's again.
     add(super::symbols::changed_instances_selected(app), tl!("Reset"), "symbol.instance.reset");

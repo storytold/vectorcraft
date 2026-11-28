@@ -9,22 +9,22 @@ use craft::ui::tabs::{DocumentTab, DocumentTabs, DocumentTabsEvent};
 
 /// [`view_tab_title`] for a document with one view.
 #[cfg(test)]
-pub(super) fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool, display_print_size: bool) -> String {
-    view_tab_title(d, None, true, zoom, outline, display_print_size)
+pub(super) fn tab_title(d: &vectorcraft_engine::DocState, zoom: f64, outline: bool, print: Option<f64>) -> String {
+    view_tab_title(d, None, true, zoom, outline, print)
 }
 
 /// A document tab's title: "Name* @ 66.67 % (RGB/Preview)", or while an opacity mask is edited
 /// "Name* @ 66.67 % (<Opacity Mask>/Opacity Mask)". For a view of a document with more than one
 /// view, the view's `number` follows the name: "Name:2* @ 66.67 % (RGB/Preview)". The `*` of unsaved changes shows
 /// when `marked`; a document tab shows its own modified mark instead.
-fn view_tab_title(d: &vectorcraft_engine::DocState, number: Option<u32>, marked: bool, zoom: f64, outline: bool, display_print_size: bool) -> String {
+fn view_tab_title(d: &vectorcraft_engine::DocState, number: Option<u32>, marked: bool, zoom: f64, outline: bool, print: Option<f64>) -> String {
     let mode = if d.doc.mask_edit.is_some() {
         format!("<{0}>/{0}", tl!("Opacity Mask"))
     } else {
         let color = if d.doc.color_mode == vectorcraft_doc::ColorMode::Cmyk { "CMYK" } else { "RGB" };
         format!("{color}/{}", if outline { tl!("Outline") } else { tl!("Preview") })
     };
-    format!("{} @ {} ({mode})", view_tab_name(d, number, marked), zoom_label(zoom, display_print_size).replace('%', " %"))
+    format!("{} @ {} ({mode})", view_tab_name(d, number, marked), zoom_label(zoom, print).replace('%', " %"))
 }
 
 /// The start of [`view_tab_title`], which an inactive document tab shows alone (#8582): "Name*",
@@ -39,7 +39,7 @@ fn view_tab_name(d: &vectorcraft_engine::DocState, number: Option<u32>, marked: 
 fn window_tab_title(app: &VectorcraftApp, w: crate::doc_windows::Win, d: &vectorcraft_engine::DocState, marked: bool) -> String {
     let view = crate::doc_windows::view(app, w);
     let zoom = view.map_or(1.0, |v| v.zoom);
-    view_tab_title(d, crate::doc_windows::label(app, w), marked, zoom, view.is_some_and(|v| v.outline), app.session.prefs.display_print_size)
+    view_tab_title(d, crate::doc_windows::label(app, w), marked, zoom, view.is_some_and(|v| v.outline), app.print_ppi_of(Some(w)))
 }
 
 /// The title of window `w`'s tab and floating window ([`crate::doc_windows`]).
@@ -83,7 +83,8 @@ pub fn doc_tabs(app: &mut VectorcraftApp, ui: &mut Ui) {
             // The tab's modified mark shows unsaved changes, so its text has no `*`.
             let whole = window_tab_title(app, w, d, false);
             let tab = if Some(w) == shown {
-                DocumentTab::new(w, whole)
+                // The modified mark follows the document's name, before the view's zoom and mode.
+                DocumentTab::new(w, whole).name_len(view_tab_name(d, doc_windows::label(app, w), false).len())
             } else {
                 DocumentTab::new(w, view_tab_name(d, doc_windows::label(app, w), false)).tooltip(whole)
             };
@@ -223,10 +224,29 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
         crumbs.push((None, false, pn.clone()));
     }
     // Up one level: the isolated object's parent group, or `object.exitIsolation`, which goes from an
-    // isolated sublayer to its parent layer and otherwise leaves isolation mode.
-    let up = match ancestry.iter().rev().nth(1).filter(|p| st.doc.node(**p).is_some_and(|n| !n.is_layer())) {
+    // isolated sublayer to its parent layer, from a group in a symbol's art to the symbol's layer, and
+    // otherwise leaves isolation mode. While a pattern is edited the back arrow is Done. Screen readers
+    // call it by what it does.
+    let parent_group = ancestry.iter().rev().nth(1).copied().filter(|p| st.doc.node(*p).is_some_and(|n| !n.is_layer()));
+    let up = match parent_group {
         Some(parent) => ("object.isolate", json!({ "id": parent.0 })),
         None => ("object.exitIsolation", json!({})),
+    };
+    let symbol_layer = st.doc.symbol_edit.as_ref().map(|e| e.layer);
+    let up_one = parent_group.is_some()
+        || symbol_layer.is_some_and(|l| l != iso && ancestry.contains(&l))
+        || (st.doc.mask_edit.is_none()
+            && symbol_layer.is_none()
+            && st.doc.node(iso).is_some_and(|n| n.is_layer())
+            && st.doc.parent_of(iso).is_some_and(|p| st.doc.is_editable(p)));
+    let back_name = if pattern_edit.is_some() {
+        tl!("Done")
+    } else if up_one {
+        tl!("Back One Level")
+    } else if symbol_layer == Some(iso) {
+        tl!("Exit Symbol Editing Mode")
+    } else {
+        tl!("Exit Isolation Mode")
     };
     let entries: Vec<Entry<usize>> = crumbs.iter().enumerate().map(|(i, (_, _, name))| Entry::new(i, name.clone())).collect();
     let mut nav: Option<(&str, serde_json::Value)> = None;
@@ -236,7 +256,7 @@ pub fn isolation_bar(app: &mut VectorcraftApp, ui: &mut Ui, area: egui::Rect) {
     let mut bar_ui = ui.new_child(egui::UiBuilder::new().max_rect(area));
     Bar::new(tl!("Isolation mode"), BarKind::Options).show(&mut bar_ui, |ui, _| {
         Row::new().fill().senses_surface().show(ui, |ui, cx| {
-            if IconButton::new(craft::behavior::IconId::new("chevron_left")).label(tl!("Back")).show(ui).clicked() {
+            if IconButton::new(craft::behavior::IconId::new("chevron_left")).label(back_name).show(ui).clicked() {
                 if pattern_edit.is_some() {
                     pattern_cmd = Some("object.pattern.done");
                 } else {

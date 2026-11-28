@@ -5,15 +5,16 @@ use std::path::Path;
 
 use craft::host::{Host, PickId, PickRequest};
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Props as _, Show as _};
+use craft::ui::contract::{Props as _, Show as _, ShowContainer as _};
 use craft::ui::display::Text;
+use craft::ui::layout_components::Row;
 use serde::{Deserialize, Serialize};
 
 use crate::VectorcraftApp;
 
 /// Opaque saved choice. Public so hosts can construct `UiState` with a struct update; its path
 /// has no public setter and is never read from the generic preference or dialog-field maps.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Choice {
     path: Option<String>,
 }
@@ -44,13 +45,22 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     app.original_editor.choice = app.ui.original_editor.clone();
 }
 
-pub(crate) fn commit(app: &mut VectorcraftApp) {
+/// Saves the dialog's choice; returns whether it differs from the saved one.
+pub(crate) fn commit(app: &mut VectorcraftApp) -> bool {
+    let changed = app.ui.original_editor != app.original_editor.choice;
     app.ui.original_editor = app.original_editor.choice.clone();
+    changed
 }
 
 pub(crate) fn reset(app: &mut VectorcraftApp) {
     forget(app);
     app.original_editor.choice = Choice::default();
+}
+
+/// `prefs.reset`: the saved choice goes back to the default, and the next Preferences shows it.
+pub(crate) fn reset_saved(app: &mut VectorcraftApp) {
+    app.ui.original_editor = Choice::default();
+    reset(app);
 }
 
 pub(crate) fn cancel(app: &mut VectorcraftApp) {
@@ -118,19 +128,21 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, enabled: bool) {
     {
         app.status(e);
     }
-    ui.horizontal_wrapped(|ui| {
+    let chosen = app.original_editor.choice.path.clone();
+    let (mut choose, mut default) = (false, false);
+    Row::new().wrap(true).show(ui, |ui, _| {
         Text::new(tl!("Edit Original with:")).show(ui);
-        let name = app.original_editor.choice.path.as_deref().and_then(|p| Path::new(p).file_name());
+        let name = chosen.as_deref().and_then(|p| Path::new(p).file_name());
         Text::new(name.map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "PhotoCraft".into())).show(ui);
-        if Button::new(tl!("Choose…")).enabled(enabled).show(ui).clicked()
-            && let Err(e) = pick(app)
-        {
-            app.status(e);
-        }
-        if app.original_editor.choice.path.is_some() && Button::new("PhotoCraft").enabled(enabled).show(ui).clicked() {
-            reset(app);
-        }
+        choose = Button::new(tl!("Choose…")).enabled(enabled).show(ui).clicked();
+        default = chosen.is_some() && Button::new("PhotoCraft").enabled(enabled).show(ui).clicked();
     });
+    if choose && let Err(e) = pick(app) {
+        app.status(e);
+    }
+    if default {
+        reset(app);
+    }
 }
 
 #[cfg(test)]
@@ -170,7 +182,7 @@ mod tests {
             let p = dir.join(if cfg!(windows) { "Editor.exe" } else { "editor" });
             std::fs::write(&p, b"").unwrap();
             #[cfg(unix)]
-            std::os::unix::fs::PermissionsExt::set_mode(&mut std::fs::metadata(&p).unwrap().permissions(), 0o755);
+            std::fs::set_permissions(&p, <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o755)).unwrap();
             p
         };
         path.to_string_lossy().into_owned()
@@ -257,6 +269,32 @@ mod tests {
         prefs_dialog::answer_reset(&mut app, PromptChoice::Proceed);
         prefs_dialog::confirm(&mut app).unwrap();
         assert!(app.ui.original_editor.path.is_none());
+    }
+
+    /// `prefs.reset` of every category or of File Handling, alone or as a batch step, resets the
+    /// saved choice; a reset of another category keeps it.
+    #[test]
+    fn prefs_reset_resets_the_saved_choice_with_file_handling() {
+        let (mut app, picker) = app();
+        prefs_dialog::cancel(&mut app);
+        let mine = editor("prefs-reset");
+        let chosen = |app: &mut VectorcraftApp| {
+            prefs_dialog::open(app, Some("File Handling"));
+            choose(app, &picker, Some(&mine)).unwrap();
+            prefs_dialog::confirm(app).unwrap();
+            assert!(app.ui.original_editor.path.is_some());
+        };
+        chosen(&mut app);
+        app.run("prefs.reset", json!({"category": "General"})).unwrap();
+        assert!(app.ui.original_editor.path.is_some(), "General keeps the choice");
+        app.run("prefs.reset", json!({"category": "File Handling"})).unwrap();
+        assert!(app.ui.original_editor.path.is_none(), "File Handling resets it");
+        chosen(&mut app);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("command.batch", json!({"commands": [{"command": "prefs.reset", "params": {}}]})).unwrap();
+        assert!(app.ui.original_editor.path.is_none(), "every category, as a batch step");
+        prefs_dialog::open(&mut app, Some("File Handling"));
+        assert!(app.original_editor.choice.path.is_none(), "Preferences shows the default");
     }
 
     #[test]

@@ -132,7 +132,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mixed = !modes.is_empty() && shared.is_none();
     // Selected members can always take a mode.
     let count = if modes.is_empty() { n } else { n.max(2) };
-    crate::panels::section(tl!("Shape Modes:")).show(ui, |ui, _| {
+    crate::panels::subheading(tl!("Shape Modes:")).show(ui, |ui, _| {
         Row::new().gap(Gap::Item).show(ui, |ui, _| {
             for ((icon, label, op), mode) in SHAPE_MODES.into_iter().zip(ShapeMode::ALL) {
                 let glyph = ShapeModeGlyph { icon: IconId::new(icon), mixed };
@@ -153,7 +153,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
                 .show(ui);
         });
     });
-    crate::panels::section(tl!("Pathfinders:")).show(ui, |ui, _| {
+    crate::panels::subheading(tl!("Pathfinders:")).show(ui, |ui, _| {
         Row::new().gap(Gap::Item).show(ui, |ui, _| {
             for (icon, label, op) in PATHFINDERS {
                 IconButton::command(IconSpec::svg(IconId::new(icon)), CommandRef::new(format!("object.pathfinder.{op}")))
@@ -518,6 +518,28 @@ mod tests {
         p.app().run("select.none", json!({})).unwrap();
         assert!(!crate::menus::enabled(&p.app(), "pathfinder.repeat"), "nothing selected");
         assert!(p.app().run("pathfinder.repeat", json!({})).is_err());
+    }
+
+    /// The state the window's menus give the Repeat row, which the panel menu's row reads.
+    fn repeat_row(p: &Panel) -> Option<CommandState> {
+        crate::menus::model::refresh(&mut p.app(), p.ctx());
+        p.app().menus.states.get(&CommandRef::new("pathfinder.repeat")).cloned()
+    }
+
+    /// Before an operation has run, the Repeat row reads Repeat Pathfinder and is dimmed; after Unite
+    /// or Minus Front from the panel it names that operation.
+    #[test]
+    fn the_repeat_row_names_the_last_operation() {
+        let mut p = Panel::new(two_squares(), show);
+        let command = CommandRef::new("pathfinder.repeat");
+        let off = crate::menus::model::off_reason(&p.app(), &command, "Repeat Pathfinder");
+        assert_eq!(repeat_row(&p), Some(CommandState::new().enabled(false).hint(off)), "the plain label, dimmed");
+        p.click("Unite");
+        select_two_squares(&mut p.app(), 110.0);
+        assert_eq!(repeat_row(&p), Some(CommandState::new().enabled(true).title("Repeat Unite")));
+        p.click("Minus Front");
+        select_two_squares(&mut p.app(), 210.0);
+        assert_eq!(repeat_row(&p), Some(CommandState::new().enabled(true).title("Repeat Minus Front")));
     }
 
     /// One selected path cannot supply the operands for Unite; the command reports the failure.

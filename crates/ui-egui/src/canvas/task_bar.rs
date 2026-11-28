@@ -1,11 +1,12 @@
 use craft::behavior::CanvasView;
 use craft::behavior::{IconId, Mixed};
-use craft::color_ui::ui::PaintChip;
+use craft::color_ui::ui::{PaintChip, PaintChipSize};
 use craft::theme::{Srgba, Variant};
 use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
-use craft::ui::canvas_controls::TaskBar;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::canvas_controls::{TaskBar, TaskBarGrip, TaskBarHang};
+use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::display::Text;
 use craft::ui::menu::PanelRow;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
@@ -185,8 +186,8 @@ fn task_bar_shows_type(app: &VectorcraftApp) -> bool {
 
 /// What the Contextual Task Bar offers for the tool and selection in use, without the place it hangs at. The
 /// per-tool rules:
-/// With the Artboard tool it offers Resize (Artboard Options), Duplicate, Rearrange All (with two or more
-/// artboards) and Export (Export for Screens).
+/// With the Artboard tool it offers Resize (Artboard Options), Duplicate, Rearrange (the selected artboards)
+/// and Export (Export for Screens).
 /// A basic shape selected with the Selection tool shows a Shape Properties button in place of Lock.
 /// While a basic shape tool (Rectangle, Rounded Rectangle, Ellipse, Polygon or Star) has one closed
 /// path selected, as after it draws one, the bar offers Edit Path, Fill and Stroke, and Shape
@@ -255,7 +256,7 @@ fn offer(app: &VectorcraftApp, images_memo: &mut Memo, smooth_memo: &mut Memo) -
     // Edit Path: the Direct Selection tool, to edit the path's anchors.
     let edit_path = || (tl!("Edit Path"), "dc-direct", "tool.select", json!({"tool": "directSelection"}));
     if on_artboards {
-        artboard_items(&mut items, st.doc.artboards.len());
+        artboard_items(&mut items);
     } else if blank {
         // Draw (Pencil) switches to the Pencil tool; Place Image picks files for the Place dialog.
         items.push((tl!("Draw (Pencil)"), "pencil", "tool.select", json!({"tool": "pencil"})));
@@ -455,19 +456,25 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
     let has_shape = offer.shape.is_some();
     let mut run: Option<(&'static str, serde_json::Value)> = None;
     let mut show_swatches = false;
-    let shown = TaskBar::new(tl!("Contextual Task Bar"), &offer.anchor, Bind::bound(&mut local)).more_rows(more_rows(&offer)).show(
-        ui,
-        space.view.rect,
-        |ui, _| {
+    let shown = TaskBar::new(tl!("Contextual Task Bar"), &offer.anchor, Bind::bound(&mut local))
+        .grip(TaskBarGrip::Bar)
+        .member_gap(Gap::Item)
+        .hang_gap(TaskBarHang::ClearOfHandles)
+        .more_rows(more_rows(&offer))
+        .show(ui, space.view.rect, |ui, _| {
             for (label, icon, cmd, params) in &offer.actions {
                 if *cmd == TASK_BAR_FIDELITY {
                     // The Smooth tool's Fidelity, labeled, sets the tool's option as it is typed or stepped.
                     if let Some(v) = offer.fidelity {
-                        // PLAN: assumed `freehand::fidelity_field` draws no label of its own
-                        ui.label(*label);
+                        Text::new(*label).show(ui);
                         if let Some(x) = crate::dialogs::freehand::fidelity_field(ui, "task-bar-fidelity", v, "smooth").filter(|x| *x != v) {
                             run = Some(("tool.setOption", json!({"tool": "smooth", "values": {"fidelity": x}})));
                         }
+                    }
+                } else if icon_only(cmd) {
+                    // Convert to Corner and to Smooth show their icon alone, named by their label, as production's did.
+                    if IconButton::new(IconSpec::svg(IconId::new(icon))).label(*label).show(ui).clicked() {
+                        run = Some((*cmd, params.clone()));
                     }
                 } else if Button::new(*label).variant(Variant::SECONDARY).icon(IconSpec::svg(IconId::new(icon))).show(ui).clicked() {
                     run = Some((*cmd, params.clone()));
@@ -488,6 +495,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                         let chip = PaintChip::new(chip.label(has_shape), Bind::given(value), Srgba::BLACK)
                             .popover(false)
                             .ring(stroke)
+                            .chip_size(PaintChipSize::Compact)
                             .selected(app.session.fill_active != stroke)
                             .show(ui);
                         if chip.clicked.is_some() {
@@ -523,8 +531,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                     }
                 }
             }
-        },
-    );
+        });
     let (rect, hide) = (shown.output.rect, shown.output.hide);
     if local != before {
         app.ui.task_bar_place.set(key, local);
@@ -545,10 +552,10 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
         // Properties or the Control bar, it leaves the Image Trace panel as it was.
         Some((TASK_BAR_IMAGE_TRACE, _)) => crate::menus::invoke(app, "imageTrace.make", json!({"preset": "Default"})),
         // The Artboard tool's buttons: Artboard Options for the active artboard, as Properties'
-        // icon opens it; Duplicate for every selected artboard; Rearrange All Artboards.
+        // icon opens it; Duplicate and Rearrange for every selected artboard.
         Some((TASK_BAR_ARTBOARD_OPTIONS, _)) => crate::menus::invoke(app, "tool.options", json!({"tool": "artboard"})),
         Some((TASK_BAR_DUPLICATE_ARTBOARDS, _)) => crate::panels::artboards::duplicate_picked(app),
-        Some((TASK_BAR_REARRANGE_ARTBOARDS, _)) => crate::panels::artboards::open_rearrange(app),
+        Some((TASK_BAR_REARRANGE_ARTBOARDS, _)) => crate::panels::artboards::open_rearrange_selected(app),
         // The convert buttons convert the direct-selected anchors, as the Control bar's buttons do.
         Some((TASK_BAR_TO_CORNER, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "corner"})),
         Some((TASK_BAR_TO_SMOOTH, _)) => crate::menus::invoke(app, "path.convertAnchors", json!({"to": "smooth"})),
@@ -690,17 +697,15 @@ pub(crate) fn chip_paints(app: &VectorcraftApp, ctx: &egui::Context) -> (vectorc
     (fill, stroke, fill_mixed, stroke_mixed)
 }
 
-/// The Contextual Task Bar's items with the Artboard tool in a document of `artboards` artboards:
-/// Resize, Duplicate, Rearrange All (with two or more) and Export.
-fn artboard_items(items: &mut Vec<Action>, artboards: usize) {
+/// The Contextual Task Bar's items with the Artboard tool: Resize, Duplicate, Rearrange (the
+/// selected artboards) and Export.
+fn artboard_items(items: &mut Vec<Action>) {
     // As in the reference app, the Artboard tool offers to resize, duplicate and export the
     // artboards (<https://community.adobe.com/questions-652/contextual-task-bar-in-illustrator-2025-quick-actions-when-you-need-them-1546580>),
     // and to rearrange them (<https://creativepro.com/managing-artboards-in-illustrator/>).
     items.push((tl!("Resize"), "move-diagonal-2", TASK_BAR_ARTBOARD_OPTIONS, json!({})));
     items.push((tl!("Duplicate"), "copy", TASK_BAR_DUPLICATE_ARTBOARDS, json!({})));
-    if artboards > 1 {
-        items.push((tl!("Rearrange All"), "dc-rearrange", TASK_BAR_REARRANGE_ARTBOARDS, json!({})));
-    }
+    items.push((tl!("Rearrange"), "dc-rearrange", TASK_BAR_REARRANGE_ARTBOARDS, json!({})));
     items.push((tl!("Export"), "share-2", "file.exportForScreens", json!({})));
 }
 
@@ -728,8 +733,13 @@ const TASK_BAR_ARTBOARD_OPTIONS: &str = "taskBar.artboardOptions";
 /// The Contextual Task Bar's Duplicate button with the Artboard tool.
 const TASK_BAR_DUPLICATE_ARTBOARDS: &str = "taskBar.duplicateArtboards";
 
-/// The Contextual Task Bar's Rearrange All button with the Artboard tool.
+/// The Contextual Task Bar's Rearrange button with the Artboard tool.
 const TASK_BAR_REARRANGE_ARTBOARDS: &str = "taskBar.rearrangeArtboards";
+
+/// Whether the task bar shows the action `cmd` as its icon alone (its label names it and is its tooltip).
+fn icon_only(cmd: &str) -> bool {
+    matches!(cmd, TASK_BAR_TO_CORNER | TASK_BAR_TO_SMOOTH)
+}
 
 /// The Contextual Task Bar's Convert Selected Anchor Points to Corner button, for direct-selected
 /// anchors or a path selected whole with Direct Selection.

@@ -76,19 +76,23 @@ mod syntax;
 pub use editing::{EDITING_FILE, Editing, LEGACY_EDITING_FILE, editing, editing_with};
 pub use export::{check_page_sizes, export, export_with_report, page_areas};
 pub use file_info::{FileInfo, MAX_TEMPLATE_BYTES, file_info, metadata_template, read_template};
-#[cfg(any(test, feature = "read-count"))]
-pub use import::imports_of;
 pub use import::{
     INVISIBLE_TEXT_NOTE, OFF_ARTBOARD_NOTE, OUTLINED_TEXT_NOTE, PAST_PAGE_NOTE, RESHAPED_TEXT_NOTE, UNMATCHED_GLYPHS_NOTE, UNNAMED_CHARACTERS_NOTE,
     holds_outlines, import, import_opened, import_with_report, is_glyph_outlines, is_outlines_note,
 };
+#[cfg(any(test, feature = "read-count"))]
+pub use import::{form_content_of, function_evaluations_of, imports_of};
+#[cfg(any(test, feature = "read-count"))]
+pub use import_scan::form_content_limit;
+#[cfg(any(test, feature = "read-count"))]
+pub use import_shading::function_evaluation_limit;
 pub use marks::{leaves_out_bleed, page_bleed, printer_marks};
 pub use output::ActiveProfiles;
 #[cfg(any(test, feature = "read-count"))]
 pub use pages::reads_of;
 pub use pages::{
     IllustratorData, Opened, PageInfo, PdfInfo, TrimPages, has_illustrator_data, illustrator_data, illustrator_data_without_pdf_part, info,
-    is_postscript, open_pdf, read_illustrator_data_without_pdf_part,
+    is_postscript, open_pdf, read_illustrator_data_without_pdf_part, read_illustrator_data_without_pdf_part_with,
 };
 pub use piece_info::{PRIVATE_CHUNK, PrivateData};
 pub use post::{THUMBNAIL_SIZE, Thumbnail};

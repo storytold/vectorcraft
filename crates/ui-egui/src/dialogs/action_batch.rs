@@ -8,6 +8,7 @@
 //! empty, or Data Sets without a document, is an error and the dialog stays open.
 
 use std::hash::Hash;
+use std::sync::Arc;
 
 use craft::automation::actions::Action;
 use craft::host::PickRequest;
@@ -131,6 +132,8 @@ pub(crate) enum Folder {
 /// The Batch dialog on the dialog host.
 pub struct BatchDialog {
     id: DialogId,
+    /// Identifies this opening even when another Batch dialog reuses `id`.
+    folder_owner: Arc<()>,
     /// The index of the action's set.
     pub set: usize,
     /// The index of the action in its set.
@@ -150,13 +153,13 @@ impl BatchDialog {
         &self.form.values
     }
 
-    /// The Browse presses since the last call.
-    pub(crate) fn take_asked(&mut self) -> Vec<Folder> {
-        std::mem::take(&mut self.asked)
+    /// The Browse presses since the last call and the opening that made them.
+    pub(crate) fn take_asked(&mut self) -> (Arc<()>, Vec<Folder>) {
+        (self.folder_owner.clone(), std::mem::take(&mut self.asked))
     }
 
     /// Writes the folder the picker answered into its row.
-    pub(crate) fn set_folder(&mut self, which: Folder, path: String) {
+    fn set_folder(&mut self, which: Folder, path: String) {
         match which {
             Folder::Source => self.form.values.folder = path,
             Folder::Destination => self.form.values.destination_folder = path,
@@ -176,6 +179,7 @@ pub fn open(app: &mut VectorcraftApp, set: usize, action: usize) -> Result<Value
     refuse_steps(&included_commands(a))?;
     let dialog = BatchDialog {
         id: dialog_id(KEY),
+        folder_owner: Arc::new(()),
         set,
         action,
         action_name: a.name.clone(),
@@ -207,9 +211,9 @@ pub(crate) fn overwrites_one_file(app: &VectorcraftApp, set: usize, action: usiz
     vectorcraft_engine::cmd::fileio::batch_overwrites_one_file(&app.session, &params(fields, "", commands))
 }
 
-/// Files the request for the folder behind `which`; the answer goes into the open dialog's row.
+/// Files the request for `which`; the answer goes to the row of the Batch dialog that asked.
 // PLAN: PathRow shows Browse whether or not the host offers pickers; `file_asks::ask` says so when it cannot ask.
-pub(crate) fn ask_folder(app: &mut VectorcraftApp, which: Folder) {
+pub(crate) fn ask_folder(app: &mut VectorcraftApp, owner: Arc<()>, which: Folder) {
     let title = match which {
         Folder::Source => crate::i18n::t("Source Folder"),
         Folder::Destination => crate::i18n::t("Destination Folder"),
@@ -218,10 +222,9 @@ pub(crate) fn ask_folder(app: &mut VectorcraftApp, which: Folder) {
         if let Some(path) = picked.paths().first()
             && let Some(dialogs) = app.dialogs()
         {
-            let path = path.to_string_lossy().into_owned();
             dialogs.with(|host| {
-                if let Some(dialog) = host.get_mut::<BatchDialog>() {
-                    dialog.set_folder(which, path);
+                if let Some(dialog) = host.get_mut::<BatchDialog>().filter(|d| Arc::ptr_eq(&d.folder_owner, &owner)) {
+                    dialog.set_folder(which, path.to_string_lossy().into_owned());
                 }
             });
         }
@@ -304,9 +307,7 @@ impl ActionDialog for BatchDialog {
 /// A row that picks one of `entries` for `value`.
 fn select_row<T: Copy + Eq + Hash + std::fmt::Debug + Send + Sync + 'static>(ui: &mut Ui, name: &str, value: &mut T, entries: &[Entry<T>]) {
     Field::new(label(name)).show(ui, |ui, _| {
-        if let Some(picked) = Select::new(label(name), Bind::given(*value), entries).show(ui).value().copied() {
-            *value = picked;
-        }
+        Select::new(label(name), Bind::bound(value), entries).show(ui);
     });
 }
 
@@ -414,10 +415,13 @@ impl StackDialog for BatchDialog {
 #[cfg(test)]
 mod tests {
     use craft::automation::actions::{Action, ActionStep};
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
     use vectorcraft_engine::Session;
 
     use super::*;
     use crate::dialogs::actions::pump;
+    use crate::tests::panel_harness::Panel;
 
     /// An app with one set holding `steps` as the action "Draw", and a window to show dialogs in.
     fn app_with(steps: Vec<ActionStep>) -> VectorcraftApp {
@@ -437,6 +441,44 @@ mod tests {
         });
     }
 
+    #[test]
+    fn batch_folder_answers_belong_to_the_dialog_that_asked() {
+        let step = ActionStep::new("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20}));
+        let mut app = app_with(vec![step]);
+        let picker = crate::tests::picks::scripted(&mut app);
+        let ctx = app.ui_ctx.clone().unwrap();
+        let dialogs = app.dialogs().unwrap();
+        let request_folders = |app: &mut VectorcraftApp| {
+            dialogs.with(|host| host.get_mut::<BatchDialog>().unwrap().asked.extend([Folder::Source, Folder::Destination]));
+            pump(app, &ctx);
+        };
+        let folders = || {
+            dialogs.with(|host| {
+                let fields = host.get::<BatchDialog>().unwrap().fields();
+                (fields.folder.clone(), fields.destination_folder.clone())
+            })
+        };
+        let answer = |app: &mut VectorcraftApp, source: &str, destination: &str| {
+            picker.answer(&[destination]);
+            picker.answer(&[source]);
+            file_asks::poll(app);
+        };
+
+        open(&mut app, 0, 0).unwrap();
+        request_folders(&mut app);
+        assert_eq!(picker.requests().len(), 2);
+        dialogs.with(|host| host.cancel::<BatchDialog>(&ctx));
+        open(&mut app, 0, 0).unwrap();
+        set_fields(&app, &[("folder", json!("new-source")), ("destinationFolder", json!("new-destination"))]);
+        answer(&mut app, "old-source", "old-destination");
+        assert_eq!(folders(), ("new-source".into(), "new-destination".into()));
+
+        request_folders(&mut app);
+        assert_eq!(picker.requests().len(), 4);
+        answer(&mut app, "picked-source", "picked-destination");
+        assert_eq!(folders(), ("picked-source".into(), "picked-destination".into()));
+    }
+
     /// Batch plays an action recorded with a key its command no longer reads, as Play does.
     #[test]
     fn an_action_with_a_key_no_longer_read_still_plays_in_a_batch() {
@@ -453,6 +495,42 @@ mod tests {
         pump(&mut app, &ctx);
         assert!(app.dialogs().unwrap().with(|host| host.confirm::<BatchDialog>(&ctx)));
         assert!(!app.dialogs().unwrap().with(|host| host.is_open::<BatchDialog>()));
+        assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
+        assert!(!app.session.replaying());
+    }
+
+    #[test]
+    fn canceled_choices_keep_the_batch_source_destination_and_file_name() {
+        let mut app = app_with(vec![ActionStep::new("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20}))]);
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("dataset.new", json!({"name": "a"})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        open(&mut panel.app(), 0, 0).unwrap();
+        set_fields(&panel.app(), &[("source", json!("datasets"))]);
+        panel.frame();
+        let fields = |panel: &Panel| panel.app().dialogs().unwrap().with(|host| host.get::<BatchDialog>().unwrap().fields().clone());
+        let is_open = |panel: &Panel| panel.app().dialogs().unwrap().with(|host| host.is_open::<BatchDialog>());
+        let original = fields(&panel);
+        for (name, key) in [("Play", Key::ArrowUp), ("Destination", Key::ArrowUp), ("File Name", Key::ArrowDown)] {
+            panel.click_role(name, Role::COMBO_BOX);
+            panel.key(key, Modifiers::NONE);
+            assert_ne!(fields(&panel), original, "the popup previews {name}");
+            panel.key(Key::Escape, Modifiers::NONE);
+            panel.frame();
+            assert!(is_open(&panel), "Escape closes only the {name} popup");
+            assert_eq!(fields(&panel), original, "Escape restores {name}");
+        }
+        panel.click_role("Destination", Role::COMBO_BOX);
+        panel.key(Key::Home, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        panel.frame();
+        let chosen = fields(&panel);
+        assert_eq!((chosen.source, chosen.destination), (BatchSource::DataSets, BatchDestination::None));
+        panel.click("OK");
+        panel.frame();
+        panel.frame();
+        assert!(!is_open(&panel));
+        let app = panel.app();
         assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
         assert!(!app.session.replaying());
     }

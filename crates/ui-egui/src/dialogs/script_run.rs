@@ -1,10 +1,12 @@
 //! File › Scripts › Other Script…: choosing a JavaScript file and the warning before it runs
 //! (`script.run` runs it), the question a run that keeps adding art asks, the question quitting
 //! asks while a script runs, and the dialogs a script opens with `alert`, `confirm` and `prompt`.
+//! A script's ScriptUI dialog is in [`script_window`]; these questions and dialogs open over it.
 //!
 //! `ui.runScript {path? | source?, name?}` shows the warning for that script; without either it
 //! asks for a `.js` or `.jsx` file through the app's file asks. With Preferences › General › Show
-//! External Script Warning off, the chosen script runs at once. The warning (kind `scriptRun`) is a
+//! External Script Warning off, the chosen script runs at once. With General › Run Startup Scripts
+//! on, the startup scripts run first (`script.startup.run`). The warning (kind `scriptRun`) is a
 //! prompt: its `choice` field (`proceed` runs, `cancel` does not) and `skip` (true: turn the
 //! warning off). The growth question (`scriptGrowth`) and the question quitting asks
 //! (`scriptClose`) have the `choice` field alone.
@@ -28,24 +30,28 @@
 //! are not the dialog's default. `selectDlg` opens the host's folder picker in its own folder.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use craft::host::{PickRequest, Picked};
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Outcome as _, Show as _};
+use craft::ui::contract::{Bind, Outcome as _, Props as _, Scroll, Show as _, ShowContainer as _};
 use craft::ui::dialog::{
     DialogHost, DialogId, DialogResult, DialogStack, FieldRefusal, Prompt, PromptChoice, StackDialog, StandardPrompt, dialog_id,
 };
 use craft::ui::display::Text;
+use craft::ui::layout_components::Stack;
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::scripts::{RUN_EXTS, TOO_LARGE, runs};
+use vectorcraft_engine::file_access::ScopeHandle;
 use vectorcraft_engine::script::dialogs::{MAX_PROMPT_BYTES, cut_to, shown_text};
 use vectorcraft_engine::script::files::{MAX_ENTRIES, PickAnswer, PickerKind, ScriptPicker};
 use vectorcraft_engine::script::{DialogAnswer, MAX_SOURCE_BYTES, ScriptDialog};
 
+use super::script_window::{self, ScriptWindow};
 use crate::VectorcraftApp;
 use crate::file_asks::{self, Owner};
 
@@ -65,6 +71,8 @@ pub(crate) const BY_PERSON: &str = "Only the person at the keyboard can allow a 
 
 /// The note the file dialog shows when the person picked more files than a script is given.
 const PICKED_LEFT_OUT: &str = "A script is given at most 2,048 files: the files picked after them were left out";
+/// The height of the Script File Access prompt's list of picked files before it scrolls, in points.
+const PICKED_LIST_HEIGHT: f32 = 120.0;
 
 /// The warning before a script runs. One type per question, so the host's per-type results never
 /// mix the three questions of this area.
@@ -82,6 +90,11 @@ crate::dialogs::confirm::wrapped_dialog!(CloseQuestion, StandardPrompt, CLOSE_KI
 /// The tag of the warning: the params `script.run` takes once the warning is answered.
 struct RunWarning {
     params: Value,
+    /// The automation roots in force when asked: the script runs under them, and under any in force
+    /// when the warning is answered.
+    scope: ScopeHandle,
+    /// Automation asked ([`VectorcraftApp::automation_asked`]): the script runs as automation.
+    automated: bool,
 }
 
 /// What a script's `alert`, `confirm` or `prompt` dialog answers with.
@@ -266,6 +279,7 @@ impl StackDialog for ScriptNotice {
 /// The dialog of a script's file dialog call: what the run asked for, read from the run's own
 /// request when the dialog opens, so no field of the dialog changes what the person reads.
 pub(crate) struct ScriptFiles {
+    opening: Arc<()>,
     kind: PickerKind,
     prompt: String,
     can_always: bool,
@@ -280,6 +294,7 @@ pub(crate) struct ScriptFiles {
 impl ScriptFiles {
     fn new(p: ScriptPicker) -> Self {
         Self {
+            opening: Arc::new(()),
             kind: p.kind,
             prompt: p.prompt,
             can_always: p.can_always,
@@ -353,7 +368,12 @@ impl StackDialog for ScriptFiles {
             }
             let rows = |ui: &mut Ui| paths.iter().for_each(|path| drop(Text::new(shown_text(path, false)).show(ui)));
             if paths.len() > 1 {
-                egui::ScrollArea::vertical().id_salt("script-picked").max_height(120.0).show(ui, rows);
+                Stack::new()
+                    .label(tl!("Picked files"))
+                    .scroll(Scroll::vertical())
+                    .room_height(PICKED_LIST_HEIGHT)
+                    .id_salt("script-picked")
+                    .show(ui, |ui, _| rows(ui));
             } else {
                 rows(ui);
             }
@@ -407,9 +427,33 @@ pub(crate) fn with_host<R>(app: &VectorcraftApp, f: impl FnOnce(&mut DialogHost,
     Some(app.dialogs()?.with(|host| f(host, &ctx)))
 }
 
+/// Whether the question asked on quitting with a script running is open.
+pub(crate) fn asking_to_close(app: &VectorcraftApp) -> bool {
+    with_host(app, |host, _| host.is_open::<CloseQuestion>()).unwrap_or(false)
+}
+
 /// Whether a dialog is open or waits to open: a script's dialog opens only over nothing.
 pub(crate) fn busy(app: &VectorcraftApp) -> bool {
     app.any_dialog_open() || with_host(app, |host, _| !host.is_empty()).unwrap_or(false)
+}
+
+/// Whether the run's question can open now: over nothing, or over the script's ScriptUI dialog
+/// while nothing, neither a dialog nor a popup, is open over it.
+pub(crate) fn can_ask(app: &VectorcraftApp) -> bool {
+    !busy(app) || script_window::uncovered(app)
+}
+
+/// Opens `dialog` over the script's ScriptUI dialog when that is the top dialog, so the ScriptUI
+/// dialog keeps its queued events and typed text under it; otherwise over nothing.
+fn open_over_window<D: StackDialog>(app: &VectorcraftApp, dialog: D) {
+    with_host(app, |host, _| match host.get::<ScriptWindow>().map(StackDialog::id).filter(|id| host.stack().is_top(*id)) {
+        Some(parent) => {
+            host.open_child(dialog, parent);
+        }
+        None => {
+            host.open(dialog);
+        }
+    });
 }
 
 /// Closes the open `D` the run no longer waits at, and drops its result: only answers the person
@@ -463,7 +507,7 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         return Err("Choose a .js or .jsx script".into());
     }
     if !app.session.prefs.show_external_script_warning {
-        return app.run("script.run", params);
+        return crate::script_runs::run_chosen(app, params);
     }
     let name = params.get("name").and_then(Value::as_str).or(path).map_or_else(|| "script".to_string(), vectorcraft_engine::cmd::fileio::file_name);
     // The script's name is the message: it is what the person reads first.
@@ -473,7 +517,7 @@ pub(crate) fn chosen(app: &mut VectorcraftApp, params: Value) -> Result<Value, S
         .dont_show_again()
         .button(PromptChoice::Proceed, tl!("Run"))
         .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(RunWarning { params });
+        .tag(RunWarning { params, scope: ScopeHandle::capture(), automated: app.automation_asked() });
     with_host(app, |host, _| host.open(RunQuestion(prompt))).ok_or_else(|| "there is no window to ask in".to_string())?;
     Ok(Value::Null)
 }
@@ -496,34 +540,41 @@ fn close_question() -> CloseQuestion {
     )
 }
 
-/// Asks whether to continue a run that has added a great deal; Stop is its Cancel button.
+/// Asks whether to continue a run that has added a great deal; Stop is its Cancel button. Over the
+/// script's ScriptUI dialog, Continue shows that dialog again with its queued events and typed
+/// text.
 pub(crate) fn open_growth(app: &VectorcraftApp) {
-    with_host(app, |host, _| host.open(growth_question()));
+    open_over_window(app, growth_question());
 }
 
 /// Shows the dialog the running script waits at.
 pub(crate) fn open_notice(app: &VectorcraftApp, d: &ScriptDialog) {
-    with_host(app, |host, _| host.open(ScriptNotice::new(d)));
+    open_over_window(app, ScriptNotice::new(d));
 }
 
 /// Shows the file dialog the running script waits at.
 pub(crate) fn open_picker(app: &VectorcraftApp, p: ScriptPicker) {
-    with_host(app, |host, _| host.open(ScriptFiles::new(p)));
+    open_over_window(app, ScriptFiles::new(p));
 }
 
 /// Quitting while a script runs asks whether to stop it, also over the script's own dialog, which
-/// Cancel shows again as it was. Any other open dialog stays, and quitting asks nothing yet.
+/// Cancel shows again as it was, with the events a ScriptUI dialog has not given the script yet and
+/// the text typed in its fields. Any other open dialog stays, and quitting asks nothing yet.
 pub(crate) fn ask_to_close(app: &mut VectorcraftApp) {
     with_host(app, |host, _| {
-        let own = host.get::<ScriptNotice>().map(StackDialog::id).or_else(|| host.get::<ScriptFiles>().map(StackDialog::id));
-        match own {
-            Some(parent) if host.stack().is_top(parent) => {
+        let own = [
+            host.get::<ScriptNotice>().map(StackDialog::id),
+            host.get::<ScriptFiles>().map(StackDialog::id),
+            host.get::<ScriptWindow>().map(StackDialog::id),
+        ];
+        match own.into_iter().flatten().find(|id| host.stack().is_top(*id)) {
+            Some(parent) => {
                 host.open_child(close_question(), parent);
             }
             None if host.is_empty() => {
                 host.open(close_question());
             }
-            _ => {}
+            None => {}
         }
     });
 }
@@ -560,10 +611,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     }
     if let Some(DialogResult::Ok(mut answer)) = run
         && answer.choice == PromptChoice::Proceed
-        && let Some(RunWarning { params }) = answer.take_tag::<RunWarning>()
+        && let Some(RunWarning { params, scope, automated }) = answer.take_tag::<RunWarning>()
     {
         let stored = if answer.skip { app.run("prefs.set", json!({"key": "showExternalScriptWarning", "value": false})).map(drop) } else { Ok(()) };
-        if let Err(e) = stored.and_then(|()| app.run("script.run", params).map(drop)) {
+        let run = |app: &mut VectorcraftApp| crate::script_runs::run_chosen(app, params).map(drop);
+        let automated = automated || app.automation_asked();
+        if let Err(e) = stored.and_then(|()| scope.within_current().run(|| file_asks::as_automated(app, automated, run))) {
             app.status(e);
         }
     }
@@ -577,18 +630,43 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         }
         None => {}
     }
+    answer_close(app, close);
+    if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
+        choose(app);
+    }
+    script_window::pump(app);
+}
+
+/// Takes the answer to the quit question given between two queued runs, before the next run
+/// starts. True when it stopped the runs.
+pub(crate) fn answer_close_between_runs(app: &mut VectorcraftApp) -> bool {
+    let Some(close) = with_host(app, |host, _| host.take::<CloseQuestion>()).flatten() else {
+        return false;
+    };
+    answer_close(app, Some(close));
+    !app.session.script_running()
+}
+
+/// With Stop as the answer to the quit question, stops the run, or between two queued runs, the
+/// runs not yet started.
+fn answer_close(app: &mut VectorcraftApp, close: Option<DialogResult<<CloseQuestion as StackDialog>::Result>>) {
+    let startup = app.session.startup_script_running();
+    // Between two queued runs: none runs, and the report is the last run's.
+    let between = app.session.script_running() && app.session.script_name().is_none();
     if let Some(DialogResult::Ok(answer)) = close
         && answer.choice == PromptChoice::Proceed
         && app.session.script_abandon()
     {
-        let error = app.session.script_failure_text().unwrap_or_default();
-        crate::script_runs::failed(app, error);
+        if between {
+            crate::script_runs::stopped_between_runs(app);
+        } else {
+            let error = app.session.script_failure_text().unwrap_or_default();
+            crate::script_runs::ended_with_error(app, startup, error);
+        }
         forget::<ScriptNotice>(app);
         forget::<ScriptFiles>(app);
+        forget::<ScriptWindow>(app);
         app.sync_views();
-    }
-    if with_host(app, |host, _| host.get_mut::<ScriptFiles>().is_some_and(|d| std::mem::take(&mut d.choose))).unwrap_or(false) {
-        choose(app);
     }
 }
 
@@ -674,8 +752,11 @@ pub(crate) fn settle_files(app: &mut VectorcraftApp, result: DialogResult<FilesA
 }
 
 /// Asks for the files of the kind the running script asked for, starting at the script's file or
-/// folder, with the script's file types; the answer goes to the open file dialog.
+/// folder, with the script's file types; the answer goes to the dialog that opened the picker.
 fn choose(app: &mut VectorcraftApp) {
+    let Some(opening) = with_host(app, |host, _| host.get::<ScriptFiles>().map(|dialog| Arc::clone(&dialog.opening))).flatten() else {
+        return;
+    };
     let Some(p) = app.session.script_picker() else { return };
     let several = p.multiple && p.kind == PickerKind::Open;
     let mut request = match p.kind {
@@ -705,7 +786,11 @@ fn choose(app: &mut VectorcraftApp) {
     file_asks::ask(app, request, Owner::Free, move |app, picked| {
         let chosen = picked.paths().iter().map(|path| path.to_string_lossy().into_owned()).collect();
         let automated = app.file_asks.automated();
-        with_host(app, |host, _| host.get_mut::<ScriptFiles>().map(|dialog| dialog.add(chosen, several, automated)));
+        with_host(app, |host, _| {
+            if let Some(dialog) = host.get_mut::<ScriptFiles>().filter(|dialog| Arc::ptr_eq(&dialog.opening, &opening)) {
+                dialog.add(chosen, several, automated);
+            }
+        });
         Ok(Value::Null)
     });
 }

@@ -19,7 +19,6 @@ use craft::text::ui::character::{
     FontHeightReference as HeightReference, FontPickerSource, Kerning, Leading, SIZE_PRESETS, keys,
 };
 use craft::text::ui::type_options::TextAntiAlias;
-use craft::ui::buttons::Link;
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Lazy, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::display::Divider;
@@ -34,7 +33,7 @@ use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::setup::{LANGUAGES, char_language_name};
 use vectorcraft_doc::text::TypeAntiAlias;
-use vectorcraft_doc::{CharStyle, NodeId, NodeKind};
+use vectorcraft_doc::{CharStyle, NodeId, NodeKind, SymbolPart};
 use vectorcraft_engine::DocState;
 use vectorcraft_tools::{Mods, ToolKey};
 
@@ -290,8 +289,13 @@ pub(crate) fn format(app: &mut VectorcraftApp, p: Value) {
 /// [`format`] that returns the command's result: `text.setRangeStyle` on the range the Type tool
 /// has selected (the whole text when nothing is selected) while it edits text, else
 /// `text.setFormat` on the selected stories ([`selected_stories`]).
-pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value, String> {
-    let Some((id, a, b)) = text_editing_kept(app)? else {
+pub(crate) fn run_format(app: &mut VectorcraftApp, p: Value) -> Result<Value, String> {
+    let editing = text_editing_kept(app)?;
+    run_format_after_typing(app, p, editing)
+}
+
+fn run_format_after_typing(app: &mut VectorcraftApp, mut p: Value, editing: Option<(NodeId, usize, usize)>) -> Result<Value, String> {
+    let Some((id, a, b)) = editing else {
         target_selected_stories(app, &mut p);
         return app.run("text.setFormat", p);
     };
@@ -304,6 +308,40 @@ pub(crate) fn run_format(app: &mut VectorcraftApp, mut p: Value) -> Result<Value
         p["end"] = json!(b);
     }
     app.run("text.setRangeStyle", p)
+}
+
+#[derive(PartialEq, Eq)]
+pub(crate) enum FormatTarget {
+    Objects(Vec<NodeId>, Option<SymbolPart>),
+    Story(Vec<NodeId>),
+    Range(NodeId, usize, usize),
+}
+
+fn format_target(app: &VectorcraftApp, editing: Option<(NodeId, usize, usize)>) -> FormatTarget {
+    if let Some((id, start, end)) = editing {
+        return text_story(app).map_or(FormatTarget::Range(id, start, end), FormatTarget::Story);
+    }
+    let mut ids = selected_stories(app);
+    ids.sort_unstable_by_key(|id| id.0);
+    let part = app.session.active().and_then(|st| st.selection.symbol_part.clone());
+    FormatTarget::Objects(ids, part)
+}
+
+pub(crate) fn format_target_kept(app: &mut VectorcraftApp) -> Result<FormatTarget, String> {
+    let editing = text_editing_kept(app)?;
+    Ok(format_target(app, editing))
+}
+
+/// Apply a settings dialog to its opening text only. Compare before keeping typing so a
+/// refused confirmation on different text does not commit that text's in-progress edit.
+pub(crate) fn run_format_at_target(app: &mut VectorcraftApp, p: Value, target: &FormatTarget) -> Result<Value, String> {
+    let check = |current: FormatTarget| {
+        if &current != target { Err(tl!("The selected text changed. Restore the selection to continue.").to_owned()) } else { Ok(()) }
+    };
+    check(format_target(app, text_editing(app)))?;
+    let editing = text_editing_kept(app)?;
+    check(format_target(app, editing))?;
+    run_format_after_typing(app, p, editing)
 }
 
 /// The Tate-chu-yoko Settings Up/Down and Left/Right the characters the panels act on share, in
@@ -1306,7 +1344,7 @@ pub(crate) fn control_bar(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
         return true;
     }
     Divider::vertical().show(ui);
-    let link = Link::new(tl!("Character:")).show(ui).response;
+    let link = crate::panels::option_link(tl!("Character:")).show(ui).response;
     Popover::new(tl!("Character options"), Bind::kept()).overlay(|overlay| overlay.opened_by(&link, Trigger::Click)).show(ui, |ui, _| show(app, ui));
     Row::new().show(ui, |ui, _| {
         font_menu::font_fields(app, ui);
@@ -1621,8 +1659,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, Tsume 0, the Default character direction,
 /// Kashidas on, the Default digits, Adjust Horizontal and Vertical Diacritic Position 0 and the Em Box
 /// font height reference, whether or not Show East Asian
-/// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
-/// already open, the reset is part of that group's step.
+/// Options, Show Indic Options and Show Font Height Options are on. Area type with Dynamic Text
+/// (Block) on keeps its frame's Line Gap. Inside an undo group that is already open, the reset is
+/// part of that group's step.
 fn reset_panel(app: &mut VectorcraftApp) {
     // Typing in progress stays an undo step of its own.
     end_typing(app);
@@ -1631,7 +1670,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
         app.session.begin_named_undo_group(Some("Reset Panel".into()));
     }
     let d = CharStyle::default();
-    style(app, json!({"tracking": 0, "leading": "auto"}));
+    // Dynamic Text's Line Gap is the frame's, so the reset leaves it as it is.
+    style(app, json!({"tracking": 0, "leading": "auto", "keepLineGap": true}));
     format(
         app,
         json!({

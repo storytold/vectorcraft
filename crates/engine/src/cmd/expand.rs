@@ -182,7 +182,7 @@ impl Expandable {
         n.walk(&mut |c| {
             let shape = matches!(c.kind, NodeKind::Path { .. } | NodeKind::Compound { .. });
             e.text |= matches!(c.kind, NodeKind::Text(_));
-            e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. }) || c.extras().flare.is_some();
+            e.live |= matches!(c.kind, NodeKind::Path { live: Some(_), .. }) || c.extras().flare.is_some() || c.extras().generated.is_some();
             e.effects |= !c.appearance.effects.is_empty();
             e.envelope |= matches!(c.kind, NodeKind::Envelope { .. });
             e.blends |= matches!(c.kind, NodeKind::Blend { .. });
@@ -503,13 +503,17 @@ fn end_dimension_links(s: &mut Session, ended: &mut Vec<EndedLink>) -> Result<()
     Ok(())
 }
 
-/// Makes the live shapes in `n` plain paths, and the flares plain groups of their parts.
+/// Makes the live shapes in `n` plain paths, and the flares and generated art objects plain groups
+/// of their parts.
 fn drop_live(n: &mut Node) {
     if let NodeKind::Path { live, .. } = &mut n.kind {
         *live = None;
     }
     if n.extras().flare.is_some() {
         n.extras_mut().flare = None;
+    }
+    if n.extras().generated.is_some() {
+        n.extras_mut().generated = None;
     }
     if let Some(ch) = n.children_mut() {
         for c in ch.iter_mut() {

@@ -80,11 +80,12 @@ std::thread_local! {
 /// While held, a cataloged font database's fonts and its
 /// [`FontDb::generation`](crate::FontDb::generation) change only on this thread: a change on another
 /// thread (a system font loaded for a character no loaded font covers, fonts added, a rescan, a
-/// composite font set or removed) waits until it is dropped, before it publishes anything. A change
-/// on this thread waits until no other thread holds one, unless every other thread that holds one is
-/// itself waiting to change fonts. Tests hold it to count the layouts that a cache keyed on the
-/// generation keeps. The guards one thread holds count as one, until the last of them is dropped, in
-/// whatever order they are.
+/// composite font set or removed) waits until it is dropped, before it publishes anything. So does a
+/// change of the hyphenation exceptions ([`crate::set_hyphenation_exceptions`]), the other input of
+/// [`crate::layout_inputs`]. A change on this thread waits until no other thread holds one, unless
+/// every other thread that holds one is itself waiting to change fonts. Tests hold it to count the
+/// layouts that a cache keyed on the generation keeps. The guards one thread holds count as one,
+/// until the last of them is dropped, in whatever order they are.
 pub struct SteadyFonts {
     /// Dropped on the thread that made it.
     _thread: std::marker::PhantomData<*const ()>,
@@ -1700,6 +1701,15 @@ pub const PRIVATE_USE_CHAR: char = '\u{F0000}';
 /// that need a character no other font covers, with or without craft-fonts.
 pub fn private_use_font() -> Option<Vec<u8>> {
     remapped_source_sans(PRIVATE_USE_FAMILY, "PrivateUseSans-Regular", &[(PRIVATE_USE_CHAR, 'H')])
+}
+
+/// The family of [`spacing_comma_font`].
+pub const SPACING_COMMA_FAMILY: &str = "Spacingcomma Sans";
+
+/// A face that maps only U+02BB (a modifier letter) to the bundled Source Sans 3 outline of U+0326
+/// (a combining mark), for tests of a shape that is a mark in one face and a character in another.
+pub fn spacing_comma_font() -> Option<Vec<u8>> {
+    remapped_source_sans(SPACING_COMMA_FAMILY, "SpacingcommaSans-Regular", &[('\u{2BB}', '\u{326}')])
 }
 
 /// The family of [`large_cmap_font`].

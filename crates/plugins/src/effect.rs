@@ -503,7 +503,8 @@ fn run(
     tests::RUNS_STARTED.with(|n| n.set(n.get() + 1));
     let output = plugin.run_limited(&input, &params, &limits)?;
     if plugin.manifest().paint_output {
-        return Ok(Out::Pieces(Arc::new(painted::decode(&output, scope, rule)?)));
+        let looks = plugin.manifest().appearance_output.then(painted::effect_check);
+        return Ok(Out::Pieces(Arc::new(painted::decode_with(&output, scope, rule, looks)?)));
     }
     Ok(Out::Path(output_geometry(decode(&output)?)))
 }
@@ -713,12 +714,16 @@ mod tests {
         let _lock = crate::safe_mode::TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         crate::safe_mode::set_active(None);
         const ID: &str = "test.effect.deferfailed";
-        // Runs to its instruction budget.
+        // Runs to its instruction budget: 100,000 instructions, not the default 50 million and 4,000
+        // per byte of input. The view's budget is measured in real time, and a run that the view's
+        // budget cuts short is deferred for time, not as failed.
         let src = crate::wat::spinning(&crate::wat::manifest(ID, "effect", "{}"), 1_000_000_000, r#"{"objects":[]}"#);
-        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
+        let limits = Limits { fuel_base: 100_000, fuel_per_byte: 0, ..Limits::default() };
+        registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), limits).unwrap()).unwrap();
         let view = crate::deferred::Deferrals::with_clock(stepping(1));
         assert!(!view.view(|| drawn(ID, &line(2), 0)));
-        assert!(last_error(ID).is_some());
+        let e = last_error(ID).unwrap_or_default();
+        assert!(e.contains("instruction budget"), "{e}");
         assert!(!view.view(|| drawn("test.effect.notinstalled", &line(2), 1)));
         let reasons = |v: &crate::deferred::Deferrals| v.list().iter().map(|d| d.reason).collect::<Vec<_>>();
         assert_eq!(reasons(&view), [Reason::Failed, Reason::Missing]);
@@ -807,7 +812,7 @@ mod tests {
         crate::safe_mode::set_active(None);
         let dir = std::env::temp_dir().join(format!("vc-effect-overlap-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(crate::safe_mode::begin_launch(&dir), None);
+        assert_eq!(crate::safe_mode::begin_launch(&dir), []);
         let marker = || {
             let files = std::fs::read_dir(&dir).unwrap().filter_map(|e| Some(e.ok()?.path()));
             let json = files.filter(|p| p.extension().is_some_and(|x| x == "json")).collect::<Vec<_>>();
@@ -816,8 +821,8 @@ mod tests {
         };
         let src = crate::wat::returning(&crate::wat::manifest("test.effect.overlap", "effect", "{}"), r#"{"objects":[]}"#);
         let plugin = registry::install(crate::Plugin::load(&wat::parse_str(&src).unwrap(), Limits::default()).unwrap()).unwrap();
-        let named = Some(crate::safe_mode::Item::of(&plugin));
-        assert_eq!(marker(), None);
+        let named = vec![crate::safe_mode::Item::of(&plugin)];
+        assert_eq!(marker(), []);
 
         assert!(begin_run(&plugin), "the first run is guarded");
         assert!(begin_run(&plugin), "a run that starts while the first is running is guarded");
@@ -829,9 +834,9 @@ mod tests {
         end_run(plugin.serial(), true);
         assert_eq!(marker(), named, "the third run is still running");
         end_run(plugin.serial(), false);
-        assert_eq!(marker(), None, "no run is running");
+        assert_eq!(marker(), [], "no run is running");
         assert!(!begin_run(&plugin), "later runs aren't guarded");
-        assert_eq!(marker(), None);
+        assert_eq!(marker(), []);
 
         crate::safe_mode::end_launch();
         crate::safe_mode::forget_previous();

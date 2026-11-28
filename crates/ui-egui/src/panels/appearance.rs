@@ -23,7 +23,7 @@ use std::sync::{Arc, OnceLock};
 use craft::behavior::overlay::{Align, Side};
 use craft::behavior::{ColumnKey, ColumnWidth, CopyKeys, DisplayOrder, EditEvent, IconId, ItemSource, Selection};
 use craft::theme::Srgba;
-use craft::ui::buttons::{Button, ButtonOutput, Link};
+use craft::ui::buttons::{Button, ButtonOutput};
 use craft::ui::choice::{Swatch, SwatchOutput};
 use craft::ui::contract::overlay::{Anchor, Place};
 use craft::ui::contract::{
@@ -352,11 +352,17 @@ pub fn effect_label(id: &str) -> String {
         .unwrap_or_else(|| id.rsplit('.').next().unwrap_or(id).to_string())
 }
 
-/// [`effect_label`] as shown: a built-in effect's in the UI language (an `@id` row for the
-/// effect's id wins over the plain row of its English label), a plug-in's as it is.
+/// Is `id` one of our own effects? A plug-in's effect name comes from the plug-in and is shown as
+/// it is.
+fn built_in_effect(id: &str) -> bool {
+    catalog().iter().any(|c| c.0 == id)
+}
+
+/// [`effect_label`] as shown: a built-in effect's name in the UI language as the Effect menu
+/// shows it ([`crate::i18n::effect_name`]), a plug-in's as it is.
 pub(crate) fn shown_effect_label(id: &str) -> String {
-    match catalog().iter().find(|c| c.0 == id) {
-        Some(c) => crate::i18n::t_id(id, &c.1).to_string(),
+    match built_in_effect(id).then(|| crate::i18n::effect_name(crate::i18n::current(), id)).flatten() {
+        Some(name) => name,
         None => effect_label(id),
     }
 }
@@ -429,7 +435,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let order = rows.keys();
     let sel = current_sel(app, node.as_deref());
     let mut selection = node.as_deref().map_or_else(Selection::default, |n| list_selection(app, n, sel));
-    let list_id = ui.scope_id().with("appearance-rows");
+    let document = app.session.active().map(|st| st.uid);
+    let list_id = ui.scope_id().with(("appearance-rows", document));
     let has = node.is_some();
     // A dragged fill/stroke or effect row lights Duplicate and Delete up, also with nothing picked.
     let dragged = craft::ui::runtime::drag::active::<ListDrag<RowKey>>(ui.ctx())
@@ -490,6 +497,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         if let (Some(dropped), Some(n)) = (&out.dropped, node.as_deref())
             && let Some(drag) = dropped.payload::<ListDrag<RowKey>>()
+            && drag.list == list_id
         {
             drop_on_footer(app, n, sel, &drag.keys, dropped.index == DUPLICATE);
         }
@@ -797,8 +805,10 @@ fn object_row<'r>(cx: &'r RowCx<'_>) -> ListRow<'r> {
         None => cx.app.session.paint.fill.clone(),
     };
     let row = row.thumb(ThumbSize::Small, move |painter, rect| paint_preview::paint_rect(painter, rect, &fill));
-    match cx.node.filter(|_| cx.mix.is_none()) {
-        Some(n) => row.part_drag(RowDragSpot::Thumb(ThumbTarget::First), PanelDrag::Appearance(n.id)),
+    match cx.node.filter(|_| cx.mix.is_none()).zip(cx.app.session.active()) {
+        Some((n, st)) => {
+            row.part_drag(RowDragSpot::Thumb(ThumbTarget::First), PanelDrag::Appearance { document: st.uid, reverts: st.reverts, source: n.id })
+        }
         None => row,
     }
 }
@@ -813,7 +823,7 @@ fn item_row<'r>(cx: &'r RowCx<'_>, key: RowKey, i: usize) -> ListRow<'r> {
     let (name, link) = if fill { (tl!("Fill"), tl!("Fill:")) } else { (tl!("Stroke"), tl!("Stroke:")) };
     let mut row = ListRow::new(name).toggle(ToggleCell::eye(EYE, it.visible())).cell_field(
         NAME,
-        Link::new(link).tooltip(tl!("Click to edit")),
+        crate::panels::option_link(link).tooltip(tl!("Click to edit")),
         link_output(cx.pass, key),
     );
     // The first trailing part added is the outermost: the profile closes the row, the swatch sits
@@ -876,7 +886,7 @@ fn opacity_row<'r>(cx: &'r RowCx<'_>, key: RowKey) -> ListRow<'r> {
     };
     ListRow::new(tl!("Opacity"))
         .toggle(ToggleCell::eye(EYE, true))
-        .cell_field(NAME, Link::new(tl!("Opacity:")).tooltip(tl!("Click to edit")), link_output(cx.pass, key))
+        .cell_field(NAME, crate::panels::option_link(tl!("Opacity:")).tooltip(tl!("Click to edit")), link_output(cx.pass, key))
         // A screen reader reads the shown opacity as the row's description.
         .description(shown.clone())
         .trailing(shown)
@@ -892,7 +902,7 @@ fn contents_row<'r>(cx: &'r RowCx<'_>) -> ListRow<'r> {
     let characters = matches!(n.kind, vectorcraft_doc::NodeKind::Text(_));
     let mut row = ListRow::new(label.clone()).toggle(ToggleCell::eye(EYE, true));
     if characters {
-        row = row.cell_field(NAME, Link::new(label).tooltip(tl!("Click to edit")), link_output(cx.pass, RowKey::Contents));
+        row = row.cell_field(NAME, crate::panels::option_link(label).tooltip(tl!("Click to edit")), link_output(cx.pass, RowKey::Contents));
         // The characters' stroke closes the row, their fill before it.
         for stroke in [true, false] {
             let paint = n.proxy_paint_only(stroke, None).cloned().unwrap_or(Paint::None);
@@ -918,7 +928,7 @@ fn effect_row<'r>(cx: &'r RowCx<'_>, key: RowKey, item: &mut ItemCx<'_, 'r, RowK
     let tip = skipped_effect_tip(&e.id).unwrap_or_else(|| tl!("Click to edit").to_string());
     let row = ListRow::new(label.clone())
         .toggle(ToggleCell::eye(EYE, e.visible))
-        .cell_field(NAME, Link::new(label).tooltip(tip), link_output(cx.pass, key))
+        .cell_field(NAME, crate::panels::option_link(label).tooltip(tip), link_output(cx.pass, key))
         .trailing_icon(fx_icon(), Label::Empty)
         .tooltip(tl!("Double-click to edit"));
     if cx.open.contains(&key) {
@@ -1778,9 +1788,10 @@ fn effects_move(
 pub(crate) fn fx_menu(app: &mut VectorcraftApp, ui: &mut Ui) {
     let mut groups: Vec<(String, Vec<(String, String)>)> = vec![];
     let plugins: Vec<_> = vectorcraft_effects::plugin_effects().into_iter().map(catalog_entry).collect();
-    // Built-in effects in the UI language; a plug-in's by the name it gives.
-    let built_in = catalog().iter().map(|(id, label, menu)| (id, tl!(label), menu));
-    for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.as_str(), menu))) {
+    // Built-in effects named as the Effect menu names them; a plug-in's by the name it gives.
+    let lang = crate::i18n::current();
+    let built_in = catalog().iter().map(|(id, label, menu)| (id, crate::i18n::effect_name(lang, id).unwrap_or_else(|| label.clone()), menu));
+    for (id, label, menu) in built_in.chain(plugins.iter().map(|(id, label, menu)| (id, label.clone(), menu))) {
         let g = menu.get(1).cloned().unwrap_or_else(|| "Other".into());
         match groups.iter_mut().find(|(n, _)| *n == g) {
             Some((_, v)) => v.push((id.clone(), label.to_string())),

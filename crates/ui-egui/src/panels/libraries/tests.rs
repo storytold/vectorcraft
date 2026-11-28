@@ -71,7 +71,8 @@ fn art(app: &mut VectorcraftApp, x: f64, name: Option<&str>) -> Vec<vectorcraft_
 /// New art at `x`, as the canvas drags it.
 fn art_drag(app: &mut VectorcraftApp, x: f64) -> PanelDrag {
     let ids = art(app, x, None);
-    PanelDrag::Art { document: app.session.active().unwrap().uid, ids }
+    let state = app.session.active().unwrap();
+    PanelDrag::Art { document: state.uid, reverts: state.reverts, ids }
 }
 
 fn graphics(app: &mut VectorcraftApp) -> Vec<String> {
@@ -248,6 +249,34 @@ fn an_empty_library_takes_art_anywhere() {
     assert_eq!(graphics(&mut panel.app()).len(), 1);
 }
 
+#[test]
+fn a_library_drop_does_not_collect_unrelated_artwork_after_a_document_switch() {
+    let mut app = app();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    let first = art_drag(&mut app, 10.0);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let second = art_drag(&mut app, 50.0);
+    assert!(matches!((&first, &second), (PanelDrag::Art { ids: a, .. }, PanelDrag::Art { ids: b, .. }) if a == b));
+    assert!(app.session.set_active(0));
+
+    let mut panel = Harness::new(app, with_source);
+    let from = panel.rect(SOURCE).center();
+    let to = panel.rect("This library is empty").center();
+    CARRIED.with(|carried| *carried.borrow_mut() = Some(first.clone()));
+    panel.drag_hold_role(SOURCE, craft::ui::contract::Role::LIST_ITEM, to - from);
+    assert!(craft::ui::runtime::drag::mark(panel.ctx()).is_some());
+    assert!(panel.app().session.set_active(1));
+    panel.frame();
+    let drag = craft::ui::runtime::drag::active::<PanelDrag>(panel.ctx());
+    assert_eq!(drag.as_deref(), Some(&first));
+    assert!(craft::ui::runtime::drag::mark(panel.ctx()).is_none());
+    panel.release();
+    assert!(graphics(&mut panel.app()).is_empty(), "the library never collects the target document's same-ID artwork");
+
+    drop_at(&mut panel, second, to);
+    assert_eq!(graphics(&mut panel.app()).len(), 1, "artwork from the current document can still be added");
+}
+
 fn gradients_and_patterns_come_from_swatches_and_paint_the_selection() {
     let mut app = app();
     app.run("library.create", json!({"name": "Brand"})).unwrap();
@@ -362,6 +391,59 @@ fn last_dialog(app: &VectorcraftApp) -> (craft::ui::dialog::DialogId, Value) {
     let open = open_dialogs(app);
     let last = open.last().expect("a dialog is open");
     (last.id, last.fields.as_ref().and_then(|f| f.get("name")).cloned().unwrap_or_default())
+}
+
+/// Enter a name through the real text field, then let the held OK run its library command.
+fn type_library_name(panel: &mut Harness, name: &str) {
+    panel.click("Name");
+    panel.key(Key::A, Modifiers::COMMAND);
+    panel.type_text(name);
+    panel.click("OK");
+    panel.frame();
+    panel.frame();
+}
+
+/// Every library naming action uses the same hosted form. Keyboard edits must reach its held
+/// answer, just as automation's explicit field updates do.
+#[test]
+fn typed_library_group_and_item_names_reach_the_library_commands() {
+    let mut panel = Harness::new(app(), crate::tests::picks::dialogs);
+    panel.app().run(CREATE, json!({})).unwrap();
+    type_library_name(&mut panel, "Brand");
+    let lib = panel.app().session.libraries.current().unwrap().to_string();
+    assert_eq!(panel.app().session.libraries.get(&lib).unwrap().name, "Brand");
+    assert!(open_dialogs(&panel.app()).is_empty());
+
+    panel.app().run(RENAME, json!({})).unwrap();
+    type_library_name(&mut panel, "House");
+    assert_eq!(panel.app().session.libraries.get(&lib).unwrap().name, "House");
+    panel.app().run("library.add", json!({"kind": "fillColor", "color": "#0044aa", "name": "Blue"})).unwrap();
+    ask_group_name(&mut panel.app(), &lib, None, json!([{"kind": "fillColor", "item": "Blue"}]));
+    type_library_name(&mut panel, "Cool");
+    assert_eq!(group_names(&mut panel.app()), [("Cool".to_string(), vec!["Blue".to_string()])]);
+    ask_group_name(&mut panel.app(), &lib, Some("Cool"), Value::Null);
+    type_library_name(&mut panel, "Cold");
+    assert_eq!(group_names(&mut panel.app()), [("Cold".to_string(), vec!["Blue".to_string()])]);
+    ask_item_name(&mut panel.app(), &lib, ItemKind::Color, "Blue");
+    type_library_name(&mut panel, "Ocean");
+    assert_eq!(group_names(&mut panel.app()), [("Cold".to_string(), vec!["Ocean".to_string()])]);
+    assert!(open_dialogs(&panel.app()).is_empty());
+
+    panel.app().run(RENAME, json!({})).unwrap();
+    type_library_name(&mut panel, " ");
+    assert!(last_dialog(&panel.app()).1.as_str().unwrap().trim().is_empty(), "the refused edit stays in the dialog");
+    assert_eq!(panel.app().session.libraries.get(&lib).unwrap().name, "House");
+    panel.click("Cancel");
+    panel.frame();
+
+    panel.app().run(RENAME, json!({})).unwrap();
+    panel.click("Name");
+    panel.key(Key::A, Modifiers::COMMAND);
+    panel.type_text("Discarded");
+    panel.click("Cancel");
+    panel.frame();
+    assert_eq!(panel.app().session.libraries.get(&lib).unwrap().name, "House");
+    assert!(open_dialogs(&panel.app()).is_empty());
 }
 
 fn group_dialogs_run_with_their_library_and_group() {
@@ -525,4 +607,33 @@ fn a_shrunk_thumbnail_keeps_its_color_beside_clear_pixels() {
     for p in small.pixels() {
         assert!(p[3] > 0 && [200, 30, 30].iter().zip(p.0).all(|(&want, c)| m(c, p[3]).abs_diff(m(want, p[3])) <= 1), "{p:?}");
     }
+}
+
+/// Graphic thumbnails decoded while the panel draws one frame.
+fn decoded(panel: &mut Harness) -> usize {
+    super::counters::DECODED.with(|c| c.set(0));
+    panel.frame();
+    super::counters::DECODED.with(std::cell::Cell::get)
+}
+
+/// A library of many graphics decodes their thumbnails at most 16 a frame, through the framework's
+/// thumbnail store, and decodes none again once they show.
+#[test]
+fn graphic_thumbnails_decode_a_few_a_frame_and_once() {
+    let mut app = app();
+    app.run("library.create", json!({"name": "Brand"})).unwrap();
+    for i in 0..60 {
+        art(&mut app, f64::from(i), Some(&format!("Mark {i}")));
+    }
+    // The harness draws two frames as it opens.
+    super::counters::DECODED.with(|c| c.set(0));
+    let mut panel = Harness::new(app, show);
+    let opening = super::counters::DECODED.with(std::cell::Cell::get);
+    assert!(opening > 0 && opening <= 32, "{opening} decoded in the first two frames");
+    let mut later = 0;
+    for _ in 0..8 {
+        later += decoded(&mut panel);
+    }
+    assert!(later > 0, "the rest decode in later frames");
+    assert_eq!(decoded(&mut panel), 0, "a shown thumbnail is not decoded again");
 }

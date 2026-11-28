@@ -4,7 +4,7 @@
 //! bounding-box scale (Shift proportional, Alt from center; Snap to Grid, Snap to Pixel, Smart
 //! Guides and Snap to Point snap what the handle moves) and rotate (outside corners, Shift 45°),
 //! drag a live rectangle's or polygon's corner widget to round its corners (Alt-click cycles their kind,
-//! double-click opens the Corners dialog), drag a live ellipse's pie widgets to set its pie angles
+//! double-click shows the Transform panel), drag a live ellipse's pie widgets to set its pie angles
 //! (double-click makes it whole again: [`crate::pie`]), double-click a group or an object to enter isolation
 //! mode (Double Click To Isolate), Cmd/Ctrl-click to select the object behind (Command Click to Select Objects Behind),
 //! click or drag a ruler guide ([`crate::rulerguide`]), Cmd/Ctrl+Shift-double-click a ruler guide or
@@ -41,7 +41,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
-use vectorcraft_doc::hit::{Hit, HitKind, hit_test, marquee_in_view, objects_at, selected_hidden_at};
+use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, leaves_at, marquee_in_view, selected_hidden_at};
 use vectorcraft_doc::{NodeId, OrientedBox};
 use vectorcraft_geom::{Affine, Point, Rect, Vec2};
 
@@ -214,6 +214,11 @@ pub struct SelectionTool {
     /// Where the pointer was at the last press or drag: a widget drag released anywhere else is
     /// dragged there before it ends.
     held_at: Option<Point>,
+    /// Where the last press that selected the object behind (Cmd/Ctrl-click) was released: a
+    /// double-click there that follows it is that press clicked again, not a double-click that
+    /// isolates or edits. It holds the document's revision at the release too (None until then),
+    /// and an edit or a selection change after it ends it.
+    pressed_behind: Option<(Point, Option<(u64, u64)>)>,
 }
 
 /// What Distance Guides measure the selection to.
@@ -503,16 +508,65 @@ struct MemoState {
 /// The measurements for one key; a slot holds `None` until it is measured.
 struct Measured {
     revision: (u64, u64),
+    /// The fonts, hyphenation exceptions and plug-ins live art is drawn and hit with
+    /// ([`vectorcraft_doc::hit::live_inputs`]).
+    live: u64,
     objects: Vec<NodeId>,
     measure: vectorcraft_effects::preview::Measure,
     bounds: Option<Option<Rect>>,
     oriented: Option<Option<OrientedBox>>,
     by_object: HashMap<NodeId, Option<Option<Rect>>>,
+    /// [`painted_bounds`] in Preview and in Outline view.
+    painted: [Option<Option<Rect>>; 2],
+    /// [`selected_part_boxes`].
+    part_boxes: Option<std::sync::Arc<[(NodeId, Rect)]>>,
+    /// [`selects_behind_at`]'s last answer, with the point and settings it was for.
+    behind: Option<(BehindKey, bool)>,
+}
+
+/// What [`selects_behind_at`] answers for besides the document and the selection: the point, the
+/// tolerances (the zoom and the preferences) and the hit-test settings.
+#[derive(Clone, Copy, PartialEq)]
+struct BehindKey {
+    at: Point,
+    pick_tol: f64,
+    point_tol: f64,
+    scope: Option<NodeId>,
+    outline: bool,
+    path_only: bool,
+    type_path_only: bool,
+    skip_guides: bool,
+    handles_multiple: bool,
+    /// The zoom, which sets the mesh points' and the box handles' reach.
+    zoom: f64,
+    show_bbox: bool,
+}
+
+impl BehindKey {
+    fn of(cx: &ToolContext, at: Point) -> Self {
+        let opt = cx.selection_hit_options();
+        Self {
+            at,
+            pick_tol: cx.pick_tol(),
+            point_tol: cx.point_tol(),
+            scope: cx.isolation,
+            outline: opt.outline,
+            path_only: opt.path_only,
+            type_path_only: opt.type_path_only,
+            skip_guides: opt.skip_guides,
+            handles_multiple: cx.handles_multiple,
+            zoom: cx.zoom,
+            show_bbox: cx.show_bbox,
+        }
+    }
 }
 
 impl Measured {
     fn is_for(&self, cx: &ToolContext) -> bool {
-        self.revision == cx.revision && self.measure == cx.bounds_measure() && self.objects == cx.selection.objects
+        self.revision == cx.revision
+            && self.live == vectorcraft_doc::hit::live_inputs()
+            && self.measure == cx.bounds_measure()
+            && self.objects == cx.selection.objects
     }
 }
 
@@ -534,11 +588,15 @@ impl PreviewMemo {
         st.checks += 1;
         let fresh = || Measured {
             revision: cx.revision,
+            live: vectorcraft_doc::hit::live_inputs(),
             objects: cx.selection.objects.clone(),
             measure: cx.bounds_measure(),
             bounds: None,
             oriented: None,
             by_object: HashMap::new(),
+            painted: [None, None],
+            part_boxes: None,
+            behind: None,
         };
         if !st.entry.as_ref().is_some_and(|m| m.is_for(cx)) {
             st.entry = Some(fresh());
@@ -553,10 +611,16 @@ impl PreviewMemo {
         {
             return v;
         }
+        let live = vectorcraft_doc::hit::live_inputs();
         let v = measure();
+        // Live inputs that changed while it measured leave the value unkept: only the entry for the
+        // inputs it was measured with takes it.
         if let Ok(mut st) = self.0.try_borrow_mut() {
             st.measurements += 1;
-            *slot(Self::current(&mut st, cx)) = Some(v.clone());
+            let m = Self::current(&mut st, cx);
+            if m.live == live {
+                *slot(m) = Some(v.clone());
+            }
         }
         v
     }
@@ -582,6 +646,48 @@ pub fn selection_bounds(cx: &ToolContext) -> Option<Rect> {
 /// shows and drags (rotated after a rotation).
 pub fn selection_box(cx: &ToolContext) -> Option<OrientedBox> {
     remembered(cx, |m| &mut m.oriented, || vectorcraft_effects::preview::oriented_bounds_with(cx.doc, &cx.selection.objects, cx.bounds_measure()))
+}
+
+/// The bounds a hit test can find the objects in that a click selects for the selected art
+/// ([`top_holder`]): their reach (a blend's spine included), their visual bounds as drawn
+/// (strokes and effects included, whatever Use Preview Bounds says) and their geometric bounds
+/// (where Outline view hits the paths), together, kept for each view mode.
+fn painted_bounds(cx: &ToolContext) -> Option<Rect> {
+    let outline = cx.selection_hit_options().outline;
+    remembered(
+        cx,
+        |m| &mut m.painted[usize::from(outline)],
+        || {
+            let mut seen = std::collections::HashSet::new();
+            let tops: Vec<NodeId> = cx.selection.objects.iter().map(|&id| top_holder(cx, id)).filter(|id| seen.insert(*id)).collect();
+            // A layer or group above them with visible effects of its own that draw art (not raster
+            // effects, which a hit test leaves out, nor color adjustments) can draw (and hit) them
+            // anywhere. Outline view hits the paths where they are.
+            let moves_art = |e: &vectorcraft_doc::Effect| {
+                e.visible && !outline && !vectorcraft_effects::is_raster(&e.id) && !vectorcraft_effects::is_adjustment(&e.id)
+            };
+            let above_has_effects = tops.iter().any(|id| {
+                cx.doc.ancestry(*id).is_some_and(|a| {
+                    a.iter().take_while(|n| *n != id).any(|n| cx.doc.node(*n).is_some_and(|n| n.appearance.effects.iter().any(moves_art)))
+                })
+            });
+            if above_has_effects {
+                return Some(Rect::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::INFINITY));
+            }
+            let symbols = cx.doc.symbol_boxes();
+            let reach = tops.iter().filter_map(|id| cx.doc.node(*id)).filter_map(|n| n.reach_bounds_with(&symbols));
+            let drawn = vectorcraft_effects::preview::bounds_of(cx.doc, &tops, true);
+            let geometric = vectorcraft_effects::preview::bounds_of(cx.doc, &tops, false);
+            reach.chain(drawn).chain(geometric).reduce(|a, b| a.union(b))
+        },
+    )
+}
+
+/// `measure`'s list of the selected objects' editable paths with their control bounds, kept in the
+/// session's [`PreviewMemo`] while the document and the selection stay as they are
+/// ([`crate::direct::over_selected_part`]).
+pub(crate) fn selected_part_boxes(cx: &ToolContext, measure: impl FnOnce() -> std::sync::Arc<[(NodeId, Rect)]>) -> std::sync::Arc<[(NodeId, Rect)]> {
+    remembered(cx, |m| &mut m.part_boxes, measure)
 }
 
 /// [`selection_box`] while the canvas shows it (View › Show Bounding Box, and no anchors selected
@@ -708,7 +814,7 @@ pub(crate) fn hold_point(cx: &ToolContext, h: &Hit, p: Point) -> Point {
 }
 
 /// [`hold_point`]'s point of the path hit, None when the press holds no point of it.
-fn held_on_path(cx: &ToolContext, h: &Hit, p: Point) -> Option<Point> {
+pub(crate) fn held_on_path(cx: &ToolContext, h: &Hit, p: Point) -> Option<Point> {
     let reach = if matches!(h.kind, HitKind::Stroke | HitKind::Outline) { f64::INFINITY } else { cx.tol(HOVER_REACH) };
     cx.doc.node(h.leaf).and_then(|n| n.path_data()).and_then(|pd| hold_on_path(pd, p, reach))
 }
@@ -800,6 +906,25 @@ impl SelectionTool {
                 }
             }
             PointerKind::Up => self.loaded_at_press = None,
+            _ => {}
+        }
+    }
+
+    /// Each press, whatever takes it, starts with no Select Behind of its own, and the double-click
+    /// that follows one comes where that press is released, with the document as the release left
+    /// it, before the pointer moves away; a press that drags or is released away is not a click
+    /// ([`Self::pressed_behind`]).
+    fn note_pressed_behind(&mut self, cx: &ToolContext, ev: &PointerEvent) {
+        match ev.kind {
+            PointerKind::Down => self.pressed_behind = None,
+            PointerKind::Move | PointerKind::Drag => {
+                if self.pressed_behind.is_some_and(|(at, _)| at.distance(ev.pos) > cx.tol(1.0)) {
+                    self.pressed_behind = None;
+                }
+            }
+            PointerKind::Up => {
+                self.pressed_behind = self.pressed_behind.filter(|(at, _)| at.distance(ev.pos) <= cx.tol(1.0)).map(|_| (ev.pos, Some(cx.revision)));
+            }
             _ => {}
         }
     }
@@ -1031,10 +1156,16 @@ impl Tool for SelectionTool {
         }
     }
 
+    /// A press lent to another tool is not a Select Behind press of this tool.
+    fn press_elsewhere(&mut self) {
+        self.pressed_behind = None;
+    }
+
     /// A press takes the selection's widgets, a ruler guide, a selected object's centre point or
     /// the art; the drags then move, scale, rotate, marquee or drag what it took.
     fn pointer(&mut self, cx: &ToolContext, ev: &PointerEvent) -> Vec<Action> {
         self.note_loaded_at_press(ev.kind);
+        self.note_pressed_behind(cx, ev);
         let released_away = self.note_held_at(ev);
         let hovering = ev.kind == PointerKind::Move && matches!(self.state, State::Idle);
         self.bracket_hover = hovering.then_some(ev.pos);
@@ -1081,13 +1212,16 @@ impl Tool for SelectionTool {
                     self.state = State::Moving { start: p, press: p, hold: center, grip: Grip::Point, began: false, deselect, key, exclude: None };
                     return vec![];
                 }
-                // 3. Objects: Cmd/Ctrl-click selects the one under the selected one (cycling).
+                // 3. Objects: once armed, Cmd/Ctrl-click selects the one under the selected one
+                // (cycling).
                 if m.cmd
                     && cx.select_behind
+                    && cx.behind_armed
                     && let Some(behind) = object_behind(cx, p)
                 {
                     self.state =
                         State::Moving { start: p, press: p, hold: p, grip: Grip::Point, began: false, deselect: None, key: None, exclude: None };
+                    self.pressed_behind = Some((p, None));
                     return vec![Action::Exec("select.set".into(), json!({ "ids": [behind.0] }))];
                 }
                 let (hit, scope) = match selected_source_hit(cx, p) {
@@ -1434,12 +1568,105 @@ impl Tool for SelectionTool {
     }
 }
 
-/// Select Behind: of the objects under `p` (topmost first), the one below the lowest selected
-/// one, back to the topmost after the bottom one; the topmost when none is selected.
+/// Does a Cmd/Ctrl press at `p` with the Selection tool select behind: is Select Behind on and
+/// armed by an earlier Cmd/Ctrl press ([`ToolContext::behind_armed`]), and is an object under the
+/// pointer ([`leaves_at`]) selected or inside a selected object (a member of a selected group),
+/// with another object under the pointer too, away from the anchors, handles, mesh points and
+/// spine Direct Selection edits ([`crate::direct::over_selected_part`])? Elsewhere Cmd lends the
+/// press to Direct Selection or Group Selection.
+pub fn selects_behind_at(cx: &ToolContext, p: Point) -> bool {
+    if !cx.select_behind || !cx.behind_armed {
+        return false;
+    }
+    let tol = cx.pick_tol();
+    // The answer is kept for the document and the selection as they are: the cursor, the canvas
+    // marks and a press at the same point ask again without walking the document again.
+    let key = BehindKey::of(cx, p);
+    if let Some(memo) = cx.preview_memo
+        && let Ok(mut st) = memo.0.try_borrow_mut()
+        && let Some((k, v)) = PreviewMemo::current(&mut st, cx).behind
+        && k == key
+    {
+        return v;
+    }
+    // The painted bounds of the objects holding the selection come first: away from them, no
+    // document walk is needed. They take in a wide stroke's outer half, which the bounding box
+    // leaves out without Use Preview Bounds, and a group's members that are not selected. With no
+    // other object under the pointer there is nothing to select behind: the press is lent.
+    // A shown bounding box's handles and rotate zones are not passed to Select Behind: the press
+    // there is lent.
+    let live = vectorcraft_doc::hit::live_inputs();
+    let behind = painted_bounds(cx).is_some_and(|b| b.inflate(tol, tol).contains(p))
+        && !shown_box(cx).is_some_and(|b| box_hit(cx, &b, p).is_some())
+        && {
+            let stack = under_pointer(cx, p);
+            stack.len() > 1 && lowest_selected(&stack).is_some()
+        }
+        && !crate::direct::over_selected_part(cx, p);
+    if let Some(memo) = cx.preview_memo
+        && let Ok(mut st) = memo.0.try_borrow_mut()
+    {
+        st.measurements += 1;
+        // Only the entry for the live inputs it was found with keeps the answer.
+        let m = PreviewMemo::current(&mut st, cx);
+        if m.live == live {
+            m.behind = Some((key, behind));
+        }
+    }
+    behind
+}
+
+/// The objects under `p` that Select Behind steps through, topmost first: for each object a Direct
+/// Selection click picks there ([`leaves_at`]; in a compound path, the path under the pointer), the
+/// object and whether it is selected or inside a selected object.
+fn under_pointer(cx: &ToolContext, p: Point) -> Vec<(NodeId, bool)> {
+    let tol = cx.pick_tol();
+    leaves_at(cx.doc, p, cx.selection_hit_options())
+        .into_iter()
+        .map(|h| {
+            let part = cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol));
+            let picked = h.ancestry.iter().copied().chain(std::iter::once(h.leaf)).chain(part).any(|id| cx.selection.contains(id));
+            (part.unwrap_or(h.leaf), picked)
+        })
+        .collect()
+}
+
+/// The index in `stack` ([`under_pointer`]) of the lowest object that is selected or inside a
+/// selected object.
+fn lowest_selected(stack: &[(NodeId, bool)]) -> Option<usize> {
+    stack.iter().rposition(|(_, picked)| *picked)
+}
+
+/// The selected object `id` and the objects holding it, outermost first, from the object a click
+/// with the Selection tool selects for it ([`Hit::top_object`]): below its layers, the isolated
+/// object and an envelope whose contents are edited.
+fn holder_chain(cx: &ToolContext, id: NodeId) -> Vec<NodeId> {
+    let Some(a) = cx.doc.ancestry(id) else { return vec![id] };
+    let isolated = cx.isolation.and_then(|s| a.iter().position(|n| *n == s));
+    let contents =
+        a.iter().rposition(|n| cx.doc.node(*n).is_some_and(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Envelope { editing: true, .. })));
+    // Below the isolated object or the envelope, the child holding `id` is the top object, a
+    // sublayer included; elsewhere layers and sublayers are skipped.
+    let chain: Vec<NodeId> = match isolated.max(contents) {
+        Some(i) => a.iter().skip(i + 1).copied().collect(),
+        None => a.iter().copied().skip_while(|n| cx.doc.node(*n).is_some_and(|n| n.is_layer())).collect(),
+    };
+    if chain.is_empty() { vec![id] } else { chain }
+}
+
+/// The object a click with the Selection tool selects for the selected object `id`
+/// ([`holder_chain`]).
+fn top_holder(cx: &ToolContext, id: NodeId) -> NodeId {
+    holder_chain(cx, id).first().copied().unwrap_or(id)
+}
+
+/// Select Behind: of the objects under `p` ([`under_pointer`], topmost first, members of groups
+/// one by one), the one below the lowest one that is selected or inside a selected object, back to
+/// the topmost after the bottom one; the topmost when none is.
 fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
-    let stack = objects_at(cx.doc, p, cx.selection_hit_options(), cx.isolation);
-    let next = stack.iter().rposition(|id| cx.selection.contains(*id)).map_or(0, |i| i + 1);
-    stack.get(next).or(stack.first()).copied()
+    let stack = under_pointer(cx, p);
+    let next = lowest_selected(&stack).map_or(0, |i| i + 1);
+    stack.get(next).or(stack.first()).map(|(id, _)| *id)
 }
 
 /// The selected object a press on `h` lands on: `top` when it is selected, else the outermost
@@ -1448,15 +1675,22 @@ fn object_behind(cx: &ToolContext, p: Point) -> Option<NodeId> {
 /// member with only some anchors or segments selected does not count: the press selects `top`.
 /// A member with every anchor selected (as `select.anchors` and `select.key` leave a path) counts.
 fn selected_under(cx: &ToolContext, h: &Hit, top: NodeId) -> Option<NodeId> {
-    if cx.selection.contains(top) {
+    selected_under_in(cx.doc, cx.selection, h, top)
+}
+
+/// [`selected_under`] in `doc` with `selection`: the selected object a Selection tool press on
+/// `h` lands on, where `top` is the object the press would select. The canvas's hover outline
+/// outlines nothing where this finds an object.
+pub fn selected_under_in(doc: &vectorcraft_doc::Document, selection: &vectorcraft_doc::Selection, h: &Hit, top: NodeId) -> Option<NodeId> {
+    if selection.contains(top) {
         return Some(top);
     }
     let every_anchor = |id: NodeId| {
-        cx.selection
+        selection
             .partial(id)
-            .is_none_or(|picked| cx.doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().all(|(s, i, _)| picked.contains(&(s, i)))))
+            .is_none_or(|picked| doc.node(id).and_then(|n| n.path_data()).is_some_and(|p| p.anchors().all(|(s, i, _)| picked.contains(&(s, i)))))
     };
-    let whole = |id: NodeId| cx.selection.contains(id) && every_anchor(id) && !cx.selection.segments.contains_key(&id);
+    let whole = |id: NodeId| selection.contains(id) && every_anchor(id) && !selection.segments.contains_key(&id);
     let below = h.ancestry.iter().position(|id| *id == top).map_or(&[][..], |i| h.ancestry.get(i..).unwrap_or_default());
     below.iter().copied().chain(std::iter::once(h.leaf)).find(|id| whole(*id))
 }
@@ -1624,6 +1858,14 @@ impl SelectionTool {
 
     fn double_click(&mut self, cx: &ToolContext, p: Point, m: Mods) -> Vec<Action> {
         self.state = State::Idle;
+        // Quick Cmd-clicks that select behind keep what the last one selected, before the widgets
+        // of that object answer, also when Cmd is let go before the release. Cmd+Shift on a guide
+        // still releases it. A double-click elsewhere, or after an edit or a selection change, is a
+        // double-click of its own. A press whose release has not come yet (both in one frame)
+        // still counts.
+        if self.pressed_behind.take().is_some_and(|(at, rev)| at.distance(p) <= cx.tol(1.0) && rev.is_none_or(|r| r == cx.revision)) {
+            return release_guide_at(cx, p, m).into_iter().collect();
+        }
         // A threaded port: the thread breaks there. Any other port takes the double-click
         // too, so it neither edits the type nor isolates.
         if let Some((id, port)) = crate::text::port_at(cx, p) {
@@ -1634,7 +1876,12 @@ impl SelectionTool {
             }
             return vec![];
         }
-        if let Some(a) = corners::double_click(cx, p, false).or_else(|| pie::double_click(cx, p)).or_else(|| typewidget::double_click(cx, p)) {
+        // A corner widget of a selected live shape shows the Transform panel, as with the shape
+        // tools; the tool and the selection stay as they are. Direct Selection opens Corners.
+        if corners::over_widget(cx, p, false) {
+            return vec![Action::Panel("transform".into())];
+        }
+        if let Some(a) = pie::double_click(cx, p).or_else(|| typewidget::double_click(cx, p)) {
             return vec![a];
         }
         if let Some(a) = release_guide_at(cx, p, m) {

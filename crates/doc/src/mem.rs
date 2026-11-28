@@ -278,6 +278,7 @@ fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> u
     if let Some(e) = n.extras_box() {
         b += ALLOC + size_of::<NodeExtras>();
         b += boxed(&e.mask) + boxed(&e.graph) + boxed(&e.shaper) + boxed(&e.attrs) + boxed(&e.slice) + boxed(&e.perspective);
+        b += e.attrs.as_deref().map_or(0, attrs_bytes);
         b += boxed(&e.dimension) + boxed(&e.live_paint_gaps) + boxed(&e.colorize);
         b += e
             .color_mask
@@ -285,6 +286,10 @@ fn node_bytes(n: &Node, other: Option<&Node>, counted: &mut HashSet<usize>) -> u
             .map_or(0, |m| ALLOC + size_of::<crate::color_mask::ColorMask>() + m.key.capacity() + m.from.capacity() + m.colors.capacity() * 3);
         b += e.trace.as_ref().map_or(0, |t| ALLOC + size_of::<Value>() + json_bytes(t));
         b += e.flare.as_ref().map_or(0, |f| ALLOC + size_of::<crate::flare::FlareSpec>() + json_bytes(&f.params));
+        b += e
+            .generated
+            .as_ref()
+            .map_or(0, |g| ALLOC + size_of::<crate::generated::GeneratedArt>() + g.plugin.capacity() + g.name.capacity() + map_bytes(&g.params));
         b += e.intertwine.as_deref().map_or(0, |a| ALLOC + size_of::<PathData>() + path_bytes(a));
         if e.intertwine_tiers.capacity() > 0 {
             b += ALLOC + e.intertwine_tiers.capacity() * size_of::<PathData>() + e.intertwine_tiers.iter().map(path_bytes).sum::<usize>();
@@ -404,6 +409,22 @@ fn swatches_bytes(s: &[Swatch]) -> usize {
     ALLOC + std::mem::size_of_val(s) + s.iter().map(|w| w.name.capacity() + paint_heap_bytes(&w.paint)).sum::<usize>()
 }
 
+/// The heap an object's attributes own: their text, data, events, classes, foreign attributes and
+/// tags.
+fn attrs_bytes(a: &crate::ObjectAttributes) -> usize {
+    let pairs = |v: &Vec<(String, String)>| vec_bytes(v) + v.iter().map(|(k, v)| k.capacity() + v.capacity()).sum::<usize>();
+    a.url.capacity()
+        + a.note.capacity()
+        + pairs(&a.data)
+        + pairs(&a.events)
+        + vec_bytes(&a.classes)
+        + a.classes.iter().map(String::capacity).sum::<usize>()
+        + vec_bytes(&a.foreign)
+        + a.foreign.iter().map(|f| f.ns.capacity() + f.prefix.capacity() + f.name.capacity() + f.value.capacity()).sum::<usize>()
+        + vec_bytes(&a.tags)
+        + a.tags.iter().map(|t| t.name.capacity() + t.value.capacity()).sum::<usize>()
+}
+
 /// A vector's buffer (not what its elements own).
 fn vec_bytes<T>(v: &Vec<T>) -> usize {
     if v.capacity() == 0 { 0 } else { ALLOC + v.capacity() * size_of::<T>() }
@@ -488,6 +509,21 @@ mod tests {
         }
         let per = before.retained_bytes(&after) / n;
         assert!((400..1200).contains(&per), "{per} bytes per moved rectangle");
+    }
+
+    /// An object's attributes count with their text: a version of a rectangle with a long tag and
+    /// a long note keeps both.
+    #[test]
+    fn tags_and_notes_count() {
+        let before = doc_with_rects(1);
+        let mut after = before.clone();
+        let id = after.layers[0].children().unwrap()[0].id;
+        after.node_mut(id).unwrap().edit_attrs(|a| {
+            a.note = "n".repeat(30_000);
+            a.tags.push(crate::ObjectTag { id: 1, name: "size".into(), value: "v".repeat(60_000) });
+        });
+        let bytes = after.retained_bytes(&before);
+        assert!(bytes >= 90_000, "{bytes} bytes for a rectangle with 90,000 bytes of attributes");
     }
 
     #[test]

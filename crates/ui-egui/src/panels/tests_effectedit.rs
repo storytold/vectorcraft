@@ -134,7 +134,7 @@ fn effect_rows_drag_to_reorder_and_into_an_item() {
     let mut panel = Panel::new(app, appearance::show);
     let ids = |fx: Vec<vectorcraft_doc::Effect>| fx.into_iter().map(|e| e.id).collect::<Vec<_>>();
     // Twist below Roughen: dropped on the lower half of its row.
-    let (twist, below) = (row_spot(&mut panel, "Twist"), row_spot(&mut panel, "Roughen") + egui::vec2(0.0, 6.0));
+    let (twist, below) = (row_spot(&mut panel, "Twist"), row_spot(&mut panel, "Roughen") + egui::vec2(0.0, 9.0));
     panel.drag_between(twist, below, egui::Modifiers::NONE);
     assert_eq!(ids(effects(&panel.app(), None)), ["distort.roughen", "distort.twist"]);
     drag_row(&mut panel, "Twist", "Stroke:", egui::Modifiers::ALT);
@@ -161,6 +161,39 @@ fn alt_dragging_an_item_duplicates_it_and_several_items_delete_together() {
     assert_eq!(kinds(&panel), ["fill"]);
     run(&mut panel.app(), "edit.undo", json!({}));
     assert_eq!(kinds(&panel).len(), 3, "one undo step");
+}
+
+#[test]
+fn an_appearance_row_drop_after_next_document_leaves_the_new_stack_alone() {
+    use craft::ui::runtime::drag;
+    use egui::{Key, Modifiers};
+
+    let mut app = app_with_rect();
+    let first = app.session.active().unwrap().uid;
+    run(&mut app, "file.new", json!({"width": 400, "height": 300}));
+    run(&mut app, "shape.rectangle", json!({"x": 20, "y": 30, "width": 50, "height": 30}));
+    let second = app.session.active().unwrap().uid;
+    let kinds = |app: &VectorcraftApp| first_selected(app).unwrap().appearance.items.iter().map(|item| item.kind_name()).collect::<Vec<_>>();
+    let before = kinds(&app);
+    assert_eq!(before, ["fill", "stroke"]);
+    assert!(app.session.set_active(0));
+
+    let mut panel = Panel::new(app, appearance::show);
+    let from = row_spot(&mut panel, "Stroke:");
+    let to = panel.rect("Delete Selected Item").center();
+    panel.drag_hold_between(from, to);
+    assert!(drag::mark(panel.ctx()).is_some(), "the footer accepts the stroke before switching documents");
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, second);
+    assert!(drag::mark(panel.ctx()).is_none(), "the footer withdraws the drop indicator after the document switch");
+    panel.release();
+    assert_eq!(kinds(&panel.app()), before, "the active document's stroke stays in its own stack");
+
+    drag_row(&mut panel, "Stroke:", "Delete Selected Item", Modifiers::NONE);
+    assert_eq!(kinds(&panel.app()), ["fill"], "a stroke from the active document can still be removed by dragging");
+    panel.key(Key::F6, Modifiers::COMMAND);
+    assert_eq!(panel.app().session.active().unwrap().uid, first);
+    assert_eq!(kinds(&panel.app()), ["fill", "stroke"], "the original document keeps its stroke");
 }
 
 #[test]

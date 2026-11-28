@@ -157,6 +157,13 @@ fn clicking_rows_at_any_depth_highlights_them_and_sets_the_current_layer() {
     let n = rect(&mut s, 50.0);
     assert_eq!(parent(&s, n), Some(sub));
     assert!(s.execute("layer.setCurrent", &json!({"id": 9999})).is_err());
+    // `keepRows` makes the layer current and leaves the highlighted rows.
+    run(&mut s, "layer.setCurrent", json!({"id": b.0}));
+    run(&mut s, "layer.setCurrent", json!({"id": c.0, "keepRows": true}));
+    let st = s.doc().unwrap();
+    assert_eq!((st.highlighted_rows(), st.current_layer()), (vec![b], Some(layer)));
+    assert!(s.execute("layer.setCurrent", &json!({"id": a.0, "keepRows": 1})).is_err());
+    assert_eq!(s.doc().unwrap().current_layer(), Some(layer), "a bad keepRows changes nothing");
     // Shift/Ctrl: several rows.
     run(&mut s, "layer.highlight", json!({"ids": [a.0, g.0], "mode": "set"}));
     run(&mut s, "layer.highlight", json!({"ids": [c.0], "mode": "add"}));
@@ -388,6 +395,105 @@ fn the_selection_column_selects_a_rows_art_and_shift_adds_or_removes_it() {
     // Targeting a layer selects its sublayers' art too.
     run(&mut s, "layer.setProps", json!({"id": sub.0, "locked": false}));
     assert_eq!(ids_sel(&run(&mut s, "layer.target", json!({"id": layer.0}))), vec![c, a, g]);
+}
+
+/// The selection as a sorted list.
+fn sorted_sel(s: &Session) -> Vec<NodeId> {
+    let mut ids = s.doc().unwrap().selection.objects.clone();
+    ids.sort();
+    ids
+}
+
+/// The art the selection squares of `rows` select, each clicked alone, put together and sorted.
+/// Leaves nothing selected.
+fn each_rows_art(s: &mut Session, rows: &[NodeId]) -> Vec<NodeId> {
+    run(s, "select.none", json!({}));
+    let mut art = vec![];
+    for row in rows {
+        art.extend(ids_sel(&run(s, "layer.selectAll", json!({"id": row.0}))));
+    }
+    art.sort();
+    art.dedup();
+    run(s, "select.none", json!({}));
+    art
+}
+
+/// `layer.selectAll` with `range` (a Shift-click from the last selection square clicked) selects
+/// the art of every row in the range, across the sublayer and the group, as each row's square
+/// selects it; hidden and locked rows are left out, and `add` adds to the selection. The
+/// highlighted rows stay, and no undo step is recorded.
+#[test]
+fn the_selection_column_selects_the_art_of_a_range_of_rows() {
+    let mut s = session();
+    let (layer, sub, a, g, b, c) = tree(&mut s);
+    run(&mut s, "layer.setCurrent", json!({"id": sub.0}));
+    let undo = undos(&s);
+    // The rows top down: the layer, the sublayer, the group, its rectangle, then a and c.
+    let range = [g, b, a, c];
+    let want = each_rows_art(&mut s, &range);
+    let reply = run(&mut s, "layer.selectAll", json!({"range": range.map(|r| r.0)}));
+    assert_eq!(sorted_sel(&s), want, "the group, its member's row, the sublayer's rectangle and the top layer's rectangle");
+    assert!(want.contains(&a) && want.contains(&c), "{want:?}");
+    assert_eq!(ids_sel(&reply).len(), s.doc().unwrap().selection.objects.len());
+    assert_eq!(s.doc().unwrap().highlighted_rows(), vec![sub], "the highlighted row stays");
+    assert_eq!(undos(&s), undo, "a selection change is not an undo step");
+    // A range given bottom up selects the same art.
+    run(&mut s, "layer.selectAll", json!({"range": [c.0, a.0, b.0, g.0]}));
+    assert_eq!(sorted_sel(&s), want);
+    // `add` keeps what was selected.
+    run(&mut s, "select.set", json!({"ids": [c.0]}));
+    run(&mut s, "layer.selectAll", json!({"range": [a.0], "add": true}));
+    let got = sorted_sel(&s);
+    assert!(got.len() == 2 && got.contains(&a) && got.contains(&c), "{got:?}");
+    // A range holding a layer row takes that layer's art, its sublayer's too.
+    run(&mut s, "layer.selectAll", json!({"range": [layer.0, sub.0]}));
+    assert_eq!(sorted_sel(&s), each_rows_art(&mut s, &[layer]));
+    // Locked and hidden rows are left out.
+    run(&mut s, "layer.setProps", json!({"ids": [a.0], "locked": true}));
+    run(&mut s, "layer.setProps", json!({"ids": [c.0], "visible": false}));
+    run(&mut s, "layer.selectAll", json!({"range": range.map(|r| r.0)}));
+    let got = sorted_sel(&s);
+    assert!(!got.is_empty() && !got.contains(&a) && !got.contains(&c), "{got:?}");
+    // A range of only hidden and locked rows changes nothing and says why.
+    run(&mut s, "select.set", json!({"ids": [g.0]}));
+    assert!(s.execute("layer.selectAll", &json!({"range": [a.0, c.0]})).is_err());
+    assert_eq!(sorted_sel(&s), vec![g]);
+}
+
+/// `layer.selectHighlighted` selects the art of the highlighted rows, as their selection squares
+/// do, leaving out hidden and locked rows; `add` adds it. The highlighted rows stay, no undo step is
+/// recorded, and with no row highlighted it is an error.
+#[test]
+fn select_highlighted_selects_the_art_of_the_highlighted_rows() {
+    let mut s = session();
+    let (_, _, a, g, _, c) = tree(&mut s);
+    let want = each_rows_art(&mut s, &[g, c]);
+    run(&mut s, "layer.highlight", json!({"ids": [g.0, c.0], "mode": "set"}));
+    let rows = s.doc().unwrap().highlighted_rows();
+    let undo = undos(&s);
+    run(&mut s, "layer.selectHighlighted", json!({}));
+    assert_eq!(sorted_sel(&s), want);
+    assert_eq!(s.doc().unwrap().highlighted_rows(), rows, "the highlighted rows stay");
+    assert_eq!(undos(&s), undo, "a selection change is not an undo step");
+    // `add` keeps what was selected.
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    // Selecting art in another layer let go of the highlighted rows.
+    run(&mut s, "layer.highlight", json!({"ids": [g.0, c.0], "mode": "set"}));
+    run(&mut s, "layer.selectHighlighted", json!({"add": true}));
+    let mut with_a = want.clone();
+    with_a.push(a);
+    with_a.sort();
+    assert_eq!(sorted_sel(&s), with_a);
+    // A hidden row is left out.
+    run(&mut s, "layer.setProps", json!({"ids": [c.0], "visible": false}));
+    run(&mut s, "layer.highlight", json!({"ids": [g.0, c.0], "mode": "set"}));
+    run(&mut s, "layer.selectHighlighted", json!({}));
+    assert!(!sorted_sel(&s).contains(&c));
+    // With no row highlighted, nothing changes.
+    run(&mut s, "layer.highlight", json!({"ids": [], "mode": "set"}));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    assert!(s.execute("layer.selectHighlighted", &json!({})).is_err());
+    assert_eq!(sorted_sel(&s), vec![a]);
 }
 
 /// The rows of [`column_start`]: [`tree`]'s, plus a rectangle `o` on a second layer and an empty
@@ -626,6 +732,34 @@ fn object_set_props_that_changes_nothing_deselects_what_it_leaves_hidden_or_lock
         run(&mut s, "edit.undo", json!({}));
         assert!(s.doc().unwrap().doc.is_editable(x));
     }
+}
+
+/// Layer Options that leave every row as it is change nothing and record no undo step; one that
+/// changes a row records one.
+#[test]
+fn layer_options_that_change_nothing_record_no_undo_step() {
+    let mut s = session();
+    let (layer, sub, a, ..) = tree(&mut s);
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "name": "Sub", "color": "red"}));
+    let before = (s.doc().unwrap().doc.clone(), undos(&s));
+    for p in [
+        json!({}),
+        json!({"id": layer.0, "visible": true, "locked": false, "template": false, "printable": true, "preview": true, "dimImages": false}),
+        json!({"id": sub.0, "name": "Sub", "color": "red"}),
+        json!({"id": sub.0, "name": " "}),
+        json!({"ids": [a.0, sub.0], "visible": true}),
+    ] {
+        run(&mut s, "layer.setProps", p.clone());
+        let after = (s.doc().unwrap().doc.clone(), undos(&s));
+        assert!(after.0 == before.0 && after.1 == before.1, "{p} changes nothing");
+    }
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "locked": true}));
+    assert_eq!(undos(&s), before.1 + 1, "locking the sublayer is one undo step");
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let undo = undos(&s);
+    run(&mut s, "layer.setProps", json!({"id": sub.0, "locked": true}));
+    assert_eq!(undos(&s), undo, "locking it again records no undo step");
+    assert!(s.doc().unwrap().selection.objects.is_empty(), "the art of the locked sublayer is deselected");
 }
 
 #[test]

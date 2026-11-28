@@ -2,7 +2,7 @@
 //! gives a real window, so a test lays text out and paints in the app's look; and the frame the
 //! hosts run.
 
-use craft::ui::runtime::frame::{FrameInput, set_input};
+use craft::ui::runtime::frame::{FrameInput, set_input, take_output};
 use craft::ui::shell::embed;
 
 /// Installs the runtime with a window system that has no OS services, the app's interface fonts
@@ -14,7 +14,9 @@ pub(crate) fn install(ctx: &egui::Context) {
     if embed::install(ctx, craft::ui::testing::install_spec(), &fonts).is_err() {
         fonts.install(ctx);
     }
-    set_input(ctx, FrameInput::new(crate::app::root_env(&vectorcraft_engine::Prefs::default(), 1.0)));
+    let prefs = vectorcraft_engine::Prefs::default();
+    let print = crate::state::print_ppi(prefs.display_print_size, None);
+    set_input(ctx, FrameInput::new(crate::app::root_env(&prefs, 1.0, print)));
 }
 
 /// `app` shown in a window of its own: its context is the one every frame of the test runs on, so its dialogs open on
@@ -27,6 +29,25 @@ pub(crate) fn windowed(mut app: crate::VectorcraftApp) -> crate::VectorcraftApp 
     app
 }
 
+/// Waits until the process's lookup of the installed CJK faces has ended: fontconfig's scan on Linux, which
+/// [`crate::ui_fonts`]'s loader starts the first time a CJK character has no glyph. Nothing waits on macOS and Windows.
+/// While the scan runs, Japanese, Chinese and Korean text draws without glyphs; the pass after it ends registers the
+/// face it found, and the next frame lays the text out again, wider or narrower, moving the controls around it. A test
+/// that measures controls in one frame and clicks them in a later one calls this first; then each new context
+/// registers its face after its first pass, and the controls hold still from the second frame on.
+pub(crate) fn wait_for_cjk_fonts() {
+    use craft::ui::fonts::{FontCandidates as _, SystemCandidates};
+    // `pending` starts the scan when it has not started.
+    if !SystemCandidates.pending() {
+        return;
+    }
+    let (ended, wait) = std::sync::mpsc::channel();
+    SystemCandidates.wake_when_ready(craft::host::Wake::new(move || {
+        let _ = ended.send(());
+    }));
+    let _ = wait.recv();
+}
+
 /// A context with the runtime, the app's interface fonts and its root theme installed.
 pub(crate) fn ui_context() -> egui::Context {
     let ctx = egui::Context::default();
@@ -36,8 +57,9 @@ pub(crate) fn ui_context() -> egui::Context {
 
 /// One frame of the whole app on `ctx` as the hosts run it (kb.C26): the app has the window's context, as the hosts
 /// hand it when they create the app, gives the input of the frame
-/// (`embed::before_input`), the window draws with `raw`, and the app takes what the runtime gathered in it, running the
-/// commands it fired, as the host's next frame begins. The frame's texture uploads are handled.
+/// (`embed::before_input`, once, as the hosts call it), the window draws with `raw`, and the app takes what the runtime
+/// gathered in it, running the commands it fired, as the host's next frame begins ([`run_fired`]). The frame's texture
+/// uploads are handled.
 pub(crate) fn app_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, raw: egui::RawInput) -> egui::FullOutput {
     part_frame(app, ctx, raw, |app, ui| {
         app.tick(ui.ctx());
@@ -49,16 +71,35 @@ pub(crate) fn app_frame(app: &mut crate::VectorcraftApp, ctx: &egui::Context, ra
 pub(crate) fn part_frame(
     app: &mut crate::VectorcraftApp,
     ctx: &egui::Context,
+    raw: egui::RawInput,
+    draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui),
+) -> egui::FullOutput {
+    let mut out = part_frame_uploads(app, ctx, raw, draw);
+    out.textures_delta.clear();
+    out
+}
+
+/// [`part_frame`] with the frame's texture uploads kept in the output, for a test that reads them. The test clears
+/// `textures_delta` once it has read it.
+pub(crate) fn part_frame_uploads(
+    app: &mut crate::VectorcraftApp,
+    ctx: &egui::Context,
     mut raw: egui::RawInput,
     mut draw: impl FnMut(&mut crate::VectorcraftApp, &mut egui::Ui),
 ) -> egui::FullOutput {
     app.adopt_context(ctx);
     app.raw_input(ctx, &mut raw);
     embed::before_input(ctx, |out| app.frame_input(out));
-    let mut out = ctx.run_ui(raw, |ui| draw(app, ui));
-    embed::before_input(ctx, |out| app.frame_input(out));
-    out.textures_delta.clear();
+    let out = ctx.run_ui(raw, |ui| draw(app, ui));
+    run_fired(app, ctx);
     out
+}
+
+/// The app takes what the runtime gathered on `ctx` since the last frame began and runs the commands it fired, as the
+/// host's next `embed::before_input` does, without giving the runtime its input: the next frame gives it. A second
+/// input in one frame makes every command state the next frame publishes look changed, and the frame asks for a rerun.
+pub(crate) fn run_fired(app: &mut crate::VectorcraftApp, ctx: &egui::Context) {
+    let _ = app.frame_input(take_output(ctx));
 }
 
 /// Held by a test that changes the custom dictionary, which the whole process shares, or that needs it to hold still:
@@ -67,6 +108,30 @@ pub(crate) fn part_frame(
 pub(crate) fn custom_dictionary() -> std::sync::MutexGuard<'static, ()> {
     static HELD: std::sync::Mutex<()> = std::sync::Mutex::new(());
     HELD.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Runs the test `name` (its path in the crate, such as `canvas::tests::a_test`) alone in a child test process, for a
+/// test that loads or removes a color profile. The loaded profiles are the whole process's, and the canvas's frame key
+/// holds their generation ([`vectorcraft_color::cms::profiles_generation`]), so a profile loaded in this process while
+/// another test renders changes that test's keys. A test that assigns a profile to its front document, or changes
+/// Color Settings, also runs here: the active color settings ([`vectorcraft_color::cms::active`]) are the whole
+/// process's too, and another test converting a color while they are changed gets that profile's values. In the child
+/// it returns `true`, and the test goes on. Here it waits for the child, fails when the child's test fails, and returns
+/// `false`.
+pub(crate) fn in_own_process(name: &str) -> bool {
+    const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+    if std::env::var_os(CHILD).is_some_and(|v| v == name) {
+        return true;
+    }
+    let output =
+        std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", name, "--nocapture"]).env(CHILD, name).output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+        "{name} failed in its own process:\n{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    false
 }
 
 /// The default proof view, held: View › Proof Colors, Overprint Preview and Separations Preview are the whole process's

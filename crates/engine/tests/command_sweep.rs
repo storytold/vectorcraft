@@ -93,7 +93,7 @@ fn every_command_without_a_document() {
 }
 
 /// Regression: huge column counts used to panic with `capacity overflow`; in every layout and
-/// order (#681), with huge and negative spacing too.
+/// order (#681), with huge and negative spacing too, and with `indices` and `at`.
 #[test]
 fn artboard_rearrange_huge_columns() {
     for fx in Fixture::ALL {
@@ -105,6 +105,11 @@ fn artboard_rearrange_huge_columns() {
                     assert_eq!(probe(fx, "artboard.rearrange", &p), None);
                 }
             }
+        }
+        // Listed artboards, out of range, and the grid's top-left at the far ends of the plane.
+        for (indices, at) in [(json!([0]), json!([1e308, -1e308])), (json!([0, u64::MAX]), json!([0, 0])), (json!([]), json!([-1e308, 1e308]))] {
+            let p = json!({ "indices": indices, "at": at, "columns": u64::MAX, "spacing": 1e308 });
+            assert_eq!(probe(fx, "artboard.rearrange", &p), None);
         }
     }
 }
@@ -852,6 +857,11 @@ fn structured_junk() {
         ("node.move", json!({"id": 1, "parent": null, "index": 1000})),
         ("layer.setProps", json!({"id": 1, "color": 1000})),
         ("layer.newSublayer", json!({"parent": 2})),
+        ("color.parse", json!({"text": "rgb(1e308 -1e308 1e-400 / 1e308)"})),
+        ("color.parse", json!({"text": "hsl(1e308turn 1e308% -1e308%)"})),
+        ("color.parse", json!({"text": "oklch(1e308 1e308 -1e308rad / -1)"})),
+        ("color.parse", json!({"text": "#\u{1F600}\u{0}\u{FFFF}"})),
+        ("color.parse", json!({"text": "rgb(((((((((((("})),
         ("text.create", json!({"x": 0, "y": 0, "text": "\u{0}\u{FFFF}\u{1F600}", "size": -1})),
         ("text.create", json!({"x": 0, "y": 0, "text": "a", "size": 1e308, "area": {"width": -1, "height": 0}})),
         ("text.setStyle", json!({"size": 0, "leading": -1, "tracking": 1e308})),

@@ -1,5 +1,7 @@
 use super::*;
+use crate::i18n::LangExt as _;
 use crate::tests::panel_harness::Panel;
+use craft::keymap::CommandRef;
 
 #[test]
 fn single_object_aligns_to_artboard() {
@@ -471,6 +473,20 @@ fn object_align_lists_the_align_to_choices() {
     assert_eq!(app.ui.align_to, AlignTo::Selection);
 }
 
+/// With anchor points of one path selected (Direct Selection), Align to Selection returns
+/// `"selection"`: the points align to each other, so the lone path does not make it Artboard.
+#[test]
+fn align_to_selection_with_anchor_points_returns_selection() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let id = app.run("path.create", json!({"d": "M100 40 L200 60 L150 160 Z"})).unwrap()["id"].as_u64().unwrap();
+    app.ui.align_to = AlignTo::Artboard;
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 0], [0, 1]], "mode": "set"})).unwrap();
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "selection"}));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+    assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
+}
+
 /// With the Artboard tool chosen, Align to Key Object is off and fails, and Align to Artboard and
 /// Align to Selection store the choice while the selected objects keep their key.
 #[test]
@@ -489,6 +505,19 @@ fn align_to_commands_with_the_artboard_tool() {
     assert_eq!(app.ui.align_to, AlignTo::Selection);
     assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
     assert_eq!(app.session.active().unwrap().selection.key.map(|k| k.0), front.as_u64(), "the key stays");
+}
+
+/// With the Artboard tool chosen and one object selected with no anchor points, Align to Selection
+/// returns `"selection"`, the stored choice, not `"artboard"`.
+#[test]
+fn align_to_selection_with_one_object_and_the_artboard_tool_returns_selection() {
+    let (mut app, back, _) = back_and_front();
+    app.run("select.set", json!({"ids": [back]})).unwrap();
+    app.ui.align_to = AlignTo::Artboard;
+    app.select_tool("artboard");
+    assert_eq!(app.run("align.toSelection", json!({})).unwrap(), json!({"alignTo": "selection"}));
+    assert_eq!(app.ui.align_to, AlignTo::Selection);
+    assert_eq!(align_to_checks(&app), [Some(true), Some(false), Some(false)]);
 }
 
 /// Align to Key Object is off and fails when the topmost selected object can't be the key: a group
@@ -760,4 +789,57 @@ fn a_button_runs_the_artboard_command_only_with_the_artboard_tool() {
     let before = artboard_corners(&app);
     run_button(&mut app, Button::Align("horizontal", "left")).ok();
     assert_eq!(artboard_corners(&app), before, "with the Selection tool the buttons leave the artboards alone");
+}
+
+/// The description of the dimmed command of each button in [`COMMANDS`], which its tooltip and its
+/// menu item show.
+fn off_reasons(app: &VectorcraftApp, distribute: bool) -> Vec<(&'static str, Option<String>)> {
+    COMMANDS
+        .iter()
+        .filter(|(_, b)| matches!(b, Button::Distribute(..) | Button::Spacing(_)) == distribute)
+        .map(|(id, _)| {
+            let command = CommandRef::new(*id);
+            (*id, (!crate::menus::enabled(app, id)).then(|| crate::menus::model::off_reason(app, &command, "Label")))
+        })
+        .collect()
+}
+
+/// Every reason in `reasons` is `why`.
+fn all_say(reasons: &[(&'static str, Option<String>)], why: &str) {
+    for (id, reason) in reasons {
+        assert_eq!(reason.as_deref(), Some(why), "{id}");
+    }
+}
+
+/// A dimmed Align or Distribute button says why it can't run, as an engine command's menu item
+/// does, in the interface language: with no document, that none is open; with nothing selected,
+/// that Align needs a selection; with fewer than two objects, that Distribute needs two or more;
+/// with the Artboard tool chosen and too few artboards selected, how many it needs.
+#[test]
+fn a_dimmed_align_or_distribute_button_says_why() {
+    let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), Default::default());
+    all_say(&off_reasons(&app, true), "no document open");
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    all_say(&off_reasons(&app, false), "nothing selected");
+    all_say(&off_reasons(&app, true), "select at least two objects");
+    let a = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 10, "height": 10})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [a]})).unwrap();
+    assert!(off_reasons(&app, false).iter().all(|(_, r)| r.is_none()), "one object aligns");
+    all_say(&off_reasons(&app, true), "select at least two objects");
+    // The reason is shown in the interface language.
+    crate::i18n::set_current(crate::i18n::Lang::from_code("de").unwrap());
+    let german = crate::i18n::msg("select at least two objects");
+    let reasons = off_reasons(&app, true);
+    crate::i18n::set_current(crate::i18n::Lang::EN);
+    assert_ne!(german, "select at least two objects");
+    all_say(&reasons, &german);
+
+    let mut app = selected_artboards();
+    app.session.set_tool_option("selected", &json!([1, 0]));
+    assert!(off_reasons(&app, false).iter().all(|(_, r)| r.is_none()), "two artboards align");
+    all_say(&off_reasons(&app, true), "select at least three artboards");
+    app.ui.align_to = AlignTo::Artboard;
+    assert!(off_reasons(&app, true).iter().all(|(_, r)| r.is_none()), "two artboards distribute to the artboard");
+    app.session.set_tool_option("selected", &json!([1]));
+    all_say(&off_reasons(&app, true), "select at least two artboards");
 }

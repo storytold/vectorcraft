@@ -26,7 +26,7 @@
 //! with loops. The realm provides the language (sections 10 to 14 of ECMA-262 5.1) and these
 //! built-ins: the global functions and constants (15.1, with Annex B's `escape` and `unescape`),
 //! `Object` (15.2), `Function` with `call`, `apply` and `bind` (15.3), `Array` (15.4), `String`
-//! (15.5), `Boolean.prototype`'s `toString` and `valueOf` (15.6.4), `Number` (15.7), `Math` (15.8),
+//! (15.5), `Boolean` (15.6), `Number` (15.7), `Math` (15.8),
 //! `Date` (15.9), `RegExp` (15.10), the error types (15.11) and `JSON` (15.12). The array methods
 //! visit only the indices an array or array-like object has, so a sparse array of length 2^32-1
 //! costs as much as its elements, and `JSON.parse`, `JSON.stringify` and the reviver walk use no
@@ -46,45 +46,124 @@
 //! those of ECMAScript 5.1 above. XML trees live in the heap, and parsing, copying, comparing and
 //! serializing them, and evaluating XPath on them, use no native recursion and take fuel for each
 //! node.
+//!
+//! With [`Options::es2015`], the parser and the realm also read and run a part of ECMAScript 2015
+//! (<https://262.ecma-international.org/6.0/>): block-scoped `let` and `const` declarations with
+//! their temporal dead zone (section 13.3.1), a new `let` binding for each iteration of a `for`
+//! loop, function declarations in blocks scoped to the block (Annex B.3.3 in sloppy code), arrow
+//! functions (section 14.2), template literals and tagged templates (sections 12.2.9 and
+//! 12.3.7), default and rest parameters (section 14.1) and spread in array literals, calls and
+//! `new` (sections 12.2.5 and 12.3.6.1), `for … of` loops (section 13.7.5), array and object
+//! destructuring in declarations, assignments, parameters and `catch` clauses (sections 12.15.5
+//! and 13.3.3), shorthand and computed property names, methods and `__proto__: value` in object
+//! literals (sections 12.2.6, 14.3 and B.3.1), classes with `extends`, `super` and `new.target`
+//! (sections 14.5, 12.3.5 and 12.3.8), and the `name` property of functions (section 9.2.11).
+//! Spread, `for … of` and array patterns use the iterator protocol of the 11th edition
+//! (<https://262.ecma-international.org/11.0/>, section 7.4), and a loop or pattern left early
+//! closes its iterator. In a realm made without the option and later given it with
+//! [`Realm::set_es2015`], which has no `Symbol.iterator`, they walk arrays and `arguments` objects
+//! by index and strings by code point, and throw a `TypeError` for other values.
+//! Object rest properties (`{ a, ...rest }`) and modules stay syntax errors.
+//!
+//! With [`Options::es2015`], the parser and the realm also have generators (ECMA-262 11th edition,
+//! sections 14.4 and 25.4): `function*` declarations and expressions, `*name() {…}` methods in
+//! object literals, `yield` and `yield*`, which passes `next`, `throw` and `return` on to the
+//! iterator it delegates to, and generator objects with `next`, `return` and `throw` from
+//! `%GeneratorPrototype%`, reached through `%GeneratorFunction%`. Outside a generator function's
+//! body and parameters, `yield` stays an identifier in sloppy code. A generator's suspended frame
+//! lives in the heap, each resumption takes fuel and counts against the frame limit, and resuming a
+//! generator while its body runs is a `TypeError`.
+//!
+//! With [`Options::es2015`], the realm also has `Symbol` (ECMA-262 11th edition, section 19.4,
+//! <https://262.ecma-international.org/11.0/>): `Symbol.for` and `Symbol.keyFor` over a registry
+//! that lasts as long as the realm, the well-known Symbols `iterator`, `asyncIterator`,
+//! `hasInstance`, `toPrimitive` and `toStringTag` with the hooks ToPrimitive, `instanceof` and
+//! `Object.prototype.toString` read, Symbol-keyed properties with `Object.getOwnPropertySymbols`,
+//! and iterator objects with a `next` method from `Array.prototype.values`, `keys`, `entries` and
+//! `@@iterator`, `String.prototype[@@iterator]` (by code point) and every `arguments` object.
+//! `Date.prototype[@@toPrimitive]` converts a Date without a hint as with the String hint, and an
+//! object without an `@@toPrimitive` method, a Date included, converts without a hint as with the
+//! Number hint. A Symbol converted to a string or a number without `String(symbol)` or `toString` throws a
+//! `TypeError`. A string converts to a number in the `0b` and `0o` forms as well. Every iterator
+//! step and every prototype a Symbol-keyed lookup passes takes fuel, and every Symbol and registry
+//! entry counts against the heap limit. Registry lookups and insertions take fuel for the key's
+//! code units, and a registered description shares the key's existing buffer.
+//!
+//! With [`Options::es2015`], the realm also provides `Promise` (ECMA-262 11th edition, section
+//! 25.6, <https://262.ecma-international.org/11.0/#sec-promise-objects>): the constructor, `then`,
+//! `catch`, `finally`, `Promise.resolve`, `reject`, `all`, `allSettled` and `race`. The promise
+//! jobs a script queues run in order once its code has ended, before its run ends, on the run's
+//! limits; a promise still rejected with no handler at the end is reported by
+//! [`Realm::unhandled_rejections`]. [`Realm::add_es2015`] gives a realm made without the option
+//! `Promise` for its next runs.
+//!
+//! With [`Options::es2015`], the realm also provides these ECMAScript 2015 built-ins
+//! (<https://262.ecma-international.org/6.0/>): `Map` and `Set` (sections 23.1 and 23.2), whose
+//! keys compare with SameValueZero and keep the order they were added in, with `forEach` visiting
+//! entries added while it runs; `WeakMap` and `WeakSet` (23.3 and 23.4), whose entries the
+//! collector removes once their keys are unreachable; and `ArrayBuffer`, `DataView` and the nine
+//! typed arrays (24.1, 24.2 and 22.2). `keys`, `values` and `entries` give iterator objects with
+//! a `next` method. Until the language has iterators, the collection constructors and
+//! `%TypedArray%.from` read an array, a string (by code point) or an object with a `length`, by
+//! index. A typed array constructor reads an array or an object with a `length` the same way, and
+//! converts a first argument that is not an object to a length. A buffer longer than the heap
+//! limit is a `RangeError`, and its bytes are checked against the heap before they are allocated.
 #![forbid(unsafe_code)]
 
 pub mod ast;
 mod builtins;
 mod bytecode;
 mod chars;
+mod class_ops;
 mod compiler;
 mod date_builtins;
 mod error;
 mod file_classes;
+mod generator;
 mod heap;
 mod host;
+mod host_classes;
 mod interp;
+mod iteration;
 mod lexer;
 mod number;
 mod number_builtins;
 mod parser;
 mod realm;
+mod reflect;
 mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
+pub mod scriptui;
+mod scriptui_resource;
 mod string_builtins;
+mod symbol;
 mod token;
+mod unit_value;
 mod value;
 mod xml;
 mod xml_builtins;
+mod xmp;
+mod xmp_classes;
 mod xpath;
 
 pub use ast::{
-    AssignOp, Ast, BinaryOp, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LogicalOp, Name, Program, Property,
-    PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
+    AssignOp, Ast, BinaryOp, Binding, CatchClause, ClassDef, ClassElement, ClassKey, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId,
+    FunctionKind, LexKind, LogicalOp, MethodKind, Name, Program, Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece,
+    UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
 pub use host::{Arg, CallSite, Data, DataLimits, HostError, HostFunction, HostItem, ScriptItem, SiteFunction};
+pub use host_classes::{ArgInfo, FILE_REF_KEY, HOST_REF_KEY, HostClass, HostMember, MemberInfo, file_ref_path, host_ref, host_ref_parts};
 pub use lexer::{Goal, Lexer};
 pub use number::to_string as number_to_string;
-pub use realm::{Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE};
+pub use realm::{
+    Interrupt, JsValue, LimitKind, Limits, MAX_UNBROKEN_FUEL, Progress, Realm, Rejection, RunError, RunErrorKind, SourceLocator, UNKNOWN_SOURCE,
+};
+pub use reflect::MAX_REFLECTED_MEMBERS;
 pub use token::{Directive, DirectiveName, Keyword, Punct, Span, Token, TokenKind};
+pub use xmp::{MAX_BYTES as XMP_MAX_BYTES, PacketSpan, find_packet as find_xmp_packet};
 
 /// How a script is read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -100,11 +179,27 @@ pub struct Options {
     pub max_source_units: usize,
     /// Read and run E4X (ECMA-357). Off, XML syntax is an error and a realm has no XML built-ins.
     pub e4x: bool,
+    /// Read and run the ECMAScript 2015 forms this engine has: `let` and `const`, arrow functions,
+    /// template literals (tagged ones included), default and rest parameters, spread in array
+    /// literals, calls and `new`, `for … of`, array and object destructuring, shorthand and
+    /// computed property names, methods in object literals, and classes with `super` and
+    /// `new.target`, and from ECMAScript 2020 optional chains (`a?.b`, `a?.[k]`, `f?.()`) and
+    /// `??`. Off, they are syntax errors and the language is ES5.1's. Code a
+    /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
+    /// A realm made with it on also has the later editions' built-ins this engine has: `Symbol`
+    /// with Symbol-keyed properties, the iterators of arrays, strings and `arguments` objects,
+    /// `Promise` with its job queue, `Map`, `Set`, `WeakMap`, `WeakSet`, `ArrayBuffer`, `DataView`
+    /// and the typed arrays. A realm made with it off has the ES5.1 built-ins only, as the
+    /// app's scripts expect. Those built-ins are chosen when the realm is made: turning the option
+    /// on or off later with [`Realm::set_es2015`] changes the language later runs read, and does
+    /// not add or remove them; [`Realm::add_es2015`] adds `Promise` to a realm made without it.
+    /// Runs with it on also convert `0b` and `0o` strings to numbers.
+    pub es2015: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false }
+        Self { strict: false, preprocessor_lines: false, max_depth: DEFAULT_MAX_DEPTH, max_source_units: 64 << 20, e4x: false, es2015: false }
     }
 }
 
@@ -203,14 +298,36 @@ impl LineTable {
 #[cfg(test)]
 mod builtins_tests;
 #[cfg(test)]
+mod collections_tests;
+#[cfg(test)]
+mod es2015_object_tests;
+#[cfg(test)]
+mod es2015_tests;
+#[cfg(test)]
+mod es2020_tests;
+#[cfg(test)]
 mod extension_tests;
+#[cfg(test)]
+mod generator_tests;
 #[cfg(test)]
 mod host_tests;
 #[cfg(test)]
 mod interp_tests;
 #[cfg(test)]
+mod promise_tests;
+#[cfg(test)]
+mod reflect_tests;
+#[cfg(test)]
+mod scriptui_tests;
+#[cfg(test)]
+mod symbol_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod text_tests;
 #[cfg(test)]
+mod unit_value_tests;
+#[cfg(test)]
 mod xml_tests;
+#[cfg(test)]
+mod xmp_tests;

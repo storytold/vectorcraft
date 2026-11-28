@@ -357,6 +357,48 @@ fn convert_to_oklch_answers_lightness_chroma_and_hue() {
     assert!((l - 100.0).abs() < 0.01 && past["values"][1].as_f64().unwrap() < 1e-3, "{past}");
 }
 
+/// `color.parse` reads each notation into an RGB color, its hex and the alpha as a percentage (null
+/// when the text gives none), and answers an error for anything else.
+#[test]
+fn parse_reads_hex_with_alpha_and_css_colors() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = session();
+    let mut parse = |text: &str| s.execute("color.parse", &json!({ "text": text }));
+    for (text, opacity) in [
+        ("#33669980", json!(50.2)),
+        ("33669980", json!(50.2)),
+        ("#3698", json!(53.33)),
+        ("#336699", Value::Null),
+        ("#369", Value::Null),
+        ("rgb(51 102 153 / 50%)", json!(50.0)),
+        ("rgba(51, 102, 153, 0.25)", json!(25.0)),
+        ("rgb(20% 40% 60%)", Value::Null),
+        ("hsl(210 50% 40%)", Value::Null),
+        ("hsla(210deg, 50%, 40%, 1)", json!(100.0)),
+    ] {
+        let r = parse(text).unwrap();
+        assert_eq!(r["hex"], "#336699", "{text}: {r}");
+        assert_eq!(r["opacity"], opacity, "{text}: {r}");
+        let c: Color = serde_json::from_value(r["color"].clone()).unwrap();
+        let Color::Rgb { r: red, g, b } = c else { panic!("{text}: {c:?}") };
+        assert_eq!([red, g, b].map(|v| (v * 255.0).round() as u8), [0x33, 0x66, 0x99], "{text}");
+    }
+    let red = parse("oklch(62.8% 0.2577 29.23 / 0.5)").unwrap();
+    assert_eq!((&red["hex"], &red["opacity"]), (&json!("#ff0000"), &json!(50.0)), "{red}");
+    let message = "`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters";
+    let long = format!("rgb(1 2 3{})", " ".repeat(40));
+    for bad in ["", "#12345", "#gggggg", "rgb(1, 2%, 3)", "rgb(1 2)", "oklch(0.5, 0.1, 30)", "cmyk 0 100 100 0", "red", long.as_str()] {
+        let e = parse(bad).unwrap_err().to_string();
+        assert!(e.ends_with(message), "{bad:?}: {e}");
+    }
+    assert!(parse_err(&mut s, json!({})).ends_with("missing `text`"));
+    assert!(parse_err(&mut s, json!({"text": 5})).ends_with("`text` must be a string"));
+}
+
+fn parse_err(s: &mut Session, p: Value) -> String {
+    s.execute("color.parse", &p).unwrap_err().to_string()
+}
+
 #[test]
 fn assign_profile_is_stored_and_undoable() {
     let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -1164,4 +1206,175 @@ fn gamut_check_refuses_colors_that_are_not_a_list() {
     let r = s.execute("color.gamutCheck", &json!({"colors": null})).unwrap();
     assert_eq!(r, s.execute("color.gamutCheck", &json!({})).unwrap());
     assert!(r["outOfGamut"].as_array().unwrap().iter().any(|v| v["hex"] == "#0000ff"), "{r}");
+}
+
+fn mode_index_swatch(name: &str, paint: Paint, global: bool) -> vectorcraft_color::Swatch {
+    vectorcraft_color::Swatch { name: name.into(), paint, global, spot: false }
+}
+
+fn mode_index_link(color: Color, name: &str, tint: f32) -> Paint {
+    Paint::Solid { color, swatch: Some(name.into()), tint }
+}
+
+fn mode_index_gradient() -> Paint {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+        GradientKind::Linear,
+        vec![GradientStop::new(0.0, Color::rgb(0.1, 0.2, 0.3)), GradientStop::new(1.0, Color::rgb(0.8, 0.7, 0.6))],
+    ))))
+}
+
+/// A later global cannot replace the first exact-name record, even when that first record
+/// cannot supply a global base. These legacy palettes exercise the public conversion command.
+#[test]
+fn document_mode_index_keeps_ineligible_first_name_shadowing() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let stored = Color::rgb(0.123_457, 0.456_789, 0.789_123);
+    let shadows = [
+        (Paint::solid(Color::rgb(0.8, 0.1, 0.2)), false),
+        (mode_index_link(Color::rgb(0.6, 0.3, 0.4), "Underlying", 0.5), true),
+        (mode_index_gradient(), true),
+    ];
+    for grouped in [false, true] {
+        for (paint, global) in &shadows {
+            let mut s = session();
+            let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!(stored));
+            s.edit("legacy duplicate palette", |d, _| {
+                let first = mode_index_swatch("Shadow", paint.clone(), *global);
+                let later = mode_index_swatch("Shadow", Paint::solid(Color::rgb(0.1, 0.8, 0.2)), true);
+                d.swatches = vec![mode_index_swatch("Underlying", Paint::solid(Color::rgb(0.2, 0.4, 0.6)), true)].into();
+                d.swatch_groups.clear();
+                if grouped {
+                    d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "First".into(), swatches: vec![first] });
+                } else {
+                    d.swatches.push(first);
+                }
+                d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Later".into(), swatches: vec![later] });
+                d.node_mut(id).unwrap().appearance.set_fill(mode_index_link(stored, "Shadow", 0.25));
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(s.doc().unwrap().doc.global_color("Shadow"), None);
+            s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+            assert_eq!(fill_of(&s, id), mode_index_link(to_cmyk(stored), "Shadow", 0.25), "grouped={grouped}, first={paint:?}");
+        }
+    }
+}
+
+/// A first eligible record wins over later groups, and its converted base supplies art,
+/// gradient-stop and tint-swatch colors. Undo/Redo retain the complete duplicate palette.
+#[test]
+fn document_mode_index_uses_the_first_global_base_across_groups() {
+    use vectorcraft_color::{Gradient, GradientKind, GradientPaint, GradientStop};
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let base = Color::rgb(0.271_937, 0.314_773, 0.583_119);
+    let other = Color::rgb(0.812_345, 0.234_567, 0.456_789);
+    for grouped in [false, true] {
+        let mut s = session();
+        let filled = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!(base));
+        let gradient = rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!(other));
+        s.edit("legacy grouped palette", |d, _| {
+            let first = mode_index_swatch("Shared", Paint::solid(base), true);
+            let later = mode_index_swatch("Shared", Paint::solid(other), true);
+            d.swatches = vec![mode_index_swatch("Shared tint", mode_index_link(base.tinted(0.3), "Shared", 0.3), false)].into();
+            d.swatch_groups.clear();
+            if grouped {
+                d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "First".into(), swatches: vec![first] });
+            } else {
+                d.swatches.push(first);
+            }
+            d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Later".into(), swatches: vec![later] });
+            d.node_mut(filled).unwrap().appearance.set_fill(mode_index_link(base.tinted(0.25), "Shared", 0.25));
+            let stop = GradientStop { swatch: Some("Shared".into()), tint: 0.6, ..GradientStop::new(0.0, base.tinted(0.6)) };
+            d.node_mut(gradient).unwrap().appearance.set_fill(Paint::Gradient(Box::new(GradientPaint::new(Gradient::new(
+                GradientKind::Linear,
+                vec![stop, GradientStop::new(1.0, other)],
+            )))));
+            Ok(())
+        })
+        .unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let history = s.doc().unwrap().history.undo.len();
+        s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+        let converted = to_cmyk(base);
+        assert_eq!(fill_of(&s, filled), mode_index_link(converted.tinted(0.25), "Shared", 0.25));
+        assert_eq!(s.doc().unwrap().doc.swatch("Shared").unwrap().paint.color(), Some(converted));
+        assert_eq!(s.doc().unwrap().doc.swatch("Shared tint").unwrap().paint, mode_index_link(converted.tinted(0.3), "Shared", 0.3));
+        let Paint::Gradient(paint) = fill_of(&s, gradient) else { panic!("gradient lost") };
+        assert_eq!(
+            (paint.gradient.stops[0].color, paint.gradient.stops[0].swatch.as_deref(), paint.gradient.stops[0].tint),
+            (converted.tinted(0.6), Some("Shared"), 0.6)
+        );
+        assert_eq!(paint.gradient.stops[1].color, to_cmyk(other));
+        assert_eq!(s.doc().unwrap().history.undo.len(), history + 1);
+        let after = s.doc().unwrap().doc.clone();
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *before);
+        s.execute("edit.redo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *after);
+    }
+}
+
+/// Grouped Lab spots keep their definitions; both Spot Colors choices supply their own linked
+/// base to document art, tint swatches and the new-art fill when the document mode changes.
+#[test]
+fn document_mode_index_keeps_grouped_lab_spot_options_and_new_art() {
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let lab = Color::Lab { l: 61.5, a: 42.25, b: -17.75 };
+    for use_lab in [false, true] {
+        let mut s = session();
+        s.execute("swatch.new", &json!({"name": "Indexed Lab", "color": lab, "spot": true})).unwrap();
+        s.execute("swatch.new", &json!({"swatch": "Indexed Lab", "tint": 70})).unwrap();
+        s.edit("group the spot", |d, _| {
+            let ink = d.remove_swatch("Indexed Lab").unwrap();
+            d.swatch_groups.push(vectorcraft_color::SwatchGroup { name: "Spot group".into(), swatches: vec![ink] });
+            Ok(())
+        })
+        .unwrap();
+        s.execute("swatch.spotOptions", &json!({"useLab": use_lab})).unwrap();
+        let id = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!("#000000"));
+        s.execute("paint.setFill", &json!({"ids": [id.0], "swatch": "Indexed Lab", "tint": 40})).unwrap();
+        let before = s.doc().unwrap().doc.clone();
+        let old_paint = s.paint.clone();
+        let base = if use_lab { lab } else { to_cmyk(lab) };
+        s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+        let ink = s.doc().unwrap().doc.swatch("Indexed Lab").unwrap();
+        assert!(ink.global && ink.spot);
+        assert_eq!(ink.paint, Paint::solid(lab));
+        let expected = mode_index_link(base.tinted(0.4), "Indexed Lab", 0.4);
+        assert_eq!(fill_of(&s, id), expected);
+        assert_eq!(s.paint.fill, expected, "new art follows the same spot choice");
+        assert_eq!(s.doc().unwrap().doc.swatch("Indexed Lab 70%").unwrap().paint, mode_index_link(base.tinted(0.7), "Indexed Lab", 0.7));
+        s.execute("edit.undo", &json!({})).unwrap();
+        assert_eq!(*s.doc().unwrap().doc, *before);
+        assert_eq!(s.paint, old_paint);
+    }
+}
+
+/// The implicit Registration lookup is not a stored palette record. Only an explicit global
+/// record supplies its tint base here; an unresolved link keeps conversion of its stored color.
+#[test]
+fn document_mode_index_keeps_registration_and_missing_link_fallbacks() {
+    use vectorcraft_color::swatch::{REGISTRATION, registration};
+    let _g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    let stored = Color::rgb(0.321_987, 0.654_321, 0.876_543);
+    for explicit in [false, true] {
+        let mut s = session();
+        let mark = rect(&mut s, 0.0, 0.0, 10.0, 10.0, json!(stored));
+        let missing = rect(&mut s, 20.0, 0.0, 10.0, 10.0, json!(stored));
+        s.edit("legacy registration and missing link", |d, _| {
+            d.swatches = (if explicit { vec![registration().clone()] } else { vec![] }).into();
+            d.swatch_groups.clear();
+            d.node_mut(mark).unwrap().appearance.set_fill(mode_index_link(stored, REGISTRATION, 0.25));
+            d.node_mut(missing).unwrap().appearance.set_fill(mode_index_link(stored, "Missing", 0.5));
+            Ok(())
+        })
+        .unwrap();
+        assert!(s.doc().unwrap().doc.swatch(REGISTRATION).is_some(), "the implicit lookup exists in both fixtures");
+        assert_eq!(s.doc().unwrap().doc.swatches_iter().count(), usize::from(explicit));
+        s.execute("object.convertDocumentColorMode", &json!({"mode": "cmyk"})).unwrap();
+        let color = if explicit { Color::cmyk(1.0, 1.0, 1.0, 1.0).tinted(0.25) } else { to_cmyk(stored) };
+        assert_eq!(fill_of(&s, mark), mode_index_link(color, REGISTRATION, 0.25));
+        assert_eq!(fill_of(&s, missing), mode_index_link(to_cmyk(stored), "Missing", 0.5));
+    }
 }

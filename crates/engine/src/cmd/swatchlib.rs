@@ -17,6 +17,7 @@ use vectorcraft_color::swatch::REGISTRATION;
 use vectorcraft_color::{Paint, Swatch, SwatchGroup, SwatchLibrary, default_swatches};
 use vectorcraft_doc::pattern::pattern_paint;
 
+use super::clipboard::resources::numbered_name;
 use super::fileio::{create_dir, extension, read_file, read_file_head, write_file, write_new_file};
 use super::menucmds::squash;
 use super::package::free_name;
@@ -49,7 +50,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Add to Swatches",
             ["Window", "Swatch Libraries"],
             None,
-            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, and for a color the same process, global or spot kind, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"); a tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered copy, links to that copy; a global or spot color it links to that the document lacks comes in with it. A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, skipping the names of the library's other swatches, and the pattern links to it → {library, added: [names in the document, the colors patterns, tints and gradients brought included], existing: [names already there], applied?: name}",
+            "{library: id or name, names?: [swatch or colour group names in the library] (default: all of it; a group comes as a colour group, a single swatch ungrouped), apply?: \"fill\"|\"stroke\" (also apply the first one to the selection and the defaults, as paint.setFill / paint.setStroke), focus?: true (with apply: false keeps the active proxy), defaultsOnly?: bool (with apply: apply it to the defaults only, as paint.setFill does; the journal records it for swatches applied while the Live Paint Bucket is the active tool)} copy library swatches into the document as one undo step. A swatch the document already has (same name and paint, and for a color the same process, global or spot kind, or a numbered copy of that name with the same color when the name has another color there) isn't added again; a name taken by another swatch gets a number (\"Clay 1 2\"); a tint or gradient whose global or spot color comes in under a numbered name, or is in the document as such a numbered copy, links to that copy; a global or spot color it links to that the document lacks comes in with it. A pattern swatch brings its pattern, as pasting art painted with it does: the same pattern the document has is used, also when its art links to the document's own color of a name, and a name another pattern or swatch has gets a number; a global or spot color its art links to whose name the document gives another color comes in numbered, skipping the names of the library's other swatches, and the pattern links to it, not to a numbered copy that is the library's other swatch of that name; a swatch of a numbered library name that the art brings, such as a tint \"Ink 2\" or a pattern's swatch when its pattern comes in under another name, keeps that name when the document does not use it, and a pattern swatch or a pattern the art is painted with that comes in numbered skips the library's other names too → {library, added: [names in the document, the colors patterns, tints and gradients brought included], existing: [names already there], applied?: name}",
             has_doc,
             add
         ),
@@ -1029,55 +1030,27 @@ fn free_copy_in(taken: &mut HashSet<String>, base: &str, reserved: impl Fn(&str)
     name
 }
 
-/// [`patternlib::import`] of pattern `pattern` of `src` into `d`, keeping the library's numbered
-/// swatch names (the keys of `names`, such as "Ink 2") that `d` does not use for the library's own
-/// swatches of those names, so that a color the art brings under a numbered name does not take one
-/// of them. While the import runs, a placeholder swatch holds each such name the art does not
-/// bring, and a copy of the library's color holds each one the art brings, which the art then
-/// takes. The placeholders are removed before it returns, and so is a copy the art did not take;
-/// a copy the art took is listed with the colors the import brought. Names of the patterns the
-/// import brings are not held.
-fn import_holding(
-    d: &mut vectorcraft_doc::Document,
-    src: &vectorcraft_doc::Document,
-    pattern: &str,
-    names: &HashMap<&str, &Swatch>,
-) -> Result<(String, patternlib::SwatchNames, patternlib::SwatchNames)> {
-    let numbered = |n: &str| n.rsplit_once(' ').is_some_and(|(_, k)| !k.is_empty() && k.bytes().all(|b| b.is_ascii_digit()));
-    let taken = taken_names(d);
-    let mut free: Vec<&str> = names.keys().copied().filter(|n| numbered(n) && !taken.contains(*n)).collect();
-    free.sort_unstable();
-    let (mut held, mut copies): (Vec<Swatch>, Vec<Swatch>) = (vec![], vec![]);
-    if !free.is_empty() {
-        let brings = patternlib::brought_names(src, pattern);
-        let patterns = patternlib::brought_patterns(src, pattern);
-        for n in free.into_iter().filter(|n| !patterns.contains(*n)) {
-            if !brings.contains(n) {
-                held.push(Swatch { name: n.to_string(), paint: Paint::None, global: false, spot: false });
-            } else if let Some(w) = names.get(n).filter(|w| w.paint.color().is_some() && linked_names(&w.paint).is_empty()) {
-                copies.push((*w).clone());
-            }
+/// The name of the document's swatch for library pattern swatch `w`, whose pattern came in as
+/// `target`, the import having made swatch `made` for it (removed again). A numbered name skips
+/// the names of the library's other swatches (`lib_by_name`), as for a color; so does a swatch
+/// named after its pattern when the pattern's name is one of them. The swatch takes the library
+/// swatch's numbered name when it is free and the library has no other swatch of that name, and leaves a
+/// numbered name the library gives an earlier swatch to that one.
+fn pattern_swatch_name(w: &Swatch, target: &str, made: Option<String>, taken: &mut HashSet<String>, lib_by_name: &HashMap<&str, &Swatch>) -> String {
+    let reserved = |n: &str| lib_by_name.contains_key(n);
+    let owns = lib_by_name.get(w.name.as_str()).is_some_and(|o| *o == w);
+    let named_after = matches!(&w.paint, Paint::Pattern { pattern, .. } if *pattern == w.name);
+    match made {
+        _ if named_after && owns && numbered_name(&w.name) && !taken.contains(&w.name) => w.name.clone(),
+        _ if !owns && numbered_name(&w.name) && !taken.contains(&w.name) => {
+            let mut held = taken.clone();
+            held.insert(w.name.clone());
+            free_copy_in(&mut held, &w.name, reserved)
         }
+        Some(made) if named_after => made,
+        None if named_after && (target == w.name || !reserved(target)) => free_copy_in(taken, target, reserved),
+        _ => free_copy_in(taken, &w.name, reserved),
     }
-    let start = d.swatches.len();
-    d.swatches.extend(held.iter().chain(&copies).cloned());
-    let imported = patternlib::import(d, src, pattern);
-    let used = |n: &str| {
-        imported
-            .as_ref()
-            .is_ok_and(|(_, colors, took)| !colors.iter().any(|(from, _)| from == n) && !took.iter().any(|(from, to)| from == n && to != n))
-    };
-    let used: HashSet<String> = copies.iter().map(|w| w.name.clone()).filter(|n| used(n)).collect();
-    let mut i = 0;
-    d.swatches.retain(|w| {
-        i += 1;
-        let ours = held.iter().chain(&copies).any(|h| h.name == w.name && h.paint == w.paint);
-        !(i > start && ours && !used.contains(&w.name))
-    });
-    let (target, mut colors, mut took) = imported?;
-    took.retain(|(from, _)| !used.contains(from));
-    colors.extend(copies.into_iter().map(|w| w.name).filter(|n| used.contains(n)).map(|n| (n.clone(), n)));
-    Ok((target, colors, took))
 }
 
 /// Link the swatches of `d` that `pending` names (document name, library swatch) to their colors
@@ -1175,6 +1148,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
         Some(other) => return Err(bad(C, format!("apply is \"fill\" or \"stroke\", not `{other}`"))),
     };
     let focus = switch_or(p, "focus", true, C)?;
+    switch_or(p, "defaultsOnly", false, C)?;
     let picked = picked(&lib, &names_param(p, C)?, C)?;
     // Swatches the document already has (same name and paint; for a pattern swatch, a swatch of the
     // same pattern) are reused, not added again. The patterns are in a built-in pattern library's
@@ -1201,6 +1175,25 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     for w in lib.swatches.iter().chain(lib.groups.iter().flat_map(|g| &g.swatches)) {
         lib_by_name.entry(w.name.as_str()).or_insert(w);
     }
+    // A swatch a pattern's art brings under a numbered name skips the library's numbered names,
+    // which a later add looks up as those swatches'. Only the names a picked pattern's swatches and
+    // patterns can come in under, their own or one numbered after them, are needed.
+    let mut brings_names: HashSet<String> = HashSet::new();
+    if let Some(src) = patterns.as_ref().filter(|_| lib_by_name.keys().any(|n| numbered_name(n))) {
+        let picked_patterns: BTreeSet<&str> = picked
+            .iter()
+            .filter_map(|(_, w)| match &w.paint {
+                Paint::Pattern { pattern, .. } => Some(pattern.as_str()),
+                _ => None,
+            })
+            .collect();
+        for pattern in picked_patterns {
+            brings_names.extend(patternlib::brought_resource_names(src, pattern));
+        }
+    }
+    let can_take = |n: &str| brings_names.contains(n) || n.rsplit_once(' ').is_some_and(|(base, _)| brings_names.contains(base));
+    let lib_names: patternlib::Reserved =
+        Arc::new(lib_by_name.iter().filter(|(n, _)| numbered_name(n) && can_take(n)).map(|(n, w)| (n.to_string(), (*w).clone())).collect());
     let group_names: HashSet<&str> = d.swatch_groups.iter().map(|g| g.name.as_str()).collect();
     // A color whose name the document gives another color, or a color group, is the numbered copy
     // of it that an earlier add or a pattern's art brought in, when that copy is the same color. A
@@ -1232,7 +1225,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(src) = &patterns {
         for (_, w) in &picked {
             let Paint::Pattern { pattern, .. } = &w.paint else { continue };
-            present.entry(pattern.as_str()).or_insert_with(|| patternlib::present_pattern(d, src, pattern));
+            present.entry(pattern.as_str()).or_insert_with(|| patternlib::present_pattern(d, src, pattern, &lib_names));
         }
     }
     // Whether the document's swatch `x` of the name of library swatch `w` is `w` with its colors
@@ -1437,7 +1430,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     let mut learned = vec![];
                     if pending.iter().any(|(_, w)| linked_names(&w.paint).iter().any(waited)) {
                         let mut probe = d.clone();
-                        let (_, colors, took) = import_holding(&mut probe, src, pattern, &lib_by_name)?;
+                        let (_, colors, took) = patternlib::import(&mut probe, src, pattern, &lib_names)?;
                         for (from, to) in colors_of(&probe, &colors, &took) {
                             if let std::collections::hash_map::Entry::Vacant(e) = links.entry(from.clone()) {
                                 e.insert(to);
@@ -1447,7 +1440,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                     }
                     let settled = settle(d, &mut pending, &links);
                     let had = taken_names(d);
-                    let (target, colors, took) = import_holding(d, src, pattern, &lib_by_name)?;
+                    let (target, colors, took) = patternlib::import(d, src, pattern, &lib_names)?;
                     // Those colors are the ones the library's tints of them link to, unless the
                     // document already has one for them. A name the copy gave that the import
                     // into the document did not give is replaced, and the tints linked to it are
@@ -1482,11 +1475,7 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
                         d.swatches.retain(|x| x.name != *made);
                     }
                     taken = taken_names(d);
-                    let name = match made {
-                        Some(made) if w.name == *pattern => made,
-                        None if w.name == *pattern => d.free_swatch_name(&target),
-                        _ => free_in(&mut taken, &w.name),
-                    };
+                    let name = pattern_swatch_name(w, &target, made, &mut taken, &lib_by_name);
                     taken.insert(name.clone());
                     // The library swatch's placement of its pattern is kept.
                     let paint = match &w.paint {
@@ -1596,7 +1585,8 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let mut out = json!({"library": shown_library_id(s, &info.id), "added": added_names, "existing": names(&existing)});
     if let (Some(cmd), Some((_, first))) = (apply, picked.first()) {
         let name = added.iter().chain(&existing).find(|(l, _)| *l == first.name).map_or(first.name.clone(), |(_, n)| n.clone());
-        s.execute(cmd, &json!({"swatch": name, "focus": focus}))?;
+        let only = super::paint::defaults_only(s, p, C, cmd == "paint.setStroke")?;
+        s.execute(cmd, &super::paint::with_defaults_only(json!({"swatch": name, "focus": focus}), only))?;
         // Adding and applying undo together.
         squash(s, undo_before, "Add to Swatches");
         out["applied"] = json!(name);

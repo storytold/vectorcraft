@@ -7,12 +7,14 @@ mod contextmenu;
 mod cut;
 mod distortkeys;
 mod document_drag;
+mod drag_commands;
 pub(super) mod folder;
 mod font_menu;
 mod fonts;
 mod guide_escape;
 mod home;
 pub(super) mod labels;
+mod last_filter;
 mod lifecycle;
 mod nativemenu;
 mod nativeoptions;
@@ -33,6 +35,7 @@ mod quickpenbar;
 mod recolor;
 mod recovery;
 pub(super) mod removeanchors;
+mod retype_runs;
 mod rotateview;
 mod ruler_origin;
 mod save;
@@ -41,6 +44,7 @@ mod screenmode;
 mod script_check;
 mod script_dialogs;
 mod script_run;
+mod script_window;
 mod scripts_menu;
 mod scrub;
 mod selectall;
@@ -56,3 +60,8 @@ mod tab_reorder;
 pub(crate) mod taskbar;
 mod toolescape;
 mod trace_runs;
+
+/// Installed plug-ins are process-wide. Tests that install filter plug-ins under a name another
+/// test also installs, or that check how plug-ins sharing a name are told apart, hold this lock
+/// while their plug-ins are installed, so each sees only its own plug-ins under that name.
+pub(super) static SHARED_PLUGIN_NAMES: std::sync::Mutex<()> = std::sync::Mutex::new(());

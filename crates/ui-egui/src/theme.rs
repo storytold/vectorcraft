@@ -146,8 +146,55 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
 }
 
 /// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
-/// where the sets give pills.
-const SIZES: &[u8] = br#"{"all": {"radius.button": 4}}"#;
+/// where the sets give pills, the Home title is 26-point with a 36-point call to action, 28-point New and Open with 16
+/// points beside their labels and 24-point link rows. Home's margin and the gaps between its title, actions, sections,
+/// headings and links are the framework's page tokens, which follow its spacing scale (`space.gap.*`). The compact set
+/// takes the reference app's metrics:
+/// 26-point fields and spinners, 24-point push buttons, 10 points inside panels, 5 between rows, 16-point glyphs in
+/// icon buttons, 5-point control corners, 8-point menus and 10-point windows, 33-point panel tabs, 310-point dock
+/// columns with 14-point column bars and 38-point icon columns, 29-point menu rows, and dialogs 22 points inside their
+/// edge with 28-point buttons at least 72 points wide.
+/// Its type is the size the reference app draws: it set Inter at 92% of its nominal 13-point body, 12.5-point labels
+/// and 11.5-point captions, so they read at 12, 11.5 and 10.5 points, on the rows those nominal sizes gave.
+const SIZES: &[u8] = br#"{
+    "all": {
+        "radius.button": 4,
+        "typography.display.size": 26,
+        "typography.display.line_height": 32,
+        "size.page.action": 36,
+        "size.page.button": 28,
+        "size.page.button_side": 16,
+        "size.page.link": 24
+    },
+    "compact": {
+        "size.control.md": 26,
+        "size.button": 24,
+        "size.icon.glyph_md": 16,
+        "size.rail.width": 38,
+        "size.dock.column": 310,
+        "size.bar.column": 14,
+        "size.panel_header": 33,
+        "size.bar.tab": 35,
+        "size.bar.tab_large": 44,
+        "space.pad.regular": 10,
+        "space.gap.row": 5,
+        "radius.control": 5,
+        "radius.surface": 8,
+        "radius.window": 10,
+        "size.dialog.button": 72,
+        "size.dialog.button_height": 28,
+        "size.row.menu": 29,
+        "space.pad.dialog": 22,
+        "typography.body.size": 12,
+        "typography.body.line_height": 17,
+        "typography.body_strong.size": 12,
+        "typography.body_strong.line_height": 17,
+        "typography.label.size": 11.5,
+        "typography.label.line_height": 17,
+        "typography.caption.size": 10.5,
+        "typography.caption.line_height": 15
+    }
+}"#;
 
 /// The app's sizes ([`SIZES`]) as one shared value: the token cache tells a change of sizes by its pointer, so a
 /// new value each frame would resolve the tokens again each frame.
@@ -180,5 +227,18 @@ mod tests {
     #[test]
     fn the_app_sizes_are_read_whole() {
         assert!(AppSizes::parse(SIZES).is_ok_and(|sizes| !sizes.is_empty()));
+    }
+
+    /// Home's margin and gaps are the framework's page tokens: no size set gives them points of its own, so they follow
+    /// the framework's spacing scale.
+    #[test]
+    fn home_spacing_follows_the_framework_tokens() {
+        let sets: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(SIZES).unwrap();
+        for (set, sizes) in &sets {
+            let keys = sizes.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default();
+            for key in keys {
+                assert!(!key.starts_with("size.page.gap.") && key != "size.page.margin", "{set} sets {key}");
+            }
+        }
     }
 }

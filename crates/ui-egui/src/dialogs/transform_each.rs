@@ -17,7 +17,7 @@
 
 use craft::behavior::Mixed;
 use craft::ui::choice::{Checkbox, Radio, RadioGroup};
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _};
+use craft::ui::contract::{Bind, FieldLabelRole, Props as _, Show as _, ShowContainer as _, SideLabel};
 use craft::ui::dialog::{DialogHost, DialogId, FieldRefusal};
 use craft::ui::display::Text;
 use craft::ui::form::Field;
@@ -52,6 +52,22 @@ pub(crate) struct Open {
     pub id: DialogId,
     /// The preview OK commits and Cancel rolls back.
     pub preview: LivePreview,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
+    /// The tool reset count when the current preview record was created.
+    preview_tool_resets: u64,
+}
+
+impl Open {
+    fn in_source(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == self.document)
+    }
+
+    /// Whether the active document is the opening one, reverted since the dialog opened.
+    fn reverted(&self, app: &VectorcraftApp) -> bool {
+        let (uid, reverts) = self.document;
+        app.session.active().is_some_and(|doc| doc.uid == uid && doc.reverts != reverts)
+    }
 }
 
 /// Whether [`rows`] draws the link and the Relative / Absolute choice (Transform Each) or only the
@@ -290,30 +306,32 @@ enum Measure {
 }
 
 /// One captioned side: a slider over `rail` and a number field in ±`limit`, `value` being none
-/// while the objects differ (the field reads Mixed). Returns the value the user set this pass.
+/// while the objects differ (the field reads Mixed). `caption` is the row (Scale or Move) and the
+/// visible label; the label repeats in each row, so it only describes the controls, and their
+/// names start with the row. Returns the value the user set this pass.
 fn side(
     ui: &mut Ui,
     key: &'static str,
-    label: impl Into<Label>,
+    (row, label): (&'static str, &'static str),
     value: Option<f64>,
     measure: Measure,
     rail: &RangeInclusive<f64>,
     limit: f64,
 ) -> Option<f64> {
-    let label: Label = label.into();
+    let name: Label = format!("{row} {label}").into();
     let mut edit = None;
-    Field::new(label.clone()).id_salt(key).show(ui, |ui, _| {
+    Field::new(label).side(SideLabel::new().role(FieldLabelRole::Describes)).id_salt(key).show(ui, |ui, _| {
         Row::new().show(ui, |ui, _| {
             let shown = value.map_or(Mixed::Mixed, |v| Mixed::Same(Some(v)));
             let dragged = Slider::new(Bind::given(value.map_or(Mixed::Mixed, |v| Mixed::Same(v.clamp(*rail.start(), *rail.end())))), rail.clone())
-                .label(label.clone())
+                .label(name.clone())
                 .id_salt("slider")
                 .show(ui)
                 .value()
                 .copied();
             let field = match measure {
-                Measure::Percent => NumberField::new(label.clone(), Bind::given(shown)).unit_kind(UnitKind::Percent),
-                Measure::Length(lengths) => NumberField::length(label.clone(), Bind::given(shown), lengths),
+                Measure::Percent => NumberField::new(name.clone(), Bind::given(shown)).unit_kind(UnitKind::Percent),
+                Measure::Length(lengths) => NumberField::length(name.clone(), Bind::given(shown), lengths),
             };
             let typed = field.range(-limit..=limit).id_salt("field").show(ui).edit.value().cloned().flatten();
             edit = typed.or(dragged);
@@ -361,11 +379,12 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut DialogFields, lengths: LengthUnits,
     let (mut angle, mut toggled, mut mode) = (None, None, None);
     let read: &DialogFields = fields;
     let shown = Stack::new().show(ui, |ui, _| {
-        Text::new(tl!("Scale")).show(ui);
+        let scale = tl!("Scale");
+        Text::new(scale).show(ui);
         Row::new().show(ui, |ui, _| {
             Stack::new().show(ui, |ui, _| {
                 for (at, (key, label)) in [(hk, tl!("Horizontal:")), (vk, tl!("Vertical:"))].into_iter().enumerate() {
-                    scales[at] = side(ui, key, label, field_number(read, key), measure, &rail, limit);
+                    scales[at] = side(ui, key, (scale, label), field_number(read, key), measure, &rail, limit);
                 }
             });
             if link == ScaleLink::Toggle {
@@ -375,9 +394,10 @@ pub(crate) fn rows(ui: &mut Ui, fields: &mut DialogFields, lengths: LengthUnits,
         if link == ScaleLink::Toggle {
             mode = mode_radios(ui, !absolute);
         }
-        Text::new(tl!("Move")).show(ui);
+        let shift = tl!("Move");
+        Text::new(shift).show(ui);
         for (at, (key, label)) in [("moveH", tl!("Horizontal:")), ("moveV", tl!("Vertical:"))].into_iter().enumerate() {
-            moves[at] = side(ui, key, label, Some(num(read, key, 0.0)), Measure::Length(lengths), &MOVE_RAIL, MAX_ABSOLUTE);
+            moves[at] = side(ui, key, (shift, label), Some(num(read, key, 0.0)), Measure::Length(lengths), &MOVE_RAIL, MAX_ABSOLUTE);
         }
         Text::new(tl!("Rotate")).show(ui);
         angle = rotate_row(ui, num(read, "rotate", 0.0));
@@ -466,6 +486,7 @@ fn form(fields: &mut DialogFields, shared: Shared, lengths: LengthUnits) -> Para
 /// Opens Transform Each on the values it was last confirmed with.
 pub(crate) fn open(app: &mut VectorcraftApp) {
     let Some(ctx) = app.ui_ctx.clone() else { return };
+    let Some(document) = app.session.active().map(|doc| (doc.uid, doc.reverts)) else { return };
     let shared = shared_size(app, app.session.general_unit());
     let lengths = crate::canvas::general_lengths(app); // PLAN: assumed path of cv.B5b
     let mut f = opening_fields(app, &ctx);
@@ -478,32 +499,52 @@ pub(crate) fn open(app: &mut VectorcraftApp) {
     let dialog = HostedParamDialog::new(&ctx, KEY, f, move |fields| form(fields, shared, lengths));
     let options = HeldOptions { cancel: Some(Box::new(cancel)), ..Default::default() };
     if let Some(id) = open_held_with(app, dialog, move |app, result| ok(app, &ctx, result), options) {
-        app.object_dialogs.each = Some(Open { id, preview: LivePreview::default() });
+        app.object_dialogs.each = Some(Open { id, preview: LivePreview::default(), document, preview_tool_resets: app.session.tool_resets() });
     }
 }
 
 /// Cancel rolls the preview back.
 fn cancel(app: &mut VectorcraftApp) {
-    if let Some(open) = app.object_dialogs.each.take() {
+    if let Some(open) = app.object_dialogs.each.take()
+        && open.in_source(app)
+        && app.session.tool_resets() == open.preview_tool_resets
+    {
         open.preview.cancel(app);
     }
 }
 
 /// Applies the confirmed values as one undo step.
 fn commit(app: &mut VectorcraftApp, f: &DialogFields) -> Result<(), String> {
+    let open = app.object_dialogs.each.as_ref().ok_or("the Transform Each dialog is closed")?;
+    let (in_source, reverted, (uid, _), preview_tool_resets) = (open.in_source(app), open.reverted(app), open.document, open.preview_tool_resets);
+    if !in_source {
+        let reason = if reverted {
+            let reason = tl!("The document was reverted. Reopen this dialog to continue.");
+            app.status(reason);
+            reason
+        } else if app.session.documents().iter().any(|doc| doc.uid == uid) {
+            "switch back to the document where Transform Each was opened"
+        } else {
+            "the document where Transform Each was opened has closed"
+        };
+        return Err(reason.into());
+    }
+    if app.session.tool_resets() != preview_tool_resets && app.session.in_interaction() {
+        return Err("finish the active edit before applying Transform Each".into());
+    }
     let p = with_scale_options(app, f, command_params(app, f))?;
     let preview = app.object_dialogs.each.as_mut().map(|o| std::mem::take(&mut o.preview)).unwrap_or_default();
     preview.commit(app, CMD, p).map(|_| ())
 }
 
-/// OK: transforms each object and keeps the values for the next open. A refusal clears Copy, or the
-/// next plain OK would copy.
+/// OK: transforms each object and keeps the values for the next open. A refusal turns Copy off, or
+/// the next plain OK would copy; a refused plain OK keeps its values, so the dialog shows the reason.
 fn ok(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Result<(), String> {
     if let Err(reason) = commit(app, &result.fields) {
         if let (Some(id), Some(dialogs)) = (app.object_dialogs.each.as_ref().map(|o| o.id), app.dialogs()) {
             dialogs.with(|host| {
                 if let Some(d) = host.get_mut_by_id::<HostedParamDialog>(id) {
-                    d.clear_field(COPY);
+                    d.set_field(COPY, FieldValue::Bool(false));
                 }
             });
         }
@@ -523,18 +564,26 @@ fn ok(app: &mut VectorcraftApp, ctx: &egui::Context, result: &ParamResult) -> Re
 /// Each frame: previews the dialog's values while Preview is on, and turns a press of Copy into a
 /// confirm with `copy` set.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
-    let Some(id) = app.object_dialogs.each.as_ref().map(|o| o.id) else { return };
+    let Some((id, in_source)) = app.object_dialogs.each.as_ref().map(|o| (o.id, o.in_source(app))) else { return };
     let Some(dialogs) = app.dialogs() else { return };
     let Some((previewing, fields, action)) =
         dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone(), d.take_action())))
     else {
         return;
     };
-    let mut p = command_params(app, &fields);
-    add_scale_options(app, &fields, &mut p);
-    if let Some(mut open) = app.object_dialogs.each.take() {
-        // The preview reports its own status; the answer of a run is not needed here.
-        let _ = open.preview.run(app, previewing, "Transform Each", CMD, &p);
+    if in_source && let Some(mut open) = app.object_dialogs.each.take() {
+        let tool_resets = app.session.tool_resets();
+        if open.preview_tool_resets == tool_resets || !app.session.in_interaction() {
+            if open.preview_tool_resets != tool_resets {
+                // A switch already ended the earlier preview.
+                open.preview = LivePreview::default();
+                open.preview_tool_resets = tool_resets;
+            }
+            let mut p = command_params(app, &fields);
+            add_scale_options(app, &fields, &mut p);
+            // The preview reports its own status; the answer of a run is not needed here.
+            let _ = open.preview.run(app, previewing, "Transform Each", CMD, &p);
+        }
         app.object_dialogs.each = Some(open);
     }
     if action.as_deref() == Some(COPY) {
@@ -682,6 +731,197 @@ mod tests {
         let (ctx, id) = (h.ctx.clone(), id(h));
         assert!(h.state().dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id)) || h.state().object_dialogs.each.is_some());
         h.run_steps(3);
+    }
+
+    fn open_with_two_documents() -> (Harness, NodeId) {
+        let (mut app, first) = square_app();
+        app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        app.run("shape.rectangle", json!({"x": 70, "y": 50, "width": 30, "height": 65})).unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        let mut h = start(app);
+        open(h.state_mut());
+        h.run_steps(2);
+        (h, first)
+    }
+
+    #[test]
+    fn preview_and_ok_stay_on_the_opening_document() {
+        let (mut h, first) = open_with_two_documents();
+        set(&mut h, "moveH", json!(45));
+        h.run_steps(2);
+        assert!(h.state().session.in_interaction(), "the opening document has a preview");
+
+        h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+        let other = h.state().session.doc().unwrap().doc.clone();
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
+        assert_eq!(h.state().session.doc().unwrap().doc, other, "Preview must leave the other document unchanged");
+        assert!(!h.state().session.in_interaction());
+        confirm(&mut h);
+        assert_eq!(h.state().session.doc().unwrap().doc, other, "OK must leave the other document unchanged");
+        assert!(h.state().object_dialogs.each.is_some(), "the draft is still open");
+
+        h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
+        confirm(&mut h);
+        let doc = &h.state().session.doc().unwrap().doc;
+        assert!((doc.node(first).unwrap().geometric_bounds().unwrap().x0 - 120.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn copy_stays_on_the_opening_document() {
+        let (mut h, _) = open_with_two_documents();
+        set(&mut h, "preview", json!(false));
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
+        h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+        let other = h.state().session.doc().unwrap().doc.clone();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
+        h.run_steps(4);
+        assert_eq!(h.state().session.doc().unwrap().doc, other, "Copy must leave the other document unchanged");
+        assert_ne!(field(&h, COPY), Some(FieldValue::Bool(true)), "a refused Copy clears its flag");
+
+        h.state_mut().run("document.activate", json!({"index": 0})).unwrap();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
+        h.run_steps(4);
+        assert_eq!(h.state().session.doc().unwrap().doc.layers[0].children().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn cancel_keeps_the_other_documents_gesture_active() {
+        let (mut h, _) = open_with_two_documents();
+        set(&mut h, "moveH", json!(45));
+        h.run_steps(2);
+        assert!(h.state().session.in_interaction());
+        h.state_mut().run("document.activate", json!({"index": 1})).unwrap();
+        let app = h.state_mut();
+        app.session.begin_interaction("Another gesture").unwrap();
+        app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+
+        let (ctx, id) = (h.ctx.clone(), id(&h));
+        assert!(h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id)));
+        h.run_steps(3);
+        assert_eq!(h.state().session.doc().unwrap().doc, other, "Cancel preserves the other document's gesture");
+        assert!(h.state().session.in_interaction());
+    }
+
+    #[test]
+    fn switching_back_preserves_a_gesture_that_started_after_the_preview() {
+        let (mut h, _) = open_with_two_documents();
+        set(&mut h, "moveH", json!(45));
+        h.run_steps(2);
+        assert!(h.state().session.in_interaction());
+        let app = h.state_mut();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        app.session.begin_interaction("Another gesture").unwrap();
+        app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+        let gesture = app.session.doc().unwrap().doc.clone();
+
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
+        confirm(&mut h);
+
+        assert_eq!(h.state().session.doc().unwrap().doc, gesture, "Preview and OK leave the newer gesture alone");
+        assert!(h.state().session.in_interaction());
+        let (ctx, id) = (h.ctx.clone(), id(&h));
+        assert!(h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, id)));
+        h.run_steps(2);
+        assert_eq!(h.state().session.doc().unwrap().doc, gesture, "Cancel also leaves the newer gesture alone");
+        assert!(h.state().session.in_interaction());
+    }
+
+    /// A harness on a saved copy of [`square_app`], with Transform Each open on it. The directory
+    /// holds the saved file.
+    fn open_on_a_saved_document(tag: &str) -> (Harness, NodeId, vectorcraft_testkit::TempDir) {
+        let (mut app, id) = square_app();
+        let dir = vectorcraft_testkit::TempDir::new(tag);
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let mut h = start(app);
+        open(h.state_mut());
+        h.run_steps(2);
+        (h, id, dir)
+    }
+
+    /// Reverts the document to its saved copy and selects the restored square again.
+    fn revert_and_reselect(h: &mut Harness) {
+        h.state_mut().run("file.revert", json!({"confirmed": true})).unwrap();
+        h.state_mut().run("select.all", json!({})).unwrap();
+        h.run_steps(2);
+    }
+
+    const REVERTED: &str = "The document was reverted. Reopen this dialog to continue.";
+
+    /// Asserts that the held OK was refused because the document was reverted, under the rows and
+    /// on the status line.
+    fn assert_refused_for_the_revert(h: &Harness) {
+        assert_eq!(h.state().ui.status, REVERTED, "the status line reports the revert");
+        let id = id(h);
+        let held = h.state().dialogs().unwrap().with(|host| host.held_state(id));
+        assert!(
+            matches!(&held, Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str() == REVERTED),
+            "OK is refused for the revert, the held state is {held:?}"
+        );
+    }
+
+    /// After File > Revert the draft neither previews on nor commits to the restored square, and OK
+    /// is refused; reopened, the dialog applies again.
+    #[test]
+    fn transform_each_refuses_its_draft_after_file_revert() {
+        let (mut h, square, _dir) = open_on_a_saved_document("transform-each-revert");
+        set(&mut h, "moveH", json!(45));
+        h.run_steps(2);
+        assert!(h.state().session.in_interaction(), "the draft previews before the revert");
+
+        revert_and_reselect(&mut h);
+        let restored = h.state().session.doc().unwrap().doc.clone();
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        set(&mut h, "moveH", json!(60));
+        h.run_steps(2);
+        assert_eq!(h.state().session.doc().unwrap().doc, restored, "Preview must leave the restored square unchanged");
+        confirm(&mut h);
+        assert_eq!(h.state().session.doc().unwrap().doc, restored, "OK must leave the restored square unchanged");
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "OK must record no undo step");
+        assert!(h.state().object_dialogs.each.is_some(), "the dialog stays open with the refusal");
+        assert_refused_for_the_revert(&h);
+
+        let (ctx, dialog) = (h.ctx.clone(), id(&h));
+        assert!(h.state().dialogs().unwrap().with(|host| host.cancel_by_id(&ctx, dialog)));
+        h.run_steps(3);
+        assert_eq!(h.state().session.doc().unwrap().doc, restored, "Cancel must leave the restored square unchanged");
+        open(h.state_mut());
+        h.run_steps(2);
+        set(&mut h, "moveH", json!(30));
+        confirm(&mut h);
+        assert!(h.state().object_dialogs.each.is_none(), "the reopened dialog applies");
+        let x0 = h.state().session.doc().unwrap().doc.node(square).unwrap().geometric_bounds().unwrap().x0;
+        assert!((x0 - 50.0).abs() < 1e-6, "the reopened dialog moves the restored square, x0 is {x0}");
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo + 1);
+    }
+
+    /// After File > Revert, Copy does not copy the restored square either.
+    #[test]
+    fn copy_refuses_its_draft_after_file_revert() {
+        let (mut h, _, _dir) = open_on_a_saved_document("transform-each-copy-revert");
+        set(&mut h, "preview", json!(false));
+        set(&mut h, "moveH", json!(100));
+        h.run_steps(2);
+        // With Preview off the document has no unsaved change to revert yet.
+        h.state_mut().run("object.move", json!({"dx": 5, "dy": 0})).unwrap();
+
+        revert_and_reselect(&mut h);
+        let restored = h.state().session.doc().unwrap().doc.clone();
+        let undo = h.state().session.doc().unwrap().history.undo.len();
+        h.get_by_role_and_label(egui::accesskit::Role::Button, "Copy").click();
+        h.run_steps(4);
+        assert_eq!(h.state().session.doc().unwrap().doc, restored, "Copy must leave the restored document unchanged");
+        assert_eq!(h.state().session.doc().unwrap().history.undo.len(), undo, "Copy must record no undo step");
+        assert_ne!(field(&h, COPY), Some(FieldValue::Bool(true)), "a refused Copy clears its flag");
+        assert_eq!(h.state().ui.status, REVERTED, "the status line reports the revert");
+        assert!(h.state().object_dialogs.each.is_some(), "the dialog stays open");
     }
 
     #[test]

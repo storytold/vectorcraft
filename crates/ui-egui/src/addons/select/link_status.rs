@@ -46,6 +46,8 @@ pub const STATUSES: [(&str, &str, &str); 4] = [
 ];
 /// The dialog's Show choices: (value, label).
 const SHOW: [(&str, &str); 5] = [("all", "All"), ("linked", "Linked"), ("embedded", "Embedded"), ("missing", "Missing"), ("modified", "Modified")];
+/// The rows the image table shows before it scrolls.
+const LIST_ROWS: u16 = 9;
 /// How often the statuses are looked at again while the document stays as it is (s): files
 /// change on disk without the document knowing.
 const RECHECK: f64 = 2.0;
@@ -288,10 +290,7 @@ fn body(ui: &mut Ui, fields: &mut Fields, rows: &[Value]) {
     TextField::search(label(tl!("Search images")), Bind::bound(&mut fields.search)).show(ui);
     let shows: Vec<Entry<String>> = SHOW.iter().map(|&(value, text)| Entry::new(value.to_owned(), label(tl!(text)))).collect();
     Field::new(label(tl!("Show:"))).show(ui, |ui, _| {
-        let picked = Select::new(label(tl!("Show:")), Bind::given(fields.show.clone()), &shows).show(ui).value().cloned();
-        if let Some(show) = picked {
-            fields.show = show;
-        }
+        Select::new(label(tl!("Show:")), Bind::bound(&mut fields.show), &shows).show(ui);
     });
     let visible = shown(rows, &fields.search, &fields.show, &Env::of(ui).folder());
     let lines: Vec<Line> = visible
@@ -317,6 +316,7 @@ fn body(ui: &mut Ui, fields: &mut Fields, rows: &[Value]) {
     let out = Table::<u64>::new(label(tl!("Select by Link Status")), columns)
         .select(SelectMode::None)
         .empty(label(tl!("No images match.")))
+        .max_rows(LIST_ROWS)
         .show_items(ui, &source, &mut |id, item| match lines.iter().find(|line| line.id == *id) {
             Some(line) => ListRow::new(line.name.clone())
                 .cells(item.cells())

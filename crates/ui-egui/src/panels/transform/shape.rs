@@ -1,14 +1,16 @@
 //! The Transform panel's live-shape rows: the Rectangle, Polygon, Ellipse and Line Properties, also shown by the
 //! Properties panel and the Contextual Task Bar.
 
+use std::ops::RangeInclusive;
+
 use craft::behavior::Mixed;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Bracket, Props as _, Show as _, ShowContainer as _};
 use craft::ui::form::Field;
 use craft::ui::layout_components::{Row, Stack};
 use craft::ui::pickers::Select;
-use craft::ui::sections::{HeaderStrength, Section};
 use craft::ui::text::{NumberField, link_toggle};
+use craft::ui::value_drag::Slider;
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::{LiveShape, Node, NodeKind};
@@ -26,9 +28,10 @@ enum Quantity {
     Degrees,
     /// A length in the document's general unit.
     Length,
-    /// A polygon's side count: a whole number from 3 to 1000.
-    Sides,
 }
+
+/// The side counts Polygon Properties' Sides slider spans; the field beside it takes 3 to 1000.
+const SIDES_SLIDER: RangeInclusive<f64> = 3.0..=20.0;
 
 /// A live rectangle's, polygon's, ellipse's or line's properties (Transform and Properties panels, and for the
 /// first three the Contextual Task Bar). `headed` adds the Rectangle and Polygon Properties headings; an ellipse's
@@ -51,11 +54,11 @@ pub(crate) fn live_shape_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, l
     true
 }
 
-/// `rows` under a caption heading, or bare when there is none.
+/// `rows` under a sub-heading, or bare when there is none.
 fn under_heading(ui: &mut Ui, heading: Option<&'static str>, mut rows: impl FnMut(&mut Ui)) {
     match heading {
         Some(title) => {
-            Section::fixed(title).strength(HeaderStrength::Caption).show(ui, |ui, _| rows(ui));
+            crate::panels::subheading(title).show(ui, |ui, _| rows(ui));
         }
         None => rows(ui),
     }
@@ -76,7 +79,6 @@ fn number_row(app: &mut VectorcraftApp, ui: &mut Ui, label: &'static str, value:
         let field = match quantity {
             Quantity::Length => NumberField::length(label, bind, general_lengths(app)),
             Quantity::Degrees => NumberField::new(label, bind).unit("°").commit_decimals(1),
-            Quantity::Sides => NumberField::new(label, bind).range(3.0..=1000.0).fixed_decimals(0),
         };
         edit = Some(field.show(ui).edit);
     });
@@ -173,13 +175,13 @@ fn pie_rows(app: &mut VectorcraftApp, ui: &mut Ui, pie: (f64, f64)) {
     }
 }
 
-/// A live polygon's Polygon Properties: its side count, angle (counterclockwise), corner type and radius, radius
-/// (centre to vertex) and side length, and Make Sides Equal, which an uneven scale enables.
+/// A live polygon's Polygon Properties: its side count (a field and a slider), angle (counterclockwise), corner
+/// type and radius, radius (center to vertex) and side length, and Make Sides Equal, which an uneven scale enables.
 fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShape) {
     let LiveShape::Polygon { sides, .. } = live else { return };
     let radius = live.polygon_radius();
     let side = radius.map(|r| 2.0 * r * (std::f64::consts::PI / f64::from((*sides).max(3))).sin());
-    number_row(app, ui, tl!("Sides"), Some(f64::from(*sides)), Quantity::Sides, |s| json!({ "sides": s as u64 }));
+    sides_row(app, ui, *sides);
     angle_row(app, ui, live, "polygonAngle");
     corner_kind_row(app, ui, corner_style(app, n).1);
     Field::new(tl!("Corner Radius")).show(ui, |ui, _| corner_radius_field(app, ui, n));
@@ -187,6 +189,43 @@ fn polygon_rows(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, live: &LiveShap
     number_row(app, ui, tl!("Side Length"), side, Quantity::Length, |l| json!({ "sideLength": l }));
     if Button::new(tl!("Make Sides Equal")).enabled(!live.polygon_sides_equal()).show(ui).clicked() {
         set_live_shape(app, json!({"makeSidesEqual": true}));
+    }
+}
+
+/// Polygon Properties' Sides row for a polygon of `sides` sides: a field that takes 3 to 1000, and after it a slider
+/// over [`SIDES_SLIDER`]. A typed count is one undo step. A slider drag previews the count and its release records
+/// one undo step; Escape during the drag puts the count back. A click on the rail or an arrow key sets the count in
+/// one undo step. A count above 20 puts the thumb at the rail's right end, and screen readers read the real count.
+fn sides_row(app: &mut VectorcraftApp, ui: &mut Ui, sides: u32) {
+    let label = tl!("Sides");
+    let count = f64::from(sides);
+    let (mut typed, mut slid) = (None, None);
+    Field::new(label).show(ui, |ui, _| {
+        Row::new().show(ui, |ui, _| {
+            typed = Some(NumberField::new(label, Bind::given(Some(count))).range(3.0..=1000.0).fixed_decimals(0).id_salt("field").show(ui).edit);
+            let (lo, hi) = (*SIDES_SLIDER.start(), *SIDES_SLIDER.end());
+            slid = Some(
+                Slider::new(Bind::given(count.clamp(lo, hi)), SIDES_SLIDER)
+                    .step(1.0)
+                    .short(true)
+                    .value_text(sides.to_string())
+                    .label(label)
+                    .id_salt("slider")
+                    .show(ui),
+            );
+        });
+    });
+    if let Some(edit) = typed {
+        apply_edits(app, &edit, EditPath::Scope, |app, v, _| {
+            if let Some(v) = v {
+                set_live_shape(app, json!({ "sides": *v as u64 }));
+            }
+        });
+    }
+    if let Some(edit) = slid {
+        apply_edits(app, &edit, EditPath::Preview, |app, v, phase| {
+            crate::panels::live_run(app, "Live Shape Properties", "object.setLiveShape", json!({ "sides": v.round() as u64 }), phase);
+        });
     }
 }
 

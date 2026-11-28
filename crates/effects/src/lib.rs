@@ -82,11 +82,12 @@ pub use group::{
 pub use lighting_presets::{LIGHTING_PRESETS, LightingPreset, lighting_preset_params, matching_lighting_preset};
 pub use live::{expand_live, expand_live_deep, expanded_live_group, outline_object, text_outliner};
 pub use marks::{CROP_MARKS, crop_marks_art, has_crop_marks};
+pub use params::{blend_mode_id, parse_blend_mode, takes_blend_mode};
 pub use pixel::{PIXEL_EFFECTS, PixelFx, PixelSpace};
 pub use placement::pinned_gradient_item;
 pub use raster::{
-    RASTERIZE, RasterFx, Rasterize, color_param, follow_items, item_effects_in, outset, raster_effects, rasterize_stage, stage_maps, staged_effects,
-    without_geometry,
+    RASTERIZE, RasterFx, Rasterize, blend_mode, color_param, follow_items, item_effects_in, outset, raster_effects, rasterize_stage, stage_maps,
+    staged_effects, without_geometry,
 };
 pub use reshape::{
     SYMBOL_ART_MAX_NODES, add_instance_row_effects_to_parts, expand_outlined, follows_image_pixels, gives_image_shape, has_copied_row_raster,
@@ -117,14 +118,16 @@ pub use stylize::{ScribbleSetting, scribble_setting_id, scribble_settings};
 pub use svg_filter::SVG_FILTER;
 pub use trap::TRAP;
 pub use vectorcraft_three_d::PlanarFace;
-pub use vectorcraft_three_d::{BevelProfile, Mesh};
+pub use vectorcraft_three_d::{BevelProfile, Mesh, MeshPart};
 pub use warp::{WARP_NET, WarpNet, WarpStyle, map_version, warp_point, warp_version};
 
 mod catalog;
 mod geometry;
 mod params;
 
-pub use catalog::{EffectInfo, Lengths, WARP_STYLES, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range};
+pub use catalog::{
+    EffectInfo, Lengths, WARP_STYLES, built_in_effect, effect_catalog, effect_info, is_length, length_range, plugin_effects, raster_px_range,
+};
 pub(crate) use geometry::{Budget, apply_one};
 pub use geometry::{
     Carry, GeomContext, apply_geometry, apply_geometry_bez, apply_geometry_bez_carrying, apply_geometry_carrying, apply_geometry_with,
@@ -132,6 +135,6 @@ pub use geometry::{
 #[cfg(test)]
 pub(crate) use geometry::{MAX_EFFECT_LINES, apply_geometry_within};
 pub use params::{
-    any_plugin_paints_output, default_params, has_geometry, has_painted_plugin_effect, has_plugin_effect, is_geometry, is_raster, merged_params,
-    new_effect, plugin_revision, scale_effect, upgrade_params,
+    any_plugin_paints_output, check_returned_effect, default_params, has_geometry, has_painted_plugin_effect, has_plugin_effect, is_geometry,
+    is_raster, merged_params, new_effect, plugin_revision, scale_effect, upgrade_params,
 };

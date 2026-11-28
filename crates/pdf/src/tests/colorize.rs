@@ -121,6 +121,40 @@ fn a_process_color_writes_the_image_in_that_color_with_a_soft_mask() {
     assert_eq!(images(&pdf(&doc(ColorMode::Cmyk, None))), [("DeviceGray".into(), vec![], false)]);
 }
 
+/// A colorized image whose color overprints is drawn with an overprinting graphics state
+/// (ISO 32000-1 §8.6.7), its DeviceN image unchanged; one that knocks out sets none.
+#[test]
+fn an_overprinting_colorized_image_sets_overprint() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let text = |d: &Document| String::from_utf8_lossy(&pdf(d)).into_owned();
+    assert!(!text(&d).contains("/OP true"), "a knocking-out image sets no overprint");
+    let Some(id) = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id) else { panic!("the image") };
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    let out = pdf(&d);
+    assert!(text(&d).contains("/OP true/op true"), "the image overprints");
+    assert!(images(&out).contains(&("DeviceN".into(), vec!["Ink".into()], true)), "still the ink's DeviceN image");
+
+    // A process color is written in only the process inks it puts down, so its zero plates keep
+    // the inks below: an image's samples take no part in the nonzero overprint mode.
+    let mut d = doc(ColorMode::Cmyk, Some(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 1.0))));
+    assert_eq!(images(&pdf(&d)), [("DeviceGray".into(), vec![], false), ("DeviceCMYK".into(), vec![], true)], "knocking out: CMYK");
+    let Some(id) = d.layers[0].children().and_then(|c| c.first()).map(|n| n.id) else { panic!("the image") };
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    assert!(images(&pdf(&d)).contains(&("DeviceN".into(), vec!["Black".into()], true)), "{:?}", images(&pdf(&d)));
+    // A gray color is black ink alone.
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::Gray { k: 0.6 })));
+    assert!(images(&pdf(&d)).contains(&("DeviceN".into(), vec!["Black".into()], true)), "{:?}", images(&pdf(&d)));
+
+    // White knocks out with Discard White Overprint (the default), as a white fill does; without
+    // it, an overprinting white process color puts no ink down and paints nothing.
+    d.node_mut(id).unwrap().extras_mut().colorize = Some(Box::new(Paint::solid(Color::cmyk(0.0, 0.0, 0.0, 0.0))));
+    assert_eq!(images(&pdf(&d)).len(), 2, "the white image and its soft mask");
+    assert!(!text(&d).contains("/OP true"), "white knocks out");
+    d.setup.discard_white_overprint = false;
+    assert!(images(&pdf(&d)).is_empty(), "{:?}", images(&pdf(&d)));
+}
+
 /// Registration prints on every plate: the process inks and the document's spot inks.
 #[test]
 fn registration_writes_the_image_in_every_ink() {
@@ -303,6 +337,106 @@ fn separations_print_the_image_on_its_ink_plate() {
     }
 }
 
+/// On printed separations an overprinting colorized image is hidden on the plates its color puts
+/// no ink on, so a writer without blending modes (PostScript) keeps the ink below it there; a
+/// knocking-out one is drawn on every plate.
+#[test]
+fn separations_hide_an_overprinting_image_on_plates_without_its_ink() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    let shown = |overprint: bool, postscript: bool| {
+        let mut d = doc(ColorMode::Cmyk, Some(spot.clone()));
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = overprint;
+        let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+        let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+        let job = plan(&d, &PrintOptions { settings, postscript, ..Default::default() }).unwrap();
+        names.into_iter().zip(&job.plates).map(|(name, p)| (name, p.layers[0].children().unwrap()[0].visible)).collect::<Vec<_>>()
+    };
+    for postscript in [true, false] {
+        let knocking = shown(false, postscript);
+        assert!(knocking.len() > 1 && knocking.iter().all(|(_, v)| *v), "{knocking:?}");
+        for (name, visible) in shown(true, postscript) {
+            assert_eq!(visible, name == "Ink", "{name}");
+        }
+    }
+
+    // With a drop shadow of its own the image knocks out on every plate, so the PostScript
+    // writer draws it there.
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    let id = d.layers[0].children().unwrap()[0].id;
+    let n = d.node_mut(id).unwrap();
+    n.extras_mut().colorize_overprint = true;
+    n.appearance.effects.push(vectorcraft_doc::Effect { id: "stylize.dropShadow".into(), params: serde_json::json!({}), visible: true });
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let job = plan(&d, &PrintOptions { settings, postscript: true, ..Default::default() }).unwrap();
+    for p in &job.plates {
+        let image = &p.layers[0].children().unwrap()[0];
+        assert!(image.visible && !image.extras().colorize_overprint, "{:?}", image.extras());
+    }
+}
+
+/// With Discard White Overprint on, an overprinting colorized image in a tint of a spot ink whose
+/// color is white still overprints, in the PDF and on printed separations: it prints as that ink,
+/// not as paper white.
+#[test]
+fn a_white_spot_ink_image_overprints_with_discard_white_overprint() {
+    let white = Color::cmyk(0.0, 0.0, 0.0, 0.0);
+    let spot = Paint::Solid { color: white, swatch: Some("White Ink".into()), tint: 0.5 };
+    let mut d = doc(ColorMode::Cmyk, Some(spot));
+    d.swatches.push(Swatch { name: "White Ink".into(), paint: Paint::solid(white), global: true, spot: true });
+    d.setup.discard_white_overprint = true;
+    let id = d.layers[0].children().unwrap()[0].id;
+    d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+    let out = pdf(&d);
+    assert!(String::from_utf8_lossy(&out).contains("/OP true/op true"), "the image overprints");
+    assert!(images(&out).contains(&("DeviceN".into(), vec!["White Ink".into()], true)), "{:?}", images(&out));
+
+    let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+    let names: Vec<String> = print_inks(&d, &settings).0.into_iter().map(|i| i.name).collect();
+    for postscript in [true, false] {
+        let job = plan(&d, &PrintOptions { settings: settings.clone(), postscript, ..Default::default() }).unwrap();
+        for (name, p) in names.iter().zip(&job.plates) {
+            assert_eq!(p.layers[0].children().unwrap()[0].visible, name == "White Ink", "{name}");
+        }
+    }
+    // Printed as process inks, the white ink is paper white: the image knocks out on every plate.
+    let converted = serde_json::json!({"output": {"mode": "separations", "inks": [{"name": "White Ink", "convertToProcess": true}]}});
+    let settings: PrintSettings = serde_json::from_value(converted).unwrap();
+    for postscript in [true, false] {
+        let job = plan(&d, &PrintOptions { settings: settings.clone(), postscript, ..Default::default() }).unwrap();
+        assert!(!job.plates.is_empty());
+        for p in &job.plates {
+            assert!(p.layers[0].children().unwrap()[0].visible, "a converted white ink knocks out");
+        }
+    }
+}
+
+/// An overprinting colorized image whose pixels don't take its color (a color preview of its
+/// file) is separated as those pixels on every plate, so it is not hidden on the plates its
+/// color puts no ink on.
+#[test]
+fn separations_show_an_overprinting_image_whose_pixels_refuse_its_color() {
+    let spot = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    for postscript in [true, false] {
+        let mut d = doc(ColorMode::Cmyk, Some(spot.clone()));
+        let preview = Arc::new(vectorcraft_doc::links::missing_placeholder().unwrap());
+        d.images.insert(
+            "pic".into(),
+            ImageBlob { mime: "image/png".into(), bytes: preview.clone(), proxy: Some(preview), file_font: Default::default() },
+        );
+        let id = d.layers[0].children().unwrap()[0].id;
+        d.node_mut(id).unwrap().extras_mut().colorize_overprint = true;
+        let settings: PrintSettings = serde_json::from_value(serde_json::json!({"output": {"mode": "separations"}})).unwrap();
+        let job = plan(&d, &PrintOptions { settings, postscript, ..Default::default() }).unwrap();
+        assert!(job.plates.len() > 1);
+        for p in &job.plates {
+            let n = &p.layers[0].children().unwrap()[0];
+            assert!(n.visible, "postscript {postscript}: the pixels print on every plate");
+            assert!(n.extras().colorize.is_none() && !n.extras().colorize_overprint, "postscript {postscript}: {:?}", n.extras());
+        }
+    }
+}
+
 /// Printed separations separate a colorized image with a color mask as it shows: the pixels the
 /// mask hides print on no plate.
 #[test]
@@ -401,12 +535,47 @@ fn a_colorized_missing_link_placeholder_is_written_in_its_own_colors() {
     }
 }
 
+/// A `w` × `h` gray PNG of `px`.
+fn gray_png(w: u32, h: u32, px: Vec<u8>) -> Vec<u8> {
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, px).unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+}
+
+/// Whether each image XObject of `pdf`, soft masks too, has /Interpolate true.
+fn interpolated(pdf: &[u8]) -> Vec<bool> {
+    let file = Pdf::new(Arc::new(pdf.to_vec())).unwrap();
+    file.objects()
+        .into_iter()
+        .filter_map(|o| match o {
+            Object::Stream(s) if s.dict().get::<Name<'_>>(b"Subtype").is_some_and(|n| n.as_ref() == b"Image") => {
+                Some(s.dict().get::<bool>(b"Interpolate") == Some(true))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A colorized image whose pixels are black or white (a 1-bit image mask, as both importers open
+/// one) is written without /Interpolate, its soft mask too: a RIP that smooths the mask greys its
+/// edges, and the same mask drawn below in another ink shows there. A grayscale image keeps it.
+#[test]
+fn a_black_and_white_colorized_image_asks_viewers_not_to_smooth_it() {
+    let red = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    for (pixels, smooth) in [(vec![0, 255], false), (vec![0, 128], true)] {
+        let mut d = doc(ColorMode::Cmyk, Some(red.clone()));
+        d.images.insert("pic".into(), ImageBlob::png(gray_png(2, 1, pixels.clone())));
+        let found = interpolated(&pdf(&d));
+        assert_eq!(found, [smooth, smooth], "{pixels:?}: the image and its soft mask");
+    }
+}
+
 /// A pixelated colorized image (an envelope's with Anti-Alias off) is written without
-/// /Interpolate, as an uncolorized one is.
+/// /Interpolate, as an uncolorized one is. (Its pixels are gray: a black-and-white one never is.)
 #[test]
 fn a_pixelated_colorized_image_asks_viewers_not_to_smooth_it() {
     for pixelated in [false, true] {
         let mut d = doc(ColorMode::Cmyk, Some(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0))));
+        d.images.insert("pic".into(), ImageBlob::png(gray_png(2, 1, vec![0, 128])));
         let id = d.layers[0].children().unwrap()[0].id;
         d.node_mut(id).unwrap().extras_mut().pixelated = pixelated;
         let out = pdf(&d);

@@ -19,6 +19,9 @@ pub(crate) enum Value {
     Number(f64),
     String(Str),
     Object(ObjId),
+    /// A Symbol (ECMA-262 11th edition, section 6.1.5), which only a realm with
+    /// [`crate::Options::es2015`] makes.
+    Symbol(crate::symbol::Sym),
 }
 
 impl Value {
@@ -44,7 +47,7 @@ impl Value {
             Value::Bool(b) => *b,
             Value::Number(n) => !(n.is_nan() || *n == 0.0),
             Value::String(s) => s.len() > 0,
-            Value::Object(_) => true,
+            Value::Object(_) | Value::Symbol(_) => true,
         }
     }
 }
@@ -191,8 +194,72 @@ impl Str {
         }
     }
 
+    /// At most `max` code units from the start, read along the rope without flattening it,
+    /// visiting at most `max_nodes` nodes, with the number of nodes visited. When the nodes run
+    /// out first, the units read so far are returned.
+    pub(crate) fn prefix(&self, max: usize, max_nodes: u64) -> (Vec<u16>, u64) {
+        let mut units = Vec::new();
+        let mut stack = vec![self.clone()];
+        let mut visited = 0u64;
+        while let Some(node) = stack.pop() {
+            if units.len() >= max || visited >= max_nodes {
+                break;
+            }
+            visited += 1;
+            match &*node.0.borrow() {
+                Node::Flat(f) => units.extend_from_slice(f.get(..f.len().min(max - units.len())).unwrap_or_default()),
+                Node::Concat { left, right, .. } => {
+                    stack.push(right.clone());
+                    stack.push(left.clone());
+                }
+                Node::Taken => {}
+            }
+        }
+        (units, visited)
+    }
+
     pub(crate) fn to_rust_string(&self) -> String {
         String::from_utf16_lossy(&self.flat())
+    }
+
+    /// The first `max_units` code units as a Rust string, read along the rope without flattening
+    /// it, so a long string is not copied whole.
+    pub(crate) fn prefix_to_rust_string(&self, max_units: usize) -> String {
+        if self.len() <= max_units {
+            return self.to_rust_string();
+        }
+        let mut units = Vec::with_capacity(max_units);
+        let mut stack = vec![self.clone()];
+        while let Some(s) = stack.pop() {
+            let room = max_units - units.len();
+            if room == 0 {
+                break;
+            }
+            match &*s.0.borrow() {
+                Node::Flat(f) => units.extend_from_slice(&f[..f.len().min(room)]),
+                Node::Concat { left, right, .. } => {
+                    stack.push(right.clone());
+                    stack.push(left.clone());
+                }
+                Node::Taken => {}
+            }
+        }
+        String::from_utf16_lossy(&units)
+    }
+
+    /// Calls `f` with each run of code units in order, read along the rope without flattening it.
+    pub(crate) fn for_each_chunk(&self, mut f: impl FnMut(&[u16])) {
+        let mut stack = vec![self.clone()];
+        while let Some(s) = stack.pop() {
+            match &*s.0.borrow() {
+                Node::Flat(units) => f(units),
+                Node::Concat { left, right, .. } => {
+                    stack.push(right.clone());
+                    stack.push(left.clone());
+                }
+                Node::Taken => {}
+            }
+        }
     }
 }
 
@@ -236,9 +303,10 @@ pub(crate) fn is_str_space(u: u16) -> bool {
     crate::chars::is_whitespace(u32::from(u)) || crate::chars::is_line_terminator(u32::from(u))
 }
 
-/// ToNumber applied to a string (section 9.3.1): the StringNumericLiteral grammar, NaN for
-/// anything else.
-pub(crate) fn string_to_number(units: &[u16]) -> f64 {
+/// ToNumber applied to a string (section 9.3.1): the StringNumericLiteral grammar, with the `0b`
+/// and `0o` literals of ECMA-262 11th edition, section 7.1.3.1, as well when `binary_octal` is
+/// set; NaN for anything else.
+pub(crate) fn string_to_number(units: &[u16], binary_octal: bool) -> f64 {
     let start = units.iter().position(|&u| !is_str_space(u)).unwrap_or(units.len());
     let end = units.iter().rposition(|&u| !is_str_space(u)).map_or(start, |i| i + 1);
     let Some(text) = units.get(start..end) else { return f64::NAN };
@@ -251,6 +319,15 @@ pub(crate) fn string_to_number(units: &[u16]) -> f64 {
             return f64::NAN;
         }
         return crate::chars::radix_value(hex.bytes().filter_map(|b| crate::chars::hex_value(u32::from(b))), 16).unwrap_or(f64::NAN);
+    }
+    if binary_octal {
+        for (prefix, radix) in [("0b", 2), ("0B", 2), ("0o", 8), ("0O", 8)] {
+            let Some(digits) = s.strip_prefix(prefix) else { continue };
+            if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+                return f64::NAN;
+            }
+            return crate::chars::radix_value(digits.chars().filter_map(|c| c.to_digit(radix)), radix).unwrap_or(f64::NAN);
+        }
     }
     let (sign, body) = match s.as_bytes().first() {
         Some(b'+') => (1.0, &s[1..]),
@@ -359,19 +436,32 @@ mod tests {
             ("-Infinity", f64::NEG_INFINITY),
         ];
         for (s, want) in cases {
-            assert_eq!(string_to_number(&u(s)), *want, "{s:?}");
+            assert_eq!(string_to_number(&u(s), false), *want, "{s:?}");
         }
         for s in ["inf", "nan", "1_0", "0x", "1e", ".", "--1", "0x-1", "infinity", "1 2"] {
-            assert!(string_to_number(&u(s)).is_nan(), "{s:?}");
+            assert!(string_to_number(&u(s), false).is_nan(), "{s:?}");
+        }
+    }
+
+    #[test]
+    fn binary_and_octal_strings_convert_only_when_asked() {
+        for (s, want) in [("0b10", 2.0), ("0B11", 3.0), (" 0o17 ", 15.0), ("0O7", 7.0), ("0x10", 16.0), ("2", 2.0)] {
+            assert_eq!(string_to_number(&u(s), true), want, "{s:?}");
+        }
+        for s in ["0b", "0b2", "0o8", "-0b1", "+0o1", "0b1.0", "0o"] {
+            assert!(string_to_number(&u(s), true).is_nan(), "{s:?}");
+        }
+        for s in ["0b10", "0o2"] {
+            assert!(string_to_number(&u(s), false).is_nan(), "{s:?}");
         }
     }
 
     #[test]
     fn hex_strings_round_once_to_the_nearest_number() {
-        assert_eq!(string_to_number(&u("0xc83ce80553ee648")), 0xc83_ce80_553e_e648_u64 as f64);
+        assert_eq!(string_to_number(&u("0xc83ce80553ee648"), false), 0xc83_ce80_553e_e648_u64 as f64);
         // 2^136 + 2^83 + 1: a set bit past 128 bits rounds the half-way case up.
         let digits = format!("0x1{}8{}1", "0".repeat(13), "0".repeat(19));
-        assert_eq!(string_to_number(&u(&digits)), 2f64.powi(136) + 2f64.powi(84));
+        assert_eq!(string_to_number(&u(&digits), false), 2f64.powi(136) + 2f64.powi(84));
     }
 
     #[test]

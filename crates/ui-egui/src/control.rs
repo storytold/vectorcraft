@@ -171,6 +171,12 @@ pub fn inspect(app: &VectorcraftApp, ctx: &egui::Context) -> Value {
         // The display profile the canvas is drawn through, or why none (Preferences ›
         // Performance › Use Monitor Profile for Canvas).
         "displayProfile": app.display_profile.status(app.session.prefs.monitor_profile_display),
+        // With Preferences › General › Display Print Size at 100% Zoom on, the measured density of
+        // the main window's display in points per inch (null where none was measured), and the
+        // points an inch takes at 100% in the current window. Both are null with it off, when the
+        // desktop app does not measure the displays.
+        "screenPpi": app.session.prefs.display_print_size.then(|| app.services.screen_ppi.ppi()).flatten(),
+        "printPpi": app.print_ppi(),
         // Window › Arrange › Tile and its layout (not saved, so not in `ui`) and the panes the
         // last frame drew: each one's document index, view number (Window › New Window) and rect.
         // Canvas coordinates map to the current window's pane, inside its rulers and scroll bars
@@ -1442,6 +1448,10 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
             {
                 return wrap(r);
             }
+            // A script's ScriptUI dialog gives the script an event and stays open.
+            if let Some(r) = crate::dialogs::script_window::dialog_method(app, method, &params) {
+                return wrap(r);
+            }
             // `ui.dialog.set {action}` answers the dialog after setting its fields: the app's own key, which the
             // framework's method does not take.
             let action = if method == "ui.dialog.set" { params.as_object_mut().and_then(|o| o.remove("action")) } else { None };
@@ -1451,6 +1461,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
                 Some(Some("cancel")) => Some("ui.dialog.cancel"),
                 Some(_) => return err("`action` must be confirm or cancel"),
             };
+            let pdf = app.save_pdf.as_ref().map(|open| open.id).filter(|_| method == "ui.dialog.set");
             let reply = dialogs.with(|host| {
                 // The answer goes to the dialog the fields went to, even when setting them opens another over it.
                 if answer.is_some()
@@ -1459,9 +1470,18 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
                 {
                     params["dialog"] = json!(top.id.value().to_string());
                 }
+                if method == "ui.dialog.set"
+                    && let Ok(id) = craft::automation::dialogs::dialog_id(host, &params)
+                {
+                    crate::dialogs::effect::normalize_set_mode(app, id, &mut params);
+                }
                 let sets = params.as_object().is_some_and(|o| o.keys().any(|k| k != "dialog"));
                 let set = if answer.is_none() || sets {
-                    craft::automation::dialogs::dialog_method(host, ctx, method, &params)
+                    // A Save PDF settings object keeps the options it leaves out.
+                    match pdf.and_then(|id| crate::dialogs::save_pdf::set_settings_objects(host, ctx, id, &params)) {
+                        Some(set) => Some(set.map(|()| Value::Null)),
+                        None => craft::automation::dialogs::dialog_method(host, ctx, method, &params),
+                    }
                 } else {
                     Some(Ok(Value::Null))
                 };

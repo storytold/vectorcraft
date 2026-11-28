@@ -1073,6 +1073,7 @@
 	Direction:	દિશા:
 	Directives	નિર્દેશો
 	Disable Auto Add/Delete	ઑટો ઍડ/ડિલીટ બંધ કરો
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete એન્કર બિંદુઓ દૂર કરે છે અને પાથને જોડાયેલા રાખે છે
 	Interpolate Control Points When Moving Anchors	એન્કર બિંદુઓ ખસેડતી વખતે દિશા હેન્ડલ્સ ઇન્ટરપોલેટ કરો
 	Disable Opacity Mask	ઓપેસિટી માસ્ક બંધ કરો
 	Disable and Continue	બંધ કરો અને ચાલુ રાખો
@@ -1729,6 +1730,18 @@
 	Graphic Styles	ગ્રાફિક સ્ટાઇલ્સ
 	Graphic Styles Options	ગ્રાફિક સ્ટાઇલ્સ વિકલ્પો
 	Graphics	ગ્રાફિક્સ
+	Contrast	કોન્ટ્રાસ્ટ
+	Show Contrast	કોન્ટ્રાસ્ટ બતાવો
+	Contrast For	આના માટે કોન્ટ્રાસ્ટ
+	Normal Text	સામાન્ય ટેક્સ્ટ
+	Large Text	મોટું ટેક્સ્ટ
+	Contrast Background	કોન્ટ્રાસ્ટ પૃષ્ઠભૂમિ
+	Behind Selection	પસંદગીની પાછળ
+	Current Color	વર્તમાન રંગ
+	Pass	પાસ
+	Fail	નાપાસ
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 લઘુત્તમ કોન્ટ્રાસ્ટ: સામાન્ય ટેક્સ્ટ AA 4.5:1 (1.4.3) અને AAA 7:1 (1.4.6), મોટું ટેક્સ્ટ AA 3:1 અને AAA 4.5:1, ગ્રાફિક્સ અને નિયંત્રણો AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	પૃષ્ઠભૂમિ પસંદગીના કેન્દ્રમાં વાંચવામાં આવે છે.
 	Graphics Processor	ગ્રાફિક્સ પ્રોસેસર
 	Graphics: {adapter}	ગ્રાફિક્સ: {adapter}
 	Gravity	ગ્રેવિટી
@@ -2623,6 +2636,10 @@
 	One page per artboard.	દરેક આર્ટબોર્ડ માટે એક પેજ.
 	Only Web Colors	માત્ર વેબ રંગો
 	Opacity	અપારદર્શકતા
+	Show Opacity	અપારદર્શકતા બતાવો
+	Show Hex Field	Hex ફીલ્ડ બતાવો
+	Hex or CSS color	Hex અથવા CSS રંગ
+	Parse Color	રંગ પાર્સ કરો
 	Opacity & Mask Define Knockout Shape	અપારદર્શકતા અને માસ્ક નૉકઆઉટ આકાર વ્યાખ્યાયિત કરે છે
 	Opacity Mask Info	અપારદર્શકતા માસ્ક માહિતી
 	Opacity Mask Options	અપારદર્શકતા માસ્ક વિકલ્પો
@@ -3071,6 +3088,7 @@
 	Read Shortcut Set File	શોર્ટકટ સેટ ફાઇલ વાંચો
 	Read files you open in its format and make documents from them	તમે ખોલો તે ફાઇલોને તેના ફોર્મેટમાં વાંચો અને તેમાંથી દસ્તાવેજ બનાવો
 	Read the objects it is given	આપેલી ઑબ્જેક્ટ્સ વાંચો
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	આપેલી ઑબ્જેક્ટ્સ અને દસ્તાવેજની સેટિંગ્સ, આર્ટબોર્ડ, લેયર્સ અને સ્વેચ વાંચો
 	Reading the file…	ફાઇલ વાંચી રહ્યું છે…
 	Reads or sets environment variables	એન્વાયર્નમેન્ટ વેરીએબલ વાંચે કે સેટ કરે છે
 	Ready	તૈયાર
@@ -3081,6 +3099,9 @@
 	Rearrange All	બધું ફરીથી ગોઠવો
 	Rearrange All Artboards	બધા આર્ટબોર્ડ ફરીથી ગોઠવો
 	Rearrange All Artboards…	બધા આર્ટબોર્ડ ફરીથી ગોઠવો…
+	Rearrange…	ફરીથી ગોઠવો…
+	Selected Artboards: {n}	પસંદ કરેલા આર્ટબોર્ડ: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	આર્ટબોર્ડ મૂકવા કેનવાસ પર ક્લિક કરો (Esc રદ કરે છે)
 	Rearrange Artboards	આર્ટબોર્ડ ફરીથી ગોઠવો
 	Recall Selection	પસંદગી યાદ કરો
 	Recent Colors	તાજેતરના રંગો
@@ -3372,7 +3393,7 @@ arrowhead	Feather	પીંછું
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	પસંદ કરો › સમાન › ભરવાનો રંગ, સ્ટ્રોક રંગ અને ભરો અને સ્ટ્રોક ફક્ત ગ્લોબલ કે સ્પોટ સ્વૉચના એ જ ટિન્ટ સાથે મેળ ખાય છે, તેના કોઈપણ ટિન્ટ સાથે નહીં.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	કોઈ દસ્તાવેજ ખુલ્લો ન હોય ત્યારે હોમ સ્ક્રીન બતાવે છે; બંધ હોય ત્યારે તમે હોમ પર ક્લિક ન કરો ત્યાં સુધી વિન્ડો ખાલી રહે છે.
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	કદ, સ્થાન અને ગોઠવણી માટે ઑબ્જેક્ટને તેમના સ્ટ્રોક અને આકાર બદલતી ઇફેક્ટ્સ સાથે માપે છે; છાયા, ગ્લો અને બ્લર માપવામાં આવતા નથી.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% ઝૂમ પર દસ્તાવેજનો એક ઇંચ 72 ને બદલે 96 સ્ક્રીન પોઇન્ટ લે છે.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% ઝૂમ પર દસ્તાવેજનો એક ઇંચ ડિસ્પ્લેનો એક ઇંચ ભરે છે, અથવા સિસ્ટમ ડિસ્પ્લેનું ઉપયોગી કદ ન જણાવે ત્યારે 96 સ્ક્રીન પોઇન્ટ લે છે.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	પસંદગી ટૂલથી ગ્રુપ, પાથ કે છબી પર ડબલ-ક્લિક કરવાથી તે આઇસોલેશન મોડમાં ખુલે છે.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	પૅટર્ન ભરણ અને સ્ટ્રોક આર્ટવર્ક સાથે ટ્રાન્સફોર્મ થાય છે, સિવાય કે કોઈ ટ્રાન્સફોર્મ કે ટ્રાન્સફોર્મ પેનલનું મેનૂ બીજું પસંદ કરે.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	લાઇવ ખૂણાઓની ત્રિજ્યાઓ આર્ટવર્ક સાથે સ્કેલ થાય છે, સિવાય કે સ્કેલિંગ બીજું પસંદ કરે.
@@ -3383,6 +3404,7 @@ arrowhead	Feather	પીંછું
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	ટ્રેકપેડ પર બે આંગળીથી ફેરવવાનો હાવભાવ કેનવાસનું દૃશ્ય ફેરવે છે.
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	કી દબાવી રાખવાથી કીબોર્ડ શૉર્ટકટમાં તેની હોલ્ડ કૉલમનું ટૂલ અથવા કમાન્ડ ચાલે છે; ટૂંકું દબાણ તેનો સામાન્ય શોર્ટકટ ચલાવે છે.
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	કીનો હોલ્ડ શોર્ટકટ તેના સામાન્ય શોર્ટકટને બદલે ચાલે તે પહેલાં કીને કેટલી સેકન્ડ દબાવી રાખવી પડે.
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete પસંદ કરેલા એન્કર પોઇન્ટ દૂર કરે છે અને ત્યાં પાથ ખોલવાને બદલે દરેકની આસપાસ વળાંકને ફરી ગોઠવે છે.
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	જ્યારે તમે એન્કર પોઇન્ટ ખસેડો છો, ત્યારે એક ખસેલા છેડાવાળો દરેક વળાંક તેના છેડાઓની સાપેક્ષે પોતાનો આકાર જાળવે છે.
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ટૂલની શોર્ટકટ કી દબાવી રાખવાથી છોડો ત્યાં સુધી તે ટૂલ પસંદ રહે છે, પછી અગાઉનું ટૂલ ફરી પસંદ થાય છે.
 	Shows the bounding box while you move the selection or draw a shape.	તમે પસંદગી ખસેડો કે આકાર દોરો ત્યારે બાઉન્ડિંગ બોક્સ બતાવે છે.
@@ -3981,6 +4003,15 @@ arrowhead	Feather	પીંછું
 	Show East Asian Options	પૂર્વ એશિયન વિકલ્પો બતાવો
 	Show Edges	કિનારીઓ બતાવો
 	Show External Script Warning	બાહ્ય સ્ક્રિપ્ટ ચેતવણી બતાવો
+	Script File Access	સ્ક્રિપ્ટની ફાઇલ ઍક્સેસ
+	No script has kept file access.	કોઈ સ્ક્રિપ્ટ પાસે સાચવેલ ફાઇલ ઍક્સેસ નથી.
+	Read file	ફાઇલ વાંચો
+	Read and write file	ફાઇલ વાંચો અને લખો
+	Read and write folder	ફોલ્ડર વાંચો અને લખો
+	Revoke	પરવાનગી પાછી ખેંચો
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	પરવાનગી પાછી ખેંચવાથી સ્ક્રિપ્ટના દરેક સંસ્કરણ માટે સાચવેલ ઍક્સેસ દૂર થાય છે. ફોલ્ડરની ઍક્સેસમાં તેની અંદરનું બધું આવે છે.
+@msg	Script file access revoked	સ્ક્રિપ્ટની ફાઇલ ઍક્સેસ પાછી ખેંચી
+@msg	The script file access was already revoked	સ્ક્રિપ્ટની ફાઇલ ઍક્સેસ પહેલેથી પાછી ખેંચાઈ હતી
 	Show Find Field	શોધ ફીલ્ડ બતાવો
 	Show Font Height Options	ફોન્ટ ઊંચાઈ વિકલ્પો બતાવો
 	Show Font Names in English	ફોન્ટ નામો અંગ્રેજીમાં બતાવો
@@ -4338,6 +4369,8 @@ arrowhead	Feather	પીંછું
 	Tangent Circle	સ્પર્શક વર્તુળ
 	Tangent Circle Tool	સ્પર્શક વર્તુળ ટૂલ
 	No tangent circle here	અહીં કોઈ સ્પર્શક વર્તુળ નથી
+	Ask For Circle Radius	વર્તુળની ત્રિજ્યા પૂછો
+	Auto-Update Default	ડિફૉલ્ટ આપમેળે અપડેટ કરો
 	Tangent Circle…	સ્પર્શક વર્તુળ…
 	Taper	ટેપર
 	Target	લક્ષ્ય
@@ -5152,6 +5185,7 @@ antiAlias	Sharp	શાર્પ
 	Place Brush Art	બ્રશ આર્ટ પ્લેસ કરો
 	Replace Brush Art	બ્રશ આર્ટ બદલો
 	Replace Pattern Art	પેટર્ન આર્ટ બદલો
+	Place Pattern Art	પેટર્ન આર્ટ પ્લેસ કરો
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	સ્ટ્રોક્સ આ બ્રશ વાપરે છે. તે સ્ટ્રોક્સ પર નવી આર્ટ લાગુ કરવી છે કે તેમને જેમ છે તેમ રાખીને નવી આર્ટવાળી બ્રશની નકલ ઉમેરવી છે?
 	Apply to Strokes	સ્ટ્રોક્સ પર લાગુ કરો
 	Leave Strokes	સ્ટ્રોક્સ જેમ છે તેમ રાખો
@@ -5207,6 +5241,12 @@ antiAlias	Sharp	શાર્પ
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}; {size}; {detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	રિઝોલ્યુશન ઉપલબ્ધ નથી
+	estimated memory {memory}	અંદાજિત મેમરી {memory}
+	memory unavailable	મેમરી ઉપલબ્ધ નથી
+	Unknown format	અજ્ઞાત ફોર્મેટ
 	{kind}, {instances}	{kind}, {instances}
 	{kind}, {rows} × {cols}	{kind}, {rows} × {cols}
 	{grid}, {instances}	{grid}, {instances}
@@ -5264,16 +5304,20 @@ antiAlias	Sharp	શાર્પ
 anchor	Points:	પોઇન્ટ્સ:
 diagnostics	render	રેન્ડર
 diagnostics	ui	ઇન્ટરફેસ
+file-filter	Action sets	ઍક્શન સેટ
 file-filter	All placeable files	પ્લેસ કરી શકાય તેવી બધી ફાઇલો
 file-filter	All readable files	વાંચી શકાય તેવી બધી ફાઇલો
+file-filter	Composite fonts	કમ્પોઝિટ ફોન્ટ્સ
 file-filter	Export presets	એક્સપોર્ટ પ્રીસેટ્સ
 file-filter	Flattener presets	ફ્લેટનર પ્રીસેટ્સ
 file-filter	PDF presets	PDF પ્રીસેટ્સ
 file-filter	PDF-compatible .ai	PDF-સુસંગત .ai
+file-filter	Perspective grid presets	પરસ્પેક્ટિવ ગ્રિડ પ્રીસેટ્સ
 file-filter	Print presets	પ્રિન્ટ પ્રીસેટ્સ
 file-filter	SVG Compressed	સંકુચિત SVG
 file-filter	Swatch libraries	સ્વેચ લાઇબ્રેરીઓ
 file-filter	Templates	ટેમ્પ્લેટ્સ
+file-filter	Tracing presets	ટ્રેસિંગ પ્રીસેટ્સ
 file-filter	VectorCraft Template	VectorCraft ટેમ્પ્લેટ
 gradient-kind	Radial	રેડિયલ
 lighting	Light	લાઇટ
@@ -5638,6 +5682,11 @@ swatch	[Registration]	[રજિસ્ટ્રેશન]
 	No objects are selected.	કોઈ ઑબ્જેક્ટ પસંદ કરેલ નથી.
 	Open a document to mark its fold lines.	તેની ફોલ્ડ લાઇન્સ ચિહ્નિત કરવા દસ્તાવેજ ખોલો.
 	Remove Fold Line Role	લાઇન પ્રકાર દૂર કરો
+	Fold Angle	ફોલ્ડ ખૂણો
+	Set Fold Angle…	ફોલ્ડ ખૂણો સેટ કરો…
+	Set Fold Angle	ફોલ્ડ ખૂણો સેટ કરો
+	Reset Fold Angle	ફોલ્ડ ખૂણો રીસેટ કરો
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	એવી ક્રીઝ, આંશિક કટ અથવા પર્ફોરેશન લાઇન પસંદ કરો જે લૉક કે છુપાયેલી ન હોય
 	Check	ચેક કરો
 	Check Fold Lines	ફોલ્ડ લાઇન્સ ચેક કરો
 @msg	No cut lines are in the selection.	પસંદગીમાં કોઈ કટ લાઇન નથી.

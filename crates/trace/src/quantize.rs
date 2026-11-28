@@ -17,6 +17,8 @@ pub(crate) use denoise::{Source, denoise_nearest};
 pub use palette::FULL_TONE_MAX;
 use palette::{Bin, HistKey, TracedAs, Used, color_palette, flat_count, flat_palette, kmeans_1d, labs, nearest_1d, nearest_lab, nearest_library};
 #[cfg(test)]
+pub(crate) use palette::{LIBRARY_COMPARISONS, SWATCH_LOOKUPS};
+#[cfg(test)]
 pub(crate) use rare::kept_rare;
 use rare::{rare_colours, refine_around};
 

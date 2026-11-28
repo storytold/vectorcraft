@@ -158,6 +158,35 @@ fn map_art_maps_a_symbol_onto_a_surface_of_extrude_and_bevel_classic() {
     assert!(params.get("__mapArt").is_none() && params.get("__mapSurface").is_none(), "the dialog's own state stays out of the effect");
 }
 
+/// The theme's plot size, as a pass of the app's interface resolves it.
+fn plot_size() -> egui::Vec2 {
+    let mut plot = None;
+    crate::testing::ui_context()
+        .run_ui(Default::default(), |ui| {
+            let size = craft::ui::runtime::env::Env::of(ui).tokens.size.plot;
+            plot = Some(vec2(size.width, size.height));
+        })
+        .textures_delta
+        .clear();
+    plot.expect("the pass ran")
+}
+
+#[test]
+fn map_art_surface_preview_takes_the_themes_plot_size() {
+    let mut h = opened(with_symbol("M50 50L150 50L150 150L50 150Z"), json!({"effect":CLASSIC_EXTRUDE,"item":null}));
+    h.set("__page", json!("mapArt"));
+    let plot = plot_size();
+    let tree = h.fixture.tree();
+    let surface = h
+        .fixture
+        .by_role(craft::ui::contract::Role::CANVAS)
+        .into_iter()
+        .find(|t| tree.name_of(t.node) == Some("Surface"))
+        .expect("Map Art shows the surface canvas");
+    assert_eq!(surface.rect.height(), plot.y, "the preview is as tall as the theme's plot: {:?}", surface.rect);
+    assert!(surface.rect.width() >= plot.x, "the preview is at least as wide as the theme's plot: {:?}", surface.rect);
+}
+
 #[test]
 fn map_art_maps_no_more_surfaces_than_an_object_takes() {
     let max = vectorcraft_effects::MAX_MAPS;
@@ -377,6 +406,39 @@ fn the_bevel_reset_restores_the_bevel_settings_and_keeps_the_others() {
     assert_eq!(doc(&h), before);
 }
 
+/// The Bevel heading is a section named Bevel that holds its Reset, on its own line between Cap and Bevel Shape.
+#[test]
+fn the_bevel_heading_is_a_section_between_cap_and_bevel_shape() {
+    use craft::ui::contract::Role;
+    let mut h = drawn(SQUARE, EXTRUDE);
+    h.set("__page", json!("object"));
+    let (cap, reset, shape) = (h.target("Cap").rect, h.target("Reset").rect, h.target("Bevel Shape").rect);
+    let tree = h.fixture.tree();
+    let section = h.fixture.by_role(Role::GROUP).into_iter().find(|t| tree.name_of(t.node) == Some("Bevel")).map(|t| t.rect);
+    assert!(section.is_some_and(|s| s.contains_rect(reset)), "a section named Bevel holds Reset: {section:?} {reset:?}");
+    assert!(reset.top() >= cap.bottom(), "Reset is below Cap: {cap:?} {reset:?}");
+    assert!(shape.top() >= reset.bottom(), "Bevel Shape is below Reset: {reset:?} {shape:?}");
+    h.cancel();
+}
+
+/// The bevel's Repeat and Revolve's Segments are counts: their rows show no unit after the number, while Taper, a
+/// share, shows its percent sign.
+#[test]
+fn the_bevel_repeat_and_the_revolve_segments_show_no_unit() {
+    use craft::ui::patterns::form_dialogs::DialogFields;
+    use craft::ui::runtime::env::UnitKind;
+    let app = VectorcraftApp::new(Session::new(), crate::Services::default());
+    let unit = |effect: &str, page: &str, key: &str| {
+        let data = super::super::three_d::data(&app, Some(effect), &serde_json::Map::new());
+        let mut fields = DialogFields::new();
+        fields.set("__page", FieldValue::Text(page.into()));
+        super::params(&data, &fields, super::Place::Dialog).into_iter().find(|p| p.key == key).map(|p| p.unit)
+    };
+    assert_eq!(unit(EXTRUDE, "object", "bevelRepeat"), Some(None));
+    assert_eq!(unit(REVOLVE, "rotation", "segments"), Some(None));
+    assert_eq!(unit(EXTRUDE, "object", "taper"), Some(Some(UnitKind::Percent)));
+}
+
 #[test]
 fn reset_all_keeps_map_art_and_its_options() {
     let mut h = drawn(SQUARE, CLASSIC_EXTRUDE);
@@ -483,4 +545,31 @@ fn lighting_presets_cancel_restores_an_existing_custom_light_rig() {
     assert_ne!(doc(&h), before);
     h.cancel();
     assert_eq!(doc(&h), before);
+}
+
+/// The color well named Color, with the color it shows.
+fn color_well(h: &ThreeD) -> Option<String> {
+    use craft::ui::contract::Role;
+    let tree = h.fixture.tree();
+    let well = h.fixture.by_role(Role::COLOR_WELL).into_iter().find(|t| tree.name_of(t.node) == Some("Color"));
+    well.and_then(|t| tree.value_of(t.node).map(str::to_owned))
+}
+
+/// The light color of 3D and Materials and the custom shading color of 3D (Classic) show as color wells with the
+/// stored color.
+#[test]
+fn the_light_color_and_the_custom_shading_color_are_color_wells() {
+    let mut h = drawn(SQUARE, REVOLVE);
+    h.set("__page", json!("lighting"));
+    h.set("lightColor", json!("#ff8040"));
+    assert_eq!(color_well(&h).as_deref(), Some("#ff8040"), "the light color is a well that shows the light's color");
+    h.cancel();
+
+    let mut h = drawn(SQUARE, CLASSIC_EXTRUDE);
+    h.set("__page", json!("lighting"));
+    h.set("surface", json!("plastic"));
+    h.set("shadingColor", json!("custom"));
+    h.set("shadingCustom", json!("#336699"));
+    assert_eq!(color_well(&h).as_deref(), Some("#336699"), "the custom shading color is a well that shows the color");
+    h.cancel();
 }

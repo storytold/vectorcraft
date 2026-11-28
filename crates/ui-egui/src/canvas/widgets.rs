@@ -9,8 +9,9 @@ use craft::draw::ui::corner::{CornerPoint, CornerTarget};
 use craft::draw::ui::transform::TransformReach;
 use craft::draw::ui::{CornerKind, CornerWidgets, TransformBox};
 use craft::ui::canvas::canvas_space;
+use craft::ui::canvas_controls::path_runs;
 use craft::ui::contract::{Access, Bind, Common, Component, Cx, MeasureCx, PaintUi, Props as _, Role, Show as _};
-use craft::ui::primitives::{PaintShape, StrokeColor, StrokeWidth};
+use craft::ui::primitives::{DataWidth, PaintShape, StrokeColor, StrokeWidth};
 use craft::ui::style::{ComponentStyle, DataColor, StyleColor, StyleCx};
 use egui::{Color32, Pos2, Response, vec2};
 use vectorcraft_doc::{Document, LiveCorners, LiveShape, NodeId, NodeKind, OrientedBox};
@@ -20,6 +21,12 @@ use vectorcraft_tools::{blendwidget, objects_on_path, pie, sidewidget, typewidge
 use super::BodyKind;
 use crate::VectorcraftApp;
 use crate::doc_windows::Win;
+
+/// How near the pointer comes to a Live Corners widget, in screen points, for the corner it controls to be
+/// highlighted: the distance at which a press picks the widget.
+const CORNER_HOVER_REACH: f64 = 5.0;
+/// The width, in screen points, of the cut corner drawn while the pointer is over its Live Corners widget.
+const CORNER_HOVER_WIDTH: f32 = 2.0;
 
 /// The bounding box on show: the box and the layer colour it is drawn in.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -40,34 +47,34 @@ fn doc_point(p: vectorcraft_geom::Point) -> Point {
     Point::new(p.x, p.y)
 }
 
-/// Is the active tool a shape tool that is not drawing a shape? While it draws it shows none of its widgets;
-/// adjusting a widget, it shows them.
-fn shape_tool_idle(app: &VectorcraftApp) -> bool {
-    vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id()) && !(app.session.tool_busy() && !app.session.tool_transforming())
+/// Is the active tool a shape tool that is not drawing a shape, and `tool`, the tool whose widgets the canvas shows,
+/// is that tool (Cmd lends no other)? While it draws it shows none of its widgets; adjusting a widget, it shows them.
+fn shape_tool_idle(app: &VectorcraftApp, tool: &str) -> bool {
+    tool == app.session.tool_id()
+        && vectorcraft_tools::shape::shows_shape_widgets(tool)
+        && !(app.session.tool_busy() && !app.session.tool_transforming())
 }
 
 /// The bounding box to draw, if any: the Selection tool's (rotated with the objects after a rotation), also
-/// shown by the shape tools that keep a shape just drawn ready to adjust, and by Cmd held over another tool,
-/// which lends the Selection tool to a press. It hides while a drag moves, rotates or resizes the selection, so
+/// shown by the shape tools that keep a shape just drawn ready to adjust, and by Cmd held over another tool
+/// where it lends the Selection tool to a press. It hides while a drag moves, rotates or resizes the selection, so
 /// only the art is seen going with the pointer; a handle resize keeps it at the changing bounds. With General ›
 /// Show Bounding Box While Moving and Drawing on, a move draws it where the drag has moved the selection and a
 /// shape tool draws it around the shape being drawn. With Real-time Drawing off the document stays at the
 /// drag's snapshot, so a resize or a shape being drawn measures the box from the pending preview; a shape being
-/// drawn shows no box until a preview has made it. `held` is the modifiers held now; a second pass of a frame
-/// reads the same held state, which is not an event.
+/// drawn shows no box until a preview has made it. `tool` is the tool whose marks the canvas shows
+/// ([`super::shown_tool`]): while Cmd is held, the selection tool a press borrows, so the box shows only when that
+/// is the Selection tool, whose handles take the press.
 // PLAN: the sheet's `(app, st)` cannot work: `selection_box` and `deferred_transform_box` need `&mut app`, so the
 // active document is read inside.
-pub(super) fn bounding_box(app: &mut VectorcraftApp, held: egui::Modifiers) -> Option<ShownBox> {
+pub(super) fn bounding_box(app: &mut VectorcraftApp, tool: &str) -> Option<ShownBox> {
     let resizing = app.session.tool_resizing();
     let move_box = app.session.move_drag_box();
     let drawing_boxed = app.session.draws_new_shape_box();
     let follows = resizing || move_box.is_some() || drawing_boxed;
-    let selection_tool = app.session.tool_id() == "selection";
-    let shape_tool = vectorcraft_tools::shape::shows_shape_widgets(app.session.tool_id());
-    // PLAN: assumed `super::mods(egui::Modifiers, bool) -> Mods` stays at `canvas` (sheet w20).
-    let held = super::mods(held, false);
-    let lends_selection = !app.session.tool_busy() && app.session.lent_tool_id(&held) == Some("selection");
-    let show_box = (selection_tool || lends_selection || (shape_tool && (!app.session.tool_busy() || follows)))
+    let own = tool == app.session.tool_id();
+    let shape_tool = own && vectorcraft_tools::shape::shows_shape_widgets(tool);
+    let show_box = (tool == "selection" || (shape_tool && (!app.session.tool_busy() || follows)))
         && (follows || !app.session.tool_transforming())
         && app.ui.view.bounding_box;
     if !show_box {
@@ -112,21 +119,28 @@ fn corner_target(doc: &Document, id: NodeId, indices: &[usize]) -> Option<Corner
     (!corners.is_empty()).then(|| CornerTarget::new(id.0, corners, individual))
 }
 
-/// The Live Corners widgets on show, one group per layer colour so each draws in its object's colour: Selection
-/// and the shape tools on a live rectangle or polygon while Show Shape Widgets is on, Direct Selection on any
-/// path. Only the corners the tool hit-tests are listed, those within the Hide Corner Widget angle.
-// PLAN: the decision's `(.., f64)` is dropped: the corners listed are already those within the angle, so no
-// angle is left to hand on.
-pub(super) fn corners(app: &VectorcraftApp, zoom: f64) -> Option<Vec<(DataColor, Vec<CornerTarget>)>> {
-    let tool = app.session.tool_id();
+/// The Live Corners widgets `tool` shows at `zoom`: Selection and the shape tools on a live rectangle or polygon
+/// while Show Shape Widgets is on, Direct Selection on any path, within the Hide Corner Widget angle. `tool` is the
+/// tool whose widgets the canvas shows ([`super::shown_tool`]).
+fn shown_corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Option<vectorcraft_tools::corners::CornerWidgets> {
     let direct = tool == "directSelection";
-    if !(matches!(tool, "selection" | "directSelection") || shape_tool_idle(app)) {
+    if !(matches!(tool, "selection" | "directSelection") || shape_tool_idle(app, tool)) {
         return None;
     }
     let st = app.session.active()?;
     let on = app.ui.view.corner_widgets && (direct || app.ui.view.shape_widgets);
-    let shown =
-        vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, zoom, direct, on, app.session.prefs.hide_corner_widget_above)?;
+    vectorcraft_tools::corners::CornerWidgets::showing(&st.doc, &st.selection, zoom, direct, on, app.session.prefs.hide_corner_widget_above)
+}
+
+/// The Live Corners widgets on show, one group per layer colour so each draws in its object's colour: Selection
+/// and the shape tools on a live rectangle or polygon while Show Shape Widgets is on, Direct Selection on any
+/// path. Only the corners the tool hit-tests are listed, those within the Hide Corner Widget angle. `tool` is the tool
+/// whose widgets the canvas shows ([`super::shown_tool`]).
+// PLAN: the decision's `(.., f64)` is dropped: the corners listed are already those within the angle, so no
+// angle is left to hand on.
+pub(super) fn corners(app: &VectorcraftApp, tool: &str, zoom: f64) -> Option<Vec<(DataColor, Vec<CornerTarget>)>> {
+    let shown = shown_corners(app, tool, zoom)?;
+    let st = app.session.active()?;
     // `visible_on` and `corners` list the same corners in the same order: path after path.
     let mut per_path: Vec<(NodeId, Vec<usize>)> = vec![];
     for ((id, _), index) in shown.visible_on().zip(shown.corners()) {
@@ -145,6 +159,26 @@ pub(super) fn corners(app: &VectorcraftApp, zoom: f64) -> Option<Vec<(DataColor,
         }
     }
     Some(groups)
+}
+
+/// The cut of the corner whose Live Corners widget is on show within 5 screen points of `at` (the distance at which
+/// a press picks the widget), with its layer colour: what the canvas highlights under the pointer. `None` while the
+/// tool is busy or a mouse button is down (`button_down`; a pan drag leaves the tool idle), away from the widgets,
+/// and for a square corner, which has no cut. `tool` is the tool whose widgets the canvas shows.
+pub(super) fn corner_hover(
+    app: &VectorcraftApp,
+    tool: &str,
+    zoom: f64,
+    at: Option<vectorcraft_geom::Point>,
+    button_down: bool,
+) -> Option<(DataColor, vectorcraft_geom::BezPath)> {
+    if button_down || app.session.tool_busy() {
+        return None;
+    }
+    let shown = shown_corners(app, tool, zoom)?;
+    let st = app.session.active()?;
+    let (id, cut) = shown.hovered_cut(&st.doc, at?, CORNER_HOVER_REACH / zoom.max(1e-9))?;
+    Some((data_color(st.doc.layer_color(id)), cut))
 }
 
 fn corner_kind(kind: DocCornerKind) -> CornerKind {
@@ -222,11 +256,11 @@ impl ShapeWidgets {
     /// The widgets of the active document at `zoom` (screen points per document unit) under a view turned by
     /// `rotation`. `edges` is View › Show Edges: the type, side and pie widgets go with it, the blend and Objects
     /// on Path widgets are controls and stay. `shown` is the bounding box on show, which the type and side
-    /// widgets sit beside; a shape being drawn has neither.
-    fn of(app: &VectorcraftApp, edges: bool, shown: Option<&ShownBox>, zoom: f64, rotation: f64) -> Self {
+    /// widgets sit beside; a shape being drawn has neither. `tool` is the tool whose widgets the canvas shows
+    /// ([`super::shown_tool`]): while Cmd is held, the selection tool a press borrows.
+    fn of(app: &VectorcraftApp, tool: &str, edges: bool, shown: Option<&ShownBox>, zoom: f64, rotation: f64) -> Self {
         let mut marks = vec![];
         let Some(st) = app.session.active() else { return Self::new(marks) };
-        let tool = app.session.tool_id();
         let layer = |id| data_color(st.doc.layer_color(id));
         let shape_widgets = app.ui.view.shape_widgets;
         if edges {
@@ -240,7 +274,7 @@ impl ShapeWidgets {
                 }
             }
             // Pie widgets stay while one is dragged, each joined to the outline's point at its angle.
-            if app.ui.view.bounding_box && shape_widgets && (tool == "selection" || shape_tool_idle(app)) {
+            if app.ui.view.bounding_box && shape_widgets && (tool == "selection" || shape_tool_idle(app, tool)) {
                 for w in pie::PieWidget::of(&st.doc, &st.selection, zoom) {
                     marks.push(Mark::new(Form::Disc, Filling::Hollow, w.at, pie::RADIUS_PX, layer(w.id)).joined(w.on));
                 }
@@ -275,7 +309,7 @@ impl ShapeWidgets {
     }
 
     fn new(marks: Vec<Mark>) -> Self {
-        ShapeWidgets { common: Common::new(), marks }.label("Shape widgets")
+        ShapeWidgets { common: Common::new(), marks }.label(tl!("Shape widgets"))
     }
 }
 
@@ -334,7 +368,66 @@ impl Component for ShapeWidgets {
     }
 
     fn access(&self, access: &mut Access, _: &Cx<'_, Self>) {
-        access.description("Shape widgets");
+        access.description(tl!("Shape widgets"));
+    }
+
+    fn finish(self, cx: Cx<'_, Self>) -> Response {
+        cx.response.clone()
+    }
+}
+
+/// The cut of the corner whose Live Corners widget the pointer is over, drawn under the widgets in its layer colour
+/// as one paint-only canvas control.
+#[derive(craft::ui::contract::Component, craft::ui::contract::Props)]
+#[component(canvas_control)]
+pub struct CornerHover {
+    #[common]
+    common: Common,
+    cut: vectorcraft_geom::BezPath,
+    color: DataColor,
+}
+
+impl CornerHover {
+    fn new(cut: vectorcraft_geom::BezPath, color: DataColor) -> Self {
+        CornerHover { common: Common::new(), cut, color }.label("Corner highlight")
+    }
+}
+
+/// The style of the corner highlight.
+#[derive(Clone, Debug, PartialEq, ComponentStyle)]
+#[non_exhaustive]
+pub struct CornerHoverStyle {
+    #[style(metrics)]
+    metrics: Metrics,
+}
+
+impl Component for CornerHover {
+    const ROLE: Role = Role::GRAPHICS_OBJECT;
+    const INPUT: Input = Input::Display;
+    const PARTS: bool = false;
+    const STOPS: bool = false;
+    const OVERLAYS: bool = false;
+    type Style = CornerHoverStyle;
+    type Output = Response;
+
+    fn style(_: &StyleCx<'_>, _: CornerHoverStyleKey) -> CornerHoverStyle {
+        CornerHoverStyle { metrics: Metrics::new() }
+    }
+
+    fn measure(&mut self, _: &MeasureCx<'_, Self>) -> egui::Vec2 {
+        egui::Vec2::ZERO
+    }
+
+    fn paint(&mut self, ui: &mut PaintUi<'_>, cx: &Cx<'_, Self>) {
+        let Some(space) = canvas_space(&cx.env) else { return };
+        let draw = ui.draw();
+        for (points, _) in path_runs(&space.view, &self.cut) {
+            draw.stroke(&PaintShape::Path(points), DataWidth::points(CORNER_HOVER_WIDTH), StrokeColor::Data(self.color));
+        }
+    }
+
+    fn access(&self, access: &mut Access, _: &Cx<'_, Self>) {
+        access.description("Corner highlight");
     }
 
     fn finish(self, cx: Cx<'_, Self>) -> Response {
@@ -353,16 +446,24 @@ pub(super) fn show(app: &mut VectorcraftApp, ui: &mut egui::Ui, space: &craft::u
     // PLAN: assumed the body's rect is the canvas rect the controls are shown at.
     let rect = ui.max_rect();
     let edges = app.ui.view.edges;
-    let shown = if edges { bounding_box(app, ui.input(|i| i.modifiers)) } else { None };
+    // While Cmd is held, the widgets of the selection tool a press borrows.
+    let tool = super::shown_tool(app, ui.ctx());
+    let shown = if edges { bounding_box(app, tool) } else { None };
     if edges {
-        for (at, (color, targets)) in corners(app, space.view.zoom).into_iter().flatten().enumerate() {
+        // The pointer of this pass: `hover_doc` is only set after the canvas body has been shown.
+        let (pointer, button_down) = ui.input(|i| (i.pointer.hover_pos(), i.pointer.any_down()));
+        let at = pointer.filter(|_| ui.rect_contains_pointer(rect)).map(|p| space.view.to_doc(p));
+        if let Some((color, cut)) = corner_hover(app, tool, space.view.zoom, at, button_down) {
+            CornerHover::new(cut, color).show_at(ui, rect);
+        }
+        for (at, (color, targets)) in corners(app, tool, space.view.zoom).into_iter().flatten().enumerate() {
             CornerWidgets::new("Live Corners", Bind::given(targets)).id_salt(at).reach(TransformReach::Shown).color(color).show_at(ui, rect);
         }
         if let Some(b) = &shown {
             show_box(ui, rect, b);
         }
     }
-    let widgets = ShapeWidgets::of(app, edges, shown.as_ref(), space.view.zoom, space.view.rotation);
+    let widgets = ShapeWidgets::of(app, tool, edges, shown.as_ref(), space.view.zoom, space.view.rotation);
     if !widgets.marks.is_empty() {
         widgets.show_at(ui, rect);
     }

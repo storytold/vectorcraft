@@ -1147,8 +1147,23 @@ fn embeds_glyphs(f: &Dict<'_>) -> bool {
 /// found are noted in `fonts` (their cache key → base font name, and whether the file carries its
 /// glyphs).
 pub(crate) fn scan_page(page: &Page<'_>, ocgs: &mut Ocgs, all_on: bool, fonts: &mut FontNames, max_form_bytes: usize) -> Result<Scan, PdfError> {
-    let scan = walk_page(page, ocgs, all_on, fonts, max_form_bytes).out;
+    let walked = walk_page(page, ocgs, all_on, fonts, max_form_bytes);
+    #[cfg(any(test, feature = "read-count"))]
+    FORM_CONTENT_WALKED.with(|n| n.set(n.get().saturating_add(walked.form_content)));
+    let scan = walked.out;
     if scan.cut { Err(incomplete_content()) } else { Ok(scan) }
+}
+
+#[cfg(any(test, feature = "read-count"))]
+thread_local! {
+    /// The bytes of form content [`scan_page`] walked on this thread (tests).
+    pub(crate) static FORM_CONTENT_WALKED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The bytes of form content a page's scan walks before it refuses the page (tests).
+#[cfg(any(test, feature = "read-count"))]
+pub fn form_content_limit() -> usize {
+    MAX_FORM_CONTENT
 }
 
 pub(crate) fn walk_page<'w, 'p>(

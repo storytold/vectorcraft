@@ -939,6 +939,32 @@ fn saved_color_settings_that_cannot_be_used_leave_the_defaults() {
     }
 }
 
+/// With a working RGB space other than sRGB, `color.contrast` writes the background in working RGB,
+/// the form `against` takes: a given brown comes back as it was given, and the background read
+/// behind the selection, given back, answers the same ratio.
+#[test]
+fn contrast_writes_the_background_as_against_takes_it_with_another_working_space() {
+    let _g = settings();
+    let before = cms::active_settings();
+    let mut s = session();
+    exec(&mut s, "edit.colorSettings", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    let given = s.execute("color.contrast", &json!({"color": "#000000", "against": "#806040"}));
+    exec(&mut s, "file.new", json!({"width": 200, "height": 200}));
+    exec(&mut s, "shape.rectangle", json!({"x": 20, "y": 20, "width": 80.3, "height": 160}));
+    exec(&mut s, "paint.setFill", json!({"color": "#2050a0"}));
+    exec(&mut s, "object.lock", json!({}));
+    exec(&mut s, "shape.rectangle", json!({"x": 50, "y": 50, "width": 100, "height": 100}));
+    exec(&mut s, "paint.setFill", json!({"color": "#808080"}));
+    let below = s.execute("color.contrast", &json!({}));
+    let again = below.as_ref().ok().and_then(|b| s.execute("color.contrast", &json!({"against": b["against"].clone()})).ok());
+    cms::set_active(&before).unwrap();
+    let given = given.unwrap();
+    assert_eq!(given["against"], "#806040", "{given}");
+    let (below, again) = (below.unwrap(), again.unwrap());
+    assert_eq!(below["against"], again["against"], "{below} {again}");
+    assert!((below["ratio"].as_f64().unwrap() - again["ratio"].as_f64().unwrap()).abs() < 1e-9, "{below} {again}");
+}
+
 /// View › Proof Setup › Customize's Preserve CMYK Numbers proofs each color from its own inks:
 /// with Device CMYK as the working space, C50 M50 Y50 and K50 show as the same gray, and on
 /// VectorCraft Generic CMYK they print, and so proof, as different grays; a pattern's tile art
@@ -1205,6 +1231,23 @@ fn color_management_policies_are_checked_and_kept() {
     let mut next = Session::new();
     next.attach_color_settings(file);
     assert_eq!(cms::active_settings(), cms::ColorSettings::default());
+}
+
+/// `color.parse` takes `oklch()` only while the working RGB space is sRGB; a hex color still gives
+/// its numbers as the document's RGB numbers in another working space.
+#[test]
+fn color_parse_takes_oklch_only_in_an_srgb_working_space() {
+    let _g = settings();
+    let old = cms::active_settings();
+    let mut s = session();
+    s.execute("edit.colorSettings", &json!({"rgb": cms::WIDE_GAMUT_RGB})).unwrap();
+    let oklch = s.execute("color.parse", &json!({"text": "oklch(0.6 0.1 30)"})).map_err(|e| e.to_string());
+    let hex = s.execute("color.parse", &json!({"text": "#33669980"})).map_err(|e| e.to_string());
+    cms::set_active(&old).unwrap();
+    assert!(oklch.as_ref().unwrap_err().ends_with("OKLCH needs sRGB as the working RGB space"), "{oklch:?}");
+    let hex = hex.unwrap();
+    assert_eq!((&hex["hex"], &hex["opacity"]), (&json!("#336699"), &json!(50.2)));
+    assert!(s.execute("color.parse", &json!({"text": "oklch(0.6 0.1 30)"})).is_ok(), "sRGB again");
 }
 
 /// The Ask boxes of Edit › Color Settings are checked, come back in the reply and are kept in
@@ -1763,6 +1806,37 @@ fn paste_on_all_artboards_leaves_artboard_backgrounds_out() {
     assert_eq!(models(&mut s, json!({})), 1, "a plain paste brings the RGB background");
     assert_eq!(models(&mut s, json!({"allArtboards": true})), 0);
     assert!(s.execute("clipboard.profileMismatch", &json!({"allArtboards": "yes"})).is_err());
+    let r = exec(&mut s, "edit.pasteOnAllArtboards", json!({"profileMismatch": "convert"}));
+    assert!(r.get("profileMismatch").is_none(), "{r}");
+}
+
+/// The swatch conflicts Paste on All Artboards raises leave copied artboard backgrounds out, as the
+/// paste does: pasting back into the document the objects came from, where only the RGB background
+/// of the copied artboard now has another profile, converts nothing for it, so its edited CMYK
+/// swatch raises no conflict. A plain paste, which brings the background and converts it, compares
+/// the swatches and lists the edited one.
+#[test]
+fn swatch_conflicts_on_all_artboards_leave_artboard_backgrounds_out() {
+    let _g = settings();
+    let _reset = ColorSettingsReset { profile: None, paths: vec![] };
+    let mut s = session();
+    exec(&mut s, "swatch.new", json!({"name": "Brand", "color": {"c": 20, "m": 40, "y": 60, "k": 10}, "global": true}));
+    let ink = rect(&mut s, 0.0, 0.0, 10.0, 10.0);
+    exec(&mut s, "paint.setFill", json!({"ids": [ink.0], "swatch": "Brand"}));
+    exec(&mut s, "paint.setStroke", json!({"ids": [ink.0], "none": true}));
+    exec(&mut s, "artboard.setProps", json!({"index": 0, "color": "#3366cc"}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": cms::WIDE_GAMUT_RGB}));
+    exec(&mut s, "artboard.copy", json!({"index": 0}));
+    exec(&mut s, "edit.assignProfile", json!({"rgb": null}));
+    exec(&mut s, "swatch.edit", json!({"name": "Brand", "color": {"c": 60, "m": 40, "y": 20, "k": 0}}));
+    let conflicts = |s: &mut Session, p: serde_json::Value| exec(s, "clipboard.conflicts", p)["swatches"].as_array().unwrap().len();
+    assert_eq!(conflicts(&mut s, json!({"profileMismatch": "convert"})), 1, "a plain paste converts the RGB background");
+    assert_eq!(conflicts(&mut s, json!({"profileMismatch": "convert", "allArtboards": true})), 0);
+    assert_eq!(conflicts(&mut s, json!({"profileMismatch": "convert", "allArtboards": false})), 1);
+    assert_eq!(conflicts(&mut s, json!({"profileMismatch": "convert", "allArtboards": null})), 1, "null is the default");
+    for bad in [json!("yes"), json!(1)] {
+        assert!(s.execute("clipboard.conflicts", &json!({ "allArtboards": bad })).is_err(), "{bad}");
+    }
     let r = exec(&mut s, "edit.pasteOnAllArtboards", json!({"profileMismatch": "convert"}));
     assert!(r.get("profileMismatch").is_none(), "{r}");
 }

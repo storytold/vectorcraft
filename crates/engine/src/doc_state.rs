@@ -3,6 +3,44 @@ use super::history::{History, HistoryEntry};
 use super::interaction::{Interaction, LastTransform, UndoGroup};
 use super::{Arc, Document, NodeId, NodeKind, Selection, Value, cmd, file_access};
 
+/// A document's window as the desktop app shows it ([`crate::Session::window_views`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowView {
+    /// The document point at the centre of the canvas.
+    pub center: vectorcraft_geom::Point,
+    /// The zoom is 1 at the window's displayed 100%.
+    pub zoom: f64,
+    /// The camera uses this scale at the window's displayed 100%.
+    pub zoom_baseline: f64,
+    /// The view's rotation in degrees, clockwise on screen.
+    pub rotation: f64,
+    /// The canvas's width and height in document points at a zoom of 1.
+    pub size: [f64; 2],
+    /// View › Screen Mode: 0 Normal, 1 Full Screen Mode with Menu Bar, 2 Full Screen Mode, 3
+    /// Presentation Mode (`view.screenMode`).
+    pub screen_mode: u8,
+}
+
+impl WindowView {
+    /// The physical camera scale stays within these limits.
+    pub const ZOOM_RANGE: (f64, f64) = (0.0313, 640.0);
+
+    /// `zoom_range` returns this window's allowed displayed zoom ratios.
+    pub fn zoom_range(&self) -> (f64, f64) {
+        let (min, max) = Self::ZOOM_RANGE;
+        (min / self.zoom_baseline, max / self.zoom_baseline)
+    }
+
+    /// The part of the document the canvas shows: the box around its four corners, which a
+    /// rotated view turns.
+    pub fn visible(&self) -> vectorcraft_geom::Rect {
+        let (sin, cos) = self.rotation.to_radians().sin_cos();
+        let (w, h) = (self.size[0] / self.zoom / 2.0, self.size[1] / self.zoom / 2.0);
+        let (x, y) = (w * cos.abs() + h * sin.abs(), w * sin.abs() + h * cos.abs());
+        vectorcraft_geom::Rect::new(self.center.x - x, self.center.y - y, self.center.x + x, self.center.y + y)
+    }
+}
+
 /// Per-document editing state.
 #[derive(Clone, Debug)]
 pub struct DocState {
@@ -53,6 +91,9 @@ pub struct DocState {
     pub interaction: Option<Interaction>,
     /// Edits made while this is open are one undo step (a scrubbed numeric field).
     pub undo_group: Option<UndoGroup>,
+    /// The built-in effect the edit in progress applies ([`crate::Session::edit_effect`]): the
+    /// undo step it records keeps it ([`DocState::push_undo`]).
+    pub(crate) effect_step: Option<&'static str>,
     /// For Object → Transform → Transform Again (⌘D): what the last transformation was. A
     /// transform command keeps the `copy`, `typeAreas` and `patterns` it used, and `strokes` and
     /// `corners` when it scales; a drag keeps the params of its last preview with the values that
@@ -66,11 +107,17 @@ pub struct DocState {
     pub recalled_selection: RecalledSelection,
     /// Process-unique id of this open document (tab indices shift when tabs close).
     pub uid: u64,
+    /// When the document last became the current one: a larger value is more recent
+    /// ([`Session::front_order`]). It is not saved.
+    pub(crate) activated: u64,
     /// How many times File → Revert replaced the document's content in its tab
     /// ([`Session::replace_document`]). Work started for the document (a file read for Place, a
     /// pasted bitmap) is dropped when this has changed by the time it finishes; edits do not
     /// change it, and a batch that fails puts it back with the document.
     pub reverts: u64,
+    /// Advances when Undo or Redo restores an older document snapshot. The same node ID can name different objects
+    /// across that boundary.
+    pub history_restores: u64,
     /// Preferences › User Interface › Open Documents As Tabs when the document opened: cleared,
     /// the UI opens it in a floating window of its own.
     pub opened_as_tab: bool,
@@ -129,6 +176,11 @@ pub struct DocState {
     /// paths the document links to are looked at within them later too, when the Links panel
     /// asks about a link outside any caller's scope.
     pub opened_by: Option<Arc<file_access::AutomationRoots>>,
+    /// What the commands scripts ran did to the document since the person last opened or saved it:
+    /// `None` when they did nothing. The commands a script runs read and write the document's file,
+    /// and read the files it links to, only as the person left them ([`DocState::as_person_left`]).
+    /// Not saved.
+    pub(crate) by_script: Option<ByScript>,
     /// The live-effect plug-in stages deferred while the document is drawn on screen, and the time
     /// budget of its first view ([`vectorcraft_plugins::deferred`]). Not saved.
     pub plugin_effects: vectorcraft_plugins::deferred::Deferrals,
@@ -145,6 +197,77 @@ pub struct DocState {
     /// measured: the next refresh checks only the layer trees that differ from it
     /// ([`cmd::inline::refresh`]). Not saved.
     pub(crate) inline_resolved: Option<cmd::inline::Resolved>,
+    /// The selected objects as [`crate::Session::select`] last checked them or the proxies last
+    /// read them, with the document they were checked in ([`SelectionRecord`]). Not saved.
+    pub(crate) selection_record: Option<SelectionRecord>,
+}
+
+/// A selection of objects alone ([`objects_only`]) with the document it was checked or read in:
+/// while the document and the selected objects stay the same, a command that adds objects checks
+/// and reads only the added ones.
+#[derive(Clone, Debug)]
+pub(crate) struct SelectionRecord {
+    /// The document, held as [`EmptyArtboards::doc`] holds it.
+    pub(crate) doc: std::sync::Weak<Document>,
+    pub(crate) objects: Vec<NodeId>,
+    /// Lock Guides as it was when [`crate::Session::select`] left these objects selected; `None`
+    /// when it did not.
+    pub(crate) settled: Option<bool>,
+    /// What the proxies read from these objects; `None` when they were not read.
+    pub(crate) paints: Option<cmd::SelectionPaints>,
+}
+
+/// Whether `sel` holds selected objects and nothing else: no anchors, segments, key, target,
+/// slices, ruler guides, object of a symbol instance's art or object on a path.
+pub(crate) fn objects_only(sel: &Selection) -> bool {
+    sel.anchors.is_empty()
+        && sel.segments.is_empty()
+        && sel.key.is_none()
+        && sel.target.is_none()
+        && sel.slices.is_empty()
+        && sel.guides.is_empty()
+        && sel.key_guide.is_none()
+        && sel.key_anchor.is_none()
+        && sel.symbol_part.is_none()
+        && sel.on_path_member.is_none()
+}
+
+/// How `after` starts with objects of `before` kept in their order: → how many objects of `after`
+/// do, and the objects of `before` that are not among them, in order.
+pub(crate) fn kept_from(before: &[NodeId], after: &[NodeId]) -> (usize, Vec<NodeId>) {
+    let (mut at, mut kept, mut removed) = (0, 0, Vec::new());
+    for id in after {
+        let Some(i) = before[at..].iter().position(|b| b == id) else { break };
+        removed.extend_from_slice(&before[at..at + i]);
+        at += i + 1;
+        kept += 1;
+    }
+    removed.extend_from_slice(&before[at..]);
+    (kept, removed)
+}
+
+/// The objects of `ids` that are not in `of`, each named once, in order.
+fn left_out(ids: &[NodeId], of: &[NodeId]) -> Vec<NodeId> {
+    if ids.is_empty() {
+        return vec![];
+    }
+    let mut out: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+    for id in of {
+        out.remove(id);
+    }
+    let mut seen = std::collections::HashSet::new();
+    ids.iter().copied().filter(|id| out.contains(id) && seen.insert(*id)).collect()
+}
+
+/// What the commands scripts ran did to an open document since the person last opened or saved it
+/// ([`DocState::by_script`]).
+#[derive(Clone, Debug)]
+pub(crate) enum ByScript {
+    /// A command a script ran opened it (or made it).
+    Opened,
+    /// A command a script ran changed it or gave it another file: the document, its file and the
+    /// file it was read from as they were before the first such command.
+    Changed { doc: Arc<Document>, path: Option<String>, links_from: Option<String> },
 }
 
 /// Whether a document has an artboard for Delete Empty Artboards to delete, with the document that
@@ -361,11 +484,14 @@ impl DocState {
             symbol_edit_return: Default::default(),
             interaction: None,
             undo_group: None,
+            effect_step: None,
             last_transform: None,
             last_selection_cmd: None,
             recalled_selection: RecalledSelection::default(),
             uid: NEXT_DOC_UID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            activated: 0,
             reverts: 0,
+            history_restores: 0,
             opened_as_tab: true,
             mask_view: None,
             spelling_ignored: Default::default(),
@@ -385,11 +511,88 @@ impl DocState {
             links_from: None,
             last_perspective: None,
             opened_by: file_access::current(),
+            by_script: None,
             empty_artboards: Default::default(),
             plugin_effects: Default::default(),
             art_to_fit: Default::default(),
             measured_in_own: None,
             inline_resolved: None,
+            selection_record: None,
+        }
+    }
+    /// The [`SelectionRecord`] of the selection now: `None` when the document or the selected
+    /// objects changed since it was made, or when anything besides whole objects is selected
+    /// ([`objects_only`]). Only a new [`Document`] makes the record stale: the document's new art
+    /// is the one state that changes in place and matters to it, and [`crate::Session::select`]
+    /// checks the whole selection while there is new art.
+    pub(crate) fn selection_record(&self) -> Option<&SelectionRecord> {
+        self.selection_record
+            .as_ref()
+            .filter(|r| std::ptr::eq(r.doc.as_ptr(), Arc::as_ptr(&self.doc)) && objects_only(&self.selection) && r.objects == self.selection.objects)
+    }
+    /// What the proxies read from the selected objects, when the [`SelectionRecord`] of the
+    /// selection now holds it.
+    pub(crate) fn selection_paints(&self) -> Option<&cmd::SelectionPaints> {
+        self.selection_record().and_then(|r| r.paints.as_ref())
+    }
+    /// Keep the [`SelectionRecord`] of the selection that [`crate::Session::select`] left, with
+    /// Lock Guides `guides_locked`. `record` is the record of the selection before, in the same
+    /// document: the objects that leave the selection are taken out of its paints and the objects
+    /// that join it are read into them, unless that reads more objects than reading the selection
+    /// again would, counting the contents of groups and containers on both sides
+    /// ([`cmd::SelectionPaints::reads_no_more_than`]), or the paints left can't be told apart
+    /// without reading them again.
+    pub(crate) fn record_selection(&mut self, record: Option<SelectionRecord>, guides_locked: bool) {
+        if !objects_only(&self.selection) {
+            self.selection_record = None;
+            return;
+        }
+        let objects = &self.selection.objects;
+        self.selection_record = Some(match record {
+            Some(mut r) => {
+                if let Some(p) = &mut r.paints {
+                    let (kept, removed) = kept_from(&r.objects, objects);
+                    let gone = left_out(&removed, objects);
+                    let joined = left_out(&objects[kept..], &r.objects);
+                    let changed = [gone.as_slice(), joined.as_slice()].concat();
+                    if !cmd::SelectionPaints::reads_no_more_than(&self.doc, &changed, objects) || !p.remove(&self.doc, &gone) {
+                        r.paints = None;
+                    } else {
+                        p.add(&self.doc, &joined);
+                    }
+                }
+                r.objects.clone_from(objects);
+                r.settled = Some(guides_locked);
+                r
+            }
+            None => SelectionRecord { doc: Arc::downgrade(&self.doc), objects: objects.clone(), settled: Some(guides_locked), paints: None },
+        });
+    }
+
+    /// The document, its file and the file it was read from as the person last left them, for the
+    /// commands scripts run ([`DocState::by_script`]): `None` for a document a script's command
+    /// opened.
+    pub(crate) fn as_person_left(&self) -> Option<(&Arc<Document>, Option<&str>, Option<&str>)> {
+        match &self.by_script {
+            None => Some((&self.doc, self.path.as_deref(), self.links_from.as_deref())),
+            Some(ByScript::Opened) => None,
+            Some(ByScript::Changed { doc, path, links_from }) => Some((doc, path.as_deref(), links_from.as_deref())),
+        }
+    }
+
+    /// Notes what a command a script ran did to the document, which was `was` (the document, its
+    /// file and the file it was read from) before the command ran, or not open when `was` is
+    /// `None`. The first change is kept until the person saves the document.
+    pub(crate) fn note_script_command(&mut self, was: Option<(&Arc<Document>, &Option<String>, &Option<String>)>) {
+        if self.by_script.is_some() {
+            return;
+        }
+        let Some((doc, path, links_from)) = was else {
+            self.by_script = Some(ByScript::Opened);
+            return;
+        };
+        if !Arc::ptr_eq(doc, &self.doc) || *path != self.path || *links_from != self.links_from {
+            self.by_script = Some(ByScript::Changed { doc: doc.clone(), path: path.clone(), links_from: links_from.clone() });
         }
     }
     /// `measure`'s answer for the document now. `measure` runs once for each version of the document,
@@ -478,7 +681,9 @@ impl DocState {
                 Some(l) if l.selection == it.selection => l.selection.clone(),
                 _ => it.selection,
             };
+            let effect = std::mem::replace(&mut self.effect_step, it.effect);
             self.push_undo(it.label, it.doc, selection);
+            self.effect_step = effect;
             if let Some(paints) = it.color_mode_paints
                 && let Some(e) = self.history.undo.last_mut()
             {
@@ -494,8 +699,10 @@ impl DocState {
     }
     /// Record an undo step: `doc` and `selection` as they were before an edit (the document now is
     /// the one after it). In an undo group only the group's first edit records one: the edits
-    /// after it extend that step.
+    /// after it extend that step. A new step named after the effect in [`DocState::effect_step`]
+    /// keeps that effect ([`HistoryEntry::effect`]); a step an undo group names keeps none.
     pub(crate) fn push_undo(&mut self, mut label: String, doc: Arc<Document>, selection: Arc<Selection>) {
+        let mut effect = self.effect_step;
         if let Some(g) = &mut self.undo_group {
             let recorded = |first: &Arc<Document>| self.history.undo.last().is_some_and(|l| Arc::ptr_eq(&l.doc, first));
             if g.first.as_ref().is_some_and(recorded) {
@@ -506,9 +713,11 @@ impl DocState {
             g.first = Some(doc.clone());
             if let Some(l) = &g.label {
                 label = l.clone();
+                effect = None;
             }
         }
-        let e = HistoryEntry::kept(label, doc, selection, &self.doc);
+        let mut e = HistoryEntry::kept(label, doc, selection, &self.doc);
+        e.effect = effect.filter(|id| crate::history::effect_step_label(id) == Some(e.label.as_str()));
         self.history.undo.push(e);
         self.history.clear_redo();
         self.history.trim();
@@ -524,6 +733,32 @@ impl DocState {
             self.layer_rows = it.layer_rows;
             self.variables_highlight = it.variables_highlight;
             self.isolation = it.isolation;
+            self.revision += 1;
+        }
+    }
+    /// End isolation mode when the isolated object is no longer in the document (an edit deleted,
+    /// cut, ungrouped or replaced it, or Undo or Redo took it out, such as the clip group Draw
+    /// Inside made around it, #3705), rather than naming an id a later object may take. While
+    /// opacity mask, pattern or symbol editing is on, isolation goes back to that mode's editing
+    /// layer.
+    pub(crate) fn leave_isolation_if_gone(&mut self) {
+        if self.isolation.is_some_and(|i| self.doc.node(i).is_none()) {
+            let d = &self.doc;
+            let layer = d.mask_edit.map(|e| e.layer).or(d.pattern_edit.as_ref().map(|e| e.layer)).or(d.symbol_edit.as_ref().map(|e| e.layer));
+            self.isolation = layer.filter(|l| d.node(*l).is_some());
+            self.revision += 1;
+        }
+    }
+    /// After the document went back from `undone` to a state from when `before` was isolated (a
+    /// canceled undo group or undo scope, an interaction's next preview): `before` is isolated
+    /// again when the edits taken back had removed it.
+    pub(crate) fn restore_isolation(&mut self, before: Option<NodeId>, undone: &Document) {
+        if let Some(b) = before
+            && self.isolation != before
+            && undone.node(b).is_none()
+            && self.doc.node(b).is_some()
+        {
+            self.isolation = before;
             self.revision += 1;
         }
     }

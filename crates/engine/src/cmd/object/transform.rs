@@ -16,7 +16,27 @@ fn origin_of(s: &Session, p: &Value, ids: &[NodeId]) -> Result<Point> {
     {
         return Ok(b.center());
     }
-    s.transform_box(ids).map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()))
+    // Selected ruler guides transform with the selection (not with objects named by `ids`, nor
+    // with Transform Objects off), so the center is that of the objects' box and the guides'
+    // lines together.
+    let guides = if p.get("ids").is_none_or(Value::is_null) && transforms_objects(p) { editable_guides(s)? } else { vec![] };
+    let boxed = s.transform_box(ids);
+    if guides.is_empty() {
+        return boxed.map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()));
+    }
+    let objects = boxed.map(|b| {
+        let c = b.corners();
+        c.iter().fold(Rect::from_points(c[0], c[0]), |r, p| r.union_pt(*p))
+    });
+    let lines = guides.into_iter().filter_map(|g| st.doc.guide_line(&g)).map(|(a, b)| Rect::from_points(a, b));
+    let b = lines.fold(objects, |acc, r| Some(acc.map_or(r, |acc| acc.union(r))));
+    b.map(|b| b.center()).ok_or_else(|| EngineError::Other("selection has no bounds".into()))
+}
+
+/// The selected ruler guides that a transform changes: those that can be edited.
+fn editable_guides(s: &Session) -> Result<Vec<vectorcraft_doc::Guide>> {
+    let st = s.doc()?;
+    Ok(st.selection.guides.iter().filter_map(|id| st.doc.ruler_guide(*id)).filter(|g| st.doc.guide_editable(g)).collect())
 }
 
 /// What a transform command scales besides geometry: Scale Strokes & Effects and Scale Corners from
@@ -43,20 +63,31 @@ pub(super) fn scaling_options(s: &Session, p: &Value) -> Scaling {
 }
 
 /// Transform Patterns: do the pattern fills and strokes of `ids` transform with them (`patterns`
-/// param, else General › Transform Pattern Tiles)? Noted in the journal when they use a pattern,
-/// so a replay moves their tiles alike whatever the preference is then.
+/// param, else General › Transform Pattern Tiles)? Noted in the journal when they or the art of
+/// their linked opacity masks use a pattern, so a replay moves their tiles alike whatever the preference is then.
 pub(crate) fn transform_patterns(s: &mut Session, p: &Value, ids: &[NodeId]) -> Result<bool> {
     let on = bool_or(p, "patterns", s.prefs.transform_pattern_tiles);
     let d = &s.doc()?.doc;
     let mut uses = false;
     let paths = d.index_paths(ids.iter().copied());
     for n in ids.iter().filter_map(|id| paths.get(id)).filter_map(|p| d.node_at(p)) {
-        n.walk(&mut |c| uses |= vectorcraft_doc::pattern::uses_pattern(c, None));
+        uses |= uses_pattern_with_masks(n);
     }
     if uses {
         s.note_journal("patterns", json!(on));
     }
     Ok(on)
+}
+
+/// Whether `n`, a descendant or the art of a linked opacity mask among them (and theirs) has a
+/// pattern fill or stroke: what Transform Patterns moves when `n` is transformed.
+fn uses_pattern_with_masks(n: &vectorcraft_doc::Node) -> bool {
+    let mut uses = false;
+    n.walk(&mut |c| {
+        uses |= vectorcraft_doc::pattern::uses_pattern(c, None)
+            || c.extras().mask.as_deref().is_some_and(|m| m.linked && uses_pattern_with_masks(&m.art));
+    });
+    uses
 }
 
 /// Transform Objects (`objects` param, on unless it is false): off, a transform leaves the art
@@ -125,8 +156,18 @@ fn apply_transform_moving_guides(
     let c = xf.as_coeffs();
     let is_translation = (c[0] - 1.0).abs() < 1e-9 && c[1].abs() < 1e-9 && c[2].abs() < 1e-9 && (c[3] - 1.0).abs() < 1e-9;
     let delta = guides.unwrap_or(Vec2::new(c[4], c[5]));
-    let with_guides = objects && p.get("ids").is_none_or(Value::is_null) && is_translation;
-    let has_guides = with_guides && !s.doc()?.selection.guides.is_empty();
+    // The selected ruler guides transform with the selection: a move moves them, and any other
+    // transform maps the line each one stands for ([`Document::transform_ruler_guides`]).
+    let with_guides = objects && p.get("ids").is_none_or(Value::is_null);
+    // A transform that leaves every guide where it is (a scale of a guide along its own line)
+    // changes no guide; with a copy, the guides are copied all the same.
+    let has_guides = with_guides && {
+        let d = &s.doc()?.doc;
+        let same = |g: &vectorcraft_doc::Guide| {
+            d.transformed_guide(g, xf) == Some(vectorcraft_doc::GuideTransform::Ruler { vertical: g.vertical, pos: g.pos })
+        };
+        editable_guides(s)?.iter().any(|g| is_translation || copy || !same(g))
+    };
     // A transform of ids that name no object, or an identity transform without a copy, moves
     // nothing: the document and its undo history stay as they are, and Transform Again repeats it.
     // With a copy, the reply lists the copies, and there are none.
@@ -142,8 +183,9 @@ fn apply_transform_moving_guides(
         if c[..4] == [1.0, 0.0, 0.0, 1.0] {
             interpolate = Some(crate::cmd::path::interpolates_handles(s, p, label)?);
         }
+        let mut ids = ids;
         if xf != Affine::IDENTITY {
-            crate::cmd::path::transform_anchors(s, label, xf, sc, interpolate.unwrap_or(false))?;
+            ids.extend(crate::cmd::path::transform_anchors(s, label, xf, sc, interpolate.unwrap_or(false))?);
         }
         ids
     } else if none || (!copy && xf == Affine::IDENTITY) {
@@ -151,7 +193,7 @@ fn apply_transform_moving_guides(
     } else {
         let kept = if copy { preview_copies(s, &ids, with_guides, below)? } else { None };
         s.edit(label, |d, sel| {
-            let targets = match &kept {
+            let mut targets = match &kept {
                 // The document becomes the snapshot with the kept copies, untransformed, and the
                 // loop below transforms only the copies.
                 Some(k) => {
@@ -196,10 +238,14 @@ fn apply_transform_moving_guides(
                     crate::cmd::patterncmds::move_tile_with_art(d, &targets, before);
                 }
             }
-            if with_guides && (delta.x != 0.0 || delta.y != 0.0) {
+            if with_guides && is_translation && (delta.x != 0.0 || delta.y != 0.0) {
                 for i in sel.guides.clone() {
                     d.edit_ruler_guide(i, |g| *g = g.moved(delta));
                 }
+            } else if with_guides && !is_translation {
+                // The guide paths are made already transformed, so they join the reply after the
+                // loop above.
+                targets.extend(d.transform_ruler_guides(sel, xf));
             }
             Ok(targets)
         })?
@@ -347,7 +393,10 @@ pub(super) fn nudge(s: &mut Session, p: &Value) -> Result<Value> {
         if dx == 0.0 && dy == 0.0 {
             return ok();
         }
-        return crate::cmd::path::move_anchors(s, &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }));
+        return crate::cmd::path::nudge_anchors(
+            s,
+            &json!({ "dx": dx, "dy": dy, "patterns": p.get("patterns"), "interpolate": p.get("interpolate") }),
+        );
     }
     if objects && s.doc()?.selection.is_empty() {
         let copy = bool_or(p, "copy", false);
@@ -385,6 +434,10 @@ pub(super) fn rotate(s: &mut Session, p: &Value) -> Result<Value> {
     check_switches(p, &TRANSFORM_SWITCHES, "object.rotate")?;
     check_switches(p, &["absolute"], "object.rotate")?;
     let ids = selected_roots_to_transform(s)?;
+    // A bounding box angle is that of objects; ruler guides selected alone have none.
+    if bool_or(p, "absolute", false) && ids.is_empty() {
+        return Err(bad("object.rotate", "absolute needs objects selected: ruler guides have no bounding box angle"));
+    }
     let o = origin_of(s, p, &ids)?;
     let mut angle = f64_or(p, "angle", 0.0);
     if bool_or(p, "absolute", false) {
