@@ -2437,6 +2437,8 @@ mod tests {
     #[test]
     fn listed_commands_run_from_a_key_without_a_missing_param() {
         use vectorcraft_testkit::fixtures::Fixture;
+        // The View menu's proof commands change the whole process's proof view.
+        let _view = crate::testing::DefaultProofView::new();
         // These need a state the fixtures lack: text being edited, a pattern being edited, an
         // object linked to a graphic style, a plug-ins folder.
         let context = ["text.insertInline", "pattern.options", "graphicStyle.redefine", "plugin.reload"];
