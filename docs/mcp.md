@@ -2750,8 +2750,10 @@ https://ecma-international.org/publications-and-standards/standards/ecma-357/): 
 (https://extendscript.docsforadobe.dev/integrating-xml/the-xml-object/). A script run from a `.js` file also has
 `Promise` (described below); a `.jsx` file and a script given as `source` do not, except that a named engine
 (`#targetengine`) has `Promise` from the first `.js` run that names it and keeps it for every later run, as it keeps
-its globals. The script reaches the app through the global object `vc`, and writes to the Script Console and runs
-other files through `$`:
+its globals. An ES5.1 script does not have `Map`, `Set`, `WeakMap`, `WeakSet`, `ArrayBuffer`, `DataView` or the
+typed arrays; the JavaScript engine's ECMAScript 2015 mode (`Options::es2015` in `vectorcraft-js`) adds them, as
+`docs/target-app-parity.md` describes. The script reaches the app through the global object `vc`, and writes to the
+Script Console and runs other files through `$`:
 
 - `vc.run(id, params)` runs a command and returns its result. A command that fails throws an error the script can
   catch. The documents and the session state the command changed, preferences included, go back, and any file it
@@ -2870,7 +2872,8 @@ other files through `$`:
   changed document. A value that changes nothing runs no command, and a change to another document leaves the active
   tab as it was. A command that selects the objects it changes leaves the current layer and the highlighted Layers
   panel rows as they were before the change. A bad value throws an error and changes nothing. An object that was
-  deleted, or that a named engine kept from an earlier run, throws `Stale page item`. `remove()` on an object that
+  deleted, that a named engine kept from an earlier run, or whose document was reverted with `file.revert`, throws
+  `Stale page item`. Layer objects also become stale after their document is reverted. `remove()` on an object that
   is hidden or locked, is inside a hidden or locked layer or group, or is a group that holds one, and `removeAll()`
   when any object is, throw `cannot delete hidden or locked objects` and delete nothing. `remove()` on an object on
   a locked artboard, and `removeAll()` when any object is on one, throw `cannot delete objects on a locked artboard`
@@ -6894,9 +6897,13 @@ details are VectorCraft's own rules; the help page says only that the option mov
 
 `object.pattern.replaceArt {name, ids?}` (Replace Pattern Art) makes copies of the selected art, or of `ids`, the tile
 art of pattern `name`, as one undo step, and returns `{name}`. The pattern keeps its name, its swatch and the swatch's
-place, its tile and its options; with `sizeTileToArt` on, the tile is sized to the new art plus `hSpacing` and
-`vSpacing`. Fills and strokes name the pattern, so every object painted with it draws the new tile. The art stays on the
-canvas, selected as it was. Art that matches the tile art already records no undo step. The command is off while a
+place, and its options. When the backmost object of the art is a rectangle with no fill and no stroke (or the backmost
+member of one selected group, as `pattern.placeArt` places it), that rectangle becomes the tile and is left out of the
+tile art, and the group's members become the art. Otherwise the tile keeps its size and moves by as much as the top-left
+corner of the art's bounds moved from the old tile art's, so art drawn anywhere on the canvas stays in its tile. With
+`sizeTileToArt` on, the tile is sized to the new art plus `hSpacing` and `vSpacing`. Fills and strokes name the pattern,
+so every object painted with it draws the new tile. The art stays on the canvas, selected as it was. Art and a tile that
+match the pattern's already record no undo step. A rectangle alone leaves no art and is refused. The command is off while a
 pattern is edited ("finish editing the pattern first"), and returns an error, changing nothing, for a missing `name`, a
 pattern that does not exist, no art, and art painted with the pattern itself, directly or through the symbols, other
 patterns, graph designs and brushes it uses, or the series and label paints a graph stores. In the Swatches panel, art dragged off the canvas and released with Alt (Option on macOS) held over a
@@ -6904,7 +6911,22 @@ pattern swatch runs it with that swatch's pattern; the swatch is outlined while 
 else in the list, or without Alt, the art becomes a new pattern swatch as before. The help page describes replacing a
 pattern by dragging its edited tile onto the old swatch with Alt or Option held, with the pattern updated in the file
 (<https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=226>,
-archived copy). Keeping the tile, the options and the source art are VectorCraft's own rules.
+archived copy). Keeping the tile's size, moving it with the art, the options and the source art are VectorCraft's own
+rules. The help page describes a tile bounded by a rectangle that is the backmost object, with no fill and no stroke
+(<https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=204>, archived copy).
+
+`pattern.placeArt {name, x?, y?}` (Place Pattern Art) places a copy of pattern `name`'s tile art, centered on (`x`, `y`)
+(default: the center of the first artboard), in the layer new art goes into, selects it, and returns `{id}`, in one undo
+step. The copy is one group: a rectangle of the pattern's tile with no fill and no stroke at its back, then the tile art
+in its place in the tile, so `object.pattern.replaceArt` reads the edited copy back with the same tile. The pattern does
+not change. The command is off while a pattern is edited ("finish editing the pattern first"), and returns an error,
+changing nothing, for a missing `name`, a pattern that does not exist, an `x` or `y` that is not a number, a pattern
+with no art ("no artwork") and a locked or hidden target layer. In the app, a pattern swatch dragged from the Swatches
+panel onto an empty part of the canvas runs it at the drop point; dropped on art, the swatch fills it as before. The
+help page describes changing a pattern by dragging its swatch onto the artboard, editing the tile there and Alt-dragging
+it back onto the swatch
+(<https://help.adobe.com/archive/en_US/illustrator/cs5/illustrator_cs5_help.pdf#page=208>, archived copy). The group,
+its rectangle, the centering and the default position are VectorCraft's own rules.
 
 ```json
 {"name":"run_command","arguments":{"command":"pattern.options","params":{"showSwatchBounds":true}}}
@@ -15108,7 +15130,8 @@ options existed keep their old look (appearance applied after the distortion).
 
 An envelope opened from a `.ai` can have margins, written to native files as `boundsMargin` and reported by
 `object.envelope.info` when they are not zero: `[top, bottom, left, right]`, as shares of the content's height and
-width. While `distortAppearance` is on, the content maps from its geometric bounds grown by the margins, and while it
+width. When the content's height or width is shorter than 1e-6 pt (zero included), as on a straight line, the margins
+along that side are shares of the other side. While `distortAppearance` is on, the content maps from its geometric bounds grown by the margins, and while it
 is off, the content maps from its geometric bounds. Leaving Edit Contents measures the margins again when the content's
 strokes reach differently than when Edit Contents began, and always for an envelope whose file opened in Edit Contents.
 New envelopes have no margins, and no command sets them.
@@ -16927,7 +16950,8 @@ holds such lines, the Fold Lines panel shows a Fold Angle field with that angle,
 the fold lines as `addon.packaging.check` does, and folds the blank that holds the base panel: the panel under `base`, or
 the largest panel of all the blanks. The base panel stays in place. Every other panel turns about the hinges that join it
 to the base, each by its angle times `amount` (0 is flat, 1 is folded). A hinge's angle is the fold angle of the line
-with the most length in it (see Fold angles), the one with the lowest id among lines of equal length. A hinge that closes
+with the most length in it (see Fold angles), the one with the lowest id among lines of equal length. A valid stored
+angle sets that line's fold angle; without one, a Crease or Perforation uses 90° and a Partial Cut uses -90°. A hinge that closes
 a loop of panels is not turned about; `gap` says how far apart its two placements end up when every hinge is folded all
 the way, whatever `amount` is, and it `closes` when that is within `tolerance` or 0.5% of its length. A panel that no
 chain of hinges joins to the base stays flat where it is. `amount` must be from 0 to 1 and `base` a point in a panel;

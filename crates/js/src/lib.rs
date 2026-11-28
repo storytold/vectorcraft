@@ -95,6 +95,18 @@
 //! limits; a promise still rejected with no handler at the end is reported by
 //! [`Realm::unhandled_rejections`]. [`Realm::add_es2015`] gives a realm made without the option
 //! `Promise` for its next runs.
+//!
+//! With [`Options::es2015`], the realm also provides these ECMAScript 2015 built-ins
+//! (<https://262.ecma-international.org/6.0/>): `Map` and `Set` (sections 23.1 and 23.2), whose
+//! keys compare with SameValueZero and keep the order they were added in, with `forEach` visiting
+//! entries added while it runs; `WeakMap` and `WeakSet` (23.3 and 23.4), whose entries the
+//! collector removes once their keys are unreachable; and `ArrayBuffer`, `DataView` and the nine
+//! typed arrays (24.1, 24.2 and 22.2). `keys`, `values` and `entries` give iterator objects with
+//! a `next` method. Until the language has iterators, the collection constructors and
+//! `%TypedArray%.from` read an array, a string (by code point) or an object with a `length`, by
+//! index. A typed array constructor reads an array or an object with a `length` the same way, and
+//! converts a first argument that is not an object to a length. A buffer longer than the heap
+//! limit is a `RangeError`, and its bytes are checked against the heap before they are allocated.
 #![forbid(unsafe_code)]
 
 pub mod ast;
@@ -169,8 +181,9 @@ pub struct Options {
     /// `f?.()`) and `??`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
     /// A realm made with it on also has the later editions' built-ins this engine has: `Symbol`
-    /// with Symbol-keyed properties, the iterators of arrays, strings and `arguments` objects, and
-    /// `Promise` with its job queue. A realm made with it off has the ES5.1 built-ins only, as the
+    /// with Symbol-keyed properties, the iterators of arrays, strings and `arguments` objects,
+    /// `Promise` with its job queue, `Map`, `Set`, `WeakMap`, `WeakSet`, `ArrayBuffer`, `DataView`
+    /// and the typed arrays. A realm made with it off has the ES5.1 built-ins only, as the
     /// app's scripts expect. Those built-ins are chosen when the realm is made: turning the option
     /// on or off later with [`Realm::set_es2015`] changes the language later runs read, and does
     /// not add or remove them; [`Realm::add_es2015`] adds `Promise` to a realm made without it.
@@ -278,6 +291,8 @@ impl LineTable {
 
 #[cfg(test)]
 mod builtins_tests;
+#[cfg(test)]
+mod collections_tests;
 #[cfg(test)]
 mod es2015_object_tests;
 #[cfg(test)]

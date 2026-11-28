@@ -8159,6 +8159,7 @@ breakText	Glyphs	Glifi
 	Place Brush Art	Inserisci grafica del pennello
 	Replace Brush Art	Sostituisci grafica del pennello
 	Replace Pattern Art	Sostituisci grafica del motivo
+	Place Pattern Art	Inserisci grafica del motivo
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Alcune tracce usano questo pennello. Applicare la nuova grafica a queste tracce, o lasciarle come sono e aggiungere una copia del pennello con la nuova grafica?
 	Apply to Strokes	Applica alle tracce
 	Leave Strokes	Lascia le tracce

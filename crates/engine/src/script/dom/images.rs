@@ -115,24 +115,43 @@ pub(super) fn pending_id(h: &Host, run: f64, uid: f64, slot: f64) -> Result<Node
     }
 }
 
-/// The handle's run, uid and slot when `d` is a `PlacedItems.add()` result. Its handle has five
-/// numbers, where a page item's has four.
-fn pending_handle(d: &Data) -> Option<[f64; 3]> {
+/// The handle's run, uid, the document's revert count and slot when `d` is a `PlacedItems.add()`
+/// result. Its handle has six numbers, where a page item's has five.
+fn pending_handle(d: &Data) -> Option<[f64; 4]> {
     match host_ref_parts(d) {
         Some(("PlacedItem", handle)) => match handle.as_slice() {
-            [run, uid, _, _, slot] => Some([*run, *uid, *slot]),
+            [run, uid, _, _, reverts, slot] => Some([*run, *uid, *reverts, *slot]),
             _ => None,
         },
         _ => None,
     }
 }
 
-/// The page item handle (run, uid and the two halves of the id) of the image a
-/// `PlacedItems.add()` result `d` placed, or `None` when `d` is not such a result.
-pub(super) fn pending_as_item(h: &Host, d: &Data) -> Result<Option<[f64; 4]>, HostError> {
-    let Some([run, uid, slot]) = pending_handle(d) else { return Ok(None) };
-    let [high, low] = super::id_parts(pending_id(h, run, uid, slot)?);
-    Ok(Some([run, uid, high, low]))
+/// The document and the id of the image a `PlacedItems.add()` result placed. The result is stale
+/// once its document is closed or reverted.
+pub(super) fn pending_item(h: &Host, run: f64, uid: f64, reverts: f64, slot: f64) -> Result<(Doc, NodeId), HostError> {
+    let doc = pending_doc(h, run, uid, reverts)?;
+    Ok((doc, pending_id(h, run, uid, slot)?))
+}
+
+/// The document of a `PlacedItems.add()` result, which is stale once the document is closed or
+/// reverted.
+fn pending_doc(h: &Host, run: f64, uid: f64, reverts: f64) -> Result<Doc, HostError> {
+    let stale = || HostError::Error(STALE_ITEM.into());
+    let doc = find_doc(h, run, uid).ok_or_else(stale)?;
+    if h.session.borrow().documents().get(doc.index).is_none_or(|st| whole(reverts) != Some(st.reverts)) {
+        return Err(stale());
+    }
+    Ok(doc)
+}
+
+/// The page item handle (run, uid, the two halves of the id and the document's revert count) of
+/// the image a `PlacedItems.add()` result `d` placed, or `None` when `d` is not such a result.
+pub(super) fn pending_as_item(h: &Host, d: &Data) -> Result<Option<[f64; 5]>, HostError> {
+    let Some([run, uid, reverts, slot]) = pending_handle(d) else { return Ok(None) };
+    let (_, id) = pending_item(h, run, uid, reverts, slot)?;
+    let [high, low] = super::id_parts(id);
+    Ok(Some([run, uid, high, low, reverts]))
 }
 
 /// The ids of a document's linked (`placed`) or embedded images, topmost first, in the order of
@@ -253,8 +272,9 @@ fn placed_add(h: &Host, a: &[Data]) -> Answer {
     if pending.len() >= MAX_PENDING {
         return Err(HostError::Range(format!("a run makes at most {MAX_PENDING} placed items with PlacedItems.add")));
     }
+    let reverts = h.session.borrow().documents().get(doc.index).map_or(0, |st| st.reverts);
     pending.push(Pending { uid: doc.uid, bound: None });
-    Ok(host_ref("PlacedItem", &[float(h.run), float(doc.uid), 0.0, 0.0, float(pending.len() as u64 - 1)]))
+    Ok(host_ref("PlacedItem", &[float(h.run), float(doc.uid), 0.0, 0.0, float(reverts), float(pending.len() as u64 - 1)]))
 }
 
 macro_rules! both {
@@ -359,7 +379,8 @@ fn read_image(h: &Host, a: &[Data], cls: &str, f: impl FnOnce(&DocState, &crate:
 }
 
 fn placed_file(h: &Host, a: &[Data]) -> Answer {
-    if let Some([run, uid, slot]) = pending_handle(arg(a, 0)) {
+    if let Some([run, uid, reverts, slot]) = pending_handle(arg(a, 0)) {
+        pending_doc(h, run, uid, reverts)?;
         let k = slot_of(h, run, uid, slot)?;
         if h.dom.images.pending.borrow().get(k).is_some_and(|p| p.bound.is_none()) {
             return Ok(Data::Null);
@@ -375,7 +396,7 @@ fn placed_file(h: &Host, a: &[Data]) -> Answer {
 
 /// `file = File`: places the file, linked, for a `PlacedItems.add()` result that has none.
 fn placed_set_file(h: &Host, a: &[Data]) -> Answer {
-    let Some([run, uid, slot]) = pending_handle(arg(a, 0)) else {
+    let Some([run, uid, reverts, slot]) = pending_handle(arg(a, 0)) else {
         if host_ref_parts(arg(a, 0)).is_some_and(|(c, _)| c == "PlacedItem") {
             this_of(h, a, "PlacedItem")?;
             return Err(HostError::Error(FILE_READ_ONLY.into()));
@@ -387,7 +408,7 @@ fn placed_set_file(h: &Host, a: &[Data]) -> Answer {
         this_of(h, a, "PlacedItem")?;
         return Err(HostError::Error(FILE_READ_ONLY.into()));
     }
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let doc = pending_doc(h, run, uid, reverts)?;
     let path = image_path(h, arg(a, 1), "PlacedItem.file")?;
     let placed = on_doc(h, doc.uid, true, |h| command(h, "file.place", &json!({"path": path, "link": true})))?;
     let ids: Vec<u64> = match field(&placed, "ids") {

@@ -283,6 +283,241 @@ pub(crate) enum Class {
     Promise(Box<crate::builtins::promise::PromiseData>),
     /// The state that the functions a promise operation makes share; scripts never see it.
     PromiseRecord(Box<crate::builtins::promise::Record>),
+    /// A `Map` (ECMA-262 6.0 section 23.1): its entries in the order they were added.
+    Map(Box<Coll>),
+    /// A `Set` (section 23.2): its values in the order they were added, each with `undefined`.
+    Set(Box<Coll>),
+    /// A `WeakMap` (section 23.3): values keyed by object. An entry does not keep its key
+    /// reachable, and its value is reachable only while its key is.
+    WeakMap(Box<WeakColl>),
+    /// A `WeakSet` (section 23.4): objects that it does not keep reachable.
+    WeakSet(Box<WeakColl>),
+    /// An iterator over a Map, a Set or a typed array (sections 23.1.5, 23.2.5 and 22.1.5).
+    Iter(Box<IterState>),
+    /// An `ArrayBuffer` (section 24.1) and its bytes, which never change length.
+    ArrayBuffer(Box<[u8]>),
+    /// A `DataView` (section 24.2): a range of a buffer's bytes.
+    DataView(Box<View>),
+    /// A typed array (section 22.2): elements of one type in a range of a buffer's bytes.
+    TypedArray(Box<View>),
+}
+
+/// A Map or Set key compared with SameValueZero (section 7.2.10): `NaN` equals `NaN`, `-0`
+/// equals `+0`, strings compare by their code units, and Symbols and objects by identity.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum CollKey {
+    Undefined,
+    Null,
+    Bool(bool),
+    /// The bits of the number, with every `NaN` as one value and `-0` as `+0`.
+    Number(u64),
+    String(Rc<[u16]>),
+    Symbol(crate::symbol::Sym),
+    Object(u32),
+}
+
+impl CollKey {
+    /// The key of a number.
+    pub(crate) fn number(n: f64) -> Self {
+        CollKey::Number(if n.is_nan() {
+            f64::NAN.to_bits()
+        } else if n == 0.0 {
+            0
+        } else {
+            n.to_bits()
+        })
+    }
+}
+
+/// The entries of a Map or a Set in the order they were added. Deleting an entry leaves a hole,
+/// so the position an iterator or a `forEach` loop has reached stays valid; a collection removes
+/// the holes of a collection with more holes than entries and moves its live iterators with them.
+#[derive(Clone, Default)]
+pub(crate) struct Coll {
+    entries: Vec<Option<(Value, Value)>>,
+    index: HashMap<CollKey, usize>,
+}
+
+impl Coll {
+    /// The number of entries.
+    pub(crate) fn len(&self) -> usize {
+        self.index.len()
+    }
+
+    /// The number of positions, holes included.
+    pub(crate) fn slots(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub(crate) fn get(&self, k: &CollKey) -> Option<&Value> {
+        let i = *self.index.get(k)?;
+        self.entries.get(i)?.as_ref().map(|(_, v)| v)
+    }
+
+    pub(crate) fn has(&self, k: &CollKey) -> bool {
+        self.index.contains_key(k)
+    }
+
+    /// Sets the value under `k`, keeping its position when it is there already. Returns whether
+    /// a new entry was added.
+    pub(crate) fn set(&mut self, k: CollKey, key: Value, value: Value) -> bool {
+        if let Some(&i) = self.index.get(&k)
+            && let Some(Some((_, v))) = self.entries.get_mut(i)
+        {
+            *v = value;
+            return false;
+        }
+        self.index.insert(k, self.entries.len());
+        self.entries.push(Some((key, value)));
+        true
+    }
+
+    /// Deletes the entry under `k`; returns whether there was one.
+    pub(crate) fn delete(&mut self, k: &CollKey) -> bool {
+        let Some(i) = self.index.remove(k) else { return false };
+        if let Some(slot) = self.entries.get_mut(i) {
+            *slot = None;
+        }
+        true
+    }
+
+    /// Deletes every entry, leaving the positions in place.
+    pub(crate) fn clear(&mut self) {
+        self.index.clear();
+        self.entries.iter_mut().for_each(|e| *e = None);
+    }
+
+    /// The entry at position `i`, or `None` for a hole or a position past the end.
+    pub(crate) fn entry(&self, i: usize) -> Option<&(Value, Value)> {
+        self.entries.get(i)?.as_ref()
+    }
+
+    fn values(&self) -> impl Iterator<Item = &Value> {
+        self.entries.iter().flatten().flat_map(|(k, v)| [k, v])
+    }
+
+    fn should_compact(&self) -> bool {
+        let holes = self.entries.len() - self.index.len();
+        holes > 16 && holes > self.index.len()
+    }
+
+    /// Removes the holes. Returns, for each old position and the position past the end, the new
+    /// position of the first entry at or after it.
+    fn compact(&mut self) -> Vec<usize> {
+        let mut moved = Vec::with_capacity(self.entries.len() + 1);
+        let mut live = 0usize;
+        for e in &self.entries {
+            moved.push(live);
+            live += usize::from(e.is_some());
+        }
+        moved.push(live);
+        self.entries.retain(Option::is_some);
+        // The storage the holes held is released along with their charge.
+        self.entries.shrink_to_fit();
+        self.index.shrink_to_fit();
+        for slot in self.index.values_mut() {
+            *slot = moved.get(*slot).copied().unwrap_or(*slot);
+        }
+        moved
+    }
+
+    /// The positions the entries and the index have room for, for tests.
+    #[cfg(test)]
+    pub(crate) fn capacity(&self) -> (usize, usize) {
+        (self.entries.capacity(), self.index.capacity())
+    }
+}
+
+/// The entries of a WeakMap or a WeakSet, by the index of their key; a WeakSet's values are
+/// `undefined`.
+#[derive(Clone, Default)]
+pub(crate) struct WeakColl {
+    pub(crate) entries: HashMap<u32, Value>,
+}
+
+/// What an iterator object goes through.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum IterSource {
+    Map,
+    Set,
+    /// A typed array, by index.
+    Array,
+}
+
+/// What each step of an iterator gives: the key, the value or a `[key, value]` array.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum IterKind {
+    Keys,
+    Values,
+    Entries,
+}
+
+/// An iterator's state. `target` is `None` once the iterator has finished.
+#[derive(Clone, Debug)]
+pub(crate) struct IterState {
+    pub(crate) source: IterSource,
+    pub(crate) kind: IterKind,
+    pub(crate) target: Option<ObjId>,
+    pub(crate) pos: usize,
+}
+
+/// The element type of a typed array (section 22.2, table 50).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Elem {
+    Int8,
+    Uint8,
+    Uint8Clamped,
+    Int16,
+    Uint16,
+    Int32,
+    Uint32,
+    Float32,
+    Float64,
+}
+
+impl Elem {
+    pub(crate) const ALL: [Elem; 9] =
+        [Elem::Int8, Elem::Uint8, Elem::Uint8Clamped, Elem::Int16, Elem::Uint16, Elem::Int32, Elem::Uint32, Elem::Float32, Elem::Float64];
+
+    /// The bytes of one element.
+    pub(crate) fn size(self) -> usize {
+        match self {
+            Elem::Int8 | Elem::Uint8 | Elem::Uint8Clamped => 1,
+            Elem::Int16 | Elem::Uint16 => 2,
+            Elem::Int32 | Elem::Uint32 | Elem::Float32 => 4,
+            Elem::Float64 => 8,
+        }
+    }
+
+    /// The name of the constructor.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Elem::Int8 => "Int8Array",
+            Elem::Uint8 => "Uint8Array",
+            Elem::Uint8Clamped => "Uint8ClampedArray",
+            Elem::Int16 => "Int16Array",
+            Elem::Uint16 => "Uint16Array",
+            Elem::Int32 => "Int32Array",
+            Elem::Uint32 => "Uint32Array",
+            Elem::Float32 => "Float32Array",
+            Elem::Float64 => "Float64Array",
+        }
+    }
+
+    /// The position of the type in [`Elem::ALL`].
+    pub(crate) fn index(self) -> usize {
+        Elem::ALL.iter().position(|e| *e == self).unwrap_or(0)
+    }
+}
+
+/// A typed array or a `DataView`: `length` elements of `elem` (bytes, for a `DataView`) starting
+/// `offset` bytes into `buffer`.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct View {
+    pub(crate) buffer: ObjId,
+    pub(crate) offset: usize,
+    pub(crate) length: usize,
+    pub(crate) elem: Elem,
 }
 
 /// What an XML value is.
@@ -368,6 +603,18 @@ impl Class {
             Class::RegExp(_) => "RegExp",
             Class::Date(_) => "Date",
             Class::UnitValue(_) => "UnitValue",
+            Class::Map(_) => "Map",
+            Class::Set(_) => "Set",
+            Class::WeakMap(_) => "WeakMap",
+            Class::WeakSet(_) => "WeakSet",
+            Class::Iter(state) => match state.source {
+                IterSource::Map => "Map Iterator",
+                IterSource::Set => "Set Iterator",
+                IterSource::Array => "Array Iterator",
+            },
+            Class::ArrayBuffer(_) => "ArrayBuffer",
+            Class::DataView(_) => "DataView",
+            Class::TypedArray(view) => view.elem.name(),
         }
     }
 }
@@ -469,6 +716,12 @@ pub(crate) const SYMBOL_BYTES: usize = 48;
 pub(crate) const UNIT_VALUE_BYTES: usize = 32;
 /// The estimated bytes of a piece of code without its instructions, tables and strings.
 const CODE_BYTES: usize = 384;
+/// The estimated bytes of a Map or Set position, with its entry in the hash index.
+pub(crate) const COLL_ENTRY_BYTES: usize = 96;
+/// The estimated bytes of a WeakMap or WeakSet entry.
+pub(crate) const WEAK_ENTRY_BYTES: usize = 64;
+/// The estimated bytes of the state of an iterator, a typed array or a `DataView`.
+pub(crate) const VIEW_BYTES: usize = 48;
 
 pub(crate) fn string_bytes(len: usize) -> usize {
     32 + 2 * len
@@ -564,11 +817,18 @@ impl Heap {
 
     /// Marks everything reachable from `roots` and frees the rest. Afterwards [`Heap::bytes`] is
     /// the estimated size of what is left, strings reachable from it included.
+    ///
+    /// A WeakMap's entry marks its value only once its key is marked by another path, and the
+    /// entries of WeakMaps and WeakSets whose keys stay unmarked are removed before the sweep, so
+    /// a value that refers back to its own key does not keep it alive. Values waiting for their
+    /// key are kept by key, so the marking stays linear in the number of entries.
     pub(crate) fn collect(&mut self, roots: &Roots<'_>) {
         let mut marks = vec![false; self.cells.len()];
         let mut work: Vec<u32> = Vec::new();
         let mut strings = StringSizes::default();
         let mut live = 0usize;
+        let mut pending: HashMap<u32, Vec<Value>> = HashMap::new();
+        let mut weak: Vec<u32> = Vec::new();
         for v in &roots.values {
             mark_value(v, &mut work, &mut strings);
         }
@@ -583,10 +843,44 @@ impl Heap {
                 continue;
             }
             *mark = true;
+            if let Some(values) = pending.remove(&i) {
+                for v in &values {
+                    mark_value(v, &mut work, &mut strings);
+                }
+            }
             match self.cells.get(i as usize) {
-                Some(Cell::Object(o)) => live += trace_object(o, &mut work, &mut strings),
+                Some(Cell::Object(o)) => {
+                    live += trace_object(o, &mut work, &mut strings);
+                    match &o.class {
+                        Class::WeakMap(w) => {
+                            weak.push(i);
+                            for (k, v) in &w.entries {
+                                if marks.get(*k as usize).copied().unwrap_or(false) {
+                                    mark_value(v, &mut work, &mut strings);
+                                } else if matches!(v, Value::Object(_) | Value::String(_)) {
+                                    pending.entry(*k).or_default().push(v.clone());
+                                }
+                            }
+                        }
+                        Class::WeakSet(_) => weak.push(i),
+                        _ => {}
+                    }
+                }
                 Some(Cell::Env(e)) => live += trace_env(e, &mut work, &mut strings),
                 _ => {}
+            }
+        }
+        for i in weak {
+            if let Some(Cell::Object(o)) = self.cells.get_mut(i as usize)
+                && let Class::WeakMap(w) | Class::WeakSet(w) = &mut o.class
+            {
+                w.entries.retain(|k, _| marks.get(*k as usize).copied().unwrap_or(false));
+                // Only the entries left are charged, and a table with far more room than entries
+                // releases the extra room.
+                if w.entries.capacity() > 2 * w.entries.len() + 16 {
+                    w.entries.shrink_to_fit();
+                }
+                live += WEAK_ENTRY_BYTES * w.entries.len();
             }
         }
         for (i, (cell, marked)) in self.cells.iter_mut().zip(&marks).enumerate() {
@@ -595,8 +889,38 @@ impl Heap {
                 self.free.push(u32::try_from(i).unwrap_or(u32::MAX));
             }
         }
+        live = live.saturating_sub(self.compact_collections());
         self.bytes = live + strings.bytes;
         self.collections += 1;
+    }
+
+    /// Removes the holes of the Maps and Sets that have more holes than entries, and moves the
+    /// positions of their iterators with them. Returns the bytes the holes held.
+    fn compact_collections(&mut self) -> usize {
+        let mut moved: HashMap<u32, Vec<usize>> = HashMap::new();
+        let mut freed = 0usize;
+        for (i, cell) in self.cells.iter_mut().enumerate() {
+            if let Cell::Object(o) = cell
+                && let Class::Map(c) | Class::Set(c) = &mut o.class
+                && c.should_compact()
+            {
+                freed += COLL_ENTRY_BYTES * (c.slots() - c.len());
+                moved.insert(u32::try_from(i).unwrap_or(u32::MAX), c.compact());
+            }
+        }
+        if moved.is_empty() {
+            return 0;
+        }
+        for cell in &mut self.cells {
+            if let Cell::Object(o) = cell
+                && let Class::Iter(state) = &mut o.class
+                && state.source != IterSource::Array
+                && let Some(map) = state.target.and_then(|t| moved.get(&t.0))
+            {
+                state.pos = map.get(state.pos).or(map.last()).copied().unwrap_or(0);
+            }
+        }
+        freed
     }
 }
 
@@ -828,6 +1152,23 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
         Class::XmlFilter(state) => {
             work.extend(state.input.iter().chain(&state.kept).map(|o| o.0));
             extra = XML_LIST_BYTES + XML_REF_BYTES * (state.input.len() + state.kept.len());
+        }
+        Class::Map(c) | Class::Set(c) => {
+            for v in c.values() {
+                mark_value(v, work, strings);
+            }
+            extra = COLL_ENTRY_BYTES * c.slots();
+        }
+        // Their entries are marked and counted by the collector's weak pass.
+        Class::WeakMap(_) | Class::WeakSet(_) => {}
+        Class::Iter(state) => {
+            work.extend(state.target.iter().map(|o| o.0));
+            extra = VIEW_BYTES;
+        }
+        Class::ArrayBuffer(bytes) => extra = bytes.len(),
+        Class::DataView(view) | Class::TypedArray(view) => {
+            work.push(view.buffer.0);
+            extra = VIEW_BYTES;
         }
         Class::Xmp(meta) => extra = meta.heap_bytes(),
         Class::XmpFile(fields) => {

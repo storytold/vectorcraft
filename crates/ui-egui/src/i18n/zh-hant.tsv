@@ -8189,6 +8189,7 @@ breakText	Glyphs	字符
 	Place Brush Art	置入筆刷圖稿
 	Replace Brush Art	取代筆刷圖稿
 	Replace Pattern Art	取代圖樣圖稿
+	Place Pattern Art	置入圖樣圖稿
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	有筆畫使用了此筆刷。要將新圖稿套用到這些筆畫，還是保留筆畫不變並加入一個使用新圖稿的筆刷複本？
 	Apply to Strokes	套用至筆畫
 	Leave Strokes	保留筆畫

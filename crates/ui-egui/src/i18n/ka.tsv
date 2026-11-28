@@ -10674,6 +10674,7 @@ breakText	Glyphs	გლიფები
 	Place Brush Art	ფუნჯის ნახატის განთავსება
 	Replace Brush Art	ფუნჯის ნახატის ჩანაცვლება
 	Replace Pattern Art	პატერნის ნახატის ჩანაცვლება
+	Place Pattern Art	პატერნის ნახატის განთავსება
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	კონტურები იყენებს ამ ფუნჯს. გამოყენებულ იქნას ახალი ნახატი ამ კონტურებზე, თუ დარჩეს ისინი როგორც არის და დაემატოს ფუნჯის ასლი ახალი ნახატით?
 	Apply to Strokes	კონტურებზე გამოყენება
 	Leave Strokes	კონტურების დატოვება
