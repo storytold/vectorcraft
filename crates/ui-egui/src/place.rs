@@ -89,7 +89,7 @@ pub fn is_document(name: &str) -> bool {
 pub struct PlaceState {
     /// Web: the bytes of the files picked for the Place dialog, by selection token.
     pub(crate) picked: Vec<(String, Vec<u8>)>,
-    /// The loaded cursor's thumbnails by file name.
+    /// The loaded cursor's thumbnails by original queue entry, with names for display.
     thumbs: Vec<(String, Thumb)>,
     /// The Control bar's `image.info`, for (document uid, revision, image id).
     info: Option<((u64, u64, u64), Value)>,
@@ -99,10 +99,10 @@ pub struct PlaceState {
     /// The files of the loaded place cursor ask for their import options when clicked or dragged
     /// (the Place dialog loaded it with Show Import Options on).
     queue_asks: bool,
-    /// The loaded cursor's files by name, with the size a click places them at.
-    queue_sizes: Vec<(String, f64, f64)>,
-    /// The names of the loaded cursor's encrypted PDF files, which ask for their password.
-    queue_locked: Vec<String>,
+    /// The size a click places each original queue entry at, including entries without a size.
+    queue_sizes: Vec<Option<(f64, f64)>>,
+    /// Whether each original queue entry is an encrypted PDF, which asks for its password.
+    queue_locked: Vec<bool>,
     /// The engine's count of cursor loads ([`vectorcraft_engine::Session::place_queue_loads`]) when
     /// `queue_asks`, `queue_sizes` and `queue_locked` were set: a later load (`tool.setOption`, a
     /// script) clears them.
@@ -663,12 +663,16 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
     // at the keyboard: an agent's queue reaches no file it wasn't given.
     let roots = app.session.place_queue_roots();
     forget_older_queue(app);
+    let locked = is_locked(app, p);
+    // A Shift-click asks for the file's import options whatever the cursor was loaded with.
+    let shift_click = p.get("showImportOptions") == Some(&Value::Bool(true));
+    let ask = app.place.queue_asks || locked || shift_click;
+    let mut p = if ask { clicked_at_full_size(app, p) } else { p.clone() };
+    if let Some(params) = p.as_object_mut() {
+        params.remove(vectorcraft_tools::place::SOURCE_INDEX);
+    }
     vectorcraft_engine::file_access::confine(roots.as_ref(), || {
-        let locked = is_locked(app, p);
-        // A Shift-click asks for the file's import options whatever the cursor was loaded with.
-        let shift_click = p.get("showImportOptions") == Some(&Value::Bool(true));
-        if app.place.queue_asks || locked || shift_click {
-            let mut p = clicked_at_full_size(app, p);
+        if ask {
             if shift_click {
                 set_aside_import_options(&mut p);
             } else if !app.place.queue_asks {
@@ -687,7 +691,6 @@ pub(crate) fn place_from_cursor(app: &mut VectorcraftApp, p: &Value) {
             let _ = place_file(app, &p, Read::ForUser { dropped: false });
         } else {
             // An embedded PDF takes the `pdfTextAs` preference, as one placed from the Place dialog.
-            let mut p = p.clone();
             crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
             if crate::placing::available(app) {
                 if let Err(e) = crate::placing::start(app, &p, false) {
@@ -733,8 +736,11 @@ fn forget_older_queue(app: &mut VectorcraftApp) {
 
 /// Does `p` (a cursor click's `file.place` params) name a file the cursor holds as an encrypted PDF?
 fn is_locked(app: &VectorcraftApp, p: &Value) -> bool {
-    let name = p.get("path").or_else(|| p.get("name")).and_then(Value::as_str).map(fileio::file_name);
-    name.is_some_and(|n| app.place.queue_locked.contains(&n))
+    source_index(p).and_then(|index| app.place.queue_locked.get(index)).copied().unwrap_or(false)
+}
+
+fn source_index(p: &Value) -> Option<usize> {
+    usize::try_from(p.get(vectorcraft_tools::place::SOURCE_INDEX)?.as_u64()?).ok()
 }
 
 /// The params of a cursor click (`rect` at the file's queued size) on a PDF or DXF file, whose
@@ -750,10 +756,11 @@ fn clicked_at_full_size(app: &VectorcraftApp, p: &Value) -> Value {
     }
     let r: Vec<f64> = p.get("rect").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
     let [x, y, w, h] = r[..] else { return p };
-    // Files of the same name in the cursor must all have that size: the place tool's request names
-    // the file, not its place in the cursor.
-    let mut same_name = app.place.queue_sizes.iter().filter(|(n, ..)| *n == name).peekable();
-    let queued = same_name.peek().is_some() && same_name.all(|(_, qw, qh)| (qw - w).abs() < 1e-6 && (qh - h).abs() < 1e-6);
+    let queued = source_index(&p)
+        .and_then(|index| app.place.queue_sizes.get(index))
+        .copied()
+        .flatten()
+        .is_some_and(|(qw, qh)| (qw - w).abs() < 1e-6 && (qh - h).abs() < 1e-6);
     if queued && let Some(o) = p.as_object_mut() {
         o.remove("rect");
         o.insert("at".into(), json!([x + w / 2.0, y + h / 2.0]));
@@ -767,19 +774,8 @@ pub(crate) fn show_thumbnails(app: &mut VectorcraftApp, r: &Value, asks: bool) {
     app.place.queue_load = app.session.place_queue_loads();
     app.place.queue_asks = asks;
     app.place.asked = None;
-    app.place.queue_sizes = r["files"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|f| Some((f["name"].as_str()?.to_string(), f["width"].as_f64()?, f["height"].as_f64()?)))
-        .collect();
-    app.place.queue_locked = r["files"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|f| f["needsPassword"] == true)
-        .filter_map(|f| Some(f["name"].as_str()?.to_string()))
-        .collect();
+    app.place.queue_sizes = r["files"].as_array().into_iter().flatten().map(|f| Some((f["width"].as_f64()?, f["height"].as_f64()?))).collect();
+    app.place.queue_locked = r["files"].as_array().into_iter().flatten().map(|f| f["needsPassword"] == true).collect();
     app.place.thumbs = r["files"]
         .as_array()
         .into_iter()
@@ -1194,4 +1190,22 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
         });
     }
     true
+}
+
+#[cfg(test)]
+mod source_identity_tests {
+    use super::*;
+
+    #[test]
+    fn same_named_pdf_sources_keep_independent_password_requirements() {
+        use vectorcraft_testkit::pdf::{PdfPage, pdf};
+        let mut app = VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default());
+        let pages = [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f")];
+        let files =
+            [None, Some("pw")].map(|password| json!({"name": "same.pdf", "dataBase64": vectorcraft_format::base64_encode(&pdf(&pages, password))}));
+        app.run("file.new", json!({})).unwrap();
+        app.run("file.place.queue", json!({"files": files, "link": false})).unwrap();
+        assert!(!is_locked(&app, &json!({"name": "same.pdf", "__placeSourceIndex": 0})));
+        assert!(is_locked(&app, &json!({"name": "same.pdf", "__placeSourceIndex": 1})));
+    }
 }

@@ -1324,6 +1324,51 @@ fn two_pages() -> [PdfPage; 2] {
     [PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), PdfPage::new(300.0, 100.0, "1 0 0 rg 0 0 30 30 re f")]
 }
 
+/// Same-named PDFs keep their own click size when their page options change it.
+#[test]
+fn browser_place_same_named_pdfs_keep_each_click_at_full_size() {
+    let mut app = app();
+    let ctx = window(&app);
+    let picker = scripted(&mut app);
+    let first = pdf(&two_pages(), None);
+    let second = pdf(&[PdfPage::new(200.0, 100.0, "0 g 0 0 20 10 re f"), PdfPage::new(400.0, 100.0, "0 g 0 0 40 10 re f")], None);
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("same.pdf", &first), ("same.pdf", &second)]);
+    poll(&mut app, &ctx);
+    answer(&mut app, &[("link", json!(false)), ("showImportOptions", json!(true))]);
+    for (width, center) in [(300.0, 60.0), (400.0, 110.0)] {
+        click(&mut app);
+        assert_eq!(dialog_kind(&app).as_deref(), Some(PDF_IMPORT));
+        answer(&mut app, &[("page", json!(2))]);
+        let st = app.session.active().unwrap();
+        let bounds = st.doc.node(st.selection.objects[0]).unwrap().geometric_bounds().unwrap();
+        assert_eq!((bounds.width().round(), bounds.center()), (width, vectorcraft_geom::Point::new(center, 60.0)));
+    }
+}
+
+/// A locked PDF must not make a same-named unlocked PDF discard its deliberate drag size.
+#[test]
+fn browser_place_same_named_pdfs_keep_password_checks_separate() {
+    let mut app = app();
+    let ctx = window(&app);
+    let picker = scripted(&mut app);
+    let first = pdf(&two_pages(), None);
+    let locked = pdf(&two_pages(), Some("pw"));
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("same.pdf", &first), ("same.pdf", &locked)]);
+    poll(&mut app, &ctx);
+    answer(&mut app, &[("link", json!(false)), ("showImportOptions", json!(false))]);
+    // The unlocked file's 100-by-100 drag is deliberate. It is not the locked file's click.
+    cursor_gesture(&mut app, vectorcraft_tools::Mods::default(), (110.0, 110.0));
+    assert_eq!(dialog_kind(&app), None);
+    assert_eq!(selected_width(&app).round(), 100.0);
+    click(&mut app);
+    assert!(dialog_kind(&app).is_some(), "the other source still asks for its password");
+    answer(&mut app, &[("password", json!("pw"))]);
+    assert_eq!(dialog_kind(&app), None);
+    assert_eq!(selected_width(&app).round(), 100.0);
+}
+
 #[test]
 fn show_import_options_is_a_place_option_saved_with_the_preferences() {
     let mut app = app();

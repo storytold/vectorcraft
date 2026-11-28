@@ -9922,6 +9922,8 @@ with `pointer_gesture` (a click places at 100% with the top-left corner there, a
 `press_key` (Left/Right/Up/Down cycle, Escape discards the current file). The place tool's state includes a
 read-only `sourceIndex`: the current file's zero-based position in the original load, or null when empty.
 It stays with that file when other files are placed or discarded; `current` indexes the remaining files.
+In the app, same-named files also keep their own queued size and password requirement. Choosing another PDF
+page after a cursor click places that page at its own size; a drag keeps the chosen box.
 The cursor keeps an encrypted PDF, `.ai`
 or `.ait` file that it cannot read without the password, at 612 × 792 pt (VectorCraft's own size) with
 `needsPassword: true` and no thumbnail; in the app a click or drag on it asks for the password, and headless it places

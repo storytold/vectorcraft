@@ -171,7 +171,7 @@ mod tests {
             (TYPE, &["editing"]),
             (&["puppetWarp"], &["pins", "selected"]),
             // With nothing queued, `current` (0) is no file's index either.
-            (&["place"], &["count", "current", "name", "width", "height", "names"]),
+            (&["place"], &["count", "current", "sourceIndex", "name", "width", "height", "names"]),
         ];
         let read_only = |id: &str, k: &str| READ_ONLY.iter().any(|(ids, keys)| ids.contains(&id) && keys.contains(&k));
         // Tools that `create` makes and the catalog doesn't list.
