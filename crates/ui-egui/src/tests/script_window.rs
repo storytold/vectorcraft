@@ -291,6 +291,27 @@ fn quitting_while_a_handler_runs_keeps_the_events_still_queued() {
 }
 
 #[test]
+fn a_question_open_over_the_dialog_keeps_its_queued_click_until_it_is_answered() {
+    let mut app = app();
+    start(&mut app, &format!("{DRAW} {FORM} vc.log(w.show());"));
+    assert!(until_window(&mut app));
+    with_window(&app, |d| d.queue(&UiEvent::Click(3))).unwrap();
+    crate::dialogs::script_run::ask_to_close(&mut app);
+    assert!(is_open::<CloseQuestion>(&app));
+    for _ in 0..3 {
+        pump(&mut app);
+        script_runs::poll(&mut app);
+    }
+    assert!(matches!(queued(&app).as_slice(), [Queued::Click(_)]), "the click waits under the question");
+    assert!(app.session.script_window().is_some(), "the run still waits at the dialog");
+    cancel_close_question(&mut app);
+    assert!(until_window(&mut app), "the dialog shows again");
+    step(&mut app, Vec::new());
+    assert!(!until_window(&mut app), "the queued click on OK closes the dialog");
+    assert_eq!(log(&app), json!([1]));
+}
+
+#[test]
 fn a_click_from_ui_dialog_confirm_gives_the_typed_text_first() {
     let mut app = app();
     start(&mut app, &format!("{FORM} vc.log([w.show(), name.text]);"));

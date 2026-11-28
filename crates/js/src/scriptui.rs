@@ -1614,6 +1614,8 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
     i.temp_roots.extend(objects.iter().cloned());
     let mut nodes = Vec::with_capacity(order.len());
     let mut names = Vec::with_capacity(order.len());
+    // Whether each control can be used: it and every container that holds it are enabled and shown.
+    let mut usable: Vec<bool> = Vec::with_capacity(order.len());
     let mut items_total = 0usize;
     // Each list's array of items as it is read; a change to it means a later getter changed the list.
     let mut snapshot = Vec::with_capacity(order.len());
@@ -1633,8 +1635,10 @@ fn describe_rooted(i: &mut Interp, win: ObjId) -> JsResult<Option<Described>> {
         ];
         let enabled = get(i, o, "enabled")?.truthy();
         let visible = get(i, o, "visible")?.truthy();
+        let held_usable = *parent < 0.0 || usable.get(*parent as usize).copied().unwrap_or(false);
+        usable.push(enabled && visible && held_usable);
         // Enter and Escape click a button found by its name or text only when it can be clicked.
-        let clickable = kind == "button" && enabled && visible;
+        let clickable = kind == "button" && usable.last().copied().unwrap_or(false);
         names.push((clickable, name, text));
         d.push(("enabled".into(), Data::Bool(enabled)));
         d.push(("visible".into(), Data::Bool(visible)));

@@ -413,6 +413,18 @@ fn a_hidden_or_disabled_ok_button_is_not_the_default_found_by_its_text() {
 }
 
 #[test]
+fn an_ok_button_in_a_hidden_or_disabled_group_is_not_the_default_found_by_its_text() {
+    let (mut r, seen, _) = realm(vec![close()]);
+    let source = "var w = new Window('dialog'); var off = w.add('group'); off.enabled = false; off.add('button', undefined, 'OK'); \
+        var hid = w.add('group'); hid.visible = false; hid.add('group').add('button', undefined, 'Cancel'); \
+        w.add('button', undefined, 'OK'); w.add('button', undefined, 'Cancel'); w.show()";
+    assert_eq!(r.run(source).unwrap(), JsValue::Number(0.0));
+    let described = &seen.borrow().descriptions[0];
+    assert_eq!(field(described, "defaultElement"), &Data::Number(6.0), "the OK button outside the disabled group is the default");
+    assert_eq!(field(described, "cancelElement"), &Data::Number(7.0), "the Cancel button outside the hidden group is the cancel element");
+}
+
+#[test]
 fn an_edit_field_that_hides_its_text_is_refused_when_shown() {
     let (mut r, seen, _) = realm(Vec::new());
     let source = "var w = new Window('dialog'); w.add('edittext', undefined, 'secret', {noecho: true}); try { w.show(); } catch (e) { e.message }";

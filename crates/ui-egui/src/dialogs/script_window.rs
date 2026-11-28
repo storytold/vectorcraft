@@ -678,7 +678,8 @@ pub(crate) fn pump(app: &mut VectorcraftApp) {
         app.status(e);
     }
     let Some(w) = app.session.script_window() else { return };
-    if with_window(app, |d| d.shown()) != Some(w.shown) {
+    // A question open over the dialog keeps its queued events until the dialog is on top again.
+    if with_window(app, |d| d.shown()) != Some(w.shown) || !is_top(app) {
         return;
     }
     if let Some(event) = with_window(app, |d| d.next_event(&w)).flatten()
