@@ -58,7 +58,7 @@ fn sized_row(key: &str, label: Label, default: f64, relative: bool, lengths: Len
 /// the flag's JSON values, which `form::json_of` writes back as a bool.
 pub(super) fn relative_radio(label: impl Into<Label>, default: bool) -> Param {
     let options = vec![("true".to_owned(), lbl!("Relative")), ("false".to_owned(), lbl!("Absolute"))];
-    Param::new("relative", label, ParamKind::radio(options, Some(default.to_string())))
+    Param::new("relative", label, ParamKind::radio(options, Some(default.to_string()))).options_in_row()
 }
 
 /// Whether the pair's rows are shares of the object's size.
@@ -71,14 +71,16 @@ pub(super) fn transform(cx: &EffectCx, _fields: &DialogFields) -> Vec<Param> {
     let lengths = cx.lengths;
     vec![
         Param::custom("transform", lbl!("Transform"), move |ui, fields, _| transform_each::rows(ui, fields, lengths, ScaleLink::None))
-            .companions(["scaleH", "scaleV", "moveH", "moveV", "rotate"]),
+            .companions(["scaleH", "scaleV", "moveH", "moveV", "rotate"])
+            .full_width(),
         Param::section(lbl!("Options")),
         Param::new("objects", lbl!("Transform Objects"), ParamKind::bool(true)),
         Param::new("patterns", lbl!("Transform Patterns"), ParamKind::bool(false)),
         Param::new("strokes", lbl!("Scale Strokes & Effects"), ParamKind::bool(false)),
         Param::new("copies", lbl!("Copies:"), ParamKind::int(Some(0), Some(1000), 0)),
-        Param::custom("__reflect", lbl!("Reflect"), |ui, fields, _| transform_each::reflect_checks(ui, fields))
-            .companions(["reflectX", "reflectY", "random"]),
+        Param::new("reflectX", lbl!("Reflect X"), ParamKind::bool(false)),
+        Param::new("reflectY", lbl!("Reflect Y"), ParamKind::bool(false)),
+        Param::new("random", lbl!("Random"), ParamKind::bool(false)),
         Param::custom("__reference", lbl!("Reference Point"), |ui, fields, _| transform_each::reference_point(ui, fields)).companions(["reference"]),
     ]
 }
@@ -102,7 +104,8 @@ pub(super) fn distort(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
             "points",
             Label::from(crate::i18n::tr_ctx(crate::i18n::current(), "effect", "Points").to_string()),
             ParamKind::radio(points, None),
-        ),
+        )
+        .options_in_row(),
     ]
 }
 
@@ -185,12 +188,13 @@ pub(super) fn drop_shadow(cx: &EffectCx, fields: &DialogFields) -> Vec<Param> {
         .map(|p| if matches!(p.key.as_str(), "opacity" | "x" | "y" | "blur") { p.step_arrows(StepArrows::Leading) } else { p });
     rows.chain([
         Param::new("shade", Label::Empty, ParamKind::radio(shades, None)),
-        Param::new("color", lbl!("Color"), ParamKind::color(None)).enabled_when("shade", "color"),
+        Param::new("color", lbl!("Color"), ParamKind::color(None)).enabled_when("shade", "color").under_option("color"),
         Param::number("darkness", lbl!("Darkness"), 100.0, 1.0, 0)
             .bounds(Some(0.0), Some(100.0))
             .unit(UnitKind::Percent)
             .step_arrows(StepArrows::Leading)
-            .enabled_when("shade", "darkness"),
+            .enabled_when("shade", "darkness")
+            .under_option("darkness"),
     ])
     .collect()
 }

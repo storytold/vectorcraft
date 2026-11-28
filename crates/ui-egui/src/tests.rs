@@ -5,6 +5,7 @@ pub(super) mod background;
 mod clipboard;
 mod contextmenu;
 mod cut;
+mod dialog_layout;
 mod distortkeys;
 mod document_drag;
 mod drag_commands;
