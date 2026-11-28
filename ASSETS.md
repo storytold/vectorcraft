@@ -33,7 +33,7 @@ Generated-in-code art is original and has no file to list. This covers the defau
 
 **Font files are never committed here.** Fonts shared by the Crafting Apps live in [storytold/craft-fonts](https://github.com/storytold/craft-fonts). The small Latin UI/document fonts below predate that rule and stay.
 
-**Optional build input: craft-fonts.** Builds made with `CRAFT_FONTS_DIR=<craft-fonts checkout>` (all official releases) embed the Japanese fonts listed in its [`ATTRIBUTION.md`](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md): BIZ UDPGothic Regular and Bold, Shippori Mincho Regular and BIZ UDMincho Regular (web builds: BIZ UDPGothic Regular only), all under the SIL Open Font License 1.1. They are not files in this repository; release packages carry each one's `OFL-<family>.txt`. Builds without `CRAFT_FONTS_DIR` embed none of them.
+**Optional build input: craft-fonts.** Non-web builds made with `CRAFT_FONTS_DIR=<craft-fonts checkout>` (all official releases) embed the Japanese and Hebrew fonts listed in its [`ATTRIBUTION.md`](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md): BIZ UDPGothic Regular and Bold, Shippori Mincho Regular, BIZ UDMincho Regular, and Noto Sans Hebrew Regular (`NotoSansHebrew-Regular.ttf`), all under the SIL Open Font License 1.1. Web builds embed only BIZ UDPGothic Regular and fetch Noto Sans Hebrew Regular on demand, as configured in `crates/text/web-fonts.txt`. They are not files in this repository; release packages carry each one's `OFL-<family>.txt`. Builds without `CRAFT_FONTS_DIR` embed none of them.
 
 | Asset | Author | Source | Licence | Notes |
 |---|---|---|---|---|

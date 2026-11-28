@@ -69,6 +69,7 @@ static EMBEDDED: &Embedded = &[
     ("fi", "", include_str!("i18n/fi.tsv")),
     ("tr", "", include_str!("i18n/tr.tsv")),
     ("ca", "", include_str!("i18n/ca.tsv")),
+    ("he", "", include_str!("i18n/he.tsv")),
 ];
 
 /// The codes of [`EMBEDDED`] the interface offers. Browsers cannot use the native installed-font

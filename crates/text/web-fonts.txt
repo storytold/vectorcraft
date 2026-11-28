@@ -40,3 +40,4 @@ background | Aref Ruqaa | Bold
 background | Gulzar | Regular
 demand | NanumGothic | Regular
 demand | Noto Sans Devanagari | Regular
+demand | Noto Sans Hebrew | Regular

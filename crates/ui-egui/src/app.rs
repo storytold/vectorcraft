@@ -406,9 +406,10 @@ impl VectorcraftApp {
         if self.host.lang() != lang {
             self.host = Arc::new(self.host.with_lang(lang));
         }
+        let dir = craft::i18n::direction(lang.code());
         let native_ppp = self.ui_ctx.as_ref().map_or(1.0, |ctx| ctx.pixels_per_point() / ctx.zoom_factor());
         // The canvas steps through the zoom stops of the current window's display.
-        let root = root_env(&self.session.prefs, native_ppp, self.print_ppi());
+        let root = root_env(&self.session.prefs, native_ppp, self.print_ppi()).direction(dir);
         FrameInput::new(root).commands(menus::model::command_input(self)).host(self.host.clone())
     }
 
@@ -457,6 +458,10 @@ impl VectorcraftApp {
         self.ticked_pass = Some(ctx.cumulative_pass_nr());
         let lang = self.ui_language();
         i18n::set_current(lang);
+        let rtl = craft::i18n::direction(lang.code()) == craft::i18n::Direction::Rtl;
+        if ctx.global_style().right_to_left != rtl {
+            ctx.all_styles_mut(|s| s.right_to_left = rtl);
+        }
         // The engine gives new type the Japanese defaults while the UI is in Japanese.
         if self.session.ui_language.as_deref() != Some(lang.code()) {
             self.session.ui_language = Some(lang.code().to_string());

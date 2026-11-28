@@ -163,7 +163,8 @@ mod tests {
         // Korean and Devanagari faces are fetched only on demand, never at startup or in the
         // background queue every session runs.
         let demand: Vec<_> = WEB_FONTS.iter().filter(|w| w.demand).map(|w| w.family).collect();
-        let expected: Vec<_> = ["NanumGothic", "Noto Sans Devanagari"].into_iter().filter(|n| CRAFT_FONTS.iter().any(|f| f.family == *n)).collect();
+        let expected: Vec<_> =
+            ["NanumGothic", "Noto Sans Devanagari", "Noto Sans Hebrew"].into_iter().filter(|n| CRAFT_FONTS.iter().any(|f| f.family == *n)).collect();
         assert_eq!(demand, expected);
         assert!(WEB_FONTS.iter().all(|w| !(w.startup && w.demand)));
     }

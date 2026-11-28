@@ -835,8 +835,8 @@ fn message_dump_lists_the_reported_messages() {
 }
 
 /// Languages whose catalogs leave [`MENU_KEEP_AS_IS`] in English.
-const KEEPS_MENU_NAMES: [&str; 20] =
-    ["cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
+const KEEPS_MENU_NAMES: [&str; 21] =
+    ["cs", "de", "el", "es", "fr", "he", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "fi", "tr", "ca"];
 
 /// Menu labels the menu-complete catalogs (Czech, German, Spanish, Italian, Japanese, Brazilian Portuguese) show as they are: the product name, a format name, the built-in workspace
 /// names and the perspective grid presets (names, shown untranslated wherever else they appear).
@@ -1985,8 +1985,8 @@ fn command_ids(s: &str) -> Vec<&str> {
 /// Languages whose catalogs translate status and error messages; [`untranslated_report`] lists
 /// the messages each one lacks.
 const COMPLETE_MESSAGES: &[&str] = &[
-    "cs", "de", "el", "es", "fr", "hi", "hu", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi", "tr", "ca",
-    "nl", "da", "id", "bg",
+    "cs", "de", "el", "es", "fr", "he", "hi", "hu", "id", "it", "ja", "ka", "ko", "pl", "pt-br", "ru", "sv", "uk", "vi", "zh-hans", "zh-hant", "fi",
+    "tr", "ca", "nl", "da", "bg",
 ];
 
 /// Crates whose error and status messages reach the status bar, the crates whose errors the
@@ -2658,3 +2658,38 @@ const RENDER_SITE_ROWS: &[(&str, &str)] = &[
     ("", "Roman"),
     ("lighting", "Light"),
 ];
+#[test]
+fn hebrew_locale_tags_resolve() {
+    let he = Lang::from_code("he").expect("he registered");
+    assert_eq!(he.name(), "עברית");
+    assert!(i18n().rtl(he));
+    for tag in ["he", "he-IL", "he_IL.UTF-8"] {
+        assert_eq!(i18n().match_tag(tag), Some(he), "{tag}");
+    }
+}
+
+#[test]
+fn hebrew_plurals_have_three_forms() {
+    let he = Lang::from_code("he").expect("he registered");
+    let mut count = 0;
+    for line in include_str!("he.tsv").lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut cols = line.splitn(3, '\t');
+        let (Some(ctx), Some(src), Some(tr)) = (cols.next(), cols.next(), cols.next()) else {
+            continue;
+        };
+        if ctx != "@plural" {
+            continue;
+        }
+        count += 1;
+        let parts: Vec<&str> = tr.split('|').collect();
+        assert_eq!(parts.len(), 3, "{src}");
+        let (one, other) = src.split_once('|').unwrap();
+        for (n, form) in [(1, 0), (2, 1), (0, 2), (3, 2), (21, 2)] {
+            assert_eq!(trn(he, n, one, other), parts[form].replace("{n}", &n.to_string()), "{src}: {n}");
+        }
+    }
+    assert!(count >= 13, "Hebrew plural rows missing ({count})");
+}
