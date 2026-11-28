@@ -80,7 +80,8 @@ fn export_tool_lists_engine_formats_and_options() {
             "wmf",
             "hpgl",
             "tga",
-            "psd"
+            "psd",
+            "cmx"
         ])
     );
     for k in ["artboard", "range", "options"] {

@@ -1142,3 +1142,219 @@ fn optimize_to_file_size_finds_a_fit_when_a_lower_setting_gives_a_larger_file() 
     assert!(highest_within(&mut size, &start, (1, 90), set_quality, 100, &mut smallest).unwrap().is_none());
     assert_eq!(smallest.map(|(s, n)| (s.quality, n)), Some((36, 415)));
 }
+
+/// The bytes of a `document.exportForWeb.saveColorTable` reply without a path.
+fn color_table_file(s: &mut Session, p: Value) -> (Value, Vec<u8>) {
+    let v = run(s, "document.exportForWeb.saveColorTable", p);
+    let bytes = vectorcraft_format::base64_decode(v["dataBase64"].as_str().unwrap()).unwrap();
+    (v, bytes)
+}
+
+/// The color table file of `colors` (`#rrggbb`) and transparent entry `transparent`, as the
+/// published layout gives it: 256 RGB triples (zero past the colors used), then the number of
+/// colors and the transparent index (0xFFFF for none), two bytes each, most significant first.
+fn act_layout(colors: &[&str], transparent: Option<u16>) -> Vec<u8> {
+    let mut out = vec![];
+    for c in colors {
+        let rgb = u32::from_str_radix(c.trim_start_matches('#'), 16).unwrap();
+        out.extend_from_slice(&[(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8]);
+    }
+    out.resize(768, 0);
+    out.extend_from_slice(&(colors.len() as u16).to_be_bytes());
+    out.extend_from_slice(&transparent.unwrap_or(0xFFFF).to_be_bytes());
+    out
+}
+
+/// Save Color Table writes the table the preview shows as a 772-byte color table file: the colors
+/// as written, in file order, zero bytes after them, the count and the transparent entry.
+#[test]
+fn save_color_table_writes_the_act_layout() {
+    let mut s = two_colours();
+    for format in ["gif", "png8"] {
+        let p = json!({"format": format, "dither": "none", "transparency": false});
+        let pv = run(&mut s, "document.exportForWeb.preview", p.clone());
+        let colors: Vec<&str> = pv["colors"].as_array().unwrap().iter().map(|c| c["color"].as_str().unwrap()).collect();
+        assert_eq!(colors.len(), 2, "{pv}");
+        let (v, bytes) = color_table_file(&mut s, p);
+        assert_eq!(bytes, act_layout(&colors, None), "{format}");
+        assert_eq!((v["colors"].as_u64(), v["transparentIndex"].is_null(), v["bytes"].as_u64()), (Some(2), true, Some(772)), "{v}");
+    }
+    // Transparent pixels: the trailer names the transparent entry.
+    let mut s = session(40.0, 30.0);
+    rect(&mut s, [10.0, 5.0, 10.0, 20.0], "#ff0000");
+    let p = json!({"format": "gif", "antiAlias": "none", "dither": "none"});
+    let pv = run(&mut s, "document.exportForWeb.preview", p.clone());
+    let table = pv["colors"].as_array().unwrap();
+    let at = table.iter().position(|c| c["transparent"] == true).expect("a transparent entry") as u16;
+    let colors: Vec<&str> = table.iter().map(|c| c["color"].as_str().unwrap()).collect();
+    let (v, bytes) = color_table_file(&mut s, p);
+    assert_eq!(bytes, act_layout(&colors, Some(at)));
+    assert_eq!(v["transparentIndex"].as_u64(), Some(u64::from(at)));
+}
+
+/// A color shifted by hand goes into the file as the color it is written as.
+#[test]
+fn save_color_table_writes_shifted_colors_as_written() {
+    let mut s = two_colours();
+    let p = json!({"format": "gif", "dither": "none", "transparency": false, "colorTable": {"shifted": {"#ff0000": "#123456"}}});
+    let (_, bytes) = color_table_file(&mut s, p);
+    let colors: Vec<[u8; 3]> = bytes[..6].chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
+    assert!(colors.contains(&[0x12, 0x34, 0x56]) && !colors.contains(&[255, 0, 0]), "{colors:?}");
+}
+
+/// Save Color Table writes the file at `path`, adding `.act` to a name without an extension and
+/// keeping another extension, and refuses formats without a color table and bad params.
+#[test]
+fn save_color_table_writes_the_path_and_refuses_bad_params() {
+    let dir = std::env::temp_dir().join(format!("vc-color-table-save-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut s = two_colours();
+    let p = json!({"format": "gif", "dither": "none"});
+    let (_, bytes) = color_table_file(&mut s, p.clone());
+    let bare = dir.join("table").to_string_lossy().into_owned();
+    let v = run(&mut s, "document.exportForWeb.saveColorTable", merge(&p, json!({"path": bare})));
+    let written = format!("{bare}.act");
+    assert_eq!(v["path"].as_str(), Some(written.as_str()));
+    assert_eq!(std::fs::read(&written).unwrap(), bytes);
+    let other = dir.join("table.tbl").to_string_lossy().into_owned();
+    run(&mut s, "document.exportForWeb.saveColorTable", merge(&p, json!({"path": other})));
+    assert_eq!(std::fs::read(&other).unwrap(), bytes);
+    for (bad, says) in [
+        (json!({"format": "jpg"}), "`jpg` has no color table"),
+        (json!({"format": "png24"}), "`png24` has no color table"),
+        (json!({"path": 5}), "`path` must be a string"),
+        (json!({"path": ""}), "`path` is empty"),
+        (json!({"path": "  "}), "`path` is empty"),
+        (json!({"slice": "1"}), "`slice` is a slice number"),
+        (json!({"slice": 0}), "`slice` is a slice number"),
+    ] {
+        let e = s.execute("document.exportForWeb.saveColorTable", &bad).unwrap_err().to_string();
+        assert!(e.contains(says), "{bad}: {e}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// With Save for Web set to the selected slices and none selected, Save Color Table still writes
+/// the whole image's table, the one the dialog's preview shows. A `slice` is still looked up among
+/// the selected slices.
+#[test]
+fn save_color_table_of_the_whole_image_needs_no_selected_slice() {
+    let mut s = two_colours();
+    let slice = run(&mut s, "object.slice.create", json!({"x": 0, "y": 0, "width": 20, "height": 30}))["id"].as_u64().unwrap();
+    run(&mut s, "object.slice.select", json!({}));
+    let p = json!({"format": "gif", "dither": "none", "transparency": false});
+    let (_, whole) = color_table_file(&mut s, merge(&p, json!({"slices": "none"})));
+    let (v, bytes) = color_table_file(&mut s, merge(&p, json!({"slices": "selected"})));
+    assert_eq!(bytes, whole, "{v}");
+    let number = run(&mut s, "slice.list", json!({}))["slices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["id"].as_u64() == Some(slice))
+        .map(|l| l["number"].clone())
+        .unwrap();
+    let e = s.execute("document.exportForWeb.saveColorTable", &merge(&p, json!({"slices": "selected", "slice": number}))).unwrap_err().to_string();
+    assert!(e.contains("no selected slice"), "{e}");
+}
+
+/// The preview refuses a `slice` that is not a slice number instead of previewing the whole image.
+#[test]
+fn preview_refuses_a_slice_that_is_not_a_number() {
+    let mut s = two_colours();
+    for slice in [json!("1"), json!(0), json!(-1), json!(1.5)] {
+        let e = s.execute("document.exportForWeb.preview", &json!({"slice": slice})).unwrap_err().to_string();
+        assert!(e.contains("`slice` is a slice number"), "{slice}: {e}");
+    }
+    assert!(s.execute("document.exportForWeb.preview", &json!({"slice": null})).is_ok());
+}
+
+/// Color table files are read as the published layout gives them: 768 bytes are 256 colors without
+/// a transparent entry; 772 bytes add the count and the transparent index.
+#[test]
+fn color_table_files_are_read_by_the_published_layout() {
+    use cmd::webexport::read_act;
+    let long: Vec<u8> = (0..768).map(|i| (i % 251) as u8).collect();
+    let t = read_act(&long).unwrap();
+    assert_eq!((t.colors.len(), t.colors[0], t.colors[255], t.transparent), (256, [0, 1, 2], [12, 13, 14], None));
+    let t = read_act(&act_layout(&["#ff0000", "#00ff00", "#0000ff"], Some(1))).unwrap();
+    assert_eq!((t.colors, t.transparent), (vec![[255, 0, 0], [0, 255, 0], [0, 0, 255]], Some(1)));
+    assert_eq!(read_act(&act_layout(&["#ff0000", "#00ff00"], None)).unwrap().transparent, None);
+    // An index past the colors used names no entry.
+    assert_eq!(read_act(&act_layout(&["#ff0000", "#00ff00"], Some(2))).unwrap().transparent, None);
+    let mut zero = act_layout(&["#ff0000"], None);
+    zero[768..770].copy_from_slice(&0u16.to_be_bytes());
+    let mut over = act_layout(&["#ff0000"], None);
+    over[768..770].copy_from_slice(&257u16.to_be_bytes());
+    for bad in [vec![], vec![0; 767], vec![0; 769], vec![0; 771], vec![0; 773], zero, over] {
+        assert!(read_act(&bad).unwrap_err().contains("not a color table"), "{} bytes", bad.len());
+    }
+}
+
+/// Load Color Table makes the file's colors the fixed palette, other than its transparent entry,
+/// with the file's color count; the preview of the loaded settings writes those colors.
+#[test]
+fn load_color_table_makes_the_file_the_fixed_palette() {
+    let mut s = two_colours();
+    let file = act_layout(&["#00ff00", "#ffffff", "#ff0000"], Some(1));
+    let table = json!({
+        "deleted": ["#0000ff"], "shifted": {"#ff0000": "#111111"}, "webShift": ["#ff0000"], "locked": ["#ff0000"],
+        "transparent": ["#00ff00"], "sort": "hue",
+    });
+    let p = json!({"format": "gif", "dither": "none", "transparency": false, "webSnap": 100, "colorTable": table});
+    let v = run(&mut s, "webExport.loadColorTable", merge(&p, json!({"dataBase64": vectorcraft_format::base64_encode(&file)})));
+    assert_eq!((&v["colors"], &v["transparentIndex"]), (&json!(["#00ff00", "#ffffff", "#ff0000"]), &json!(1)));
+    let settings = &v["settings"];
+    assert_eq!((&settings["colors"], &settings["webSnap"]), (&json!(3), &json!(0)));
+    let table = &settings["colorTable"];
+    assert_eq!(
+        (&table["customPalette"], &table["deleted"], &table["shifted"], &table["webShift"]),
+        (&json!(["#00ff00", "#ff0000"]), &json!([]), &json!({}), &json!([]))
+    );
+    assert_eq!((&table["locked"], &table["transparent"], &table["sort"]), (&json!([]), &json!([]), &json!("none")));
+    // The loaded palette is what the image is written with: blue takes the nearest loaded color.
+    let pv = run(&mut s, "document.exportForWeb.preview", settings.clone());
+    let written: Vec<&str> = pv["colors"].as_array().unwrap().iter().map(|c| c["color"].as_str().unwrap()).collect();
+    assert!(!written.is_empty() && written.iter().all(|c| ["#00ff00", "#ff0000"].contains(c)), "{pv}");
+    // A table saved and loaded again keeps its colors.
+    let opaque = json!({"format": "png8", "dither": "none", "transparency": false});
+    let saved = color_table_file(&mut s, opaque.clone()).1;
+    let again = run(&mut s, "webExport.loadColorTable", json!({"format": "png8", "dataBase64": vectorcraft_format::base64_encode(&saved)}));
+    let shown = run(&mut s, "document.exportForWeb.preview", opaque);
+    let before: Vec<&Value> = shown["colors"].as_array().unwrap().iter().map(|c| &c["color"]).collect();
+    assert_eq!(again["colors"].as_array().unwrap().iter().collect::<Vec<_>>(), before);
+    // A table whose only color is its transparent entry loads that color.
+    let only = act_layout(&["#336699"], Some(0));
+    let v = run(&mut s, "webExport.loadColorTable", json!({"dataBase64": vectorcraft_format::base64_encode(&only)}));
+    assert_eq!((&v["settings"]["colorTable"]["customPalette"], &v["settings"]["colors"]), (&json!(["#336699"]), &json!(2)));
+}
+
+/// Load Color Table reads a path, reads no more of a file than a color table takes, and refuses
+/// bad params without changing the remembered settings.
+#[test]
+fn load_color_table_reads_a_path_and_refuses_bad_params() {
+    let dir = std::env::temp_dir().join(format!("vc-color-table-load-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut s = two_colours();
+    let path = dir.join("t.act").to_string_lossy().into_owned();
+    std::fs::write(&path, act_layout(&["#010203", "#040506"], None)).unwrap();
+    let v = run(&mut s, "webExport.loadColorTable", json!({"path": path}));
+    assert_eq!(v["settings"]["colorTable"]["customPalette"], json!(["#010203", "#040506"]));
+    let large = dir.join("large.act").to_string_lossy().into_owned();
+    std::fs::write(&large, vec![0u8; 1 << 20]).unwrap();
+    let b64 = vectorcraft_format::base64_encode(&act_layout(&["#010203"], None));
+    for (bad, says) in [
+        (json!({"path": large}), "not a color table"),
+        (json!({"dataBase64": vectorcraft_format::base64_encode(&[0u8; 100])}), "not a color table"),
+        // A whole table with more data after it is too long.
+        (json!({"dataBase64": format!("{b64}AAAA")}), "not a color table"),
+        (json!({}), "give exactly one of `path` and `dataBase64`"),
+        (json!({"path": path, "dataBase64": b64}), "give exactly one of `path` and `dataBase64`"),
+        (json!({"dataBase64": "%%%"}), "bad dataBase64"),
+        (json!({"dataBase64": b64, "format": "jpg"}), "`jpg` has no color table"),
+    ] {
+        let e = s.execute("webExport.loadColorTable", &bad).unwrap_err().to_string();
+        assert!(e.contains(says), "{bad}: {e}");
+    }
+    assert!(s.last_web_settings().color_table.custom_palette.is_empty(), "nothing is remembered");
+    let _ = std::fs::remove_dir_all(dir);
+}

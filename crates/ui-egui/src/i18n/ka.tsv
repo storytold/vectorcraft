@@ -8486,6 +8486,14 @@ imageTrace	Outline	კონტური
 	The script asks to read and write a folder you choose, with everything in it.	სკრიპტი ითხოვს თქვენ მიერ არჩეული საქაღალდისა და მთელი მისი შიგთავსის წაკითხვასა და ჩაწერას.
 	Allow Once	ერთხელ დაშვება
 	Always Allow This Script	ამ სკრიპტის ყოველთვის დაშვება
+	No script has kept file access.	არცერთ სკრიპტს არ აქვს შენახული წვდომა ფაილებზე.
+	Read file	ფაილის წაკითხვა
+	Read and write file	ფაილის წაკითხვა და ჩაწერა
+	Read and write folder	საქაღალდის წაკითხვა და ჩაწერა
+	Revoke	ნებართვის გაუქმება
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	ნებართვის გაუქმება შლის სკრიპტის ყველა ვერსიისთვის შენახულ წვდომას. საქაღალდეზე წვდომა მოიცავს მასში არსებულ ყველაფერს.
+@msg	Script file access revoked	სკრიპტის წვდომა ფაილებზე გაუქმდა
+@msg	The script file access was already revoked	სკრიპტის წვდომა ფაილებზე უკვე გაუქმებული იყო
 	Deny	უარყოფა
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	სკრიპტს შეუძლია ღია დოკუმენტების შეცვლა და მის მიერ გაშვებული ბრძანებებით ფაილების ჩაწერა. გაუშვით მხოლოდ სანდო სკრიპტები.
 	Do not show this warning again	აღარ აჩვენო ეს გაფრთხილება
@@ -8652,6 +8660,7 @@ liquify-list-end	{0}, {1}	{0} და {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	სკრიპტის ფაილის დიალოგისთვის `answer` უნდა იყოს ერთ-ერთი: once, always, deny, stop
 @msg	choose a file or folder first, or deny	ჯერ აირჩიეთ ფაილი ან საქაღალდე, ან უარყავით
 @msg	the script file permissions could not be saved: {e}	სკრიპტების ფაილების ნებართვების შენახვა ვერ მოხერხდა: {e}
+@msg	the script file permissions could not be read: {e}	სკრიპტების ფაილების ნებართვების წაკითხვა ვერ მოხერხდა: {e}
 @msg	this script's file access can be allowed only once	ამ სკრიპტის წვდომა ფაილებზე მხოლოდ ერთხელ შეიძლება დაიშვას
 @msg	Only the person at the keyboard can allow a script's file access	სკრიპტის წვდომას ფაილებზე მხოლოდ კლავიატურასთან მყოფი ადამიანი უშვებს
 @msg	A script is given at most 2,048 files: the files picked after them were left out	სკრიპტი იღებს მაქსიმუმ 2 048 ფაილს: მათ შემდეგ არჩეული ფაილები გამოტოვებულია
@@ -9688,6 +9697,21 @@ axis	Y Axis	Y ღერძი
 @msg	time budget	დროის ბიუჯეტი
 @msg	memory budget (the selection is too large to hand over)	მეხსიერების ბიუჯეტი (მონიშნული ზედმეტად დიდია გადასაცემად)
 @msg	output size ({what} is {len} bytes, limit {max})	გამოტანის ზომა ({what}: {len} ბაიტი, ლიმიტი {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, სტრიქონი {line}, სვეტი {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	მეხსიერების ბიუჯეტი
+@msg	call depth	გამოძახების სიღრმე
+@msg	run(input, params) returned no output object	run(input, params)-მა გამოტანის ობიექტი არ დააბრუნა
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" საჭიროებს `script`-ს: პლაგინის .js ფაილის სახელს მანიფესტის გვერდით
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` უნდა იყოს მანიფესტის საქაღალდეში მყოფი .js ფაილის სახელი: 1-128 ბაიტი, საქაღალდის გარეშე, `:` სიმბოლოს გარეშე, `.` სიმბოლოთი არ უნდა იწყებოდეს
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` სკრიპტის ტექსტია და მიეთითება მხოლოდ JSON-ში, რომელსაც plugin.install-ის dataBase64 იღებს: .vcplugin ფაილი თავის სკრიპტს `script` გასაღებში ასახელებს
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript პლაგინის მანიფესტი მიუთითებს `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" ობიექტების ფილტრისთვისაა (`kind` "filter"), არა `kind` "{kind}" მნიშვნელობისთვის
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript პლაგინს არ შეუძლია ნებართვის `{name}` ჩამოთვლა: ჰოსტის ნებართვებიდან მას შეუძლია ჩამოთვალოს `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly მოდულის მანიფესტი გამოტოვებს `runtime` გასაღებს: "js" JavaScript პლაგინისთვისაა
+@msg	a JavaScript plug-in makes no command calls	JavaScript პლაგინი ბრძანებებს არ იძახებს
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) იღებს ორ რიცხვს
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) იღებს დონეს, 0 (შეცდომა), 1 (გაფრთხილება), 2 (ინფორმაცია) ან 3 (გამართვა), და სტრიქონს
 @msg	the plug-in's grant can't be removed from the plug-in store	პლაგინის ნებართვის წაშლა პლაგინების საცავიდან შეუძლებელია
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	ნებართვა `{shown}` დაჯავშნილია პლაგინების მომავალი API-სთვის; ეს ჰოსტი მას არ გასცემს
 @msg	unknown permission `{shown}`	უცნობი ნებართვა `{shown}`

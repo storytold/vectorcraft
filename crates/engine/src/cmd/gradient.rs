@@ -87,10 +87,12 @@ fn select_stop(s: &mut Session, p: &Value) -> Result<Value> {
 /// front, the Appearance panel's active item and the tool the proxy in front shows the default
 /// paint for (the Live Paint Bucket, or the Shape Builder's Fill proxy). Selecting other art,
 /// picking a part of the instance, toggling the proxy, picking another item or choosing such a
-/// tool or leaving it leaves no stop selected.
+/// tool or leaving it leaves no stop selected. The Gradient panel keys its selected midpoint
+/// diamond by it as well ([`Session::gradient_owner`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct StopOwner {
-    doc: Option<usize>,
+pub struct StopOwner {
+    /// The active document's uid, which stays the same when its tab moves.
+    doc: Option<u64>,
     object: Option<NodeId>,
     /// The object whose paint the active proxy shows: a Live Paint group without faces (or edges)
     /// first in the selection shows the next object's.
@@ -106,7 +108,7 @@ impl StopOwner {
     pub(crate) fn of(s: &Session) -> Self {
         let st = s.active();
         Self {
-            doc: s.active,
+            doc: st.map(|d| d.uid),
             object: st.and_then(|d| d.selection.objects.first().copied()),
             source: s.proxy_source(!s.fill_active).map(|(n, _)| n.id),
             part: st.is_some_and(|d| d.selection.symbol_part.is_some()),
@@ -122,6 +124,17 @@ impl StopOwner {
     }
 }
 
+/// The drawing paints affected by an edit from the Gradient panel.
+#[derive(PartialEq)]
+pub struct GradientEditPaints(Vec<EditedPaint>);
+
+#[derive(PartialEq)]
+struct EditedPaint {
+    id: NodeId,
+    item: Option<usize>,
+    paints: Vec<Paint>,
+}
+
 impl Session {
     /// Does `paint.editGradient` without `ids` edit objects on the fill (or the stroke, `stroke`)? It does not
     /// while the active tool paints with the chosen fill (or stroke: [`Session::tool_paints`]) or when nothing it
@@ -134,11 +147,46 @@ impl Session {
                 .is_ok_and(|item| item.of_kind(self, !stroke).targets_for(self, &p, !stroke).is_ok_and(|ids| !ids.is_empty()))
     }
 
+    /// Snapshot the paints a gradient edit without explicit targets would write, by object and
+    /// appearance item. Text without an item has one paint per run. The proxy can display just
+    /// the first paint when an edit goes to several objects or text runs.
+    pub fn gradient_edit_paints(&self, stroke: bool) -> Result<GradientEditPaints> {
+        const CMD: &str = "paint.editGradient";
+        let p = json!({ "stroke": stroke });
+        if super::paint::for_tool(self, &p, stroke) {
+            return Ok(GradientEditPaints(Vec::new()));
+        }
+        let doc = &self.doc()?.doc;
+        let item = item_target(self, &p, CMD)?.of_kind(self, !stroke);
+        let ids = item.targets_for(self, &p, !stroke)?;
+        let ids = super::appearance::drop_design_art_rows(self, ids, item, !stroke, CMD)?;
+        let mut out = Vec::with_capacity(ids.len());
+        for (id, item) in ids.iter().copied().zip(item.per_target(self, &ids)) {
+            let (Some(node), Some(item)) = (doc.node(id), item) else { continue };
+            let index = item.resolve(&node.appearance, !stroke, CMD)?;
+            let (item, paints) = if index.is_none()
+                && let NodeKind::Text(text) = &node.kind
+            {
+                (None, text.runs.iter().map(|run| if stroke { run.style.stroke.clone() } else { run.style.fill.clone() }).collect())
+            } else {
+                let item = index.or_else(|| node.appearance.items.iter().rposition(|row| row.is_fill() != stroke));
+                (item, node.appearance.paint_at(index, !stroke).cloned().into_iter().collect())
+            };
+            out.push(EditedPaint { id, item, paints });
+        }
+        Ok(GradientEditPaints(out))
+    }
+
     /// The selected gradient stop (`gradient.selectStop`), while the gradient it was selected on
     /// is still the one behind the active proxy. Callers check it against the stop count (an undo
     /// can remove stops).
     pub fn selected_stop(&self) -> Option<usize> {
         self.gradient_stop.filter(|(_, owner)| *owner == StopOwner::of(self)).map(|(i, _)| i)
+    }
+
+    /// Whose gradient the active proxy shows now, as a selected stop keeps it ([`StopOwner`]).
+    pub fn gradient_owner(&self) -> StopOwner {
+        StopOwner::of(self)
     }
 }
 

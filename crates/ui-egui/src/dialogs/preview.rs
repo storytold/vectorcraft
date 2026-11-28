@@ -1,32 +1,74 @@
 //! The live preview of a dialog that previews its command on the canvas: the dialog's values run as one interaction
 //! that Cancel rolls back and OK keeps as one undo step.
 
+use std::sync::{Arc, Weak};
+
 use serde_json::Value;
+use vectorcraft_doc::Selection;
 
 use crate::VectorcraftApp;
 
-/// What a dialog's live preview has shown: the command and parameters it last ran inside the interaction.
+/// What a dialog's live preview has shown: the command and parameters it last ran inside the interaction, and which
+/// interaction that was.
 #[derive(Clone, Default)]
 pub(crate) struct LivePreview {
     previewed: Option<(String, Value)>,
+    owner: Option<Owner>,
+}
+
+/// The interaction a preview ran in: its document's `uid` and `reverts`, and the selection snapshot the interaction
+/// began with, which no other interaction shares.
+#[derive(Clone)]
+struct Owner {
+    document: (u64, u64),
+    selection: Weak<Selection>,
 }
 
 impl LivePreview {
+    /// Whether the active document's interaction is the one this preview ran in.
+    fn owns(&self, app: &VectorcraftApp) -> bool {
+        let Some(owner) = &self.owner else { return false };
+        app.session.active().is_some_and(|state| {
+            (state.uid, state.reverts) == owner.document
+                && state.interaction.as_ref().is_some_and(|interaction| owner.selection.as_ptr() == Arc::as_ptr(&interaction.selection))
+        })
+    }
+
+    /// Forgets a preview whose interaction has ended (an undo, a switch of document) or was never this one's.
+    fn forget_if_gone(&mut self, app: &VectorcraftApp) {
+        if !self.owns(app) {
+            self.previewed = None;
+            self.owner = None;
+        }
+    }
+
     /// While `on`, runs `cmd` with `params` on the interaction's snapshot whenever they differ from the last preview
-    /// or no interaction is running; `label` names the undo step. Returns the command's answer when this call ran a
+    /// or its interaction has ended; `label` names the undo step. Returns the command's answer when this call ran a
     /// preview, and `None` when nothing ran: the same values again (a pass reruns nothing), a preview that could not
-    /// begin, or `on` off, which rolls a shown preview back. A refusal's text is written for the user, without the
-    /// command's id.
+    /// begin, another edit in progress, or `on` off, which rolls a shown preview back. Typing in progress is kept as
+    /// its own step first. A refusal's text is written for the user, without the command's id.
     pub(crate) fn run(&mut self, app: &mut VectorcraftApp, on: bool, label: &str, cmd: &str, params: &Value) -> Option<Result<Value, String>> {
+        self.forget_if_gone(app);
         if !on {
             if self.previewed.take().is_some() {
                 let _ = app.session.cancel_interaction();
             }
+            self.owner = None;
             return None;
         }
         let same = self.previewed.as_ref().is_some_and(|(c, p)| c == cmd && p == params);
-        if same && app.session.in_interaction() {
+        if same {
             return None;
+        }
+        // Another dialog's, a panel's or a tool's edit in progress gets no preview of this one.
+        if self.owner.is_none() && app.session.in_interaction() {
+            if let Err(e) = app.keep_typing() {
+                app.status(e);
+                return None;
+            }
+            if app.session.in_interaction() {
+                return None;
+            }
         }
         // A failure to begin (typing that can't be kept) shows, and nothing previews on the interaction still in
         // progress.
@@ -45,13 +87,24 @@ impl LivePreview {
             }
         };
         self.previewed = Some((cmd.to_string(), params.clone()));
+        self.owner = app.session.active().and_then(|state| {
+            let interaction = state.interaction.as_ref()?;
+            Some(Owner { document: (state.uid, state.reverts), selection: Arc::downgrade(&interaction.selection) })
+        });
         Some(answer)
     }
 
-    /// OK: keeps the previewed `cmd` as one undo step (or runs it when no preview runs); the command's warning, or a
-    /// plug-in run's notice, shows in the status bar either way. On an error the dialog stays open.
+    /// OK: keeps the previewed `cmd` as one undo step, or, when its preview is not running, keeps typing in progress
+    /// and runs `cmd` as a step of its own; the command's warning, or a plug-in run's notice, shows in the status bar
+    /// either way. Another edit in progress is left as it is and OK is refused. On an error the dialog stays open.
     pub(crate) fn commit(self, app: &mut VectorcraftApp, cmd: &str, params: Value) -> Result<Value, String> {
-        if !app.session.in_interaction() {
+        if !self.owns(app) {
+            if app.session.in_interaction() {
+                app.keep_typing()?;
+            }
+            if app.session.in_interaction() {
+                return Err(tl!("Finish the active edit first.").to_owned());
+            }
             return app.run(cmd, params);
         }
         let result = app.session.preview(cmd, &params).and_then(|answer| {
@@ -72,9 +125,9 @@ impl LivePreview {
         Ok(Value::Null)
     }
 
-    /// Cancel: rolls a shown preview back.
+    /// Cancel: rolls a shown preview back, and leaves any other edit in progress as it is.
     pub(crate) fn cancel(self, app: &mut VectorcraftApp) {
-        if self.previewed.is_some() {
+        if self.previewed.is_some() && self.owns(app) {
             let _ = app.session.cancel_interaction();
         }
     }
@@ -134,6 +187,45 @@ mod tests {
         let history = &app.session.doc().unwrap().history;
         assert_eq!(history.undo.len(), undo + 1);
         assert_eq!(history.undo.last().unwrap().label, "Next Fill");
+    }
+
+    /// Once the preview's interaction has ended, another edit that begins in the same document is left alone: a new
+    /// preview does not run inside it, Cancel does not roll it back, and OK is refused instead of keeping the dialog's
+    /// command in that edit's place.
+    #[test]
+    fn another_edit_in_progress_is_not_previewed_canceled_or_committed() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 400, "height": 400})).unwrap();
+        app.run("shape.rectangle", json!({"x": 100, "y": 100, "width": 100, "height": 100})).unwrap();
+        let mut preview = LivePreview::default();
+        assert!(matches!(preview.run(&mut app, true, "Fill Color", "paint.setFill", &json!({"color": "#00a000"})), Some(Ok(_))));
+        app.session.cancel_interaction().unwrap();
+
+        app.session.begin_interaction("Other edit").unwrap();
+        app.session.preview("paint.setStroke", &json!({"color": "#0000ff"})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        let other_edit = |app: &crate::VectorcraftApp| app.session.active().and_then(|st| st.interaction.as_ref()).map(|it| it.label.clone());
+
+        preview.clone().cancel(&mut app);
+        assert_eq!(other_edit(&app).as_deref(), Some("Other edit"), "Cancel leaves the other edit running");
+        assert!(preview.run(&mut app, true, "Fill Color", "paint.setFill", &json!({"color": "#a00000"})).is_none());
+        assert_eq!(app.session.doc().unwrap().doc, other, "the other edit's preview stays");
+        assert!(preview.commit(&mut app, "paint.setFill", json!({"color": "#a00000"})).is_err());
+        assert_eq!(other_edit(&app).as_deref(), Some("Other edit"), "a refused OK leaves the other edit running");
+        assert_eq!(app.session.doc().unwrap().doc, other);
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    }
+
+    /// OK without a running preview keeps typing in progress as its own step and then runs the command, instead of
+    /// running it on the snapshot from before the typing.
+    #[test]
+    fn ok_without_a_preview_keeps_the_typing() {
+        let mut app = crate::VectorcraftApp::new(Session::new(), Default::default());
+        let id = typing(&mut app);
+        LivePreview::default().commit(&mut app, "paint.setFill", json!({"color": "#00a000"})).unwrap();
+        assert_eq!(plain(&app, id), "Hello world");
+        assert!(!app.session.in_interaction());
     }
 
     /// A dialog's preview while typing is in progress keeps the typing as its own step and starts

@@ -449,6 +449,10 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let window = DocumentWindow::new(title).id_salt((w.uid, w.number, w.generation)).first_placed(w.place.translate(origin));
         let window = if raise == Some((w.uid, w.view)) { window.raise() } else { window };
         let out = window.show(ui, |ui, _| {
+            // In an OS window of its own, a Copy or Cut that the window's labels copy nothing for runs on the art.
+            if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+                crate::shortcuts::leave_to_labels(app, ui.ctx());
+            }
             // A press anywhere on the window, its title bar and tab included, makes its document current.
             pressed = pressed_on_layer(ui);
             crate::chrome::window_tab(app, ui, win);

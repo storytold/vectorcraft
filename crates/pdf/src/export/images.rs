@@ -63,7 +63,8 @@ impl Exporter<'_> {
     /// missing or left out, its pixels can't be decoded, or its color channel exceeds
     /// [`vectorcraft_doc::MAX_RASTER_ALLOC`]; cached by key and paint (and size when images are
     /// resampled), image rejections too.
-    /// With `interpolate` (and the export's own setting), viewers may smooth it. With `overprint`
+    /// With `interpolate` (and the export's own setting), viewers may smooth it, unless every
+    /// pixel is covered or not ([`crate::images::bilevel_coverage`]). With `overprint`
     /// a gray or CMYK color is written as a DeviceN space of the process inks it holds, so the plates it
     /// leaves at zero keep the inks below: the nonzero overprint mode does not apply to an image's
     /// samples (ISO 32000-1 §8.6.7).
@@ -94,6 +95,11 @@ impl Exporter<'_> {
             self.images.insert(cache, None);
             return None;
         };
+        // A mask that only covers or doesn't, a 1-bit image mask as both importers open one, is
+        // never smoothed: a RIP that smooths it greys its edges, so where the same mask is drawn
+        // over itself in another ink the ink below shows at the edges. krilla has no 1-bit soft
+        // mask or /ImageMask, so it stays an 8-bit mask that isn't smoothed.
+        let interpolate = interpolate && !crate::images::bilevel_coverage(&alpha);
         let n = alpha.len();
         let registration = swatch.as_deref() == Some(vectorcraft_color::swatch::REGISTRATION);
         let inks: Vec<(String, [f32; 4])> = if registration {
@@ -165,9 +171,11 @@ impl Exporter<'_> {
         let mut unconverted = false;
         let img = doc.image_blob(im).filter(|_| !self.left_out.contains(key)).and_then(|blob| {
             let cmyk_image = blob.is_cmyk();
-            if !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk {
-                self.rgb_in_cmyk.images.insert(key.to_string());
-            }
+            // RGB images of a CMYK document go to CMYK only with a CMYK destination; grey ones stay
+            // grey ([`crate::images::recode`]).
+            let rgb_in_cmyk =
+                !cmyk_image && self.convert && doc.color_mode == vectorcraft_doc::ColorMode::Cmyk && !crate::images::is_grey(&blob.bytes);
+            let to_cmyk = matches!(out.pixels(), Some(crate::output::Pixels::Cmyk(_)));
             let r = if cmyk_image {
                 let icc = out.cmyk_image_icc(blob);
                 crate::images::recode_cmyk(blob, size, c, interpolate, out.cmyk_pixels(), None, out.cmyk_tag(icc.as_deref()))
@@ -180,7 +188,14 @@ impl Exporter<'_> {
                 unconverted = embed(blob, interpolate, self.sixteen_bit, profiles).is_some();
                 return None;
             }
+            // An RGB image of a CMYK document is counted once it is written: converted when the
+            // recoded image goes to CMYK, kept when it is written in RGB, as it is or recoded.
+            let converted = to_cmyk && r.image.is_some();
             let img = r.image.or_else(|| embed(blob, interpolate, self.sixteen_bit, profiles));
+            if rgb_in_cmyk && img.is_some() {
+                let set = if converted { &mut self.rgb_in_cmyk.converted } else { &mut self.rgb_in_cmyk.kept };
+                set.insert(key.to_string());
+            }
             // An image left out gets the warning below instead.
             for w in [r.warning, r.note].into_iter().flatten().filter(|_| img.is_some()) {
                 self.warn(w);
