@@ -26,9 +26,15 @@ pub fn open_bytes(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Opti
 /// [`open_bytes`], a document opening with `document.open`'s params `p`.
 fn open_bytes_with(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<String>, p: &Value) -> Result<Value, String> {
     let opens = opens_as(name);
-    // A WebAssembly plug-in is installed.
+    // A plug-in is installed: a JavaScript plug-in's manifest by its path, which the script it
+    // names is read beside. Without a path the manifest's bytes alone are refused, since they hold
+    // no script (`vectorcraft_plugins::js::SOURCE_RULE`).
     if opens == Some(OpensAs::Plugin) {
-        let module = json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)});
+        let js = vectorcraft_plugins::registry::is_js_package(std::path::Path::new(name));
+        let module = match path.as_deref() {
+            Some(path) if js => json!({ "path": path }),
+            _ => json!({"dataBase64": vectorcraft_format::base64_encode(bytes), "name": path.as_deref().unwrap_or(name)}),
+        };
         return install_module(app, module).map(|_| Value::Null);
     }
     if opens == Some(OpensAs::ShortcutSet) {
@@ -609,6 +615,12 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
         note_recent(app, path);
         return Ok(Value::Null);
     }
+    // A JavaScript plug-in's manifest is read by `plugin.install {path}`, with the script it names.
+    if opens_as(path) == Some(OpensAs::Plugin) && vectorcraft_plugins::registry::is_js_package(std::path::Path::new(path)) {
+        install_module(app, json!({ "path": path }))?;
+        note_recent(app, path);
+        return Ok(Value::Null);
+    }
     // A file only an importer plug-in reads is not read past the importer's input limit.
     check_import_size(path, false)?;
     let bytes = read(app, path)?;
@@ -634,13 +646,25 @@ fn open_file_with(app: &mut VectorcraftApp, path: &str, background: bool, p: &Va
 }
 
 /// File → New from Template…: a template (or any readable file) as a new untitled document. Without
-/// a path the open dialog starts in the Templates folder. On the web the browser's file picker
-/// opens it (`.vctemplate`, `.ait` and template files open untitled there too).
+/// a path the open dialog starts in the Templates folder. The browser supplies the picked file's
+/// name and bytes for the same template loader.
 pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Result<Value, String> {
     let Some(path) = path else {
         let filters = std::iter::once(("Templates", TEMPLATE_EXTS)).chain(fileio::builtin_open_filters());
         let request = open_request("template", fileio::templates_dialog_folder(&app.session.prefs), filters);
-        return ask_open(app, request, Owner::Free, new_from_path);
+        return Ok(file_asks::ask(app, request, Owner::Free, |app, picked| match picked {
+            Picked::Contents(files) => {
+                let (name, bytes) = files.into_iter().next().ok_or("cancelled")?;
+                if let Err(error) = open_template(app, &name, &bytes, None) {
+                    report_open_error(app, &name, &error);
+                }
+                Ok(Value::Null)
+            }
+            picked => {
+                let path = picked.first_path().ok_or("cancelled")?;
+                new_from_path(app, path.to_string_lossy().into_owned())
+            }
+        }));
     };
     new_from_path(app, path)
 }
@@ -648,7 +672,11 @@ pub fn new_from_template(app: &mut VectorcraftApp, path: Option<String>) -> Resu
 /// [`new_from_template`] for the file at `path`.
 fn new_from_path(app: &mut VectorcraftApp, path: String) -> Result<Value, String> {
     let bytes = read(app, &path)?;
-    let r = fileio::open_template(&mut app.session, &path, &bytes, Some(&path)).map_err(|e| e.to_string())?;
+    open_template(app, &path, &bytes, Some(&path))
+}
+
+fn open_template(app: &mut VectorcraftApp, name: &str, bytes: &[u8], path: Option<&str>) -> Result<Value, String> {
+    let r = fileio::open_template(&mut app.session, name, bytes, path).map_err(|e| e.to_string())?;
     opened(app, &r);
     Ok(r)
 }
@@ -677,7 +705,13 @@ pub fn ask_revert(app: &mut VectorcraftApp) -> Result<Value, String> {
     (c.enabled)(&app.session)?;
     let name = app.session.active().map(|d| d.title()).unwrap_or_default();
     let message = crate::i18n::fmt(tl!("Revert to the saved version of “{name}”?"), &[("name", &name)]);
-    dialogs::confirm::ask(app, &message, tl!("Changes made since it was last saved will be lost."), "file.revert", json!({ "confirmed": true }));
+    dialogs::confirm::ask_in_document(
+        app,
+        &message,
+        tl!("Changes made since it was last saved will be lost."),
+        "file.revert",
+        json!({ "confirmed": true }),
+    );
     Ok(json!({ "pending": dialogs::confirm::KIND }))
 }
 

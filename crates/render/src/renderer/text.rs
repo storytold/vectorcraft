@@ -327,6 +327,10 @@ impl Renderer {
     /// characters'. It also returns false for type whose offscreen drawing would be more than
     /// [`MAX_RASTER_SIDE`] pixels a side or more than [`fx::PIXEL_BUDGET`] pixels in all.
     fn draw_type_edges(&mut self, ctx: &mut RenderContext, f: &Frame, n: &Node, t: &TextObject, g: &Arc<TextGeom>, geom_kept: bool) -> bool {
+        // A smaller frame can fit the offscreen type that a full frame draws as Sharp.
+        if f.reject_patch() {
+            return true;
+        }
         if proof::overprints(f.opts) && t.runs.iter().any(|r| r.style.overprint_fill || r.style.overprint_stroke) {
             return false;
         }

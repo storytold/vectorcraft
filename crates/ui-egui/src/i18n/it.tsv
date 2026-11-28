@@ -4980,6 +4980,14 @@ axis	Both	Entrambi
 	The script asks to read and write a folder you choose, with everything in it.	Lo script chiede di leggere e scrivere una cartella che scegli, con tutto il suo contenuto.
 	Allow Once	Consenti una volta
 	Always Allow This Script	Consenti sempre questo script
+	No script has kept file access.	Nessuno script ha conservato un accesso ai file.
+	Read file	Lettura file
+	Read and write file	Lettura e scrittura file
+	Read and write folder	Lettura e scrittura cartella
+	Revoke	Revoca
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Revoca rimuove l'accesso conservato per ogni versione dello script. L'accesso a una cartella comprende tutto il suo contenuto.
+@msg	Script file access revoked	Accesso dello script ai file revocato
+@msg	The script file access was already revoked	L'accesso dello script ai file era già stato revocato
 	Deny	Nega
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Uno script può modificare i documenti aperti e scrivere file tramite i comandi che esegue. Esegui solo script di cui ti fidi.
 	Do not show this warning again	Non mostrare più questo avviso
@@ -5147,6 +5155,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` per la finestra di dialogo dei file di uno script deve essere uno tra: once, always, deny, stop
 @msg	choose a file or folder first, or deny	scegli prima un file o una cartella, oppure nega
 @msg	the script file permissions could not be saved: {e}	impossibile salvare i permessi sui file degli script: {e}
+@msg	the script file permissions could not be read: {e}	impossibile leggere i permessi sui file degli script: {e}
 @msg	this script's file access can be allowed only once	l'accesso ai file di questo script può essere consentito solo una volta
 @msg	Only the person at the keyboard can allow a script's file access	Solo la persona alla tastiera può consentire l’accesso ai file di uno script
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Uno script riceve al massimo 2.048 file: i file scelti dopo questi sono stati esclusi
@@ -7205,6 +7214,21 @@ axis	Y Axis	Asse Y
 @msg	time budget	budget di tempo
 @msg	memory budget (the selection is too large to hand over)	budget di memoria (la selezione è troppo grande per essere passata)
 @msg	output size ({what} is {len} bytes, limit {max})	dimensione dell’output ({what} è di {len} byte, limite {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} riga {line}, colonna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	budget di memoria
+@msg	call depth	profondità delle chiamate
+@msg	run(input, params) returned no output object	run(input, params) non ha restituito alcun oggetto di output
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" richiede `script`: il nome del file .js del plug-in, accanto al manifest
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` deve essere il nome di un file .js nella cartella del manifest: 1-128 byte, nessuna cartella, nessun `:`, senza iniziare con `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` è il testo dello script, indicato solo nel JSON che riceve il dataBase64 di plugin.install: un file .vcplugin indica il proprio script in `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	il manifest di un plug-in JavaScript indica `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" è per un filtro di oggetti (`kind` "filter"), non per `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	un plug-in JavaScript non può elencare il permesso `{name}`: dei permessi dell’host può elencare `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	il manifest di un modulo WebAssembly omette `runtime`: "js" è per un plug-in JavaScript
+@msg	a JavaScript plug-in makes no command calls	un plug-in JavaScript non chiama comandi
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) accetta due numeri
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) accetta un livello, 0 (errore), 1 (avviso), 2 (informazione) o 3 (debug), e una stringa
 @msg	the plug-in's grant can't be removed from the plug-in store	il permesso del plug-in non può essere rimosso dall’archivio dei plug-in
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	l’autorizzazione `{shown}` è riservata a un’API dei plug-in successiva; questo host non la concede
 @msg	unknown permission `{shown}`	autorizzazione sconosciuta `{shown}`
