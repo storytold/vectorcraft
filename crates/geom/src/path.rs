@@ -412,6 +412,9 @@ impl SubPath {
         if seg >= self.segment_count() || n == 0 {
             return false;
         }
+        if dv == kurbo::Vec2::ZERO {
+            return true;
+        }
         let mut t = t;
         if self.segment_is_line(seg) {
             let c = self.segment(seg);
@@ -942,6 +945,13 @@ mod tests {
             let landed = sp.segment(0).nearest(grabbed + dv, 1e-9).distance_sq.sqrt();
             assert!(landed < 1e-6, "t {t}: the grabbed point is {landed} off the pointer");
         }
+        // No move leaves it as it was, a smooth end's other handle included.
+        let mut sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(300.0, 0.0)], false);
+        sp.anchors[1].h_out = Point::new(300.0, 50.0);
+        sp.anchors[1].kind = AnchorKind::Smooth;
+        let before = sp.clone();
+        assert!(sp.bend_segment(0, 0.5, kurbo::Vec2::ZERO));
+        assert_eq!(sp.anchors, before.anchors);
     }
     use super::*;
 
