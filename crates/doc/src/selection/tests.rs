@@ -109,6 +109,14 @@ fn expand_to_selects_a_member_in_place_of_its_selected_group() {
     with_locked.set([k]);
     assert!(with_locked.expand_to(&d, last));
     assert_eq!(with_locked.objects, [shown, last]);
+    // A locked or hidden member itself does not open the group.
+    for target in [locked, hidden] {
+        let mut s = Selection::default();
+        s.set([k]);
+        let before = s.clone();
+        assert!(!s.expand_to(&d, target), "{target:?}");
+        assert_eq!(s, before);
+    }
 }
 
 /// A selection with every field set: objects 1 to 6 with 3 listed twice, anchors, segments, a key,

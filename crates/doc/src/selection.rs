@@ -199,8 +199,8 @@ impl Selection {
     /// When `id` is also selected itself, it keeps its place in the selection.
     ///
     /// Returns whether the selection changed. It does not change when `id` is not inside a selected
-    /// object, is inside one that is partly selected (anchors or segments), or is one of a selected
-    /// Shaper Group's original shapes.
+    /// object, is inside one that is partly selected (anchors or segments), is one of a selected
+    /// Shaper Group's original shapes, or is hidden, locked or on a locked artboard itself.
     pub fn expand_to(&mut self, doc: &Document, id: NodeId) -> bool {
         let Some(chain) = doc.ancestry(id) else { return false };
         let Some(top) = chain.iter().position(|a| self.contains(*a)) else { return false };
@@ -217,7 +217,7 @@ impl Selection {
             if children.iter().take(originals).any(|c| c.id == pair[1]) {
                 return false;
             }
-            members.extend(children.iter().skip(originals).map(|c| c.id).filter(|c| *c == id || (*c != pair[1] && editable(*c))));
+            members.extend(children.iter().skip(originals).map(|c| c.id).filter(|c| editable(*c) && (*c == id || *c != pair[1])));
         }
         if !members.contains(&id) {
             return false;

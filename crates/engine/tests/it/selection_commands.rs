@@ -112,6 +112,18 @@ fn remove_and_anchor_toggle_open_a_selected_group() {
     assert_eq!(sel.objects, [a, b, c]);
     assert_eq!(sel.partial(a), Some(&[(0, 0), (0, 2), (0, 3)].into()), "the other anchors of a stay selected");
     assert_eq!((sel.partial(b), sel.partial(c)), (None, None), "b and c stay selected whole");
+    // A second Shift-click, on an anchor of b, deselects only that anchor of b.
+    s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 2]], "mode": "toggle"})).unwrap();
+    let sel = &s.active().unwrap().selection;
+    assert_eq!(sel.objects, [a, b, c]);
+    assert_eq!(sel.partial(a), Some(&[(0, 0), (0, 2), (0, 3)].into()));
+    assert_eq!(sel.partial(b), Some(&[(0, 0), (0, 1), (0, 3)].into()), "the other anchors of b stay selected");
+    assert_eq!(sel.partial(c), None);
+    // An anchor of a path that is not selected joins the selection by itself.
+    let d = NodeId(s.execute("shape.rectangle", &json!({"x": 60, "y": 0, "width": 10, "height": 10})).unwrap()["id"].as_u64().unwrap());
+    s.execute("select.set", &json!({"ids": [c.0]})).unwrap();
+    s.execute("select.anchors", &json!({"id": d.0, "anchors": [[0, 1]], "mode": "toggle"})).unwrap();
+    assert_eq!(s.active().unwrap().selection.partial(d), Some(&[(0, 1)].into()));
 }
 
 #[test]
