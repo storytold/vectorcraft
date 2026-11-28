@@ -48,7 +48,9 @@
 //! known and the style isn't plain (its objects keep their drawn look).
 //!
 //! A style is *plain* when every filter in it is one read here: fills and strokes (in a colour; fills
-//! with a pattern or gradient too; strokes with a Calligraphic or Art brush or aligned inside or outside too), each with its own
+//! with a pattern or gradient too; strokes with a gradient, a Calligraphic or Art brush or aligned inside or outside too; a gradient
+//! stroke is read on an object only where its drawn look paints that swatch and no other fill or
+//! stroke of the style uses it, `read::ops`' `styled`), each with its own
 //! transparency and effects, and the effects of
 //! [`effect`]. Such objects are read as themselves with an appearance of those fills, strokes and
 //! effects (a path's stack of several fills and strokes when its drawn look places each of its
@@ -265,6 +267,8 @@ pub(super) enum StyleItem {
         profile: Option<WidthProfile>,
         /// Which side of the path it paints (centred, or inside or outside a closed path).
         align: StrokeAlign,
+        /// A gradient swatch it paints with instead of `paint`, placed as its drawn look has it.
+        gradient: Option<String>,
         /// A brush: its name, and its settings for this object.
         brush: Option<(String, PathBrush)>,
         /// Its arrowheads, as symbols of the file (`None`: it has none).
@@ -938,6 +942,7 @@ impl OnePaint {
                     dash: f.dash.clone(),
                     profile: None,
                     align: StrokeAlign::Center,
+                    gradient: None,
                     brush: None,
                     arrows: None,
                 }),
@@ -1544,21 +1549,26 @@ fn stroke_item(f: &Filter, align: StrokeAlign) -> Result<Option<StyleItem>, ()> 
     // draws them fitted between solid ends, which the reader checks the stroke against before it
     // takes it.
     let aligned = f.params.get("BSDashAdj").is_some_and(|v| *v != 0.0);
-    match &f.stroke {
-        Some(p) if !f.gradient && f.pattern.is_none() => Ok(Some(StyleItem::Stroke {
-            paint: p.clone(),
-            width: f.width,
-            cap: f.cap,
-            join: f.join,
-            miter: f.miter,
-            dash: f.dash.clone().map(|d| Dash { align_corners: aligned, ..d }),
-            profile: width_profile(&f.arrays),
-            align,
-            brush: None,
-            arrows: stroke_arrows(f)?,
-        })),
-        _ => Err(()),
-    }
+    // A gradient stroke names its swatch; where it lies is the drawn look's (`read::ops`' `styled`).
+    let (paint, gradient) = match (&f.stroke, &f.gradient_of) {
+        _ if f.pattern.is_some() => return Err(()),
+        (_, Some((Some(name), _))) if f.gradient => (Paint::None, Some(name.clone())),
+        (Some(p), _) if !f.gradient => (p.clone(), None),
+        _ => return Err(()),
+    };
+    Ok(Some(StyleItem::Stroke {
+        paint,
+        width: f.width,
+        cap: f.cap,
+        join: f.join,
+        miter: f.miter,
+        dash: f.dash.clone().map(|d| Dash { align_corners: aligned, ..d }),
+        profile: width_profile(&f.arrays),
+        align,
+        gradient,
+        brush: None,
+        arrows: stroke_arrows(f)?,
+    }))
 }
 
 /// The arrowheads of stroke filter `f` ([`StrokeArrows`]; `None` without any). `Err` for heads
@@ -1678,6 +1688,7 @@ fn calligraphic_stroke(f: &Filter) -> Option<StyleItem> {
         dash: None,
         profile: None,
         align: StrokeAlign::Center,
+        gradient: None,
         brush: Some((name.clone(), PathBrush::Calligraphic(super::brush::calligraphic(values, variation, codes)))),
         arrows: None,
     })
@@ -1760,6 +1771,7 @@ fn art_stroke(f: &Filter) -> Option<StyleItem> {
         dash: None,
         profile: None,
         align: StrokeAlign::Center,
+        gradient: None,
         brush: Some((name.clone(), PathBrush::Art(settings))),
         arrows: None,
     })

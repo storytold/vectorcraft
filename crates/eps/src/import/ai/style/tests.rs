@@ -1608,7 +1608,7 @@ fn a_style_of_one_paint_reads_as_the_fill_and_stroke_its_xd_turns_on() {
     let Some(Ok(items)) = one(&format!("0 O\n0 0 1 0 k\n{stroke}1 1 Xd\n")) else { panic!("{:?}", one(stroke)) };
     let [
         StyleItem::Fill(fill),
-        StyleItem::Stroke { paint, width, cap, join, miter, dash, profile: None, align: StrokeAlign::Center, brush: None, arrows: _ },
+        StyleItem::Stroke { paint, width, cap, join, miter, dash, profile: None, align: StrokeAlign::Center, brush: None, arrows: _, gradient: _ },
     ] = items.as_slice()
     else {
         panic!("{items:?}")
