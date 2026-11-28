@@ -300,7 +300,7 @@ pub(crate) enum Class {
 }
 
 /// A Map or Set key compared with SameValueZero (section 7.2.10): `NaN` equals `NaN`, `-0`
-/// equals `+0`, strings compare by their code units and objects by identity.
+/// equals `+0`, strings compare by their code units, and Symbols and objects by identity.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum CollKey {
     Undefined,
@@ -309,6 +309,7 @@ pub(crate) enum CollKey {
     /// The bits of the number, with every `NaN` as one value and `-0` as `+0`.
     Number(u64),
     String(Rc<[u16]>),
+    Symbol(crate::symbol::Sym),
     Object(u32),
 }
 

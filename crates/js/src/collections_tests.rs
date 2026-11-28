@@ -81,6 +81,15 @@ fn keys_compare_with_same_value_zero() {
 }
 
 #[test]
+fn symbol_keys_compare_by_identity() {
+    truth(
+        "var a = Symbol('k'), b = Symbol('k'); var m = new Map([[a, 1], [b, 2]]); \
+         m.size === 2 && m.get(a) === 1 && m.get(b) === 2 && m.get(Symbol('k')) === undefined && m.keys().next().value === a",
+    );
+    truth("var r = Symbol.for('k'); var s = new Set([r, Symbol.for('k')]); s.size === 1 && s.has(r) && s.delete(r) && s.size === 0");
+}
+
+#[test]
 fn entries_keep_the_order_they_were_added_in() {
     assert_eq!(
         string(

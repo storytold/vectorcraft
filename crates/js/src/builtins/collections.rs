@@ -185,6 +185,7 @@ fn coll_key(interp: &mut Interp, v: &Value) -> JsResult<CollKey> {
         Value::Bool(b) => CollKey::Bool(*b),
         Value::Number(n) => CollKey::number(*n),
         Value::String(s) => CollKey::String(flat_charged(interp, s)?),
+        Value::Symbol(s) => CollKey::Symbol(s.clone()),
         Value::Object(o) => CollKey::Object(o.0),
     })
 }

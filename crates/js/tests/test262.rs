@@ -33,10 +33,11 @@
 //! chains and `??`) without and with that option, and
 //! prints both counts; its failures with the option go to `es2015-failures.txt`.
 //!
-//! A sixth test runs the tests under the folders [`ES2015_BUILT_INS`] names (`Map`, `Set`,
+//! A sixth test runs the tests under the folders [`ES2015_COLLECTION_BUILT_INS`] names (`Map`, `Set`,
 //! `WeakMap`, `WeakSet`, `ArrayBuffer`, `DataView`, `TypedArray` and `TypedArrayConstructors`) in
-//! realms with [`Options::es2015`], each test whose feature tags are all in [`ES2015_FEATURES`]; its
-//! failures go to `es2015-failures.txt`. It fails when the interpreter panics.
+//! realms with [`Options::es2015`], each test whose feature tags are all in
+//! [`ES2015_COLLECTION_FEATURES`]; its failures go to `es2015-builtins-failures.txt`. It fails when
+//! the interpreter panics.
 //!
 //! Two more tests read the Annex B trees, where tests name any edition's section: one parses every
 //! test under `test/annexB/language/` without a feature tag the same way as the ES5 parse subset
@@ -636,16 +637,16 @@ fn run_text_builtins(dir: &Path) {
 
 /// The directories under `test/built-ins/` that hold the tests of the ECMAScript 2015 collections
 /// and binary data, which run in a realm with [`Options::es2015`].
-const ES2015_BUILT_INS: &[&str] = &["Map", "Set", "WeakMap", "WeakSet", "ArrayBuffer", "DataView", "TypedArray", "TypedArrayConstructors"];
+const ES2015_COLLECTION_BUILT_INS: &[&str] = &["Map", "Set", "WeakMap", "WeakSet", "ArrayBuffer", "DataView", "TypedArray", "TypedArrayConstructors"];
 
 /// The names in [`MISSING_BUILTINS`] that a realm with [`Options::es2015`] provides.
 const ES2015_BUILTINS: &str = "Map Set WeakMap WeakSet ArrayBuffer DataView Int8Array Uint8Array Float64Array";
 
-/// The feature tags a test under [`ES2015_BUILT_INS`] may have and still run: the built-ins
+/// The feature tags a test under [`ES2015_COLLECTION_BUILT_INS`] may have and still run: the built-ins
 /// themselves and the stable typed array sort. A tag starting `DataView.prototype.` names one of
 /// the `DataView` methods. Tests with any other tag (symbols, `Reflect`, classes, resizable or
 /// detached buffers, `BigInt` and later additions) are counted as skipped.
-const ES2015_FEATURES: &[&str] = &[
+const ES2015_COLLECTION_FEATURES: &[&str] = &[
     "Map",
     "Set",
     "WeakMap",
@@ -669,14 +670,14 @@ fn es2015_collections_and_binary_data_run() {
     handle.join().unwrap();
 }
 
-/// Runs the tests under the folders [`ES2015_BUILT_INS`] names in realms with
+/// Runs the tests under the folders [`ES2015_COLLECTION_BUILT_INS`] names in realms with
 /// [`Options::es2015`], prints each folder's counts and writes the failures to
-/// `es2015-failures.txt` beside the suite.
+/// `es2015-builtins-failures.txt` beside the suite.
 fn run_es2015_built_ins(dir: &Path) {
     let missing = missing_builtins(&[TEXT_BUILTINS, ES2015_BUILTINS]);
     let mut report = String::new();
     let mut panicked = 0;
-    for name in ES2015_BUILT_INS {
+    for name in ES2015_COLLECTION_BUILT_INS {
         let root = or_fail(inside(dir, &format!("test/built-ins/{name}")));
         assert!(root.is_dir(), "{} is not a test262 checkout", dir.display());
         let counts = run_es2015_tests(dir, &root, &missing);
@@ -684,7 +685,7 @@ fn run_es2015_built_ins(dir: &Path) {
         report.push_str(&format!("# built-ins/{name}\n{}\n", counts.failures));
         panicked += counts.panicked;
     }
-    let path = dir.join("es2015-failures.txt");
+    let path = dir.join("es2015-builtins-failures.txt");
     if let Err(e) = std::fs::write(&path, &report) {
         println!("could not write {}: {e}", path.display());
     }
@@ -692,7 +693,7 @@ fn run_es2015_built_ins(dir: &Path) {
     assert_eq!(panicked, 0, "the interpreter panicked; see {}", path.display());
 }
 
-/// Runs the tests under `root` whose feature tags are all in [`ES2015_FEATURES`], as
+/// Runs the tests under `root` whose feature tags are all in [`ES2015_COLLECTION_FEATURES`], as
 /// [`run_tests`] runs the ES5 tests, each in a new realm with [`Options::es2015`].
 fn run_es2015_tests(dir: &Path, root: &Path, missing: &HashSet<&str>) -> RunCounts {
     // A harness file is named by the test's `includes:`, so it is read only inside `harness/`.
@@ -706,7 +707,7 @@ fn run_es2015_tests(dir: &Path, root: &Path, missing: &HashSet<&str>) -> RunCoun
             continue;
         }
         let includes: String = meta.includes.iter().map(|i| harness(i) + "\n").collect();
-        let known = meta.features.iter().all(|f| ES2015_FEATURES.contains(&f.as_str()) || f.starts_with("DataView.prototype."));
+        let known = meta.features.iter().all(|f| ES2015_COLLECTION_FEATURES.contains(&f.as_str()) || f.starts_with("DataView.prototype."));
         if !known || meta.flags.iter().any(|f| f == "async") || needs_missing_builtin(&[&source, &includes], missing) {
             counts.skipped += 1;
             continue;
@@ -719,7 +720,7 @@ fn run_es2015_tests(dir: &Path, root: &Path, missing: &HashSet<&str>) -> RunCoun
             let body = if has("raw") { source.clone() } else { format!("{prelude}{includes}{source}") };
             let script = if strict { format!("\"use strict\";\n{body}") } else { body };
             let negative_type = meta.negative_type.clone().filter(|_| meta.negative_phase.as_deref() == Some("runtime"));
-            match std::panic::catch_unwind(|| run_in(Options { es2015: true, ..Options::default() }, &script, negative_type.as_deref())) {
+            match std::panic::catch_unwind(|| run_one(&script, negative_type.as_deref(), &Options { es2015: true, ..Options::default() })) {
                 Ok(Ok(())) => counts.passed += 1,
                 Ok(Err(why)) => {
                     counts.failed += 1;

@@ -167,7 +167,7 @@ pub(crate) fn canonical_index(k: &[u16]) -> Option<f64> {
     if k == [u16::from(b'-'), u16::from(b'0')] {
         return Some(-0.0);
     }
-    let n = string_to_number(k);
+    let n = string_to_number(k, true);
     (*number_to_str(n).flat() == *k).then_some(n)
 }
 
