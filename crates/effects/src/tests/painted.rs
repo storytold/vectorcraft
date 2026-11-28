@@ -607,6 +607,64 @@ fn a_piece_s_raster_effects_follow_its_transform_effect() {
     assert!(kept.iter().all(|e| e.id != "distort.transform"), "{kept:?}");
 }
 
+/// A piece's raster effect listed before a Transform effect that makes copies goes on each copy,
+/// as an object's does: every copy carries its own Drop Shadow, scaled with it, and the art around
+/// the copies carries none.
+#[test]
+fn each_copy_of_a_piece_carries_its_own_raster_effects() {
+    let shadow = Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true };
+    let copying = Effect { id: "distort.transform".into(), params: json!({"scaleH": 200, "scaleV": 200, "copies": 1}), visible: true };
+    let square =
+        || Node::path(NodeId(9), shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0)), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    // The offsets of the Drop Shadows the nodes under `art` carry, and how many `art` itself
+    // carries.
+    let shadows = |art: &Node| {
+        let offsets = |c: &Node| {
+            c.appearance
+                .effects
+                .iter()
+                .filter(|e| e.id == "stylize.dropShadow")
+                .map(|e| {
+                    let at = |k: &str| e.params.get(k).and_then(serde_json::Value::as_f64).unwrap_or(f64::NAN);
+                    ((at("x") * 1000.0).round() as i64, (at("y") * 1000.0).round() as i64)
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut inside = vec![];
+        for c in art.children().into_iter().flatten() {
+            c.walk(&mut |d| inside.extend(offsets(d)));
+        }
+        inside.sort_unstable();
+        (inside, offsets(art).len())
+    };
+    let mut object = square();
+    object.appearance.effects = vec![shadow.clone(), copying.clone()];
+    let expected = shadows(&crate::reshape::own_effects_art(None, &object).expect("the object's copies are drawn"));
+    assert_eq!(expected.0.len(), 2, "{expected:?}");
+    assert_eq!(expected.1, 0, "{expected:?}");
+    let mut n = square();
+    let look = vectorcraft_plugins::painted::Look { effects: vec![shadow, copying], ..Default::default() };
+    crate::reshape::dress_piece(&mut n, &look, Budget::EFFECTS, None).expect("the piece is dressed");
+    assert_eq!(shadows(&n), expected);
+}
+
+/// A piece whose copies, each with its own raster effects, would pass the room left to it is
+/// refused rather than drawn with fewer copies than its Transform effect asks for.
+#[test]
+fn a_piece_s_copies_with_raster_effects_keep_to_its_room() {
+    let square = shapes::rectangle(Rect::new(0.0, 0.0, 20.0, 20.0));
+    let mut n = Node::path(NodeId(9), square.clone(), Appearance::basic(Paint::solid(Color::BLACK), Paint::None, 0.0));
+    let look = vectorcraft_plugins::painted::Look {
+        effects: vec![
+            Effect { id: "stylize.dropShadow".into(), params: json!({"x": 3.0, "y": 4.0}), visible: true },
+            Effect { id: "distort.transform".into(), params: json!({"moveH": 30.0, "copies": 5}), visible: true },
+        ],
+        ..Default::default()
+    };
+    // Room for one more square: not for five.
+    assert!(crate::reshape::dress_piece(&mut n, &look, Budget::of(&square), None).is_none());
+}
+
 /// A piece's Transform effect with no copies and Scale Strokes & Effects on moves the piece: no
 /// copies were asked for, so none are missing.
 #[test]
