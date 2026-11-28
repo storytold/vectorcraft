@@ -760,12 +760,13 @@ fn apply(app: &mut VectorcraftApp, change: &ParagraphChange) {
     }
 }
 
-/// A labelled select whose entries are numbered from 0; the pick, if any, this pass. `current` is blank when `None`.
+/// A labelled select whose entries are numbered from 0; the committed pick, if any, this pass.
+/// `current` is blank when `None`. Browsing a popup must not apply paragraph formatting.
 fn pick_row(ui: &mut Ui, label: &'static str, salt: &'static str, entries: &[Entry<u32>], current: Option<u32>) -> Option<u32> {
     let mut picked = None;
     Field::new(label).id_salt(salt).show(ui, |ui, _| {
         let shown = current.map_or(Mixed::Mixed, Mixed::Same);
-        picked = Select::new(label, Bind::given(shown), entries).id_salt(salt).show(ui).value().copied();
+        picked = Select::new(label, Bind::given(shown), entries).id_salt(salt).show(ui).events.committed().copied();
     });
     picked
 }
