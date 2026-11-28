@@ -25,6 +25,8 @@
 //!   `exportFile` adds the format's extension unless the name already ends
 //!   with it (`.png`, `.jpg` or `.jpeg`, `.gif`, `.tif` or `.tiff`, `.svg`, `.svgz`), and writes
 //!   one file: the active artboard with `artBoardClipping`, otherwise the bounds of the visible art.
+//!   An SVG export writes a compressed file when `compressed` is true, which adds `.svgz`, and
+//!   when the name ends with `.svgz`.
 //!   An SVG with `embedRasterImages` false also writes the document's embedded images beside it,
 //!   and when one of those files may not be written, none of them is.
 //! - An option the classes here map is applied; a listed option that is not mapped is accepted at
@@ -672,10 +674,14 @@ fn file_command(h: &Host, id: &str, params: &Value) -> Answer {
     Ok(data)
 }
 
-/// The path to give a command for the real path `real`.
-fn plain(real: std::path::PathBuf) -> String {
-    crate::cmd::findfiles::plain(real).to_string_lossy().into_owned()
+/// The path to give a command for the real path `real`, or an error naming `path` when the real
+/// path has no UTF-8 form.
+fn plain(real: std::path::PathBuf, path: &str) -> std::result::Result<String, HostError> {
+    crate::cmd::findfiles::plain(real).into_os_string().into_string().map_err(|_| refused(NOT_UNICODE, path))
 }
+
+/// The error a real path with no UTF-8 form gives.
+const NOT_UNICODE: &str = "Script file path is not valid Unicode";
 
 /// The built-in preset names scripts use that VectorCraft's built-in presets name otherwise, and the
 /// preset each one names here (`Default` is VectorCraft's default preset, as
@@ -731,7 +737,7 @@ fn doc_save_as(h: &Host, a: &[Data]) -> Answer {
         }
     }
     let real = h.disk.borrow().save_target(path).map_err(|m| refused(m, path))?;
-    p.insert("path".into(), json!(plain(real)));
+    p.insert("path".into(), json!(plain(real, path)?));
     exactly(h, || on_doc(h, doc.uid, false, |h| file_command(h, "file.saveAs", &Value::Object(p))))?;
     Ok(Data::Undefined)
 }
@@ -763,7 +769,9 @@ fn doc_export_file(h: &Host, a: &[Data]) -> Answer {
             None => return Err(HostError::Error(format!("options for {} are not available yet", kind.format))),
         },
     };
-    let svgz = p.remove("_svgz").and_then(|v| v.as_bool()).unwrap_or(false);
+    // An SVG export to a name that ends with `.svgz` writes a compressed file, whatever `compressed` holds.
+    let svgz_name = path.rsplit(['/', '\\']).next().is_some_and(|n| n.to_lowercase().ends_with(".svgz"));
+    let svgz = p.remove("_svgz").and_then(|v| v.as_bool()).unwrap_or(false) || (kind.format == "svg" && svgz_name);
     let clip = p.remove("_clip").and_then(|v| v.as_bool()).unwrap_or(false);
     let (hs, vs) = (p.remove("_h").and_then(|v| v.as_f64()).unwrap_or(100.0), p.remove("_v").and_then(|v| v.as_f64()).unwrap_or(100.0));
     if (hs - vs).abs() > 1e-9 {
@@ -785,7 +793,7 @@ fn doc_export_file(h: &Host, a: &[Data]) -> Answer {
     }
     let named = with_extension(path, &kind, svgz);
     let real = h.disk.borrow().save_target(&named).map_err(|m| refused(m, &named))?;
-    p.insert("path".into(), json!(plain(real)));
+    p.insert("path".into(), json!(plain(real, &named)?));
     exactly(h, || on_doc(h, doc.uid, false, |h| file_command(h, "document.export", &Value::Object(p))))?;
     Ok(Data::Undefined)
 }
@@ -831,7 +839,7 @@ fn app_open(h: &Host, a: &[Data]) -> Answer {
         }
     }
     let real = h.disk.borrow().open_target(path).map_err(|m| refused(m, path))?;
-    p.insert("path".into(), json!(plain(real)));
+    p.insert("path".into(), json!(plain(real, path)?));
     let r = exactly(h, || file_command(h, "document.open", &Value::Object(p)))?;
     let index = match &r {
         Data::Object(items) => items.iter().find_map(|(k, v)| match (k.as_str(), v) {
@@ -931,7 +939,7 @@ fn doc_close(h: &Host, a: &[Data]) -> Answer {
                 // A refusal names the document, as `fullName` does when the read roots hide its file.
                 let name = super::with_doc(h, doc, |_, st| st.title());
                 let real = h.disk.borrow().save_target(&path).map_err(|m| refused(m, &name))?;
-                let p = json!({"path": plain(real), "format": format});
+                let p = json!({"path": plain(real, &name)?, "format": format});
                 exactly(h, || on_doc(h, doc.uid, false, |h| file_command(h, "file.saveAs", &p)))?;
             }
             _ => return Err(HostError::Error(UNSAVED_CHANGES.into())),

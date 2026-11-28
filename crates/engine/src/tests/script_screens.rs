@@ -80,6 +80,39 @@ fn linked_screen_svg_images_are_rejected_before_output_is_created() {
     assert!(!output.exists());
 }
 
+/// A volume root the person picked is a folder the export may write into: the export goes on to
+/// the command, which here refuses an asset the document does not have, and writes nothing.
+#[cfg(unix)]
+#[test]
+fn a_picked_volume_root_is_a_folder_to_export_into() {
+    let base = vectorcraft_testkit::TempDir::new("screen-root");
+    std::fs::create_dir_all(base.join("main")).unwrap();
+    let mut s = session(&base);
+    s.execute("file.new", &json!({"width": 20, "height": 20})).unwrap();
+    s.script_frames = true;
+    let main = base.join("main/main.jsx");
+    let script = "var p = Folder.selectDialog('p'); var i = new ExportForScreensItemToExport(); i.artboards = ''; i.assets = [987654321];\n\
+                  try { app.activeDocument.exportForScreens(p, ExportForScreensType.SE_PNG24, undefined, i); vc.log('exported'); } catch (e) { vc.log(String(e)); }";
+    std::fs::write(&main, script).unwrap();
+    assert_eq!(s.execute("script.run", &json!({"path": main.to_string_lossy()})).unwrap()["running"], true);
+    let mut picked = false;
+    let mut report = None;
+    for _ in 0..10_000 {
+        if !picked && s.script_picker().is_some() {
+            picked = true;
+            assert!(s.script_pick(crate::script::files::PickAnswer::Allow { paths: vec!["/".into()], always: false }));
+        }
+        if let Some(r) = s.script_pump() {
+            report = Some(r.unwrap());
+            break;
+        }
+    }
+    let report = report.unwrap_or_else(|| panic!("the run neither ended nor waited"));
+    assert!(picked, "{report}");
+    let said = report["log"][0].as_str().unwrap_or_default().to_string();
+    assert!(!said.contains(DENIED) && !said.contains("exported") && said.contains("987654321"), "{said}");
+}
+
 /// A fresh folder for test `name`, by its real path, with `main` for the script.
 fn folder(name: &str) -> PathBuf {
     let base = std::env::temp_dir().join(format!("vc-script-screens-{name}-{}", std::process::id()));

@@ -462,7 +462,7 @@ fn doc_export_for_screens(h: &Host, a: &[Data]) -> Answer {
     };
     let real = h.disk.borrow().folder_target(folder).map_err(|m| refused(m, folder))?;
     let mut base = Map::new();
-    base.insert("folder".into(), json!(plain(real)));
+    base.insert("folder".into(), json!(plain(real, folder)?));
     base.insert("folders".into(), json!("none"));
     base.insert("formats".into(), json!([Value::Object(row)]));
     if let Some(prefix) = prefix {

@@ -38,13 +38,27 @@ fn file_wrappers_report_encoder_warnings_without_changing_their_return_values() 
     }
 }
 
-/// A fresh folder for test `name`, by its real path, with `main` for the script.
-fn folder(name: &str) -> PathBuf {
-    let base = std::env::temp_dir().join(format!("vc-script-save-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
-    std::fs::create_dir_all(base.join("main")).unwrap();
-    std::fs::create_dir_all(base.join("outside")).unwrap();
-    std::fs::canonicalize(&base).unwrap()
+/// A test's folder, by its real path, removed with everything in it when dropped, also when the
+/// test fails.
+struct Workspace {
+    _dir: vectorcraft_testkit::TempDir,
+    real: PathBuf,
+}
+
+impl std::ops::Deref for Workspace {
+    type Target = PathBuf;
+    fn deref(&self) -> &PathBuf {
+        &self.real
+    }
+}
+
+/// A fresh folder for test `name`, with `main` for the script and `outside`.
+fn folder(name: &str) -> Workspace {
+    let dir = vectorcraft_testkit::TempDir::new(&format!("script-save-{name}"));
+    std::fs::create_dir_all(dir.join("main")).unwrap();
+    std::fs::create_dir_all(dir.join("outside")).unwrap();
+    let real = std::fs::canonicalize(&*dir).unwrap();
+    Workspace { _dir: dir, real }
 }
 
 /// A session whose scripts keep their data folders in `base/settings/Script Data`.
@@ -118,7 +132,6 @@ fn save_as_export_file_and_open_write_and_read_where_the_script_may() {
     assert!(dir.join("e.JPG").is_file() && !dir.join("e.JPG.jpg").exists(), "a name that ends with the extension keeps it");
     assert!(std::fs::read(dir.join("f.svgz")).unwrap().starts_with(&[0x1f, 0x8b]));
     assert_eq!(s.documents().len(), 2);
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// Without options, a save or export writes what an untouched new options object of its class gives.
@@ -151,7 +164,6 @@ fn omitted_options_are_a_new_options_objects_defaults() {
         let pdf = std::fs::read(dir.join(name)).unwrap();
         assert!(pdf.starts_with(b"%PDF-1.4"), "{name}: PDFCompatibility.ACROBAT5 is PDF 1.4, {:?}", String::from_utf8_lossy(&pdf[..8]));
     }
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A raster export at 100% has one pixel per point, whatever the document's raster effects
@@ -178,7 +190,6 @@ fn a_raster_export_at_100_percent_has_a_pixel_per_point() {
         let image = image::open(dir.join(name)).unwrap();
         assert_eq!((image.width(), image.height()), (200, 100), "{name}");
     }
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// With `pDFPreset` named, the options left at a new object's defaults keep the preset's values, and
@@ -203,7 +214,6 @@ fn a_pdf_preset_keeps_its_settings_unless_an_option_changes() {
         let pdf = std::fs::read(dir.join(name)).unwrap();
         assert!(pdf.starts_with(version), "{name}: {:?}", String::from_utf8_lossy(&pdf[..8]));
     }
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A save that writes several files, such as an EPS with a file per artboard, writes none of them
@@ -232,7 +242,6 @@ fn a_save_writes_nothing_when_one_of_its_files_is_refused() {
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
     std::fs::set_permissions(&board, perms).unwrap();
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// When the writer a save is given does not check the file access itself, a save of several files
@@ -280,7 +289,6 @@ fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
     std::fs::set_permissions(&refused, perms).unwrap();
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// Every path goes through the script's file grants, as a `File` opened for reading or writing.
@@ -326,7 +334,6 @@ fn save_as_export_file_and_open_refuse_paths_outside_the_grants() {
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
     std::fs::set_permissions(dir.join("kept.svg"), perms).unwrap();
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// The file of an open document is not written or read through a script method unless the
@@ -344,7 +351,6 @@ fn an_open_documents_file_is_not_saved_over_without_a_grant() {
     let e = failure(&mut s, &base, &format!("app.activeDocument.exportFile(new File({}), ExportType.SVG);", quoted(&path)));
     assert!(e.contains(DENIED), "{e}");
     assert_eq!(std::fs::read(&path).unwrap(), before);
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A save or export to a file a `File` object holds open for writing throws, so the object's bytes
@@ -370,7 +376,6 @@ fn a_file_open_for_writing_is_not_saved_over() {
         assert_eq!(std::fs::read_to_string(dir.join(name)).unwrap(), "pending", "{name}: the File's own bytes");
         assert_eq!(s.active().unwrap().path, None, "{name}: the document's file is unchanged");
     }
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A file `open` reads besides the one it names, here an SVG's linked image, is read only where
@@ -411,7 +416,6 @@ fn open_reads_linked_files_only_where_the_script_may() {
     std::fs::copy(dir.join("page.svg"), dir.join("copy.svg")).unwrap();
     s.execute("document.open", &json!({"path": dir.join("copy.svg").to_string_lossy()})).unwrap();
     assert!(ims(&s).is_empty() && kinds(&s).iter().any(|k| k.starts_with("Path")), "{:?}", kinds(&s));
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// An SVG export with `embedRasterImages` false writes the document's embedded image beside the
@@ -442,7 +446,6 @@ fn an_svg_export_writes_nothing_when_one_of_its_files_is_refused() {
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
     std::fs::set_permissions(&image, perms).unwrap();
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// An export does not write a file it writes besides the one named, here an SVG's image, while a
@@ -474,7 +477,6 @@ fn an_svg_export_does_not_write_an_image_a_file_holds_open() {
     assert!(log[0].as_str().unwrap().contains(DENIED), "{log}");
     assert!(!svg.exists(), "the SVG is not written when its image may not be");
     assert_eq!(std::fs::read_to_string(&image).unwrap(), "pending", "the File's own bytes");
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A link inside a granted folder that leads out of it is followed and refused.
@@ -497,7 +499,6 @@ fn a_link_out_of_the_granted_folder_is_refused() {
     assert!(e.contains(DENIED), "{e}");
     assert!(std::fs::read_dir(base.join("outside")).unwrap().count() == 1, "nothing is written outside");
     assert_eq!(s.documents().len(), 1);
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// Bad arguments throw before anything is written or opened.
@@ -576,7 +577,6 @@ fn bad_arguments_are_refused_with_an_error() {
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "nothing was written");
     assert_eq!(s.documents().len(), 1);
     assert_eq!(s.active().unwrap().path, None);
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// Only a `File` the `File` class made names a file. An object made from `File.prototype` and a
@@ -613,7 +613,6 @@ fn a_forged_file_is_refused() {
     assert!(std::fs::read_dir(base.join("outside")).unwrap().count() == 1);
     assert_eq!(s.documents().len(), 1, "nothing is opened");
     assert_eq!(s.active().unwrap().path, None);
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A document from an earlier run is stale, and saving it throws.
@@ -627,7 +626,6 @@ fn a_stale_document_is_not_saved() {
     let e = failure(&mut s, &base, &format!("#targetengine keep\nFolder.userData; held.saveAs(new File({}));", quoted(&dir.join("x.svg"))));
     assert!(e.contains("Stale document"), "{e}");
     assert!(!dir.join("x.svg").exists());
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// `open` applies the page and crop box of its options to a PDF.
@@ -636,9 +634,13 @@ fn open_takes_the_page_and_crop_box_of_its_options() {
     let base = folder("pdf");
     let mut s = session(&base);
     let dir = data_folder(&mut s, &base);
-    s.execute("file.new", &json!({"width": 100, "height": 50, "artboards": 2})).unwrap();
+    // Page 2 is 200 × 400 pt with a 180 × 380 pt crop box, unlike page 1's 100 × 100 pt.
+    let mut second = vectorcraft_testkit::pdf::PdfPage::new(200.0, 400.0, "0 0 1 rg 20 30 40 50 re f");
+    second.crop = Some([10.0, 10.0, 190.0, 390.0]);
+    let pages = [vectorcraft_testkit::pdf::PdfPage::new(100.0, 100.0, "0 g 0 0 10 10 re f"), second];
     let pdf = dir.join("two.pdf");
-    s.execute("file.saveAs", &json!({"path": pdf.to_string_lossy(), "format": "pdf"})).unwrap();
+    std::fs::write(&pdf, vectorcraft_testkit::pdf::pdf(&pages, None)).unwrap();
+    let size = |s: &Session| s.active().map(|st| st.doc.artboards.iter().map(|a| (a.rect.width(), a.rect.height())).collect::<Vec<_>>());
     let out = logged(
         &mut s,
         &base,
@@ -649,6 +651,9 @@ fn open_takes_the_page_and_crop_box_of_its_options() {
         ),
     );
     assert_eq!(out, json!(["DocumentColorSpace.CMYK"]));
+    assert_eq!(size(&s), Some(vec![(200.0, 400.0)]), "page 2 on its media box");
+    logged(&mut s, &base, &format!("Folder.userData; app.open(new File({}), undefined, {{pageToOpen: 2}});", quoted(&pdf)));
+    assert_eq!(size(&s), Some(vec![(180.0, 380.0)]), "page 2 on its crop box, the default");
     let e = failure(&mut s, &base, &format!("Folder.userData; app.open(new File({}), undefined, {{pageToOpen: 3}});", quoted(&pdf)));
     assert!(!e.is_empty(), "a page the file does not have");
     assert_eq!(s.documents().len(), 2);
@@ -658,7 +663,59 @@ fn open_takes_the_page_and_crop_box_of_its_options() {
     logged(&mut s, &base, &undefined);
     assert_eq!(s.documents().len(), 3);
     assert_eq!(s.active().unwrap().doc.artboards.len(), 2, "both pages");
-    let _ = std::fs::remove_dir_all(base);
+}
+
+/// An SVG export to a name that ends with `.svgz` writes a compressed file at that name, without
+/// options and with `compressed` false; a name without the suffix stays a plain SVG.
+#[test]
+fn export_file_keeps_an_svgz_name_compressed() {
+    let base = folder("svgz");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let d = quoted(&dir);
+    logged(
+        &mut s,
+        &base,
+        &format!(
+            "Folder.userData; var dir = {d}, d = app.documents.add(DocumentColorSpace.RGB, 20, 20);\n\
+             vc.run('shape.rectangle', {{x: 2, y: 2, width: 10, height: 10}});\n\
+             d.exportFile(new File(dir + '/logo.svgz'), ExportType.SVG);\n\
+             var o = new ExportOptionsSVG(); o.compressed = false;\n\
+             d.exportFile(new File(dir + '/plain.SVGZ'), ExportType.SVG, o);\n\
+             d.exportFile(new File(dir + '/page'), ExportType.SVG);"
+        ),
+    );
+    for name in ["logo.svgz", "plain.SVGZ"] {
+        assert!(std::fs::read(dir.join(name)).unwrap().starts_with(&[0x1f, 0x8b]), "{name}");
+        assert!(!dir.join(format!("{name}.svg")).exists(), "{name}");
+    }
+    assert!(std::fs::read_to_string(dir.join("page.svg")).unwrap().contains("<svg"));
+}
+
+/// A path whose real path has no UTF-8 form, through a link to a folder of such a name, is refused
+/// before anything is written there.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_real_path_that_is_not_unicode_is_refused() {
+    use std::os::unix::ffi::OsStrExt;
+    let base = folder("not-unicode");
+    let mut s = session(&base);
+    let dir = data_folder(&mut s, &base);
+    let odd = dir.join(std::ffi::OsStr::from_bytes(b"odd-\xff"));
+    std::fs::create_dir_all(&odd).unwrap();
+    std::os::unix::fs::symlink(&odd, dir.join("link")).unwrap();
+    let link = quoted(&dir.join("link"));
+    s.execute("file.new", &json!({"width": 20, "height": 20})).unwrap();
+    s.execute("shape.rectangle", &json!({"x": 2, "y": 2, "width": 10, "height": 10})).unwrap();
+    for call in [
+        format!("app.activeDocument.exportFile(new File({link} + '/out.png'), ExportType.PNG24)"),
+        format!("app.activeDocument.saveAs(new File({link} + '/out.svg'))"),
+        format!("app.activeDocument.exportForScreens(new Folder({link}), ExportForScreensType.SE_PNG24)"),
+    ] {
+        let e = failure(&mut s, &base, &format!("Folder.userData; {call};"));
+        assert!(e.contains("not valid Unicode"), "{call}: {e}");
+    }
+    assert_eq!(std::fs::read_dir(&odd).unwrap().count(), 0, "nothing is written in the folder");
 }
 
 /// `fullName` and `path` name the document's file and folder once it has one, `saved` follows its
@@ -705,7 +762,6 @@ fn full_name_path_saved_and_close_follow_the_documents_file() {
     assert!(s.documents().is_empty());
     let e = failure(&mut s, &base, "app.documents.add(); app.activeDocument.close('DONOTSAVECHANGES');");
     assert!(e.contains("SaveOptions"), "{e}");
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A document without unsaved changes closes with `SaveOptions.SAVECHANGES` and with no argument.
@@ -728,7 +784,6 @@ fn a_document_without_unsaved_changes_closes_with_any_save_options() {
         ),
     );
     assert_eq!(out, json!([[true, true, 2], 1, 0]));
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// `close(SaveOptions.SAVECHANGES)` saves in the format the document was last saved in, not the
@@ -757,7 +812,6 @@ fn closing_with_save_changes_keeps_the_documents_format() {
     assert!(bytes.starts_with(b"%PDF"), "the save on close keeps the PDF format");
     assert_ne!(bytes, saved, "the close wrote the second rectangle to the file");
     assert!(s.documents().is_empty());
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// Setting `Document.saved` records the document's saved state without saving it: `true` lets
@@ -786,7 +840,6 @@ fn setting_saved_records_the_saved_state() {
     assert_eq!(out[5][1], json!(1), "a document set as unsaved stays open");
     assert!(out[6].as_str().unwrap().contains("true or false"), "{}", out[6]);
     assert!(s.active().unwrap().is_dirty(), "the state stays after the run");
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// With automation read roots that leave out the document's file, `fullName` and `path` throw
@@ -823,7 +876,6 @@ fn full_name_and_path_leave_out_a_file_outside_the_read_roots() {
     assert!(e.contains(DENIED) && !e.contains("outside"), "SAVECHANGES does not write a file the script may not: {e}");
     assert_eq!(std::fs::read(&file).unwrap(), before, "the file is left as it was");
     assert_eq!(s.documents().len(), 1, "the document stays open");
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A `pDFPreset` in square brackets names the built-in preset of the name inside them, and a name
@@ -858,7 +910,6 @@ fn a_bracketed_pdf_preset_names_the_built_in_preset() {
         );
         assert!(e.contains("unknown PDF preset"), "{bad}: {e}");
     }
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// A number given as `artboardRange` is read as `String(number)` reads it.
@@ -881,7 +932,6 @@ fn a_number_artboard_range_names_that_artboard() {
     assert_eq!(pdf.artboards.len(), 1, "one page");
     let r = pdf.artboards[0].rect;
     assert!((r.width() - 60.0).abs() < 0.01 && (r.height() - 80.0).abs() < 0.01, "the second artboard: {r:?}");
-    let _ = std::fs::remove_dir_all(base);
 }
 
 /// With `saveMultipleArtboards`, a `.ai` or EPS save also writes a file for each artboard of
@@ -943,5 +993,4 @@ fn save_multiple_artboards_writes_a_file_per_artboard() {
         assert!(e.contains("range"), "{bad}: {e}");
     }
     assert!(!dir.join("aioff/b.ai").exists(), "a bad range writes nothing");
-    let _ = std::fs::remove_dir_all(base);
 }

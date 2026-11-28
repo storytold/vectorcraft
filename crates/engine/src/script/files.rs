@@ -715,8 +715,15 @@ impl Disk {
 
     /// The real path of the folder `path` that an export writes its files into, as a `File`
     /// opened for writing there would reach it ([`Disk::target`]), or why it may not: a file is
-    /// not a folder.
+    /// not a folder. A root (`/`, `E:\`) has no name of its own: its real path must be inside a
+    /// folder the script may write to and the automation write roots in force.
     pub(crate) fn folder_target(&self, path: &str) -> Result<std::path::PathBuf, &'static str> {
+        let p = self.checked(path)?;
+        if p.file_name().is_none() {
+            let real = std::fs::canonicalize(p).map_err(|_| ACCESS_DENIED)?;
+            let writable = crate::file_access::check_write(&crate::cmd::findfiles::plain(real.clone()).to_string_lossy()).is_ok();
+            return if self.writes.allows(&real) && writable { Ok(real) } else { Err(ACCESS_DENIED) };
+        }
         let real = self.target(path, true)?;
         match std::fs::metadata(&real) {
             Ok(m) if !m.is_dir() => Err(NOT_FOLDER),
