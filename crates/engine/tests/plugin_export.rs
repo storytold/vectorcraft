@@ -8,7 +8,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
@@ -268,24 +267,31 @@ fn declines_and_bad_output_write_nothing_and_warnings_come_back() {
 }
 
 /// Background Export's Cancel stops an exporter between two slices of its budget: here one that
-/// never returns, cancelled from another thread once it is running.
+/// never returns after it reports its first step, cancelled when that report arrives, so the cancel
+/// lands while it is running.
 #[test]
 fn a_cancelled_export_stops_the_exporter() {
     let mut s = session();
-    install(&mut s, &tpl::module(&tpl::exporter("test.spins", r#"["tss"]"#, "{}"), "(loop $l (br $l)) (i64.const 0)", "", 1));
+    let manifest = r#"{"id":"test.spins","name":"Test test.spins","version":"1","kind":"exporter","api":2,"extensions":["tss"],"params":{},"permissions":["doc.read","export.write","progress"]}"#;
+    let spins = "(call $vc_progress (i64.const 1) (i64.const 7)) (loop $l (br $l))";
+    let wasm = wat::parse_str(tpl::reporting(manifest, spins, r#"{"dataBase64":""}"#)).unwrap();
+    let grant = json!(["doc.read", "export.write", "progress"]);
+    s.allow_plugin_grants_from_requests();
+    s.execute("plugin.install", &json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant})).unwrap();
     let token = vectorcraft_doc::cancel::CancelToken::new();
-    let cancel = token.clone();
-    let wait = Duration::from_millis(300);
-    let canceller = std::thread::spawn(move || {
-        std::thread::sleep(wait);
-        cancel.cancel();
-    });
-    let t = Instant::now();
-    let r = vectorcraft_doc::cancel::scope(&token, None, || s.execute("document.export", &json!({"format": "plugin.test.spins"})));
-    let took = t.elapsed();
-    canceller.join().unwrap();
+    let reports = std::rc::Rc::new(std::cell::Cell::new(0));
+    let sink: vectorcraft_doc::cancel::ProgressSink = {
+        let (token, reports) = (token.clone(), reports.clone());
+        std::rc::Rc::new(move |done, total, _| {
+            if (done, total) == (1, 7) {
+                reports.set(reports.get() + 1);
+                token.cancel();
+            }
+        })
+    };
+    let r = vectorcraft_doc::cancel::scope(&token, Some(sink), || s.execute("document.export", &json!({"format": "plugin.test.spins"})));
     assert!(matches!(r, Err(EngineError::Cancelled)), "{r:?}");
-    assert!(took >= wait && took < Duration::from_secs(10), "stopped while running, not before: {took:?}");
+    assert_eq!(reports.get(), 1, "cancelled once the exporter was running, not before");
 }
 
 /// Every string in `v`, at any depth.

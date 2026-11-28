@@ -126,6 +126,177 @@ fn styled(app: &mut VectorcraftApp, attrs: Value, text: &str) -> u64 {
     id
 }
 
+fn options_in_the_first_of_two_documents() -> VectorcraftApp {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    styled(&mut app, json!({"size": 12.0}), "Other document");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    open(&mut app, "Body");
+    app
+}
+
+#[test]
+fn the_style_preview_stays_in_its_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    let opening = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, other, "Preview leaves the other document's Body style unchanged");
+    assert!(!app.session.in_interaction());
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    pump(&mut app);
+    assert!(app.session.doc().unwrap().doc.char_styles.iter().any(|style| style.name == "Revised"));
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, opening);
+}
+
+/// After File > Revert the draft neither previews on nor commits to the restored document, and OK is refused.
+#[test]
+fn style_options_refuse_their_draft_after_file_revert() {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    let dir = vectorcraft_testkit::TempDir::new("char-style-options-revert");
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+    app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+    open(&mut app, "Body");
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let restored = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, restored, "Preview leaves the restored document's Body style unchanged");
+    assert!(!ok::<Existing>(&mut app), "the dialog stays open with the refusal");
+    assert_eq!(app.session.doc().unwrap().doc, restored, "OK leaves the restored document's Body style unchanged");
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+    let refusal = with_dialog::<Existing, _>(&app, |host, id| host.held_state(id));
+    assert!(matches!(refusal, Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")));
+}
+
+#[test]
+fn a_style_options_confirmation_stays_in_its_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "preview", json!(false));
+    set::<Existing>(&app, "name", json!("Revised"));
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    let other = app.session.doc().unwrap().doc.clone();
+    let closed = ok::<Existing>(&mut app);
+
+    assert_eq!(app.session.doc().unwrap().doc, other, "OK leaves the other document's Body style unchanged");
+    assert!(!closed, "the same draft remains available");
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    assert!(ok::<Existing>(&mut app));
+    assert!(app.session.doc().unwrap().doc.char_styles.iter().any(|style| style.name == "Revised"));
+}
+
+#[test]
+fn cancelling_style_options_leaves_the_other_documents_gesture() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.session.begin_interaction("Another gesture").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+
+    cancel::<Existing>(&mut app);
+
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
+fn switching_back_leaves_a_new_gesture_in_the_opening_document() {
+    let mut app = options_in_the_first_of_two_documents();
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    app.session.begin_interaction("Another gesture").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert!(!ok::<Existing>(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+fn options_with_a_newer_gesture() -> VectorcraftApp {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    open(&mut app, "Body");
+    set::<Existing>(&app, "name", json!("Revised"));
+    pump(&mut app);
+    assert!(app.session.in_interaction());
+    let resets = app.session.tool_resets();
+    app.session.cancel_interaction().unwrap();
+    app.session.begin_interaction("Character Style Options").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    assert_eq!(app.session.tool_resets(), resets);
+    app
+}
+
+#[test]
+fn cancelling_style_options_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    cancel::<Existing>(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
+fn style_options_preview_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
+#[test]
+fn style_options_confirmation_preserves_a_newer_gesture_in_the_same_document() {
+    let mut app = options_with_a_newer_gesture();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    let undo = app.session.doc().unwrap().history.undo.len();
+    assert!(!ok::<Existing>(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+    assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+}
+
+#[test]
+fn a_first_style_preview_preserves_an_existing_gesture() {
+    let mut app = app();
+    styled(&mut app, json!({"size": 24.0}), "Opening document");
+    open(&mut app, "Body");
+    app.session.begin_interaction("Character Style Options").unwrap();
+    app.session.preview("object.move", &json!({"dx": 20, "dy": 0})).unwrap();
+    let gesture = app.session.doc().unwrap().doc.clone();
+    set::<Existing>(&app, "size", json!(18));
+    pump(&mut app);
+    assert_eq!(app.session.doc().unwrap().doc, gesture);
+    assert!(app.session.in_interaction());
+}
+
 #[test]
 fn unchanged_basic_fields_preserve_original_keys() {
     for attrs in [
@@ -515,6 +686,45 @@ fn diacritic_position_fields_show_set_reset_and_commit() {
     assert!(t.runs.iter().all(|r| (r.style.diacritic_horizontal, r.style.diacritic_vertical) == (-120.0, 1000.0)));
 }
 
+/// The number fields read typed text as the app's other number fields do: `6x2`, `10+4`, `200/2%`,
+/// `45°`, a decimal comma, and a length with its unit. `%` and `°` only where the field takes them,
+/// and an exponent is not read.
+#[test]
+fn number_fields_take_field_arithmetic() {
+    let typed = [
+        ("size", "6x2", 12.0),
+        ("tracking", "10+4", 14.0),
+        ("h_scale", "200/2%", 100.0),
+        ("rotation", "45°", 45.0),
+        ("fill_tint", "25*2", 50.0),
+        ("leading", "1 in", 72.0),
+        ("baseline_shift", "\u{2212}2", -2.0),
+        ("kerning", "12,5", 12.5),
+        ("h_scale", "12,5%", 12.5),
+        ("rotation", "12,5°", 12.5),
+    ];
+    for (key, text, want) in typed {
+        let (mut d, _) = dialog_for(json!({}));
+        put(&mut d, key, json!(text));
+        assert_eq!(optional_number(&Values::new(&d), key), Ok(Some(json!(want))), "{key} {text}");
+    }
+    for (key, text) in [
+        ("size", "12°"),
+        ("leading", "50%"),
+        ("tracking", "10%"),
+        ("rotation", "45%"),
+        ("h_scale", "1%2"),
+        ("size", "1e3"),
+        ("h_scale", "1,000"),
+        ("h_scale", "1,000%"),
+        ("rotation", "1,000°"),
+    ] {
+        let (mut d, _) = dialog_for(json!({}));
+        put(&mut d, key, json!(text));
+        assert!(optional_number(&Values::new(&d), key).is_err(), "{key} {text}");
+    }
+}
+
 /// Tsume: empty is unset, an explicit 0 stays set, a typed value stops at 0 and 100, Reset Panel
 /// unsets it, and it commits to the style and the text set in it.
 #[test]
@@ -523,7 +733,7 @@ fn tsume_field_shows_sets_resets_and_commits() {
     assert_eq!(val(&d, "tsume"), json!(""));
     let (mut d, o) = dialog_for(json!({"tsume": 50.0}));
     assert_eq!(val(&d, "tsume"), json!("50.0"));
-    for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("150", 100.0), ("-5", 0.0)] {
+    for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("25%", 25.0), ("50/2%", 25.0), ("150", 100.0), ("-5", 0.0)] {
         put(&mut d, "tsume", json!(typed));
         assert_eq!(edited_attrs(&d, &o).unwrap(), attrs(json!({"tsume": kept})), "{typed}");
     }
@@ -545,6 +755,41 @@ fn tsume_field_shows_sets_resets_and_commits() {
     assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "tsume": 75.0})));
     let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
     assert!(t.runs.iter().all(|r| r.style.tsume == 75.0));
+}
+
+/// The Insert Aki, Tsume and diacritic rows each have the Character panel's presets menu beside the field, and a
+/// preset picked from it is the field's value and commits to the style, with each frame drawn once.
+#[test]
+fn aki_tsume_and_diacritic_rows_pick_from_the_character_panel_presets() {
+    use craft::ui::testing::Fixture;
+    let mut fx = Fixture::new(|ui| crate::dialogs::host::window_dialogs(ui.ctx()).with(|host| host.run(ui)));
+    fx.room(egui::vec2(900.0, 900.0));
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.ui_ctx = Some(fx.ctx().clone());
+    app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+    styled(&mut app, json!({"size": 24.0}), "Text");
+    open(&mut app, "Body");
+    set::<Existing>(&app, "tab", json!("advanced"));
+    fx.settle();
+
+    let presets_in_row = |fx: &Fixture, label: &str| {
+        let field = fx.by_label(label).unwrap_or_else(|| panic!("the {label} field"));
+        let tree = fx.tree();
+        tree.keys().into_iter().filter(|key| tree.name_of(*key) == Some("Presets")).filter_map(|key| fx.target(key)).find(|chevron| {
+            chevron.rect.center().y > field.rect.top() && chevron.rect.center().y < field.rect.bottom() && chevron.rect.left() >= field.rect.left()
+        })
+    };
+    for label in ["Insert Aki Left", "Insert Aki Right", "Tsume (%)", "Adjust Horizontal Diacritic Position", "Adjust Vertical Diacritic Position"] {
+        assert!(presets_in_row(&fx, label).is_some(), "{label} has a presets menu");
+    }
+
+    let chevron = presets_in_row(&fx, "Insert Aki Left").unwrap();
+    fx.click(&chevron).settle();
+    let pick = fx.by_label("500").expect("the 500 preset");
+    fx.click(&pick).settle();
+    assert_eq!(fields::<Existing>(&app)["akiLeft"], json!("500"));
+    assert!(ok::<Existing>(&mut app));
+    assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "akiLeft": 500.0})));
 }
 
 /// The negated tags of the twenty stylistic sets: an explicit empty Stylistic Sets choice.

@@ -20,14 +20,15 @@ use craft::host::{PickRequest, Picked};
 use craft::ui::buttons::Button;
 use craft::ui::contract::SelectMode;
 use craft::ui::contract::{Bind, CollectionEvent, Props as _, Show as _, ShowCollection as _, ShowContainer as _, clicked};
-use craft::ui::display::Text;
-use craft::ui::layout_components::Row;
+use craft::ui::display::{Shade, Text};
+use craft::ui::layout_components::{Row, Stack};
 use craft::ui::list::{List, ListRow};
 // PLAN: assumed `craft::ui::patterns::form_dialogs::FieldValue` and `craft::ui::runtime::env::Label` paths.
 use craft::ui::dialog::{Dialog, DialogId, DialogResult, DialogStack, FieldRefusal, PromptChoice, StackDialog, StandardPrompt, dialog_id};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::Label;
 use craft::ui::sections::{DialogRole, FooterButton};
+use craft::ui::style::TypeRole;
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::{TRACE_PRESET_EXTS, TRACE_PRESET_FORMAT, TRACE_PRESET_MAX_BYTES};
 
@@ -88,6 +89,8 @@ pub(crate) struct Manager {
     data: RowsData,
     /// What a button asked for, taken by [`pump`].
     action: Option<Action>,
+    /// Identifies this opening when an Import picker finishes later.
+    import_owner: Arc<()>,
 }
 
 impl StackDialog for Manager {
@@ -123,46 +126,55 @@ impl StackDialog for Manager {
         let (data, action) = (&self.data, &mut self.action);
         let dialog = Dialog::new(tl!("Tracing Presets")).buttons([FooterButton::new(tl!("Close"), DialogRole::Cancel)]);
         let shown = dialog.show(ui, |ui, _| {
-            Text::new(tl!("Presets:")).show(ui);
-            let out = List::new(tl!("Presets"))
-                .select(SelectMode::Single)
-                .max_rows(LIST_ROWS)
-                .selection(Bind::given(Selection::single(at)))
-                .show_items(ui, &Labels(&labels), &mut |&k, _| ListRow::new(labels[k].clone()));
-            for event in out.events {
-                if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
-                    && let Some(p) = keys.last().and_then(|&k| list.presets.get(k))
-                {
-                    *action = Some(Action::Select(p.0.clone()));
-                }
-            }
-            Row::new().show(ui, |ui, _| {
-                let buttons = [
-                    (Button::new(tl!("New…")).tooltip(tl!("A new preset starting from the selected one")), Action::New, true),
-                    (Button::new(tl!("Edit…")), Action::Edit, !builtin),
-                    (Button::new(tl!("Delete")), Action::Delete, !builtin),
-                    (Button::new(tl!("Import…")), Action::Import, true),
-                    (Button::new(tl!("Export…")), Action::Export, any_saved),
-                ];
-                for (button, act, enabled) in buttons {
-                    if clicked(&button.enabled(enabled).show(ui)) {
-                        *action = Some(act);
+            // The list and its buttons on the left, the selected preset's name and settings on the right.
+            Row::new().id_salt("presets-body").show(ui, |ui, _| {
+                Stack::new().id_salt("presets-list").show(ui, |ui, _| {
+                    Text::new(tl!("Presets:")).role(TypeRole::Caption).shade(Shade::Muted).show(ui);
+                    let out = List::new(tl!("Presets"))
+                        .select(SelectMode::Single)
+                        .max_rows(LIST_ROWS)
+                        .selection(Bind::given(Selection::single(at)))
+                        .show_items(ui, &Labels(&labels), &mut |&k, _| ListRow::new(labels[k].clone()));
+                    for event in out.events {
+                        if let CollectionEvent::Selection { change: SelectionChange::Set(keys), .. } = event
+                            && let Some(p) = keys.last().and_then(|&k| list.presets.get(k))
+                        {
+                            *action = Some(Action::Select(p.0.clone()));
+                        }
                     }
-                }
+                    Row::new().show(ui, |ui, _| {
+                        let buttons = [
+                            (Button::new(tl!("New…")).tooltip(tl!("A new preset starting from the selected one")), Action::New, true),
+                            (Button::new(tl!("Edit…")), Action::Edit, !builtin),
+                            (Button::new(tl!("Delete")), Action::Delete, !builtin),
+                            (Button::new(tl!("Import…")), Action::Import, true),
+                            (Button::new(tl!("Export…")), Action::Export, any_saved),
+                        ];
+                        for (button, act, enabled) in buttons {
+                            if clicked(&button.enabled(enabled).show(ui)) {
+                                *action = Some(act);
+                            }
+                        }
+                    });
+                });
+                Stack::new().id_salt("presets-details").show(ui, |ui, _| {
+                    Text::new(list_label(preset)).role(TypeRole::BodyStrong).show(ui);
+                    // The selected preset's settings, as the editor shows them, to read only: edits land in a copy.
+                    let mut params = preset.1.clone();
+                    // PLAN: the rows components take no `enabled` prop; the scope's `Ui` is disabled for them.
+                    ui.scope(|ui| {
+                        ui.disable();
+                        rows::main_rows(ui, &mut params, data, RowsHost::Dialog);
+                        rows::advanced_rows(ui, &mut params, data, RowsHost::Dialog, None);
+                    });
+                    if builtin {
+                        Text::new(tl!("Built-in presets don't change: New makes a copy you can edit."))
+                            .role(TypeRole::Caption)
+                            .shade(Shade::Muted)
+                            .show(ui);
+                    }
+                });
             });
-            // PLAN: the sheet's two columns and a strong name need layout and text variants that are not in the bundle; stacked and plain here.
-            Text::new(list_label(preset)).show(ui);
-            // The selected preset's settings, as the editor shows them, to read only: edits land in a copy.
-            let mut params = preset.1.clone();
-            // PLAN: the rows components take no `enabled` prop; the scope's `Ui` is disabled for them.
-            ui.scope(|ui| {
-                ui.disable();
-                rows::main_rows(ui, &mut params, data, RowsHost::Dialog);
-                rows::advanced_rows(ui, &mut params, data, RowsHost::Dialog, None);
-            });
-            if builtin {
-                Text::new(tl!("Built-in presets don't change: New makes a copy you can edit.")).show(ui);
-            }
         });
         shown.output.result(|| ())
     }
@@ -170,8 +182,13 @@ impl StackDialog for Manager {
 
 /// Open the presets manager on `selected` (default: the first preset, Default).
 pub(crate) fn open(app: &mut VectorcraftApp, selected: Option<&str>) {
-    let manager =
-        Manager { list: image_trace::presets(app), selected: selected.unwrap_or("Default").to_string(), data: RowsData::of(app), action: None };
+    let manager = Manager {
+        list: image_trace::presets(app),
+        selected: selected.unwrap_or("Default").to_string(),
+        data: RowsData::of(app),
+        action: None,
+        import_owner: Arc::new(()),
+    };
     match app.dialogs() {
         Some(dialogs) => {
             dialogs.with(|host| host.open(manager));
@@ -241,9 +258,11 @@ fn run(app: &mut VectorcraftApp, act: Action, current: &str) -> Result<(), Strin
             select(app, next.as_deref().unwrap_or("Default"));
         }
         Action::Import => {
-            let request = PickRequest::open("tracingPresets").filter("Tracing presets", TRACE_PRESET_EXTS);
+            let Some(owner) = with_manager(app, |m| Arc::clone(&m.import_owner)) else { return Ok(()) };
+            let name = file_asks::filter_name(crate::i18n::current(), "Tracing presets");
+            let request = PickRequest::open("tracingPresets").filter(name, TRACE_PRESET_EXTS);
             // The answer, or its failure, reaches the status bar from the continuation; nothing is pending here.
-            let _ = file_asks::ask(app, request, Owner::Free, picked);
+            let _ = file_asks::ask(app, request, Owner::Free, move |app, answer| picked(app, answer, ImportSource::Picker(owner)));
         }
         Action::Export => {
             crate::io::save_command_output(app, "imageTrace.presets.export", TRACE_PRESET_FORMAT, json!({}), |_, _| Ok(Value::Null))?;
@@ -252,20 +271,37 @@ fn run(app: &mut VectorcraftApp, act: Action, current: &str) -> Result<(), Strin
     Ok(())
 }
 
-/// The file Import… picked: a path on the desktop, the file's bytes on the web.
-fn picked(app: &mut VectorcraftApp, picked: Picked) -> Result<Value, String> {
-    match picked {
-        Picked::Paths(paths) => {
-            if let Some(path) = paths.first() {
-                open_path(app, &path.to_string_lossy())?;
-            }
+enum ImportSource {
+    FileOpen,
+    Picker(Arc<()>),
+}
+
+impl ImportSource {
+    fn matches(&self, manager: &Manager) -> bool {
+        match self {
+            Self::FileOpen => true,
+            Self::Picker(owner) => Arc::ptr_eq(owner, &manager.import_owner),
         }
-        Picked::Contents(files) => {
-            if let Some((_, bytes)) = files.first() {
-                open_file(app, bytes)?;
+    }
+
+    fn select(&self, app: &VectorcraftApp, name: &str) {
+        let _ = with_manager(app, |manager| {
+            if self.matches(manager) {
+                manager.selected = name.to_string();
             }
-        }
-        _ => {}
+        });
+    }
+}
+
+/// The file Import… picked, a path on the desktop or the file's bytes on the web.
+fn picked(app: &mut VectorcraftApp, picked: Picked, source: ImportSource) -> Result<Value, String> {
+    let file = match picked {
+        Picked::Paths(paths) => paths.first().map(|path| file_contents(app, json!({ "path": path.to_string_lossy() }))).transpose()?,
+        Picked::Contents(files) => files.first().map(|(_, bytes)| checked_contents(bytes)).transpose()?,
+        _ => None,
+    };
+    if let Some(file) = file {
+        open_import(app, file, source)?;
     }
     Ok(Value::Null)
 }
@@ -283,6 +319,7 @@ fn import_file(app: &mut VectorcraftApp, file: &Value) -> Result<(Value, Vec<Val
 struct ReplaceFile {
     file: Value,
     first: Option<String>,
+    source: ImportSource,
 }
 
 /// The Replace question. Its own type, so the host keeps its answer apart from every other prompt's.
@@ -290,22 +327,23 @@ pub(crate) struct ReplacePresets(pub(crate) StandardPrompt);
 
 crate::dialogs::confirm::wrapped_dialog!(ReplacePresets, StandardPrompt, REPLACE_KIND);
 
-/// Asks whether the import of `file` replaces the saved presets `skipped` kept, over the manager
-/// when it is open.
-fn ask_replace(app: &VectorcraftApp, skipped: &[Value], file: Value) {
+/// Asks whether the import of `file` replaces the saved presets `skipped` kept. It opens over the
+/// manager if the import targets that opening.
+fn ask_replace(app: &VectorcraftApp, skipped: &[Value], file: Value, source: ImportSource) {
     let names: Vec<Label> = skipped.iter().filter_map(Value::as_str).map(|n| Label::from(n.to_string())).collect();
     let first = skipped.first().and_then(Value::as_str).map(str::to_owned);
     let prompt = StandardPrompt::custom(tl!("Replace the saved presets that have these names?"))
         .lines(names)
         .button(PromptChoice::Proceed, tl!("Replace"))
-        .button(PromptChoice::Cancel, tl!("Cancel"))
-        .tag(ReplaceFile { file, first });
+        .button(PromptChoice::Cancel, tl!("Cancel"));
     if let Some(dialogs) = app.dialogs() {
         dialogs.with(|host| {
-            if host.is_open::<Manager>() {
-                host.open_child(ReplacePresets(prompt), dialog_id(KIND));
+            let over_manager = host.get::<Manager>().is_some_and(|manager| source.matches(manager));
+            let prompt = ReplacePresets(prompt.tag(ReplaceFile { file, first, source }));
+            if over_manager {
+                host.open_child(prompt, dialog_id(KIND));
             } else {
-                host.open(ReplacePresets(prompt));
+                host.open(prompt);
             }
         });
     }
@@ -320,12 +358,12 @@ fn answer_replace(app: &mut VectorcraftApp) {
     if answer.choice != PromptChoice::Proceed {
         return;
     }
-    let Some(ReplaceFile { mut file, first }) = answer.take_tag::<ReplaceFile>() else { return };
+    let Some(ReplaceFile { mut file, first, source }) = answer.take_tag::<ReplaceFile>() else { return };
     file["replace"] = json!(true);
     match app.run("imageTrace.presets.import", file) {
         Ok(_) => {
             if let Some(first) = first {
-                select(app, &first);
+                source.select(app, &first);
             }
         }
         Err(e) => app.status(e),
@@ -352,37 +390,36 @@ fn file_contents(app: &VectorcraftApp, file: Value) -> Result<Value, String> {
         (None, Some(read)) => read(path)?,
         (None, None) => return Err("no file reader".into()),
     };
+    checked_contents(&bytes)
+}
+
+fn checked_contents(bytes: &[u8]) -> Result<Value, String> {
     if bytes.len() > TRACE_PRESET_MAX_BYTES {
         return Err(too_big());
     }
-    Ok(json!({ "dataBase64": vectorcraft_format::base64_encode(&bytes) }))
+    Ok(json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }))
 }
 
-/// A tracing presets file opened (File › Open, a drop, or the file Import… picked): it imports as
-/// Import… does, over the manager when it is open (which selects the first preset it added), and
-/// asks whether to replace saved presets of the file's names.
+/// Imports a tracing presets file opened through File › Open or a drop. The open manager selects
+/// the first newly imported preset and hosts the question about duplicates.
 pub(crate) fn open_file(app: &mut VectorcraftApp, bytes: &[u8]) -> Result<(), String> {
-    if bytes.len() > TRACE_PRESET_MAX_BYTES {
-        return Err(too_big());
-    }
-    open_import(app, json!({ "dataBase64": vectorcraft_format::base64_encode(bytes) }))
+    open_import(app, checked_contents(bytes)?, ImportSource::FileOpen)
 }
 
-/// [`open_file`] for the tracing presets file at `path` (File › Open, a drop, Import…): the file is
-/// read no further than one byte past the size limit.
+/// [`open_file`] for the file at `path`. Reads at most one byte past the size limit.
 pub(crate) fn open_path(app: &mut VectorcraftApp, path: &str) -> Result<(), String> {
     let file = file_contents(app, json!({ "path": path }))?;
-    open_import(app, file)
+    open_import(app, file, ImportSource::FileOpen)
 }
 
-/// The import of a tracing presets file `file` (`{dataBase64}`), over the manager when it is open.
-fn open_import(app: &mut VectorcraftApp, file: Value) -> Result<(), String> {
+/// Imports the file into the saved presets and directs its dialog changes to the import's source.
+fn open_import(app: &mut VectorcraftApp, file: Value, source: ImportSource) -> Result<(), String> {
     let (imported, skipped) = import_file(app, &file)?;
     if let Some(first) = imported.get(0).and_then(Value::as_str) {
-        select(app, first);
+        source.select(app, first);
     }
     if !skipped.is_empty() {
-        ask_replace(app, &skipped, file);
+        ask_replace(app, &skipped, file, source);
     }
     Ok(())
 }

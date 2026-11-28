@@ -4,10 +4,11 @@
 // PLAN: ui-egui reaches the framework through `craft::..`; the crate's Cargo.toml needs the `craft` dependency
 // (hub-w1 owns the manifest).
 use craft::behavior::Anchor9;
+use craft::i18n::Word;
 use craft::ui::contract::{Bind, Show as _};
 use craft::ui::patterns::form_dialogs::{DialogFields, Param};
 use craft::ui::pickers::{ReferencePoint, ReferencePointLook};
-use craft::ui::runtime::env::Label;
+use craft::ui::runtime::env::{Label, WordRows, WordsOverride, with_env};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::Unit;
 
@@ -30,13 +31,35 @@ pub(crate) fn reference_index(fields: &DialogFields, key: &str) -> usize {
     fields.int(key).map_or(0, |n| n.clamp(0, 8) as usize)
 }
 
+/// The dialog reference picker's corner labels use the app catalog's existing title-case keys.
+fn localized_reference_corners() -> WordRows {
+    [
+        (Word::keyed("referencePoint.topLeft", "Top left"), "Top Left"),
+        (Word::keyed("referencePoint.topRight", "Top right"), "Top Right"),
+        (Word::keyed("referencePoint.bottomLeft", "Bottom left"), "Bottom Left"),
+        (Word::keyed("referencePoint.bottomRight", "Bottom right"), "Bottom Right"),
+    ]
+    .into_iter()
+    .fold(WordRows::new(), |rows, (word, source)| {
+        let translated = tl!(source);
+        if translated == source { rows } else { rows.row(word, translated) }
+    })
+}
+
 /// A row of the nine-point reference picker over the index `key` holds ([`reference_index`]).
 pub(crate) fn reference_param(key: &str, label: impl Into<Label>) -> Param {
     let name = key.to_owned();
     Param::custom(key, label, move |ui, fields, _| {
         let shown = reference_index(fields, &name);
         let mut anchor = Some(Anchor9::ALL.get(shown).copied().unwrap_or(Anchor9::TopLeft));
-        let edit = ReferencePoint::new(tl!("Reference Point"), Bind::bound(&mut anchor)).look(ReferencePointLook::Squares).show(ui);
+        let picker = ReferencePoint::new(tl!("Reference Point"), Bind::bound(&mut anchor)).look(ReferencePointLook::Squares);
+        let show = |ui: &mut egui::Ui| picker.show(ui);
+        let words = localized_reference_corners();
+        let edit = if words.iter().next().is_some() {
+            with_env(ui, |overrides| overrides.words = Some(WordsOverride::Overlay(words)), show)
+        } else {
+            show(ui)
+        };
         if let Some(picked) = Anchor9::ALL.iter().position(|point| Some(*point) == anchor).filter(|at| *at != shown) {
             fields.set(name.clone(), picked as i64);
         }

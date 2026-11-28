@@ -133,17 +133,20 @@ fn home_lists_recent_files_and_a_click_opens_one() {
     let missing = dir.join("Gone.svg").to_string_lossy().into_owned();
     app.ui.recent_files = (0..9).map(|i| dir.join(format!("Drawing {i}.svg")).to_string_lossy().into_owned()).collect();
     app.ui.recent_files.insert(0, missing);
+    // Each row reads its name and then its folder.
+    let row = |name: &str| format!("{name}, {}", dir.display());
     let mut home = home_screen(app);
-    assert!(home.shows("Gone.svg") && home.shows("Drawing 4.svg"), "the first recent files are listed");
-    assert!(!home.shows("Drawing 5.svg"), "the first six only");
-    home.double_click("Gone.svg");
+    assert!(home.shows(&row("Gone.svg")) && home.shows(&row("Drawing 4.svg")), "the first recent files are listed");
+    assert!(!home.shows(&row("Drawing 5.svg")), "the first six only");
+    home.double_click(&row("Gone.svg"));
     let app = home.app();
     assert!(app.session.documents().is_empty());
     assert!(!app.ui.status.is_empty(), "a file that can't be opened says so");
 }
 
 /// The Home screen has a Learn section: every tutorial of the Learn panel under its skill. A
-/// tutorial shows the Learn panel at its steps and no document is opened.
+/// tutorial shows the Learn panel at its steps and no document is opened; the Quick skill guide
+/// shows its list of skills.
 #[test]
 fn home_has_a_learn_section_that_opens_the_learn_panel() {
     use crate::panels::learn::{self, Tab, View, catalog};
@@ -162,6 +165,9 @@ fn home_has_a_learn_section_that_opens_the_learn_panel() {
     assert_eq!(app.ui.learn, View { tab: Tab::Skills, skill: Some("draw"), tutorial: Some("pen-paths") });
     assert!(app.session.documents().is_empty(), "no document is opened");
     assert!(crate::menus::home_showing(&app), "Home stays");
+    drop(app);
+    home.click("Quick skill guide");
+    assert_eq!(home.app().ui.learn, View { tab: Tab::Skills, skill: None, tutorial: None }, "the guide shows the list of skills");
 }
 
 /// Home shown over open documents has the Learn section too; a tutorial chosen there leaves the

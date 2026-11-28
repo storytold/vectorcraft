@@ -4,17 +4,21 @@
 //! Each field is unset (empty, absent, or a checkbox in its unset state) or set, and an unset field leaves
 //! its attribute out of the style. A field still as it opened keeps the style's stored value as it is.
 
+use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use craft::behavior::Mixed;
+use craft::text::ui::character::{AKI_PRESETS, DIACRITIC_PRESETS, TSUME_PRESETS};
 use craft::ui::choice::Checkbox;
-use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _};
-use craft::ui::dialog::{DialogResult, FieldRefusal};
+use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogResult, FieldRefusal, StackDialog};
+use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{
     DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, TabLayout,
 };
 use craft::ui::pickers::Select;
-use craft::ui::runtime::env::Label;
+use craft::ui::runtime::env::{Env, Label};
+use craft::ui::text::{NumberField, NumberPick};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::setup::DocSetup;
 
@@ -428,6 +432,24 @@ fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
     }
 }
 
+/// The number the text typed into number field `key` reads as, with the arithmetic of the app's number
+/// fields (`6x2`, `10+4`, `200/2`) and a decimal comma: a length in points in the length fields (`1 in`),
+/// and a final `%` in the percent fields or `°` in Character Rotation.
+fn typed_number(key: &str, text: &str) -> Option<f64> {
+    let text = text.trim().replace('\u{2212}', "-");
+    let mark = match key {
+        "size" | "leading" | "baseline_shift" | "tcyUpDown" | "tcyLeftRight" | "stroke_width" => {
+            return vectorcraft_doc::Unit::Points.parse(&vectorcraft_doc::decimal_point(&text));
+        }
+        "h_scale" | "v_scale" | "tsume" | "fill_tint" | "stroke_tint" => Some('%'),
+        "rotation" => Some('°'),
+        _ => None,
+    };
+    // The suffix comes off before the comma is read, so `1,000%` is refused as `1,000` is.
+    let number = mark.and_then(|m| text.strip_suffix(m)).unwrap_or(&text);
+    vectorcraft_doc::parse_number(&vectorcraft_doc::decimal_point(number))
+}
+
 fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
     let label = match key {
         "size" => tl!("Size"),
@@ -457,7 +479,7 @@ fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
         Some(v) => {
             let n = v
                 .as_f64()
-                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
+                .or_else(|| v.as_str().and_then(|s| typed_number(key, s)))
                 .filter(|n| n.is_finite())
                 .ok_or_else(|| format!("{label} must be a number"))?;
             // Character Style fields use the Character panel's visible ranges.
@@ -843,7 +865,9 @@ fn sets_row() -> Param {
             .and_then(|v| v.as_array().map(|tags| tags.iter().filter_map(Value::as_str).map(str::to_string).collect()))
             .unwrap_or_default();
         let mut clicked = None;
-        let line = ui.horizontal_wrapped(|ui| {
+        let line = Row::new().wrap(true).show(ui, |ui, _| {
+            // The row's body may run more than once in a pass: the last run's click applies.
+            clicked = None;
             for set in &vectorcraft_text::EXTRA_FEATURES[..20] {
                 let current = listed.iter().find(|t| bare(t) == *set).map(|t| !t.starts_with('-'));
                 if let (_, Some(next)) = tri_box(ui, current, Some(Label::from(set.to_string())), set) {
@@ -864,7 +888,7 @@ fn sets_row() -> Param {
                 fields.set("ot_sets", FieldValue::Json(json!(listed)));
             }
         }
-        line.response
+        line.output
     })
 }
 
@@ -895,7 +919,39 @@ fn basic_rows() -> Vec<PropertyRow> {
     ])
 }
 
-// PLAN: the Aki, Tsume and Diacritic rows are plain text rows: `Param::text` has no preset menu to carry the Character panel's presets.
+/// A number row over the text field `key` (empty for unset) whose menu offers `presets`, as the Character panel's field
+/// of the same name does. A typed value stays within `range`; automation sets the field's text, as for a text row.
+fn preset_number(key: &'static str, label: String, range: RangeInclusive<f64>, presets: &'static [f32]) -> Param {
+    let name = label.clone();
+    Param::custom(key, label, move |ui, fields, _| {
+        let value = fields.text(key).and_then(|text| text.trim().parse::<f64>().ok()).filter(|n| n.is_finite());
+        let units = Env::of(ui).units();
+        let rows: Vec<Entry<NumberPick>> = presets
+            .iter()
+            .map(|&p| {
+                let n = f64::from(p);
+                Entry::new(NumberPick::Number(n), units.number(n, 0..=2))
+            })
+            .collect();
+        let out = NumberField::new(name.clone(), Bind::given(value)).range(range.clone()).presets(&rows).id_salt(key).show(ui);
+        if let Some(picked) = out.edit.value() {
+            let text = picked.map(|n| n.to_string()).unwrap_or_default();
+            if fields.text(key) != Some(text.as_str()) {
+                fields.set(key, FieldValue::Text(text));
+            }
+        }
+        out.edit.response.clone()
+    })
+    // Set from outside: the field's text, as a text row takes it.
+    .on_set(|fields, key, value| match value {
+        Value::String(text) => {
+            fields.set(key, FieldValue::Text(text));
+            Ok(())
+        }
+        other => Err(FieldRefusal::Rejects(&other).message(key)),
+    })
+}
+
 fn advanced_rows() -> Vec<PropertyRow> {
     let mut params: Vec<Param> = [
         ("h_scale", tl!("Horizontal Scale"), "%"),
@@ -904,15 +960,20 @@ fn advanced_rows() -> Vec<PropertyRow> {
         ("tcyUpDown", tl!("Tate-chu-yoko Up/Down"), "pt"),
         ("tcyLeftRight", tl!("Tate-chu-yoko Left/Right"), "pt"),
         ("rotation", tl!("Character Rotation"), "°"),
-        ("akiLeft", tl!("Insert Aki Left"), ""),
-        ("akiRight", tl!("Insert Aki Right"), ""),
-        ("tsume", tl!("Tsume"), "%"),
-        ("diacriticHorizontal", tl!("Adjust Horizontal Diacritic Position"), ""),
-        ("diacriticVertical", tl!("Adjust Vertical Diacritic Position"), ""),
     ]
     .into_iter()
-    .map(|(key, caption, unit)| text(key, if unit.is_empty() { caption.to_string() } else { format!("{caption} ({unit})") }))
+    .map(|(key, caption, unit)| text(key, format!("{caption} ({unit})")))
     .collect();
+    let aki = 0.0..=vectorcraft_doc::text::MAX_AKI;
+    let tsume = 0.0..=vectorcraft_doc::text::MAX_TSUME;
+    let diacritic = -vectorcraft_doc::text::MAX_DIACRITIC_POSITION..=vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+    params.extend([
+        preset_number("akiLeft", tl!("Insert Aki Left").to_string(), aki.clone(), &AKI_PRESETS),
+        preset_number("akiRight", tl!("Insert Aki Right").to_string(), aki, &AKI_PRESETS),
+        preset_number("tsume", format!("{} (%)", tl!("Tsume")), tsume, &TSUME_PRESETS),
+        preset_number("diacriticHorizontal", tl!("Adjust Horizontal Diacritic Position").to_string(), diacritic.clone(), &DIACRITIC_PRESETS),
+        preset_number("diacriticVertical", tl!("Adjust Vertical Diacritic Position").to_string(), diacritic, &DIACRITIC_PRESETS),
+    ]);
     let languages: Vec<(&'static str, &'static str)> = vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, _, _)| (*name, *name)).collect();
     params.push(select("language", tl!("Language:"), &languages));
     rows(params)
@@ -1104,6 +1165,8 @@ pub(crate) use style_dialog;
 pub(crate) struct CharStyleOptions {
     inner: HostedPropertiesDialog,
     opening: Arc<Opening>,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
 }
 
 impl CharStyleOptions {
@@ -1119,12 +1182,21 @@ impl CharStyleOptions {
 }
 style_dialog!(CharStyleOptions, KIND);
 
+/// The preview and the document activation that owns it, retained until the host reports Cancel.
+#[derive(Default)]
+pub(crate) struct Preview {
+    live: LivePreview,
+    activation: Option<(u64, u64)>,
+    interaction_selection: Option<Arc<vectorcraft_doc::Selection>>,
+}
+
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     crate::panels::character::end_typing(app);
-    let doc = &app.session.active().ok_or("no document open")?.doc;
+    let state = app.session.active().ok_or("no document open")?;
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
     let def = doc.char_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no character style `{name}`"))?;
     let opening = Arc::new(Opening::new(name, def.attrs.clone(), &doc.setup, swatch_choices(doc)));
-    let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening };
+    let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening, document };
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(json!({"dialog": KIND}))
 }
@@ -1148,21 +1220,90 @@ pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 /// The dialog's frame work: previews the values, commits at OK, and rolls the preview back at Cancel.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let refusals = Refusals {
+        busy: "finish the active edit before applying Character Style Options",
+        elsewhere: "switch back to the document where Character Style Options was opened",
+        closed: "the document where Character Style Options was opened has closed",
+    };
+    pump_in_opening_document::<CharStyleOptions>(
+        app,
+        |app| &mut app.char_style_preview,
+        |d| (d.document, d.frame()),
+        CharStyleOptions::hosted_mut,
+        (tl!("Character Style Options"), "charStyle.edit"),
+        &refusals,
+    );
+}
+
+/// Why a style options dialog's OK is refused outside its own preview.
+pub(crate) struct Refusals {
+    /// Another edit is active in the opening document.
+    pub(crate) busy: &'static str,
+    /// Another document is active.
+    pub(crate) elsewhere: &'static str,
+    /// The opening document has closed.
+    pub(crate) closed: &'static str,
+}
+
+/// Runs one frame of the style options dialog `D` that opened on one document: previews and commits `command`
+/// (its undo label and id) only while that document is active, has not been reverted since the dialog opened and
+/// has no other edit active in it, refuses OK elsewhere with `refusals`, and at Cancel rolls back only the preview
+/// the dialog still owns. `preview` is the app's slot for the dialog's preview, `state` gives the opening
+/// document's uid and revert count and this frame's state, and `hosted` gives the hosted dialog that takes OK's
+/// answer.
+pub(crate) fn pump_in_opening_document<D: StackDialog>(
+    app: &mut VectorcraftApp,
+    preview: fn(&mut VectorcraftApp) -> &mut Preview,
+    state: fn(&mut D) -> ((u64, u64), Frame),
+    hosted: fn(&mut D) -> &mut HostedPropertiesDialog,
+    (label, command): (&str, &str),
+    refusals: &Refusals,
+) {
     let Some(dialogs) = app.dialogs() else { return };
-    let Some(frame) = dialogs.with(|host| host.get_mut::<CharStyleOptions>().map(CharStyleOptions::frame)) else {
-        if matches!(dialogs.with(|host| host.take::<CharStyleOptions>()), Some(DialogResult::Cancel)) {
-            std::mem::take(&mut app.char_style_preview).cancel(app);
+    let active = app.session.active().map(|doc| (doc.uid, app.session.tool_resets()));
+    let interaction_selection = app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+    let owned = preview(app);
+    let owns_interaction = owned.activation == active
+        && owned.interaction_selection.as_ref().zip(interaction_selection.as_ref()).is_some_and(|(owned, current)| Arc::ptr_eq(owned, current));
+    let Some(((document, reverts), frame)) = dialogs.with(|host| host.get_mut::<D>().map(state)) else {
+        if matches!(dialogs.with(|host| host.take::<D>()), Some(DialogResult::Cancel)) {
+            let owned = std::mem::take(preview(app));
+            if owns_interaction {
+                owned.live.cancel(app);
+            }
         }
         return;
     };
-    let live = std::mem::take(&mut app.char_style_preview);
-    let (live, done) = drive(app, live, tl!("Character Style Options"), "charStyle.edit", &frame);
-    app.char_style_preview = live;
+    let in_opening = app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == (document, reverts));
+    let done = if let Some(activation) = active.filter(|_| in_opening) {
+        if interaction_selection.is_some() && !owns_interaction {
+            frame.ok.then(|| Err(refusals.busy.into()))
+        } else {
+            let owned = std::mem::take(preview(app));
+            let live = if owns_interaction { owned.live } else { LivePreview::default() };
+            let (live, answer) = drive(app, live, label, command, &frame);
+            let interaction_selection =
+                app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+            *preview(app) = Preview { live, activation: Some(activation), interaction_selection };
+            answer
+        }
+    } else if frame.ok {
+        let why = if app.session.active().is_some_and(|doc| doc.uid == document) {
+            "The document was reverted. Reopen this dialog to continue."
+        } else if app.session.documents().iter().any(|doc| doc.uid == document) {
+            refusals.elsewhere
+        } else {
+            refusals.closed
+        };
+        Some(Err(why.into()))
+    } else {
+        None
+    };
     if let Some(done) = done {
         let answer = done.map(drop).map_err(|why| reason(&why));
         dialogs.with(|host| {
-            if let Some(d) = host.get_mut::<CharStyleOptions>() {
-                d.hosted_mut().answer_ok(answer);
+            if let Some(d) = host.get_mut::<D>() {
+                hosted(d).answer_ok(answer);
             }
         });
     }

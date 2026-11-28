@@ -413,6 +413,9 @@ digits	Malayalam	マラヤーラム数字
 	Artboards	アートボード
 	Convert to Artboards	アートボードに変換
 	Rearrange All Artboards…	すべてのアートボードを再配置…
+	Rearrange…	再配置…
+	Selected Artboards: {n}	選択したアートボード: {n}
+@msg	Click on the canvas to place the artboards (Esc cancels)	キャンバスをクリックしてアートボードを配置します (Esc でキャンセル)
 	Fit to Artwork Bounds	アートワーク境界に合わせる
 	Fit to Selected Art	選択オブジェクトに合わせる
 	Graph	グラフ
@@ -1698,6 +1701,7 @@ antiAlias	Sharp	シャープ
 	Dimensions	寸法
 	Direct Selection Tool	ダイレクト選択ツール
 	Disable Auto Add/Delete	自動追加/削除機能を使用しない
+	Delete Removes Anchor Points and Keeps Paths Joined	Delete でアンカーポイントを削除してパスをつなげたままにする
 	Interpolate Control Points When Moving Anchors	アンカーポイントの移動時に方向線ハンドルを補間
 	Disable Opacity Mask	不透明マスクを無効にする
 	Discard	破棄
@@ -2708,6 +2712,12 @@ antiAlias	Sharp	シャープ
 	{width} × {height} px	{width} × {height} px
 	{size} — {file}	{size} — {file}
 	{n} ppi	{n} ppi
+	{format}; {size}; {detail}	{format}、{size}、{detail}
+	{x} × {y} ppi	{x} × {y} ppi
+	resolution unavailable	解像度を取得できません
+	estimated memory {memory}	推定メモリ {memory}
+	memory unavailable	メモリを取得できません
+	Unknown format	不明な形式
 	{kind}, {instances}	{kind}、{instances}
 	{kind}, {rows} × {cols}	{kind}、{rows} × {cols}
 	{grid}, {instances}	{grid}、{instances}
@@ -3337,7 +3347,7 @@ mark-style	Japanese	日本式
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	選択 › 共通 › カラー (塗り)、カラー (線)、塗りと線は、グローバルスウォッチまたは特色スウォッチの同じ濃度だけを選び、ほかの濃度は選びません。
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	ドキュメントが開いていないときにホーム画面を表示します。オフのときは、ホームをクリックするまでウィンドウは空のままです。
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	サイズ、位置、整列のために、線と形を変える効果を含めてオブジェクトを測ります。ドロップシャドウ、光彩、ぼかしは含めません。
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	100% 表示のとき、ドキュメントの 1 インチを 72 ではなく 96 スクリーンポイントで表示します。
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	100% 表示のとき、ドキュメントの 1 インチをディスプレイの 1 インチで表示します。システムが使用できるディスプレイのサイズを報告しない場合は 96 スクリーンポイントで表示します。
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	選択ツールでグループ、パス、画像をダブルクリックすると、編集モードで開きます。
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	変形コマンドや変形パネルのメニューで別の指定をしない限り、パターンの塗りと線をアートワークと一緒に変形します。
 	Live corner radii scale with the art, unless the scale chooses otherwise.	拡大・縮小で別の指定をしない限り、ライブコーナーの半径をアートワークと一緒に拡大・縮小します。
@@ -3348,6 +3358,7 @@ mark-style	Japanese	日本式
 	A two-finger rotate gesture on a trackpad rotates the canvas view.	トラックパッドで 2 本指の回転ジェスチャーをすると、カンバスの表示が回転します。
 	Holding a key runs the tool or command in its Hold column in Keyboard Shortcuts; a quick press runs its usual shortcut.	キーを長押しすると、キーボードショートカットの長押し列にあるツールまたはコマンドを実行します。短く押すと通常のショートカットを実行します。
 	How long, in seconds, a key must be held before its hold shortcut runs instead of its usual shortcut.	通常のショートカットの代わりに長押しショートカットを実行するまで、キーを押し続ける秒数です。
+	Delete removes the selected anchor points and refits the curve around each one, instead of opening the path there.	Delete キーで選択したアンカーポイントを削除し、パスをそこで開かずに、各ポイントの周りの曲線を合わせ直します。
 	When you move anchor points, each curve with one moved end keeps its shape relative to its ends.	アンカーポイントを移動すると、一方の端が移動した各曲線は、両端に対する形状を保ちます。
 	Holding a tool's shortcut key chooses the tool until you let go, and then the previous tool is chosen again.	ツールのショートカットキーを押している間はそのツールを選び、離すと前のツールに戻ります。
 	Shows the bounding box while you move the selection or draw a shape.	選択範囲の移動中や図形の描画中にバウンディングボックスを表示します。
@@ -4350,6 +4361,9 @@ file-filter	Swatch libraries	スウォッチライブラリ
 file-filter	Flattener presets	分割・統合プリセット
 file-filter	PDF presets	PDF プリセット
 file-filter	Print presets	プリントプリセット
+file-filter	Tracing presets	トレースプリセット
+file-filter	Action sets	アクションセット
+file-filter	Composite fonts	合成フォント
 file-filter	Preferences	環境設定
 file-filter	Export presets	書き出しプリセット
 file-filter	SVG Compressed	SVG 圧縮
@@ -4432,6 +4446,17 @@ file-filter	Templates	テンプレート
 	Stacked	積み重ね
 	Graphic Style Libraries Menu	グラフィックスタイルライブラリメニュー
 	Graphics	グラフィックス
+	Show Contrast	コントラストを表示
+	Contrast For	コントラストの対象
+	Normal Text	通常のテキスト
+	Large Text	大きなテキスト
+	Contrast Background	コントラストの背景
+	Behind Selection	選択範囲の背後
+	Current Color	現在のカラー
+	Pass	合格
+	Fail	不合格
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	WCAG 2.2 の最小コントラスト：通常のテキスト AA 4.5:1 (1.4.3) と AAA 7:1 (1.4.6)、大きなテキスト AA 3:1 と AAA 4.5:1、グラフィックとコントロール AA 3:1 (1.4.11)。
+	The background is read at the center of the selection.	背景は選択範囲の中央で読み取ります。
 	Greek & Cyrillic	ギリシャ文字とキリル文字
 	Hex by Column	六角形 (列)
 	Hex by Row	六角形 (行)
@@ -5785,6 +5810,14 @@ variable-list-end	{0}, {1}	{0}、{1}
 	The script asks to read and write a folder you choose, with everything in it.	スクリプトが、選択したフォルダーとその中身すべての読み書きを求めています。
 	Allow Once	今回のみ許可
 	Always Allow This Script	このスクリプトを常に許可
+	No script has kept file access.	ファイルアクセスを保持しているスクリプトはありません。
+	Read file	ファイルの読み取り
+	Read and write file	ファイルの読み取りと書き込み
+	Read and write folder	フォルダーの読み取りと書き込み
+	Revoke	許可を取り消す
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	「許可を取り消す」は、スクリプトのすべてのバージョンに保持されたアクセスを削除します。フォルダーへのアクセスには、その中のすべてが含まれます。
+@msg	Script file access revoked	スクリプトのファイルアクセスを取り消しました
+@msg	The script file access was already revoked	スクリプトのファイルアクセスはすでに取り消されています
 	Deny	拒否
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	スクリプトは開いているドキュメントを変更でき、実行するコマンドを通じてファイルを書き込むこともできます。信頼できるスクリプトだけを実行してください。
 	Do not show this warning again	今後この警告を表示しない
@@ -5959,6 +5992,7 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	スクリプトのファイルダイアログの `answer` は once、always、deny、stop のいずれかにしてください
 @msg	choose a file or folder first, or deny	先にファイルまたはフォルダーを選択するか、拒否してください
 @msg	the script file permissions could not be saved: {e}	スクリプトのファイル許可を保存できませんでした: {e}
+@msg	the script file permissions could not be read: {e}	スクリプトのファイル許可を読み込めませんでした: {e}
 @msg	this script's file access can be allowed only once	このスクリプトのファイルアクセスは 1 回だけ許可できます
 @msg	Only the person at the keyboard can allow a script's file access	スクリプトのファイルアクセスを許可できるのはキーボードの前にいる人だけです
 @msg	A script is given at most 2,048 files: the files picked after them were left out	スクリプトに渡せるファイルは 2,048 個までのため、それ以降に選んだファイルは除外されました
@@ -6053,6 +6087,12 @@ liquify-list-end	{0}, {1}	{0}、{1}
 @msg	Couldn't paste from the clipboard: {e}	クリップボードから貼り付けられませんでした: {e}
 @msg	Couldn't paste: the document it was pasted in was closed	貼り付けられませんでした: 貼り付け先のドキュメントは閉じられています
 @msg	nothing selected	何も選択されていません
+@msg	`{key}` must be a color or {_1}	`{key}` はカラーまたは {_1} である必要があります
+@msg	the selected objects' colors differ: give `color`	選択したオブジェクトのカラーが異なります：`color` を指定してください
+@msg	the selected objects' colors differ: give `opacity` or `color`	選択したオブジェクトのカラーが異なります：`opacity` または `color` を指定してください
+@msg	the active fill or stroke has no color: give `color`	アクティブな塗りまたは線にカラーがありません：`color` を指定してください
+@msg	the active fill or stroke is hidden: give `color`	アクティブな塗りまたは線が非表示です：`color` を指定してください
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	アクティブな塗りまたは線は不透明マスクを通して描画されます：`color` を指定してください
 @msg	nothing selected is in a group	選択したオブジェクトはどれもグループ内にありません
 @msg	the {tool} tool has no options	{tool} ツールにはオプションがありません
 @msg	unknown tool `{tool}`	`{tool}` は不明なツールです
@@ -7001,6 +7041,8 @@ axis	Y Axis	Y 軸
 	Cancel Plug-in Run	プラグインの実行をキャンセル
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} は完了しましたが、その間にドキュメントまたはプラグインが変更されました。もう一度実行してください
 @msg	Running “{name}”…	「{name}」を実行中…
+@msg	Plug-in “{name}”: {notice}	プラグイン「{name}」: {notice}
+@msg	`notice` must be a string with visible text	`notice` は表示される文字を含む文字列にしてください
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	ライブ効果はドキュメントの描画中に実行されるため、`heavy` にはできません
 @msg	an exporter always gets an export's budget: leave `budget` out	書き出しプラグインには常に書き出しの予算が割り当てられます。`budget` は省略してください
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	「{_1}」は大きな計算予算を求めています (1 回の実行につき最大 {minutes} 分、通常の {times} 倍の命令)。デスクトップ アプリで人が承認するか、--allow-plugin-grants を付けて開始したセッションで `allowHeavy: true` を指定してください
@@ -7027,6 +7069,8 @@ axis	Y Axis	Y 軸
 @msg	needs approval: it asks for {0}, which the user grants when installing it on its own	承認が必要です: {0} を要求しています。これはユーザーが単独でインストールするときに許可します
 @msg	not JSON: {e}	JSON ではありません: {e}
 @msg	not a WebAssembly binary (missing \\0asm header)	WebAssembly バイナリではありません (\\0asm ヘッダーがありません)
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} parameters	関数型のパラメーター数が上限の {MAX_FUNC_TYPE_VALUES} 個を超えています
+@msg	a function type exceeds the limit of {MAX_FUNC_TYPE_VALUES} results	関数型の結果の数が上限の {MAX_FUNC_TYPE_VALUES} 個を超えています
 @msg	parameter `{k}`: {what}	パラメーター `{k}`: {what}
 @msg	parameter `{name}`: {what}	パラメーター `{name}`: {what}
 @msg	plug-in parameters must be a JSON object	プラグインのパラメーターは JSON オブジェクトにしてください
@@ -7044,6 +7088,10 @@ axis	Y Axis	Y 軸
 @msg	vc_alloc returned 0 (out of memory)	vc_alloc が 0 を返しました (メモリ不足)
 @msg	vc_alloc returned a block outside memory	vc_alloc がメモリの外のブロックを返しました
 @msg	vc_run returned error code {packed}	vc_run がエラーコード {packed} を返しました
+@msg	did not finish loading within {secs} s	{secs} 秒以内に読み込みが完了しませんでした
+@msg	no thread was left to load it	読み込むためのスレッドが残っていませんでした
+@msg	panicked while loading	読み込み中にパニックが発生しました
+@msg	panicked while loading: {what}	読み込み中にパニックが発生しました: {what}
 @msg	{_1} is not a file	{_1} はファイルではありません
 @msg	{_1} is {_2} bytes (limit {_3})	{_1} は {_2} バイトです (上限 {_3})
 @msg	{_1} objects (limit {MAX_OBJECTS})	オブジェクトが {_1} 個あります (上限 {MAX_OBJECTS})
@@ -7086,12 +7134,21 @@ axis	Y Axis	Y 軸
 @msg	a list of {min_items} to {max_items} numbers	{min_items} から {max_items} 個の数値のリスト
 @msg	a new object needs a `path`	新しいオブジェクトには `path` が必要です
 @msg	a number	数値
-@msg	a painted live effect returns only `objects`	ペイント型のライブ効果が返すのは `objects` だけです
+@msg	a painted live effect returns only `objects` and `notice`	ペイント型のライブ効果が返すのは `objects` と `notice` だけです
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes` だけです
 @msg	a read-only object was left out	読み取り専用のオブジェクトが省かれています
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	読み取り専用のオブジェクトが省かれています: {{"id": …}} だけの形か、渡されたとおりの形で返してください
 @msg	a string	文字列
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	線に使えるのは `paint`、`width`、`join`、`cap`、`miterLimit` だけです
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	ペイント型のライブ効果のピースに使えるのは `path`、`fillRule`、`fills`、`strokes`、`opacity`、`blend`、`effects` だけです
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	線に使えるのは `paint`、`width`、`join`、`cap`、`miterLimit`、`opacity`、`blend`、`effects` だけです
+@msg	`appearanceOutput` may only be true	`appearanceOutput` には true のみ指定できます
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` は `paintOutput` を宣言した `api` 3 のライブ効果専用です
+@msg	`opacity` must be a number from 0 to 1	`opacity` は 0 から 1 の数値にしてください
+@msg	unknown blending mode; `blend` is one of {_1}	不明な描画モードです。`blend` は {_1} のいずれかです
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` は最大 {MAX_LOOK_EFFECTS} 件のレコードの配列にしてください
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	1 つの結果に含められる効果レコードは最大 {MAX_RESULT_EFFECTS} 件です
+@msg	this host takes no effects here	このホストではここに効果を指定できません
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	線は {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}} の形にしてください
 @msg	an effect must be {{"id", "params"?, "visible"?}}	効果は {{"id", "params"?, "visible"?}} の形にしてください
 @msg	an effect on a fill returns only `fills`	塗りの効果が返すのは `fills` だけです
@@ -7191,6 +7248,8 @@ axis	Y Axis	Y 軸
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` は {_1} です。このホストが対応するプラグイン API レベルは 1 から {API_LEVEL} です
 @msg	`paintOutput` may only be true	`paintOutput` には true のみ指定できます
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` は `api` 2 のライブ効果 (`kind` "effect") 専用です
+@msg	`place` is only for an importer (`kind` "importer")	`place` はインポーター (`kind` "importer") 専用です
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	「{shown}」はファイルを開きますが配置はしません: マニフェストで `place` が設定されていません
 @msg	`grant` must be a list of permission names	`grant` は権限名のリストにしてください
 @msg	`grant` names an unknown permission `{shown}`	`grant` に不明な権限 `{shown}` が含まれています
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	種類 `{_1}` のプラグインには権限 `{_2}` が必要です
@@ -7202,12 +7261,60 @@ axis	Y Axis	Y 軸
 @msg	`inputs` lists `{shown}` twice	`inputs` に `{shown}` が 2 回指定されています
 @msg	`inputs` needs `api` 2 or later	`inputs` には `api` 2 以上が必要です
 @msg	`inputs` needs the permission `doc.read`	`inputs` には権限 `doc.read` が必要です
+@msg	only a filter declares `writes`	`writes` を宣言できるのはフィルターだけです
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` に不明なオブジェクトの種類 `{shown}` があります。type、image、symbolInstance のいずれかを使ってください
+@msg	`writes` lists `{shown}` twice	`writes` に `{shown}` が 2 回指定されています
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` に指定された `{shown}` は `inputs` に指定されていません
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` には `api` {WRITES_API} 以上が必要です
+@msg	`writes` needs the permission `doc.write`	`writes` には権限 `doc.write` が必要です
+@msg	{_1} is not type, an image or a symbol instance	{_1} はテキスト、画像、シンボルインスタンスのいずれでもありません
+@msg	the text of type given as `truncated` can't be changed	`truncated` として渡されたテキストの文字列は変更できません
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	{MAX_INPUT_RUNS} 項目以下のリストにしてください
+@msg	type needs at least one run	テキストには 1 つ以上のランが必要です
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	テキストが {bytes} バイトあります (上限 {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	段落が {paragraphs} 個あります (上限 {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	出力全体のテキストが {MAX_INPUT_TEXT_TOTAL} バイトを超えています
+@msg	unknown key '{k}'	不明なキー '{k}'
+@msg	must be a list of 6 numbers	6 つの数値のリストにしてください
+@msg	a number is out of range (limit ±{MAX_COORD})	数値が範囲外です (上限 ±{MAX_COORD})
+@msg	flattens the object to a line or a point	オブジェクトが線または点につぶれます
+@msg	an object flattened to a line or a point can't be placed again	線または点につぶれたオブジェクトは配置し直せません
+@msg	must be a number from 0 to 1	0 から 1 までの数値にしてください
+@msg	must be the name of a symbol	シンボルの名前にしてください
+@msg	'{shown}' is not a symbol in this document	'{shown}' はこのドキュメントのシンボルではありません
+@msg	a run must be {{"text", "style", "inline"?}}	ランは {{"text", "style", "inline"?}} にしてください
+@msg	`text` holds the character of an inline graphic	`text` にインライングラフィックの文字が含まれています
+@msg	inline graphics can't be added, removed, reordered or changed	インライングラフィックは追加、削除、並べ替え、変更できません
+@msg	the characters of threaded type can't be changed	スレッドテキストの文字は変更できません
+@msg	the characters of type with ruby can't be changed	ルビのあるテキストの文字は変更できません
+@msg	expected {count} paragraph styles, one per paragraph	段落スタイルは段落ごとに 1 つ、計 {count} 個必要です
+@msg	the document has no Kinsoku set named '{shown}'	ドキュメントに '{shown}' という名前の禁則処理セットはありません
+@msg	must be 1-{MAX_FAMILY} printable characters	印刷可能な 1-{MAX_FAMILY} 文字にしてください
+	Read the objects it is given, and the document's settings, artboards, layers and swatches	渡されたオブジェクトと、ドキュメントの設定、アートボード、レイヤー、スウォッチの読み取り
+@msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` には重複しないセクションを指定してください: settings、artboards、layers、swatches
+@msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` は、`api` 3 以降で権限 `doc.read` を持つフィルターまたは `commands` のあるライブ効果専用です
+@msg	the document information the plug-in asks for is too large to hand over: at most {MAX_CONTEXT_ITEMS} artboards, layers and swatches in {MAX_CONTEXT_BYTES} bytes	プラグインが求めるドキュメント情報が大きすぎて渡せません: アートボード、レイヤー、スウォッチは合わせて {MAX_CONTEXT_ITEMS} 個、{MAX_CONTEXT_BYTES} バイトまでです
 @msg	memory budget (object {_1} needs {size} bytes of input, {left} left)	メモリ予算 (オブジェクト {_1} には {size} バイトの入力が必要ですが、残りは {left} です)
 @msg	object budget (more than {MAX_OBJECTS} read-only objects)	オブジェクト予算 ({MAX_OBJECTS} 個を超える読み取り専用オブジェクト)
 @msg	instruction budget	命令予算
 @msg	time budget	時間予算
 @msg	memory budget (the selection is too large to hand over)	メモリ予算 (選択範囲が大きすぎて渡せません)
 @msg	output size ({what} is {len} bytes, limit {max})	出力サイズ ({what} は {len} バイト、上限 {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}、{script} {line} 行 {column} 列)
+@msg	{reason} ({id}, {script})	{reason} ({id}、{script})
+@msg	memory budget	メモリ予算
+@msg	call depth	呼び出しの深さ
+@msg	run(input, params) returned no output object	run(input, params) が出力オブジェクトを返しませんでした
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" には `script` が必要です: マニフェストと同じ場所にあるプラグインの .js ファイルの名前
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` はマニフェストのフォルダーにある .js ファイルの名前にしてください: 1-128 バイト、フォルダーなし、`:` なし、`.` で始まらないこと
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` はスクリプトのテキストで、plugin.install の dataBase64 が受け取る JSON でだけ指定します: .vcplugin ファイルはスクリプトを `script` で指定します
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript プラグインのマニフェストは `runtime` "js" を指定します
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" はオブジェクトフィルター (`kind` "filter") 用で、`kind` "{kind}" 用ではありません
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript プラグインは権限 `{name}` を指定できません: ホストの権限のうち指定できるのは `progress` です
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly モジュールのマニフェストでは `runtime` を省略します: "js" は JavaScript プラグイン用です
+@msg	a JavaScript plug-in makes no command calls	JavaScript プラグインはコマンドを呼び出しません
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) には数値を 2 つ指定します
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) にはレベル 0 (エラー)、1 (警告)、2 (情報)、3 (デバッグ) のいずれかと文字列を指定します
 @msg	the plug-in's grant can't be removed from the plug-in store	プラグインの許可をプラグインストアから削除できません
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	権限 `{shown}` は今後のプラグイン API 用に予約されています。このホストはこの権限を付与しません
 @msg	unknown permission `{shown}`	不明な権限 `{shown}`
@@ -9954,6 +10061,7 @@ breakText	Glyphs	字形
 	Place Brush Art	ブラシのアートを配置
 	Replace Brush Art	ブラシのアートを置き換え
 	Replace Pattern Art	パターンのアートを置き換え
+	Place Pattern Art	パターンのアートを配置
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	このブラシは線で使われています。新しいアートをそれらの線に適用しますか？それとも線をそのままにして、新しいアートを持つブラシのコピーを追加しますか？
 	Apply to Strokes	線に適用
 	Leave Strokes	線を保持
@@ -10023,6 +10131,8 @@ breakText	Glyphs	字形
 	Tangent Circle	接円
 	Tangent Circle Tool	接円ツール
 	No tangent circle here	ここに接円はありません
+	Ask For Circle Radius	円の半径を確認
+	Auto-Update Default	デフォルトを自動更新
 	Circle:	円:
 @msg	`ids` names an object twice	`ids` に同じオブジェクトが 2 回指定されています
 @msg	select two or three paths or compound paths	パスまたは複合パスを 2 つか 3 つ選択してください
@@ -10500,6 +10610,11 @@ breakText	Glyphs	字形
 	No objects are selected.	オブジェクトが選択されていません。
 	Open a document to mark its fold lines.	ドキュメントを開くと折り線を設定できます。
 	Remove Fold Line Role	線種を解除
+	Fold Angle	折り角度
+	Set Fold Angle…	折り角度を設定…
+	Set Fold Angle	折り角度を設定
+	Reset Fold Angle	折り角度をリセット
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ロックも非表示もされていない筋入れ線、半抜き線またはミシン目線を選択してください
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	ツールバーのツールとそのキーの働きを、ヒントの代わりにカードで表示。ツールヒントを表示がオンのときに使用
 	Selects whole objects and groups to move, resize or rotate them.	オブジェクトやグループ全体を選択して、移動、サイズ変更、回転を行います。

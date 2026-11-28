@@ -26,14 +26,16 @@ pub(crate) use export::{
     selection_path, take_selection,
 };
 pub(crate) use open::asks_first;
-pub(crate) use open::report_installed;
 pub(crate) use open::{EXPORT_PRESETS, import_presets, open_notes, open_with_on, opened, opened_after_notice, show_opened};
 pub use open::{
     MAX_RECENT_FILES, OpensAs, ask_revert, install_module, install_plugin, new_from_template, note_recent, open_bytes, open_dialog, open_document,
     open_path, open_path_with, open_reporting, open_with, opens_as, place_bytes, recent_files, report_open_error,
 };
+pub(crate) use open::{install_module_as, open_bytes_reporting, report_installed};
 #[cfg(test)]
 pub(crate) use open::{open_file, opened_with_notes};
+#[cfg(test)]
+pub(crate) use save::FILE_TYPES;
 pub(crate) use save::save_current;
 pub use save::{
     SAVE_CANCELED, ask_format_options, ask_pdf_options, cancel_saves, hide_saves, remember_active_artboard, remember_view, save, save_pdf,

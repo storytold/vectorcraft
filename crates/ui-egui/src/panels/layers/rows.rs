@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use craft::behavior::{EditEvent, SelectionChange};
 use craft::keymap::{CommandRef, Mods};
 use craft::layers::ui::panel::{ActivateOn, LayerColumn, LayerDrop, LayerMove, LayerPosition, LayerSelect, LayerToggle, LayersEvent};
@@ -110,15 +112,42 @@ pub(super) fn locate_layer_listed(doc: &Document, root: Option<NodeId>) -> bool 
 pub(super) fn shows_targeted(tree: &DocLayers<'_>, n: &Node, is_sel: bool) -> bool {
     match tree.state().selection.target {
         Some(id) => id == n.id,
-        None if n.is_layer() => {
-            if tree.state().selection.objects.is_empty() {
-                return false;
-            }
-            let art = n.layer_art(true);
-            !art.is_empty() && art.iter().all(|id| tree.is_selected(*id))
-        }
+        None if n.is_layer() => tree.is_full(n.id),
         None => is_sel,
     }
+}
+
+/// The layers and sublayers of `doc` whose [`Node::layer_art`] with `editable` is not empty and
+/// all in `sel`, found in one pass over the layers and their direct children.
+pub(super) fn full_layers(doc: &Document, sel: &HashSet<NodeId>) -> HashSet<NodeId> {
+    /// Adds `layer` to `out` when it is full, and returns its art's count and selected count.
+    fn visit(layer: &Node, sel: &HashSet<NodeId>, out: &mut HashSet<NodeId>) -> (usize, usize) {
+        let (mut art, mut selected) = (0, 0);
+        for c in layer.children().into_iter().flatten() {
+            let counts = !(c.is_ruler_guide() || !c.visible || c.locked || c.is_template());
+            if c.is_layer() {
+                let (a, s) = visit(c, sel, out);
+                if counts {
+                    art += a;
+                    selected += s;
+                }
+            } else if counts {
+                art += 1;
+                selected += usize::from(sel.contains(&c.id));
+            }
+        }
+        if art > 0 && selected == art {
+            out.insert(layer.id);
+        }
+        (art, selected)
+    }
+    let mut out = HashSet::new();
+    if !sel.is_empty() {
+        for layer in doc.layers.iter().filter(|l| l.is_layer()) {
+            visit(layer, sel, &mut out);
+        }
+    }
+    out
 }
 
 /// The `layer.target` of a click with `mods` on the target circle of `id`, by the rules of a row click (#8639): plain
@@ -127,18 +156,36 @@ pub(super) fn shows_targeted(tree: &DocLayers<'_>, n: &Node, is_sel: bool) -> bo
 /// whether the click moves the anchor to `id`: every click but a Shift range.
 pub(super) fn target_click(tree: &DocLayers<'_>, filter: &LayerFilter, anchor: Option<NodeId>, id: NodeId, mods: Mods) -> ((String, Value), bool) {
     if mods.shift
-        && let Some(start) = anchor.or(tree.state().selection.target)
+        && let Some(range) = anchor.or(tree.state().selection.target).and_then(|start| listed_range(tree, filter, start, id))
     {
-        let order = listed_nodes(tree, filter);
-        let at = |k: NodeId| order.iter().position(|r| *r == k);
-        if let (Some(i), Some(j)) = (at(start), at(id)) {
-            let range: Vec<u64> = order.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.0).collect();
-            let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
-            return (("layer.target".into(), params), false);
-        }
+        let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
+        return (("layer.target".into(), params), false);
     }
     let params = if mods.cmd { json!({"id": id.0, "add": true}) } else { json!({"id": id.0}) };
     (("layer.target".into(), params), true)
+}
+
+/// The `layer.selectAll` of a click with `mods` on the selection square of `id`. A plain click selects the row's art.
+/// Shift selects the art of every row `filter` lists from `anchor` (the last square clicked) to it, and Shift+Ctrl/Cmd
+/// adds that art to the selection. With no anchor listed, Shift adds the row's art or removes it when it is all
+/// selected, and so does Ctrl/Cmd. With it, whether the click moves the anchor to `id`: every click but a Shift range.
+pub(super) fn art_click(tree: &DocLayers<'_>, filter: &LayerFilter, anchor: Option<NodeId>, id: NodeId, mods: Mods) -> ((String, Value), bool) {
+    if mods.shift
+        && let Some(range) = anchor.and_then(|start| listed_range(tree, filter, start, id))
+    {
+        let params = if mods.cmd { json!({"range": range, "add": true}) } else { json!({"range": range}) };
+        return (("layer.selectAll".into(), params), false);
+    }
+    let params = if mods.shift || mods.cmd { json!({"id": id.0, "add": true}) } else { json!({"id": id.0}) };
+    (("layer.selectAll".into(), params), true)
+}
+
+/// The rows `filter` lists from `start` to `end`, both included, top-down; `None` when either is not listed.
+fn listed_range(tree: &DocLayers<'_>, filter: &LayerFilter, start: NodeId, end: NodeId) -> Option<Vec<u64>> {
+    let order = listed_nodes(tree, filter);
+    let at = |k: NodeId| order.iter().position(|r| *r == k);
+    let (i, j) = (at(start)?, at(end)?);
+    Some(order.get(i.min(j)..=i.max(j)).unwrap_or_default().iter().map(|r| r.0).collect())
 }
 
 /// The layer, group and object rows the panel over `tree` lists under `filter`, top-down: the children of open rows,
@@ -416,8 +463,8 @@ fn drop_command(tree: &DocLayers<'_>, mv: &LayerMove<RowId>) -> Option<(String, 
 /// The selected art carried by a row's selection square, dropped on `target`: the selection's top
 /// objects, as Arrange and Group take them, move there (Alt copies them).
 fn art_drop(st: &DocState, payload: &DropPayload, target: NodeId, position: LayerPosition, copy: bool) -> Option<(String, Value)> {
-    let art = payload.get::<ArtDrag>()?;
-    let ids: Vec<u64> = st.doc.paint_order(art.0.iter().copied()).iter().map(|i| i.0).collect();
+    let art = payload.get::<ArtDrag>().filter(|art| art.document == st.uid)?;
+    let ids: Vec<u64> = st.doc.paint_order(art.ids.iter().copied()).iter().map(|i| i.0).collect();
     Some(("layer.move".into(), json!({"ids": ids, "target": target.0, "place": place(position), "copy": copy})))
 }
 

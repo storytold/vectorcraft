@@ -25,6 +25,16 @@ pub struct CanvasCache {
     /// The frame shown was rendered on the worker: an interaction's frames stay there
     /// ([`canvas::show`]).
     pub from_worker: bool,
+    /// The frame shown drew art in a way that depends on its size, or a part of it drawn again on
+    /// this thread would not have matched the frame around it. Edits that reach the affected area
+    /// render whole, on the worker when the frame is heavy ([`canvas::show`]).
+    pub whole_frames: bool,
+    /// The shown web frame can still be patched outside this enclosure in its own raster pixels.
+    /// Present only when all frame-size-dependent output has a known bound.
+    pub view_sized_bounds: Option<vectorcraft_geom::Rect>,
+    /// Draws for a patch against a web frame with bounded view-sensitive art.
+    /// The renderer of the whole frame keeps its raster and derived-art caches across these patches.
+    pub web_patch_renderer: Option<Box<vectorcraft_render::Renderer>>,
     /// The frame shown holds pixels the worker copied from its last frame, and when it was shown
     /// (seconds, egui's input time): it renders whole once it has been shown for
     /// [`canvas::STILL_SECS`] with the view unmoved.
@@ -60,6 +70,10 @@ pub struct CanvasCache {
     /// The words Edit › Spelling › Auto Spell Check underlined on each text object in the last
     /// frame; dropped while it is off.
     pub spelling: canvas::marks::SpellingMarks,
+    /// The active document's visible text objects for (document uid, revision), which Show Hidden
+    /// Characters and Auto Spell Check draw over. A pass that draws neither drops them
+    /// ([`canvas::marks::marks_of`]).
+    pub text_nodes: canvas::marks::TextNodes,
     /// The Hand, Zoom and Rotate View tools the Space key and its chords lend the canvas, between
     /// passes; the tool adapter takes it out for its call and puts it back.
     pub momentary: Option<craft::ui::canvas::Momentary>,
@@ -87,6 +101,10 @@ pub struct CanvasCache {
     /// The view the canvas last drew and when it last changed (egui's input time): while it moves,
     /// the canvas doesn't hit-test the art under the pointer ([`canvas::hover_wait`], #2452).
     pub view_moved: Option<(canvas::ViewKey, f64)>,
+    /// The object the Eyedropper's click at the pointer would act on, which Object Highlighting
+    /// outlines, with what it was found for: finding it again, which can sample a color, waits
+    /// until one of those changes.
+    pub hover_object: Option<(canvas::HoverObjectKey, Option<vectorcraft_doc::NodeId>)>,
     /// Where the press of the gesture running on the canvas landed, in document points: a move carried out of the
     /// canvas drops its art there relative to the pointer (`canvas::drops`).
     pub grab: Option<Point>,
@@ -99,6 +117,9 @@ pub struct CanvasCache {
     /// Escape cancelled the tool's press while the button is still down: its release still sends the tool its Up,
     /// which gives back a selection tool Cmd lent.
     pub escaped_press: bool,
+    /// The host's Caps Lock state at the last canvas pass, which `VectorcraftApp::follow_caps_lock` compares with the
+    /// next reading; `None` before the first pass.
+    pub host_caps_lock: Option<bool>,
     /// A press on the canvas committed a panel field's running preview before the tool took the press, as the field's
     /// commit came first in production: the field's own commit later in the pass has nothing left to run.
     pub committed_preview: bool,
@@ -159,7 +180,7 @@ pub struct CanvasCache {
     /// The Navigator's view region, for (document uid, revision, View Artboard Contents Only).
     pub nav_region: Option<((u64, u64, bool), vectorcraft_geom::Rect)>,
     /// The Document Info panel's values, for (document uid, revision, selection only, options).
-    pub doc_info: Option<((u64, u64, bool, Value), Value)>,
+    pub doc_info: Option<DocInfoCache>,
     /// The Variables panel's rows, for the panel's key.
     pub(crate) variable_rows: Option<(crate::panels::variables::RowsKey, Rc<crate::panels::variables::Rows>)>,
     /// The Map Art surfaces of the 3D dialog's object.
@@ -167,6 +188,11 @@ pub struct CanvasCache {
     /// The command palette's built rows, for the palette's build key.
     pub(crate) palette: Option<(crate::palette::BuildKey, Arc<crate::palette::Built>)>,
 }
+
+/// [`CanvasCache::doc_info`]: (document uid, revision, selection only, whether Objects is shown
+/// (and so the paths' area asked for), the Artboard tool's options) and the `document.info` result
+/// fetched for them.
+pub type DocInfoCache = ((u64, u64, bool, bool, Value), Arc<Value>);
 
 /// [`CanvasCache::map_surfaces`]: the surfaces and what they were computed for.
 pub type MapSurfacesCache = (MapSurfacesKey, Arc<Vec<vectorcraft_effects::MapSurface>>);
@@ -339,6 +365,14 @@ pub struct CacheKey {
     /// The paper under the art that translucent art is blended with before the conversion
     /// ([`crate::display_profile::convert_over`]). None without a display profile, and in Outline.
     pub backdrop: Option<std::sync::Arc<crate::display_profile::Backdrop>>,
+    /// The active color settings ([`vectorcraft_color::cms::active_settings`]), the working color
+    /// settings ([`vectorcraft_color::cms::working_settings`]) and the loaded profiles' generation
+    /// ([`vectorcraft_color::cms::profiles_generation`]) the frame's colors were converted with:
+    /// Edit › Color Settings, a profile loaded again under its name or removed, and the front
+    /// document's assigned profiles change them without changing the document. A proof of the
+    /// working CMYK space converts through the working settings, which can change while the active
+    /// settings stay the same.
+    pub color: (vectorcraft_color::cms::ColorSettings, vectorcraft_color::cms::ColorSettings, u64),
 }
 
 impl CacheKey {

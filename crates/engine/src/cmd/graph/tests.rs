@@ -352,6 +352,47 @@ fn a_paint_opacity_on_a_series_mark_survives_regeneration() {
     assert!(opacities.iter().all(|o| *o == (0.4, 0.6)), "{opacities:?}");
 }
 
+/// `paint.setFill {opacity}` and `paint.setStroke {opacity}` with the opacity a mark already shows replace the opacity
+/// another mark of the series left on the graph, as an explicit 100% does.
+#[test]
+fn a_paint_opacity_a_series_mark_already_shows_replaces_the_kept_opacity() {
+    let (mut s, id, _, marks) = column_marks();
+    s.execute("paint.setFill", &json!({"ids": [marks[0].0], "opacity": 40})).unwrap();
+    s.execute("paint.setStroke", &json!({"ids": [marks[0].0], "opacity": 60})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (Some(0.4), Some(0.6)));
+    // The second mark is opaque already: its row comes out as it was.
+    s.execute("paint.setFill", &json!({"ids": [marks[1].0], "color": "#ff0000", "opacity": 100})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (None, Some(0.6)));
+    s.execute("paint.setStroke", &json!({"ids": [marks[1].0], "opacity": 100})).unwrap();
+    let kept = spec(&s, id).series_paints[0].clone();
+    assert_eq!((kept.fill_opacity, kept.stroke_opacity), (None, None));
+    s.execute("graph.setData", &json!({"rows": [[1, 2], [3, 4]]})).unwrap();
+    let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+    let opacities: Vec<(f32, f32)> =
+        series(&n, 0).children().unwrap().iter().map(|m| (m.appearance.fill().unwrap().opacity, m.appearance.stroke().unwrap().opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == (1.0, 1.0)), "{opacities:?}");
+}
+
+/// The same for a graph's axis lines: a stroke opacity set on an opaque line replaces the one its kind keeps from another
+/// line.
+#[test]
+fn a_stroke_opacity_an_axis_line_already_shows_replaces_the_kept_opacity() {
+    let mut s = Session::new();
+    s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    let id = graph(&mut s, "column");
+    let lines = line_nodes(&s, id);
+    s.execute("paint.setStroke", &json!({"ids": [lines[0].id.0], "opacity": 40})).unwrap();
+    let kept = |s: &Session| spec(s, id).label_styles.axis_rows.and_then(|r| r.paint.stroke_opacity);
+    assert_eq!(kept(&s), Some(0.4));
+    s.execute("paint.setStroke", &json!({"ids": [lines[1].id.0], "opacity": 100})).unwrap();
+    assert_eq!(kept(&s), None);
+    s.execute("graph.setData", &json!({"id": id.0, "csv": ",2024,2025\nQ1,3,2\nQ2,5,4\nQ3,-1,6"})).unwrap();
+    let opacities: Vec<f32> = line_nodes(&s, id).iter().map(|n| n.appearance.stroke().map_or(1.0, |st| st.opacity)).collect();
+    assert!(opacities.iter().all(|o| *o == 1.0), "{opacities:?}");
+}
+
 /// Clear Appearance and Reduce to Basic Appearance on a series mark take its fill and stroke opacity away, and the
 /// graph keeps none, so the series stays opaque when it is drawn again.
 #[test]
@@ -5970,6 +6011,58 @@ fn a_symbol_pasted_with_a_graph_inside_draws_it_with_the_documents_design_of_tha
     };
     let columns: Vec<usize> = series(&graphs[0], 0).children().unwrap().iter().map(|n| paths(n)).collect();
     assert_eq!(columns, [2, 2, 2, 2], "drawn with the document's design");
+}
+
+/// A symbol a loaded look or text style brings, through the pattern it paints with, draws its
+/// graph with the document's design of that name, as a pasted one does.
+#[test]
+fn a_symbol_a_loaded_look_or_text_style_brings_draws_its_graph_with_the_documents_design() {
+    let mut src = Session::new();
+    src.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+    save_coin_design(&mut src);
+    let id = graph(&mut src, "column");
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    src.execute("graph.column", &json!({"design": "Coin"})).unwrap();
+    src.execute("select.set", &json!({"ids": [id.0]})).unwrap();
+    let instance = src.execute("symbol.new", &json!({"name": "Chart"})).unwrap()["id"].clone();
+    src.execute("object.pattern.make", &json!({"name": "Charts", "edit": false, "ids": [instance]})).unwrap();
+    let r = src.execute("shape.rectangle", &json!({"x": 10, "y": 10, "width": 40, "height": 40})).unwrap()["id"].as_u64().unwrap();
+    src.execute("paint.setFill", &json!({"swatch": "Charts", "ids": [r]})).unwrap();
+    let t = src.execute("text.create", &json!({"x": 10, "y": 80, "text": "Charts"})).unwrap()["id"].clone();
+    src.execute("paint.setFill", &json!({"swatch": "Charts", "ids": [t]})).unwrap();
+    src.execute("charStyle.new", &json!({"name": "Charted", "id": t})).unwrap();
+    let source = (*src.doc().unwrap().doc).clone();
+    let look = source.node(NodeId(r)).unwrap().appearance.clone();
+    assert!(source.pattern("Charts").is_some());
+
+    let paths = |n: &vectorcraft_doc::Node| {
+        let mut count = 0;
+        n.walk(&mut |m| count += usize::from(matches!(m.kind, NodeKind::Path { .. })));
+        count
+    };
+    let columns = |d: &vectorcraft_doc::Document| -> Vec<usize> {
+        let art = &d.symbols.iter().find(|x| x.name == "Chart").expect("the symbol came in").art;
+        let mut graphs = vec![];
+        art.walk(&mut |m| {
+            if m.extras().graph.is_some() {
+                graphs.push(m.clone());
+            }
+        });
+        series(&graphs[0], 0).children().unwrap().iter().map(|n| paths(n)).collect()
+    };
+    for styles in [false, true] {
+        // A document whose "Coin" is a rectangle and an ellipse.
+        let mut s = Session::new();
+        s.execute("file.new", &json!({"width": 800, "height": 800})).unwrap();
+        save_design(&mut s, "Coin");
+        let d = std::sync::Arc::make_mut(&mut s.doc_mut().unwrap().doc);
+        if styles {
+            crate::cmd::clipboard::resources::import_text_styles(&source, d, true, false).unwrap();
+        } else {
+            crate::cmd::clipboard::resources::import_looks(&source, d, &look, &serde_json::Map::new()).unwrap();
+        }
+        assert_eq!(columns(d), [2, 2, 2, 2], "styles {styles}: drawn with the document's design");
+    }
 }
 
 #[test]

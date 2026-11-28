@@ -70,7 +70,7 @@ fn icon_button(ui: &mut Ui, icon: &'static str, label: &'static str, enabled: bo
 fn name_field(ui: &mut Ui, name: &str) -> Option<String> {
     let mut typed = None;
     Field::new(tl!("Name:")).id_salt("ab-name").show(ui, |ui, _| {
-        typed = TextField::new(tl!("Name:"), Bind::given(name.to_owned())).show(ui).events.landed().cloned();
+        typed = TextField::new(tl!("Name:"), Bind::given(name.to_owned())).show(ui).events.committed().cloned();
     });
     typed.map(|n| n.trim().to_owned()).filter(|n| !n.is_empty() && n != name)
 }
@@ -175,6 +175,16 @@ pub(crate) fn selected(app: &VectorcraftApp, n: usize) -> usize {
 /// The selected artboards (of `n`): while the Artboard tool is in use, those it has selected
 /// (Shift-click, #1139), else the active one.
 pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
+    let mut all = tool_selection(app, n);
+    if all.is_empty() {
+        all.push(selected(app, n));
+    }
+    all
+}
+
+/// The artboards (of `n`) the Artboard tool has selected while it is in use, sorted and once
+/// each; empty with another tool or with none selected.
+pub(crate) fn tool_selection(app: &VectorcraftApp, n: usize) -> Vec<usize> {
     let tool = (app.session.tool_id() == "artboard").then(|| app.session.tool_options()["selected"].clone());
     let mut all: Vec<usize> = tool
         .iter()
@@ -184,9 +194,6 @@ pub(crate) fn picked(app: &VectorcraftApp, n: usize) -> Vec<usize> {
         .filter_map(|i| usize::try_from(i).ok())
         .filter(|i| *i < n)
         .collect();
-    if all.is_empty() {
-        all.push(selected(app, n));
-    }
     all.sort_unstable();
     all.dedup();
     all
@@ -317,10 +324,18 @@ pub(crate) fn fit_has_art(app: &VectorcraftApp, indices: &[usize]) -> bool {
 /// isn't selected becomes the only selected one, and the menu's facts are measured.
 pub(crate) fn right_click(app: &mut VectorcraftApp, p: vectorcraft_geom::Point) {
     let Some(st) = app.session.active() else { return };
-    let (uid, n, hit) = (st.uid, st.doc.artboards.len(), st.doc.artboard_at(p));
+    let (n, hit) = (st.doc.artboards.len(), st.doc.artboard_at(p));
     if let Some(i) = hit.filter(|i| !picked(app, n).contains(i)) {
         select(app, i);
     }
+    measure_menu(app, p);
+}
+
+/// The canvas menu's facts for the selected artboards, with the menu opened at `p` (a right-click, or the Menu key or
+/// Shift+F10, which select nothing).
+pub(crate) fn measure_menu(app: &mut VectorcraftApp, p: vectorcraft_geom::Point) {
+    let Some(st) = app.session.active() else { return };
+    let (uid, n) = (st.uid, st.doc.artboards.len());
     let all = picked(app, n);
     let any_empty = vectorcraft_engine::find_command("artboard.deleteEmpty").is_some_and(|c| (c.enabled)(&app.session).is_ok());
     let any_art = fit_has_art(app, &all);
@@ -421,10 +436,11 @@ pub(crate) fn toggle(app: &mut VectorcraftApp, i: usize, n: usize) {
 }
 
 /// Whether Select All's shortcut selects every artboard ([`select_all`]) instead of the art: the list has
-/// key focus and the Artboard tool is in use. The list keeps the keys only while its window draws it in every pass, so
-/// a closed panel gives them back to the art; the fired commands run after the frame, a pass after the list's last.
+/// key focus and the Artboard tool is in use. Fired commands run a pass after the list's last draw.
+/// A detached window's pass counter stops when it closes, so the panel must still be visible.
 pub(crate) fn selects_all(app: &VectorcraftApp, ctx: &egui::Context) -> bool {
     app.session.tool_id() == "artboard"
+        && crate::panel_docking::visible(app, "artboards")
         && app.ui.artboards_ui.focused_pass.is_some_and(|(window, pass)| ctx.cumulative_pass_nr_for(window) <= pass + 1)
 }
 
@@ -608,6 +624,16 @@ pub(crate) fn open_rearrange(app: &mut VectorcraftApp) {
     app.run("ui.menuDialog", json!({ "command": "artboard.rearrange" })).ok();
 }
 
+/// Open Rearrange for the selected artboards ([`picked`]), whose OK waits for a click on the
+/// canvas.
+pub(crate) fn open_rearrange_selected(app: &mut VectorcraftApp) {
+    let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
+    if n > 0 {
+        let indices = picked(app, n);
+        crate::dialogs::rearrange_artboards::open_selected(app, &indices);
+    }
+}
+
 /// The rows of the panel's menu.
 pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
     let command = |id: &'static str| PanelRow::Command(CommandRef::new(id));
@@ -621,6 +647,7 @@ pub(crate) fn menu_rows(_app: &VectorcraftApp) -> Vec<PanelRow> {
         command("artboard.convertToArtboards"),
         PanelRow::Command(CommandRef::with_params("tool.options", json!({"tool": "artboard"}))),
         PanelRow::Command(CommandRef::with_params("ui.menuDialog", json!({"command": "artboard.rearrange"}))),
+        command("ui.artboards.rearrange"),
         PanelRow::Separator,
         command("ui.artboards.fitToArt"),
     ]
@@ -638,12 +665,14 @@ pub(crate) fn menu_states(app: &VectorcraftApp, states: &mut CommandStates) {
     set(CommandRef::new("artboard.convertToArtboards"), tl!("Convert to Artboards"), crate::menus::enabled(app, "artboard.convertToArtboards"));
     set(CommandRef::with_params("tool.options", json!({"tool": "artboard"})), tl!("Artboard Options…"), n > 0);
     set(CommandRef::with_params("ui.menuDialog", json!({"command": "artboard.rearrange"})), tl!("Rearrange All Artboards…"), n > 1);
+    set(CommandRef::new("ui.artboards.rearrange"), tl!("Rearrange…"), !tool_selection(app, n).is_empty());
     set(CommandRef::new("ui.artboards.fitToArt"), tl!("Fit to Artwork Bounds"), n > 0);
 }
 
 /// Run the panel menu's own row `id` (`ui.artboards.<row>`) → its result; None for any other id. Rename
 /// opens the name field on the active artboard's row when that artboard is selected, else on the first
-/// selected row.
+/// selected row. Rearrange… opens Rearrange for the artboards the Artboard tool has selected, and does
+/// nothing when it has none.
 pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option<Result<Value, String>> {
     let n = app.session.active().map_or(0, |d| d.doc.artboards.len());
     match id {
@@ -658,6 +687,11 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
         }
         "ui.artboards.deleteEmpty" => return Some(delete_empty(app)),
         "ui.artboards.fitToArt" => return Some(app.run("artboard.fitToArt", json!({ "indices": picked(app, n) }))),
+        "ui.artboards.rearrange" => {
+            if !tool_selection(app, n).is_empty() {
+                open_rearrange_selected(app);
+            }
+        }
         _ => return None,
     }
     Some(Ok(Value::Null))

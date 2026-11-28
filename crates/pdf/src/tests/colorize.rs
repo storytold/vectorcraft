@@ -399,6 +399,16 @@ fn a_white_spot_ink_image_overprints_with_discard_white_overprint() {
             assert_eq!(p.layers[0].children().unwrap()[0].visible, name == "White Ink", "{name}");
         }
     }
+    // Printed as process inks, the white ink is paper white: the image knocks out on every plate.
+    let converted = serde_json::json!({"output": {"mode": "separations", "inks": [{"name": "White Ink", "convertToProcess": true}]}});
+    let settings: PrintSettings = serde_json::from_value(converted).unwrap();
+    for postscript in [true, false] {
+        let job = plan(&d, &PrintOptions { settings: settings.clone(), postscript, ..Default::default() }).unwrap();
+        assert!(!job.plates.is_empty());
+        for p in &job.plates {
+            assert!(p.layers[0].children().unwrap()[0].visible, "a converted white ink knocks out");
+        }
+    }
 }
 
 /// An overprinting colorized image whose pixels don't take its color (a color preview of its
@@ -525,12 +535,47 @@ fn a_colorized_missing_link_placeholder_is_written_in_its_own_colors() {
     }
 }
 
+/// A `w` × `h` gray PNG of `px`.
+fn gray_png(w: u32, h: u32, px: Vec<u8>) -> Vec<u8> {
+    let img = craft_image_codecs::Image::from_raw(w, h, craft_image_codecs::ChannelLayout::Gray, craft_image_codecs::SampleType::U8, px).unwrap();
+    craft_image_codecs::encode(&img, craft_image_codecs::Format::Png, &craft_image_codecs::EncodeOptions::default()).unwrap()
+}
+
+/// Whether each image XObject of `pdf`, soft masks too, has /Interpolate true.
+fn interpolated(pdf: &[u8]) -> Vec<bool> {
+    let file = Pdf::new(Arc::new(pdf.to_vec())).unwrap();
+    file.objects()
+        .into_iter()
+        .filter_map(|o| match o {
+            Object::Stream(s) if s.dict().get::<Name<'_>>(b"Subtype").is_some_and(|n| n.as_ref() == b"Image") => {
+                Some(s.dict().get::<bool>(b"Interpolate") == Some(true))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A colorized image whose pixels are black or white (a 1-bit image mask, as both importers open
+/// one) is written without /Interpolate, its soft mask too: a RIP that smooths the mask greys its
+/// edges, and the same mask drawn below in another ink shows there. A grayscale image keeps it.
+#[test]
+fn a_black_and_white_colorized_image_asks_viewers_not_to_smooth_it() {
+    let red = Paint::Solid { color: Color::cmyk(0.0, 1.0, 1.0, 0.0), swatch: Some("Ink".into()), tint: 1.0 };
+    for (pixels, smooth) in [(vec![0, 255], false), (vec![0, 128], true)] {
+        let mut d = doc(ColorMode::Cmyk, Some(red.clone()));
+        d.images.insert("pic".into(), ImageBlob::png(gray_png(2, 1, pixels.clone())));
+        let found = interpolated(&pdf(&d));
+        assert_eq!(found, [smooth, smooth], "{pixels:?}: the image and its soft mask");
+    }
+}
+
 /// A pixelated colorized image (an envelope's with Anti-Alias off) is written without
-/// /Interpolate, as an uncolorized one is.
+/// /Interpolate, as an uncolorized one is. (Its pixels are gray: a black-and-white one never is.)
 #[test]
 fn a_pixelated_colorized_image_asks_viewers_not_to_smooth_it() {
     for pixelated in [false, true] {
         let mut d = doc(ColorMode::Cmyk, Some(Paint::solid(Color::cmyk(1.0, 0.0, 0.0, 0.0))));
+        d.images.insert("pic".into(), ImageBlob::png(gray_png(2, 1, vec![0, 128])));
         let id = d.layers[0].children().unwrap()[0].id;
         d.node_mut(id).unwrap().extras_mut().pixelated = pixelated;
         let out = pdf(&d);

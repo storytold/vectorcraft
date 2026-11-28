@@ -108,6 +108,24 @@ fn a_group_with_its_own_fill_answers_for_its_contents() {
     assert!((node(&s, g).appearance.items[own].opacity() - 0.3).abs() < 1e-6, "the group's own fill keeps its opacity");
 }
 
+/// A targeted layer without an active Appearance row: `paint.proxies` answers the opacity of the
+/// layer's editable art, which `paint.setFill {opacity}` sets, not that of a locked object before it.
+#[test]
+fn a_targeted_layer_answers_for_its_editable_art() {
+    let mut s = session();
+    let (locked, open) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    s.execute("paint.setFill", &json!({"ids": [locked.0], "opacity": 20})).unwrap();
+    s.execute("paint.setFill", &json!({"ids": [open.0], "opacity": 80})).unwrap();
+    s.execute("object.lock", &json!({"ids": [locked.0]})).unwrap();
+    let layer = s.doc().unwrap().doc.layers[0].id;
+    s.execute("layer.target", &json!({"id": layer.0})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 80.0);
+    s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    assert!((fill_opacity(&s, open) - 0.4).abs() < 1e-6);
+    assert!((fill_opacity(&s, locked) - 0.2).abs() < 1e-6, "the locked object keeps its opacity");
+    assert_eq!(proxies(&mut s)["fillOpacity"], 40.0);
+}
+
 /// With the Appearance panel's lower fill row active, that row takes the opacity and the top fill
 /// keeps its own.
 #[test]
@@ -122,6 +140,39 @@ fn the_active_appearance_row_takes_the_opacity() {
     assert!((ap.items[0].opacity() - 0.3).abs() < 1e-6);
     assert_eq!(ap.items[2].opacity(), 1.0);
     assert_eq!(proxies(&mut s)["fillOpacity"], 30.0);
+}
+
+/// With a path of a compound path selected and its fill row active, the command edits the compound
+/// path's fill, and `paint.proxies` answers that fill's opacity, not the member's own.
+#[test]
+fn an_active_row_of_a_compound_member_answers_for_its_compound() {
+    let mut s = session();
+    let (a, b) = (rect(&mut s, 10.0), rect(&mut s, 200.0));
+    select(&mut s, &[a, b]);
+    let compound = NodeId(s.execute("object.compoundPath.make", &json!({})).unwrap()["id"].as_u64().unwrap());
+    s.execute("paint.setFill", &json!({"ids": [compound.0], "opacity": 40})).unwrap();
+    // A fill row of the member's own, at 100%.
+    s.execute("appearance.addFill", &json!({"ids": [a.0]})).unwrap();
+    assert_eq!(fill_opacity(&s, a), 1.0);
+    select(&mut s, &[a]);
+    let row = node(&s, a).appearance.items.iter().position(|it| it.is_fill()).unwrap();
+    s.execute("appearance.setActiveItem", &json!({"index": row})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 40.0);
+    s.execute("paint.setFill", &json!({"opacity": 70})).unwrap();
+    assert!((fill_opacity(&s, compound) - 0.7).abs() < 1e-6);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 70.0);
+
+    // A fill row of the member's at an index that is not a fill in the compound path: the command
+    // edits the compound path's top fill, which the proxy answers.
+    s.execute("appearance.addFill", &json!({"ids": [a.0]})).unwrap();
+    let (member, outer) = (node(&s, a).appearance, node(&s, compound).appearance);
+    let row = (0..member.items.len()).find(|i| member.items[*i].is_fill() && !outer.items.get(*i).is_some_and(|it| it.is_fill())).unwrap();
+    select(&mut s, &[a]);
+    s.execute("appearance.setActiveItem", &json!({"index": row})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 70.0);
+    s.execute("paint.setFill", &json!({"opacity": 20})).unwrap();
+    assert!((fill_opacity(&s, compound) - 0.2).abs() < 1e-6);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 20.0);
 }
 
 /// A color and an opacity change together in one undo step, and the same call again records no
@@ -330,7 +381,8 @@ fn type_beside_other_art_is_left_alone() {
     };
     let before = (node(&s, t), runs(&s));
     select(&mut s, &[r, t]);
-    s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    let out = s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    assert_eq!(out["objects"], 1, "only the rectangle took the opacity");
     assert!((fill_opacity(&s, r) - 0.4).abs() < 1e-6);
     assert_eq!((node(&s, t), runs(&s)), before);
     select(&mut s, &[t]);
@@ -380,7 +432,8 @@ fn an_opacity_no_target_takes_is_an_error() {
     s.execute("paint.setFill", &json!({"opacity": 70})).unwrap();
     select(&mut s, &[a, b]);
     assert_eq!(proxies(&mut s)["fillOpacity"], 70.0, "the first selected object with a fill item answers");
-    s.execute("paint.setFill", &json!({"opacity": 20})).unwrap();
+    let out = s.execute("paint.setFill", &json!({"opacity": 20})).unwrap();
+    assert_eq!(out["objects"], 1, "the object without a fill item is not counted");
     assert!((fill_opacity(&s, b) - 0.2).abs() < 1e-6);
     assert!(node(&s, a).appearance.fill().is_none());
 }
@@ -482,4 +535,91 @@ fn a_picked_mesh_point_takes_the_fill_opacity() {
     assert!((o[4] - 0.3).abs() < 1e-6, "{o:?}");
     assert!(o.iter().enumerate().all(|(i, a)| i == 4 || *a == 1.0), "{o:?}");
     assert_eq!(proxies(&mut s)["fillOpacity"], 30.0);
+}
+
+/// A null `id` or `ids` names no object, so while the Type tool has characters selected the paint
+/// goes to those characters only, and the rest of the type keeps its paint.
+#[test]
+fn a_null_id_leaves_the_paint_to_the_selected_characters() {
+    for key in ["id", "ids"] {
+        let mut s = session();
+        let t = text(&mut s);
+        select(&mut s, &[t]);
+        s.select_tool("type", ViewInfo::default()).unwrap();
+        s.set_tool_option("textSelection", &json!({"editing": t.0, "anchor": 0, "caret": 1}));
+        s.execute("paint.setFill", &json!({"color": "#ff0000", key: null})).unwrap();
+        let NodeKind::Text(tx) = &node(&s, t).kind else { panic!("not type") };
+        let fills: Vec<Paint> = tx.runs.iter().map(|r| r.style.fill.clone()).collect();
+        assert_eq!(fills.first(), Some(&Paint::solid(Color::rgb8(255, 0, 0))), "{key}: {fills:?}");
+        assert!(fills.len() > 1 && fills[1..].iter().all(|f| *f != Paint::solid(Color::rgb8(255, 0, 0))), "{key}: {fills:?}");
+        let e = s.execute("paint.setFill", &json!({"opacity": 40, key: null})).unwrap_err();
+        assert!(e.to_string().contains("type characters have no opacity of their own"), "{key}: {e}");
+    }
+}
+
+/// A selected Live Paint group stands for its faces in a fill opacity and for its edges in a stroke
+/// opacity, and `paint.proxies` answers from those same parts.
+#[test]
+fn a_live_paint_group_answers_from_the_parts_it_sets() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    s.execute("livePaint.make", &json!({"ids": [id.0]})).unwrap();
+    let g = s.doc().unwrap().selection.objects[0];
+    select(&mut s, &[g]);
+    s.execute("paint.setStroke", &json!({"opacity": 30})).unwrap();
+    assert_eq!(proxies(&mut s)["strokeOpacity"], 30.0);
+    s.execute("paint.setFill", &json!({"opacity": 40})).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 40.0);
+    assert_eq!(proxies(&mut s)["strokeOpacity"], 30.0);
+}
+
+/// While the Live Paint Bucket is the active tool, a fill or stroke chosen goes to the bucket, so
+/// `paint.proxies` answers no opacity for the selection and an opacity is an error that leaves the
+/// document as it was.
+#[test]
+fn the_live_paint_bucket_answers_no_opacity() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    assert_eq!(proxies(&mut s)["fillOpacity"], 100.0);
+    s.select_tool("livePaintBucket", ViewInfo::default()).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+    assert_eq!(proxies(&mut s)["strokeOpacity"], Value::Null);
+    let doc = s.doc().unwrap().doc.clone();
+    assert!(s.execute("paint.setFill", &json!({"opacity": 40})).is_err());
+    assert_eq!(*s.doc().unwrap().doc, *doc);
+}
+
+/// The Eyedropper armed to sample into the Live Paint Bucket's gradient works for the bucket, so
+/// the proxies answer no opacity for the selection then too, as they show no paint of its own.
+#[test]
+fn the_eyedropper_armed_for_the_bucket_answers_no_opacity() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    s.select_tool("eyedropper", ViewInfo::default()).unwrap();
+    assert_eq!(proxies(&mut s)["fillOpacity"], 100.0, "the Eyedropper alone shows the selection's");
+    s.set_tool_option("stop", &json!("livePaintBucket"));
+    assert!(s.tool_paints(false) && s.tool_paints(true));
+    assert_eq!(proxies(&mut s)["fillOpacity"], Value::Null);
+    assert_eq!(proxies(&mut s)["strokeOpacity"], Value::Null);
+}
+
+/// A `swatch` that is no name does not turn a request into an opacity alone: it is an error and
+/// leaves the document as it was.
+#[test]
+fn a_swatch_that_is_no_name_is_refused_with_an_opacity() {
+    let mut s = session();
+    let id = rect(&mut s, 10.0);
+    select(&mut s, &[id]);
+    let doc = s.doc().unwrap().doc.clone();
+    for cmd in ["paint.setFill", "paint.setStroke"] {
+        for swatch in [json!(5), json!(true), json!(["a"]), json!({})] {
+            assert!(s.execute(cmd, &json!({"swatch": swatch, "opacity": 40})).is_err(), "{cmd} {swatch}");
+        }
+        // A null swatch names none, so the opacity goes alone.
+        s.execute(cmd, &json!({"swatch": null, "opacity": 40})).unwrap();
+        s.execute("edit.undo", &json!({})).unwrap();
+    }
+    assert_eq!(*s.doc().unwrap().doc, *doc);
 }

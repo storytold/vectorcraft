@@ -90,8 +90,8 @@ fn ui_color_wheel_sets_and_reads_the_settings() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
     let settings = |view: &str, vision: bool| {
         json!({
-            "view": view, "channel": "hue", "opacity": false, "hexField": false, "sliders": "none", "gamut": false,
-            "harmony": false, "harmonyRule": "complementary", "vision": vision, "documentColors": false
+            "view": view, "channel": "hue", "sliders": "none", "gamut": false, "harmony": false, "harmonyRule": "complementary", "opacity": false,
+            "hexField": false, "contrast": false, "contrastFor": "normalText", "contrastBackground": null, "vision": vision, "documentColors": false
         })
     };
     assert_eq!(app.run("ui.colorWheel", json!({})).unwrap(), settings("wheel", false));
@@ -104,7 +104,7 @@ fn ui_color_wheel_sets_and_reads_the_settings() {
     assert_eq!(app.run("ui.colorWheel", json!(5)).unwrap_err(), "the params must be an object, not 5");
     assert_eq!(
         app.run("ui.colorWheel", json!({"visoin": false})).unwrap_err(),
-        "unknown parameter `visoin`; the command takes: view, channel, opacity, hexField, sliders, gamut, harmony, harmonyRule, vision, documentColors"
+        "unknown parameter `visoin`; the command takes: view, channel, sliders, gamut, harmony, harmonyRule, opacity, hexField, contrast, contrastFor, contrastBackground, vision, documentColors"
     );
     assert!(app.ui.color_wheel.vision);
     assert_eq!(app.run("ui.colorWheel", json!({"vision": null})).unwrap()["vision"], true);

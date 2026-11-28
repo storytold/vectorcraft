@@ -263,6 +263,7 @@ fn start(
         let id = app.background.next_id;
         let jobs = app.jobs();
         let (sets, status) = (app.ui.status_sets, if label.is_empty() { String::new() } else { format!("{label}…") });
+        let started = export_progress::now(app);
         let bg = &mut app.background;
         bg.next_id += 1;
         let tx = bg.results.get_or_insert_with(channel).0.clone();
@@ -280,18 +281,7 @@ fn start(
             }),
         );
         let line = status.clone();
-        bg.jobs.push(Job {
-            id,
-            kind,
-            label: label.clone(),
-            doc,
-            progress,
-            hidden: false,
-            started: export_progress::now(),
-            sets,
-            line,
-            then: Box::new(then),
-        });
+        bg.jobs.push(Job { id, kind, label: label.clone(), doc, progress, hidden: false, started, sets, line, then: Box::new(then) });
         if label.is_empty() {
             return Ok(json!({ "background": true }));
         }

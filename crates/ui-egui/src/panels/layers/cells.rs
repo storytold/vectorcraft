@@ -4,7 +4,8 @@
 //!   ([`rows::target_click`](super::rows::target_click)); dragging it carries the appearance
 //!   ([`PanelDrag::Appearance`]) onto another row's circle (Alt copies it) or the trash. A circle
 //!   lights up while another row's appearance is held over it.
-//! - The selection square selects the row's art (Shift adds or removes); a row whose art is
+//! - The selection square selects the row's art, with the modifier rules of
+//!   [`rows::art_click`](super::rows::art_click) (Shift selects a range of rows); a row whose art is
 //!   selected shows it in its layer's colour, a row holding selected art a small one, and dragging
 //!   either onto another row moves the selected art there (Alt copies it).
 //!
@@ -24,7 +25,7 @@ use egui::{Color32, CornerRadius, Pos2, Rect, Response, Vec2, vec2};
 
 use super::model::{DocLayers, RowId};
 use super::rows::{TARGET_RADIUS, has_styled_target, shows_targeted, target_marks};
-use super::{NodeId, Value, json};
+use super::{Node, NodeId, Value, json};
 use crate::panel_drag::PanelDrag;
 
 /// The side of the square of a row whose art is selected.
@@ -32,18 +33,21 @@ const SQUARE_SIDE: f32 = 7.0;
 /// The side of the square of a row that holds selected art.
 const HELD_SIDE: f32 = 4.0;
 
-/// The selected art a row's selection square carries to another row: the selected objects when the
-/// drag started. Only the Layers rows take it.
+/// The selected art a row's selection square carries to another row in the same document.
 #[derive(Clone, Debug)]
-pub(super) struct ArtDrag(pub(super) Vec<NodeId>);
+pub(super) struct ArtDrag {
+    pub(super) document: u64,
+    pub(super) ids: Vec<NodeId>,
+}
 
 /// What a cell reports.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum CellPick {
     /// The circle was clicked with these modifiers.
     Target(Mods),
-    /// The square was clicked: select the row's art (Shift adds or removes).
-    SelectArt { add: bool },
+    /// The square was clicked with these modifiers: select the row's art, by the rules of
+    /// [`rows::art_click`](super::rows::art_click).
+    SelectArt(Mods),
     /// Another row's appearance was dropped on the circle (Alt copies it).
     TakeAppearance { source: NodeId, copy: bool },
 }
@@ -90,6 +94,7 @@ impl Outcome for CellOutput {
 pub(super) struct TargetCircle {
     #[common]
     common: Common,
+    document: u64,
     id: NodeId,
     targeted: bool,
     styled: bool,
@@ -99,18 +104,19 @@ pub(super) struct TargetCircle {
 }
 
 impl TargetCircle {
-    fn new(id: NodeId, targeted: bool, styled: bool) -> Self {
-        Self { common: Common::new(), id, targeted, styled, held: false, pick: None }
+    fn new(document: u64, id: NodeId, targeted: bool, styled: bool) -> Self {
+        Self { common: Common::new(), document, id, targeted, styled, held: false, pick: None }
     }
 
     /// A targeted circle with an appearance, for the suite.
     fn sample() -> Self {
-        Self::new(NodeId(1), true, true).label("Target")
+        Self::new(1, NodeId(1), true, true).label("Target")
     }
 }
 
 /// The circle as a drop target: it takes another row's appearance.
 struct TakesAppearance {
+    document: u64,
     own: NodeId,
     rect: Rect,
 }
@@ -120,7 +126,9 @@ impl DropTarget<PanelDrag> for TakesAppearance {
 
     fn accept(&self, payload: &PanelDrag, _: Pos2, op: DropOperation) -> Option<(NodeId, bool)> {
         match payload {
-            PanelDrag::Appearance(source) if *source != self.own => Some((*source, op == DropOperation::Copy)),
+            PanelDrag::Appearance { document, source } if *document == self.document && *source != self.own => {
+                Some((*source, op == DropOperation::Copy))
+            }
             _ => None,
         }
     }
@@ -163,13 +171,12 @@ impl Component for TargetCircle {
             self.pick = Some(CellPick::Target(activation.mods));
         }
         if primary_drag_start(cx) {
-            cx.start_drag(PanelDrag::Appearance(self.id), DragPreview::None);
+            cx.start_drag(PanelDrag::Appearance { document: self.document, source: self.id }, DragPreview::None);
         }
         let rect = cx.rect;
-        let own = self.id;
-        self.held =
-            cx.dragging::<PanelDrag>().is_some_and(|(drag, at)| rect.contains(at) && matches!(*drag, PanelDrag::Appearance(source) if source != own));
-        if let Some((source, copy)) = cx.drop_target::<PanelDrag, _>(&TakesAppearance { own, rect }) {
+        let target = TakesAppearance { document: self.document, own: self.id, rect };
+        self.held = cx.dragging::<PanelDrag>().is_some_and(|(drag, at)| rect.contains(at) && target.accept(&drag, at, DropOperation::Move).is_some());
+        if let Some((source, copy)) = cx.drop_target::<PanelDrag, _>(&target) {
             self.pick = Some(CellPick::TakeAppearance { source, copy });
         }
     }
@@ -193,14 +200,16 @@ impl Component for TargetCircle {
     }
 }
 
-/// A row's selection square: filled in its layer's colour while the row's art is selected, a small
-/// square while the row holds selected art. Without `id` it is only a mark (a ruler guide's row, a
+/// A row's selection square: filled in its layer's colour while the row's art is selected (for a
+/// layer or sublayer, all of its visible, unlocked art), a small square while the row holds
+/// selected art. Without `id` it is only a mark (a ruler guide's row, a
 /// spine's row) and takes no press.
 #[derive(Component, Props)]
 #[component(sample = SelectionSquare::sample)]
 pub(super) struct SelectionSquare {
     #[common]
     common: Common,
+    document: u64,
     id: Option<NodeId>,
     selected: bool,
     holds: bool,
@@ -211,13 +220,13 @@ pub(super) struct SelectionSquare {
 }
 
 impl SelectionSquare {
-    fn new(id: Option<NodeId>, selected: bool, holds: bool, color: DataColor, art: Vec<NodeId>) -> Self {
-        Self { common: Common::new(), id, selected, holds, color, art, pick: None }
+    fn new(document: u64, id: Option<NodeId>, selected: bool, holds: bool, color: DataColor, art: Vec<NodeId>) -> Self {
+        Self { common: Common::new(), document, id, selected, holds, color, art, pick: None }
     }
 
     /// A selected row's square, for the suite.
     fn sample() -> Self {
-        Self::new(Some(NodeId(1)), true, false, DataColor::new(Color32::from_rgb(79, 128, 255)), vec![NodeId(1)]).label("Select art")
+        Self::new(1, Some(NodeId(1)), true, false, DataColor::new(Color32::from_rgb(79, 128, 255)), vec![NodeId(1)]).label("Select art")
     }
 }
 
@@ -247,10 +256,10 @@ impl Component for SelectionSquare {
             return;
         }
         if let Some(activation) = cx.activation() {
-            self.pick = Some(CellPick::SelectArt { add: activation.mods.shift });
+            self.pick = Some(CellPick::SelectArt(activation.mods));
         }
         if (self.selected || self.holds) && !self.art.is_empty() && primary_drag_start(cx) {
-            cx.start_drag(ArtDrag(self.art.clone()), DragPreview::None);
+            cx.start_drag(ArtDrag { document: self.document, ids: self.art.clone() }, DragPreview::None);
         }
     }
 
@@ -346,6 +355,19 @@ impl Component for Cells {
     }
 }
 
+/// The marks of node row `n`'s selection square in the panel over `tree`: whether it shows the
+/// full-sized square (the row is selected, or it is a layer or sublayer whose visible, unlocked art
+/// is all selected), and whether it shows the small one (it holds selected art otherwise).
+pub(super) fn square_marks(tree: &DocLayers<'_>, n: &Node) -> (bool, bool) {
+    let full = tree.is_selected(n.id) || tree.is_full(n.id);
+    let holds = !full && {
+        let mut any = false;
+        n.walk(&mut |c| any |= c.id != n.id && tree.is_selected(c.id));
+        any
+    };
+    (full, holds)
+}
+
 /// The cells of row `row` (shown as `info`) of the panel over `tree`.
 pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cells {
     let st = tree.state();
@@ -353,33 +375,36 @@ pub(super) fn build(tree: &DocLayers<'_>, row: &RowId, info: &LayerInfo) -> Cell
     let selected = |id: NodeId| tree.is_selected(id);
     match *row {
         RowId::Node(id) => {
-            let Some(n) = tree.doc().node(id) else { return Cells::new(None, SelectionSquare::new(None, false, false, color, vec![])) };
+            let Some(n) = tree.doc().node(id) else { return Cells::new(None, SelectionSquare::new(st.uid, None, false, false, color, vec![])) };
             let is_sel = selected(id);
-            let holds = !is_sel && {
-                let mut any = false;
-                n.walk(&mut |c| any |= c.id != id && selected(c.id));
-                any
-            };
-            let art = if is_sel || holds { st.selection.objects.clone() } else { vec![] };
-            let circle = TargetCircle::new(id, shows_targeted(tree, n, is_sel), has_styled_target(n))
+            let (full, holds) = square_marks(tree, n);
+            let art = if full || holds { st.selection.objects.clone() } else { vec![] };
+            let circle = TargetCircle::new(st.uid, id, shows_targeted(tree, n, is_sel), has_styled_target(n))
                 .label(crate::i18n::fmt(tl!("Target {row}"), &[("row", info.name.as_str())]));
-            let square = SelectionSquare::new(Some(id), is_sel, holds, color, art)
+            let square = SelectionSquare::new(st.uid, Some(id), full, holds, color, art)
                 .label(crate::i18n::fmt(tl!("Select art of {row}"), &[("row", info.name.as_str())]));
             Cells::new(Some(circle), square)
         }
-        RowId::Guide(i) => Cells::new(None, SelectionSquare::new(None, tree.guides().contains(&i), false, color, vec![])),
-        RowId::Spine(blend) => Cells::new(None, SelectionSquare::new(None, selected(blend), false, color, vec![])),
+        RowId::Guide(i) => Cells::new(None, SelectionSquare::new(st.uid, None, tree.guides().contains(&i), false, color, vec![])),
+        RowId::Spine(blend) => Cells::new(None, SelectionSquare::new(st.uid, None, selected(blend), false, color, vec![])),
     }
 }
 
-/// What row `row`'s cells reported: the commands `layer.selectAll` and `appearance.transfer` on the row's node, added to
-/// `out`, and a click on its target circle with its modifiers, which the panel resolves once it knows its rows.
-pub(super) fn output(out: &mut Vec<(String, Value)>, target: &mut Option<(NodeId, Mods)>, row: &RowId, shown: CellsOutput) {
+/// What row `row`'s cells reported: the command `appearance.transfer` on the row's node, added to `out`, and a click on
+/// its target circle (`target`) or its selection square (`art`) with its modifiers, which the panel resolves once it
+/// knows its rows.
+pub(super) fn output(
+    out: &mut Vec<(String, Value)>,
+    target: &mut Option<(NodeId, Mods)>,
+    art: &mut Option<(NodeId, Mods)>,
+    row: &RowId,
+    shown: CellsOutput,
+) {
     let RowId::Node(id) = *row else { return };
     for pick in shown.picks {
         match pick {
             CellPick::Target(mods) => *target = Some((id, mods)),
-            CellPick::SelectArt { add } => out.push(("layer.selectAll".to_string(), json!({"id": id.0, "add": add}))),
+            CellPick::SelectArt(mods) => *art = Some((id, mods)),
             CellPick::TakeAppearance { source, copy } => {
                 out.push(("appearance.transfer".to_string(), json!({"source": source.0, "target": id.0, "copy": copy})));
             }
@@ -391,6 +416,6 @@ pub(super) fn output(out: &mut Vec<(String, Value)>, target: &mut Option<(NodeId
 /// layer or group that takes the objects ([`DocLayers::lands_in`]).
 pub(super) fn accepts_art<'a>(tree: &'a DocLayers<'a>) -> impl Fn(&ArtDrag, &RowId, LayerPosition) -> bool + 'a {
     move |art: &ArtDrag, row: &RowId, position: LayerPosition| {
-        position == LayerPosition::Into && matches!(*row, RowId::Node(id) if tree.lands_in(id, &art.0, true))
+        art.document == tree.state().uid && position == LayerPosition::Into && matches!(*row, RowId::Node(id) if tree.lands_in(id, &art.ids, true))
     }
 }

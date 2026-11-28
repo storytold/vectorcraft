@@ -26,6 +26,7 @@ mod lossy_overwrite;
 mod model_based;
 mod param_keys;
 mod paste_many;
+mod pasted_clipping_path;
 mod pen_click_after_smooth;
 mod pen_endpoint_picking;
 mod pen_rubber_band;
