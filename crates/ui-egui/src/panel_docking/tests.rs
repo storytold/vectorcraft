@@ -142,6 +142,49 @@ fn button(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() }
 }
 
+/// Both Tools widths use the same full-height square frame as the icon rail.
+#[test]
+fn docked_tools_share_the_icon_rails_flush_frame() {
+    use egui::emath::GuiRounding as _;
+
+    let mut h = Harness::new();
+    let [single, double] = [false, true].map(|double| {
+        h.app.run("window.toolbarColumns", json!({ "double": double })).unwrap();
+        h.frames(3);
+        h.time += 0.05;
+        let input = egui::RawInput { time: Some(h.time), screen_rect: Some(SCREEN), ..Default::default() };
+        let out = crate::testing::app_frame(&mut h.app, &h.ctx, input);
+        let area = h.app.dock_rt.space.as_ref().expect("dock area").area;
+        let columns = &h.app.dock_rt.columns;
+        let tools = columns.iter().find(|(panel, _)| panel == crate::toolbar::TOOLS).expect("Tools column").1;
+        let icons = columns.iter().find(|(_, rect)| rect.right() == area.right()).expect("icon column at the window edge").1;
+        assert_eq!(tools.min, area.min, "Tools begins at the dock's outer corner");
+        assert_eq!(tools.right(), h.canvas().left(), "the canvas begins at the Tools edge");
+        assert_eq!(tools.bottom(), area.bottom(), "Tools extends to the bottom chrome");
+        assert!(area.bottom() < SCREEN.bottom(), "bottom chrome is visible");
+        let frame = |bounds: Rect| {
+            let bounds = bounds.round_to_pixels(h.ctx.pixels_per_point());
+            out.shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Rect(rect)
+                        if rect.rect == bounds
+                            && rect.stroke.width > 0.0
+                            && rect.corner_radius == egui::CornerRadius::ZERO
+                            && rect.stroke_kind == egui::StrokeKind::Inside =>
+                    {
+                        Some(rect.stroke)
+                    }
+                    _ => None,
+                })
+                .expect("full square column outline")
+        };
+        assert_eq!(frame(tools), frame(icons));
+        tools.width()
+    });
+    assert!(double > single, "two columns widen the Tools rail");
+}
+
 fn main_panels(layout: &Layout<String>) -> Vec<String> {
     dock_columns(layout).first().map(|c| c.groups.iter().flat_map(|g| g.panels.clone()).collect()).unwrap_or_default()
 }

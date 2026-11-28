@@ -27,6 +27,36 @@ fn set(before: &str, after: &str) -> EditEvent<String> {
     EditEvent::set(Mixed::Same(before.to_string()), after.to_string(), "Font Family".into(), None)
 }
 
+/// The shared picker narrows to variable families, including when Favorites is also on.
+#[test]
+fn the_variable_filter_lists_only_variable_families() {
+    use craft::font_manager::picker::{FamilyInfos, FontFilters, FontPickerSettings, family_rows};
+    use craft::font_manager::{Catalog, Source};
+    use vectorcraft_text::test_fonts::{HEIGHT_FAMILY, TWO_AXIS_FAMILY, height_font, two_axis_font};
+
+    let catalog = Arc::new(Catalog::of_files(Vec::new()));
+    for font in [height_font(true), two_axis_font()] {
+        catalog.add_bytes(font.unwrap(), Source::Bundled, &Default::default()).unwrap();
+    }
+    let infos = FamilyInfos::of(&catalog);
+    let mut settings = FontPickerSettings::default();
+    settings.set_favorite(HEIGHT_FAMILY, true);
+    let listed = |variable, favorites, settings: &FontPickerSettings| {
+        let mut filters = FontFilters::default();
+        filters.variable = variable;
+        filters.favorites = favorites;
+        family_rows(&catalog, &infos, "", Some(settings), &filters, &[], "en").into_iter().map(|row| row.family).collect::<Vec<_>>()
+    };
+
+    let all = listed(false, false, &settings);
+    assert_eq!(all, [TWO_AXIS_FAMILY, HEIGHT_FAMILY]);
+    assert_eq!(listed(true, false, &settings), [TWO_AXIS_FAMILY]);
+    assert!(listed(true, true, &settings).is_empty(), "the only favorite is static");
+    settings.set_favorite(TWO_AXIS_FAMILY, true);
+    assert_eq!(listed(true, true, &settings), [TWO_AXIS_FAMILY]);
+    assert_eq!(listed(false, false, &settings), all);
+}
+
 /// The Document set agrees with the families the document's type uses (hidden and locked type included, a missing
 /// family left out of nothing: it is named as it is), and gives the same set again when nothing changed.
 #[test]
