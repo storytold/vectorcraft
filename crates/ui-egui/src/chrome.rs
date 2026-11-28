@@ -10,7 +10,7 @@ use craft::ui::contract::{Bind, BodyCx, Gap, Props, Show, ShowContainer};
 use craft::ui::display::Picture;
 use craft::ui::layout_components::Row;
 use craft::ui::primitives::IconSpec;
-use craft::ui::runtime::windows::WindowHost;
+use craft::ui::runtime::windows::{WindowAction, WindowHost};
 use craft::ui::shell::{Frame, Title, TitleBar};
 use craft::ui::style::{SurfaceKind, Variant};
 use egui::Ui;
@@ -142,11 +142,18 @@ pub fn app_bar(ui: &mut Ui, _cx: &mut BodyCx<'_>, app: &mut VectorcraftApp) {
     let end = |ui: &mut Ui, _: &mut BodyCx<'_>| trailing(ui, &mut app.borrow_mut());
     // A nightly's window and Dock entry carry its own name, so they never read as the stable app's.
     let title = if crate::os_window::stable_services_allowed() { tl!("VectorCraft") } else { crate::os_window::name() };
-    let _ = if titled {
+    let out = if titled {
         TitleBar::new().surface(SurfaceKind::Background).show_titled(ui, Title::new(title), start, end)
     } else {
         TitleBar::new().surface(SurfaceKind::Background).show_fitted(ui, start, end)
     };
+    // The title bar reports a caption Close click in its output and never acts on it. The window host sends the close,
+    // and a close of the main window goes through the app's close guard, so the unsaved-changes prompt runs as it does
+    // for an OS close.
+    if out.close_requested {
+        let ctx = ui.ctx().clone();
+        WindowHost::of(&ctx).act(ctx.viewport_id(), WindowAction::Close);
+    }
 }
 
 /// The OS window title: the active document's name suffixed with the app name (a `*` prefix
