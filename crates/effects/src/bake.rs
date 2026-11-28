@@ -82,7 +82,7 @@ pub(crate) fn apply(effects: &[vectorcraft_doc::Effect], path: &PathData, ctx: &
     if !has_geometry(effects) || path.is_empty() {
         return (path.clone(), crate::Carry::default());
     }
-    let b = vectorcraft_geom::Shape::bounding_box(&path.to_bezpath());
+    let b = path.bounds().unwrap_or_default();
     apply_geometry_carrying(effects, path, b, ctx)
 }
 

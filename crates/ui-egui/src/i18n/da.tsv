@@ -632,6 +632,15 @@ liquify-list-end	{0}, {1}	{0} og {1}
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	et skrivebeskyttet objekt blev udeladt: returnér det, som {{"id": …}} alene eller som det blev givet
 @msg	a string	en streng
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en streg har kun `paint`, `width`, `join`, `cap` og `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	et stykke fra en malet live-effekt har kun `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` og `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	en streg har kun `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` og `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` må kun være true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` er kun til en live-effekt, der angiver `paintOutput`, ved `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` skal være et tal fra 0 til 1
+@msg	unknown blending mode; `blend` is one of {_1}	ukendt blandingstilstand; `blend` er en af {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` skal være en liste med højst {MAX_LOOK_EFFECTS} poster
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	et resultat bærer højst {MAX_RESULT_EFFECTS} effektposter
+@msg	this host takes no effects here	denne vært tager ikke imod effekter her
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	en streg skal være {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	en effekt skal være {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	en effekt på en udfyldning returnerer kun `fills`
@@ -10550,6 +10559,7 @@ breakText	Glyphs	Glyffer
 	Place Brush Art	Placér penselgrafik
 	Replace Brush Art	Erstat penselgrafik
 	Replace Pattern Art	Erstat mønstergrafik
+	Place Pattern Art	Placér mønstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Streger bruger denne pensel. Anvend den nye grafik på stregerne, eller lad dem være, som de er, og tilføj en kopi af penslen med den nye grafik?
 	Apply to Strokes	Anvend på streger
 	Leave Strokes	Bevar streger
@@ -10619,6 +10629,8 @@ breakText	Glyphs	Glyffer
 	Tangent Circle	Tangentcirkel
 	Tangent Circle Tool	Tangentcirkel-værktøj
 	No tangent circle here	Ingen tangentcirkel her
+	Ask For Circle Radius	Spørg om cirklens radius
+	Auto-Update Default	Opdater standard automatisk
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` nævner et objekt to gange
 @msg	select two or three paths or compound paths	vælg to eller tre stier eller sammensatte stier

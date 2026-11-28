@@ -8,10 +8,12 @@
 //! manifest's `budget`) has no Preview, since a run may take minutes: it runs in the background
 //! ([`crate::plugin_runs`]). A light filter that reports its progress (plug-in API level 2 with the
 //! `progress` permission) and calls no commands runs in the background too, with its progress and
-//! Cancel, when it runs at once or when OK runs it without a kept preview ([`in_background`]). A
-//! filter or live effect with commands of its own is a submenu named after it, holding its item and
-//! then its commands; a command with parameters opens the same dialog for them ([`open_command`]).
-//! A command whose manifest names another menu is listed in that menu instead ([`place_commands`]).
+//! Cancel, when it runs at once or when OK runs it without a kept preview ([`in_background`]). On the
+//! web every filter and plug-in command run here goes to a worker, and their dialogs have no Preview
+//! ([`crate::plugin_runs`]). A filter or live effect with commands of its own is a submenu named
+//! after it, holding its item and then its commands; a command with parameters opens the same dialog
+//! for them ([`open_command`]). A command whose manifest names another menu is listed in that menu
+//! instead ([`place_commands`]).
 //! Object › Plug-ins starts with Apply Last Filter and Last Filter…, which run the filter that last
 //! ran again with the same parameters or open its dialog with them, and a filter's dialog opens with
 //! the parameters it last ran with in the session ([`LastFilters`]).
@@ -194,7 +196,7 @@ fn leave_out(items: &mut [Node], placed: &std::collections::HashSet<String>) {
 }
 
 /// Object › Plug-ins: the installed object filters (each with its commands, if it has any), then
-/// Install Plug-in… and Reload Plug-ins.
+/// Install Plug-in…, Reload Plug-ins and Plug-ins That Didn't Load… ([`super::failed_plugins`]).
 pub fn object_menu() -> Vec<Node> {
     let mut items: Vec<Node> = registry::list()
         .iter()
@@ -204,7 +206,12 @@ pub fn object_menu() -> Vec<Node> {
     if items.is_empty() {
         items.push(placeholder(NO_FILTERS));
     }
-    items.extend([Sep, c("Install Plug-in…", "ui.installPlugin"), c("Reload Plug-ins", "plugin.reload")]);
+    items.extend([
+        Sep,
+        c("Install Plug-in…", "ui.installPlugin"),
+        c("Reload Plug-ins", "plugin.reload"),
+        c("Plug-ins That Didn't Load…", super::failed_plugins::COMMAND),
+    ]);
     items
 }
 
@@ -482,11 +489,16 @@ fn step_id(s: &Value) -> Option<&str> {
 
 /// Whether batch step `s`, which returned `result` if the batch reports it, may have installed,
 /// removed or reloaded plug-in `id`: a removal names its id, an install reports the id it installed,
-/// and a reload, or an install whose result is not known, may change any plug-in.
+/// a retry the ids it installed, and a reload, or an install or retry whose result is not known, may
+/// change any plug-in.
 fn may_change(s: &Value, result: Option<&Value>, id: &str) -> bool {
     match step_id(s) {
         Some("plugin.remove") => s.get("params").and_then(|p| p.get("id")).and_then(Value::as_str) == Some(id),
         Some("plugin.install") => result.and_then(|r| r.get("id")).and_then(Value::as_str).is_none_or(|i| i == id),
+        Some("plugin.retry") => result
+            .and_then(|r| r.get("retried"))
+            .and_then(Value::as_array)
+            .is_none_or(|rows| rows.iter().any(|row| row.get("id").and_then(Value::as_str) == Some(id))),
         Some("plugin.reload") => true,
         _ => false,
     }
@@ -574,7 +586,9 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
 }
 
 /// Opens the dialog of filter `plugin`, or of its command `command`, with `m` the manifest it runs
-/// with, headed `heading`: the rows at `values`, with a live Preview for a light filter.
+/// with, headed `heading`: the rows at `values`, with a live Preview for a light filter. Where
+/// filters run in workers (the web build) the dialog has no Preview: a preview would run the plug-in
+/// on the page.
 fn open_filter(
     app: &mut VectorcraftApp,
     plugin: &Plugin,
@@ -584,8 +598,9 @@ fn open_filter(
     values: Map<String, Value>,
 ) -> Result<(), String> {
     let own = plugin.manifest();
-    let light = own.budget == Budget::Light;
-    let look = Look { title: heading.clone(), description: own.description.clone(), previews: light, note: !light, ok: None };
+    let heavy = own.budget == Budget::Heavy;
+    let light = !heavy && !crate::plugin_runs::in_workers(app);
+    let look = Look { title: heading.clone(), description: own.description.clone(), previews: light, note: heavy, ok: None };
     let instance = command.as_deref().unwrap_or(plugin.id()).to_string();
     let (id, params) = open_hosted(app, KIND, &instance, m, values, look)?;
     let kind = Opened::Filter {
@@ -635,9 +650,9 @@ fn in_background(m: &Manifest) -> bool {
 }
 
 /// Runs filter `plugin` with `plugin.run`'s params `p`: at once, or in the background
-/// ([`in_background`]).
+/// ([`in_background`]). Where filters run in workers (the web build), every run does.
 fn run(app: &mut VectorcraftApp, plugin: &Plugin, p: Value) -> Result<Value, String> {
-    match in_background(plugin.manifest()) {
+    match in_background(plugin.manifest()) || crate::plugin_runs::in_workers(app) {
         false => app.run(CMD, p),
         true => crate::plugin_runs::start(app, p),
     }
@@ -715,13 +730,23 @@ fn import_with(app: &mut VectorcraftApp, open: Value, values: Map<String, Value>
 
 /// OK of a filter dialog: a filter keeps its previewed run as one undo step; a heavy one, which has
 /// no preview, and a light one that runs in the background ([`in_background`]) with Preview off or a
-/// failed preview, start in the background ([`run`]). A preview still shown when Preview was just
-/// turned off, or one that failed, is rolled back first.
+/// failed preview, start in the background ([`run`]). On the web the filter or its command always
+/// starts in a worker. A preview still shown when Preview was just turned off, or one that failed, is
+/// rolled back first.
 fn confirm_filter(app: &mut VectorcraftApp, kind: Opened, values: Map<String, Value>) -> Result<Value, String> {
     let Opened::Filter { plugin, command: own, preview, light, previewing, refused, .. } = kind else { return Ok(Value::Null) };
     let (cmd, p) = command(&plugin, own.as_deref(), values);
     let kept = light && previewing && app.session.in_interaction() && !refused;
     match registry::get(&plugin) {
+        // On the web, with no Preview, the filter or its command always runs in a worker; a command
+        // automation confirmed runs on the page and returns its result, as `routes` runs it.
+        Some(found) if crate::plugin_runs::in_workers(app) && !(own.is_some() && app.automation_asked()) => {
+            preview.cancel(app);
+            match own {
+                None => run(app, &found, p),
+                Some(_) => crate::plugin_runs::start_command(app, &cmd, p),
+            }
+        }
         Some(found) if own.is_none() && in_background(found.manifest()) && !kept => {
             preview.cancel(app);
             run(app, &found, p)

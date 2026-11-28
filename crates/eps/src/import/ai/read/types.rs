@@ -312,6 +312,9 @@ pub(super) struct Place {
     pub(super) folder: Option<String>,
     /// The operand stack's height at `%AI28_BeginPlacedRelativePath`, until its end.
     pub(super) folder_at: Option<usize>,
+    /// The file's bytes, when the data includes them between `%%BeginDocument:` and
+    /// `%%EndDocument` (at most [`MAX_PLACED_DOCUMENT`]).
+    pub(super) document: Option<Vec<u8>>,
     /// Its `` ` `` was read.
     pub(super) ticked: bool,
     /// It began on a `%_` line, in a hidden object or on a layer that doesn't show.
@@ -361,8 +364,26 @@ pub struct PlacedPage {
     pub size: (f64, f64),
 }
 
+/// An included EPS whose linked preview becomes a placed document after variable binding.
+#[derive(Debug)]
+pub struct PlacedEps {
+    /// The linked image.
+    pub id: NodeId,
+    /// The document that replaces the image unless an image variable binds it.
+    pub placed: vectorcraft_doc::PlacedDocument,
+    /// The EPS bytes stored under the placed document's key only when it replaces the image.
+    pub blob: vectorcraft_doc::ImageBlob,
+}
+
+/// The largest placed file kept from the bytes the data includes (the largest file File › Place
+/// reads).
+pub(super) const MAX_PLACED_DOCUMENT: usize = 256 << 20;
+
+/// The type a placed EPS file's bytes are stored with.
+pub(super) const EPS_MIME: &str = "application/postscript";
+
 /// What the open result says of placed files: they show the preview the file keeps of them.
-pub(super) const LINKED_PREVIEWS: &str =
+pub(crate) const LINKED_PREVIEWS: &str =
     "linked pictures show the low-resolution preview saved in the file until their files are found: relink them in the Links panel";
 
 /// What the open result says of linked images the data keeps no pixels of (`XF`): they show a

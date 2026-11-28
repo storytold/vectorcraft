@@ -772,6 +772,10 @@ fn current_tool_names_the_selection_tool_cmd_lends() {
 /// color profile.
 #[test]
 fn the_status_bar_info_field_shows_the_chosen_readout() {
+    // Assigning a profile to the front document changes the process's active color settings.
+    if !crate::testing::in_own_process("chrome::tests::the_status_bar_info_field_shows_the_chosen_readout") {
+        return;
+    }
     let mut bar = status_readout_app();
     let texts = status_readout_frame(&mut bar);
     assert!(texts.iter().any(|t| t.text == "Selection"), "Current Tool by default: {texts:?}");

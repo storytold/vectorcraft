@@ -7294,6 +7294,15 @@ axis	Y Axis	Oś Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	pominięto obiekt tylko do odczytu: zwróć go jako samo {{"id": …}} lub w postaci, w jakiej został przekazany
 @msg	a string	ciągiem znaków
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	obrys ma tylko `paint`, `width`, `join`, `cap` i `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	element malującego efektu dynamicznego ma tylko `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` i `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	obrys ma tylko `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` i `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` może mieć tylko wartość true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` dotyczy tylko efektu na żywo, który deklaruje `paintOutput`, z `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` musi być liczbą od 0 do 1
+@msg	unknown blending mode; `blend` is one of {_1}	nieznany tryb mieszania; `blend` to jeden z {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` musi być tablicą najwyżej {MAX_LOOK_EFFECTS} rekordów
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	wynik zawiera najwyżej {MAX_RESULT_EFFECTS} rekordów efektów
+@msg	this host takes no effects here	ten host nie przyjmuje tu efektów
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	obrys musi mieć postać {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	efekt musi mieć postać {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efekt wypełnienia zwraca tylko `fills`
@@ -8353,6 +8362,7 @@ breakText	Glyphs	Glify
 	Place Brush Art	Umieść kompozycję pędzla
 	Replace Brush Art	Zastąp kompozycję pędzla
 	Replace Pattern Art	Zastąp kompozycję wzorka
+	Place Pattern Art	Umieść kompozycję wzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
 	Apply to Strokes	Zastosuj do obrysów
 	Leave Strokes	Pozostaw obrysy
@@ -8422,6 +8432,8 @@ breakText	Glyphs	Glify
 	Tangent Circle	Okrąg styczny
 	Tangent Circle Tool	Narzędzie Okrąg styczny
 	No tangent circle here	Brak okręgu stycznego w tym miejscu
+	Ask For Circle Radius	Pytaj o promień okręgu
+	Auto-Update Default	Automatycznie aktualizuj wartość domyślną
 	Circle:	Okrąg:
 @msg	`ids` names an object twice	`ids` wskazuje ten sam obiekt dwa razy
 @msg	select two or three paths or compound paths	zaznacz dwie lub trzy ścieżki lub ścieżki złożone

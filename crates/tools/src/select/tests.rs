@@ -2917,14 +2917,15 @@ fn a_double_click_on_a_symbol_instance_edits_its_symbol() {
 
 /// #4891 for the Selection tool: a press on a selected object's centre point (Attributes › Show
 /// Center) moves the selection, also where no art is painted (an unfilled shape), which the press
-/// would otherwise take for a marquee; anywhere else a press still starts one.
+/// would otherwise take for a marquee; anywhere else a press still starts one. With Object
+/// Selection by Path Only, so that the inside of the unfilled shape takes no press of its own.
 #[test]
 fn a_press_on_the_centre_point_moves_an_unfilled_shape() {
     let (d, id) = doc_with_live_rect();
     let mut s = Selection::default();
     s.add(id);
     let p = paint();
-    let c = cx(&d, &s, &p);
+    let c = ToolContext { path_only: true, ..cx(&d, &s, &p) };
     let centre = Point::new(150.0, 150.0);
     let mut t = SelectionTool::default();
     assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::Move);
