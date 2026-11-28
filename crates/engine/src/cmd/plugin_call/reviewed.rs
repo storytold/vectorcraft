@@ -404,6 +404,7 @@ pub(super) const ALLOWED: &[&str] = &[
     "object.slice.release",
     "object.slice.select",
     "object.slice.setRect",
+    "object.stepAndRepeat",
     "object.tag.add",
     "object.tag.remove",
     "object.tag.removeAll",

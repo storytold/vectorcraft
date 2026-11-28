@@ -4,8 +4,8 @@ use super::path_ops::PathOp;
 use super::simplify_slider::StripKind;
 use super::{
     blend_options, dimension, flare_options, graph_data, graph_design, graph_type, indexed_color, live_paint_gaps, object_mosaic, option_form,
-    path_ops, perspective_grid, perspective_presets, saved_names, shapes, simplify_slider, slices, smooth_slider, transform, transform_each,
-    width_point,
+    path_ops, perspective_grid, perspective_presets, saved_names, shapes, simplify_slider, slices, smooth_slider, step_repeat, transform,
+    transform_each, width_point,
 };
 use crate::VectorcraftApp;
 
@@ -16,6 +16,8 @@ pub(crate) struct ObjectDialogs {
     pub transform: Option<transform::Open>,
     /// The open Transform Each dialog's preview record.
     pub each: Option<transform_each::Open>,
+    /// The open Step and Repeat dialog's preview record.
+    pub step: Option<step_repeat::Open>,
     /// The open Average, Average & Join, Offset Path and Simplify dialogs' preview records.
     pub path: Vec<path_ops::Open>,
     /// The open Split Into Grid dialog's record.
@@ -47,6 +49,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     sync(app);
     transform::pump(app, ctx);
     transform_each::pump(app, ctx);
+    step_repeat::pump(app, ctx);
     path_ops::pump(app, ctx);
     shapes::pump(app, ctx);
     flare_options::pump(app, ctx);
@@ -75,6 +78,7 @@ pub(crate) fn open_from_menu(app: &mut VectorcraftApp, id: &str) -> bool {
     }
     match id {
         "object.transformEach" => transform_each::open(app),
+        step_repeat::CMD => step_repeat::open(app),
         "path.average" => path_ops::open(app, PathOp::Average),
         "path.averageJoin" => path_ops::open(app, PathOp::AverageJoin),
         "object.path.offsetPath" => path_ops::open(app, PathOp::OffsetPath),
