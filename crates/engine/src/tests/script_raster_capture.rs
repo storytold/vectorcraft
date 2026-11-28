@@ -58,8 +58,9 @@ fn images(s: &Session) -> Vec<(u32, u32)> {
     out
 }
 
-/// A script that selects `b` and rasterizes `a` (the first and second page items).
-const RASTERIZE_A: &str = "var d = app.activeDocument, a = d.pageItems[0], b = d.pageItems[1]; b.name = 'b'; d.selection = [b];";
+/// A script that selects `b` and rasterizes `a` (the second and first page items: the list starts
+/// with the topmost object).
+const RASTERIZE_A: &str = "var d = app.activeDocument, a = d.pageItems[1], b = d.pageItems[0]; b.name = 'b'; d.selection = [b];";
 
 #[test]
 fn script_rasterize_explicit_sources_preserves_selection() {
@@ -249,12 +250,12 @@ fn script_rasterize_rejects_bad_clip_bounds() {
         ("'all'", "four numbers"),
     ];
     for (bounds, message) in cases {
-        refused(&mut s, &format!("var d = app.activeDocument; d.rasterize(d.pageItems[0], {bounds});"), message);
+        refused(&mut s, &format!("var d = app.activeDocument; d.rasterize(d.pageItems[1], {bounds});"), message);
     }
     // `a` spans x 10 to 40: a rectangle at x 42 to 48 reaches only the 10 pt padding around it.
     refused(
         &mut s,
-        "var d = app.activeDocument, o = new RasterizeOptions(); o.padding = 10; d.rasterize(d.pageItems[0], [42, 280, 48, 240], o);",
+        "var d = app.activeDocument, o = new RasterizeOptions(); o.padding = 10; d.rasterize(d.pageItems[1], [42, 280, 48, 240], o);",
         "does not overlap the art",
     );
 }
@@ -262,7 +263,7 @@ fn script_rasterize_rejects_bad_clip_bounds() {
 #[test]
 fn script_rasterize_rejects_an_image_past_the_size_limit() {
     let (mut s, ..) = doc();
-    let source = "var d = app.activeDocument, b = d.pageItems[1]; b.width = 3000; b.height = 3000; var o = new RasterizeOptions(); o.resolution = 2400; d.rasterize(b, undefined, o);";
+    let source = "var d = app.activeDocument, b = d.pageItems[0]; b.width = 3000; b.height = 3000; var o = new RasterizeOptions(); o.resolution = 2400; d.rasterize(b, undefined, o);";
     let e = failure(&mut s, source);
     assert!(e.contains("too large"), "{e}");
     assert_eq!(images(&s), Vec::<(u32, u32)>::new());

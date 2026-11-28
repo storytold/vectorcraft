@@ -1117,17 +1117,20 @@ fn document_preset_applies_only_its_given_fields() {
 #[test]
 fn document_preset_settings_are_limited_in_bytes() {
     let mut s = Session::new();
+    // A title holds at most 4,096 bytes, so 1,005 presets with such a title and their six defaults
+    // hold 4,192,860 bytes, and the next preset's defaults bring that to 4,192,934 of 4,194,304.
     let out = log(
         &mut s,
-        "var big = new Array(1572865).join('a'), p = new DocumentPreset(), q = new DocumentPreset();\
-         p.title = big; p.units = big; p.title = big; q.title = 'x'; vc.log(p.title.length);\
-         try { q.colorMode = big; } catch (e) { vc.log([e.name, e.message]); }\
-         vc.log(q.colorMode === undefined); p.title = 'short'; q.colorMode = big; vc.log(q.colorMode.length);",
+        "var big = new Array(4097).join('a'), ps = [];\
+         for (var i = 0; i < 1005; i++) { var p = new DocumentPreset(); p.title = big; ps.push(p); }\
+         var q = new DocumentPreset(); ps[0].title = big; vc.log(ps[0].title.length);\
+         try { q.title = big; } catch (e) { vc.log([e.name, e.message]); }\
+         vc.log(q.title === undefined); ps[0].title = 'short'; q.title = big; vc.log(q.title.length);",
     );
-    assert_eq!(out[0], json!(1_572_864));
+    assert_eq!(out[0], json!(4096), "a setting assigned again replaces what it held");
     assert_eq!(out[1], json!(["RangeError", "the DocumentPresets of a script can hold at most 4 MB of settings"]));
     assert_eq!(out[2], json!(true), "a refused setting is not stored");
-    assert_eq!(out[3], json!(1_572_864), "replacing a setting frees what it held");
+    assert_eq!(out[3], json!(4096), "replacing a setting frees what it held");
 }
 
 /// A new `DocumentPreset`'s default settings count toward the 4 MB, so one that would pass the
@@ -1135,15 +1138,18 @@ fn document_preset_settings_are_limited_in_bytes() {
 #[test]
 fn a_new_document_preset_is_refused_past_the_byte_limit() {
     let mut s = Session::new();
-    // The six defaults hold 74 bytes; the two strings leave 10 bytes of the 4 MB free.
+    // The six defaults hold 74 bytes and a 4,096-byte title 4,098, so 1,005 presets with such a
+    // title and one more with a 1,358-byte title leave 10 bytes of the 4 MB free.
     let out = log(
         &mut s,
-        "var p = new DocumentPreset(); p.title = new Array(2097153).join('a'); p.units = new Array(2097065).join('b');\
+        "var big = new Array(4097).join('a');\
+         for (var i = 0; i < 1005; i++) { var f = new DocumentPreset(); f.title = big; }\
+         var p = new DocumentPreset(); p.title = new Array(1359).join('b');\
          try { new DocumentPreset(); vc.log('made'); } catch (e) { vc.log([e.name, e.message]); }\
-         p.colorMode = 1; vc.log(p.colorMode); p.title = 'x'; vc.log(new DocumentPreset().width);",
+         p.documentBleedLink = true; vc.log(p.documentBleedLink); p.title = 'x'; vc.log(new DocumentPreset().width);",
     );
     assert_eq!(out[0], json!(["RangeError", "the DocumentPresets of a script can hold at most 4 MB of settings"]));
-    assert_eq!(out[1], json!(1), "a refused preset adds nothing to the count");
+    assert_eq!(out[1], json!(true), "a refused preset adds nothing to the count");
     assert_eq!(out[2], json!(612), "a preset below the limit is still made");
 }
 
