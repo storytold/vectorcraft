@@ -280,6 +280,12 @@ pub fn page(bytes: &[u8]) -> Result<Rect, String> {
     Ok(Rect::new(0.0, 0.0, urx - llx, ury - lly))
 }
 
+/// An EPS or PostScript file's bounding box (`%%HiResBoundingBox` when it has one) in its own
+/// space, as `[llx, lly, urx, ury]`, read from its comments; `None` without one.
+pub(crate) fn bounding_box(bytes: &[u8]) -> Option<[f64; 4]> {
+    Dsc::read(program(bytes).ok()?).bbox
+}
+
 /// [`import`], an Illustrator EPS through the editing copy of its art only when `editing_data`
 /// (else what its page prints, as any EPS).
 pub fn import_with(bytes: &[u8], editing_data: bool) -> Result<Imported, String> {

@@ -457,10 +457,35 @@ mod tests {
         }
     }
 
-    /// Installs the process-wide root: the one test that may, since a `OnceLock` is set once per
-    /// process (nextest gives every test its own).
+    /// Runs the test `name` of this module again in a child process of the test binary → whether
+    /// this is that child. For a test that installs the process-wide root, which every test running
+    /// beside it would then read as the settings folder.
+    fn in_own_process(name: &str) -> bool {
+        const CHILD: &str = "VECTORCRAFT_TEST_OWN_PROCESS";
+        if std::env::var_os(CHILD).is_some() {
+            return true;
+        }
+        // The test's path without the crate's name: the desktop app and `vectorcraft-cli` both build this file.
+        let module = module_path!().split_once("::").map_or(module_path!(), |(_, path)| path);
+        let path = format!("{module}::{name}");
+        let output =
+            std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact", &path, "--nocapture"]).env(CHILD, "1").output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+            "{path} failed in its own process:\n{stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+        );
+        false
+    }
+
+    /// Installs the process-wide root, which a `OnceLock` holds once per process, so the test runs in
+    /// a process of its own.
     #[test]
     fn the_installed_root_is_used_once_and_must_be_absolute() {
+        if !in_own_process("the_installed_root_is_used_once_and_must_be_absolute") {
+            return;
+        }
         let dir = temp("installed-root");
         assert!(install_data_root(PathBuf::from("relative/root")).is_err(), "a relative root is refused");
         install_data_root(dir.to_path_buf()).unwrap();

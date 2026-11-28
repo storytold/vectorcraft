@@ -105,6 +105,8 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
             let r = super::slices::open_options(app);
             reported(app, r);
         }
+        // A Tangent Circle Tool click with Ask For Circle Radius on: the circle's radius.
+        crate::addons::pathtools::tangent_circle_radius::KIND => crate::addons::pathtools::tangent_circle_radius::open(app, &p),
         // A click or double-click that would edit type set in fonts that aren't available.
         vectorcraft_tools::text::MISSING_FONT_EDIT => super::confirm::ask_missing_font_edit(app, &p),
         _ => {}

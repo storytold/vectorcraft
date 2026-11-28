@@ -10467,6 +10467,8 @@ breakText	Glyphs	Glifler
 	Tangent Circle	Teğet Daire
 	Tangent Circle Tool	Teğet Daire Aracı
 	No tangent circle here	Burada teğet daire yok
+	Ask For Circle Radius	Daire Yarıçapını Sor
+	Auto-Update Default	Varsayılanı Otomatik Güncelle
 	Circle:	Daire:
 @msg	`ids` names an object twice	`ids` bir nesneyi iki kez belirtiyor
 @msg	select two or three paths or compound paths	iki veya üç yol ya da bileşik yol seçin

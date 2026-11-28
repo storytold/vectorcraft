@@ -167,9 +167,10 @@ fn corner_kind_row(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node) {
 }
 
 /// A select of the corner kinds named `name`, showing `current` (blank for None), as wide as its
-/// widest kind, so it fits beside a corner's radius field. Returns the kind picked.
+/// widest kind, so it fits beside a corner's radius field. Returns the kind chosen, not one only
+/// highlighted in the open list.
 fn corner_select(ui: &mut Ui, name: &'static str, current: Option<CornerKind>, entries: &[Entry<CornerKind>]) -> Option<CornerKind> {
-    Select::new(name, Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), entries).sizing(Sizing::Content).show(ui).value().copied()
+    Select::new(name, Bind::given(current.map_or(Mixed::Mixed, Mixed::Same)), entries).sizing(Sizing::Content).show(ui).events.committed().copied()
 }
 
 /// Set `kind` on corner `corner` (every corner for None) of each selected live rectangle

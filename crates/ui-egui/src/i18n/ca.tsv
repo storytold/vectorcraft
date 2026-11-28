@@ -8594,6 +8594,8 @@ breakText	Glyphs	Glifs
 	Tangent Circle	Cercle tangent
 	Tangent Circle Tool	Eina de cercle tangent
 	No tangent circle here	Aquí no hi ha cap cercle tangent
+	Ask For Circle Radius	Demana el radi del cercle
+	Auto-Update Default	Actualitza automàticament el valor predeterminat
 	Circle:	Cercle:
 @msg	`ids` names an object twice	`ids` indica un objecte dues vegades
 @msg	select two or three paths or compound paths	seleccioneu dos o tres camins o camins compostos

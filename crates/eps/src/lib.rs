@@ -61,6 +61,18 @@ pub use print::{PrintFonts, PrintJob, PrintPage, print};
 use vectorcraft_doc::Document;
 use vectorcraft_geom::{Point, Rect};
 
+#[cfg(any(test, feature = "work-count"))]
+std::thread_local! {
+    /// Included EPS files parsed by open checks on this thread.
+    pub(crate) static INCLUDED_EPS_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Included EPS files parsed by open checks on this thread, for tests that count work instead of timing it.
+#[cfg(any(test, feature = "work-count"))]
+pub fn included_eps_reads() -> usize {
+    INCLUDED_EPS_READS.with(std::cell::Cell::get)
+}
+
 /// The PostScript language level the file needs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {

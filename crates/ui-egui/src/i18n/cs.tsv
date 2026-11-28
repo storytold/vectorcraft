@@ -8575,6 +8575,8 @@ breakText	Glyphs	Glyfy
 	Tangent Circle	Tečná kružnice
 	Tangent Circle Tool	Nástroj Tečná kružnice
 	No tangent circle here	Zde není žádná tečná kružnice
+	Ask For Circle Radius	Ptát se na poloměr kružnice
+	Auto-Update Default	Automaticky aktualizovat výchozí hodnotu
 	Circle:	Kružnice:
 @msg	`ids` names an object twice	`ids` uvádí některý objekt dvakrát
 @msg	select two or three paths or compound paths	vyberte dvě nebo tři cesty nebo složené cesty

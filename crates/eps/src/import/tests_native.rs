@@ -8358,6 +8358,119 @@ fn a_placed_pdf_page_bound_to_an_image_variable_stays_a_linked_image() {
     assert_eq!(d.variables.objects_of("v_file"), [n.id], "{notes:?}");
 }
 
+/// An included EPS keeps its linked preview and binding when an image variable binds it.
+#[test]
+fn a_placed_eps_with_a_preview_preserves_its_image_variable_binding() {
+    use vectorcraft_testkit::ai::{XmlValue, variable_library_data, xml_element, xml_node};
+    let declared = vec![xml_node(
+        1,
+        "variable",
+        XmlValue::Str(""),
+        &[("trait", XmlValue::Str("fileref")), ("varName", XmlValue::Unicode("v_file")), ("docRef", XmlValue::Raw("/XMLUIDREF : (eps) ;"))],
+        &[],
+    )];
+    let set = xml_element("variableSet", &[("locked", "none")], &[xml_element("variables", &[], &declared)]);
+    let library = variable_library_data(&xml_element("variableSets", &[], &[set]));
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 40 40\n%%EndComments\n0 0 40 40 rectfill\n%%EOF\n";
+    let place = format!(
+        "%AI5_BeginPlace\n%%FileType: 0\n[1 0 0 -1 30 70] 0 0 40 40 4 4 0\n(/files/shape.eps)`\n\
+         %%BeginDocument: /files/shape.eps\n{eps}\n%%EndDocument\n\
+         %AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n~\n%AI5_EndPlace\n\
+         %_/ArtDictionary :\n%_/XMLUID : (eps) ; (AI10_ArtUID) ,\n%_;\n%_\n",
+        "\x7f\0\0\0".repeat(4)
+    );
+    let art = layer("Jig", true, &place);
+    let (bound, notes) = crate::ai_alone(&private(&native(&(library + &art)))).unwrap();
+    let n = &bound.layers[0].children().unwrap()[0];
+    let NodeKind::Image(im) = &n.kind else { panic!("{:?} {notes:?}", n.kind) };
+    assert_eq!(im.link.as_ref().unwrap().path, "/files/shape.eps");
+    assert_eq!((im.width, im.height), (2, 2));
+    assert_eq!(bound.images[&im.key].mime, "image/png");
+    assert!(bound.images.values().all(|b| b.mime != "application/postscript"));
+    assert_eq!(bound.variables.objects_of("v_file"), [n.id], "{notes:?}");
+    assert!(!notes.iter().any(|n| n.contains("variable bindings")), "{notes:?}");
+    assert!(notes.iter().any(|n| n.contains("low-resolution preview")), "the preview it shows is noted: {notes:?}");
+    let (unbound, notes) = crate::ai_alone(&private(&native(&art))).unwrap();
+    assert!(!notes.iter().any(|n| n.contains("low-resolution preview")), "it draws its bytes: {notes:?}");
+    let converted = &unbound.layers[0].children().unwrap()[0];
+    assert_eq!(converted.id, n.id);
+    let NodeKind::PlacedDocument(p) = &converted.kind else { panic!("{:?} {notes:?}", converted.kind) };
+    assert_eq!(&*unbound.images[&p.key].bytes, eps.as_bytes());
+    assert!(unbound.images[&p.key].proxy.is_none());
+}
+
+/// What reading an included EPS file warns of, such as art left out, is in the open result.
+#[test]
+fn a_placed_eps_read_in_part_warns_of_what_it_leaves_out() {
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n0 0 30 30 rectfill\n0 0 60 60 nosuchoperator\n%%EOF\n";
+    let own = crate::import_names(eps.as_bytes(), true, false, crate::NameEncoding::default()).unwrap().warnings;
+    assert!(!own.is_empty(), "the file read alone warns");
+    for place in [placed_eps_with_preview(eps), placed_eps_with_preview(eps).replace(&placed_eps_preview(), "")] {
+        let (d, notes) = crate::ai_alone(&private(&native(&layer("Jig", true, &place)))).unwrap();
+        let n = &d.layers[0].children().unwrap()[0];
+        assert!(matches!(n.kind, NodeKind::PlacedDocument(_)), "{:?} {notes:?}", n.kind);
+        for w in &own {
+            assert!(notes.contains(&format!("a placed EPS file: {w}")), "{w}: {notes:?}");
+        }
+    }
+}
+
+/// An unreadable included EPS keeps the preview that the linked image can show.
+#[test]
+fn a_placed_eps_with_an_unreadable_program_keeps_its_preview() {
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%EndComments\n0 0 60 60 nosuchoperator\n%%EOF\n";
+    assert!(crate::import_names(eps.as_bytes(), true, false, crate::NameEncoding::default()).is_err());
+    let place = placed_eps_with_preview(eps);
+    let (d, notes) = crate::ai_alone(&private(&native(&layer("Jig", true, &place)))).unwrap();
+    let n = &d.layers[0].children().unwrap()[0];
+    let NodeKind::Image(im) = &n.kind else { panic!("{:?} {notes:?}", n.kind) };
+    assert_eq!(im.link.as_ref().unwrap().path, "/files/shape.eps");
+    assert_eq!((im.width, im.height), (2, 2));
+    let preview = &d.images[&im.key];
+    assert_eq!(preview.mime, "image/png");
+    assert_eq!(preview.proxy.as_deref(), Some(&*preview.bytes));
+    assert!(d.images.values().all(|b| b.mime != "application/postscript"));
+    assert!(notes.iter().any(|n| n.contains("low-resolution preview")), "{notes:?}");
+}
+
+/// A pattern's included EPS keeps its bytes without waiting for image variable binding.
+#[test]
+fn a_placed_eps_with_a_preview_in_a_pattern_keeps_its_bytes() {
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 40 40\n%%EndComments\n0 0 40 40 rectfill\n%%EOF\n";
+    let place = placed_eps_with_preview(eps);
+    let pattern = format!("%AI3_BeginPattern: (Pic)\n(Pic) 0 0 40 40\n{place}E\n%AI3_EndPattern\n");
+    let (d, notes) = crate::ai_alone(&private(&native(&(pattern + &layer("Jig", true, &square(10, 10)))))).unwrap();
+    let art = &d.pattern("Pic").unwrap().art;
+    assert_eq!(art.len(), 1, "{art:?} {notes:?}");
+    let NodeKind::PlacedDocument(p) = &art[0].kind else { panic!("{art:?} {notes:?}") };
+    assert_eq!(&*d.images[&p.key].bytes, eps.as_bytes());
+    assert_eq!(d.images[&p.key].mime, "application/postscript");
+    assert!(d.images[&p.key].proxy.is_none());
+    assert!(!notes.iter().any(|n| n.contains("low-resolution preview")), "{notes:?}");
+
+    // One whose bytes can't be read keeps its preview there too.
+    let broken = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 40 40\n%%EndComments\n0 0 40 40 nosuchoperator\n%%EOF\n";
+    let pattern = format!("%AI3_BeginPattern: (Pic)\n(Pic) 0 0 40 40\n{}E\n%AI3_EndPattern\n", placed_eps_with_preview(broken));
+    let (d, notes) = crate::ai_alone(&private(&native(&(pattern + &layer("Jig", true, &square(10, 10)))))).unwrap();
+    let art = &d.pattern("Pic").unwrap().art;
+    assert!(matches!(&art[..], [n] if matches!(&n.kind, NodeKind::Image(im) if im.link.is_some())), "{art:?} {notes:?}");
+    assert!(notes.iter().any(|n| n.contains("low-resolution preview")), "{notes:?}");
+}
+
+/// A placed EPS file at `/files/shape.eps` whose bytes `eps` the data includes, with a 2 × 2 preview.
+fn placed_eps_with_preview(eps: &str) -> String {
+    format!(
+        "%AI5_BeginPlace\n%%FileType: 0\n[1 0 0 -1 30 70] 0 0 40 40 4 4 0\n(/files/shape.eps)`\n\
+         %%BeginDocument: /files/shape.eps\n{eps}\n%%EndDocument\n{}~\n%AI5_EndPlace\n",
+        placed_eps_preview()
+    )
+}
+
+/// The 2 × 2 preview of [`placed_eps_with_preview`].
+fn placed_eps_preview() -> String {
+    format!("%AI26_BeginPlacedObjectPreview\n2 2 8 32 17 {}\n%AI26_EndPlacedObjectPreview\n", "\x7f\0\0\0".repeat(4))
+}
+
 #[test]
 fn a_small_placed_file_goes_where_it_draws_closer_to_the_page() {
     // A 2 × 2 placed file (a small logo on a large page) whose box corner the matrix takes to

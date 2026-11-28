@@ -97,10 +97,13 @@ pub(crate) fn copy_shown(ui: &mut Ui, shown: &egui::Response, value: &str) -> bo
             None => d.remove::<egui::Pos2>(press_id),
         });
     }
-    ui.ctx().accesskit_node_builder(shown.id, |node| {
-        node.set_description(tl!("Copy"));
-        node.add_action(egui::accesskit::Action::Click);
-    });
+    // A value that cannot be copied (empty, disabled or clipped away) offers no Copy action.
+    if eligible {
+        ui.ctx().accesskit_node_builder(shown.id, |node| {
+            node.set_description(tl!("Copy"));
+            node.add_action(egui::accesskit::Action::Click);
+        });
+    }
     let activated = ui.input(|i| i.num_accesskit_action_requests(shown.id, egui::accesskit::Action::Click) > 0);
     eligible
         && (activated

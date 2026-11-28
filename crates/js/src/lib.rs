@@ -86,7 +86,8 @@
 //! Number hint. A Symbol converted to a string or a number without `String(symbol)` or `toString` throws a
 //! `TypeError`. A string converts to a number in the `0b` and `0o` forms as well. Every iterator
 //! step and every prototype a Symbol-keyed lookup passes takes fuel, and every Symbol and registry
-//! entry counts against the heap limit.
+//! entry counts against the heap limit. Registry lookups and insertions take fuel for the key's
+//! code units, and a registered description shares the key's existing buffer.
 //!
 //! With [`Options::es2015`], the realm also provides `Promise` (ECMA-262 11th edition, section
 //! 25.6, <https://262.ecma-international.org/11.0/#sec-promise-objects>): the constructor, `then`,

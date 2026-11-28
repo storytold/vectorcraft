@@ -30,7 +30,8 @@
 //!   false then. Assigning to such a name throws the same error.
 //! - Assigning `activeDocument` or `selection` without `app.` assigns `app.activeDocument` or the
 //!   active document's selection. A top-level `var selection = ...` does the same and does
-//!   not make a variable of the script. Assigning `documents` keeps its value.
+//!   not make a variable of the script. An assignment to `documents` is ignored outside strict
+//!   mode and throws a `TypeError` in strict mode code or with `#strict on`.
 //! - After `documents[0]`, documents are listed from the one active most recently to the one
 //!   active longest ago. A change a script makes to a document in the back does not move it.
 //! - `pageItems` lists every object, with the objects inside groups and compound paths after the

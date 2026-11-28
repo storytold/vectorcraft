@@ -10751,6 +10751,8 @@ breakText	Glyphs	გლიფები
 	Tangent Circle	მხები წრე
 	Tangent Circle Tool	მხები წრის ხელსაწყო
 	No tangent circle here	აქ მხები წრე არ არის
+	Ask For Circle Radius	წრის რადიუსის კითხვა
+	Auto-Update Default	ნაგულისხმევის ავტომატური განახლება
 	Circle:	წრე:
 @msg	`ids` names an object twice	`ids` ერთსა და იმავე ობიექტს ორჯერ მიუთითებს
 @msg	select two or three paths or compound paths	მონიშნეთ ორი ან სამი ტრაექტორია ან შედგენილი ტრაექტორია
