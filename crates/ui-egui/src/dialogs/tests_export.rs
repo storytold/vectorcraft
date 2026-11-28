@@ -206,6 +206,67 @@ fn export_as_png_picks_the_file_then_shows_png_options() {
     assert_eq!(&written.borrow()[0].1[16..20], 120u32.to_be_bytes(), "60 pt at 144 ppi");
 }
 
+/// PNG Options' pixel size is in the window's accessibility tree, and it follows the resolution.
+#[test]
+fn png_options_name_the_pixel_size_in_the_accessibility_tree() {
+    let (mut app, _) = app(1);
+    app.run("file.export.png", json!({})).unwrap();
+    answer_saves(&mut app);
+    let sizes = |app: &mut VectorcraftApp| -> Vec<String> {
+        super::tests::settle(app);
+        let out = super::tests::frame(app, vec![]);
+        let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+        nodes.iter().filter_map(|(_, node)| node.label()).filter(|label| label.ends_with(" px")).map(str::to_owned).collect()
+    };
+    let at_72 = sizes(&mut app);
+    assert_eq!(at_72, ["60 × 40 px"]);
+    set(&mut app, "ppi", json!(144));
+    assert_eq!(sizes(&mut app), ["120 × 80 px"]);
+}
+
+/// The role and name of each node of the window's accessibility tree, in a frame drawn once the dialogs have settled.
+fn access_names(app: &mut VectorcraftApp) -> Vec<(egui::accesskit::Role, String)> {
+    super::tests::settle(app);
+    let out = super::tests::frame(app, vec![]);
+    let nodes = out.platform_output.accesskit_update.map(|u| u.nodes).unwrap_or_default();
+    nodes.iter().filter_map(|(_, node)| node.label().map(|label| (node.role(), label.to_owned()))).collect()
+}
+
+/// The hints under Export As, DXF Options and EPS Options, the words of the DXF scale row and the HP-GL pen numbers
+/// are in the window's accessibility tree, and the HP-GL pen error is announced as an alert.
+#[test]
+fn export_dialogs_name_their_hints_rows_and_errors_in_the_accessibility_tree() {
+    let names = |app: &mut VectorcraftApp| -> Vec<String> { access_names(app).into_iter().map(|(_, name)| name).collect() };
+    let (mut app, _) = app(1);
+    app.run("file.exportAs", json!({"format": "png", "useArtboards": false})).unwrap();
+    let shown = names(&mut app);
+    assert!(shown.iter().any(|n| n == "The bounds of the visible art."), "{shown:?}");
+    cancel(&mut app);
+
+    crate::menus::invoke(&mut app, "ui.dxfOptionsDialog", json!({}));
+    let shown = names(&mut app);
+    for word in ["=", "Units"] {
+        assert!(shown.iter().any(|n| n == word), "{word} is not named in {shown:?}");
+    }
+    assert!(shown.iter().any(|n| n.starts_with("Type becomes outlines")), "{shown:?}");
+    cancel(&mut app);
+
+    crate::menus::invoke(&mut app, "ui.epsOptionsDialog", json!({}));
+    let shown = names(&mut app);
+    assert!(shown.iter().any(|n| n.starts_with("Transparency is flattened with the preset.")), "{shown:?}");
+    cancel(&mut app);
+
+    app.run("ui.hpglOptionsDialog", json!({})).unwrap();
+    set(&mut app, "pens", json!(["#ff0000", "#000000"]));
+    set(&mut app, "__penError", json!("The pens could not be listed."));
+    let shown = access_names(&mut app);
+    assert!(shown.iter().any(|(_, n)| n == "2"), "the second pen's number is not named in {shown:?}");
+    assert!(
+        shown.iter().any(|(role, n)| *role == egui::accesskit::Role::Alert && n.contains("The pens could not be listed.")),
+        "the pen error is not an alert in {shown:?}"
+    );
+}
+
 /// File › Export › Export As PNG… exports the artboard in use, not the first (#5502), and each
 /// artboard the Artboard tool has selected, one file each.
 #[test]
@@ -281,6 +342,62 @@ fn a_bad_range_keeps_export_as_open() {
     confirm(&mut app);
     assert_eq!(kind(&app).as_deref(), Some("exportAs"));
     assert!(written.borrow().is_empty());
+}
+
+#[test]
+fn export_as_opened_without_a_drawing_does_not_take_a_later_drawing() {
+    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Services::default()));
+    save_panel(&mut app, |_| Some("/out/untitled.png".into()));
+    app.run("file.exportAs", json!({"format": "png"})).unwrap();
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
+    assert_eq!(fields(&app)["format"], "png");
+
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let error = try_confirm(&mut app).expect_err("the old Export As draft has no source drawing");
+    assert!(error.contains("Open Export As from the drawing"), "{error}");
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
+    PANEL.with_borrow(|panel| assert!(panel.as_ref().unwrap().picker.requests().is_empty()));
+}
+
+#[test]
+fn export_as_waits_for_the_drawing_that_opened_it() {
+    let (mut app, written) = app(2);
+    app.run("file.exportAs", json!({"format": "png", "useArtboards": true, "range": "1"})).unwrap();
+    app.run("file.new", json!({ "width": 200, "height": 100 })).unwrap();
+    let error = try_confirm(&mut app).expect_err("Export As must refuse the other drawing");
+    assert!(error.contains("original drawing"), "{error}");
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
+    assert_eq!(fields(&app)["range"], "1");
+    PANEL.with_borrow(|panel| assert!(panel.as_ref().unwrap().picker.requests().is_empty()));
+    app.run("document.activate", json!({ "index": 0 })).unwrap();
+    confirm(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
+    confirm(&mut app);
+    assert_eq!(written.borrow().len(), 1);
+    assert_eq!(&written.borrow()[0].1[16..20], 60u32.to_be_bytes());
+}
+
+#[test]
+fn png_options_wait_for_the_drawing_that_opened_them() {
+    let (mut app, written) = app(1);
+    app.run("file.export.png", json!({})).unwrap();
+    answer_saves(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
+    let draft = fields(&app);
+    app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+    app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+    let error = try_confirm(&mut app).expect_err("PNG Options must refuse the other drawing");
+    assert!(error.contains("original drawing"), "{error}");
+    assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
+    assert_eq!(fields(&app)["path"], draft["path"]);
+    assert!(written.borrow().is_empty());
+
+    app.run("document.activate", json!({"index": 0})).unwrap();
+    confirm(&mut app);
+    let w = written.borrow();
+    assert_eq!(w.len(), 1);
+    assert_eq!(&w[0].1[16..20], 60u32.to_be_bytes());
 }
 
 /// Each format's Export As continues in its options dialog, writes nothing before that dialog's OK, and then
@@ -408,4 +525,70 @@ fn export_as_writes_only_the_chosen_artboard_in_every_format() {
             }
         }
     }
+}
+
+fn native_export_as_source() -> (VectorcraftApp, Written, crate::tests_picks::Picker, vectorcraft_testkit::TempDir) {
+    let (mut app, written) = app(1);
+    let dir = vectorcraft_testkit::TempDir::new("export-as-after-revert");
+    let capture = written.clone();
+    app.services.write = Some(Box::new(move |path, bytes| {
+        if path.ends_with(".vectorcraft") {
+            std::fs::write(path, bytes).map_err(|error| error.to_string())
+        } else {
+            capture.borrow_mut().push((path.to_string(), bytes.to_vec()));
+            Ok(())
+        }
+    }));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|error| error.to_string())));
+    let picker = crate::tests_picks::scripted(&mut app);
+    app.run("file.saveAs", json!({"path": dir.join("Export.vectorcraft")})).unwrap();
+    app.run("shape.ellipse", json!({"x": 45, "y": 20, "width": 10, "height": 10})).unwrap();
+    (app, written, picker, dir)
+}
+
+fn revert_export_source(app: &mut VectorcraftApp) {
+    let source = app.session.active().unwrap();
+    let (uid, reverts) = (source.uid, source.reverts);
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let source = app.session.active().unwrap();
+    assert_eq!((source.uid, source.reverts), (uid, reverts + 1));
+}
+
+#[test]
+fn export_as_refuses_an_approval_from_before_native_revert() {
+    let (mut app, written, picker, _dir) = native_export_as_source();
+    app.run("file.exportAs", json!({"format": "png", "useArtboards": true})).unwrap();
+    revert_export_source(&mut app);
+
+    let error = try_confirm(&mut app).expect_err("an old Export As approval must stay in the dialog");
+    assert!(error.contains("Reopen this dialog"));
+    assert_eq!(kind(&app).as_deref(), Some("exportAs"));
+    assert_eq!(fields(&app)["useArtboards"], true);
+    assert!(picker.requests().is_empty(), "the retired draft did not open a save picker");
+    assert!(written.borrow().is_empty());
+}
+
+#[test]
+fn export_as_cannot_use_a_destination_selected_after_native_revert() {
+    let (mut app, written, picker, _dir) = native_export_as_source();
+    app.run("file.exportAs", json!({"format": "png"})).unwrap();
+    try_confirm(&mut app).unwrap();
+    assert_eq!(picker.requests().len(), 1);
+    revert_export_source(&mut app);
+
+    picker.answer_saved("/output/Old.png", None);
+    crate::file_asks::poll(&mut app);
+    frame(&mut app);
+    assert!(kind(&app).is_none(), "the retired pick did not open PNG Options");
+    assert!(written.borrow().is_empty());
+
+    app.run("file.exportAs", json!({"format": "png"})).unwrap();
+    try_confirm(&mut app).unwrap();
+    assert_eq!(picker.requests().len(), 2);
+    picker.answer_saved("/output/Fresh.png", None);
+    crate::file_asks::poll(&mut app);
+    frame(&mut app);
+    assert_eq!(kind(&app).as_deref(), Some("pngOptions"));
+    try_confirm(&mut app).unwrap();
+    assert_eq!(names(&written), ["/output/Fresh.png"]);
 }

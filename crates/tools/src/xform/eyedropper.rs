@@ -16,8 +16,9 @@
 //!
 //! The Gradient panel's eyedropper sets the `stop` option (the tool to return to): the next click
 //! samples the colour under the cursor into the selected gradient stop (`paint.sampleColor
-//! {stop}`) and switches back to that tool. Armed for the Live Paint Bucket, a click once its stop
-//! is no longer selected ends the pick without sampling and switches back to the bucket.
+//! {stop}`) and switches back to that tool. Armed for a stop of the gradient a tool paints with
+//! (the Live Paint Bucket's, the Shape Builder's fill), a click once its stop is no longer
+//! selected ends the pick without sampling and switches back to that tool.
 //!
 //! Gradient mesh points picked with the Mesh tool, Direct Selection or the Lasso before switching
 //! to the Eyedropper stay picked (its `meshPoints` option), and go back to one of those tools
@@ -203,6 +204,8 @@ fn color_under(s: &mut Sampler, doc: &Document, levels: &mut [Option<Document>],
             *size.get_or_insert_with(|| s.symbol_nodes + doc.layers.iter().map(|l| l.count()).sum::<usize>())
         };
         s.spend(cost)?;
+        #[cfg(test)]
+        VISITED.with(|v| v.set(v.get() + s.symbol_nodes + doc.layers.iter().map(|l| l.count()).sum::<usize>()));
         let h = hit_test_visible_skipping(doc, p, opts, &|id| passed.contains(&id))?;
         if let Some(live) = drawn_live(doc, &h.ancestry) {
             if let Some(c) = live_color_at(s, levels, live, p) {
@@ -269,6 +272,9 @@ fn live_color_at(s: &mut Sampler, levels: &mut [Option<Document>], n: &Node, p: 
 thread_local! {
     /// The blends and envelopes [`live_color_at`] has evaluated on this thread.
     static EXPANSIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The objects the hit tests of [`color_under`] may have visited on this thread: every object
+    /// of the document hit, and the symbols' art.
+    static VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// The color `n` shows at `p`: an image's pixels, a mesh's interpolated patch color, a symbol
@@ -559,9 +565,9 @@ impl Tool for EyedropperTool {
                 self.brush_key_color = false;
                 vec![Action::Dialog("brushKeyColor".into(), json!({ "color": color_json(&c) })), Action::SwitchTool(back)]
             }
-            Click::BackToBucket => {
+            Click::Back(back) => {
                 self.stop = None;
-                vec![Action::SwitchTool("livePaintBucket".into())]
+                vec![Action::SwitchTool(back)]
             }
             Click::MeshPoints(id, points, color) => {
                 let params = json!({ "id": id.0, "points": points, "color": color_json(&color), "keepModel": true });
@@ -691,8 +697,9 @@ enum Click {
     ImageTrace(Value),
     /// Brush Options › Key Color: this color, sampled from this object.
     BrushKeyColor(Color, NodeId),
-    /// A pick for a Live Paint Bucket stop that is no longer selected switches back unsampled.
-    BackToBucket,
+    /// A pick for a stop of the gradient a tool paints with (the Live Paint Bucket's, the Shape
+    /// Builder's fill) that is no longer selected switches back to that tool unsampled.
+    Back(String),
     /// The fill color goes to these points of this selected gradient mesh.
     MeshPoints(NodeId, Vec<usize>, Color),
     /// `appearance.copyFrom` this source, with `reverse` or `append` or neither.
@@ -707,7 +714,7 @@ impl Click {
     /// The object of the document the click reads from or writes to.
     fn object(&self) -> Option<NodeId> {
         match self {
-            Click::ImageTrace(_) | Click::BackToBucket => None,
+            Click::ImageTrace(_) | Click::Back(_) => None,
             Click::BrushKeyColor(_, id) | Click::MeshPoints(id, ..) | Click::CopyFrom(id, _) | Click::Sample { source: id, .. } => Some(*id),
         }
     }
@@ -728,13 +735,17 @@ impl EyedropperTool {
             let (c, source) = sample_at(cx, p)?;
             return Some(Click::BrushKeyColor(c, source));
         }
-        // A pick for a stop of the Live Paint Bucket's gradient (the default paint's) ends without
+        // A pick for a stop of the gradient of a tool that paints with the chosen colors (the
+        // default paint's: the Live Paint Bucket's, or the Shape Builder's fill) ends without
         // sampling once that stop is no longer selected (a Cmd-click selected another object) or no
         // longer there (another paint was chosen): the click switches back.
-        let bucket_paint = if cx.fill_active { &cx.paint.fill } else { &cx.paint.stroke };
-        let bucket_stop = cx.gradient_stop.filter(|i| matches!(bucket_paint, Paint::Gradient(g) if *i < g.gradient.stops.len()));
-        if self.stop.as_deref() == Some("livePaintBucket") && bucket_stop.is_none() {
-            return Some(Click::BackToBucket);
+        let tool_paint = if cx.fill_active { &cx.paint.fill } else { &cx.paint.stroke };
+        let tool_stop = cx.gradient_stop.filter(|i| matches!(tool_paint, Paint::Gradient(g) if *i < g.gradient.stops.len()));
+        if cx.tool_paints
+            && tool_stop.is_none()
+            && let Some(back) = &self.stop
+        {
+            return Some(Click::Back(back.clone()));
         }
         let stop = self.stop.clone().zip(cx.gradient_stop);
         // A plain click on a selected gradient mesh gives the fill color to the point there, else
@@ -934,19 +945,23 @@ mod tests {
             ]
         );
         assert_eq!(t.options(), json!({"stop": null, "brushKeyColor": false}), "one sample only");
-        // Armed for the Live Paint Bucket with its stop no longer selected, a click ends the pick.
-        cx.gradient_stop = None;
-        t.set_option("stop", &json!("livePaintBucket"));
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
-        assert_eq!(a, vec![Action::SwitchTool("livePaintBucket".into())]);
-        assert_eq!(t.returns_to(), None);
-        // So does a click once the default paint has no such stop (here, a solid fill).
-        cx.gradient_stop = Some(1);
-        assert!(!matches!(cx.paint.fill, Paint::Gradient(_)));
-        t.set_option("stop", &json!("livePaintBucket"));
-        assert_eq!(t.returns_to(), Some("livePaintBucket"));
-        let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
-        assert_eq!(a, vec![Action::SwitchTool("livePaintBucket".into())]);
+        // Armed for a tool that paints with the chosen colors (the Live Paint Bucket, or the Shape
+        // Builder's fill) with its stop no longer selected, a click ends the pick.
+        cx.tool_paints = true;
+        for back in ["livePaintBucket", "shapeBuilder"] {
+            cx.gradient_stop = None;
+            t.set_option("stop", &json!(back));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+            assert_eq!(a, vec![Action::SwitchTool(back.into())]);
+            assert_eq!(t.returns_to(), None);
+            // So does a click once the default paint has no such stop (here, a solid fill).
+            cx.gradient_stop = Some(1);
+            assert!(!matches!(cx.paint.fill, Paint::Gradient(_)));
+            t.set_option("stop", &json!(back));
+            assert_eq!(t.returns_to(), Some(back));
+            let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0));
+            assert_eq!(a, vec![Action::SwitchTool(back.into())]);
+        }
         // Neither a Key Color pick nor an Image Trace ignored-color pick is a gradient stop's.
         t.set_option("brushKeyColor", &json!(true));
         t.set_option("stop", &json!("livePaintBucket"));
@@ -1574,11 +1589,23 @@ mod tests {
             d.insert(Some(l), usize::MAX, Node::new(inst, NodeKind::SymbolInstance { symbol: name.into(), xf: Affine::IDENTITY })).unwrap();
         }
         let (s, p) = (Selection::default(), paint());
-        let start = std::time::Instant::now();
+        let cx = cx(&d, &s, &p);
+        let opts = sample_options(&cx);
+        let symbol_nodes = d.symbols.iter().map(|s| s.art.count()).sum();
         for at in [Point::new(150.5, 150.5), Point::new(350.5, 350.5), Point::new(350.5, 50.5)] {
-            assert_eq!(sample_color_at(&cx(&d, &s, &p), at), None, "{at:?}");
+            assert_eq!(sample_color_at(&cx, at), None, "{at:?}");
+            // Sampled on this thread, so the count is this sample's. Each hit test counts the
+            // objects it may visit against the limit first, except the first one in the document,
+            // which a click makes anyway.
+            VISITED.with(|v| v.set(0));
+            let mut s = Sampler { doc: &d, opts, raster_sample: cx.raster_sample, symbol_nodes, work: MAX_WORK, exhausted: false, patterns: 0 };
+            let mut levels: Vec<Option<Document>> = (0..MAX_NESTING).map(|_| None).collect();
+            let c = color_under(&mut s, &d, &mut levels, at, opts);
+            assert!(c.is_none() || s.exhausted, "{at:?}");
+            let allowed = MAX_WORK + symbol_nodes + d.layers.iter().map(|l| l.count()).sum::<usize>();
+            let visited = VISITED.with(|v| v.get());
+            assert!(visited <= allowed, "{at:?}: hit tests may have visited {visited} objects, {allowed} allowed");
         }
-        assert!(start.elapsed() < std::time::Duration::from_secs(60), "{:?}", start.elapsed());
     }
 
     /// Each hit test in a tile's art may measure the art of every symbol, so it counts the symbols'

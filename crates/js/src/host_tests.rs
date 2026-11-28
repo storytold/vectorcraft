@@ -11,6 +11,57 @@ fn realm(fuel: u64) -> Realm {
     r
 }
 
+#[test]
+fn non_finite_indexer_keys_reach_the_host_unchanged() {
+    let mut r = realm(1_000_000);
+    let index: HostFunction = Rc::new(|args| {
+        assert!(matches!(args.get(1), Some(Data::Number(n)) if !n.is_finite()), "{args:?}");
+        Ok(Data::Bool(true))
+    });
+    let class = HostClass { name: "Indexed".into(), parent: None, members: vec![], index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("it".into(), host_ref("Indexed", &[1.0]))]).unwrap();
+    let source = "[it[NaN], it[Infinity], it[-Infinity], NaN in it, Infinity in it, -Infinity in it].join('|')";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("true|true|true|true|true|true".into()));
+}
+
+#[test]
+fn host_receivers_obey_limits_lowered_after_the_object_was_created() {
+    for limits in [DataLimits { depth: 64, bytes: 1_000, entries: 2 }, DataLimits { depth: 64, bytes: 1, entries: 100 }] {
+        for expression in ["it[0]", "0 in it", "it.method()", "it.take(it)"] {
+            let mut r = realm(1_000_000);
+            let calls = Rc::new(Cell::new(0));
+            let called = calls.clone();
+            let function: HostFunction = Rc::new(move |_| {
+                called.set(called.get() + 1);
+                Ok(Data::Undefined)
+            });
+            let class = HostClass {
+                name: "Indexed".into(),
+                parent: None,
+                members: vec![("method".into(), HostMember::Method(function.clone())), ("take".into(), HostMember::Method(function.clone()))],
+                index: Some(function),
+                construct: None,
+            };
+            r.define_host_classes(vec![class], vec![("it".into(), host_ref("Indexed", &[1.0, 2.0, 3.0]))]).unwrap();
+            r.set_data_limits(limits);
+            let source = format!("var result = 'called'; try {{ {expression}; }} catch (e) {{ result = e.name; }} result");
+            assert_eq!(r.run(&source).unwrap(), JsValue::String("RangeError".into()), "{expression}: {limits:?}");
+            assert_eq!(calls.get(), 0, "{expression}");
+        }
+    }
+}
+
+#[test]
+fn index_keys_share_the_receivers_data_budget() {
+    let mut r = realm(1_000_000);
+    let class = HostClass { name: "Indexed".into(), parent: None, members: vec![], index: Some(Rc::new(|_| Ok(Data::Bool(true)))), construct: None };
+    r.define_host_classes(vec![class], vec![("it".into(), host_ref("Indexed", &[1.0]))]).unwrap();
+    r.set_data_limits(DataLimits { depth: 64, bytes: 256, entries: 100 });
+    assert_eq!(r.run("it['short']").unwrap(), JsValue::Bool(true));
+    let source = "var result = 'called'; try { it[new Array(71).join('x')]; } catch (e) { result = e.name; } result";
+    assert_eq!(r.run(source).unwrap(), JsValue::String("RangeError".into()));
+}
+
 /// A realm with `host.take(value)`, which records what it was given and returns it.
 fn with_take(r: &mut Realm) -> Rc<RefCell<Vec<Data>>> {
     let seen: Rc<RefCell<Vec<Data>>> = Rc::default();
@@ -73,6 +124,96 @@ fn an_ended_run_leaves_the_realm_ready_for_the_next() {
     r.start("kept").unwrap();
     assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("yes".into()));
     r.end();
+}
+
+fn paused_for_replacement(promise: bool) -> Realm {
+    let mut r = Realm::with_options(Options { es2015: promise, ..Options::default() }, Limits::default());
+    let pause = r.pause_flag();
+    r.define_function("pauseNow", move |_| {
+        pause.set(true);
+        Ok(JsValue::Undefined)
+    });
+    let source = if promise {
+        "var kept = 'yes', after = false, queued = false;\n\
+         Promise.resolve().then(function () { pauseNow(); after = true; });\n\
+         Promise.resolve().then(function () { queued = true; }); 'old'"
+    } else {
+        "var kept = 'yes', after = false, queued = false; pauseNow(); after = true; 'old'"
+    };
+    r.start(source).unwrap();
+    assert_eq!(r.advance(1_000_000).unwrap(), Progress::Paused);
+    assert!(r.is_running());
+    if promise {
+        assert!(r.interp().promises.draining);
+    }
+    r
+}
+
+fn replacement(r: &mut Realm, sliced: bool, source: &str) -> Result<JsValue, RunError> {
+    if sliced {
+        r.start(source)?;
+        finish(r, 1_000).0
+    } else {
+        r.run(source)
+    }
+}
+
+#[test]
+fn replacing_a_paused_promise_run_discards_its_reaction_and_queued_jobs() {
+    for sliced in [false, true] {
+        let mut r = paused_for_replacement(true);
+        assert_eq!(replacement(&mut r, sliced, "'new'").unwrap(), JsValue::String("new".into()));
+        assert!(!r.is_running());
+        assert_eq!(r.run("[kept, after, queued].join('|')").unwrap(), JsValue::String("yes|false|false".into()));
+    }
+}
+
+#[test]
+fn replacing_a_paused_script_discards_its_remaining_code() {
+    for sliced in [false, true] {
+        let mut r = paused_for_replacement(false);
+        assert_eq!(replacement(&mut r, sliced, "'new'").unwrap(), JsValue::String("new".into()));
+        assert!(!r.is_running());
+        assert_eq!(r.run("[kept, after, queued].join('|')").unwrap(), JsValue::String("yes|false|false".into()));
+    }
+}
+
+#[test]
+fn replacing_a_waiting_run_discards_its_host_call() {
+    for sliced in [false, true] {
+        let mut r = realm(1_000_000);
+        let calls = with_ask(&mut r);
+        r.start("var after = false; ask('old'); after = true").unwrap();
+        assert_eq!(r.advance(1_000).unwrap(), Progress::Paused);
+        assert!(r.waits());
+        assert_eq!(replacement(&mut r, sliced, "'new'").unwrap(), JsValue::String("new".into()));
+        assert!(!r.waits());
+        assert_eq!(r.run("after").unwrap(), JsValue::Bool(false));
+        assert_eq!(calls.get(), 1);
+        assert!(r.answer(Data::Null).is_err());
+    }
+}
+
+#[test]
+fn replacing_a_paused_run_with_invalid_source_still_ends_it() {
+    for promise in [false, true] {
+        for sliced in [false, true] {
+            let mut r = paused_for_replacement(promise);
+            assert_eq!(replacement(&mut r, sliced, "(").unwrap_err().kind, RunErrorKind::Syntax);
+            assert!(!r.is_running());
+            assert_eq!(r.run("[kept, after, queued].join('|')").unwrap(), JsValue::String("yes|false|false".into()));
+        }
+    }
+}
+
+#[test]
+fn replacing_a_paused_run_applies_its_pending_language_setting() {
+    for sliced in [false, true] {
+        let mut r = paused_for_replacement(false);
+        r.set_es2015(true);
+        assert_eq!(replacement(&mut r, sliced, "let fresh = 7; fresh").unwrap(), JsValue::Number(7.0));
+        assert_eq!(r.run("after").unwrap(), JsValue::Bool(false));
+    }
 }
 
 /// Setting `Folder.current` back for the next run drops what only the last run's uncaught
@@ -673,6 +814,134 @@ fn a_host_function_that_waits_where_it_cannot_ends_the_run() {
     r.define_host_function("ask", vec![], f).unwrap();
     let e = r.run("try { ask(); } catch (e) { 'caught' }").unwrap_err();
     assert_eq!(e.kind, RunErrorKind::Internal);
+}
+
+/// The host class `Thing` with the method `fetch`, which waits for its answer where it can, the
+/// getter `id`, the first number of the object's handle, and the constructor `make`; and the
+/// global `thing`, the `Thing` with the handle `[1]`.
+fn with_thing(r: &mut Realm, make: Option<HostFunction>) {
+    let can_wait = r.wait_flag();
+    let fetch: HostFunction = Rc::new(move |_| if can_wait.get() { Err(HostError::Wait) } else { Err(HostError::Error("cannot wait here".into())) });
+    let id: HostFunction = Rc::new(|a| Ok(a.first().and_then(host_ref_parts).and_then(|(_, h)| h.first().copied()).map_or(Data::Null, Data::Number)));
+    let members = vec![("fetch".to_string(), HostMember::Method(fetch)), ("id".to_string(), HostMember::Get(id))];
+    let class = HostClass { name: "Thing".into(), parent: None, members, index: None, construct: make };
+    r.define_host_classes(vec![class], vec![("thing".into(), host_ref("Thing", &[1.0]))]).unwrap();
+}
+
+#[test]
+fn the_answer_to_a_waiting_member_of_a_host_class_is_an_object_of_its_class() {
+    let mut r = realm(1_000_000);
+    with_thing(&mut r, None);
+    r.start("var t = thing.fetch(), u = thing.fetch(); [t instanceof Thing, t.id, t === u, t === thing].join()").unwrap();
+    for _ in 0..2 {
+        assert_eq!(r.advance(1_000).unwrap(), Progress::Paused);
+        assert!(r.waits());
+        r.answer(host_ref("Thing", &[2.0])).unwrap();
+    }
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::String("true,2,true,false".into()));
+}
+
+#[test]
+fn a_host_class_constructor_called_with_new_cannot_wait() {
+    let mut r = realm(1_000_000);
+    let could: Rc<Cell<Option<bool>>> = Rc::default();
+    let (seen, can_wait) = (could.clone(), r.wait_flag());
+    let make: HostFunction = Rc::new(move |_| {
+        seen.set(Some(can_wait.get()));
+        if can_wait.get() { Err(HostError::Wait) } else { Ok(Data::Object(Vec::new())) }
+    });
+    with_thing(&mut r, Some(make));
+    r.start("var c = new Thing(); c instanceof Thing").unwrap();
+    assert_eq!(finish(&mut r, 1_000).0.unwrap(), JsValue::Bool(true));
+    assert_eq!(could.get(), Some(false));
+}
+
+#[test]
+fn objects_of_a_host_class_report_its_available_members_as_their_own() {
+    let mut r = realm(1_000_000);
+    let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let missing: HostFunction = Rc::new(|_| Err(HostError::Error("not here yet".into())));
+    let base = HostClass {
+        name: "Base".into(),
+        parent: None,
+        members: vec![
+            ("size".to_string(), HostMember::Get(value.clone())),
+            ("shape".to_string(), HostMember::Property { get: value.clone(), set: value.clone() }),
+            ("grow".to_string(), HostMember::Method(value.clone())),
+            ("later".to_string(), HostMember::Unavailable(missing)),
+        ],
+        index: None,
+        construct: None,
+    };
+    let leaf = HostClass {
+        name: "Leaf".into(),
+        parent: Some("Base".into()),
+        members: vec![("leaf".to_string(), HostMember::Get(value))],
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![base, leaf], vec![("it".into(), host_ref("Leaf", &[1.0]))]).unwrap();
+    r.start(
+        "var own = Object.prototype.hasOwnProperty, keys = [];\
+         for (var k in it) keys.push(k);\
+         [it.hasOwnProperty('size'), it.hasOwnProperty('shape'), it.hasOwnProperty('grow'), it.hasOwnProperty('leaf'),\
+          own.call(it, 'size'), it.propertyIsEnumerable('grow'),\
+          it.hasOwnProperty('later'), it.propertyIsEnumerable('later'), it.hasOwnProperty('nope'),\
+          it.hasOwnProperty('hasOwnProperty'), it.hasOwnProperty('constructor'), 'later' in it,\
+          keys.sort().join(' '), Leaf.prototype.hasOwnProperty('size'), ({}).hasOwnProperty('size')].join()",
+    )
+    .unwrap();
+    assert_eq!(
+        finish(&mut r, 1_000_000).0.unwrap(),
+        JsValue::String("true,true,true,true,true,true,false,false,false,false,false,true,leaf shape size,false,false".into())
+    );
+}
+
+#[test]
+fn a_member_a_class_declares_unavailable_is_not_its_own_when_its_parent_has_it() {
+    let mut r = realm(1_000_000);
+    let value: HostFunction = Rc::new(|_| Ok(Data::Number(1.0)));
+    let missing: HostFunction = Rc::new(|_| Err(HostError::Error("not here yet".into())));
+    let base = HostClass {
+        name: "Base".into(),
+        parent: None,
+        members: vec![("size".to_string(), HostMember::Get(value.clone())), ("grow".to_string(), HostMember::Method(value))],
+        index: None,
+        construct: None,
+    };
+    let leaf = HostClass {
+        name: "Leaf".into(),
+        parent: Some("Base".into()),
+        members: vec![("size".to_string(), HostMember::Unavailable(missing))],
+        index: None,
+        construct: None,
+    };
+    r.define_host_classes(vec![base, leaf], vec![("it".into(), host_ref("Leaf", &[1.0]))]).unwrap();
+    r.start("[it.hasOwnProperty('size'), it.propertyIsEnumerable('size'), it.hasOwnProperty('grow')].join()").unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::String("false,false,true".into()));
+}
+
+#[test]
+fn assigning_a_name_a_prototype_has_does_not_call_the_indexer() {
+    let mut r = realm(1_000_000);
+    let calls: Rc<Cell<u32>> = Rc::default();
+    let seen = calls.clone();
+    let index: HostFunction = Rc::new(move |a| {
+        seen.set(seen.get() + 1);
+        match a.get(1) {
+            Some(Data::Number(_)) => Ok(Data::Undefined),
+            _ => Err(HostError::Error("no such member".into())),
+        }
+    });
+    let class = HostClass { name: "List".into(), parent: None, members: Vec::new(), index: Some(index), construct: None };
+    r.define_host_classes(vec![class], vec![("it".into(), host_ref("List", &[1.0]))]).unwrap();
+    r.start("Object.prototype.extra = 1; it.extra = 2; it.extra").unwrap();
+    assert_eq!(finish(&mut r, 1_000_000).0.unwrap(), JsValue::Number(1.0));
+    assert_eq!(calls.get(), 0);
+    // A name nothing has still goes to the indexer, which throws.
+    r.start("it.nope = 2").unwrap();
+    assert!(finish(&mut r, 1_000_000).0.is_err());
+    assert_eq!(calls.get(), 1);
 }
 
 #[test]

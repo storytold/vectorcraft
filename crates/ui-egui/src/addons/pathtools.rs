@@ -17,10 +17,10 @@ pub mod tangent_circle;
 use craft::behavior::ColumnWidth;
 use craft::menu::Node;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::display::{Divider, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::{Grid, Row};
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::text::NumberField;
@@ -192,6 +192,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         empty_state(ui, "dc-anchor-smooth", tl!("No document"), tl!("Open a document to edit its anchor points."));
         return;
     }
+    Stack::new().label(tl!("Anchor Inspector")).fill().scroll(Scroll::vertical()).show(ui, |ui, _| show_inspector(app, ui));
+}
+
+fn show_inspector(app: &mut VectorcraftApp, ui: &mut Ui) {
     let readout = readout(app);
     let anchor = readout.anchor.as_ref();
     let selected = app.session.active().is_some_and(|st| !st.selection.is_empty());
@@ -301,7 +305,19 @@ fn options_params(tool: &str, lengths: LengthUnits) -> Vec<Param> {
     if tool == tangent_circle_tool::ID {
         let (lo, hi) = tangent_circle_tool::RADIUS_RANGE;
         let kind = ParamKind::number(Some(lo), Some(hi), tangent_circle_tool::RADIUS, 1.0, 2);
-        return vec![Param::new("radius", tl!("Radius"), kind).length(lengths)];
+        let colors =
+            tangent_circle_tool::COLORS.iter().zip(TANGENT_CIRCLE_COLORS).map(|((name, _), label)| ((*name).to_owned(), tl!(label).into())).collect();
+        let (snap_lo, snap_hi) = tangent_circle_tool::SNAP_RANGE;
+        let snap = ParamKind::number(Some(snap_lo), Some(snap_hi), tangent_circle_tool::SNAP_PX, 1.0, 2);
+        return vec![
+            Param::new("radius", tl!("Radius"), kind).length(lengths),
+            Param::new("addPoints", tl!(tangent_circle_tool::ADD_POINTS), ParamKind::bool(false)),
+            Param::new("center", tl!("Circle Center"), ParamKind::bool(true)),
+            Param::new("radii", tl!("Circle Radii Lines"), ParamKind::bool(true)),
+            Param::new("color", tl!("Color"), ParamKind::choice(colors, Some("red".into()))),
+            Param::new("snapTolerance", tl!("Snap Tolerance"), snap).unit(UnitKind::Pixels),
+            Param::new("snapWithoutGuides", tl!("Snap When Smart Guides Are Off"), ParamKind::bool(true)),
+        ];
     }
     let (size, tolerance) = (anchor_eraser::SIZE_RANGE, anchor_eraser::TOLERANCE_RANGE);
     vec![
@@ -310,6 +326,9 @@ fn options_params(tool: &str, lengths: LengthUnits) -> Vec<Param> {
         Param::new("pressure", tl!("Pressure"), ParamKind::bool(false)),
     ]
 }
+
+/// The labels of the Tangent Circle tool's colors ([`tangent_circle_tool::COLORS`]), in its order.
+const TANGENT_CIRCLE_COLORS: [&str; 6] = ["Red", "Blue", "Magenta", "Green", "Black", "Gray"];
 
 /// Open the options of add-on tool `tool` with its current values. OK sets them; when the tool refuses one, the dialog
 /// stays open with the reason.

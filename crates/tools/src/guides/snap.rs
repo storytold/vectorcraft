@@ -325,9 +325,10 @@ pub fn square(d: Vec2) -> Vec2 {
 /// too, so they all snap alike, and shows its [`Self::guides`].
 ///
 /// The targets ([`Targets::for_drawing`], the art in the window) are gathered once per document
-/// state: hovering gathers them again only after the document, the selection, what is left out,
-/// the window or the snapping options changed; a press always gathers them afresh, and the drag
-/// it starts keeps them, the document then showing the drag's own previews.
+/// state: hovering and pressing gather them again only after the document, the selection, what is
+/// left out, the window or the snapping options changed, so a press keeps the targets the hover
+/// before it gathered. The drag a press starts keeps them, the document then showing the drag's
+/// own previews.
 ///
 /// The Measure and Measure & Inspect tools keep one too, for the ends of a drag only. They do not
 /// ask it while hovering. [`Self::measure`] gathers [`Targets::for_measure`] instead, and a press
@@ -415,17 +416,14 @@ impl DrawSnap {
     /// Snap the pointer hovering at `p` (the art but `exclude` as targets, the anchors of
     /// `exclude` still pulling), reusing the targets while nothing they depend on changed.
     pub fn hover(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
-        let key = SnapKey::of(cx, exclude);
-        if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
-            self.gather(cx, key);
-        }
+        self.gather_unless_current(cx, exclude);
         self.snap(cx, p, from)
     }
 
-    /// Snap the point pressed at `p`, the targets gathered afresh: the drag that follows keeps
-    /// them ([`Self::drag`]).
+    /// Snap the point pressed at `p`, reusing the targets the last hover or press gathered while
+    /// nothing they depend on changed: the drag that follows keeps them ([`Self::drag`]).
     pub fn press(&mut self, cx: &ToolContext, p: Point, exclude: &[NodeId], from: Option<&Leave>) -> Point {
-        self.gather(cx, SnapKey::of(cx, exclude));
+        self.gather_unless_current(cx, exclude);
         self.snap(cx, p, from)
     }
 
@@ -542,6 +540,15 @@ impl DrawSnap {
             Some((_, PointSnap { targets: Some((t, _)), .. })) => t.label(p, text).into_iter().collect(),
             _ => vec![],
         };
+    }
+
+    /// Gather the targets for the art but `exclude` unless the last hover or press gathered them
+    /// for the same [`SnapKey`].
+    fn gather_unless_current(&mut self, cx: &ToolContext, exclude: &[NodeId]) {
+        let key = SnapKey::of(cx, exclude);
+        if self.targets.as_ref().is_none_or(|(k, _)| k.as_ref() != Some(&key)) {
+            self.gather(cx, key);
+        }
     }
 
     fn gather(&mut self, cx: &ToolContext, key: SnapKey) {

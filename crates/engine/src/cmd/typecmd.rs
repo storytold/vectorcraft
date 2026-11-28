@@ -95,7 +95,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Area Type Options…",
             ["Type"],
             None,
-            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|emBoxHeight|fixed (emBoxHeight: the top of the first line's ideographic em box, the largest on the line, touches the top of the type area inside the inset), firstBaselineMin?: pt (the least distance from that top to the first baseline; with fixed, the distance), verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
+            "{ids?|id?, width?: pt, height?: pt, rows?, columns?, gutter?: pt (between rows and columns), rowGutter?: pt|null (between rows when it differs from gutter, which is then between columns; gutter given alone sets both; the reply gives the rows' gutter either way), inset?: pt, firstBaseline?: ascent|capHeight|xHeight|leading|emBoxHeight|fixed (emBoxHeight: the top of the first line's ideographic em box, the largest on the line, touches the top of the type area inside the inset), firstBaselineMin?: pt (the least distance from that top to the first baseline; with fixed, the distance), verticalAlign?: top|center|bottom|justify, flow?: columns|rows (Text Flow: down each column's rows, then across, the default; or across each row's columns, then down), fit?: none|autoHeight|shrinkText|block, fitMinPercent?: 10..100, wordGap?: % 0..1000, lineGap?: pt -1296..1296, …the keys of its own reply (it can be passed back; the values it only reports are ignored)} set the selected area type's options (each frame takes the options given over its own and keeps the rest; fit resolves against each frame's own; options that change nothing add no undo step); width and height size the type area from its top-left corner, along the type's own axes, and the text reflows at its size (with fit autoHeight, Auto Size, the frame's height follows the text after every edit and height is ignored; setting the height by hand turns it off); fit shrinkText scales overflowing text down (size, leading, baseline shift) by the largest factor down to fitMinPercent % (default 50) that makes it fit; fit block is Dynamic Text's Block, as type.dynamicText sets it (in place of Auto Size and Shrink Text to Fit; threaded frames are refused; another fit turns it off, keeping the sizes it wrote), and wordGap and lineGap set its gaps (kept while Block is off; out of range is an error; a leading change on the text also sets lineGap, as type.dynamicText says) (none given: query) → the first object's options, plus wordGap and lineGap, overflow (the text doesn't fit its frame) and fitScale (Shrink Text's factor, 1 unshrunk)",
             has_selection,
             area_options
         ),
@@ -140,7 +140,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Character",
             [],
             None,
-            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; \"hkna\" is H or V Style, kana in the font's forms for the writing direction, shaped as `vkna` in vertical type, and \"ital\" is Roman Italics, half-width alphanumerics in the font's italic forms, both on or off only), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
+            "{ids?|id?, font?, style? (font alone: the style is kept when the new family has it, else its closest), size?: pt 0.1..1296 (outside it: an error), leading?: pt|\"auto\", keepLineGap?: bool = false (true: Dynamic Text (Block) keeps the frame's line gap, as Reset Panel does), tracking?: 1/1000 em, justify?: \"auto\" (the start of each paragraph's direction)|\"left\"|\"center\"|\"right\"|\"justifyAll\", fill?: colour|\"none\", stroke?: colour|\"none\" (characters without a stroke weight get 1 pt; #rrggbbaa and #rgba are refused in both), keepModel?: bool (fill and stroke, as paint.setFill), strokeWidth?: pt (the character stroke's weight, in document points as stroke.set), features?: [\"dlig\", \"-liga\", \"salt=2\", …] OpenType (swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take the font's alternate number as `tag=N`, N 0–65535: \"salt=2\" draws the second alternate of each glyph that has one, \"salt\" is \"salt=1\", \"-salt\" and \"salt=0\" are off; \"hkna\" is H or V Style, kana in the font's forms for the writing direction, shaped as `vkna` in vertical type, and \"ital\" is Roman Italics, half-width alphanumerics in the font's italic forms, both on or off only), featureChanges?: [\"tnum\", \"-onum\", \"salt=2\", …] (OpenType features turned on, or with - off, on top of each character's own, a value replacing the feature's last one; its other features are kept), start?: byte, end?: byte} (size/leading are document points after object scaling; on area type with Dynamic Text (Block) on, a leading change sets the frame's line gap (text.areaOptions lineGap) to the new leading less the size of the first character changed, within -1296..1296 pt, so every line spreads or tightens by the change, unless keepLineGap is true; with a range: the character attributes style that range and justify the paragraphs it touches; without: all the text; no undo step when no character, paragraph or graph label style changes) → {ids, overflow?: [id…] (area type and type on a path whose text no longer fits; left out when all fits), warning?: text (the font or style set isn't available: its type is drawn in the fallback font or the family's closest style)}",
             has_doc,
             set_style
         ),
@@ -335,11 +335,46 @@ pub(crate) fn refresh_bounds(t: &mut TextObject) {
     // Edits that changed the paragraph count keep one paragraph style per paragraph.
     t.normalize_paras();
     block::block_fit(t);
+    refresh_fitted(t);
+}
+
+/// The part of [`refresh_bounds`] after Block has fitted the lines.
+fn refresh_fitted(t: &mut TextObject) {
     auto_height(t);
     let lay = vectorcraft_text::layout(vectorcraft_text::FontDb::global(), t);
     t.cached_bounds = Some(lay.bounds);
     t.cached_baselines = lay.baselines();
     t.cached_ink = Some((lay.bounds, vectorcraft_render::effects::preview::laid_out_ink(&lay, t)));
+}
+
+/// [`refresh_bounds`] after a change that set the leading of the character at `at` to `leading`
+/// (in text space; None: Auto): on area type with Block on the change goes to the frame's line gap
+/// ([`block::leading_to_line_gap`]), and the lines are fitted again only when the gap changed.
+pub(crate) fn refresh_with_leading(t: &mut TextObject, at: usize, leading: Option<f64>) {
+    if block::leading_to_line_gap(t, at, leading) {
+        refresh_fitted(t);
+    } else {
+        refresh_bounds(t);
+    }
+}
+
+/// The first character a style change over `a..b` of `t` reaches, with both ends on character
+/// boundaries as [`vectorcraft_text::edit::style_range`] sets them; None when the range styles no
+/// character (empty, or inside one character, in text that is not empty).
+pub(crate) fn styled_start(t: &TextObject, a: usize, b: usize) -> Option<usize> {
+    let plain = t.plain_text();
+    let (a, b) = (vectorcraft_text::edit::floor_char(&plain, a), vectorcraft_text::edit::floor_char(&plain, b));
+    (a != b || plain.is_empty()).then_some(a.min(b))
+}
+
+/// [`refresh_with_leading`] with the leading the character at `at` was just given (a character
+/// style, Text Tweaker).
+pub(crate) fn refresh_with_given_leading(t: &mut TextObject, at: usize) {
+    if block::given_leading_to_line_gap(t, at) {
+        refresh_fitted(t);
+    } else {
+        refresh_bounds(t);
+    }
 }
 
 /// [`refresh_bounds`] for a document that is opening: the first frame takes the layout
@@ -955,6 +990,7 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
     {
         return Err(bad(C, "nothing to change"));
     }
+    let keep_line_gap = switch_or(p, "keepLineGap", false, C)?;
     let range = TextRange::parse(p, C)?;
     let ids = text_targets(s, p, C)?;
     let protect = s.prefs.missing_glyph_protection && (font.is_some() || style.is_some());
@@ -1032,7 +1068,14 @@ fn set_style(s: &mut Session, p: &Value) -> Result<Value> {
                 let span = para_span(range, t);
                 t.edit_paras(span, |pa| pa.justify = j);
             }
-            refresh_bounds(t);
+            // With Block on, the leading goes to the frame's line gap; an empty range styles nothing.
+            let changed = leading.filter(|_| !keep_line_gap).and_then(|l| {
+                range.map_or(Some(0), |r| Some(r.bytes(t)).filter(|(a, b)| a < b).and_then(|(a, b)| styled_start(t, a, b))).map(|at| (at, l))
+            });
+            match changed {
+                Some((at, l)) => refresh_with_leading(t, at, l),
+                None => refresh_bounds(t),
+            }
         }
         // Graph labels keep a change made to all of their text through the graph being drawn again (sizes as given,
         // not in a scaled label's own units).
@@ -1478,6 +1521,8 @@ fn set_path_handle(s: &mut Session, p: &Value) -> Result<Value> {
 #[cfg(test)]
 mod area_tests;
 mod block;
+pub(super) use block::SIZES as BLOCK_SIZES;
+pub(super) use block::fit_metrics as block_fit_metrics;
 pub(crate) use block::needed_room;
 #[cfg(test)]
 mod block_tests;
