@@ -384,6 +384,82 @@ fn an_enveloped_placed_document_shows_its_file_once_read() {
 }
 
 #[test]
+fn outline_mode_warps_an_enveloped_placed_documents_crossed_box() {
+    let outline = |r: &mut Renderer, d: &Document| {
+        let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+        r.render(d, 100, 100, Affine::IDENTITY, &opts).pixels
+    };
+    // An Arc warp of the box (10, 10)–(90, 50), once holding the placed document and once holding
+    // its crossed box as a plain path.
+    let envelope = |content: Arc<Node>| {
+        let kind = vectorcraft_doc::EnvelopeKind::Warp { style: "arc".into(), bend: 30.0, h: 0.0, v: 0.0, horizontal: true, version: 0 };
+        Node::new(
+            NodeId(60),
+            NodeKind::Envelope {
+                content: vec![content],
+                kind: Box::new(kind),
+                fidelity: 50.0,
+                editing: false,
+                options: Default::default(),
+                frame: Box::new(Affine::IDENTITY),
+            },
+        )
+    };
+    let mut d = doc_with("outline-envelope-1", b"loop");
+    let placed = d.remove(NodeId(50)).unwrap();
+    let NodeKind::PlacedDocument(p) = &placed.kind else { panic!("a placed document") };
+    let crossed = p.crossed_art(&placed);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, envelope(placed)).unwrap();
+    // Exporting the document as PDF, SVG or EPS reads the file.
+    d.with_placed_art();
+    let mut boxed = d.clone();
+    boxed.remove(NodeId(60)).unwrap();
+    boxed.insert(Some(l), 0, envelope(Arc::new(crossed))).unwrap();
+    let mut r = Renderer::new();
+    let warped = outline(&mut r, &d);
+    assert!(warped == outline(&mut Renderer::new(), &boxed), "the envelope warps the crossed box");
+    // With Show Images in Outline Mode the same renderer warps the file's art, and the crossed box
+    // again without it.
+    d.setup.outline_images = true;
+    let shown = outline(&mut r, &d);
+    assert!(shown != warped, "the file's art is warped");
+    assert!(shown == outline(&mut Renderer::new(), &d), "as a new renderer draws it");
+    d.setup.outline_images = false;
+    assert!(outline(&mut r, &d) == warped, "the crossed box again");
+}
+
+#[test]
+fn outline_mode_draws_each_step_of_a_blend_of_placed_documents_crossed() {
+    let opts = RenderOptions { background: Some([255, 255, 255, 255]), outline: true, ..Default::default() };
+    let inked = |r: &Rendered, x: u32, y: u32| r.pixel(x, y)[0] < 200;
+    // A blend of the 40×20 file placed at (5, 5) and at (55, 75), with one step between them: its box
+    // is (30, 40)–(70, 60), and its diagonal from the top left passes (60, 55). The file's art is a
+    // rectangle the size of the box.
+    let mut d = Document::new(100.0, 100.0);
+    d.images.insert("outline-blend-1".into(), ImageBlob::new("application/json", b"blue".to_vec()));
+    vectorcraft_doc::placed_document::set_loader(gated_blue_page);
+    let ends = vec![
+        Arc::new(placed_node(51, "outline-blend-1", 40.0, 20.0, Affine::translate((5.0, 5.0)))),
+        Arc::new(placed_node(52, "outline-blend-1", 40.0, 20.0, Affine::translate((55.0, 75.0)))),
+    ];
+    let spec = vectorcraft_doc::live::BlendSpec { spacing: vectorcraft_doc::live::BlendSpacing::Steps(1), ..Default::default() };
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, Node::new(NodeId(60), NodeKind::Blend { children: ends, spec: Box::new(spec) })).unwrap();
+    // Exporting the document as PDF, SVG or EPS reads the file.
+    d.with_placed_art();
+    let mut r = Renderer::new();
+    let crossed = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert!(inked(&crossed, 60, 55), "the step between the ends is crossed");
+    assert!(inked(&crossed, 15, 10) && inked(&crossed, 65, 80), "and so are the ends");
+    assert!(crossed.pixels == Renderer::new().render(&d, 100, 100, Affine::IDENTITY, &opts).pixels, "as a new renderer draws it");
+    d.setup.outline_images = true;
+    let shown = r.render(&d, 100, 100, Affine::IDENTITY, &opts);
+    assert!(!inked(&shown, 60, 55), "with Show Images in Outline Mode the step is not crossed");
+    assert!(inked(&shown, 50, 40), "and its file's art is drawn in outline");
+}
+
+#[test]
 fn a_placed_document_with_a_drop_shadow_shows_its_file_once_read() {
     let mut d = doc("shadowed-1");
     let n = d.node_mut(NodeId(50)).unwrap();
