@@ -10970,3 +10970,396 @@ breakText	Glyphs	Glifler
 # #5804 native-picked raster editor (draft translations; native review welcome).
 	Edit Original with:	Orijinali şununla düzenle:
 file-filter	Applications	Uygulamalar
+	Add art with Add as Single Graphic, or drop art here.	Tek Grafik Olarak Ekle ile çizim ekleyin veya çizimi buraya bırakın.
+	Add as Single Graphic	Tek Grafik Olarak Ekle
+	Add to Custom Dictionary	Özel Sözlüğe Ekle
+	Anchor Point of Perspective Artwork	Perspektif Çiziminin Bağlantı Noktası
+	Apply Gradient Preset	Degrade Hazır Ayarını Uygula
+	Apply SVG Filter	SVG Filtresi Uygula
+	Arrow Scale:	Ok Ölçeği:
+	Arrow Style:	Ok Stili:
+	Automate	Otomatikleştir
+	Automatic Plane Positioning	Otomatik Düzlem Konumlandırma
+	Brush Options	Fırça Seçenekleri
+	Bulgarian	Bulgarca
+	Cancel Image Trace	Görüntü İzlemeyi İptal Et
+	Cancel Opening	Açmayı İptal Et
+	Caps Lock Cursor State	Caps Lock İmleç Durumu
+	Catalan	Katalanca
+	Change in Custom Dictionary	Özel Sözlükte Değiştir
+	Check Spelling	Yazımı Denetle
+	Check for Updates…	Güncellemeleri Denetle…
+	Chinese	Çince
+	Clean Up	Temizle
+	Configure Shape	Şekli Yapılandır
+	Copies per Sheet (as many as fit, in a grid)	Sayfa Başına Kopya (ızgara düzeninde sığdığı kadar)
+	Create Gradient Mesh	Degrade Ağı Oluştur
+	Croatian	Hırvatça
+	Czech	Çekçe
+	Danish	Danca
+	Delete Gradient Preset	Degrade Hazır Ayarını Sil
+	Delete SVG Filter	SVG Filtresini Sil
+	Delete from Custom Dictionary	Özel Sözlükten Sil
+	Devanagari	Devanagari
+	Dimension Lines	Ölçü Çizgileri
+	Dimension Text	Ölçü Metni
+	Drop Script Engine	Betik Motorunu Kaldır
+	Duplicate Effects	Efektleri Çoğalt
+	Edit Character Style	Karakter Stilini Düzenle
+	Edit Paragraph Style	Paragraf Stilini Düzenle
+	Edit Profile	Profili Düzenle
+	Edit SVG Filter	SVG Filtresini Düzenle
+	Emboss	Kabartma
+	Expand as Wireframes	Tel Kafes Olarak Genişlet
+	Export All Open Documents	Tüm Açık Belgeleri Dışa Aktar
+	Extension Lines	Uzantı Çizgileri
+	Extension:	Uzantı:
+	Face	Yüzey
+	Finnish	Fince
+	Font Size:	Yazı Tipi Boyutu:
+	German: Swiss	Almanca: İsviçre
+	Glow	Işıma
+	Glyph Categories	Glif Kategorileri
+	Gradient Presets	Degrade Hazır Ayarları
+	Graphics map onto planar faces: pick the Plane or Extrude object type.	Grafikler düzlemsel yüzeylere eşlenir: Düzlem veya Ekstrüzyon nesne türünü seçin.
+	Graphics map onto the Plane, Extrude and Revolve object types.	Grafikler Düzlem, Ekstrüzyon ve Eksen Etrafında Döndür nesne türlerine eşlenir.
+	Gurmukhi	Gurmukhi
+	Heavy Blur	Yoğun Bulanıklık
+	Hide Extension Lines	Uzantı Çizgilerini Gizle
+	Hide Presets	Hazır Ayarları Gizle
+	Hide Units	Birimleri Gizle
+	Import Metadata Template…	Üst Veri Şablonunu İçe Aktar…
+	Import SVG Filter	SVG Filtresi İçe Aktar
+	Import SVG Filter…	SVG Filtresi İçe Aktar…
+	Include All Subdirectories	Tüm Alt Dizinleri Dahil Et
+	Intersection of Gridlines	Izgara Çizgilerinin Kesişimi
+	Invalid panel layout; restored the default dock	Geçersiz panel düzeni; varsayılan yerleştirme alanı geri yüklendi
+	Japanese Double Postcard	Japon Çift Kartpostalı
+	Japanese Envelope #3	Japon Zarf #3
+	Japanese Envelope #4	Japon Zarf #4
+	Japanese Postcard	Japon Kartpostalı
+	Kaku #2	Kaku #2
+	Kaku #3	Kaku #3
+	Limit to Library	Kitaplıkla Sınırla
+	Line Gap	Çizgi Boşluğu
+	Line Type:	Çizgi Türü:
+	Line Weight:	Çizgi Kalınlığı:
+	List Installed Scripts	Yüklü Betikleri Listele
+	List Script Engines	Betik Motorlarını Listele
+	Load All Styles	Tüm Stilleri Yükle
+	Load Character Styles	Karakter Stillerini Yükle
+	Load Paragraph Styles	Paragraf Stillerini Yükle
+	Lock All	Tümünü Kilitle
+	Lock All Except Selected	Seçili Olanlar Dışındakileri Kilitle
+	Lock Artboards	Çalışma Yüzeylerini Kilitle
+	Lock Selected	Seçileni Kilitle
+	Manage Profiles	Profilleri Yönet
+	Map Graphic	Grafik Eşle
+	Mapped graphics	Eşlenmiş grafikler
+	Materials	Malzemeler
+	Metadata Templates	Üst Veri Şablonları
+	Move Document	Belgeyi Taşı
+	Move Object on Path	Nesneyi Yol Üzerinde Taşı
+	Move Type Path Handle	Yazı Yolu Tutamacını Taşı
+	NEW DOCUMENT PROFILES	YENİ BELGE PROFİLLERİ
+	Neon & Glow	Neon ve Işıma
+	New Document Profiles	Yeni Belge Profilleri
+	New Layer	Yeni Katman
+	New SVG Filter	Yeni SVG Filtresi
+	New Sublayer	Yeni Alt Katman
+	Norwegian	Norveççe
+	Override Action "Export" Commands	Eylem "Dışa Aktar" Komutlarını Geçersiz Kıl
+	Override Action "Open" Commands	Eylem "Aç" Komutlarını Geçersiz Kıl
+	Override Action "Save" Commands	Eylem "Kaydet" Komutlarını Geçersiz Kıl
+	PSD Info	PSD Bilgisi
+	Pick a graphic above to map it onto the object.	Nesnenin üzerine eşlemek için yukarıdan bir grafik seçin.
+	Pick from Swatches	Renk Örneklerinden Seç
+	Play:	Oynat:
+	Polish	Lehçe
+	Preparing the image…	Görüntü hazırlanıyor…
+	Reading the file…	Dosya okunuyor…
+	Remove Effects	Efektleri Kaldır
+	Remove Graphic	Grafiği Kaldır
+	Replace the selected 3D objects with the edges of their faces, as stroked paths.	Seçili 3B nesneleri, yüzeylerinin kenarlarından oluşan konturlu yollarla değiştirin.
+	Reset Profile	Profili Sıfırla
+	Reshape Type Path	Yazı Yolunu Yeniden Şekillendir
+	Rough Edges	Pürüzlü Kenarlar
+	Russian	Rusça
+	SVG Filter	SVG Filtresi
+	Save Gradient Preset	Degrade Hazır Ayarını Kaydet
+	Save Gradient Preset…	Degrade Hazır Ayarını Kaydet…
+	Save and Close	Kaydet ve Kapat
+	Select Object on Path	Yoldaki Nesneyi Seç
+	Select Symbol Instance Part	Sembol Örneği Parçasını Seç
+	Select a 3D object to map the graphic onto it.	Grafiği üzerine eşlemek için bir 3B nesne seçin.
+	Serbian: Cyrillic	Sırpça: Kiril
+	Serbian: Latin	Sırpça: Latin
+	Set Panel View	Panel Görünümünü Ayarla
+	Show Hidden Panels at Edge	Gizli Panelleri Kenarda Göster
+	Show Presets	Hazır Ayarları Göster
+	Soft Blur	Yumuşak Bulanıklık
+	Spelling Suggestions	Yazım Önerileri
+	Stop on Errors	Hatalarda Dur
+	Stroke Weight Down	Kontur Kalınlığını Azalt
+	Stroke Weight Up	Kontur Kalınlığını Artır
+	Swedish	İsveççe
+	The selected objects have different graphics.	Seçili nesneler farklı grafiklere sahip.
+	Thicken	Kalınlaştır
+	Thin	İncelt
+	Tracing the colors…	Renkler izleniyor…
+	Units & Scale	Birimler ve Ölçek
+	Unlock Artboards	Çalışma Yüzeylerinin Kilidini Aç
+	Unlock Selected	Seçilinin Kilidini Aç
+	VectorCraft Updates	VectorCraft Güncellemeleri
+	While Zoom with Mouse Wheel is off, the mouse wheel with Cmd/Ctrl held scrolls the canvas sideways.	Fare Tekerleği ile Yakınlaştır kapalıyken, Cmd/Ctrl tuşu basılı tutularak çevrilen fare tekerleği tuvali yatay kaydırır.
+	Word Gap	Sözcük Aralığı
+	Yonroku-ban	Yonroku-ban
+@msg	Graphics map onto planar faces: use the Extrude or Plane object type	Grafikler düzlemsel yüzeylere eşlenir: Extrude veya Plane nesne türünü kullanın
+@msg	Script file dialogs are not available	Betik dosya iletişim kutuları kullanılamıyor
+@msg	Script file writing is not available	Betik dosyası yazma kullanılamıyor
+@msg	`anchor` must be a [subpath, anchor] pair	`anchor`, bir [subpath, anchor] çifti olmalıdır
+@msg	`anchor` needs `id`, the path the point is on	`anchor` için noktanın üzerinde bulunduğu yol olan `id` gereklidir
+@msg	`artboard` must be a whole number	`artboard` bir tam sayı olmalıdır
+@msg	`artboard` must be an artboard's index	`artboard` bir çalışma yüzeyinin dizini olmalıdır
+@msg	`artboards` must contain whole numbers	`artboards` tam sayılar içermelidir
+@msg	`baseAlong` must be one of x, y	`baseAlong` değeri x veya y olmalıdır
+@msg	`family` is required	`family` gereklidir
+@msg	`family` must be a string	`family` bir dize olmalıdır
+@msg	`fontAxes` must be an object of axis tags and values, such as {{"wght": 650}}	`fontAxes`, {{"wght": 650}} gibi eksen etiketleri ve değerlerinden oluşan bir nesne olmalıdır
+@msg	`from.byte` is past the end of {id}'s text	`from.byte`, {id} metninin sonunu aşıyor
+@msg	`from.byte` must be a whole number	`from.byte` bir tam sayı olmalıdır
+@msg	`from.id` must be a type object's id	`from.id` bir yazı nesnesinin kimliği olmalıdır
+@msg	`from.id` {id} is not a type object	`from.id` {id} bir yazı nesnesi değil
+@msg	`from.id` {id} is not one of the type objects checked	`from.id` {id}, denetlenen yazı nesnelerinden biri değil
+@msg	`from` must be {{id, byte}}	`from`, {{id, byte}} biçiminde olmalıdır
+@msg	`from` takes id and byte, not `{k}`	`from`, `{k}` değil, id ve byte alır
+@msg	`glyphForm` must be one of {_1}	`glyphForm` şunlardan biri olmalıdır: {_1}
+@msg	`in` must be [x, y]	`in`, [x, y] biçiminde olmalıdır
+@msg	`index` must be the index of an applied SVG filter	`index`, uygulanmış bir SVG filtresinin dizini olmalıdır
+@msg	`items` is a list of {{kind, item}}	`items`, {{kind, item}} öğelerinden oluşan bir listedir
+@msg	`items` must be a list of {{id, points}}	`items`, {{id, points}} öğelerinden oluşan bir liste olmalıdır
+@msg	`items` must be an array of {{id, anchors}}	`items`, {{id, anchors}} öğelerinden oluşan bir dizi olmalıdır
+@msg	`limit` must be a whole number from 1 to {MAX_SIMILAR}	`limit`, 1 ile {MAX_SIMILAR} arasında bir tam sayı olmalıdır
+@msg	`lineWidth` must be a number, not {w}	`lineWidth` {w} değil, bir sayı olmalıdır
+@msg	`lineWidth` must be from {min} to {max} pt, not {w}	`lineWidth` {w} değil, {min} ile {max} pt arasında olmalıdır
+@msg	`max` must be 1 to {MAX_WORDS}	`max`, 1 ile {MAX_WORDS} arasında olmalıdır
+@msg	`panel` is swatches, graphicStyles or symbols	`panel` değeri swatches, graphicStyles veya symbols olmalıdır
+@msg	`points` must be three [x, y] pairs of numbers	`points`, sayılardan oluşan üç adet [x, y] çifti olmalıdır
+@msg	`reference` must be a whole number from 0 to 8	`reference`, 0 ile 8 arasında bir tam sayı olmalıdır
+@msg	`ringSeed` must be below 2^53, not {r}	`ringSeed` {r} değil, 2^53 değerinden küçük olmalıdır
+@msg	`showImportOptions` must be true or false	`showImportOptions` değeri true veya false olmalıdır
+@msg	`side` must be left, right or null	`side` değeri left, right veya null olmalıdır
+@msg	`source` is the only path, line or label that graph group `target` stands for	`source`, `target` grafik grubunun temsil ettiği tek yol, çizgi veya etikettir
+@msg	`start` is a number up to 1 (below 0: before an open path's start)	`start`, en fazla 1 olan bir sayıdır (0'ın altı: açık bir yolun başlangıcından öncesi)
+@msg	`style` must be "pencil" or "brush", not {v}	`style` {v} değil, "pencil" veya "brush" olmalıdır
+@msg	`tolerance` must be from {_1} to {_2} pt	`tolerance`, {_1} ile {_2} pt arasında olmalıdır
+@msg	`words` must be a list of {{id, start, end}}	`words`, {{id, start, end}} öğelerinden oluşan bir liste olmalıdır
+@msg	`{GRAPHICS}` face must be front or back	`{GRAPHICS}` yüzeyi front veya back olmalıdır
+@msg	`{_1}`: U+{_2} is a control character or past U+FFFF	`{_1}`: U+{_2} bir denetim karakteri veya U+FFFF değerinin üzerinde
+@msg	`{_1}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{_1}`: bir karakter kümesi en fazla {CUSTOM_CHARS_MAX} karakter içerir
+@msg	`{code}` is not a code from U+0000 to U+FFFF	`{code}`, U+0000 ile U+FFFF arasında bir kod değil
+@msg	`{font}`: `{name}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{font}`: `{name}`: bir karakter kümesi en fazla {CUSTOM_CHARS_MAX} karakter içerir
+@msg	`{font}`: `{name}`: characters must be a string	`{font}`: `{name}`: characters bir dize olmalıdır
+@msg	`{font}`: `{name}`: {e}	`{font}`: `{name}`: {e}
+@msg	`{font}`: each character set must be {{name, characters, font…}}	`{font}`: her karakter kümesi {{name, characters, font…}} biçiminde olmalıdır
+@msg	`{font}`: each character set needs a name	`{font}`: her karakter kümesinin bir adı olmalıdır
+@msg	`{font}`: unknown key `{k}` in a character set	`{font}`: bir karakter kümesinde bilinmeyen `{k}` anahtarı
+@msg	`{key}` must be a list of artboard indices	`{key}`, çalışma yüzeyi dizinlerinden oluşan bir liste olmalıdır
+@msg	`{key}` must be a non-empty list of artboard indices	`{key}`, çalışma yüzeyi dizinlerinden oluşan boş olmayan bir liste olmalıdır
+@msg	`{key}` must be a number from 0 to 1	`{key}`, 0 ile 1 arasında bir sayı olmalıdır
+@msg	`{key}` must be a whole number between {min} and {max} (got {n})	`{key}`, {min} ile {max} arasında bir tam sayı olmalıdır ({n} verildi)
+@msg	`{key}` must be a whole number of at least 0, not {v}	`{key}` {v} değil, en az 0 olan bir tam sayı olmalıdır
+@msg	`{key}` must be from 0 to {max} pt	`{key}`, 0 ile {max} pt arasında olmalıdır
+@msg	`{key}` must be from 0 to {max}, not {n}	`{key}` {n} değil, 0 ile {max} arasında olmalıdır
+@msg	`{key}` must contain whole numbers	`{key}` tam sayılar içermelidir
+@msg	`{k}` isn't an export setting: {_1}, openLocation	`{k}` bir dışa aktarma ayarı değil: {_1}, openLocation
+@msg	`{name}` already carries the {_1} role	`{name}` zaten {_1} rolünü taşıyor
+@msg	`{name}` can't name a character set	`{name}` bir karakter kümesi adı olamaz
+@msg	`{name}` isn't a global or spot color	`{name}` genel veya spot renk değil
+@msg	`{name}`: U+{code} is a control character or past U+FFFF	`{name}`: U+{code} bir denetim karakteri veya U+FFFF değerinin üzerinde
+@msg	`{name}`: U+{code} is listed twice	`{name}`: U+{code} iki kez listelenmiş
+@msg	`{name}`: a character set keeps at most {CUSTOM_CHARS_MAX} characters	`{name}`: bir karakter kümesi en fazla {CUSTOM_CHARS_MAX} karakter içerir
+@msg	`{name}`: a composite font keeps at most {CUSTOM_SETS_MAX} character sets	`{name}`: bir bileşik yazı tipi en fazla {CUSTOM_SETS_MAX} karakter kümesi içerir
+@msg	`{name}`: custom must be a list of character sets	`{name}`: custom, karakter kümelerinden oluşan bir liste olmalıdır
+@msg	`{raw}` can't name a character set (1 to {COMPOSITE_NAME_MAX} characters, no control characters)	`{raw}` bir karakter kümesi adı olamaz (1 ila {COMPOSITE_NAME_MAX} karakter, denetim karakteri yok)
+@msg	`{var_key}` must be from {_1} to {most}	`{var_key}`, {_1} ile {most} arasında olmalıdır
+@msg	a composite font keeps at most {CUSTOM_SETS_MAX} character sets	bir bileşik yazı tipi en fazla {CUSTOM_SETS_MAX} karakter kümesi içerir
+@msg	a document holds at most {_1} SVG filters, and applying a default filter adds it	bir belge en fazla {_1} SVG filtresi tutar ve varsayılan bir filtre uygulamak bunu ekler
+@msg	a new document has no artboard	yeni bir belgede çalışma yüzeyi yok
+@msg	a slice's text has more than the {MAX_SLICE_TEXT} characters a PSD file holds	bir dilimin metni, bir PSD dosyasının tutabileceği {MAX_SLICE_TEXT} karakter sınırını aşıyor
+@msg	a word's `id` must be a type object's id	bir sözcüğün `id` değeri bir yazı nesnesinin kimliği olmalıdır
+@msg	a word's `{k}` must be a whole number	bir sözcüğün `{k}` değeri tam sayı olmalıdır
+@msg	alignToPixelGrid must be true or false	alignToPixelGrid değeri true veya false olmalıdır
+@msg	an image is too large to draw	bir görüntü çizmek için çok büyük
+@msg	an image of {sw} × {sh} pixels is too large to resample	{sw} × {sh} piksellik bir görüntü yeniden örneklemek için çok büyük
+@msg	anchor [{_1}, {_2}] of object {id} is not a selected anchor point	{id} nesnesinin [{_1}, {_2}] bağlantı noktası seçili bir bağlantı noktası değil
+@msg	artboardLayout must be {{layout?, columns?, spacing?, rightToLeft?}}	artboardLayout {{layout?, columns?, spacing?, rightToLeft?}} olmalıdır
+@msg	byColor needs the seam fills' group under every path: move it to the bottom or delete it	byColor, her yolun altında dikiş dolguları grubunu gerektirir: bunu en alta taşıyın veya silin
+@msg	can't open `{_1}`: not a PDF	`{_1}` açılamıyor: PDF değil
+@msg	cannot apply brush `{name}`: path has no stroke	`{name}` fırçası uygulanamıyor: yolun konturu yok
+@msg	column {column}: `{cell}` is a `%` column of graph data files, which are not read	sütun {column}: `{cell}`, okunmayan grafik veri dosyalarının `%` sütunudur
+@msg	commands[{i}]: `prefs.import` runs on its own, not as a batch step	commands[{i}]: `prefs.import` toplu işlem adımı olarak değil, tek başına çalışır
+@msg	composer must be "singleLine" or "everyLine"	composer "singleLine" veya "everyLine" olmalıdır
+@msg	could not decode image: {_1}	görüntü kodu çözülemedi: {_1}
+@msg	data set `{name}` holds a graph value for `{var}` with {_1}	`{name}` veri kümesi `{var}` için {_1} içeren bir grafik değeri barındırıyor
+@msg	data set `{name}` holds a graph value for `{var}` without rows or series	`{name}` veri kümesi `{var}` için satır veya seri içermeyen bir grafik değeri barındırıyor
+@msg	data set `{name}` holds an image value for `{var}` that isn't a file's absolute path	`{name}` veri kümesi `{var}` için bir dosyanın mutlak yolu olmayan bir görüntü değeri barındırıyor
+@msg	data set `{set}` holds a graph value for `{var}` longer than {MAX_GRAPH_CSV} bytes	`{set}` veri kümesi `{var}` için {MAX_GRAPH_CSV} bayttan uzun bir grafik değeri barındırıyor
+@msg	data set `{set}` holds a graph value for `{var}` with {_1}	`{set}` veri kümesi `{var}` için {_1} içeren bir grafik değeri barındırıyor
+@msg	data set `{set}` holds a value for `{_1}` that isn't {what}	`{set}` veri kümesi `{_1}` için {what} olmayan bir değer barındırıyor
+@msg	data set `{set}` holds a value for `{var}` that isn't a graph's `data` element	`{set}` veri kümesi `{var}` için bir grafiğin `data` öğesi olmayan bir değer barındırıyor
+@msg	direct-select three anchor points, or give `points`	üç bağlantı noktasını doğrudan seçin veya `points` verin
+@msg	duplicate attribute `{key}`	yinelenen `{key}` özniteliği
+@msg	duplicate expanded attribute `{key}`	yinelenen genişletilmiş `{key}` özniteliği
+@msg	each format is an object {{format, scale?, suffix?}}	her biçim bir {{format, scale?, suffix?}} nesnesidir
+@msg	each of `fonts` is {{family, style?}}; 1 to 1000 of them	`fonts` öğelerinin her biri {{family, style?}} biçimindedir; 1 ila 1000 adet olabilir
+@msg	each of `items` is {{kind, item}}	`items` öğelerinin her biri {{kind, item}} biçimindedir
+@msg	each of `words` must be {{id, start, end}}	`words` öğelerinin her biri {{id, start, end}} olmalıdır
+@msg	each of `words` takes id, start and end, not `{k}`	`words` öğelerinin her biri `{k}` değil; id, start ve end alır
+@msg	files must be {{name, dataBase64}}	files {{name, dataBase64}} olmalıdır
+@msg	give `anchor` or `guide`, not both	`anchor` veya `guide` verin, ikisini birden değil
+@msg	give `char` or `text`	`char` veya `text` verin
+@msg	give `matches`: [{{kind, name, target}}]	`matches` verin: [{{kind, name, target}}]
+@msg	give `points` or `rect`, not both	`points` veya `rect` verin, ikisini birden değil
+@msg	give the settings to change, e.g. {{"formats": [{{"format": "png", "scale": "2x"}}]}}	değiştirilecek ayarları verin, örn. {{"formats": [{{"format": "png", "scale": "2x"}}]}}
+@msg	give {{key, value}} or {{values}}	{{key, value}} veya {{values}} verin
+@msg	image is too large to draw	görüntü çizmek için çok büyük
+@msg	importSlices must be true or false	importSlices değeri true veya false olmalıdır
+@msg	invalid 16-bit pixel buffer	geçersiz 16 bit piksel arabelleği
+@msg	invalid 8-bit pixel buffer	geçersiz 8 bit piksel arabelleği
+@msg	knockout groups with brushed strokes over other translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	diğer yarı saydam öğelerin üzerinde fırçalı konturları bulunan oyma grupları PDF oyma grupları olarak yazılır: yarı saydam öğeleri kapladıkları alanı tamamen oyar
+@msg	knockout groups with too many overlapping translucent elements are written as PDF knockout groups: their translucent elements knock out what they cover fully	çok fazla çakışan yarı saydam öğe içeren oyma grupları PDF oyma grupları olarak yazılır: yarı saydam öğeleri kapladıkları alanı tamamen oyar
+@msg	linkPages can't be used with textAs: outlines: linked pages show the file's own type	linkPages, textAs: outlines ile kullanılamaz: bağlı sayfalar dosyanın kendi yazısını gösterir
+@msg	linkPages can't open a file with a password: linked pages are read again without it	linkPages parolalı bir dosyayı açamaz: bağlı sayfalar parola olmadan yeniden okunur
+@msg	linkPages must be true or false	linkPages değeri true veya false olmalıdır
+@msg	linkPages needs the file's path: linked pages are read from it	linkPages dosyanın yolunu gerektirir: bağlı sayfalar buradan okunur
+@msg	linkPages: `{file}` is over {_1} MB	linkPages: `{file}` {_1} MB sınırını aşıyor
+@msg	linkPages: `{file}` isn't a PDF or a PDF-compatible .ai file	linkPages: `{file}` bir PDF veya PDF uyumlu .ai dosyası değil
+@msg	match applies only with scope {scopes}	match yalnızca {scopes} kapsamıyla uygulanır
+@msg	match must be a paint as the document stores it	match, belgenin sakladığı biçimde bir boya olmalıdır
+@msg	missing `map` (rows [{{from, to}}] or {{current: new}})	`map` eksik (satırlar [{{from, to}}] veya {{current: new}})
+@msg	missing `newName` or `kind`	`newName` veya `kind` eksik
+@msg	missing `role`	`role` eksik
+@msg	missing `swatch`	`swatch` eksik
+@msg	mode must be replace or append	mode değeri replace veya append olmalıdır
+@msg	no character set	karakter kümesi yok
+@msg	no panels are docked on the {_1} side	{_1} tarafa yerleştirilmiş panel yok
+@msg	no pattern `{pat}`	`{pat}` deseni yok
+@msg	no selected object fits on the sheet	seçili hiçbir nesne tabakaya sığmıyor
+@msg	no similar objects found (rotated or reflected copies are not matched); change the Global Edit Options and try again	benzer nesne bulunamadı (döndürülmüş veya yansıtılmış kopyalar eşleştirilmez); Genel Düzenleme Seçeneklerini değiştirip yeniden deneyin
+@msg	not a gradient mesh or mesh envelope	bir degrade ağı veya ağ zarfı değil
+@msg	not an RTF file: it doesn't start with {\\rtf	RTF dosyası değil: {\\rtf ile başlamıyor
+@msg	pdfs `single` writes artboards as the pages of one PDF: assets, layers and selection `each` write a PDF each	pdfs `single` çalışma yüzeylerini tek bir PDF'in sayfaları olarak yazar: varlıklar, katmanlar ve seçim `each` her biri için ayrı bir PDF yazar
+@msg	plugin.remove: {_1}: {e}: nothing was removed	plugin.remove: {_1}: {e}: hiçbir şey kaldırılmadı
+@msg	preserveText writes type layers: it needs layers: true	preserveText yazı katmanları yazar: layers: true gerektirir
+@msg	quotes must be {{double?, single?}}	quotes {{double?, single?}} olmalıdır
+@msg	rect is [x, y, width, height] in points, with a width and a height above 0	rect, genişliği ve yüksekliği 0'dan büyük olmak üzere punto cinsinden [x, y, width, height] biçimindedir
+@msg	scope applies to a click: leave out points	scope bir tıklamaya uygulanır: points değerini hariç tutun
+@msg	scope must be "one", "connected" or "samePaint"	scope "one", "connected" veya "samePaint" olmalıdır
+@msg	select a path that is neither locked nor hidden: text, images and symbol instances can't have a fold line role	ne kilitli ne de gizli olan bir yol seçin: metin, görüntü ve sembol örnekleri katlama çizgisi rolüne sahip olamaz
+@msg	select another anchor point to align to the key anchor	ana bağlantı noktasına hizalamak için başka bir bağlantı noktası seçin
+@msg	select at most {MAX_SHAPES} objects to nest	yerleştirmek için en fazla {MAX_SHAPES} nesne seçin
+@msg	slice {number} has no finite bounds and can't be written to PSD	{number} numaralı dilimin sonlu sınırları yok ve PSD'ye yazılamıyor
+@msg	sort `{x}`: name, kind, status or size	`{x}` sıralaması: name, kind, status veya size
+@msg	style `{style}` of `{family}` is not available	`{family}` ailesinin `{style}` stili kullanılamıyor
+@msg	text must be {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}}	text {{characterSet?, platform?, removeLineReturns?, removeParagraphReturns?, replaceSpaces?}} olmalıdır
+@msg	textureImage: give {{path}} or {{name, dataBase64}} of an image file, or a texture as effect.list gives it	textureImage: bir görüntü dosyasının {{path}} veya {{name, dataBase64}} değerini ya da effect.list'in verdiği biçimde bir doku verin
+@msg	the RGB policy can't be {_1}	RGB ilkesi {_1} olamaz
+@msg	the character at byte {start} is not drawn: it falls before its path's start	{start} baytındaki karakter çizilmiyor: yolunun başlangıcından önceye düşüyor
+@msg	the composite fonts make a file larger than 4 MB, which Import can't read; export fewer of them	bileşik yazı tipleri, İçe Aktar'ın okuyamayacağı 4 MB'tan büyük bir dosya oluşturuyor; daha azını dışa aktarın
+@msg	the decoded samples don't fit the image	kodu çözülen örnekler görüntüye sığmıyor
+@msg	the document has {count} slices, more than the {MAX_SLICES} a PSD file holds	belgede bir PSD dosyasının barındırabileceği {MAX_SLICES} dilimden fazla olarak {count} dilim var
+@msg	the document it was dropped on was closed	üzerine bırakıldığı belge kapatıldı
+@msg	the document it was dropped on was reverted	üzerine bırakıldığı belge geri alındı
+@msg	the document was switched	belge değiştirildi
+@msg	the file has {_1} slices, more than the {MAX_SLICES} read	dosyada okunabilen {MAX_SLICES} dilimden fazla olarak {_1} dilim var
+@msg	the image is too large to change	görüntü değiştirmek için çok büyük
+@msg	the image is too large to draw	görüntü çizmek için çok büyük
+@msg	the image's size can't be read	görüntünün boyutu okunamıyor
+@msg	the lines and labels in graph group {_1} have different appearance rows: pass `aligned: true` or their ids	{_1} grafik grubundaki çizgiler ve etiketler farklı görünüm satırlarına sahip: `aligned: true` veya kimliklerini iletin
+@msg	the margin leaves no room on the sheet	kenar boşluğu tabakada yer bırakmıyor
+@msg	the panels are not hidden	paneller gizli değil
+@msg	the place cursor that asked for these import options is no longer loaded	bu içe aktarma seçeneklerini isteyen yerleştirme imleci artık yüklü değil
+@msg	the plug-in store can't be locked	eklenti deposu kilitlenemiyor
+@msg	the selection has nothing to nest	seçimde yerleştirilecek bir şey yok
+@msg	the slices are too large for PSD (at most 4 GB)	dilimler PSD için çok büyük (en fazla 4 GB)
+@msg	the {_1} file holds no records	{_1} dosyası hiç kayıt içermiyor
+@msg	the {_1} header is damaged	{_1} başlığı bozuk
+@msg	there is no artboard for the sheet	tabaka için çalışma yüzeyi yok
+@msg	there is no artboard {i}	{i} numaralı çalışma yüzeyi yok
+@msg	through applies to scope "connected"	through "connected" kapsamına uygulanır
+@msg	through must be an array of at most 4096 edge ids	through en fazla 4096 kenar kimliğinden oluşan bir dizi olmalıdır
+@msg	through: {id} is not an edge of {g}, or is given twice	through: {id}, {g} öğesinin bir kenarı değil veya iki kez verilmiş
+@msg	too many in-scope namespace declarations	kapsam içinde çok fazla ad alanı bildirimi
+@msg	two character sets are named `{name}`	iki karakter kümesinin adı `{name}`
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; prefix - to turn off; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom and aalt take an alternate's number as `tag=N` with N from 0 to {_1}, as `salt=2`)	bilinmeyen OpenType özelliği `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom, aalt; kapatmak için - öneki ekleyin; swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom ve aalt, N 0 ile {_1} arasında olmak üzere `tag=N` biçiminde alternatif numarası alır, örn. `salt=2`)
+@msg	unknown OpenType feature `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; prefix - to turn off)	bilinmeyen OpenType özelliği `{t}` (liga, calt, dlig, smcp, frac, onum, tnum, ordn, swsh, ss01–ss20, salt, titl, pnum, lnum, sups, subs, numr, dnom; kapatmak için - öneki ekleyin)
+@msg	unknown `by` "{name}": expected one of {_1}	bilinmeyen `by` "{name}": {_1} değerlerinden biri bekleniyordu
+@msg	unknown key `{k}`; a font takes name, parts and custom	bilinmeyen `{k}` anahtarı; bir yazı tipi name, parts ve custom alır
+@msg	unknown parameter `{within}settings.{format}`; {why}	bilinmeyen parametre `{within}settings.{format}`; {why}
+@msg	unknown role `{id}`: cut, crease, partialCut or perforation	bilinmeyen `{id}` rolü: cut, crease, partialCut veya perforation
+@msg	unknown role `{id}`: cut, crease, partialCut, perforation or none	bilinmeyen `{id}` rolü: cut, crease, partialCut, perforation veya none
+@msg	unknown snap option `{key}` (use {options})	bilinmeyen `{key}` yapışma seçeneği ({options} kullanın)
+@msg	variable `{_1}` starts or ends with white space or holds a control character, which a variable library can't hold	`{_1}` değişkeni boşlukla başlıyor ya da bitiyor veya bir değişken kitaplığının barındıramayacağı bir denetim karakteri içeriyor
+@msg	words of {_1} overlap at byte {a}	{_1} sözcükleri {a} baytında çakışıyor
+@msg	{C}: {_1}: {e}: nothing was installed	{C}: {_1}: {e}: hiçbir şey yüklenmedi
+@msg	{EXPORT_SELECTION} must be true or false, not {v}	{EXPORT_SELECTION} değeri {v} değil, true veya false olmalıdır
+@msg	{_1} is not a type object	{_1} bir yazı nesnesi değil
+@msg	{a}..{b} is not a word of {_1}'s text	{a}..{b}, {_1} metninin bir sözcüğü değil
+@msg	{label} failed: {e}	{label} başarısız oldu: {e}
+@msg	{label}: the clipping masks hide the selected art	{label}: kırpma maskeleri seçili çizimi gizliyor
+@msg	{mode_key} is one of {ERASER_MODES}, not `{id}`	{mode_key}, `{id}` değil {ERASER_MODES} değerlerinden biridir
+@msg	{mode_key} is one of {ERASER_MODES}, not {other}	{mode_key}, {other} değil {ERASER_MODES} değerlerinden biridir
+@msg	{name} is a default SVG filter, and the document holds no copy of it to delete	{name} varsayılan bir SVG filtresidir ve belgede silinecek bir kopyası bulunmuyor
+@msg	{path}: invalid pixel buffer	{path}: geçersiz piksel arabelleği
+@msg	{var_key} must be 0 or more	{var_key} 0 veya daha büyük olmalıdır
+@msg	{var_key} must be at most {most}	{var_key} en fazla {most} olmalıdır
+@msg	{why} (the {_1} role's swatch; addon.packaging.setRoleSwatch picks another)	{why} ({_1} rolünün renk örneği; addon.packaging.setRoleSwatch başka bir tane seçer)
+@msg	{w} × {h} pixels take {rgba} bytes as RGBA	{w} × {h} piksel, RGBA olarak {rgba} bayt yer kaplar
+digits	Hindi	Hintçe
+font-script	Japanese	Japonca
+swatch	Amber	Kehribar
+swatch	Aqua	Su Mavisi
+swatch	Azure	Gök Mavisi
+swatch	Black	Siyah
+swatch	Blue	Mavi
+swatch	Bright Blue	Parlak Mavi
+swatch	Bright Green	Parlak Yeşil
+swatch	Bright Red	Parlak Kırmızı
+swatch	Bright Violet	Parlak Menekşe
+swatch	Bright Yellow	Parlak Sarı
+swatch	Brights	Parlak Renkler
+swatch	Brown	Kahverengi
+swatch	Chocolate	Çikolata
+swatch	Coffee	Kahve
+swatch	Copper	Bakır
+swatch	Cyan	Camgöbeği
+swatch	Cyan Green	Camgöbeği Yeşil
+swatch	Emerald	Zümrüt
+swatch	Espresso	Espresso
+swatch	Grays	Griler
+swatch	Green	Yeşil
+swatch	Indigo	Çivit Mavisi
+swatch	Lime	Limon Yeşili
+swatch	Magenta	Macenta
+swatch	Ocean	Okyanus
+swatch	Orange	Turuncu
+swatch	Orange Red	Turuncu Kırmızı
+swatch	Pink	Pembe
+swatch	Purple	Mor
+swatch	Radial White, Black	Radyal Beyaz, Siyah
+swatch	Red	Kırmızı
+swatch	Rose	Gül
+swatch	Rust	Pas Rengi
+swatch	Sand	Kum Rengi
+swatch	Sunset	Gün Batımı
+swatch	Tan	Taba
+swatch	Teal	Ördekbaşı
+swatch	Violet	Menekşe
+swatch	Walnut	Ceviz
+swatch	White	Beyaz
+swatch	White, Black	Beyaz, Siyah
+swatch	Yellow	Sarı
+swatch	Yellow Green	Sarı Yeşil
+swatch	[None]	[Yok]
+swatch	[Registration]	[Kayıt]
