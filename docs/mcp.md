@@ -4202,6 +4202,28 @@ workspace. These are VectorCraft's own layout rules.
 {"name":"invoke_menu","arguments":{"command":"window.toolbar.dock","params":{"name":"Toolbar 1","side":"left","order":0}}}
 ```
 
+## Command buttons on toolbars made with New Toolbar
+
+A toolbar made with New Toolbar holds command buttons after its tools. `toolbar.addCommand {command, toolbar, at?}`
+(Add Command in the toolbar's Add Tool… menu, remote mode, `invoke_menu`) puts a button for `command` on the toolbar
+named `toolbar`, or moves the button when the toolbar has it already: at place `at` among its command buttons, 0 for
+the first, or at the end without `at`. `command` is a Command Palette result's id: a command's id, or
+`plugin:<id>`, `effect:<id>` or `panel:<id>`. `toolbar.removeCommand {command, toolbar}` takes a button off. Both
+answer with the toolbar's command buttons, and `window.toolbar.list` reports `commands` for each toolbar. A missing
+`toolbar` is an error for both and changes nothing. For `toolbar.addCommand`, an unknown command, a tool, a command
+that needs params a click does not give (`toolbar.addTool`) or an `at` past the end is also an error and changes
+nothing. `toolbar.removeCommand` with a command the toolbar has no button for, a tool's id included, is not an error:
+it answers with the toolbar's command buttons unchanged. A click on a button runs what the command's menu item runs, so a
+command whose item ends in … opens its dialog, and the button is dimmed while that item is. A command that is no
+longer installed, such as an uninstalled plug-in's, keeps its button, dimmed and labeled with its id, until it is
+installed again or removed. `toolbar.reset {toolbar}` takes the buttons off with the tools. The buttons are kept with
+the workspace, and toolbars saved before command buttons existed load without any. Command buttons are VectorCraft's
+own.
+
+```json
+{"name":"invoke_menu","arguments":{"command":"toolbar.addCommand","params":{"command":"object.group","toolbar":"Toolbar 1"}}}
+```
+
 ## Help search
 
 Help › VectorCraft Help… and F1 show the Help panel. `help.discover {query?}` opens it without
