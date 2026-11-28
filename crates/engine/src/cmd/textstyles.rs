@@ -163,7 +163,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "charStyle.edit",
         "Edit Character Style",
         &[],
-        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt, tracking and kerning -1000..=10000, rotation -360..=360°, stroke miter limit 1..=500, Small Caps 1..=200%, finite stroke dashes and variable font axis settings",
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; [Normal Character Style] takes only `to` equal to `name`; users keep local overrides; changed numeric attrs: size 0.1..=1296 pt, explicit leading 0.1..=5000 pt, h/v scale 1..=10000%, baseline shift and Tate-chu-yoko offsets -1296..=1296 pt, tracking and kerning -1000..=10000, rotation -360..=360°, stroke miter limit 1..=500, Small Caps 1..=200%, finite stroke dashes and variable font axis settings",
         |s, p| edit_style(s, p, Kind::Char),
         true,
     ));
@@ -178,7 +178,7 @@ pub fn specs() -> Vec<CommandSpec> {
         "paraStyle.edit",
         "Edit Paragraph Style",
         &[],
-        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; users keep local overrides; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; changed tabs: at most 256 stops, each changed stop's position 0..=100000 pt and leader at most 8 characters, sorted by position keeping the first of stops at one position",
+        "{name, to, attrs: {…}} replace name and sparse attributes in one undo step; [Normal Paragraph Style] takes only `to` equal to `name`; users keep local overrides; changed numeric attrs: indents, space_before and space_after -1296..=1296 pt; hyphenation words_longer_than 1..=25, after_first and before_last 1..=15, hyphen_limit 0..=25, zone 0..=1296 pt; justification word_spacing 0..=1000%, letter_spacing -100..=500%, glyph_scaling 50..=200% (each [min, desired, max] in order), auto_leading 0..=500%; changed tabs: at most 256 stops, each changed stop's position 0..=100000 pt and leader at most 8 characters, sorted by position keeping the first of stops at one position",
         |s, p| edit_style(s, p, Kind::Para),
         true,
     ));
@@ -1018,8 +1018,9 @@ fn edit_style(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
     let d = &s.doc()?.doc;
     let old = kind.attrs(d, &name).ok_or_else(|| bad(&c, format!("no style `{name}`")))?;
     let attrs = attrs_param(d, p, kind, "edit", Some(&old))?.ok_or_else(|| bad(&c, "missing `attrs`"))?;
-    if name == kind.normal() {
-        return Err(bad(&c, format!("`{name}` can't be edited this way")));
+    // The Normal style takes new attributes but keeps its name.
+    if name == kind.normal() && to != name {
+        return Err(bad(&c, format!("`{name}` can't be renamed")));
     }
     if to.is_empty() {
         return Err(bad(&c, "give the style a name"));
@@ -1031,9 +1032,13 @@ fn edit_style(s: &mut Session, p: &Value, kind: Kind) -> Result<Value> {
         return ok();
     }
     s.edit(if kind == Kind::Char { "Character Style Options" } else { "Paragraph Style Options" }, |d, _| {
-        if let Some(def) = kind.defs_mut(d).iter_mut().find(|def| def.name == name) {
-            def.name = to.clone();
-            def.attrs = attrs.clone();
+        // A Normal style that was never redefined has no definition yet.
+        match kind.defs_mut(d).iter_mut().find(|def| def.name == name) {
+            Some(def) => {
+                def.name = to.clone();
+                def.attrs = attrs.clone();
+            }
+            None => kind.defs_mut(d).push(TextStyleDef { name: to.clone(), attrs: attrs.clone() }),
         }
         update_users(d, kind, &name, &old, &attrs)?;
         if to != name {
