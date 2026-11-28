@@ -1,6 +1,6 @@
 # VectorCraft MCP server
 
-> **Last updated:** 2026-11-18 · **Change:** Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
+> **Last updated:** 2026-11-27 · **Change:** Anchor Inspector: canceled Corner and Shared Edge option edits restore their opening values; previously: Production Preflight command and report coverage; previously: `text.setFormat {composer}` and paragraph styles also take `standardSingleLine` and `standardEveryLine` (#4935); existing values and responses unchanged. Previously: Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides, #7252; no response-shape change. Previously: Pencil continuation, straight-line and closing cursors; scores and estimates unchanged; no response-shape change. Previously: Snap to Point with Smart Guides off draws no Smart Guides labels or lines, #7250; no response-shape change. Previously: Envelopes: a top object's side whose pieces are all one curve split at anchors follows that curve's parameter (#7097); existing response shapes retained.
 >
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 
@@ -299,11 +299,12 @@ the suite) keep the agent to the folders you give it:
   the keyboard packages every linked file as before.
 - `plugin.list`, `plugin.safeMode`, `file.recovery.*` and `ui_inspect`'s `scriptReport` leave out the paths
   outside the read roots, also those the person or an earlier request put there. In `plugin.list`, the plug-in
-  folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and a plug-in's `source`
-  (also in `plugin.info`) are named by their file name, in the errors too. A plug-in turned off for the next
-  launch (`disabled`, and `pendingItem` and `pendingItems` in `plugin.safeMode`) has a file outside the read roots
-  named by its file name. `plugin.setEnabled {file}` takes that name, and a plug-in's `source` name, when no other
-  listed file has it. In `file.recovery.list` and `file.recovery.restore`, a
+  folder last loaded is `null` in `folder.folder`, and a failed file in `folder.failed` and in `failed` and a plug-in's
+  `source` (also in `plugin.info`) are named by their file name, in the errors too. `plugin.retry {file}` takes that
+  name when no other failed file has it, and names the file and its folder by their names in its errors. A plug-in
+  turned off for the next launch (`disabled`, and `pendingItem` and `pendingItems` in `plugin.safeMode`) has a file
+  outside the read roots named by its file name. `plugin.setEnabled {file}` takes that name, a plug-in's `source` name
+  and a `failed` file's name, when no other listed file has it. In `file.recovery.list` and `file.recovery.restore`, a
   document's original file in `path` is `null`, and so is the recovery folder in `location` (`file.recovery.save`
   too); the restored documents keep their files. In `scriptReport`, a file the run wrote (`written`) and the
   included file a failed run stopped in (`file`, also in `message` and the run's error lines in `console`) are named
@@ -6034,6 +6035,8 @@ and No Shading and Diffuse Shading as the only surfaces for an object that uses 
 The defaults and the shading are VectorCraft's own. An unknown parameter (`highlightSize` and `drawHiddenFaces`
 included), a number out of range, a flag that is not true or false, a surface other than `none` or `diffuse`, or
 another shading color is refused with an error and the document is not changed.
+In all three Classic dialogs, the track cube retains untouched rotation components at their original precision;
+Page Up and Page Down change Z without rounding fractional X and Y values.
 
 ```json
 {"name":"run_command","arguments":{"command":"effect.apply","params":{"effect":"threeD.classicRotate","item":null,"params":{"rotationX":0,"rotationY":40,"rotationZ":0,"surface":"diffuse","blendSteps":64}}}}
@@ -7078,7 +7081,9 @@ and `layerRows`, the rows highlighted in the panel.
   path pasted directly into the group under either name loses its name.
 - **Dialogs and panel state** (control channel and the app's MCP): `ui.layerOptions {ids?}` and `ui.newLayer
   {sublayer?}` open Layer Options (dialog `layerOptions`: name, color, template, locked, visible, printable, preview,
-  dimImages, dimPercent; OK is one undo step; `ui.dialog.set` of `template` also sets `locked` and `dimImages`, as the
+  dimImages, dimPercent; for existing rows, unchanged approval adds no undo step; an edit is one undo step.
+  Existing rows keep their stored names unless Name is edited or explicitly set through `ui.dialog.set`, so generated labels remain automatic.
+  `ui.dialog.set` of `template` also sets `locked` and `dimImages`, as the
   checkbox does, except a Dim Images set before it; for several `ids` the dialog shows the first row's settings, and OK sends only the fields set with a
   control or `ui.dialog.set`; Cmd/Ctrl+Alt+L runs `ui.newLayer` for a new layer; in isolation mode `ui.newLayer` for a
   layer that would be outside the isolated art is an error, OK in the dialog checks again and returns the same error,
@@ -9709,8 +9714,9 @@ and small caps proportions, SVG text export), the background contents (white: ra
 art) and Align New Objects to Pixel Grid (see [Align New Objects to Pixel Grid](#align-new-objects-to-pixel-grid)).
 `outlineImages` is Show Images in Outline Mode. While it is off, Outline mode draws a linked image's frame crossed
 from corner to corner, and a placed document as its box crossed the same way without its art; an embedded image
-shows its frame alone. Not yet: a placed document with an effect that changes geometry, its own or its group's, is
-not crossed and draws its file's art reshaped by the effect. While it is on, images show their pixels in gray and
+shows its frame alone. Effects that change geometry, a placed document's own or its group's, reshape the crossed box
+instead of the file's art, and an envelope holding a placed document distorts its crossed box. Each step of a blend
+of placed documents is crossed too. While it is on, images show their pixels in gray and
 placed documents show their art.
 Pass any of these keys to change them in one undo step; `document.setUnits` stays as an alias for `units`.
 A file whose bleed (0 to 72 pt a side), superscript and subscript sizes (1 to 500%) and positions (-500 to 500%) or
@@ -9911,6 +9917,20 @@ with the defaults.
   them.
 - `file.newProfiles.reset {name}` deletes the category's file, so the shipped profile applies again, and returns
   `{name, reset}`. `reset` is false when there was no file. A copy of the profile that is open stays open.
+- `file.newProfiles.applyDefaults {name}` (Use Profile Defaults, VectorCraft's own command) gives the active document
+  the default fill and stroke and the default font of another profile. The document's Default Graphic Style takes the
+  fills, strokes, effects and transparency of the profile's, and its [Normal Character Style] takes the profile's
+  attributes, with the profile's colors converted to the document's color mode and the swatches, patterns, symbols and
+  brushes they paint with added. A composite font of the profile that those attributes name replaces the document's
+  composite font of that name, as `type.compositeFonts.import` does. A category without a file gives the shipped
+  defaults. The change is one undo step, which also puts back the fill and stroke new art took, and none is recorded
+  when applying the profile leaves the document unchanged. As
+  `graphicStyle.redefine` and `charStyle.redefine` do, objects still linked to the Default Graphic Style and type in
+  [Normal Character Style] take the new definitions and keep their overrides. New art then starts as `paint.default`
+  gives it, and new type in the profile's font. It returns `{name, changed, warnings?}`, and an error when the
+  profile's file can't be read, its [Normal Character Style] has attributes `charStyle.new` does not take, or the
+  composite font it names can't join the document's composite fonts (`type.compositeFonts.set` checks them the same
+  way).
 - Under automation roots, `file.newProfiles.edit` needs write and read access to the profile's file and
   `file.newProfiles.reset` needs write access. An error names the file whole only inside the read roots, and
   otherwise by its file name.
@@ -9996,7 +10016,12 @@ its allocation limit. Importing individual layers with `layers: true` retains it
 `file.place.info` describes a file without placing it and `image.info` reports a placed image's link, colour mode and
 effective ppi. `file.place.queue` loads the place cursor (the `place` tool) with several files: headless, drive it
 with `pointer_gesture` (a click places at 100% with the top-left corner there, a drag at the dragged size) and
-`press_key` (Left/Right/Up/Down cycle, Escape discards the current file). The cursor keeps an encrypted PDF, `.ai`
+`press_key` (Left/Right/Up/Down cycle, Escape discards the current file). The place tool's state includes a
+read-only `sourceIndex`: the current file's zero-based position in the original load, or null when empty.
+It stays with that file when other files are placed or discarded; `current` indexes the remaining files.
+In the app, same-named files also keep their own queued size and password requirement. Choosing another PDF
+page after a cursor click places that page at its own size; a drag keeps the chosen box.
+The cursor keeps an encrypted PDF, `.ai`
 or `.ait` file that it cannot read without the password, at 612 × 792 pt (VectorCraft's own size) with
 `needsPassword: true` and no thumbnail; in the app a click or drag on it asks for the password, and headless it places
 nothing. `file.place`, `file.place.queue` and
@@ -13271,7 +13296,10 @@ The em box and ICF box are those of the font of the part that sets the sample's 
 custom set that holds that character), the cap height and x-height those of the face the Roman letters are drawn in (a fallback face when the part's font lacks the character), Max Ascent/Descent the highest
 ascent and lowest descent of the faces the sample uses, and Max Ascender the top of its tallest glyph; each takes its
 part's size, baseline and vertical scale. Zoom draws it at 25% to 800% of 36 pt. The
-sample text, the zoom steps and the size are VectorCraft's own. OK runs `type.compositeFonts.set` with every font as one
+sample text, the zoom steps and the size are VectorCraft's own. Highlighting a Zoom choice previews it in the sample;
+Enter or a click accepts it, and Escape restores the percentage from when the menu opened. A later `ui.dialog.set`
+edit of `zoom` is preserved when the older popup is canceled. These Zoom interactions change only the sample preview,
+without editing the document or its Undo history. OK runs `type.compositeFonts.set` with every font as one
 undo step; a refused font keeps the dialog open. `ui.dialog.set` takes `custom`, `entry` and `char` (the index of the
 character picked in the set) as soon as the dialog opens, and `sample` (true or false), `zoom` (25, 50, 75, 100, 200,
 400 or 800) and `lineIcfBox`, `lineEmBox`, `lineBaseline`, `lineCapHeight`, `lineAscentDescent`, `lineAscender` and
@@ -14330,7 +14358,8 @@ them again at startup (`plugin.remove` deletes them there). A window or process 
 while it changes it, so installs, removals, grants and plug-in settings from two of them do not mix; when the file can't
 be locked, `plugin.install` and `plugin.remove` fail and change nothing:
 `plugin.install {path | dataBase64}` installs one, `plugin.list` / `plugin.info {id}` describe them (parameters,
-schema, defaults). An object filter may also be a JavaScript plug-in: a `.vcplugin` manifest with `"runtime": "js"` and
+schema, defaults). `plugin.list`'s `failed` lists the plug-in files that didn't load in this process, and
+`plugin.retry {file?}` loads one of them, or all of them, again ([plugins.md](plugins.md#plug-ins-that-didnt-load)). An object filter may also be a JavaScript plug-in: a `.vcplugin` manifest with `"runtime": "js"` and
 `script`, the `.js` file beside it, which `plugin.install {path}`, `plugin.inspect {path}` and `plugin.reload` read
 together (`runtime` and `script` in its entry); it runs in an interpreter of its own with no file, command or clock
 access ([plugins.md](plugins.md#javascript-filters)). An object filter runs on the selected paths and compound paths with `plugin.run {id, params}` (one
@@ -15791,7 +15820,8 @@ Tools:
   and loads its radius and kind into the tool, a drag resizes it (to 0 it goes), a double-click removes it. An Alt-drag
   cuts corners on every anchor in the marquee, replacing those there; a plain marquee selects the corners inside (Shift
   toggles), and a click away deselects. The panel section sets `radius` and `kind`, counts the selected corners and has
-  Apply to Selected Anchors.
+  Apply to Selected Anchors. Canceling a Radius edit or Corner menu choice restores its opening tool value;
+  accepting keeps the new setting without editing the document or adding Undo.
 - **Slide Anchor Along Path** (`slideAnchor`): a drag on an anchor runs `addon.pathtools.slideAnchor`, previewed while
   dragging: the anchor runs along the curve it sits on, as far as just short of its neighbours, and the two segments
   beside it are refitted. Shift snaps to where the path's tangent is at a multiple of 45° from the Constrain Angle. Ends
@@ -15805,7 +15835,8 @@ Tools:
   there gets a match on the other. Shift+Alt makes an end even inside a stretch that could merge. Stretches over 10%
   different in length, or at over 120° at an end, are left alone. Options (`tool.setOption`, or the panel, kept with the
   preferences): `diameter` (0.25 to 200 pt, 20), `tolerance` (how near two anchors count as coincident, 0 to 3 pt,
-  0.002) and `together` (Keep Shared Points Together).
+  0.002) and `together` (Keep Shared Points Together). Canceling a Diameter or Coincidence edit restores its
+  opening tool value; accepting keeps the setting without editing the document or adding Undo.
 - **Tangent Circle Tool** (`tangentCircle`): draws a circle on two path segments of any unlocked paths, selected or
   not. A click picks the segment nearest the pointer within reach (see `snapTolerance` below) as the first segment;
   over a second segment the circle that would be drawn shows (in `color`) with its center cross, its radii to the two
@@ -17140,6 +17171,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Anchor Inspector: Cancel restores Corner radius/kind and Shared Edge diameter/coincidence tool values; accepted settings leave document history unchanged. Native numeric and menu cases covered. Scores and estimates unchanged. |
 | 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
 | 2026-11-14 | Built-in Tech Circuit brush library (id `tech-circuit`): Circuit Trace, Bus Lines and Terminal Nodes; ten built-in libraries. |
 | 2026-11-13 | The Pencil ignores Smart Guides and Snap to Point and shows no Smart Guides; Snap to Grid and Snap to Pixel still move its ends (#7252). |

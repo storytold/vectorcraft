@@ -78,10 +78,10 @@ pub(crate) fn state(app: &mut VectorcraftApp) -> (TransparencyInfo, Option<Arc<N
     (info, first)
 }
 
-/// Whether the object-only controls apply: while a mask is edited, or when the Appearance panel's
-/// active row is the object itself (a fill or stroke has no mask, isolation or knockout).
+/// Whether the object-only controls apply: while a mask is edited, or when editing a whole object
+/// instead of a dynamic symbol part or an Appearance fill or stroke.
 fn object_controls(app: &VectorcraftApp, editing: bool) -> bool {
-    editing || app.session.appearance_item().is_none()
+    editing || (app.session.appearance_item().is_none() && !app.session.active().is_some_and(|st| st.selection.symbol_part.is_some()))
 }
 
 /// The key of one mask-row thumbnail: the masked object, the background it sits on and which picture it is.
