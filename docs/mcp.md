@@ -2997,6 +2997,8 @@ own rules:
   the combinator calls the iterator's `return` method if present; the original exception remains the rejection reason
   even when `return` throws. An iterator whose step threw or finished is not closed. The promises `then` and the
   statics make are always plain `Promise` objects; `Symbol.species` and subclasses are not read.
+  The statics accept registered host class constructors and bound constructors as `this`; ordinary host functions
+  still give a `TypeError`.
 - A promise rejected with no rejection handler that still has none when the run ends successfully is reported: the
   report's `unhandledRejections` lists the first 20 as `{message, messageOrigin, line, column, file?}`, where it was
   rejected (the `throw`, or the call of its reject function or of `Promise.reject`), `unhandledRejectionCount` counts

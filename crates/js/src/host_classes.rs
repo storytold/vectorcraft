@@ -131,6 +131,8 @@ pub(crate) struct Entry {
     name: Rc<str>,
     proto: ObjId,
     ctor: ObjId,
+    /// Whether the class was registered with a `construct` function, so scripts can construct it.
+    constructible: bool,
     index: Option<HostFunction>,
     /// The class without a parent this class descends from (itself for such a class), as an index
     /// into the realm's classes.
@@ -296,6 +298,11 @@ impl Interp {
         self.host_classes.iter().any(|e| e.ctor == id)
     }
 
+    /// Whether `id` is the constructor of a host class registered with a `construct` function.
+    pub(crate) fn is_constructible_host_class(&self, id: ObjId) -> bool {
+        self.host_classes.iter().any(|e| e.ctor == id && e.constructible)
+    }
+
     /// The name of the host class of `id`, when it is an object of a host class.
     pub(crate) fn host_class_name(&self, id: ObjId) -> JsResult<Option<Rc<str>>> {
         let Class::Host(h) = &self.object(id)?.class else { return Ok(None) };
@@ -445,6 +452,7 @@ fn install_class(i: &mut Interp, class: HostClass) -> JsResult<()> {
         name: class.name.as_str().into(),
         proto,
         ctor,
+        constructible: class.construct.is_some(),
         index: class.index,
         family,
         parent: parent_class,
