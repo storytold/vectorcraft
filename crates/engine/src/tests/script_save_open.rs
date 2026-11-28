@@ -110,13 +110,17 @@ fn omitted_options_are_a_new_options_objects_defaults() {
              d.exportFile(new File(dir + '/j2'), ExportType.JPEG, new ExportOptionsJPEG());\n\
              d.exportFile(new File(dir + '/p1'), ExportType.PNG24);\n\
              d.exportFile(new File(dir + '/p2'), ExportType.PNG24, new ExportOptionsPNG24());\n\
+             var j3 = new ExportOptionsJPEG(); j3.matteColor = {{red: 255, green: 255, blue: 255}};\n\
+             d.exportFile(new File(dir + '/j3'), ExportType.JPEG, j3);\n\
+             var p3 = new ExportOptionsPNG24(); p3.matteColor = {{typename: 'RGBColor', red: 255, green: 255, blue: 255}};\n\
+             d.exportFile(new File(dir + '/p3'), ExportType.PNG24, p3);\n\
              d.exportFile(new File(dir + '/s1'), ExportType.SVG);\n\
              d.exportFile(new File(dir + '/s2'), ExportType.SVG, new ExportOptionsSVG());\n\
              d.saveAs(new File(dir + '/a1.pdf'));\n\
              d.saveAs(new File(dir + '/a2.pdf'), new PDFSaveOptions());"
         ),
     );
-    for (one, two) in [("j1.jpg", "j2.jpg"), ("p1.png", "p2.png"), ("s1.svg", "s2.svg")] {
+    for (one, two) in [("j1.jpg", "j2.jpg"), ("j1.jpg", "j3.jpg"), ("p1.png", "p2.png"), ("p1.png", "p3.png"), ("s1.svg", "s2.svg")] {
         assert!(std::fs::read(dir.join(one)).unwrap() == std::fs::read(dir.join(two)).unwrap(), "{one} and {two} differ");
     }
     for name in ["a1.pdf", "a2.pdf"] {
@@ -287,7 +291,7 @@ fn a_save_writes_nothing_when_one_of_its_files_is_refused() {
 }
 
 /// When the writer a save is given does not check the file access itself, a save of several files
-/// still writes none of them after the refused one.
+/// whose last file is refused hands none of them to the writer, the refused one included.
 #[test]
 fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
     use crate::cmd::fileio::{SaveMode, save_job, save_plan};
@@ -324,9 +328,10 @@ fn a_refused_file_stops_a_save_whose_writer_does_not_check() {
             Ok(())
         })
     });
-    assert!(r.is_err(), "{r:?}");
+    let e = r.unwrap_err().to_string();
     let refused = refused.unwrap();
-    assert_eq!(written, std::slice::from_ref(&refused), "only the refused file went to the writer");
+    assert!(e.contains(DENIED) && e.contains(&refused), "{e}");
+    assert!(written.is_empty(), "no file went to the writer: {written:?}");
     let mut perms = std::fs::metadata(&refused).unwrap().permissions();
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
@@ -583,6 +588,12 @@ fn bad_arguments_are_refused_with_an_error() {
         (format!("var o = new EPSSaveOptions(); o.postScript = 'LEVEL2'; app.activeDocument.saveAs({f}, o);"), "EPSPostScriptLevelEnum"),
         (format!("app.activeDocument.exportFile({f}, 'PNG24');"), "ExportType"),
         (format!("app.activeDocument.exportFile({f}, ExportType.FLASH);"), "is not available yet"),
+        (
+            format!(
+                "var p = new ExportOptionsPNG24(); p.matteColor = {{red: 255, green: 0, blue: 255}}; app.activeDocument.exportFile({f}, ExportType.PNG24, p);"
+            ),
+            "ExportOptionsPNG24.matteColor is not available yet",
+        ),
         (format!("app.activeDocument.exportFile({f}, ExportType.PNG24, new ExportOptionsJPEG());"), "ExportOptionsPNG24"),
         (
             format!(
@@ -791,6 +802,22 @@ fn full_name_path_saved_and_close_follow_the_documents_file() {
     assert!(s.documents().is_empty());
     let e = failure(&mut s, &base, "app.documents.add(); app.activeDocument.close('DONOTSAVECHANGES');");
     assert!(e.contains("SaveOptions"), "{e}");
+    let _ = std::fs::remove_dir_all(base);
+}
+
+/// A document whose file was saved under a relative name is in the working folder the file was
+/// written in.
+#[test]
+fn path_of_a_file_saved_under_a_relative_name_is_the_working_folder() {
+    let base = folder("relative");
+    let mut s = session(&base);
+    s.execute("file.new", &json!({"width": 100, "height": 100})).unwrap();
+    s.active_mut().unwrap().path = Some("drawing.svg".into());
+    let out = logged(&mut s, &base, "var d = app.activeDocument; vc.log([d.path instanceof Folder, d.path === '' ? '' : d.path.fsName]);");
+    let cwd = std::env::current_dir().unwrap();
+    assert_eq!(out[0][0], json!(true), "{out}");
+    let shown = PathBuf::from(out[0][1].as_str().unwrap());
+    assert!(shown == cwd || std::fs::canonicalize(&shown).ok() == std::fs::canonicalize(&cwd).ok(), "{shown:?} is not {cwd:?}");
     let _ = std::fs::remove_dir_all(base);
 }
 

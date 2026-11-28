@@ -1,8 +1,11 @@
 //! The names declared, read before the analysis.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use super::{Acc, Brackets, Lexer, LineBreaks, Read, Sig, T, catalog, for_in, goes_on_after, goes_on_with, is, member_mark, unquote, word};
+use super::{
+    Acc, Brackets, COMPOUND, Lexer, LineBreaks, Read, Sig, T, Token, catalog, directives, for_in, goes_on_after, goes_on_with, is, member_mark,
+    unquote, word,
+};
 
 /// The names that give variables values the analysis doesn't read: a `with` statement makes an
 /// object's properties stand for names in its body (ECMA-262 3rd edition, section 12.10), and `eval`,
@@ -36,6 +39,14 @@ pub(crate) struct Declared<'s> {
     /// The property names a member assignment writes (`o.d = …`, `o['d'] = …`). The object may be
     /// the global object, so a variable of that name may get a value the analysis doesn't read.
     pub(super) rebound: HashSet<String>,
+    /// The names a function body assigns by name (`d = …`, `d += …`, `d++`, `for (d in …)`) other than
+    /// in a `var` statement's declarations, unless a body around the assignment declared the name with
+    /// `var` before it. The function may run at any time after it is defined,
+    /// also before its body in the text when it is a declaration, so a variable of that name may lose
+    /// the value an assignment the analysis read gave it.
+    pub(super) body_assigned: HashSet<&'s str>,
+    /// The file has an `#include` line: the included file's code may give its variables values.
+    pub(super) includes: bool,
     /// The file gives names values the analysis doesn't read in other ways ([`UNREAD_BINDINGS`] or
     /// a `constructor` property used, a property read, called or assigned whose name in brackets is
     /// not one string or number literal, which may be a variable's name on the global object
@@ -82,6 +93,9 @@ struct Declarations<'s, 'a, 'l> {
     assign: Option<bool>,
     /// The function bodies being read, the innermost last, up to [`crate::Limits::nesting`].
     bodies: Vec<Body<'s>>,
+    /// The names the bodies being read declare so far, each with the number of those bodies that
+    /// declare it.
+    declared_around: HashMap<&'s str, usize>,
     /// The bracket depth inside the outermost function body past that limit being read. The names
     /// declared inside it are not kept.
     untracked: Option<usize>,
@@ -101,6 +115,7 @@ pub(crate) fn declarations<'s>(src: &'s str, acc: &mut Acc) -> Declared<'s> {
         var_depth: None,
         assign: None,
         bodies: vec![],
+        declared_around: HashMap::new(),
         untracked: None,
         keys: vec![],
         out: Declared::default(),
@@ -109,7 +124,7 @@ pub(crate) fn declarations<'s>(src: &'s str, acc: &mut Acc) -> Declared<'s> {
     for t in lexer.by_ref() {
         match breaks.read(&t) {
             Read::Skip => {}
-            Read::Directive => d.directive(),
+            Read::Directive => d.directive(&t),
             Read::Token(sig) => d.token(sig),
         }
     }
@@ -164,7 +179,39 @@ impl<'s> Declarations<'s, '_, '_> {
         if t.word("function") && !member_mark(h0) && !word(h0, "function") {
             self.function = Some(depth);
         }
+        if !self.bodies.is_empty() || self.untracked.is_some() {
+            self.body_assignment(&t, depth);
+        }
         self.h = [Some(t), h0, h1];
+    }
+
+    /// `t` inside a function body at bracket depth `depth`: the name it assigns, when it assigns one
+    /// by name outside a `var` statement's declarations, joins [`Declared::body_assigned`].
+    fn body_assignment(&mut self, t: &Sig<'s>, depth: usize) {
+        let [h0, h1, _] = self.h;
+        let name = |s: Option<Sig<'s>>| s.filter(|s| s.kind == T::Ident).map(|s| s.text);
+        let declares = word(h1, "var") || (is(h1, ",") && self.var_depth == Some(depth));
+        let assigned = if t.kind == T::Punct && (t.text == "=" || COMPOUND.contains(&t.text) || matches!(t.text, "++" | "--")) {
+            // `d = …`, `d += …` and `d++`, not `o.d = …` (a member: [`Declared::rebound`]) or `var d = …`.
+            name(h0).filter(|_| !member_mark(h1) && !(t.text == "=" && declares))
+        } else if t.kind == T::Ident && (is(h0, "++") || is(h0, "--")) {
+            // `++d`.
+            Some(t.text)
+        } else if t.word("in") && (is(h1, "(") || word(h1, "var")) {
+            // `for (d in …)`.
+            name(h0)
+        } else {
+            None
+        };
+        // A name a body around `t` has declared with `var` before it is that body's own.
+        let own = |name: &str| self.untracked.is_none() && self.declared_around.contains_key(name);
+        if let Some(name) = assigned.filter(|n| !own(n)) {
+            if self.out.body_assigned.contains(name) || self.acc.room(self.out.body_assigned.len()) {
+                self.out.body_assigned.insert(name);
+            } else {
+                self.out.unsure = true;
+            }
+        }
     }
 
     /// `t`, a token before the brackets are followed past it: notes in [`Declared::rebound`] and
@@ -261,6 +308,14 @@ impl<'s> Declarations<'s, '_, '_> {
                 }
                 while let Some(body) = self.bodies.pop_if(|b| depth < b.depth) {
                     self.var_depth = body.var_depth;
+                    for name in body.names {
+                        if let Some(n) = self.declared_around.get_mut(name) {
+                            *n = n.saturating_sub(1);
+                            if *n == 0 {
+                                self.declared_around.remove(name);
+                            }
+                        }
+                    }
                 }
                 if self.untracked.is_some_and(|d| depth < d) {
                     self.untracked = None;
@@ -285,6 +340,7 @@ impl<'s> Declarations<'s, '_, '_> {
         if let Some(body) = self.bodies.last_mut() {
             if (var || body.depth == depth) && !body.names.contains(t.text) && self.acc.room(body.names.len()) {
                 body.names.insert(t.text);
+                *self.declared_around.entry(t.text).or_insert(0) += 1;
                 if let Some((_, names)) = self.out.bodies.get_mut(body.index) {
                     names.push(t.text);
                 }
@@ -297,7 +353,10 @@ impl<'s> Declarations<'s, '_, '_> {
     /// A preprocessor line ends the statement before it, as in [`Analyzer::directive`]. Inside a
     /// property's name in brackets it hides the tokens before the name (`this[`, a line, `'eval']`),
     /// so the name may be any.
-    fn directive(&mut self) {
+    fn directive(&mut self, t: &Token<'s>) {
+        if directives::parse(t.text).known == Some("include") {
+            self.out.includes = true;
+        }
         if self.keys.iter().any(|k| k.member) {
             self.out.unsure = true;
         }

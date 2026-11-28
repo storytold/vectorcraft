@@ -461,8 +461,7 @@ pub fn is_path_key(key: &str) -> bool {
 /// May `path` be written here? Always, without roots in force and outside a script's command
 /// ([`with_script_gate`]).
 pub fn check_write(path: &str) -> Result<(), String> {
-    current().map_or(Ok(()), |r| r.check(path, Access::Write))?;
-    check_gate(path, Access::Write)?;
+    check_write_unrecorded(path)?;
     WRITES.with(|w| {
         if let Some(paths) = w.borrow_mut().as_mut()
             && !paths.iter().any(|(p, _)| p == path)
@@ -471,6 +470,13 @@ pub fn check_write(path: &str) -> Result<(), String> {
         }
     });
     Ok(())
+}
+
+/// [`check_write`] without adding `path` to the files a script run reports as written, for a
+/// check made before anything is written.
+pub(crate) fn check_write_unrecorded(path: &str) -> Result<(), String> {
+    current().map_or(Ok(()), |r| r.check(path, Access::Write))?;
+    check_gate(path, Access::Write)
 }
 
 /// A file's modification time and length; `None` when there is no file at `path`.

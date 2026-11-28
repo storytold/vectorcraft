@@ -141,6 +141,9 @@ enum Default {
     /// An enumerated value, by its enumeration and member (`("DownsampleMethod", "NODOWNSAMPLE")` for
     /// `DownsampleMethod.NODOWNSAMPLE`).
     Member(&'static str, &'static str),
+    /// White as an RGB color: an object whose `red`, `green` and `blue` are 255 (its `typename`, when
+    /// it has one, `RGBColor`).
+    White,
     /// The help page gives no default: any value throws.
     Unset,
 }
@@ -152,6 +155,15 @@ impl Default {
             (Default::Num(a), Data::Number(b)) => (a - b).abs() < 1e-9,
             (Default::Text(a), Data::String(b)) => a == b,
             (Default::Member(e, m), Data::String(b)) => b.split_once('.').is_some_and(|(be, bm)| be == e && bm == m),
+            (Default::White, Data::Object(items)) => {
+                let full = |c: &str| items.iter().any(|(k, v)| k == c && matches!(v, Data::Number(n) if (n - 255.0).abs() < 1e-9));
+                let rgb = items.iter().all(|(k, v)| match k.as_str() {
+                    "typename" => matches!(v, Data::String(s) if s == "RGBColor"),
+                    "red" | "green" | "blue" => true,
+                    _ => false,
+                });
+                rgb && ["red", "green", "blue"].into_iter().all(full)
+            }
             _ => false,
         }
     }
@@ -502,7 +514,7 @@ fn png24_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::R
     raster_map("ExportOptionsPNG24", name, d, p)
 }
 
-const PNG24_KEPT: &[(&str, Default)] = &[("matte", Default::Bool(true)), ("matteColor", Default::Unset), ("saveAsHTML", Default::Bool(false))];
+const PNG24_KEPT: &[(&str, Default)] = &[("matte", Default::Bool(true)), ("matteColor", Default::White), ("saveAsHTML", Default::Bool(false))];
 
 fn png24_starts() -> Vec<(&'static str, Data)> {
     vec![
@@ -530,7 +542,7 @@ fn jpeg_map(name: &str, d: &Data, p: &mut Map<String, Value>) -> std::result::Re
 }
 
 const JPEG_KEPT: &[(&str, Default)] =
-    &[("blurAmount", Default::Num(0.0)), ("matte", Default::Bool(true)), ("matteColor", Default::Unset), ("saveAsHTML", Default::Bool(false))];
+    &[("blurAmount", Default::Num(0.0)), ("matte", Default::Bool(true)), ("matteColor", Default::White), ("saveAsHTML", Default::Bool(false))];
 
 fn jpeg_starts() -> Vec<(&'static str, Data)> {
     vec![
@@ -1005,12 +1017,15 @@ fn doc_full_name(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// `document.path`: a `Folder` for the folder of the document's file, or an empty string for a
-/// document that has none.
+/// document that has none. A file saved under a relative path, which the engine wrote in the
+/// process's working folder, is in that folder.
 fn doc_path(h: &Host, a: &[Data]) -> Answer {
     let doc = this_doc(h, a)?;
     let folder = super::with_doc(h, doc, |_, st| {
         Ok(shown_file(st)?.and_then(|p| {
-            let parent = std::path::Path::new(p).parent()?.to_string_lossy().into_owned();
+            let p = std::path::Path::new(p);
+            let full = if p.is_relative() { std::env::current_dir().ok()?.join(p) } else { p.to_path_buf() };
+            let parent = full.parent()?.to_string_lossy().into_owned();
             (!parent.is_empty()).then_some(parent)
         }))
     })?;

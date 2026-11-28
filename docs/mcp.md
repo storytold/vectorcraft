@@ -2895,7 +2895,9 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
-- `Document.saveAs(file, options?)` runs `file.saveAs`, and the document then has the new file.
+- `Document.saveAs(file, options?)` runs `file.saveAs`, and the document then has the new file. A save to a
+  `.vctemplate` file without options writes a template copy: the document keeps its file, its `fullName` and its
+  saved state.
   `Document.exportFile(file, exportType, options?)` runs `document.export` and leaves the document's file as it is.
   `app.open(file, documentColorSpace?, options?)` runs `document.open` and gives the new `Document`
   (https://ai-scripting.docsforadobe.dev/jsobjref/Document/, https://ai-scripting.docsforadobe.dev/jsobjref/Application/).

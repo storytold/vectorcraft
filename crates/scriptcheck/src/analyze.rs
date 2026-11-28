@@ -56,6 +56,9 @@ pub(crate) struct Known {
     /// A file gives names values the analysis doesn't read ([`Declared::unsure`]): no object counts
     /// as a Folder object whatever the path names.
     pub unsure: bool,
+    /// The script includes another file ([`Declared::includes`]), whose code may give a file's
+    /// variables values the scan of that file does not read.
+    pub others: bool,
 }
 
 impl Known {
@@ -70,6 +73,7 @@ impl Known {
     /// object only when both sides say so; otherwise it may hold a File object.
     pub fn add(&mut self, other: Known, entries: usize) {
         self.unsure |= other.unsure;
+        self.others |= other.others;
         for (name, chain) in other.bound {
             if self.bound.len() < entries || self.bound.contains_key(&name) {
                 self.bound.entry(name).or_insert(chain);
@@ -281,8 +285,8 @@ struct ObjectValue {
     /// key's whole value, a bit each ([`Analyzer::writers`]).
     bits: u8,
     /// It is the value of the first name a `var` statement declares, and the statement is directly
-    /// in a function body or the global code, not in a block and not after `if (…)`, `else`, `do` or
-    /// a loop's parentheses: only then does the variable hold `bits` after it.
+    /// in a function body or the global code, not in a block and not after `if (…)`, `else`, `do`, a
+    /// loop's parentheses or a label: only then does the variable hold `bits` after it.
     whole: bool,
     /// The bit of the method whose value is being read, and how far that value has been read.
     value: Option<(u8, Value)>,
@@ -647,6 +651,8 @@ struct Analyzer<'s, 'a, 'l> {
     /// What the receiver before the last `[` read defines in [`Analyzer::writers`], 0 for a receiver
     /// that is not such a variable.
     index_receiver: u8,
+    /// The script includes another file ([`Known::others`]): no variable joins [`Analyzer::writers`].
+    others: bool,
     /// This file or what the scan started with gives names values the analysis doesn't read
     /// ([`Declared::unsure`]): no object counts as a Folder object whatever the path names.
     unsure: bool,
@@ -727,6 +733,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             objects: vec![],
             closed: None,
             index_receiver: 0,
+            others: known.others || declared.includes,
             unsure: known.unsure || declared.unsure,
             own_names: HashSet::new(),
             scopes: vec![],
@@ -1386,7 +1393,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                 let body = self.scopes.last().map_or(0, |s| s.depth);
                 let starts = before.is_none()
                     || [";", "{", "}"].iter().any(|p| is(before, p))
-                    || (declaration.is_some_and(|d| d.nl) && !is(before, ")") && !word(before, "else") && !word(before, "do"));
+                    || (declaration.is_some_and(|d| d.nl) && !is(before, ")") && !is(before, ":") && !word(before, "else") && !word(before, "do"));
                 let whole = word(declaration, "var") && starts && depth.checked_sub(1) == Some(body);
                 if self.objects.len() < self.acc.limits.nesting {
                     self.objects.push(ObjectValue { name: a.name, depth, bits: 0, whole, value: None });
@@ -1432,9 +1439,17 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// The variable of the [`ObjectValue::whole`] literal whose `}` the token before `t` was joins
     /// [`Analyzer::writers`] when `t` ends the value (`;`, `,` or a line break). It is read before `t`
     /// closes a function body, so a literal given to the body's own variable stays inside the body.
+    /// No variable joins when code the scan does not follow at that point may give it another value:
+    /// a function body that assigns its name ([`Declared::body_assigned`]), a member assignment of a
+    /// property of that name, which may be the global object's ([`Declared::rebound`]), code given as
+    /// text or a `with` statement ([`Analyzer::unsure`]), and an included file ([`Analyzer::others`]).
     fn settle_literal(&mut self, t: &Sig<'s>) {
         if let Some((name, bits)) = self.closed.take()
             && (t.is(";") || t.is(",") || (t.nl && !goes_on_with(t)))
+            && !self.unsure
+            && !self.others
+            && !self.declared.rebound.contains(&name)
+            && !self.declared.body_assigned.contains(name.as_str())
             && (self.writers.contains_key(&name) || self.acc.room(self.writers.len()))
         {
             self.writers.insert(name, bits);
@@ -1734,7 +1749,13 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         }
         // A variable that any assignment gave a value that may be a File object leaves as one.
         let folders = self.folders.iter().filter(|name| self.folder(name)).cloned().collect();
-        let known = Known { bound: std::mem::take(&mut self.bound), files: std::mem::take(&mut self.files), folders, unsure: self.unsure };
+        let known = Known {
+            bound: std::mem::take(&mut self.bound),
+            files: std::mem::take(&mut self.files),
+            folders,
+            unsure: self.unsure,
+            others: self.others,
+        };
         (std::mem::take(&mut self.includes), module, known)
     }
 }

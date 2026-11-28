@@ -615,7 +615,7 @@ fn a_changed_or_shared_own_save_as_writes_a_file() {
         "a.saveAs(f); b['saveAs'](f); a.n = 1; a.n;\n",
         "a.saveAs = app.activeDocument.saveAs;\n",
         "b['saveAs'] = w;\n",
-        "c[k] = w;\n",
+        "c = app.activeDocument;\n",
         "delete d.saveAs;\n",
         "var h = e;\n",
         "use(g);\n",
@@ -633,6 +633,9 @@ fn a_changed_or_shared_own_save_as_writes_a_file() {
         "s.saveAs(f);\n",
     ));
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[11, 12, 13, 14, 15, 16, 18, 19, 21, 22][..]));
+    // A computed key may name any property, a variable's on the global object included.
+    let r = report("var f = new File(p);\nvar c = {saveAs: function () {}};\nc[k] = w;\nc.saveAs(f);\n");
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4][..]));
 }
 
 /// Only a `var` statement directly in a function body or the global code that gives its first name
@@ -662,6 +665,32 @@ fn only_a_whole_var_value_makes_save_as_the_scripts_own() {
         "y.saveAs(f);\n",
     ));
     assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 7, 9, 11, 13, 14, 17][..]));
+}
+
+/// A literal's `saveAs` stays the script's own only while no code the check does not follow may give
+/// the variable another value: a declaration after a label, which `if` may skip, a function body that
+/// assigns the variable (its own method's, or a declaration's that runs before its text), a member
+/// assignment of a property of that name, which may be the global object's, code given as text and an
+/// included file each leave the write reported. A function that declares its own variable of the name
+/// leaves it the script's own.
+#[test]
+fn a_save_as_other_code_may_replace_writes_a_file() {
+    let cases: [(&str, &[usize]); 7] = [
+        ("var f = new File(p);\nvar d = app.activeDocument;\nif (flag) label:\nvar d = {saveAs: function () {}};\nd.saveAs(f);\n", &[5]),
+        (
+            "var f = new File(p);\nvar d = {\n    saveAs: function () {},\n    useDocument: function () {\n        d = null;\n        d = app.activeDocument;\n    }\n};\nd.useDocument();\nd.saveAs(f);\n",
+            &[10],
+        ),
+        ("var f = new File(p);\nvar d = {saveAs: function () {}};\nswap();\nd.saveAs(f);\nfunction swap() { d = app.activeDocument; }\n", &[4]),
+        ("var f = new File(p);\nvar d = {saveAs: function () {}};\nthis.d = app.activeDocument;\nd.saveAs(f);\n", &[4]),
+        ("var f = new File(p);\nvar d = {saveAs: function () {}};\neval(s);\nd.saveAs(f);\n", &[4]),
+        ("#include \"other.jsx\"\nvar f = new File(p);\nvar d = {saveAs: function () {}};\nd.saveAs(f);\n", &[4]),
+        ("var f = new File(p);\nvar d = {saveAs: function () {}};\nfunction g() { var d = app.activeDocument; d = 1; }\nd.saveAs(f);\n", &[]),
+    ];
+    for (src, lines) in cases {
+        let r = report(src);
+        assert_eq!(feature(&r, "file.write").map_or(&[][..], |f| f.lines.as_slice()), lines, "{src}");
+    }
 }
 
 /// A `saveAs` key's value is a method of the script's own only when the whole value is one function
