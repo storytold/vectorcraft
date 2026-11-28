@@ -13,7 +13,9 @@
 //! encoding pairs of the current font's `TZ`, then by the file's `TE` encoding unless that `TZ`'s
 //! `useDefault` is 0, else as Windows-1252; a re-encoded font `/_name` is the font its `%AI3_BeginEncoding` or `TZ` names
 //! (else `name`). Strings in a composite font named `base-CMap` (CJK type) whose `TZ` gives no
-//! encoding pairs are decoded by that predefined CMap instead, and the font is `base`.
+//! encoding pairs are decoded by that predefined CMap instead, and the font is `base`. Strings in a
+//! plain Chinese system font (SimSun, MingLiU and their kin, [`chinese_font_encoding`]) whose
+//! `TZ` gives no encoding pairs are in that font's own encoding, GBK or Big5.
 
 use std::sync::Arc;
 
@@ -268,6 +270,9 @@ pub(super) struct TypeState {
     font: Option<String>,
     /// How strings in that font decode, when it is a composite font ([`composite_font`]).
     cmap: Option<Arc<CMapCodes>>,
+    /// The encoding strings in that font are in, when it is a plain Chinese font
+    /// ([`chinese_font_encoding`]).
+    multibyte: Option<&'static encoding_rs::Encoding>,
     /// The predefined CMaps read so far, by name (`None` when one couldn't be read).
     cmaps: Vec<(String, Option<Arc<CMapCodes>>)>,
     /// Between `Xb` and `XB`: the tab stops of the tab definition read so far.
@@ -292,6 +297,7 @@ impl Default for TypeState {
             paired_fonts: vec![],
             font: None,
             cmap: None,
+            multibyte: None,
             cmaps: vec![],
             tabs: None,
             chars: 0,
@@ -321,6 +327,10 @@ impl TypeState {
         if let Some(cmap) = &self.cmap {
             return cmap.decode(bytes);
         }
+        if let Some(encoding) = self.multibyte {
+            // `\r` ends a paragraph, as below; it is one byte in GBK and Big5.
+            return encoding.decode_without_bom_handling(bytes).0.replace('\r', "\n");
+        }
         let own = self.font.as_ref().and_then(|f| self.font_encodings.iter().find(|(n, _, _)| n == f));
         let (own, te) = own.map_or((None, true), |(_, e, te)| (Some(e.as_slice()), *te));
         bytes
@@ -344,6 +354,28 @@ impl TypeState {
         let codes = predefined_cmap::codes(cmap).map(Arc::new);
         self.cmaps.push((cmap.to_string(), codes.clone()));
         codes
+    }
+}
+
+/// The encoding of a plain Chinese system font, by its PostScript name: GBK for the Simplified
+/// Chinese families (SimSun, SimHei, Microsoft YaHei and their kin), Big5 for the Traditional ones
+/// (MingLiU, DFKaiShu, Microsoft JhengHei, LiGothic and their kin). Such a font sets the bytes of
+/// a string in its own encoding, two to a character outside ASCII, so they aren't one character
+/// each in `TE`'s encoding or Windows-1252 (#9375). `None` for any other font, and for SimSun's
+/// Extension B face, whose characters lie outside both encodings.
+pub(super) fn chinese_font_encoding(name: &str) -> Option<&'static encoding_rs::Encoding> {
+    const GBK: [&str; 10] = ["simsun", "nsimsun", "simhei", "simkai", "kaiti", "simfang", "fangsong", "microsoftyahei", "dengxian", "stsong"];
+    const BIG5: [&str; 8] = ["mingliu", "pmingliu", "dfkaishu", "microsoftjhenghei", "ligothic", "lisung", "biaukai", "dfkai"];
+    let key: String = name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect();
+    if key.contains("extb") {
+        return None;
+    }
+    if GBK.iter().any(|f| key.starts_with(f)) {
+        Some(encoding_rs::GBK)
+    } else if BIG5.iter().any(|f| key.starts_with(f)) {
+        Some(encoding_rs::BIG5)
+    } else {
+        None
     }
 }
 
@@ -557,11 +589,12 @@ impl Reader<'_> {
                     // A font whose `TZ` gives encoding pairs is re-encoded, which a composite font
                     // can't be; a `TZ` without pairs only names the font.
                     let reencoded = st.paired_fonts.contains(name);
-                    let (name, cmap) = match composite_font(&full).filter(|_| !reencoded) {
-                        Some((base, cmap)) => (base, st.cmap_codes(cmap)),
-                        None => (full.as_str(), None),
+                    let (name, cmap, multibyte) = match composite_font(&full).filter(|_| !reencoded) {
+                        Some((base, cmap)) => (base, st.cmap_codes(cmap), None),
+                        None => (full.as_str(), None, chinese_font_encoding(&full).filter(|_| !reencoded)),
                     };
                     st.cmap = cmap;
+                    st.multibyte = multibyte;
                     // The installed face of that PostScript name, as type from a text document
                     // takes it; else the name split into a family and style.
                     let text = super::super::super::text::named_font(name, None);
