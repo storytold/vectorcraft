@@ -1265,6 +1265,10 @@ pub struct CustomToolbar {
     /// plug-in's, is kept and shows as unavailable until it comes back.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<String>,
+    /// The labels given to its command buttons with Rename Button…, keyed by the command's id. A
+    /// button without one shows its command's label.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub labels: std::collections::BTreeMap<String, String>,
 }
 
 /// A category of an edited toolbar: its name (one of the Basic toolbar's; none in the Advanced

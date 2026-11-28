@@ -4271,8 +4271,22 @@ installed again or removed. `toolbar.reset {toolbar}` takes the buttons off with
 the workspace, and toolbars saved before command buttons existed load without any. Command buttons are VectorCraft's
 own.
 
+`toolbar.renameCommand {command, toolbar, label?}` (Rename Button… in the button's context menu) gives a button a
+label of its own, and `toolbar.addCommand` takes the same optional `label`. Spaces at the ends of the label are
+dropped, and it has at most 64 characters; an empty label, on either command, gives the button its command's label
+again. Without `label`, or with a null one, `toolbar.renameCommand` opens the Rename Button dialog and answers null.
+The dialog keeps its OK from closing it while the label is refused, and an OK after switching workspaces is refused.
+Otherwise it answers
+`{command, label}`, with `label` null for the command's own, and `window.toolbar.list` reports `labels`
+({command: label}) for each toolbar. The hover text still shows the command's name and shortcut, and a screen reader
+says the label and then the command's name, or only the label when it is the command's label or name. Control
+characters and characters that change the direction of text show as `\u{…}` escapes on the button. A longer label, a
+label that is not text or a button the toolbar does not have is an error and changes nothing. Labels are kept with the
+toolbar, Manage Toolbars' copy keeps them, and `toolbar.removeCommand` and `toolbar.reset` drop them with the buttons.
+
 ```json
 {"name":"invoke_menu","arguments":{"command":"toolbar.addCommand","params":{"command":"object.group","toolbar":"Toolbar 1"}}}
+{"name":"invoke_menu","arguments":{"command":"toolbar.renameCommand","params":{"command":"object.group","toolbar":"Toolbar 1","label":"Grp"}}}
 ```
 
 ## Help search

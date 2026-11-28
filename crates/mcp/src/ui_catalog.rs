@@ -616,13 +616,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "toolbar.addCommand",
         "Toolbar: Add Command",
         "",
-        "{command: id, toolbar: name, at?: n} put a button for `command` (a Command Palette result other than a tool: a command's id, or `plugin:<id>`, `effect:<id>` or `panel:<id>`) on the toolbar made with New Toolbar called `toolbar`, after its tools, moving it if it is there already: at place `at` among its command buttons (0 = the first; omitted: at the end), as Add Command in its Add Tool… menu and Move Up and Move Down in the button's context menu do; a click on the button runs what the command's menu item runs; an unknown command, a tool, a command that needs params a click does not give (such as this one) or an `at` past the end is an error and changes nothing; kept with the workspace; returns the toolbar's commands",
+        "{command: id, toolbar: name, at?: n, label?: text} put a button for `command` (a Command Palette result other than a tool: a command's id, or `plugin:<id>`, `effect:<id>` or `panel:<id>`) on the toolbar made with New Toolbar called `toolbar`, after its tools, moving it if it is there already: at place `at` among its command buttons (0 = the first; omitted: at the end), as Add Command in its Add Tool… menu and Move Up and Move Down in the button's context menu do; with `label`, the button shows that label, as toolbar.renameCommand gives it (an empty `label` gives it the command's own label again); a click on the button runs what the command's menu item runs; an unknown command, a tool, a command that needs params a click does not give (such as this one), an `at` past the end, or a `label` that is not text or is longer than 64 characters is an error and changes nothing; kept with the workspace; returns the toolbar's commands",
     ),
     (
         "toolbar.removeCommand",
         "Toolbar: Remove Command",
         "",
-        "{command: id, toolbar: name} take the button for `command` off the toolbar made with New Toolbar called `toolbar` (one not on it stays off; a command that is no longer installed can be taken off too), as Remove Command in its Add Tool… menu and Remove from Toolbar in the button's context menu do; returns the toolbar's commands",
+        "{command: id, toolbar: name} take the button for `command` off the toolbar made with New Toolbar called `toolbar`, with its own label (one not on it stays off; a command that is no longer installed can be taken off too), as Remove Command in its Add Tool… menu and Remove from Toolbar in the button's context menu do; returns the toolbar's commands",
+    ),
+    (
+        "toolbar.renameCommand",
+        "Toolbar: Rename Button",
+        "",
+        "{command: id, toolbar: name, label?: text} give the button for `command` on the toolbar made with New Toolbar called `toolbar` the label `label` (spaces at its ends dropped, at most 64 characters; empty: the command's own label again), as Rename Button… in the button's context menu does; without `label` (or with null), opens the Rename Button dialog and returns null; the hover text still shows the command's name and shortcut, and a screen reader says the label and then the command's name, or only the label when it is the command's label or name; a button the toolbar does not have, or a label that is not text or is longer, is an error and changes nothing; kept with the workspace; returns {command, label} (`label` null for the command's own)",
     ),
     (
         "toolbar.reset",
@@ -682,7 +688,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, &str)] = &[
         "window.toolbar.list",
         "List Toolbars",
         "",
-        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, commands, floating, side, order}], `commands` the Command Palette results of its command buttons, `side` the edge it docks at (while floating, the edge it docked at last) and `order` its column's place in that edge's dock, 0 at the window's edge, while docked (else null)",
+        "{} the toolbars made with New Toolbar in the current workspace: [{name, shown, double, slots, commands, labels, floating, side, order}], `commands` the Command Palette results of its command buttons, `labels` the labels given to them with Rename Button… ({command: label}), `side` the edge it docks at (while floating, the edge it docked at last) and `order` its column's place in that edge's dock, 0 at the window's edge, while docked (else null)",
     ),
     ("window.taskBar", "Contextual Task Bar", "", "{}"),
     (
