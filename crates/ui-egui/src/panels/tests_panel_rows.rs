@@ -141,7 +141,8 @@ fn the_arrowhead_scale_and_align_rows_show_their_labels() {
     // Each label sits at the start of its row, before the row's controls.
     for (label, control) in [("Scale", "Scale"), ("Align", "Align")] {
         let field = panel.rect(control);
-        let shown = texts.iter().find(|(text, at)| text == label && at.right() <= field.right() && (field.top()..=field.bottom()).contains(&at.center().y));
+        let shown =
+            texts.iter().find(|(text, at)| text == label && at.right() <= field.right() && (field.top()..=field.bottom()).contains(&at.center().y));
         assert!(shown.is_some(), "no {label:?} label on its row at {field:?}; painted: {:?}", texts.iter().map(|t| &t.0).collect::<Vec<_>>());
     }
 }

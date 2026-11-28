@@ -439,14 +439,16 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
     let (arrow_align, has_head) = arrow_align_state(st);
     let scale = st.map_or((100.0, 100.0), |s| s.arrow_scale);
     let linked = app.ui.stroke_panel.scale_linked;
-    let out = Field::new(tl!("Scale")).enabled(has_head).show(ui, |ui, _| {
-        LinkedFields::new(tl!("Scale"), Bind::given(Mixed::each([Some(scale.0), Some(scale.1)])), Bind::given(linked))
-            .mode(LinkMode::Equal)
-            .unit_kind(UnitKind::Percent)
-            .enabled(has_head)
-            .show(ui)
-    })
-    .inner;
+    let out = Field::new(tl!("Scale"))
+        .enabled(has_head)
+        .show(ui, |ui, _| {
+            LinkedFields::new(tl!("Scale"), Bind::given(Mixed::each([Some(scale.0), Some(scale.1)])), Bind::given(linked))
+                .mode(LinkMode::Equal)
+                .unit_kind(UnitKind::Percent)
+                .enabled(has_head)
+                .show(ui)
+        })
+        .inner;
     if let Some(on) = out.as_ref().and_then(|out| out.link.landed()) {
         app.ui.stroke_panel.scale_linked = *on;
     }
@@ -454,10 +456,10 @@ fn arrow_rows(app: &mut VectorcraftApp, ui: &mut Ui, st: Option<&StrokeLayer>) {
         app.run("stroke.setAdvanced", json!({"arrowScale": [a.unwrap_or(scale.0), b.unwrap_or(scale.1)]})).ok();
     }
     let aligns: Vec<Entry<ArrowAlign>> = ARROW_ALIGN.iter().map(|(v, _, icon, tip)| Entry::new(*v, *tip).icon(IconId::new(icon))).collect();
-    let out = Field::new(tl!("Align")).enabled(has_head).show(ui, |ui, _| {
-        Segmented::new(tl!("Align"), Bind::given(arrow_align), &aligns).enabled(has_head).show(ui)
-    })
-    .inner;
+    let out = Field::new(tl!("Align"))
+        .enabled(has_head)
+        .show(ui, |ui, _| Segmented::new(tl!("Align"), Bind::given(arrow_align), &aligns).enabled(has_head).show(ui))
+        .inner;
     if let Some(v) = out.as_ref().and_then(|out| out.events.landed())
         && let Some((_, name, _, _)) = ARROW_ALIGN.iter().find(|(a, ..)| a == v)
     {
