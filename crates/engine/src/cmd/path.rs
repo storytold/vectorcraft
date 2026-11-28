@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Anchors",
             [],
             None,
-            "{dx, dy, patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles), interpolate?: bool (Interpolate Control Points: the handles of each segment with one moved end are re-mapped by the turn, scale and move that take its old ends to its new ends; default: prefs interpolateControlPoints)} move direct-selected anchors (whole paths if fully selected); refused while an object of a symbol instance's art is selected",
+            "{dx, dy (a move by 0 changes nothing and records no undo step), patterns?: bool (Transform Patterns: pattern fills and strokes transform with the objects that move whole; default: prefs transformPatternTiles), interpolate?: bool (Interpolate Control Points: the handles of each segment with one moved end are re-mapped by the turn, scale and move that take its old ends to its new ends; default: prefs interpolateControlPoints)} move direct-selected anchors (whole paths if fully selected); refused while an object of a symbol instance's art is selected",
             has_selection,
             move_anchors
         ),
@@ -262,6 +262,10 @@ fn move_selected(s: &mut Session, p: &Value, bend: bool) -> Result<Value> {
     check_switches(p, &["patterns", "interpolate"], C)?;
     // An object selected in a symbol instance's art stays where the symbol puts it.
     super::edit::refuse_symbol_part(s)?;
+    // A move by 0 changes nothing, and the document and its undo history stay as they are.
+    if d == Vec2::ZERO {
+        return ok();
+    }
     let st = s.doc()?;
     let mut sel = st.selection.clone();
     let (held, bends) = if bend { held_segments(&st.doc, &mut sel, d) } else { (false, vec![]) };
