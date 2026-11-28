@@ -4045,6 +4045,24 @@ fn move_anchors_reshape_and_close_refuse_a_number_given_as_text() {
     assert!(after.subpaths[0].closed && moved == Some(before.subpaths[0].anchors[1].p.x + 10.0), "{after:?}");
 }
 
+/// Move Anchors by 0, with anchors or whole paths selected, changes nothing and records no undo
+/// step; a move by 10 records one.
+#[test]
+fn move_anchors_by_zero_records_no_undo_step() {
+    let mut s = session();
+    let id = curve(&mut s);
+    for select in [json!({"id": id.0, "anchors": [[0, 1]]}), json!({"id": id.0, "anchors": [[0, 0], [0, 1]]})] {
+        s.execute("select.anchors", &select).unwrap();
+        let (before, undo) = (path(&s, id), s.doc().unwrap().history.undo.len());
+        for p in [json!({}), json!({"dx": 0, "dy": 0}), json!({"dx": null, "dy": -0.0})] {
+            s.execute("path.moveAnchors", &p).unwrap();
+            assert_eq!((path(&s, id), s.doc().unwrap().history.undo.len()), (before.clone(), undo), "{select} {p}");
+        }
+        s.execute("path.moveAnchors", &json!({"dx": 10})).unwrap();
+        assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1, "{select}");
+    }
+}
+
 /// Close Path, Set Handle, Move Anchors and the Pencil, Curvature, Reshape Segment and Blob Brush
 /// commands refuse an on/off option given as text or as another value that is not true or false,
 /// naming the key, and change nothing; true, false and null still work.

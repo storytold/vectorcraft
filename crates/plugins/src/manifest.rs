@@ -118,6 +118,10 @@ pub enum Kind {
     /// An importer: reads a file in a format of its own, whose extensions the manifest lists, into
     /// a new document (File › Open, `document.open`; see [`crate::import`]).
     Importer,
+    /// A generator: draws art from its parameters alone into a generated art object, which keeps
+    /// them so the art can be drawn again with changed ones (Object › Plug-ins, `plugin.generate`;
+    /// see [`crate::generate`]).
+    Generator,
 }
 
 impl Kind {
@@ -127,6 +131,7 @@ impl Kind {
             Kind::Effect => "effect",
             Kind::Exporter => "exporter",
             Kind::Importer => "importer",
+            Kind::Generator => "generator",
         }
     }
 }
@@ -668,6 +673,9 @@ impl Manifest {
             (Budget::Heavy, Kind::Importer) => {
                 return Err(Error::Manifest("an importer always gets an import's budget: leave `budget` out".into()));
             }
+            (Budget::Heavy, Kind::Generator) => {
+                return Err(Error::Manifest("a generator always gets the usual budget: leave `budget` out".into()));
+            }
         }
         self.validate_params()?;
         self.validate_commands()?;
@@ -837,7 +845,7 @@ impl Manifest {
         if self.commands.is_empty() {
             return Ok(());
         }
-        if matches!(self.kind, Kind::Exporter | Kind::Importer) {
+        if matches!(self.kind, Kind::Exporter | Kind::Importer | Kind::Generator) {
             return Err(Error::Manifest("only a filter or a live effect declares `commands`".into()));
         }
         if self.budget == Budget::Heavy {
@@ -1388,6 +1396,29 @@ mod tests {
             (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"budget":"heavy"}"#, "an import's budget"),
             (r#"{"id":"a","name":"x","kind":"importer","extensions":["plt"],"permissions":["doc.read"]}"#, "doesn't apply"),
             (r#"{"id":"a","name":"x","kind":"filter","extensions":["plt"]}"#, "only an exporter or an importer"),
+        ] {
+            let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
+            assert!(e.contains(says), "{bad}: {e}");
+        }
+    }
+
+    /// A generator gets the usual budget and needs `doc.write`, which its manifest implies; it
+    /// declares no extensions, commands, inputs or other permissions.
+    #[test]
+    fn a_generator_writes_art_with_the_usual_budget() {
+        let m = Manifest::parse(br#"{"id":"org.example.stars","name":"Stars","kind":"generator"}"#).unwrap();
+        assert_eq!((m.kind, m.budget), (Kind::Generator, Budget::Light));
+        assert_eq!(serde_json::to_value(&m).unwrap()["kind"], json!("generator"));
+        assert_eq!(m.permissions(), [Permission::DocWrite]);
+        let listed = Manifest::parse(br#"{"id":"a","name":"x","kind":"generator","permissions":["doc.write"]}"#).unwrap();
+        assert_eq!(listed.permissions(), [Permission::DocWrite]);
+        for (bad, says) in [
+            (r#"{"id":"a","name":"x","kind":"generator","budget":"heavy"}"#, "the usual budget"),
+            (r#"{"id":"a","name":"x","kind":"generator","extensions":["plt"]}"#, "only an exporter or an importer"),
+            (r#"{"id":"a","name":"x","kind":"generator","permissions":[]}"#, "needs the permission `doc.write`"),
+            (r#"{"id":"a","name":"x","kind":"generator","permissions":["doc.write","doc.read"]}"#, "doesn't apply"),
+            (r#"{"id":"a","name":"x","kind":"generator","commands":[{"id":"again","label":"Again"}]}"#, "only a filter or a live effect"),
+            (r#"{"id":"a","name":"x","kind":"generator","place":true}"#, "`place` is only for an importer"),
         ] {
             let e = Manifest::parse(bad.as_bytes()).unwrap_err().to_string();
             assert!(e.contains(says), "{bad}: {e}");

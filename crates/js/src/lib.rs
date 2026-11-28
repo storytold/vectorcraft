@@ -56,14 +56,14 @@
 //! `new` (sections 12.2.5 and 12.3.6.1), `for … of` loops (section 13.7.5), array and object
 //! destructuring in declarations, assignments, parameters and `catch` clauses (sections 12.15.5
 //! and 13.3.3), shorthand and computed property names, methods and `__proto__: value` in object
-//! literals (sections 12.2.6, 14.3 and B.3.1), and the `name` property of functions (section
-//! 9.2.11).
+//! literals (sections 12.2.6, 14.3 and B.3.1), classes with `extends`, `super` and `new.target`
+//! (sections 14.5, 12.3.5 and 12.3.8), and the `name` property of functions (section 9.2.11).
 //! Spread, `for … of` and array patterns use the iterator protocol of the 11th edition
 //! (<https://262.ecma-international.org/11.0/>, section 7.4), and a loop or pattern left early
 //! closes its iterator. In a realm made without the option and later given it with
 //! [`Realm::set_es2015`], which has no `Symbol.iterator`, they walk arrays and `arguments` objects
 //! by index and strings by code point, and throw a `TypeError` for other values.
-//! Object rest properties (`{ a, ...rest }`), classes and modules stay syntax errors.
+//! Object rest properties (`{ a, ...rest }`) and modules stay syntax errors.
 //!
 //! With [`Options::es2015`], the parser and the realm also have generators (ECMA-262 11th edition,
 //! sections 14.4 and 25.4): `function*` declarations and expressions, `*name() {…}` methods in
@@ -114,6 +114,7 @@ pub mod ast;
 mod builtins;
 mod bytecode;
 mod chars;
+mod class_ops;
 mod compiler;
 mod date_builtins;
 mod error;
@@ -133,6 +134,8 @@ mod reflect;
 mod regexp;
 mod regexp_builtins;
 mod regexp_vm;
+pub mod scriptui;
+mod scriptui_resource;
 mod string_builtins;
 mod symbol;
 mod token;
@@ -145,9 +148,9 @@ mod xmp_classes;
 mod xpath;
 
 pub use ast::{
-    AssignOp, Ast, BinaryOp, Binding, CatchClause, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId, FunctionKind, LexKind, LogicalOp, Name,
-    Program, Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece, UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart,
-    XmlQualifier,
+    AssignOp, Ast, BinaryOp, Binding, CatchClause, ClassDef, ClassElement, ClassKey, Expr, ExprId, ForInTarget, ForInit, Function, FunctionId,
+    FunctionKind, LexKind, LogicalOp, MethodKind, Name, Program, Property, PropertyKey, PropertyValue, Stmt, StmtId, SwitchCase, TemplatePiece,
+    UnaryOp, UpdateOp, VarDecl, XmlNamePart, XmlPart, XmlQualifier,
 };
 pub use builtins::extensions::Localization;
 pub use error::{SyntaxError, TOO_DEEP, TOO_LONG};
@@ -178,9 +181,10 @@ pub struct Options {
     pub e4x: bool,
     /// Read and run the ECMAScript 2015 forms this engine has: `let` and `const`, arrow functions,
     /// template literals (tagged ones included), default and rest parameters, spread in array
-    /// literals, calls and `new`, `for … of`, array and object destructuring, and shorthand and
-    /// computed property names, and from ECMAScript 2020 optional chains (`a?.b`, `a?.[k]`,
-    /// `f?.()`) and `??`. Off, they are syntax errors and the language is ES5.1's. Code a
+    /// literals, calls and `new`, `for … of`, array and object destructuring, shorthand and
+    /// computed property names, methods in object literals, and classes with `super` and
+    /// `new.target`, and from ECMAScript 2020 optional chains (`a?.b`, `a?.[k]`, `f?.()`) and
+    /// `??`. Off, they are syntax errors and the language is ES5.1's. Code a
     /// script evaluates at run time (`eval`, `Function`) is read the way the realm reads scripts.
     /// A realm made with it on also has the later editions' built-ins this engine has: `Symbol`
     /// with Symbol-keyed properties, the iterators of arrays, strings and `arguments` objects,
@@ -313,6 +317,8 @@ mod interp_tests;
 mod promise_tests;
 #[cfg(test)]
 mod reflect_tests;
+#[cfg(test)]
+mod scriptui_tests;
 #[cfg(test)]
 mod symbol_tests;
 #[cfg(test)]

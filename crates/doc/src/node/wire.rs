@@ -18,6 +18,7 @@ impl Serialize for Node {
         use crate::skip::{is_default, is_one, is_true};
         use serde::ser::SerializeStruct;
         let e = self.extras();
+        let generated = crate::generated::written(e.generated.as_deref());
         // As the derive did: the fields written, then each field written or skipped in order.
         let skips = [
             false,
@@ -61,6 +62,7 @@ impl Serialize for Node {
             is_default(&e.warp_piece),
             is_default(&e.clip_pieces),
             e.image_quad.is_none(),
+            generated.is_none(),
         ];
         let mut st = s.serialize_struct("Node", skips.iter().filter(|s| !**s).count())?;
         let mut skip = skips.into_iter();
@@ -87,6 +89,8 @@ impl Serialize for Node {
         field!("type_outlines", &e.type_outlines);
         field!("pixelated", &e.pixelated);
         field!("shaper", &e.shaper);
+        // A generated art object's art, written while this lives, holds plain art only.
+        let _inside = generated.map(|_| crate::generated::Inside::enter());
         field!("kind", &self.kind);
         field!("graphic_style", &e.graphic_style);
         field!("attrs", &e.attrs);
@@ -110,6 +114,7 @@ impl Serialize for Node {
         field!("warp_piece", &e.warp_piece);
         field!("clip_pieces", &e.clip_pieces);
         field!("image_quad", &e.image_quad);
+        field!("generated", &generated.map(|g| crate::generated::Wire::of(g, self)));
         st.end()
     }
 }
@@ -265,6 +270,14 @@ pub(super) struct NodeWire {
     clip_pieces: bool,
     #[serde(default, deserialize_with = "image_corners")]
     image_quad: Option<Box<[vectorcraft_geom::Point; 4]>>,
+    /// Read as it is and checked against the node's kind and art ([`crate::generated`]).
+    #[serde(default, deserialize_with = "present_value")]
+    generated: Option<serde_json::Value>,
+}
+
+/// A field's value as a file holds it, a null included: only an absent field is none.
+fn present_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<serde_json::Value>, D::Error> {
+    serde_json::Value::deserialize(d).map(Some)
 }
 
 /// A distorted image's corners as a file holds them: a list of exactly four points, else none (the
@@ -455,7 +468,7 @@ fn image_corners<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Box<[v
 }
 
 impl From<NodeWire> for Node {
-    fn from(w: NodeWire) -> Self {
+    fn from(mut w: NodeWire) -> Self {
         // Corners an image cannot take are dropped, so a later transform cannot make them its own.
         let image_quad = match &w.kind {
             NodeKind::Image(im) => w.image_quad.filter(|q| crate::image_quad::check_for(im, q).is_ok()),
@@ -491,6 +504,7 @@ impl From<NodeWire> for Node {
             warp_piece: w.warp_piece,
             clip_pieces: w.clip_pieces,
             image_quad,
+            generated: w.generated.and_then(|g| crate::generated::read(g, &mut w.kind)),
         };
         Node {
             id: w.id,

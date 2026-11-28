@@ -7996,7 +7996,9 @@ axis	Y Axis	Y ekseni
 @msg	missing `picks`	`picks` eksik
 @msg	missing `word`	`word` eksik
 @msg	must be an object with `kind` and `value`	`kind` ve `value` içeren bir nesne olmalıdır
-@msg	must have `kind` alert, confirm or prompt	`kind` değeri alert, confirm veya prompt olmalıdır
+@msg	must have `kind` alert, confirm, prompt or window	`kind` değeri alert, confirm, prompt veya window olmalıdır
+@msg	is a window's answer, whose `value` must be a list of steps	bir pencerenin yanıtıdır ve `value` değeri bir adım listesi olmalıdır
+@msg	has a step {i} that is not a valid click, change or close	içindeki {i}. adım geçerli bir tıklama, değişiklik veya kapatma değil
 @msg	must have exactly `kind` and `value`	yalnızca `kind` ve `value` içermelidir
 @msg	needs a closing quote after the name	addan sonra bir kapanış tırnağı gerekir
 @msg	needs a name	bir ad gerekir

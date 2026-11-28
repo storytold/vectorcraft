@@ -6618,6 +6618,72 @@ fn a_zstandard_frame_ending_in_a_zero_byte_is_read_whole() {
     }
 }
 
+/// A reader that gives at most `.1` bytes of `.0` at a time, as private data streams read one after
+/// the other give them.
+struct Trickle<'a>(&'a [u8], usize);
+
+impl std::io::Read for Trickle<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = buf.len().min(self.1).min(self.0.len());
+        let (now, rest) = self.0.split_at(n);
+        buf[..n].copy_from_slice(now);
+        self.0 = rest;
+        Ok(n)
+    }
+}
+
+/// The editing data decoded as it is read gives what decoding it whole gives, whatever the size of
+/// the reads: the compression's marker, its header and its frames may be split between them.
+#[test]
+fn editing_data_decoded_as_it_is_read_is_the_data_decoded_whole() {
+    let body = stream(&layer(""));
+    let body = body.as_bytes();
+    let header = b"%%BoundingBox: 0 0 1 1\r\n";
+    let frame = [0x28, 0xB5, 0x2F, 0xFD, 0x20, 3, 0x19, 0, 0, b'a', b'b', 0];
+    for raw in [
+        [&b"%AI24_ZStandard_Data"[..], &zstd(body)].concat(),
+        [&header[..], b"%AI12_CompressedData", &crate::ps::deflate(body)].concat(),
+        [&b"%AI24_ZStandard_Data"[..], &frame, &frame, &[0; 64]].concat(),
+        body.to_vec(),
+    ] {
+        let whole = decode_private(&raw).unwrap();
+        for step in [1, 3, 7, 19, 64 << 10] {
+            assert_eq!(decode_private_from(Trickle(&raw, step)).unwrap(), whole, "{step} bytes at a time");
+        }
+    }
+    let zeros_between = [&b"%AI24_ZStandard_Data"[..], &frame, &[0; 4], &frame].concat();
+    for damaged in [&b"%AI12_CompressedDataxx"[..], &zeros_between] {
+        assert!(decode_private(damaged).is_err());
+        for step in 1..=damaged.len() {
+            assert!(decode_private_from(Trickle(damaged, step)).is_err(), "{step} bytes at a time");
+        }
+    }
+}
+
+/// The first marker read is the one the compressed data follows: the other marker's bytes after it
+/// are not a marker.
+#[test]
+fn editing_data_is_decoded_after_the_first_marker() {
+    let body = stream(&layer(""));
+    let mut raw = [&b"%AI12_CompressedData"[..], &crate::ps::deflate(body.as_bytes())].concat();
+    let data = decode_private(&raw).unwrap();
+    // Bytes after the end of the zlib data aren't read.
+    raw.extend_from_slice(b"%AI24_ZStandard_Data");
+    assert_eq!(decode_private(&raw).unwrap(), data);
+}
+
+/// Of the editing data's streams, no more is read than the limit: data that goes on past it is
+/// refused as too large, even where all it holds past the limit is zero padding.
+#[test]
+fn no_more_of_the_private_data_streams_is_read_than_the_limit() {
+    let frame = [0x28, 0xB5, 0x2F, 0xFD, 0x20, 3, 0x19, 0, 0, b'a', b'b', 0];
+    let raw = [&b"%AI24_ZStandard_Data"[..], &frame, &[0; 100]].concat();
+    let most = raw.len() as u64;
+    assert_eq!(decode_private_within(raw.as_slice(), most).unwrap(), b"ab\0");
+    assert_eq!(decode_private_within(raw.as_slice(), most - 1), Err(too_large()));
+    assert_eq!(max_encoded(), max_data() + max_data() / 16);
+}
+
 /// A `]` without its `[` looks at a few operand stack slots, not at every slot below it: hundreds
 /// of thousands of them look at no more than four slots each.
 #[test]

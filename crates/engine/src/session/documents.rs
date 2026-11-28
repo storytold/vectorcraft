@@ -190,6 +190,7 @@ impl Session {
             startup_failures: vec![],
             script_high_water: Default::default(),
             script_in_run: false,
+            window_views: vec![],
             script_copy_first: cfg!(target_arch = "wasm32"),
         }
     }

@@ -9,7 +9,7 @@
 //! eyedropper samples), `tips` (whether Colorization Tips is open).
 //! Scatter: per value (`size`, `spacing`, `scatter` %, `rotation` °) `…Min`, `…Max` and `…Mode`
 //! (`fixed` | `random` | `pressure` | `tilt` | `bearing` | `rotation`), `rotationRelativeTo` (`page` |
-//! `path`), `hueJitter` (°).
+//! `path`), `hueJitter` (°), `saturationJitter` (%), `brightnessJitter` (%).
 //! Art: `width` (%), `widthMode` (`fixed` | `pressure` | `tilt` | `bearing` | `rotation`),
 //! `widthMax` (the width at the heaviest pen pressure, upright or at 180°, %), `scaleMode` (`proportional` | `stretch` | `betweenGuides`), `guideStart` and
 //! `guideEnd` (% of the art's length), `direction` (`leftToRight` …), `flipAlong`, `flipAcross`,
@@ -205,6 +205,8 @@ pub(super) fn fields(b: &Brush, def: Value, f: &mut Map<String, Value>) {
             }
             f.insert("rotationRelativeTo".into(), json!(if s.rotation_relative_to_path { "path" } else { "page" }));
             f.insert("hueJitter".into(), json!(s.hue_jitter));
+            f.insert("saturationJitter".into(), json!(s.saturation_jitter));
+            f.insert("brightnessJitter".into(), json!(s.brightness_jitter));
         }
         BrushKind::Art(a) => {
             let (mode, start, end) = match a.scale {
@@ -357,6 +359,8 @@ pub(super) fn params(f: &DialogFields) -> Value {
             }
             p["modes"] = json!(SCATTER.map(|(key, _)| scatter_mode(f, key).id()));
             p["hue_jitter"] = json!(clamped(f, "hueJitter", Scatter::HUE_JITTER_RANGE));
+            p["saturation_jitter"] = json!(clamped(f, "saturationJitter", Scatter::SATURATION_JITTER_RANGE));
+            p["brightness_jitter"] = json!(clamped(f, "brightnessJitter", Scatter::BRIGHTNESS_JITTER_RANGE));
             p
         }
         "art" => {
@@ -550,6 +554,10 @@ fn scatter_rows() -> Vec<Param> {
     rows.push(Param::new("rotationRelativeTo", tl!("Rotation relative to"), ParamKind::radio(relative, Some("page".into()))));
     // Each copy turns its colors' hue by its own amount up to this many degrees either way.
     rows.push(clamped_number("hueJitter", tl!("Hue Jitter"), Scatter::HUE_JITTER_RANGE, UnitKind::Degrees));
+    // Each copy moves its colors' saturation by its own amount up to this many points either way.
+    rows.push(clamped_number("saturationJitter", tl!("Saturation Jitter"), Scatter::SATURATION_JITTER_RANGE, UnitKind::Percent));
+    // Each copy moves its colors' brightness by its own amount up to this many points either way.
+    rows.push(clamped_number("brightnessJitter", tl!("Brightness Jitter"), Scatter::BRIGHTNESS_JITTER_RANGE, UnitKind::Percent));
     rows
 }
 

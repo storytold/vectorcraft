@@ -51,6 +51,8 @@ mod jp2read;
 mod metafile;
 mod naming;
 mod native;
+mod pcraftread;
+pub(crate) use pcraftread::is_pcraft;
 mod pcxread;
 pub mod pdf;
 mod pdfimport;
@@ -263,6 +265,8 @@ mod tests_psdslices;
 mod tests_heifread;
 #[cfg(test)]
 mod tests_jp2read;
+#[cfg(test)]
+mod tests_pcraftread;
 #[cfg(test)]
 mod tests_pcxread;
 #[cfg(test)]
