@@ -7782,6 +7782,28 @@ fn a_calling_run_made_away_from_the_session_that_ends_changes_nothing() {
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// An output handed in for a run that holds the documents is dropped when that run ends: a later
+/// run with the same input and params is not given it, and `plugin.run` without its own output is
+/// refused.
+#[test]
+fn an_ended_calling_run_drops_the_output_handed_in_for_it() {
+    use cmd::plugin::FilterRun;
+    let id = "test.engine.callsawaystale";
+    let mut s = session();
+    install_select_all_then_remove(&mut s, id);
+    let (a, b) = (rect(&mut s, 10.0, "#ff0000"), rect(&mut s, 40.0, "#00ff00"));
+    run(&mut s, "select.set", json!({"ids": [a.0]}));
+    let job = FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": id})).unwrap();
+    let output = run_job_away(&mut s, &job);
+    s.hand_in_plugin_calls(output);
+    s.end_plugin_calls();
+    FilterRun::begin_calls(&mut s, "plugin.run", &json!({"id": id})).unwrap();
+    assert!(matches!(s.execute("plugin.run", &json!({"id": id})), Err(EngineError::PluginBusy)), "the ended run's output was not kept");
+    assert!(s.doc().unwrap().doc.node(a).is_some() && s.doc().unwrap().doc.node(b).is_some(), "nothing applied");
+    s.end_plugin_calls();
+    run(&mut s, "plugin.remove", json!({"id": id}));
+}
+
 /// A plug-in command's run made away from the session applies through the command itself: an
 /// output handed in for it, and the calls of one that holds the documents, are one undo step named
 /// after the command.

@@ -304,7 +304,7 @@ impl Worker {
             }
             Some(ToWorker::Run { module, manifest, input, params, limits, calls }) => {
                 self.run = None;
-                let plugin = match Plugin::load_checked(&module, Limits::default(), &manifest) {
+                let plugin = match Plugin::load_checked(&module, limits.clone(), &manifest) {
                     Ok(p) => p,
                     Err(e) => return self.done(Err(e), Report::default()),
                 };
@@ -515,6 +515,19 @@ mod tests {
         let page = Plugin::load(&module, Limits::default()).unwrap();
         let mut bridge = |_: &str, _: &Value| Ok(json!({"n": 1}));
         assert_eq!(page.run_calling(INPUT.as_bytes(), b"{}", page.limits(), &mut bridge).0.unwrap(), br#"{"n":1}"#);
+    }
+
+    /// A run in the worker keeps to the memory limit the page sends with it, as a run on the page
+    /// with those limits does.
+    #[test]
+    fn a_run_keeps_to_the_memory_limit_it_is_sent() {
+        let (mut w, got) = worker();
+        let module = wat::parse_str(tpl::module(&tpl::manifest("test.worker.memory", "filter", "{}"), tpl::ECHO, "", 2)).unwrap();
+        let manifest = checked(&mut w, &got, &module);
+        let limits = Limits { max_memory_bytes: 1 << 16, ..Limits::default() };
+        let msg = ToWorker::Run { module, manifest, input: INPUT.into(), params: b"{}".to_vec(), limits, calls: false };
+        w.handle(&msg.encode());
+        assert!(matches!(take(&got).as_slice(), [FromWorker::Done(Err(_), _)]), "two pages don't fit in one");
     }
 
     #[test]

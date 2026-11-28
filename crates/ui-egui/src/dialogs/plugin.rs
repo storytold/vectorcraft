@@ -710,8 +710,9 @@ fn confirm_filter(app: &mut VectorcraftApp, kind: Opened, values: Map<String, Va
     let (cmd, p) = command(&plugin, own.as_deref(), values);
     let kept = light && previewing && app.session.in_interaction() && !refused;
     match registry::get(&plugin) {
-        // On the web, with no Preview, the filter or its command always runs in a worker.
-        Some(found) if crate::plugin_runs::in_workers(app) => {
+        // On the web, with no Preview, the filter or its command always runs in a worker; a command
+        // automation confirmed runs on the page and returns its result, as `routes` runs it.
+        Some(found) if crate::plugin_runs::in_workers(app) && !(own.is_some() && app.automation_asked()) => {
             preview.cancel(app);
             match own {
                 None => run(app, &found, p),

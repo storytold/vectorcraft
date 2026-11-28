@@ -33,7 +33,7 @@ files need revalidation.
   `vectorcraft-web-<hash>` `.wasm` and `.js` files, and `no-cache` on `index.html` and the
   `vectorcraft-plugin-worker` files. The page refuses a cached worker whose messages differ from
   its own, and plug-ins then fail to install and run until the browser fetches the new worker.
-- **Content Security Policy:** a site that sends one must allow three things
+- **Content Security Policy:** a site that sends one must allow four things
   ([CSP Level 3](https://www.w3.org/TR/CSP3/)):
   - The inline `<script type="module">` that Trunk writes into `index.html` to start the app.
     `script-src 'self'` alone blocks it, and the app does not start. A hash of that script in
@@ -48,6 +48,10 @@ files need revalidation.
     site's own scripts is enough only when the policy sets neither `worker-src` nor
     `child-src`. When the policy blocks the worker, the app runs, and plug-ins fail to install
     and run.
+  - The requests for the `.wasm` files, which the app and the plug-in worker load with `fetch`,
+    and for the font files the app loads: `connect-src 'self'`. Without `connect-src`, the
+    browser uses `default-src`. A policy whose `default-src` does not allow the site's own
+    files blocks these requests, and neither the app nor the plug-in worker starts.
 - **HTTPS:** WebGPU (and the clipboard) only work in a secure context, which means `https://`
   or `http://localhost`. Over plain HTTP elsewhere, the app falls back to WebGL2.
 - **No special isolation headers:** VectorCraft doesn't use `SharedArrayBuffer`, so it doesn't

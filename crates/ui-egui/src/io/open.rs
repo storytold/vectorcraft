@@ -236,9 +236,7 @@ fn ask_open(
     Ok(file_asks::ask(app, request, owner, move |app, picked| match picked {
         Picked::Contents(files) => {
             for (name, bytes) in &files {
-                if let Err(e) = open_bytes(app, name, bytes, None) {
-                    report_open_error(app, name, &e);
-                }
+                open_bytes_reporting(app, name, bytes);
             }
             Ok(Value::Null)
         }
@@ -510,6 +508,17 @@ pub fn report_open_error(app: &mut VectorcraftApp, name: &str, e: &str) {
     app.status(format!("Couldn't open {name}: {e}"));
     let message = crate::i18n::fmt(tl!("Can't open “{name}”."), &[("name", name)]);
     dialogs::confirm::tell(app, &message, &crate::i18n::message(crate::i18n::current(), e));
+}
+
+/// [`open_bytes`] for a file the user asked to open, a failure reported ([`report_open_error`]),
+/// also one that a worker's check of a plug-in module finds after it returned
+/// ([`crate::plugin_runs::report_checks_as_opened`]).
+pub fn open_bytes_reporting(app: &mut VectorcraftApp, name: &str, bytes: &[u8]) {
+    let from = crate::plugin_runs::checks_started(app);
+    match open_bytes(app, name, bytes, None) {
+        Ok(_) => crate::plugin_runs::report_checks_as_opened(app, from, name),
+        Err(e) => report_open_error(app, name, &e),
+    }
 }
 
 /// [`open_path`] for a file the user asked for, a failure reported ([`report_open_error`]). On

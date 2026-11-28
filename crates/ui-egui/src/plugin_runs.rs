@@ -87,6 +87,12 @@ impl Inbox {
     pub fn failed(&self) -> bool {
         self.error.is_some()
     }
+
+    /// The messages the page hasn't read yet.
+    #[cfg(test)]
+    pub(crate) fn queued(&self) -> &VecDeque<FromWorker> {
+        &self.messages
+    }
 }
 
 /// A worker's inbox, which its message and error handlers fill.
@@ -137,17 +143,22 @@ impl InWorker {
         Ok(InWorker { link, inbox, request: Some(request), deadline, held: None })
     }
 
-    /// Its next message, posting its request once it is ready → the message, or why it can't go on.
-    /// A message waiting in its inbox is read even past the deadline.
+    /// Its next message, posting its request once it is ready, before the deadline → the message, or
+    /// why it can't go on. A message waiting in its inbox is read even past the deadline.
     fn next(&mut self, now: f64) -> Result<Option<FromWorker>, String> {
         let mut inbox = self.inbox.borrow_mut();
         if let Some(e) = inbox.error.take() {
             return Err(e);
         }
-        if now >= self.deadline && inbox.messages.is_empty() {
+        let late = now >= self.deadline;
+        if late && inbox.messages.is_empty() {
             return Err(vectorcraft_plugins::Error::Limit("time budget".into()).to_string());
         }
         match inbox.messages.pop_front() {
+            // Past the deadline the request is not posted: the run would end before it answers.
+            Some(FromWorker::Ready { protocol }) if protocol == PROTOCOL && late => {
+                Err(vectorcraft_plugins::Error::Limit("time budget".into()).to_string())
+            }
             Some(FromWorker::Ready { protocol }) if protocol == PROTOCOL => {
                 drop(inbox);
                 let request = self.request.take().ok_or_else(unexpected)?;
@@ -160,12 +171,12 @@ impl InWorker {
     }
 
     /// While a dialog is open, its answer waits in its inbox: this posts its request once it is
-    /// ready → why it must end now (it failed, or its deadline passed with no final answer waiting),
-    /// if it must. A command call waiting is not answered then, so it doesn't keep the run past its
-    /// deadline.
+    /// ready, before the deadline → why it must end now (it failed, or its deadline passed with no
+    /// final answer waiting), if it must. A command call waiting is not answered then, so it doesn't
+    /// keep the run past its deadline.
     fn watch(&mut self, now: f64) -> Option<String> {
         while matches!(self.inbox.borrow().messages.front(), Some(FromWorker::Ready { .. })) {
-            if let Err(e) = self.next(f64::NEG_INFINITY) {
+            if let Err(e) = self.next(now) {
                 return Some(e);
             }
         }
@@ -232,6 +243,9 @@ struct Check {
     module: Value,
     hash: String,
     automated: bool,
+    /// The name of the file the user opened that holds the module: a failure is reported as File ›
+    /// Open reports one ([`crate::io::report_open_error`]).
+    opened: Option<String>,
 }
 
 /// The heavy filters running, and the installs being checked.
@@ -411,8 +425,21 @@ pub fn check_install(app: &mut VectorcraftApp, module: &Value, automated: bool) 
         Ok(w) => w,
         Err(e) => return Some(Err(e)),
     };
-    app.plugin_runs.checks.push(Check { worker, module: module.clone(), hash, automated });
+    app.plugin_runs.checks.push(Check { worker, module: module.clone(), hash, automated, opened: None });
     Some(Ok(json!({ "pending": true })))
+}
+
+/// How many install checks run now, for [`report_checks_as_opened`].
+pub fn checks_started(app: &VectorcraftApp) -> usize {
+    app.plugin_runs.checks.len()
+}
+
+/// Reports a failure of each install check started since there were `from` as File › Open reports
+/// one for file `name` ([`crate::io::report_open_error`]), not only in the status bar.
+pub fn report_checks_as_opened(app: &mut VectorcraftApp, from: usize, name: &str) {
+    for c in app.plugin_runs.checks.iter_mut().skip(from) {
+        c.opened = Some(name.to_string());
+    }
 }
 
 /// The page's clock, when workers run plug-ins.
@@ -481,7 +508,19 @@ fn watch_worker(app: &mut VectorcraftApp, i: usize) -> Option<Ended> {
     if worker.held.is_some() {
         return None;
     }
-    worker.watch(t).map(|e| Ended::Worker(Some(Err(e))))
+    if let Some(e) = worker.watch(t) {
+        return Some(Ended::Worker(Some(Err(e))));
+    }
+    // A run that failed ends at once, so one that holds the documents frees them; only an output
+    // waits for the dialog to close.
+    let mut inbox = worker.inbox.borrow_mut();
+    if matches!(inbox.messages.front(), Some(FromWorker::Done(Err(_), _)))
+        && let Some(FromWorker::Done(Err(e), lines)) = inbox.messages.pop_front()
+    {
+        vectorcraft_plugins::worker::log_lines(&r.plugin, &lines);
+        return Some(Ended::Worker(Some(Err(e.to_string()))));
+    }
+    None
 }
 
 /// Reads the inbox of worker run `i` → how it ended, if it has.
@@ -617,14 +656,16 @@ fn poll_checks(app: &mut VectorcraftApp) {
             continue;
         };
         let c = app.plugin_runs.checks.remove(i);
-        let Check { worker, module, hash, automated } = c;
+        let Check { worker, module, hash, automated, opened } = c;
         drop(worker);
         let r = checked.and_then(|manifest| {
             app.session.hand_in_checked_plugin(&hash, manifest);
             crate::io::install_module_as(app, module, automated)
         });
-        if let Err(e) = r {
-            app.status(e);
+        match (r, opened) {
+            (Err(e), Some(name)) => crate::io::report_open_error(app, &name, &e),
+            (Err(e), None) => app.status(e),
+            (Ok(_), _) => {}
         }
     }
 }

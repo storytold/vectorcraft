@@ -700,6 +700,27 @@ fn on_the_web_a_command_dialog_runs_its_command_in_a_worker() {
     assert_eq!(app.session.doc().unwrap().history.undo.last().unwrap().label, "Same", "as an undo step of its own");
 }
 
+/// On the web a plug-in command's dialog that automation confirms runs the command on the page, as
+/// a command automation runs directly does: no worker starts, and the command has applied.
+#[test]
+fn on_the_web_a_command_dialog_automation_confirms_runs_on_the_page() {
+    let (mut app, _fake) = web_app();
+    let id = "test.ui.web.commandautomation";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":["doc.read","doc.write"],"commands":[{{"id":"same","label":"Same","params":{{"size":{{"type":"number","min":1,"max":9,"default":3}}}}}}]}}"#
+    );
+    let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, TRIANGLE)).unwrap());
+    app.run("plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]})).unwrap();
+    assert!(dialogs::plugin::open_command(&mut app, &format!("plugin.{id}.same")));
+    pump(&mut app);
+    app.ui.answering_control = true;
+    answer_open(&mut app, true);
+    app.ui.answering_control = false;
+    assert!(none_open(&app));
+    assert!(app.plugin_runs.running.is_empty(), "no worker run");
+    assert_eq!(app.session.doc().unwrap().history.undo.last().unwrap().label, "Same", "it applied at once");
+}
+
 /// While a dialog is open a worker still gets its run, and Cancel and the time budget still end it;
 /// only an output waits for the dialog to close.
 #[test]
@@ -880,6 +901,24 @@ fn on_the_web_a_module_is_checked_in_a_worker_before_it_installs() {
     registry::remove(id);
 }
 
+/// A plug-in file opened on the web whose check in a worker fails is reported as File › Open
+/// reports a file it can't open: in a dialog, as well as in the status bar.
+#[test]
+fn on_the_web_an_opened_module_that_fails_its_check_is_reported_in_a_dialog() {
+    let (mut app, fake) = web_app();
+    let bad_id = "test.ui.web.badopen";
+    let traps = wat::parse_str(tpl::module(&tpl::manifest(bad_id, "filter", "{}"), tpl::ECHO, "(start $s) (func $s unreachable)", 1)).unwrap();
+    crate::io::open_bytes_reporting(&mut app, "bad.wasm", &traps);
+    assert!(none_open(&app), "nothing to report before the check ends");
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    fake.serve(0);
+    plugin_runs::poll(&mut app);
+    assert!(registry::get(bad_id).is_none());
+    assert!(app.ui.status.contains("trapped"), "{}", app.ui.status);
+    assert!(!none_open(&app), "the failure is shown in a dialog");
+}
+
 /// Two checked installs that both ask for approval ask one at a time: the second waits while the
 /// first one's question is open.
 #[test]
@@ -975,13 +1014,66 @@ fn on_the_web_a_call_waiting_under_a_dialog_ends_at_the_time_budget() {
     open_dialog(&app);
     fake.ready(0);
     plugin_runs::poll(&mut app);
+    assert_eq!(fake.worker(0).sent.borrow().len(), 1, "the run is posted under the dialog");
     // The worker runs it to its command call, which waits for the dialog.
     fake.serve(0);
+    plugin_runs::poll(&mut app);
+    let call_waits = matches!(fake.worker(0).inbox.borrow().queued().front(), Some(vectorcraft_plugins::worker::FromWorker::Call { .. }));
+    assert!(call_waits, "the command call waits in the inbox");
+    assert_eq!(app.plugin_runs.running.len(), 1, "within its time budget");
     fake.clock.set(vectorcraft_plugins::Limits::default().wall_time_ms as f64 + plugin_runs::GRACE_MS);
     plugin_runs::poll(&mut app);
     assert!(app.plugin_runs.running.is_empty() && fake.worker(0).terminated.get());
     assert!(!app.session.plugin_calls_open(), "the documents are free again");
     assert_eq!(app.session.doc().unwrap().doc, doc);
+}
+
+/// A worker that is ready only after the run's deadline is not sent the run, with or without a
+/// dialog open: the run ends at its time budget.
+#[test]
+fn on_the_web_a_worker_ready_after_the_deadline_is_not_sent_the_run() {
+    let (mut app, fake) = web_app();
+    let id = "test.ui.web.readylate";
+    install_light(&mut app, id, false, "{}", "");
+    let late = vectorcraft_plugins::Limits::default().wall_time_ms as f64 + plugin_runs::GRACE_MS;
+    for (k, dialog) in [(0, false), (1, true)] {
+        fake.clock.set(0.0);
+        app.run("plugin.dialog", json!({"id": id})).unwrap();
+        if dialog {
+            open_dialog(&app);
+        }
+        fake.clock.set(late);
+        fake.ready(k);
+        plugin_runs::poll(&mut app);
+        assert!(fake.worker(k).sent.borrow().is_empty(), "dialog {dialog}: nothing is posted past the deadline");
+        assert!(app.plugin_runs.running.is_empty() && fake.worker(k).terminated.get(), "dialog {dialog}");
+        assert!(app.ui.status.contains("time budget"), "{}", app.ui.status);
+    }
+}
+
+/// A run that holds the documents and fails while a dialog is open ends at once: its calls are
+/// undone and the documents are free, without waiting for the dialog or the deadline.
+#[test]
+fn on_the_web_a_holding_run_that_fails_under_a_dialog_frees_the_documents() {
+    let (mut app, fake) = web_app();
+    let id = "test.ui.web.failsunderdialog";
+    let grant = json!(["doc.read", "doc.write", "commands"]);
+    let manifest = format!(r#"{{"id":"{id}","name":"Test {id}","kind":"filter","api":2,"permissions":{grant},"commandAllowlist":["select.all"]}}"#);
+    let imports = r#"(import "env" "vc_call" (func $vc_call (param i32 i32 i32 i32) (result i32)))"#;
+    let wasm = wat::parse_str(tpl::with_imports(&manifest, imports, "unreachable", TRIANGLE)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&wasm), "grant": grant})).unwrap();
+    let doc = app.session.doc().unwrap().doc.clone();
+    app.run("plugin.dialog", json!({"id": id})).unwrap();
+    assert!(app.session.plugin_calls_open());
+    open_dialog(&app);
+    fake.ready(0);
+    plugin_runs::poll(&mut app);
+    fake.serve(0);
+    plugin_runs::poll(&mut app);
+    assert!(app.plugin_runs.running.is_empty() && fake.worker(0).terminated.get(), "{}", app.ui.status);
+    assert!(!app.session.plugin_calls_open(), "the documents are free again");
+    assert_eq!(app.session.doc().unwrap().doc, doc);
+    assert!(app.ui.status.contains("failed"), "{}", app.ui.status);
 }
 
 /// A run whose document changes is stopped at once, also while a dialog is open.
@@ -1069,8 +1161,10 @@ fn on_the_web_a_worker_run_starts_after_the_tool_edit_in_progress() {
         app.session.pointer(&PointerEvent::new(kind, 15.0, 10.0), v).unwrap();
     }
     assert!(app.session.tool_editing(), "the merge is being computed");
+    let unmerged = app.session.doc().unwrap().doc.clone();
     assert_eq!(app.run(&format!("plugin.{id}.same"), json!({})).unwrap()["background"], true);
-    assert!(!app.session.tool_editing(), "the merge applied before the run was given the document");
+    assert!(!app.session.tool_editing(), "the merge is no longer in progress");
+    assert_ne!(app.session.doc().unwrap().doc, unmerged, "the merge applied before the run was given the document");
     fake.ready(0);
     plugin_runs::poll(&mut app);
     fake.serve(0);

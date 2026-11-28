@@ -628,8 +628,13 @@ fn end_held(s: &mut Session, c: &str, p: &Value, handed: &mut Option<HandedIn>) 
         s.plugin_calling = Some(held);
         return Some(Err(EngineError::PluginBusy));
     };
-    let Calling { run, calls, tx, .. } = held;
-    let r = if calls.kept(s) { run.finish(s, &h.output) } else { Err(EngineError::Cancelled) };
+    let Calling { cmd, run, calls, tx, .. } = held;
+    // A panic applying the output still ends the run, so what its calls did is undone.
+    let r = if calls.kept(s) {
+        crate::guard::catch_panic(|| run.finish(s, &h.output)).unwrap_or_else(|msg| Err(EngineError::Internal { cmd, msg }))
+    } else {
+        Err(EngineError::Cancelled)
+    };
     Some(tx.end(s, r))
 }
 
@@ -1264,6 +1269,9 @@ impl Session {
     /// canceled): every document and the session state go back to how they were before it.
     pub fn end_plugin_calls(&mut self) {
         if let Some(c) = self.plugin_calling.take() {
+            // An output handed in for it is dropped with it: a later run with the same input and
+            // params is not given it.
+            self.plugin_output = None;
             let _ = c.tx.end(self, Err(EngineError::Cancelled));
         }
     }

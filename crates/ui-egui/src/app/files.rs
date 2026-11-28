@@ -40,11 +40,7 @@ impl VectorcraftApp {
         let mut arrived: Vec<_> = take(self.services.inbox.as_ref()).into_iter().map(|f| (f, false)).collect();
         arrived.extend(take(self.services.page_inbox.as_ref()).into_iter().map(|f| (f, true)));
         for ((name, bytes), automated) in arrived {
-            crate::file_asks::as_automated(self, automated, |app| {
-                if let Err(e) = io::open_bytes(app, &name, &bytes, None) {
-                    io::report_open_error(app, &name, &e);
-                }
-            });
+            crate::file_asks::as_automated(self, automated, |app| io::open_bytes_reporting(app, &name, &bytes));
         }
         place::drain(self);
     }
