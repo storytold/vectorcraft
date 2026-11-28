@@ -3212,6 +3212,9 @@ digits	Malayalam	Malaiàlam
 	Only Web Colors	Només colors web
 	Opacity	Opacitat
 	Show Opacity	Mostra l’opacitat
+	Show Hex Field	Mostra el camp hex
+	Hex or CSS color	Color hex o CSS
+	Parse Color	Analitza el color
 	Opacity & Mask Define Knockout Shape	L’opacitat i la màscara defineixen la forma d’exclusió
 	Opacity Mask	Màscara d’opacitat
 	Opacity Mask Info	Informació de la màscara d’opacitat
@@ -6216,6 +6219,7 @@ digits	Malayalam	Malaiàlam
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` ha de ser hue, saturation, brightness, red, green o blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` ha de ser none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH necessita sRGB com a espai RGB de treball
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` ha de ser un color hex (#rgb, #rgba, #rrggbb o #rrggbbaa) o un color CSS rgb(), hsl() o oklch() de 48 caràcters com a màxim
 @msg	`name` is empty	`name` és buit
 @msg	`newName` is empty	`newName` és buit
 @msg	`pathfinder` must be an object	`pathfinder` ha de ser un objecte
