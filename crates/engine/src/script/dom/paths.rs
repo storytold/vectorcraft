@@ -1427,8 +1427,8 @@ pub(super) fn see_all_points(h: &super::Host) {
 
 /// The ids of the objects that differ between `was` and `now`, two versions of a document that
 /// share the objects they have in common: each object that is not the same object in both, and
-/// everything in it. Lists that keep their objects in place are compared object by object, and
-/// the rest by the part between the objects they start and end with in common.
+/// everything in it. Lists are compared by the part between the objects they start and end with
+/// in common, and in that part each object is compared with the object of the same id.
 fn changed_ids(was: &crate::Document, now: &crate::Document) -> Vec<NodeId> {
     type Nodes<'a> = &'a [Arc<crate::doc::Node>];
     fn all(nodes: Nodes<'_>, out: &mut Vec<NodeId>) {
@@ -1444,23 +1444,38 @@ fn changed_ids(was: &crate::Document, now: &crate::Document) -> Vec<NodeId> {
         let start = a.iter().zip(b).take_while(|(x, y)| Arc::ptr_eq(x, y)).count();
         let end = a[start..].iter().rev().zip(b[start..].iter().rev()).take_while(|(x, y)| Arc::ptr_eq(x, y)).count();
         let (a, b) = (&a[start..a.len() - end], &b[start..b.len() - end]);
-        if a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.id == y.id) {
-            for (x, y) in a.iter().zip(b) {
-                if Arc::ptr_eq(x, y) {
-                    continue;
-                }
-                out.push(y.id);
-                match (x.children(), y.children()) {
-                    (Some(xc), Some(yc)) => work.push((xc, yc)),
-                    (xc, yc) => {
-                        all(xc.map_or(&[][..], Vec::as_slice), &mut out);
-                        all(yc.map_or(&[][..], Vec::as_slice), &mut out);
-                    }
+        let pairs: Vec<(&Arc<crate::doc::Node>, &Arc<crate::doc::Node>)> = if a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.id == y.id) {
+            a.iter().zip(b).collect()
+        } else {
+            // Siblings were added, removed or reordered: the rest are paired by id, so an object that
+            // only moved is skipped and a changed one is compared level by level. Objects without a
+            // partner are listed with everything in them.
+            let by_id: std::collections::HashMap<NodeId, &Arc<crate::doc::Node>> = a.iter().map(|x| (x.id, x)).collect();
+            let kept: std::collections::HashSet<NodeId> = b.iter().map(|y| y.id).collect();
+            let mut pairs = Vec::new();
+            for y in b {
+                match by_id.get(&y.id) {
+                    Some(x) => pairs.push((*x, y)),
+                    None => all(std::slice::from_ref(y), &mut out),
                 }
             }
-        } else {
-            all(a, &mut out);
-            all(b, &mut out);
+            for x in a.iter().filter(|x| !kept.contains(&x.id)) {
+                all(std::slice::from_ref(x), &mut out);
+            }
+            pairs
+        };
+        for (x, y) in pairs {
+            if Arc::ptr_eq(x, y) {
+                continue;
+            }
+            out.push(y.id);
+            match (x.children(), y.children()) {
+                (Some(xc), Some(yc)) => work.push((xc, yc)),
+                (xc, yc) => {
+                    all(xc.map_or(&[][..], Vec::as_slice), &mut out);
+                    all(yc.map_or(&[][..], Vec::as_slice), &mut out);
+                }
+            }
         }
     }
     out

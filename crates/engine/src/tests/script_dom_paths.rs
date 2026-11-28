@@ -180,6 +180,20 @@ fn removing_a_point_deselects_a_path_with_direct_selected_anchors() {
 }
 
 #[test]
+fn opening_a_path_deselects_its_closing_segment() {
+    // `pathItems[1]` is `b`, a closed rectangle whose segment 3 closes it.
+    let (mut s, a, b) = doc();
+    s.execute("select.segments", &json!({"id": b.0, "segments": [[0, 3]], "mode": "set"})).unwrap();
+    s.execute("select.add", &json!({"ids": [a.0]})).unwrap();
+    log(&mut s, "app.activeDocument.pathItems[1].closed = false;");
+    let st = s.active().unwrap();
+    assert_eq!(st.doc.node(b).and_then(|n| n.path_data()).map(|p| p.subpaths[0].closed), Some(false));
+    let sel = &st.selection;
+    assert!(!sel.objects.contains(&b) && !sel.segments.contains_key(&b), "{sel:?}");
+    assert!(sel.objects.contains(&a));
+}
+
+#[test]
 fn set_anchors_with_other_anchor_counts_deselects_the_paths_anchors() {
     let (mut s, a, b) = doc();
     s.execute("select.anchors", &json!({"id": b.0, "anchors": [[0, 1]], "mode": "set"})).unwrap();

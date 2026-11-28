@@ -2987,7 +2987,9 @@ other files through `$`:
   topmost first, leaving out paths in its groups, compound paths and sublayers; a layer or group that is hidden or
   locked, or that is in a hidden or locked layer or group, throws `Cannot add a path to a hidden or locked layer or
   group` and no path is made. A Live Paint group's `pathItems`, `groupItems` and `compoundPathItems` throw
-  `Cannot add an object to a Live Paint group` from their `add()` and the shape methods, and nothing is made. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
+  `Cannot add an object to a Live Paint group` from their `add()` and the shape methods, and nothing is made; a Live
+  Paint group that is hidden or locked, or that is in a hidden or locked layer or group, throws the hidden-or-locked
+  error above instead. A `PathItem` (https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/) adds to the page item
   members `pathPoints`, `closed`, `evenodd`, `area` (negative for a path that runs counterclockwise), `length`,
   `guides`, `clipping`, `setEntirePath(points)`, `filled`, `fillColor`, `fillOverprint`, `stroked`, `strokeColor`,
   `strokeOverprint`, `strokeWidth`, `strokeCap`, `strokeJoin`, `strokeMiterLimit` (1 to 500), `strokeDashes`,

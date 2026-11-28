@@ -788,10 +788,12 @@ fn on_doc_layer<T>(
             s.active().filter(|st| st.uid == uid).map(|st| st.doc.clone())
         };
         // Anchors and segments are selected by index: a path that gained, lost or replaced anchors
-        // is not selected again, so that other anchors of it are not selected in their place.
+        // is not selected again, so that other anchors of it are not selected in their place. A path
+        // that was opened or closed keeps its anchors but not its segments, so it is not selected
+        // again either.
         if let Some(doc) = &doc {
             let counts = |d: &Document, id: NodeId| {
-                d.node(id).and_then(|n| n.path_data()).map(|p| p.subpaths.iter().map(|sp| sp.anchors.len()).collect::<Vec<_>>())
+                d.node(id).and_then(|n| n.path_data()).map(|p| p.subpaths.iter().map(|sp| (sp.anchors.len(), sp.segment_count())).collect::<Vec<_>>())
             };
             let reshaped = h.dom.reshaping.get().filter(|it| it.doc.uid == uid).map(|it| it.id);
             let partial: Vec<NodeId> = before.anchors.keys().chain(before.segments.keys()).copied().collect();
