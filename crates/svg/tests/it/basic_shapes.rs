@@ -86,6 +86,25 @@ fn turned_curved_and_dashed_shapes_keep_their_exact_form() {
     }
 }
 
+/// A self-crossing quad and a corner listed twice are not rectangles, and a 1 pt circle whose
+/// handle is 0.75 pt off the circular position is not an ellipse. The written-precision match
+/// already rejects them; these pin that.
+#[test]
+fn a_bowtie_and_a_repeated_corner_stay_polygons_and_a_near_ellipse_stays_a_path() {
+    let bowtie = poly(&[(10.0, 10.0), (60.0, 40.0), (60.0, 10.0), (10.0, 40.0)], true);
+    let svg = svg_of(bowtie, false);
+    assert!(svg.contains("<polygon ") && !svg.contains("<rect") && !svg.contains("<path"), "{svg}");
+
+    let repeated = poly(&[(10.0, 10.0), (60.0, 10.0), (60.0, 40.0), (60.0, 40.0)], true);
+    let svg = svg_of(repeated, false);
+    assert!(svg.contains("<polygon ") && !svg.contains("<rect"), "{svg}");
+
+    let mut near = shapes::ellipse(Rect::new(40.0, 40.0, 42.0, 42.0));
+    near.subpaths[0].anchors[0].h_out.x += 0.75;
+    let svg = svg_of(near, false);
+    assert!(svg.contains("<path ") && !svg.contains("<circle") && !svg.contains("<ellipse"), "{svg}");
+}
+
 /// The exported SVG rendered by resvg on white at 1 px/pt.
 fn resvg_render(svg: &str) -> Image {
     let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default()).expect("parse");
