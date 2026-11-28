@@ -825,7 +825,7 @@ pub fn find(s: &Session, name: &str) -> Option<DocSettings> {
 
 impl Session {
     /// New Document's starting settings: Letter in Preferences ▸ Units ▸ General.
-    fn default_settings(&self) -> DocSettings {
+    pub(crate) fn default_settings(&self) -> DocSettings {
         DocSettings { units: self.default_units(), ..DocSettings::default() }
     }
 }

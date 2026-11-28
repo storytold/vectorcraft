@@ -24,6 +24,35 @@ pub(crate) fn grid_kept(d: &Document, g: &PerspectiveGrid) -> bool {
     serde_json::to_value(&g).is_ok_and(|v| d.unknown.get(persp::DOC_KEY) == Some(&v))
 }
 
+/// Whether `now` differs from `before` only in the view state of its perspective grid (whether it
+/// shows, the active plane, the point Automatic Plane Positioning holds and the view options), the
+/// changes [`silent`] makes without an undo step.
+pub(crate) fn only_grid_view_changed(now: &Document, before: &Document) -> bool {
+    let (a, b) = (now.unknown.get(persp::DOC_KEY), before.unknown.get(persp::DOC_KEY));
+    if a == b {
+        return false;
+    }
+    let (mut g, mut was) = (PerspectiveGrid::current(now), PerspectiveGrid::current(before));
+    g.visible = was.visible;
+    g.plane = was.plane;
+    g.inferred = was.inferred;
+    g.locked = was.locked;
+    g.lock_station = was.lock_station;
+    g.snap = was.snap;
+    g.rulers = was.rulers;
+    g.attached.clear();
+    was.attached.clear();
+    if serde_json::to_value(&g).ok() != serde_json::to_value(&was).ok() {
+        return false;
+    }
+    let mut rest = now.clone();
+    match b {
+        Some(v) => rest.unknown.insert(persp::DOC_KEY.to_string(), v.clone()),
+        None => rest.unknown.remove(persp::DOC_KEY),
+    };
+    rest == *before
+}
+
 /// Change view state of the grid without an undo step.
 pub(crate) fn silent(s: &mut Session, f: impl FnOnce(&mut PerspectiveGrid)) -> Result<PerspectiveGrid> {
     let st = s.doc_mut()?;

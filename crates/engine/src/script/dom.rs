@@ -67,6 +67,8 @@ use vectorcraft_js::{Data, HostClass, HostError, HostFunction, HostItem, HostMem
 use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current, data_size};
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
+pub(super) mod layers;
+mod perspective;
 mod tags;
 
 /// The error for a member read or called with no document open.
@@ -125,10 +127,22 @@ pub(super) struct State {
     items: RefCell<Vec<ItemList>>,
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
+    /// The last [`layers::ART_LISTS`] lists of art [`layers`]' collections gave, least recently
+    /// used first, each kept while its document is unchanged.
+    art: RefCell<Vec<layers::ArtList>>,
+    /// The uids of the documents whose active artboard `setActiveArtboardIndex` changed.
+    pub(super) active_artboards: RefCell<Vec<u64>>,
+    /// Each open document's uid and the index of its active artboard when the run started.
+    pub(super) boards_at_start: Vec<(u64, usize)>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
 }
 
 impl State {
+    /// The state of a run that starts with the documents `docs` open.
+    pub(super) fn new(docs: &[DocState]) -> Self {
+        Self { boards_at_start: docs.iter().map(|st| (st.uid, active_artboard(st))).collect(), ..Self::default() }
+    }
+
     /// Whether a call's own savepoint is open: its commands take none of their own.
     pub(super) fn saving(&self) -> bool {
         self.saving.get()
@@ -236,7 +250,7 @@ fn method(link: &Link, f: Member) -> HostMember {
 }
 
 /// A member the help pages list that is not available yet: reading or assigning it throws, after
-/// the check that a document or page item `this` is still there. `hasOwnProperty` is false for it,
+/// the check that a document, layer or page item `this` is still there. `hasOwnProperty` is false for it,
 /// so a script that checks for the member first skips it.
 fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostMember) {
     let message = format!("{class}.{name} is not available yet");
@@ -248,7 +262,10 @@ fn later(link: &Link, class: &'static str, name: &'static str) -> (String, HostM
             "Document" => {
                 doc_of(&h, arg(&a, 0), "Document")?;
             }
-            "PageItem" => {
+            "Layer" => {
+                layers::layer_of(&h, arg(&a, 0))?;
+            }
+            c if c == "PageItem" || ITEM_CLASSES.contains(&c) => {
                 item_of(&h, arg(&a, 0))?;
             }
             _ => {}
@@ -652,6 +669,18 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
+    on_doc_layer(h, uid, keep_selection, true, f)
+}
+
+/// [`on_doc`] for a command that makes a layer current on purpose: with `keep_layer` false the
+/// layer the command made current stays current.
+fn on_doc_layer<T>(
+    h: &Host,
+    uid: u64,
+    keep_selection: bool,
+    keep_layer: bool,
+    f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
+) -> std::result::Result<T, HostError> {
     let (index, active, before, layer, activated) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
@@ -672,7 +701,7 @@ fn on_doc<T>(
         if let Some(doc) = doc {
             restored = restore_selection(h, &doc, &before);
         }
-        if restored.is_ok() {
+        if restored.is_ok() && keep_layer {
             restored = restore_layer(h, uid, layer.0, &layer.1);
         }
     }
@@ -1145,19 +1174,28 @@ fn docs_add_document(h: &Host, a: &[Data]) -> Answer {
 /// left out. The settings stay with the run, which hands the script an object of the
 /// `DocumentPreset` class.
 fn new_preset(h: &Host) -> Answer {
+    let item = |k: &str, v: Data| (k.to_string(), v);
+    add_preset(
+        h,
+        vec![
+            item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
+            item("artboardRowsOrCols", num(1.0)),
+            item("artboardSpacing", num(20.0)),
+            item("height", num(792.0)),
+            item("numArtboards", num(1.0)),
+            item("width", num(612.0)),
+        ],
+    )
+}
+
+/// A new `DocumentPreset` of the run with the settings `fields`, which `new DocumentPreset()` and
+/// `app.getPresetSettings` both make.
+fn add_preset(h: &Host, fields: Vec<(String, Data)>) -> Answer {
     let mut presets = h.dom.presets.borrow_mut();
     if presets.len() >= MAX_PRESETS {
         return Err(HostError::Range(format!("a script can make at most {MAX_PRESETS} DocumentPresets")));
     }
-    let item = |k: &str, v: Data| (k.to_string(), v);
-    presets.push(vec![
-        item("artboardLayout", text("DocumentArtboardLayout.GridByRow")),
-        item("artboardRowsOrCols", num(1.0)),
-        item("artboardSpacing", num(20.0)),
-        item("height", num(792.0)),
-        item("numArtboards", num(1.0)),
-        item("width", num(612.0)),
-    ]);
+    presets.push(fields);
     Ok(host_ref("DocumentPreset", &[float(h.run), float(presets.len() as u64 - 1)]))
 }
 
@@ -1491,12 +1529,18 @@ fn items_doc(h: &Host, a: &[Data]) -> std::result::Result<Doc, HostError> {
 }
 
 fn items_length(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_length(h, a);
+    }
     let doc = items_doc(h, a)?;
     let n = with_doc(h, doc, |_, st| page_items(h, st).len());
     Ok(num(float(n as u64)))
 }
 
 fn items_typename(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_typename(h, a);
+    }
     items_doc(h, a)?;
     Ok(text("PageItems"))
 }
@@ -1507,6 +1551,9 @@ fn items_to_string(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn items_parent(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_parent(h, a);
+    }
     let doc = items_doc(h, a)?;
     Ok(doc_ref(h, doc.uid))
 }
@@ -1519,6 +1566,9 @@ fn probing(a: &[Data]) -> bool {
 
 /// `pageItems[i]`, and `pageItems["name"]` as `getByName` reads it.
 fn items_at(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_at(h, a);
+    }
     let doc = items_doc(h, a)?;
     if let Data::String(_) = arg(a, 1) {
         return match items_by_name(h, a) {
@@ -1532,6 +1582,9 @@ fn items_at(h: &Host, a: &[Data]) -> Answer {
 }
 
 fn items_by_name(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_by_name(h, a);
+    }
     let doc = items_doc(h, a)?;
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     with_doc(h, doc, |_, st| {
@@ -1557,6 +1610,9 @@ fn items_index(h: &Host, a: &[Data]) -> Answer {
 /// locked object, or one in a hidden or locked layer or group, stops it before anything is deleted,
 /// and so does an object on a locked artboard.
 fn items_remove_all(h: &Host, a: &[Data]) -> Answer {
+    if layers::is_scoped(a) {
+        return layers::scoped_remove_all(h, a);
+    }
     let doc = items_doc(h, a)?;
     let (ids, refused, on_locked) = with_doc(h, doc, |_, st| {
         let ids = top_items(&st.doc);
@@ -1911,7 +1967,7 @@ fn item_remove(h: &Host, a: &[Data]) -> Answer {
 }
 
 /// The error of `remove()` and `removeAll()` for an object on a locked artboard.
-const ON_LOCKED_ARTBOARD: &str = "cannot delete objects on a locked artboard";
+pub(super) const ON_LOCKED_ARTBOARD: &str = "cannot delete objects on a locked artboard";
 
 /// The error of `move` and `duplicate` given an object of another document.
 pub const CROSS_DOCUMENT: &str = "Cross-document placement is not available";
@@ -2132,19 +2188,6 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
     Ok(Data::Undefined)
 }
 
-fn layer_name(h: &Host, a: &[Data]) -> Answer {
-    let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-    let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
-    with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
-}
-
-fn layer_typename(h: &Host, a: &[Data]) -> Answer {
-    layer_name(h, a)?;
-    Ok(text("Layer"))
-}
-
 /// `toString()` of an object with a name: `[Class name]`, `[PathItem ]` for an object with no name.
 fn named_text(class: &str, name: Answer) -> Answer {
     match name? {
@@ -2159,10 +2202,6 @@ fn item_to_string(h: &Host, a: &[Data]) -> Answer {
 
 fn doc_to_string(h: &Host, a: &[Data]) -> Answer {
     named_text("Document", doc_name(h, a))
-}
-
-fn layer_to_string(h: &Host, a: &[Data]) -> Answer {
-    named_text("Layer", layer_name(h, a))
 }
 
 /// `toString()` of an object without a name: `[Class]`.
@@ -2216,6 +2255,10 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
+    for (name, members) in perspective::enums() {
+        let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
+        realm.define_host_object(name, items)?;
+    }
     let l = link;
     let mut application = named(vec![
         ("typename", typename_of("Application")),
@@ -2228,6 +2271,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("toString", class_text("Application")),
     ]);
     application.push(later(l, "Application", "beep"));
+    application.extend(perspective::application_members(l));
     let preset = {
         let l = link.clone();
         let f: HostFunction = Rc::new(move |_: Vec<Data>| {
@@ -2272,11 +2316,9 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("selection", property(l, doc_selection, doc_set_selection)),
         ("toString", method(l, doc_to_string)),
     ]);
-    document.extend(
-        ["layers", "artboards", "pathItems", "groupItems", "textFrames", "swatches", "symbols", "views", "activeLayer", "saveAs", "close"]
-            .into_iter()
-            .map(|m| later(l, "Document", m)),
-    );
+    document.extend(["pathItems", "textFrames", "swatches", "symbols", "views", "saveAs", "close"].into_iter().map(|m| later(l, "Document", m)));
+    document.extend(layers::document_members(l));
+    document.extend(perspective::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -2319,12 +2361,12 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         ("zOrder", method(l, item_z_order)),
         ("toString", method(l, item_to_string)),
     ]);
+    page_item.extend(layers::page_item_members(l));
     page_item.extend(
         [
             "artworkKnockout",
             "blendingMode",
             "isIsolated",
-            "layer",
             "pixelAligned",
             "sliced",
             "uRL",
@@ -2343,13 +2385,8 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .map(|m| later(l, "PageItem", m)),
     );
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
-    classes.push(class(
-        "Layer",
-        None,
-        named(vec![("typename", get(l, layer_typename)), ("name", get(l, layer_name)), ("toString", method(l, layer_to_string))]),
-        None,
-    ));
+    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), layers::members(c, l), None)));
+    classes.extend(layers::classes(l));
     classes.extend(tags::classes(l));
     realm.define_host_classes(classes, vec![("app".into(), host_ref("Application", &[]))])?;
     // The application's members a script may name without `app.`, assigned as `app.<member>` is.

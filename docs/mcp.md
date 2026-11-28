@@ -2883,7 +2883,7 @@ other files through `$`:
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  Document and PageItem pages list, such as `Document.views`, `PageItem.blendingMode`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned.
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the
@@ -2893,6 +2893,99 @@ other files through `$`:
   strict-mode code, which throws a `TypeError`. On a collection it throws `Not found`, as described above. Other members
   those pages list, such as `app.version` and `Document.save()`, and the members of the pages of the page-item kinds
   themselves, such as a path's fill, are not defined yet and read as `undefined`.
+- A document also has `layers`, `activeLayer`, `groupItems`, `compoundPathItems` and `artboards`.
+  `layers` (https://ai-scripting.docsforadobe.dev/jsobjref/Layers/) and a layer's own `layers` have `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add()` and `removeAll()`. On the document, `add()` runs `layer.new` and makes a
+  layer above every top-level layer; on a layer it runs `layer.newSublayer` and makes a sublayer on top of that
+  layer's contents. The new layer becomes the current one. `removeAll()` runs `layer.delete`; on the document's
+  layers it throws, since a document keeps at least one layer. Assigning a layer to `activeLayer` runs
+  `layer.setCurrent`. A `Layer` (https://ai-scripting.docsforadobe.dev/jsobjref/Layer/) has `typename`, `name`,
+  `visible`, `locked`, `printable`, `preview`, `dimPlacedImages`, `opacity` (0 to 100), `color`, `parent`,
+  `layers`, `pageItems`, `groupItems`, `compoundPathItems`, `zOrderPosition`, `hasSelectedArtwork`, `isIsolated`,
+  `move(relativeObject, insertionLocation?)`, `remove()` and `zOrder(method)`. Its properties run
+  `layer.setProps`, and `opacity` runs `object.setProps`. `move` and `zOrder` run `node.move`; a layer goes into
+  another layer, to the top level of the document, or directly above or below another layer. Every page item has
+  `layer`, the layer it is in. A `GroupItem` (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/) also has
+  `clipped`, `pageItems`, `groupItems` and `compoundPathItems`, and a `CompoundPathItem`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/CompoundPathItem/) has `pathItems`. `groupItems`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/GroupItems/) and `compoundPathItems` have `length`, `[i]`,
+  `index(key)`, `getByName(name)`, `add()` and `removeAll()`. `groupItems.add()` runs `object.newGroup`.
+  `clipped` runs `layer.clippingMask.toggle`. `artboards` (https://ai-scripting.docsforadobe.dev/jsobjref/Artboards/)
+  has `length`, `[i]`, `index(key)`, `getByName(name)`, `add(artboardRect)` (runs `artboard.new`),
+  `insert(artboardRect, index)` (runs `artboard.new` and `artboard.reorder`), `remove(index)` (runs
+  `artboard.delete`), `getActiveArtboardIndex()` and `setActiveArtboardIndex(index)`. An `Artboard`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Artboard/) has `typename`, `parent`, `artboardRect`, `name`,
+  `rulerOrigin`, `rulerPAR` (0.1 to 10), `showCenter`, `showCrossHairs`, `showSafeAreas` and `remove()`; its
+  properties run `artboard.setProps`, and `rulerOrigin` runs `document.setRulerOrigin`. One document always keeps
+  one artboard.
+  VectorCraft's own rules: `layers` lists layers top first, as the Layers panel shows them. `groupItems`,
+  `compoundPathItems` and a layer's or group's `pageItems` list art topmost first, as the document's `pageItems` does. The document's
+  `groupItems` and `compoundPathItems` hold every group or compound path at any depth, and a layer's or group's hold
+  only the ones directly in it. A layer's `pageItems` leave out its sublayers, and a compound path's `pathItems`
+  list its paths, with the typename `PathItems`. `locked` true means the layer is locked. `color` is an object `{red, green, blue}` of whole
+  numbers from 0 to 255. A layer's name is from 1 to 512 characters. A layer's `zOrderPosition` counts the layers
+  beside it from 1 at the bottom, leaving out art, and `zOrder` with `BRINGFORWARD` or `SENDBACKWARD` moves it past
+  the next layer beside it and any art between them.
+  `hasSelectedArtwork = true` adds the layer's shown, unlocked art to the selection (`select.add`), and `false`
+  deselects only the layer's art (`select.toggle`); the rest of the selection, ruler guides included, stays. A layer
+  with nothing to add or deselect runs no command.
+  `clipped = true` makes the group's topmost object, which must be a path, a compound path or type, its clipping
+  path; `false` releases the mask; the group keeps its id. `groupItems.add()` makes an empty group on top of the
+  layer's or group's contents, or of the current layer's for the document's collection.
+  `compoundPathItems.add()` throws, since a compound path holds at least one path. `artboards.add` and `insert` stop
+  at 100 artboards in a document, the limit `Documents.add` uses. An artboard's rectangle is
+  `[left, top, right, bottom]` in script coordinates, with its right side right of its left side, its bottom below
+  its top, each side from 1 to 3,999,856 points and every edge at most 4,000,000 points from the document origin.
+  Artboard names are trimmed, cannot be empty and are unique: a name
+  another artboard has throws. `add` and `insert` name the new artboard `Artboard N`, with N the first number from one
+  past the artboard count that no other artboard's name uses. `rulerOrigin` is `[x, y]` from the artboard's top-left corner with Y down.
+  `setActiveArtboardIndex` changes the view's active artboard with no undo step, and `script.run`'s report lists the
+  change in `activeArtboards` (`[{document, artboard}]`, both indexes, with each document's active artboard as the
+  run leaves it). The report also lists a document whose active artboard has another index when the run ends because
+  artboards were inserted, removed or reordered before it. An index outside the list throws a
+  `RangeError`. A layer that was deleted throws `Stale layer`, and an artboard that was deleted throws
+  `Stale artboard`. `Layer.pathItems`, `blendingMode`, `artworkKnockout` and `sliced`, `GroupItem.pathItems` and
+  `GroupItems.createFromFile` throw an error that says they are not available yet.
+- A document also has `showPerspectiveGrid()`, `hidePerspectiveGrid()`, `getPerspectiveActivePlane()`,
+  `setActivePlane(gridPlane)` and `selectPerspectivePreset(gridType, presetName)`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/Document/), and `app` has `getPresetSettings(preset)` and
+  `startupPresetsList` (https://ai-scripting.docsforadobe.dev/jsobjref/Application/). `showPerspectiveGrid`
+  and `hidePerspectiveGrid` run `perspective.grid.show`, and `setActivePlane` runs `perspective.plane.set`; none of
+  them adds an undo step, and a failed run puts the grid back. `selectPerspectivePreset` runs
+  `perspective.grid.preset` with a built-in or saved preset of `perspective.presets.list` (its name in any case),
+  which shows the grid and is part of the run's undo step when the grid changes. The enumerations
+  `PerspectiveGridType` (`OnePointPerspectiveGridType`,
+  `TwoPointPerspectiveGridType`, `ThreePointPerspectiveGridType`, `InvalidPerspectiveGridType`) and
+  `PerspectiveGridPlaneType` (`GRIDLEFTPLANETYPE`, `GRIDRIGHTPLANETYPE`, `GRIDFLOORPLANETYPE`,
+  `INVALIDGRIDPLANETYPE`) come from https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/. A
+  one-point grid takes only the left and the floor plane as its active plane, as the archived scripting guide
+  describes
+  (https://web.archive.org/web/20170622004549/https://wwwimages.adobe.com/content/dam/Adobe/en/devnet/illustrator/sdk/CC2015_3/AI_ScriptGd.pdf).
+  `getPresetSettings` takes the names `addDocument` takes and gives a new `DocumentPreset` with the settings a
+  document from that preset starts with, which `addDocument` takes back unchanged. It leaves out `units` when the
+  preset's units are not one of the six `RulerUnits` values a new document takes, `rasterResolution` when the
+  preset's PPI is not 72, 150 or 300, `numArtboards` and `artboardRowsOrCols` when the preset has more than 100
+  artboards, and `artboardRowsOrCols` alone for a grid by column that no row count lays out the same, so
+  `addDocument` with the same preset keeps the preset's own. `startupPresetsList` is a read-only array of the
+  startup preset names, each of which `addDocument` and `getPresetSettings` take: `Print`, `Web`, `Mobile`,
+  `Film & Video`, `Art & Illustration`, `Branding`, `Social`, `Basic CMYK` and `Basic RGB`, in that order, so
+  `app.startupPresetsList[0]` is `Print`. This order is VectorCraft's own. Each read gives a new array; a script
+  that changes that array does not change the list a later read gives. As the Document page describes,
+  `showPerspectiveGrid` and `setActivePlane` give `true` on success, and `hidePerspectiveGrid` gives `true` when it
+  hides a grid and `false` when the grid was already hidden.
+  VectorCraft's own rules: `showPerspectiveGrid` and `setActivePlane` also give `true` when nothing changed.
+  `INVALIDGRIDPLANETYPE` makes no plane active. A preset name that is not
+  listed, a preset whose grid is not of `gridType`, `InvalidPerspectiveGridType` and a name of more than 4,096 bytes
+  throw an error with nothing changed. Changing the `DocumentPreset` `getPresetSettings` gives changes nothing else.
+  A run makes at most 10,000 `DocumentPreset` objects, those of `new DocumentPreset()` and `getPresetSettings`
+  together; one more throws a `RangeError`.
+  `app.saveWorkspace`, `switchWorkspace`, `deleteWorkspace`, `resetWorkspace`, `loadColorSettings` and
+  `showPresets`, and `Document.exportPerspectiveGridPreset` and `importPerspectiveGridPreset`, throw an error that
+  says they are not available yet.
+- `object.newGroup {parent?, index?}` adds an empty group to a shown, unlocked layer or group (`parent`; default:
+  the current layer), on top of its contents or at `index` (0 is the bottom; in a clipping layer or group, index 0
+  puts it directly above the clipping path), as one undo step named Group, and
+  gives `{id}`. The selection stays as it is.
 - `PageItem.tags` and `Document.tags` are `Tags` collections (https://ai-scripting.docsforadobe.dev/jsobjref/Tags/)
   with `typename`, `length`, `parent`, `[i]`, `index(key)`, `getByName(name)`, `add()` and `removeAll()`, and each
   `Tag` (https://ai-scripting.docsforadobe.dev/jsobjref/Tag/) has `typename`, `name`, `value`, `parent` (its page

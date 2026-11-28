@@ -2134,7 +2134,7 @@ impl Session {
             eval_strict: Cell::new(None),
             dollar: dollar::RunState::new(&request.locale),
             args: RefCell::new((Data::Undefined, 0)),
-            dom: dom::State::default(),
+            dom: dom::State::new(self.documents()),
             run_docs: RefCell::new(
                 self.docs
                     .iter()
@@ -2354,7 +2354,12 @@ impl Session {
                 changed_names.push(st.title());
                 continue;
             };
-            let changed = !st.same_content(&b.doc);
+            // The perspective grid's view state changes without an undo step, as it does outside a
+            // run, when no command in the run recorded an undo step of its own on the working copy.
+            // The working copy starts with no undo steps (`World::working`), so any step it holds now
+            // was recorded in the run.
+            let recorded = !st.history.undo.is_empty();
+            let changed = !st.same_content(&b.doc) && (recorded || !cmd::distortcmds::only_grid_view_changed(&st.doc, &b.doc));
             st.history = std::mem::take(&mut b.history);
             st.recovery.clone_from(&b.recovery);
             if changed {
@@ -2395,6 +2400,9 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
+        if let Some(boards) = dom::layers::active_artboards(&host.dom.active_artboards.borrow(), &host.dom.boards_at_start, self.documents()) {
+            report["activeArtboards"] = boards;
+        }
         let rejections = rejections_report(host, &job.realm);
         if let (false, Some(o)) = (rejections.is_empty(), report.as_object_mut()) {
             o.insert("unhandledRejections".into(), Value::Array(rejections));
