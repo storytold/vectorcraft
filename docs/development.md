@@ -357,6 +357,9 @@ The app decides which cursors exist; whoever draws them works from the list. For
   doesn't run. `cargo xtask ci` runs the same two as its `test` and `doctests` steps.
 - The test build leaves out the examples (`--lib --bins --tests`); clippy (`--all-targets`) still
   checks them.
+- `cargo xtask pdf-deps` checks exact versions and immutable sources for the shared PDF crates.
+  A shared PDF revision update must also update `xtask/src/pdf_deps.rs` to match the committed
+  `Cargo.toml` and `Cargo.lock`; keep the checks for duplicate packages and source/version drift.
 - Each crate has one integration-test binary: its test files are modules of `tests/it/main.rs`. Run
   one file's tests with `cargo nextest run -p vectorcraft-svg --test it roundtrip::` (or `cargo test`
   with the same arguments). A new test file gets a `mod` line in `main.rs`.

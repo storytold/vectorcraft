@@ -816,7 +816,7 @@ pub(crate) fn root_env(prefs: &vectorcraft_engine::Prefs, native_ppp: f32, print
     root.escape_leaves_fields = true;
     // A held key repeats its command (Cmd+= keeps zooming in).
     root.shortcuts_repeat = true;
-    root
+    theme::apply_scheme(root, prefs)
 }
 
 /// The toast tone of an engine message's level.

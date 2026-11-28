@@ -9,6 +9,8 @@ Native saves on Unix flush the destination directory after writing or replacing 
 >
 > Outline Stroke is available in the canvas context menu when the selection has an outlinable stroke (#5267), excluding the command's protected linked dimensions and plain butt-capped paths that paint no area. Painting round and square caps remain eligible. Scores and estimates unchanged.
 >
+> Quiet colour scheme, with one corner scale (#3848): opt-in; Modern remains the default. Scores and estimates unchanged.
+>
 > Tech Circuit update (2026-11-14): three original procedural brushes; ten built-in brush libraries (G5).
 >
 > Oversized artboard import update (2026-11-12): Explicit editing-data import retains a single artboard beyond a capped 14,400 pt PDF page (#6865).
@@ -252,6 +254,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 | 2026-10-29 | minor | Type core: copied text runs retain character attributes across document switches and canvas pastes (#4459); scores unchanged. |
 | 2026-10-29 | minor | Type core: soft return (Shift+Enter forced line break, U+2028) breaks lines without starting new paragraphs (#2754); scores unchanged. |
 | 2026-10-26 | minor | Type: on Windows, the font families GDI lists that DirectWrite's system font collection doesn't name are asked for one by one (a GDI font selected into a device context gives its DirectWrite face, and that face its files), so fonts Creative Cloud loads that only GDI has, read from their extensionless files in place, are in the font menus (#1258; `system_fonts::tests::fonts_only_gdi_has_loaded_are_listed_by_their_files`); the faces still listed keep their files between looks, so the look every two seconds stays about as fast. Scores and hours unchanged. |
+| 2026-10-24 | minor | shared fields and spinner/preset groups at standard 24 pt control height, square inner joints, token-driven corners (#3915); scores unchanged. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-3; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile upstream documentation after review F-2; preserve every dated revision and the original scaleArt runtime evidence without repeating completed jobs. |
 | 2026-10-22 | minor | Reconcile subsequent upstream progress updates without changing the runtime or repeating completed evidence; retain every dated upstream and feature revision. |

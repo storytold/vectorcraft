@@ -6,6 +6,8 @@
 > Panel readout copy (#8432, #8826): Info values and paint names, Links information, and named Document Info rows with no separate value follow the guarded immediate-copy policy landed in #9353. A plain first click copies the full value and reports "Copied the value"; accessible activation copies it too. Selectable readouts retain word selection on double-click, Shift/drag selection and keyboard Copy/Cut. Links Location retains #9521's path fitting and full-path tooltip as static text, with the same full-value primary/accessible copy and a native Copy Location button for keyboard use. Scores and estimates are unchanged.
 
 >
+> Quiet colour scheme, with one corner scale (#3848): opt-in; Modern remains the default. Scores and estimates unchanged.
+>
 > Oversized artboard import update (2026-11-12): Explicit editing-data import retains a single artboard beyond a capped 14,400 pt PDF page (#6865).
 >
 > **M4/M7 file-font hardening status (2026-11-12, #4569):** implementation and synthetic regressions added; compilation and runtime proof pending. Scores and estimates unchanged.
@@ -349,6 +351,7 @@ not take the artwork yet. Overflow-menu drag remains separate. Scores and hours 
 | 2026-10-25 | minor | M10/G1: a selected Grid Repeat shows handles: the one below the grid adds or removes rows, the one right of it columns, the one past its bottom-right corner both, and the sliders between the first two columns and rows set the horizontal and vertical spacing; each drag is one undo step and Escape cancels it (#2691); estimates unchanged |
 | 2026-10-24 | minor | Docs catch-up: Current focus's three G11 lines merged into one (#864 and #885 remain; #937, #983/#1037 and #834 fixed) and its two stale G2 lines (filters left, the Effect Gallery to build) removed; G2 stays the gallery's thumbnails and in-dialog preview, 1–2 h. Estimates unchanged. |
 | 2026-10-24 | minor | M10/G5: brush libraries (Window › Brush Libraries, the Brushes panel's Brush Libraries Menu, four generated libraries, Save Brushes, Other Library…); estimates unchanged |
+| 2026-10-23 | minor | Shared editable fields and spinner/preset groups are square where their parts meet, take the colour scheme's control corners at their ends, and match the standard 24 pt control height throughout the interface; Opacity shares one border with its popup arrow; scores and estimates unchanged. |
 | 2026-10-23 | minor | M10/G5: symbol libraries (Window › Symbol Libraries, the Symbols panel's Symbol Libraries Menu, Save Symbols, Other Library…); estimates unchanged |
 | 2026-10-23 | minor | M2/G1: a double-click on the Line Segment, Arc, Rectangular Grid or Polar Grid tool opens its Tool Options (#2691, in part); estimates unchanged |
 | 2026-10-23 | minor | G12 and M14: General › Constrain Angle acts for the arrow keys, Shift drags and new objects (#394); estimates unchanged |

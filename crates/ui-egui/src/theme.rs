@@ -1,10 +1,13 @@
 //! The user's interface choices (brightness, accent, colour scheme) and how they select the root theme.
 
 use craft::theme::{AppSizes, ModeChoice, Rgba, ThemeId};
+use craft::ui::runtime::env::RootEnv;
 use egui::{FontFamily, FontId};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, LazyLock};
 use vectorcraft_engine::Prefs;
+
+mod proposal;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Brightness {
@@ -85,22 +88,25 @@ impl Accent {
     }
 }
 
-/// User Interface › Color Scheme: Modern (the default: slate greys and the chosen accent) or
-/// Classic (the neutral greys and blue accent of earlier versions). Both keep the same layout,
-/// cards and corners; only the colours differ.
+/// Modern remains the default. Classic, Flat and Quiet are opt-in schemes; the proposal palettes
+/// and corner scale use the same shared framework as the built-in themes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Scheme {
     #[default]
     Modern,
     Classic,
+    Flat,
+    Quiet,
 }
 
 impl Scheme {
-    pub const ALL: [Scheme; 2] = [Scheme::Modern, Scheme::Classic];
+    pub const ALL: [Scheme; 4] = [Scheme::Modern, Scheme::Classic, Scheme::Flat, Scheme::Quiet];
     pub fn id(self) -> &'static str {
         match self {
             Scheme::Modern => "modern",
             Scheme::Classic => "classic",
+            Scheme::Flat => "flat",
+            Scheme::Quiet => "quiet",
         }
     }
     pub fn parse(s: &str) -> Option<Self> {
@@ -113,9 +119,8 @@ fn theme_id(id: &str) -> ThemeId {
     ThemeId::parse(id).unwrap_or_else(|_| ThemeId::suite_default())
 }
 
-/// The root theme the saved interface preferences select: its id, its fixed mode (the four
-/// brightness levels decide light or dark, never the system) and the accent seed. Classic keeps its
-/// own blue and Modern's coral is in its theme files, so both return no seed there.
+/// The root theme the saved interface preferences select: its id, fixed mode and accent seed.
+/// Classic, Flat and Quiet keep their own blue; Modern keeps the user's accent.
 pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
     let brightness = Brightness::parse(&prefs.ui_brightness).unwrap_or_default();
     let accent = Accent::parse(&prefs.ui_accent).unwrap_or_default();
@@ -123,6 +128,7 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
     let dark = matches!(brightness, Brightness::Dark | Brightness::MediumDark);
     let mode = if dark { ModeChoice::Dark } else { ModeChoice::Light };
     match scheme {
+        Scheme::Flat | Scheme::Quiet => (proposal::definition(scheme, brightness).id.clone(), mode, None),
         Scheme::Classic => {
             let id = match brightness {
                 Brightness::MediumDark => "craft.artcraft",
@@ -145,6 +151,21 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
     }
 }
 
+/// Supplies app-defined themes through the framework's library-theme contract. Built-in schemes
+/// keep the current production root, sizes and control settings unchanged.
+pub(crate) fn apply_scheme(root: RootEnv, prefs: &Prefs) -> RootEnv {
+    let scheme = Scheme::parse(&prefs.ui_color_scheme).unwrap_or_default();
+    match scheme {
+        Scheme::Modern | Scheme::Classic => root,
+        Scheme::Flat | Scheme::Quiet => {
+            let brightness = Brightness::parse(&prefs.ui_brightness).unwrap_or_default();
+            let mut root = root.library_theme(proposal::definition(scheme, brightness));
+            root.sizes = proposal::sizes(scheme);
+            root
+        }
+    }
+}
+
 /// The app's sizes over the framework's size sets (`sizes.json`): push buttons have the app's 4-point corners
 /// where the sets give pills, the Home title is 26-point under 60 points of page margin with a 36-point call to
 /// action, Home keeps production's rhythm (its item spacing of 5 plus the room it added: 9 from title to subtitle, 27
@@ -156,6 +177,7 @@ pub fn root_theme(prefs: &Prefs) -> (ThemeId, ModeChoice, Option<Rgba>) {
 /// edge with 28-point buttons at least 72 points wide.
 /// Its type is the size the reference app draws: it set Inter at 92% of its nominal 13-point body, 12.5-point labels
 /// and 11.5-point captions, so they read at 12, 11.5 and 10.5 points, on the rows those nominal sizes gave.
+/// Production sizes remain shared by identity, as required by the framework's token cache.
 const SIZES: &[u8] = br#"{
     "all": {
         "radius.button": 4,
@@ -203,8 +225,6 @@ const SIZES: &[u8] = br#"{
     }
 }"#;
 
-/// The app's sizes ([`SIZES`]) as one shared value: the token cache tells a change of sizes by its pointer, so a
-/// new value each frame would resolve the tokens again each frame.
 pub fn app_sizes() -> Arc<AppSizes> {
     static SHARED: LazyLock<Arc<AppSizes>> = LazyLock::new(|| Arc::new(AppSizes::parse_or_default(SIZES)));
     Arc::clone(&SHARED)
@@ -234,5 +254,67 @@ mod tests {
     #[test]
     fn the_app_sizes_are_read_whole() {
         assert!(AppSizes::parse(SIZES).is_ok_and(|sizes| !sizes.is_empty()));
+    }
+
+    fn resolved(root: RootEnv) -> Arc<craft::ui::style::UiTokens> {
+        use craft::ui::runtime::{
+            env::Env,
+            frame::{FrameInput, set_input},
+        };
+        let ctx = crate::testing::ui_context();
+        set_input(&ctx, FrameInput::new(root));
+        let mut tokens = None;
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| tokens = Some(Arc::clone(&Env::of(ui).tokens)));
+        out.textures_delta.clear();
+        tokens.expect("the frame resolves its root theme")
+    }
+
+    /// Quiet must not change a new install or a saved Modern selection at any brightness.
+    #[test]
+    fn the_default_look_has_no_quiet_lines_or_corners() {
+        assert_eq!(Scheme::default(), Scheme::Modern);
+        assert_eq!(Prefs::default().ui_color_scheme, "modern");
+        for b in Brightness::ALL {
+            let prefs = Prefs { ui_brightness: b.id().into(), ..Default::default() };
+            let (id, mode) = match b {
+                Brightness::Dark => ("craft.vectorcraft-modern", ModeChoice::Dark),
+                Brightness::MediumDark => ("craft.vectorcraft-modern-medium", ModeChoice::Dark),
+                Brightness::MediumLight => ("craft.vectorcraft-modern-medium", ModeChoice::Light),
+                Brightness::Light => ("craft.vectorcraft-modern", ModeChoice::Light),
+            };
+            let print = crate::state::print_ppi(prefs.display_print_size, None);
+            let actual = resolved(crate::app::root_env(&prefs, 1.0, print));
+            let mut production = RootEnv::new().theme(theme_id(id)).mode(mode);
+            production.sizes = app_sizes();
+            let expected = resolved(production);
+            assert_eq!(actual.color, expected.color, "{b:?}: production colours");
+            assert_eq!(actual.shape, expected.shape, "{b:?}: production corners and edges");
+        }
+    }
+
+    /// Confirming Quiet in Preferences changes the theme the real frame resolves, not just the
+    /// stored choice or a private palette helper.
+    #[test]
+    fn choosing_quiet_in_the_preferences_applies_it() {
+        let mut app = crate::testing::windowed(crate::VectorcraftApp::new(vectorcraft_engine::Session::new(), crate::Services::default()));
+        crate::prefs_dialog::open(&mut app, None);
+        crate::prefs_dialog::set_field(&mut app, "uiColorScheme", serde_json::json!("quiet")).unwrap();
+        crate::prefs_dialog::confirm(&mut app).unwrap();
+        assert_eq!(app.ui.engine_prefs["uiColorScheme"], "quiet");
+        for (b, panel, field) in [
+            (Brightness::Dark, 0x151618, 0x0f1012),
+            (Brightness::MediumDark, 0x1d1e21, 0x16171a),
+            (Brightness::MediumLight, 0xe5e7ea, 0xdadde1),
+            (Brightness::Light, 0xf3f4f6, 0xe9ebee),
+        ] {
+            app.session.prefs.ui_brightness = b.id().into();
+            let actual = resolved(crate::app::root_env(&app.session.prefs, 1.0, app.print_ppi()));
+            let rgb = |v: u32| Rgba::rgb((v >> 16) as u8, (v >> 8) as u8, v as u8);
+            assert_eq!(actual.color.surface.panel, rgb(panel), "{b:?}");
+            assert_eq!(actual.color.surface.chrome, rgb(panel), "{b:?}: one chrome surface");
+            assert_eq!(actual.color.surface.sunken, rgb(field), "{b:?}: inset fields");
+            let r = actual.shape.radius;
+            assert_eq!((r.sm, r.control, r.surface, r.window), (4.0, 8.0, 14.0, 14.0), "{b:?}");
+        }
     }
 }
