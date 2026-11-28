@@ -15,17 +15,21 @@
 //! <https://help.adobe.com/archive/en_US/illustrator/cs4/illustrator_cs4_help.pdf#page=352>,
 //! <https://web.archive.org/web/20220911143322/https://helpx.adobe.com/pdf/cs6/illustrator_reference.pdf#page=348>.
 
-use std::hash::{DefaultHasher, Hash, Hasher};
-
-use egui::{Color32, Rect, Sense, Stroke, Ui, vec2};
-use serde_json::{Value, json};
+use craft::theme::Srgba;
+use craft::ui::buttons::ToggleButton;
+use craft::ui::choice::Swatch;
+use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _};
+use craft::ui::display::{Picture, PictureSize, Text};
+use craft::ui::layout_components::{Row, Stack};
+use craft::ui::list::{ThumbAspect, ThumbSize};
+use craft::ui::pickers::Select;
+use craft::ui::primitives::Revision;
+use egui::{Color32, Ui};
+use serde_json::{Map, Value, json};
 use vectorcraft_doc::{CharClass, CharStyle, CompositeClass, CompositeFont, FontHeightReference, TextObject};
 use vectorcraft_geom::kurbo::BezPath;
 use vectorcraft_geom::{Affine, Point};
 use vectorcraft_text::FontDb;
-
-use crate::state::Dialog;
-use crate::widgets;
 
 /// The text the sample sets: two Kanji, two kana, two punctuation marks, a symbol, Roman letters
 /// with an ascender and a descender, and two numerals, then the first character of each custom set.
@@ -37,17 +41,17 @@ pub(super) const ZOOMS: [u64; 7] = [25, 50, 75, 100, 200, 400, 800];
 /// The size the sample is set at with Zoom at 100%, in points.
 const SIZE: f64 = 36.0;
 
-/// How tall the sample is drawn, in points.
+/// How tall the sample is rendered, in points. `Picture` fits the image into its token-sized rect at this aspect.
 const HEIGHT: f32 = 150.0;
 
 /// How far the sample text starts from the left edge, in points.
 const INSET: f64 = 12.0;
 
-/// The width of the column of line buttons and Zoom beside the sample, in points.
-const BUTTONS: f32 = 190.0;
+/// How wide the sample is rendered, in points.
+const WIDTH: f32 = 720.0;
 
-/// The narrowest and widest the sample is drawn, in points.
-const WIDTH: std::ops::RangeInclusive<f32> = 240.0..=720.0;
+/// The key the sample's picture is stored under; its revision says when the image changed.
+const PICTURE_KEY: u64 = 0;
 
 /// The name the sample lends the font under, so a name that is empty, being typed or shared with
 /// another font still draws.
@@ -70,7 +74,7 @@ impl Mark {
     pub(super) const ALL: [Self; 7] =
         [Self::IcfBox, Self::EmBox, Self::Baseline, Self::CapHeight, Self::AscentDescent, Self::Ascender, Self::XHeight];
 
-    /// The dialog field that holds whether the mark shows.
+    /// The sample field that holds whether the mark shows.
     pub(super) fn field(self) -> &'static str {
         match self {
             Self::IcfBox => "lineIcfBox",
@@ -115,7 +119,7 @@ impl Mark {
 
 /// The fields Show Sample adds to the dialog when it opens: hidden, at 100%, with the marks of
 /// [`Mark::shown_at_first`].
-pub(super) fn defaults(fields: &mut serde_json::Map<String, Value>) {
+pub(super) fn defaults(fields: &mut Map<String, Value>) {
     fields.insert("sample".into(), json!(false));
     fields.insert("zoom".into(), json!(100));
     for m in Mark::ALL {
@@ -123,24 +127,37 @@ pub(super) fn defaults(fields: &mut serde_json::Map<String, Value>) {
     }
 }
 
-/// Why `ui.dialog.set` can't set Show Sample's `field` to the value `d` now holds: `sample` and the
-/// marks take true or false, and `zoom` one of [`ZOOMS`].
-pub(super) fn check_field(d: &Dialog, field: &str) -> Result<(), String> {
-    let v = d.fields.get(field);
-    let key = field;
-    if field == "sample" || Mark::ALL.iter().any(|m| m.field() == field) {
-        if !v.is_some_and(Value::is_boolean) {
-            return Err(format!("`{key}` must be true or false"));
+/// Whether `field` is one of Show Sample's.
+pub(super) fn is_field(field: &str) -> bool {
+    field == "sample" || field == "zoom" || Mark::ALL.iter().any(|m| m.field() == field)
+}
+
+/// Why Show Sample's `field` can't take `value`: `sample` and the marks take true or false, and
+/// `zoom` one of [`ZOOMS`].
+pub(super) fn check_field(field: &str, value: &Value) -> Result<(), String> {
+    if field == "zoom" {
+        if !value.as_u64().is_some_and(|z| ZOOMS.contains(&z)) {
+            return Err(format!("`{field}` must be one of {}", ZOOMS.map(|z| z.to_string()).join(", ")));
         }
-    } else if field == "zoom" && !v.and_then(Value::as_u64).is_some_and(|z| ZOOMS.contains(&z)) {
-        return Err(format!("`{key}` must be one of {}", ZOOMS.map(|z| z.to_string()).join(", ")));
+    } else if !value.is_boolean() {
+        return Err(format!("`{field}` must be true or false"));
     }
     Ok(())
 }
 
-/// The Zoom `d` holds, 100 when it holds none of [`ZOOMS`].
-fn zoom(d: &Dialog) -> u64 {
-    d.fields.get("zoom").and_then(Value::as_u64).filter(|z| ZOOMS.contains(z)).unwrap_or(100)
+/// The Zoom `fields` hold, 100 when it holds none of [`ZOOMS`].
+fn zoom(fields: &Map<String, Value>) -> u64 {
+    fields.get("zoom").and_then(Value::as_u64).filter(|z| ZOOMS.contains(z)).unwrap_or(100)
+}
+
+/// Whether Show Sample is on.
+pub(super) fn shown(fields: &Map<String, Value>) -> bool {
+    on(fields, "sample")
+}
+
+/// Whether the sample field `field` is on.
+fn on(fields: &Map<String, Value>, field: &str) -> bool {
+    fields.get(field).and_then(Value::as_bool).unwrap_or(false)
 }
 
 /// The heights the marks are drawn at, in points above the baseline (a mark's line is not drawn
@@ -261,107 +278,95 @@ pub(super) fn measure(f: &CompositeFont, size: f64) -> (BezPath, Heights) {
     (path, h)
 }
 
-/// The sample drawn for a key, kept until the font, zoom, size, display scale, text color or the
-/// fonts installed change.
-struct Drawn {
-    key: u64,
-    texture: Option<egui::TextureHandle>,
-    heights: Heights,
-}
-
 thread_local! {
-    static DRAWN: crate::graphics::TexCache<Option<Drawn>> = crate::graphics::TexCache::default();
     static RENDERER: std::cell::RefCell<vectorcraft_render::Renderer> = std::cell::RefCell::new(vectorcraft_render::Renderer::new());
 }
 
-/// Show Sample's area under the table: the sample of `f` with its marks, then the mark buttons and
-/// Zoom beside it.
-pub(super) fn show(ui: &mut Ui, d: &mut Dialog, f: &CompositeFont) {
-    let zoom = zoom(d);
-    ui.horizontal(|ui| {
-        let width = (ui.available_width() - BUTTONS).clamp(*WIDTH.start(), *WIDTH.end());
-        let (rect, _) = ui.allocate_exact_size(vec2(width, HEIGHT), Sense::hover());
-        paint(ui, rect, d, f, zoom);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 2.0;
+/// Show Sample's area under the table: the sample of `f` with the marks `fields` show, then a swatch
+/// and a toggle for each mark and Zoom beside it. Zoom writes live proposals into `fields`, restores
+/// its opening percentage on cancellation and preserves a later automation edit.
+pub(super) fn show(ui: &mut Ui, fields: &mut Map<String, Value>, f: &CompositeFont) {
+    let zoom_now = zoom(fields);
+    let marks: Vec<Mark> = Mark::ALL.into_iter().filter(|m| on(fields, m.field())).collect();
+    let ppp = ui.ctx().pixels_per_point();
+    let ink = ui.visuals().text_color();
+    // The image changes with everything it is drawn from; the picture keeps its texture while the revision holds.
+    let revision = Revision::of(&(
+        serde_json::to_string(f).unwrap_or_default(),
+        zoom_now,
+        ppp.to_bits(),
+        ink.to_array(),
+        FontDb::global().generation(),
+        marks.iter().map(|m| m.field()).collect::<Vec<_>>(),
+    ));
+    let render = || image(f, zoom_now, &marks, ppp, ink);
+    let entries: Vec<Entry<u64>> = ZOOMS.iter().map(|z| Entry::new(*z, format!("{z}%"))).collect();
+    Row::new().show(ui, |ui, _| {
+        Picture::new(tl!("Sample"), PICTURE_KEY, &render)
+            .revision(revision)
+            .aspect(ThumbAspect::new(WIDTH as u16, HEIGHT as u16))
+            .extent(PictureSize::Sample(ThumbSize::Large))
+            .show(ui);
+        Stack::new().show(ui, |ui, _| {
             for m in Mark::ALL {
-                let on = d.bool(m.field());
-                ui.horizontal(|ui| {
-                    let (swatch, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-                    ui.painter().rect_filled(swatch, 1.0, m.color());
-                    if ui.add(egui::Button::selectable(on, m.label())).clicked() {
-                        d.fields.insert(m.field().into(), json!(!on));
+                Row::new().id_salt(m.field()).show(ui, |ui, _| {
+                    Swatch::new(m.label(), Srgba::from(m.color())).show(ui);
+                    let toggled = ToggleButton::new(m.label(), Bind::given(on(fields, m.field()))).show(ui);
+                    if let Some(now) = toggled.value().copied() {
+                        fields.insert(m.field().into(), json!(now));
                     }
                 });
             }
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                widgets::dim_label(ui, tl!("Zoom"));
-                let names: Vec<String> = ZOOMS.iter().map(|z| format!("{z}%")).collect();
-                let options: Vec<&str> = names.iter().map(String::as_str).collect();
-                let current = format!("{zoom}%");
-                if let Some(k) = widgets::dropdown(ui, "composite-fonts-zoom", &current, &options, 80.0)
-                    && let Some(z) = ZOOMS.get(k)
-                {
-                    d.fields.insert("zoom".into(), json!(z));
+            Row::new().id_salt("zoom").show(ui, |ui, _| {
+                Text::new(tl!("Zoom")).show(ui);
+                let mut chosen_zoom = zoom_now;
+                Select::new(tl!("Zoom"), Bind::bound(&mut chosen_zoom), &entries).show(ui);
+                if chosen_zoom != zoom_now {
+                    fields.insert("zoom".into(), json!(chosen_zoom));
                 }
             });
         });
     });
 }
 
-/// Draw the sample of `f` at `zoom` percent into `rect`, its em box centered in it, with the marks
-/// `d` shows.
-fn paint(ui: &Ui, rect: Rect, d: &Dialog, f: &CompositeFont, zoom: u64) {
-    let painter = ui.painter_at(rect);
-    let visuals = ui.visuals();
-    painter.rect_filled(rect, 2.0, visuals.extreme_bg_color);
-    let ppp = ui.ctx().pixels_per_point();
-    let ink = visuals.text_color();
-    let mut h = DefaultHasher::new();
-    serde_json::to_string(f).unwrap_or_default().hash(&mut h);
-    (zoom, ppp.to_bits(), rect.width().to_bits(), rect.height().to_bits(), ink.to_array(), FontDb::global().generation()).hash(&mut h);
-    let key = h.finish();
-    let size = SIZE * zoom as f64 / 100.0;
-    let (texture, heights) = DRAWN.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if let Some(drawn) = cache.as_ref().filter(|c| c.key == key) {
-            return (drawn.texture.clone(), drawn.heights);
-        }
-        let (_, heights) = measure(f, size);
-        let texture = render(ui.ctx(), f, size, baseline(&heights, size, rect), rect, ppp, ink);
-        *cache = Some(Drawn { key, texture: texture.clone(), heights });
-        (texture, heights)
-    });
-    if let Some(t) = &texture {
-        painter.image(t.id(), rect, Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), Color32::WHITE);
-    }
-    let base = rect.top() + baseline(&heights, size, rect) as f32;
-    for m in Mark::ALL.into_iter().filter(|m| d.bool(m.field())) {
-        for y in heights.of(m) {
-            painter.hline(rect.x_range(), base - y as f32, Stroke::new(1.0, m.color()));
-        }
-    }
-    painter.rect_stroke(rect, 2.0, visuals.widgets.noninteractive.bg_stroke, egui::StrokeKind::Inside);
-}
-
-/// Where the baseline goes, in points down from the top of `rect`: the em box's middle (else
-/// 0.38 em above the baseline) at the middle of `rect`.
-fn baseline(h: &Heights, size: f64, rect: Rect) -> f64 {
+/// Where the baseline goes, in points down from the top of an image `height` points high: the em
+/// box's middle (else 0.38 em above the baseline) at the middle of the image.
+fn baseline(h: &Heights, size: f64, height: f32) -> f64 {
     let mid = h.em_box.map_or(size * 0.38, |(bottom, top)| (bottom + top) * 0.5);
-    f64::from(rect.height()) * 0.5 + mid
+    f64::from(height) * 0.5 + mid
 }
 
-/// The sample of `f` drawn into a texture the size of `rect` in pixels ([`draw`]). `None` when
-/// `rect` is empty or larger than the largest texture.
-fn render(ctx: &egui::Context, f: &CompositeFont, size: f64, baseline: f64, rect: Rect, ppp: f32, ink: Color32) -> Option<egui::TextureHandle> {
-    let (w, h) = ((rect.width() * ppp).round(), (rect.height() * ppp).round());
-    let max = ctx.input(|i| i.max_texture_side) as f32;
-    if w < 1.0 || h < 1.0 || w > max || h > max || w > f32::from(u16::MAX) || h > f32::from(u16::MAX) {
-        return None;
+/// The sample of `f` at `zoom` percent, [`WIDTH`] by [`HEIGHT`] points at `ppp` pixels per point, its
+/// em box centered, with the lines of `marks` drawn into the pixels at the heights [`measure`] gives.
+fn image(f: &CompositeFont, zoom: u64, marks: &[Mark], ppp: f32, ink: Color32) -> egui::ColorImage {
+    let size = SIZE * zoom as f64 / 100.0;
+    let (_, heights) = measure(f, size);
+    let base = baseline(&heights, size, HEIGHT);
+    let pixels = |points: f32| (points * ppp).round().clamp(1.0, f32::from(u16::MAX)) as u16;
+    let mut rendered = draw(f, size, base, (pixels(WIDTH), pixels(HEIGHT)), ppp, ink);
+    for m in marks {
+        for y in heights.of(*m) {
+            mark_line(&mut rendered, ((base - y) as f32 * ppp).round(), ppp.ceil().max(1.0) as usize, m.color());
+        }
     }
-    let image = draw(f, size, baseline, (w as u16, h as u16), ppp, ink);
-    Some(ctx.load_texture("composite-font-sample", crate::canvas::color_image_owned(image), egui::TextureOptions::LINEAR))
+    crate::canvas::color_image_owned(rendered)
+}
+
+/// Draws a horizontal line `thickness` pixels thick from row `y` across `image`; a row outside it draws nothing.
+fn mark_line(image: &mut vectorcraft_render::Rendered, y: f32, thickness: usize, color: Color32) {
+    if !y.is_finite() || y < 0.0 {
+        return;
+    }
+    let (width, height) = (image.width as usize, image.height as usize);
+    let first = y as usize;
+    for row in first..first.saturating_add(thickness).min(height) {
+        let start = row.saturating_mul(width).saturating_mul(4);
+        if let Some(line) = image.pixels.get_mut(start..start.saturating_add(width.saturating_mul(4))) {
+            for pixel in line.as_chunks_mut::<4>().0 {
+                pixel.copy_from_slice(&color.to_array());
+            }
+        }
+    }
 }
 
 /// The sample of `f` set at `size` points in `ink`, its baseline `baseline` points down from the
@@ -381,4 +386,95 @@ pub(super) fn draw(f: &CompositeFont, size: f64, baseline: f64, px: (u16, u16), 
     let view = Affine::scale(f64::from(ppp));
     let empty = || vectorcraft_render::Rendered { width: u32::from(w), height: u32::from(h), pixels: vec![0; usize::from(w) * usize::from(h) * 4] };
     RENDERER.with(|r| r.borrow_mut().render_node(&doc, &node, w, h, view)).unwrap_or_else(empty)
+}
+
+#[cfg(test)]
+mod zoom_tests {
+    use craft::ui::contract::Role;
+    use craft::ui::dialog::dialog_id;
+    use egui::{Key, Modifiers, vec2};
+    use vectorcraft_engine::Session;
+
+    use super::super::{KIND, open, with_dialog};
+    use super::*;
+    use crate::VectorcraftApp;
+    use crate::tests::panel_harness::Panel;
+
+    fn opened(width: f32) -> Panel {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(vec2(width, 1000.0));
+        open(&mut panel.app()).unwrap();
+        with_dialog(&panel.app(), |dialog| {
+            dialog.fonts = vec![CompositeFont::new("Sample draft", "Source Sans 3", "Regular")];
+            dialog.select(0);
+        })
+        .unwrap();
+        panel.frame();
+        panel.click("Show Sample");
+        panel
+    }
+
+    fn fields(panel: &Panel) -> Map<String, Value> {
+        with_dialog(&panel.app(), |dialog| dialog.sample.clone()).expect("the Composite Fonts dialog remains open")
+    }
+
+    #[test]
+    fn composite_sample_zoom_escape_restores_the_opening_value() {
+        for width in [1024.0, 1280.0] {
+            let mut panel = opened(width);
+            let before = fields(&panel);
+            let (document, undo, revision) = {
+                let app = panel.app();
+                let st = app.session.active().unwrap();
+                (st.doc.clone(), st.history.undo.len(), st.revision)
+            };
+            assert_eq!(panel.value_role("Zoom", Role::COMBO_BOX).as_deref(), Some("100%"));
+            panel.click_role("Zoom", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            assert_ne!(fields(&panel)["zoom"], before["zoom"], "the open popup previews its proposed magnification");
+            panel.key(Key::Escape, Modifiers::NONE);
+            assert_eq!(fields(&panel), before, "Escape restores the complete sample draft while keeping the parent dialog open");
+            assert_eq!(panel.value_role("Zoom", Role::COMBO_BOX).as_deref(), Some("100%"));
+            let app = panel.app();
+            let st = app.session.active().unwrap();
+            assert_eq!(st.doc, document);
+            assert_eq!(st.history.undo.len(), undo);
+            assert_eq!(st.revision, revision);
+        }
+    }
+
+    #[test]
+    fn composite_sample_zoom_accepts_pointer_and_keyboard_choices() {
+        let mut panel = opened(1280.0);
+        panel.click_role("Zoom", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Enter, Modifiers::NONE);
+        assert_eq!(fields(&panel)["zoom"], json!(200));
+        panel.click_role("Zoom", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(fields(&panel)["zoom"], json!(200), "a later cancellation restores the last accepted choice");
+        panel.click_role("Zoom", Role::COMBO_BOX);
+        panel.click("400%");
+        assert_eq!(fields(&panel)["zoom"], json!(400));
+        assert_eq!(panel.value_role("Zoom", Role::COMBO_BOX).as_deref(), Some("400%"));
+    }
+
+    #[test]
+    fn composite_sample_zoom_preserves_an_automation_edit_during_a_popup() {
+        let mut panel = opened(1280.0);
+        panel.click_role("Zoom", Role::COMBO_BOX);
+        panel.key(Key::ArrowDown, Modifiers::NONE);
+        assert_eq!(fields(&panel)["zoom"], json!(200));
+        {
+            let app = panel.app();
+            let ctx = app.ui_ctx.clone().unwrap();
+            app.dialogs().unwrap().with(|host| host.set_json_field(&ctx, dialog_id(KIND), "zoom", json!(400))).unwrap();
+        }
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(fields(&panel)["zoom"], json!(400), "canceling an older popup must not undo the later automation edit");
+        assert_eq!(panel.value_role("Zoom", Role::COMBO_BOX).as_deref(), Some("400%"));
+    }
 }

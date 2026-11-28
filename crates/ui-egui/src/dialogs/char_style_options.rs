@@ -1,12 +1,33 @@
-//! Character Style Options fields shared by editing and creating a character style.
+//! Character Style Options fields shared by editing and creating a character style, as the tabs of a
+//! hosted properties dialog, and the helpers the paragraph and New Style dialogs build theirs from.
+//!
+//! Each field is unset (empty, absent, or a checkbox in its unset state) or set, and an unset field leaves
+//! its attribute out of the style. A field still as it opened keeps the style's stored value as it is.
 
+use std::ops::RangeInclusive;
+use std::sync::Arc;
+
+use craft::behavior::Mixed;
+use craft::text::ui::character::{AKI_PRESETS, DIACRITIC_PRESETS, TSUME_PRESETS};
+use craft::ui::choice::Checkbox;
+use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _};
+use craft::ui::dialog::{DialogResult, FieldRefusal, StackDialog};
+use craft::ui::layout_components::Row;
+use craft::ui::patterns::form_dialogs::{
+    DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, TabLayout,
+};
+use craft::ui::pickers::Select;
+use craft::ui::runtime::env::{Env, Label};
+use craft::ui::text::{NumberField, NumberPick};
 use serde_json::{Map, Value, json};
+use vectorcraft_doc::setup::DocSetup;
 
-use super::{DialogSpec, form};
+use super::preview::LivePreview;
 use crate::VectorcraftApp;
-use crate::state::Dialog;
 
 pub const KIND: &str = "charStyleOptions";
+/// The section ids, in the order the tabs show them.
+pub(crate) const SECTIONS: [&str; 5] = ["general", "basic", "advanced", "color", "opentype"];
 const BASIC: &[&str] = &[
     "font_family",
     "font_style",
@@ -54,17 +75,13 @@ const ADVANCED_NUMBERS: &[&str] = &[
     "diacriticHorizontal",
     "diacriticVertical",
 ];
-/// The Insert Aki Left and Right fields, which take the Character panel's presets and stop at
-/// [`vectorcraft_doc::text::MAX_AKI`].
+/// The Insert Aki Left and Right fields, which stop at [`vectorcraft_doc::text::MAX_AKI`].
 const AKI: [&str; 2] = ["akiLeft", "akiRight"];
-/// The Adjust Horizontal and Vertical Diacritic Position fields, which take the Character panel's
-/// presets and stop at [`vectorcraft_doc::text::MAX_DIACRITIC_POSITION`] either way.
+/// The Adjust Horizontal and Vertical Diacritic Position fields, which stop at
+/// [`vectorcraft_doc::text::MAX_DIACRITIC_POSITION`] either way.
 const DIACRITIC: [&str; 2] = ["diacriticHorizontal", "diacriticVertical"];
 /// The attributes of Character Color.
 const COLOR: &[&str] = &["fill", "stroke", "stroke_width", "overprint_fill", "overprint_stroke"];
-/// The fields of Character Color: the fill and stroke paints, their tints in percent, the stroke
-/// weight in points and the two overprint checkboxes.
-const COLOR_FIELDS: &[&str] = &["fill", "fill_tint", "stroke", "stroke_tint", "stroke_width", "overprint_fill", "overprint_stroke"];
 /// The on, off or unset checkboxes of OpenType Features and the feature tag each one sets.
 const OT_SWITCHES: &[(&str, &str)] = &[
     ("ot_liga", "liga"),
@@ -101,82 +118,188 @@ const OT_FIELDS: &[&str] = &[
     "ot_sets",
 ];
 
-pub(super) const SPEC: DialogSpec = DialogSpec {
-    heading: |_| tl!("Character Style Options").into(),
-    body,
-    confirm,
-    preview: true,
-    inputs: |_| {
-        &[
-            "name",
-            "font_family",
-            "font_style",
-            "size",
-            "leading",
-            "kerning",
-            "tracking",
-            "case",
-            "position",
-            "underline",
-            "strikethrough",
-            "standardVerticalRoman",
-            "charAlign",
-            "h_scale",
-            "v_scale",
-            "baseline_shift",
-            "tcyUpDown",
-            "tcyLeftRight",
-            "rotation",
-            "akiLeft",
-            "akiRight",
-            "tsume",
-            "diacriticHorizontal",
-            "diacriticVertical",
-            "language",
-            "fill",
-            "fill_tint",
-            "stroke",
-            "stroke_tint",
-            "stroke_width",
-            "overprint_fill",
-            "overprint_stroke",
-            "ot_figure",
-            "ot_position",
-            "ot_liga",
-            "ot_calt",
-            "ot_dlig",
-            "ot_swsh",
-            "ot_salt",
-            "ot_titl",
-            "ot_ordn",
-            "ot_frac",
-            "ot_hkna",
-            "ot_ital",
-            "ot_sets",
-            "section",
-        ]
-    },
-    min_width: 720.0,
-    max_width: Some(720.0),
-    ..DialogSpec::FORM
-};
+/// What a character style dialog opened with.
+pub(crate) struct Opening {
+    /// The style's name when the dialog opened; empty for a new style.
+    pub(crate) style: String,
+    /// The style's attributes when the dialog opened.
+    pub(crate) attrs: Map<String, Value>,
+    /// The document's Small Caps size (%), which a style that turns small caps on takes.
+    small_caps_size: f64,
+    /// The document's superscript size and position (%).
+    superscript: [f64; 2],
+    /// The document's subscript size and position (%).
+    subscript: [f64; 2],
+    /// The swatches Character Color offers ([`swatch_choices`]).
+    swatches: Value,
+}
 
-pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
-    crate::panels::character::end_typing(app);
-    let doc = &app.session.active().ok_or("no document open")?.doc;
-    let def = doc.char_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no character style `{name}`"))?;
-    let mut fields = fields_from_attrs(&def.attrs);
-    fields.insert("name".into(), json!(name));
-    fields.insert("__style".into(), json!(name));
-    fields.insert("__attrs".into(), json!(def.attrs));
-    fields.insert("__smallCapsSize".into(), json!(doc.setup.small_caps_size));
-    fields.insert("__superscript".into(), json!(doc.setup.superscript));
-    fields.insert("__subscript".into(), json!(doc.setup.subscript));
-    fields.insert("__swatches".into(), swatch_choices(doc));
-    fields.insert("section".into(), json!("general"));
-    fields.insert("preview".into(), json!(true));
-    app.ui.dialog = Some(Dialog { kind: KIND.into(), fields });
-    Ok(json!({"dialog": KIND}))
+impl Opening {
+    /// The opening of style `style` with `attrs` in a document with `setup` and `swatches`.
+    pub(crate) fn new(style: &str, attrs: Map<String, Value>, setup: &DocSetup, swatches: Value) -> Opening {
+        Opening {
+            style: style.into(),
+            attrs,
+            small_caps_size: setup.small_caps_size,
+            superscript: [setup.superscript.size, setup.superscript.position],
+            subscript: [setup.subscript.size, setup.subscript.position],
+            swatches,
+        }
+    }
+
+    /// The dialog's values at opening, for a style called `name`.
+    pub(crate) fn fields(&self, name: &str) -> DialogFields {
+        let mut fields = to_fields(&fields_from_attrs(&self.attrs));
+        fields.set("name", FieldValue::Text(name.into()));
+        paint_flags(&mut fields);
+        fields
+    }
+}
+
+/// The dialog's values as JSON, the form [`edited_attrs`] reads them in: an unset field (absent, `null` or
+/// empty text) is absent, and a number is its text, as a text row holds it.
+pub(crate) struct Values<'a> {
+    map: Map<String, Value>,
+    /// The values as the dialog keeps them, for the keys that are not style fields.
+    pub(crate) dialog: &'a DialogFields,
+}
+
+impl<'a> Values<'a> {
+    /// The values of `dialog`.
+    pub(crate) fn new(dialog: &'a DialogFields) -> Self {
+        let map = dialog.iter().filter_map(|(key, value)| Some((key.to_string(), set_value(value_of(value))?))).collect();
+        Values { map, dialog }
+    }
+
+    /// The value of field `key`; `None` while it is unset.
+    pub(crate) fn get(&self, key: &str) -> Option<&Value> {
+        self.map.get(key)
+    }
+
+    /// The text of field `key`; empty while it is unset or not text.
+    fn str(&self, key: &str) -> &str {
+        self.get(key).and_then(Value::as_str).unwrap_or("")
+    }
+
+    /// Whether Reset Panel cleared tab `tab`: its unset fields are written as unset.
+    pub(crate) fn reset(&self, tab: &str) -> bool {
+        self.dialog.was_reset(tab)
+    }
+}
+
+/// `value` unless it is unset: `null` or empty text.
+fn set_value(value: Value) -> Option<Value> {
+    match value {
+        Value::Null => None,
+        Value::String(s) if s.is_empty() => None,
+        other => Some(other),
+    }
+}
+
+/// A field's value as JSON.
+pub(crate) fn value_of(value: &FieldValue) -> Value {
+    serde_json::to_value(value).unwrap_or(Value::Null)
+}
+
+/// The field value of a JSON `value` (`None` for `null`): a number is its JSON text (`12.0`), which the text rows hold.
+fn field_of(value: &Value) -> Option<FieldValue> {
+    Some(match value {
+        Value::Null => return None,
+        Value::Bool(b) => FieldValue::Bool(*b),
+        Value::String(s) => FieldValue::Text(s.clone()),
+        Value::Number(n) => FieldValue::Text(n.to_string()),
+        other => FieldValue::Json(other.clone()),
+    })
+}
+
+/// The dialog's values for the field map `fields`.
+pub(crate) fn to_fields(fields: &Map<String, Value>) -> DialogFields {
+    let mut out = DialogFields::new();
+    for (key, value) in fields {
+        if let Some(value) = field_of(value) {
+            out.set(key.clone(), value);
+        }
+    }
+    out
+}
+
+/// `fields` as [`Values`] reads the dialog's values, so the two compare equal for a field left as it opened.
+pub(crate) fn canonical_map(fields: Map<String, Value>) -> Map<String, Value> {
+    to_fields(&fields).iter().filter_map(|(key, value)| Some((key.to_string(), set_value(value_of(value))?))).collect()
+}
+
+/// A text row.
+pub(crate) fn text(key: impl Into<String>, label: impl Into<Label>) -> Param {
+    Param::new(key, label, ParamKind::text(""))
+}
+
+/// A menu of `options` (value, label) with an empty first entry for unset.
+pub(crate) fn select(key: &'static str, label: &'static str, options: &[(&'static str, &'static str)]) -> Param {
+    let unset = (String::new(), Label::from(" "));
+    let entries = std::iter::once(unset).chain(options.iter().map(|(value, label)| ((*value).to_string(), Label::from(*label))));
+    Param::new(key, label, ParamKind::choice(entries.collect(), None))
+}
+
+/// The rows of `params`.
+pub(crate) fn rows(params: Vec<Param>) -> Vec<PropertyRow> {
+    params.into_iter().map(PropertyRow::field).collect()
+}
+
+/// A check box that is on, off or unset (shown mixed): a click turns unset on, on off, and off unset.
+fn tri_box(ui: &mut egui::Ui, current: Option<bool>, label: Option<Label>, salt: &str) -> (egui::Response, Option<Option<bool>>) {
+    let shown = current.map_or(Mixed::Mixed, Mixed::Same);
+    let mut check = Checkbox::new(Bind::given(shown)).id_salt(salt.to_string());
+    if let Some(label) = label {
+        check = check.label(label);
+    }
+    let out = check.show(ui);
+    let next = out.value().is_some().then_some(match current {
+        None => Some(true),
+        Some(true) => Some(false),
+        Some(false) => None,
+    });
+    (out.response().clone(), next)
+}
+
+/// The on, off or unset check box `key`; unset is an absent key.
+// PLAN: `craft::behavior::Mixed` needs the `craft` facade in the app's Cargo.toml (no row gives it); `Mixed` is not re-exported by craft_ui.
+pub(crate) fn tri_state(key: impl Into<String>, label: impl Into<Label>) -> Param {
+    let key = key.into();
+    let name = key.clone();
+    Param::custom(key, label, move |ui, fields, _| {
+        let (response, next) = tri_box(ui, fields.bool(&name), None, &name);
+        match next {
+            Some(Some(on)) => fields.set(name.clone(), FieldValue::Bool(on)),
+            Some(None) => {
+                fields.remove(&name);
+            }
+            None => {}
+        }
+        response
+    })
+    // Set from outside: on, off, or `null` for neither.
+    .on_set(|fields, key, value| {
+        match value {
+            Value::Bool(on) => fields.set(key, FieldValue::Bool(on)),
+            Value::Null => {
+                fields.remove(key);
+            }
+            other => return Err(FieldRefusal::Rejects(&other).message(key)),
+        }
+        Ok(())
+    })
+}
+
+/// The General tab's rows: the style's name and what it sets, or nothing of that while `attrs` is refused.
+pub(crate) fn general_rows(attrs: Result<Map<String, Value>, String>) -> Vec<PropertyRow> {
+    let mut rows = vec![PropertyRow::field(text("name", tl!("Style Name:")))];
+    rows.extend(attrs.into_iter().flatten().map(|(key, value)| PropertyRow::value(Label::Empty, super::form::attribute_line(&key, &value))));
+    rows
+}
+
+/// A refusal's text as the dialog shows it under the rows.
+pub(crate) fn reason(why: &str) -> Label {
+    Label::from(crate::i18n::message(crate::i18n::current(), why))
 }
 
 pub(crate) fn fields_from_attrs(attrs: &Map<String, Value>) -> Map<String, Value> {
@@ -309,7 +432,25 @@ fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
     }
 }
 
-fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
+/// The number the text typed into number field `key` reads as, with the arithmetic of the app's number
+/// fields (`6x2`, `10+4`, `200/2`) and a decimal comma: a length in points in the length fields (`1 in`),
+/// and a final `%` in the percent fields or `°` in Character Rotation.
+fn typed_number(key: &str, text: &str) -> Option<f64> {
+    let text = text.trim().replace('\u{2212}', "-");
+    let mark = match key {
+        "size" | "leading" | "baseline_shift" | "tcyUpDown" | "tcyLeftRight" | "stroke_width" => {
+            return vectorcraft_doc::Unit::Points.parse(&vectorcraft_doc::decimal_point(&text));
+        }
+        "h_scale" | "v_scale" | "tsume" | "fill_tint" | "stroke_tint" => Some('%'),
+        "rotation" => Some('°'),
+        _ => None,
+    };
+    // The suffix comes off before the comma is read, so `1,000%` is refused as `1,000` is.
+    let number = mark.and_then(|m| text.strip_suffix(m)).unwrap_or(&text);
+    vectorcraft_doc::parse_number(&vectorcraft_doc::decimal_point(number))
+}
+
+fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
     let label = match key {
         "size" => tl!("Size"),
         "leading" => tl!("Leading"),
@@ -331,14 +472,14 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
         "stroke_width" => tl!("Weight"),
         _ => return Err("unknown character style number field".into()),
     };
-    match d.fields.get(key) {
+    match d.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(s)) if s.trim().is_empty() => Ok(None),
         Some(Value::String(s)) if s.trim().eq_ignore_ascii_case("auto") && ["leading", "kerning"].contains(&key) => Ok(Some(Value::Null)),
         Some(v) => {
             let n = v
                 .as_f64()
-                .or_else(|| v.as_str().and_then(|s| s.trim().parse::<f64>().ok()))
+                .or_else(|| v.as_str().and_then(|s| typed_number(key, s)))
                 .filter(|n| n.is_finite())
                 .ok_or_else(|| format!("{label} must be a number"))?;
             // Character Style fields use the Character panel's visible ranges.
@@ -383,39 +524,43 @@ fn optional_number(d: &Dialog, key: &str) -> Result<Option<Value>, String> {
     }
 }
 
-pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
-    let original = d.fields.get("__attrs").and_then(Value::as_object).cloned().unwrap_or_default();
-    let original_fields = fields_from_attrs(&original);
-    let reset = d.bool("__resetBasic");
+/// The style's attributes as the dialog's `fields` set them. A field still as it opened keeps its
+/// stored value without a check, so a style read from a file with a value out of range can still be
+/// renamed; a tab that was reset writes its unset fields as unset.
+pub(crate) fn edited_attrs(fields: &DialogFields, opening: &Opening) -> Result<Map<String, Value>, String> {
+    let d = Values::new(fields);
+    let original = &opening.attrs;
+    let original_fields = canonical_map(fields_from_attrs(original));
+    let reset = d.reset("basic");
     let mut attrs = original.clone();
     for key in BASIC {
         attrs.remove(*key);
     }
     for key in ["font_family", "font_style"] {
-        if let Some(v) = d.fields.get(key).and_then(Value::as_str).filter(|v| !v.trim().is_empty()) {
+        if let Some(v) = d.get(key).and_then(Value::as_str).filter(|v| !v.trim().is_empty()) {
             attrs.insert(key.into(), json!(v.trim()));
         }
     }
-    if reset || ["font_family", "font_style"].iter().any(|key| d.fields.get(*key) != original_fields.get(*key)) {
+    if reset || ["font_family", "font_style"].iter().any(|key| d.get(key) != original_fields.get(*key)) {
         attrs.remove("font_version");
         attrs.remove("fontAxes");
     }
     for key in NUMBERS {
         // An unchanged field keeps the original value below, unchecked (see `advanced_attrs`).
-        if !reset && d.fields.get(*key) == original_fields.get(*key) {
+        if !reset && d.get(key) == original_fields.get(*key) {
             continue;
         }
-        if let Some(v) = optional_number(d, key)? {
+        if let Some(v) = optional_number(&d, key)? {
             attrs.insert((*key).into(), v);
         }
     }
     for key in SWITCHES {
-        if let Some(v) = d.fields.get(*key).and_then(Value::as_bool) {
+        if let Some(v) = d.get(key).and_then(Value::as_bool) {
             attrs.insert((*key).into(), json!(v));
         }
     }
-    if reset || d.fields.get("case").and_then(Value::as_str) != case_from_attrs(&original) {
-        match d.fields.get("case").and_then(Value::as_str) {
+    if reset || d.get("case").and_then(Value::as_str) != case_from_attrs(original) {
+        match d.get("case").and_then(Value::as_str) {
             Some("allCaps") => {
                 attrs.insert("all_caps".into(), json!(true));
                 attrs.insert("small_caps".into(), Value::Null);
@@ -424,11 +569,7 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
                 attrs.insert("all_caps".into(), json!(false));
                 attrs.insert(
                     "small_caps".into(),
-                    original
-                        .get("small_caps")
-                        .filter(|v| v.is_number())
-                        .cloned()
-                        .unwrap_or_else(|| d.fields.get("__smallCapsSize").cloned().unwrap_or_else(|| json!(70.0))),
+                    original.get("small_caps").filter(|v| v.is_number()).cloned().unwrap_or_else(|| json!(opening.small_caps_size)),
                 );
             }
             Some("normal") => {
@@ -438,25 +579,24 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
             _ => {}
         }
     }
-    if let Some(position) = d.fields.get("position").and_then(Value::as_str).filter(|v| !v.is_empty()) {
+    if let Some(position) = d.get("position").and_then(Value::as_str).filter(|v| !v.is_empty()) {
         let value = if position == "normal" {
             json!({"kind": "normal"})
         } else {
             original.get("position").filter(|v| v.get("kind").and_then(Value::as_str) == Some(position)).cloned().unwrap_or_else(|| {
-                let metrics = d.fields.get(if position == "superscript" { "__superscript" } else { "__subscript" });
-                json!({"kind": position, "size": metrics.and_then(|m| m.get("size")).cloned().unwrap_or(json!(58.3)),
-                        "position": metrics.and_then(|m| m.get("position")).cloned().unwrap_or(json!(33.3))})
+                let [size, at] = if position == "superscript" { opening.superscript } else { opening.subscript };
+                json!({"kind": position, "size": size, "position": at})
             })
         };
         attrs.insert("position".into(), value);
     }
-    if let Some(align) = d.fields.get("charAlign").and_then(Value::as_str).filter(|v| !v.is_empty()) {
+    if let Some(align) = d.get("charAlign").and_then(Value::as_str).filter(|v| !v.is_empty()) {
         attrs.insert("charAlign".into(), json!(align));
     }
     if !reset {
         for key in BASIC {
             let field = if ["all_caps", "small_caps"].contains(key) { "case" } else { key };
-            if d.fields.get(field) == original_fields.get(field) {
+            if d.get(field) == original_fields.get(field) {
                 attrs.remove(*key);
                 if let Some(value) = original.get(*key) {
                     attrs.insert((*key).into(), value.clone());
@@ -464,9 +604,9 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
             }
         }
     }
-    advanced_attrs(d, &original, &original_fields, &mut attrs)?;
-    color_attrs(d, &original, &original_fields, &mut attrs)?;
-    opentype_attrs(d, &original, &original_fields, &mut attrs);
+    advanced_attrs(&d, original, &original_fields, &mut attrs)?;
+    color_attrs(&d, original, &original_fields, &mut attrs)?;
+    opentype_attrs(&d, original, &original_fields, &mut attrs);
     Ok(attrs)
 }
 
@@ -474,16 +614,16 @@ pub(crate) fn edited_attrs(d: &Dialog) -> Result<Map<String, Value>, String> {
 /// leaves its attribute unset, and a field still as it opened keeps the original value, a
 /// gradient or pattern paint included.
 fn color_attrs(
-    d: &Dialog,
+    d: &Values,
     original: &Map<String, Value>,
     original_fields: &Map<String, Value>,
     attrs: &mut Map<String, Value>,
 ) -> Result<(), String> {
-    let reset = d.bool("__resetColor");
+    let reset = d.reset("color");
     for key in COLOR {
         attrs.remove(*key);
     }
-    let unchanged = |key: &str| !reset && d.fields.get(key) == original_fields.get(key);
+    let unchanged = |key: &str| !reset && d.get(key) == original_fields.get(key);
     for key in ["fill", "stroke"] {
         let tint_key = format!("{key}_tint");
         if unchanged(key) && unchanged(&tint_key) {
@@ -492,7 +632,7 @@ fn color_attrs(
             }
             continue;
         }
-        let Some(mut paint) = d.fields.get(key).filter(|v| v.is_object()).cloned() else { continue };
+        let Some(mut paint) = d.get(key).filter(|v| v.is_object()).cloned() else { continue };
         if paint.get("swatch").is_some_and(Value::is_string)
             && let Some(Value::Number(tint)) = optional_number(d, &tint_key)?
             && let Some(tint) = tint.as_f64()
@@ -509,7 +649,7 @@ fn color_attrs(
         attrs.insert("stroke_width".into(), v);
     }
     for key in ["overprint_fill", "overprint_stroke"] {
-        let value = if unchanged(key) { original.get(key).cloned() } else { d.fields.get(key).filter(|v| v.is_boolean()).cloned() };
+        let value = if unchanged(key) { original.get(key).cloned() } else { d.get(key).filter(|v| v.is_boolean()).cloned() };
         if let Some(value) = value {
             attrs.insert(key.into(), value);
         }
@@ -533,10 +673,10 @@ fn figure_tags(value: &str) -> &'static [&'static str] {
 /// opened, the original `features` list stays as it is. Otherwise each changed control replaces
 /// the tags it sets in the original list, which keeps every other tag, and an unset control
 /// removes them; a list left empty leaves `features` unset.
-fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &Map<String, Value>, attrs: &mut Map<String, Value>) {
-    let reset = d.bool("__resetOpenType");
+fn opentype_attrs(d: &Values, original: &Map<String, Value>, original_fields: &Map<String, Value>, attrs: &mut Map<String, Value>) {
+    let reset = d.reset("opentype");
     attrs.remove("features");
-    let unchanged = |key: &str| !reset && d.fields.get(key) == original_fields.get(key);
+    let unchanged = |key: &str| !reset && d.get(key) == original_fields.get(key);
     if OT_FIELDS.iter().all(|key| unchanged(key)) {
         if let Some(value) = original.get("features") {
             attrs.insert("features".into(), value.clone());
@@ -551,14 +691,14 @@ fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &M
     for (field, tag) in OT_SWITCHES {
         if !unchanged(field) {
             tags.retain(|t| bare(t) != *tag);
-            if let Some(on) = d.fields.get(*field).and_then(Value::as_bool) {
+            if let Some(on) = d.get(field).and_then(Value::as_bool) {
                 tags.push(if on { (*tag).to_string() } else { format!("-{tag}") });
             }
         }
     }
     if !unchanged("ot_figure") {
         tags.retain(|t| !FIGURE_TAGS.contains(&bare(t)));
-        tags.extend(figure_tags(&d.str("ot_figure")).iter().map(|t| t.to_string()));
+        tags.extend(figure_tags(d.str("ot_figure")).iter().map(|t| t.to_string()));
     }
     if !unchanged("ot_position") {
         let position_tags = crate::panels::opentype::POSITION_TAGS;
@@ -574,7 +714,7 @@ fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &M
         // A set still on keeps the value its tag gives (`ss01=2`).
         let before: Vec<String> = tags.iter().filter(|t| sets.contains(&bare(t))).cloned().collect();
         tags.retain(|t| !sets.contains(&bare(t)));
-        let listed = d.fields.get("ot_sets").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str);
+        let listed = d.get("ot_sets").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str);
         tags.extend(listed.filter(|t| sets.contains(&bare(t))).map(|t| {
             let kept = before
                 .iter()
@@ -593,17 +733,17 @@ fn opentype_attrs(d: &Dialog, original: &Map<String, Value>, original_fields: &M
 /// attribute, an empty one leaves it unset, and a field still as it opened keeps the original
 /// value, an explicit default or a language tag not in the list included.
 fn advanced_attrs(
-    d: &Dialog,
+    d: &Values,
     original: &Map<String, Value>,
     original_fields: &Map<String, Value>,
     attrs: &mut Map<String, Value>,
 ) -> Result<(), String> {
-    let reset = d.bool("__resetAdvanced");
+    let reset = d.reset("advanced");
     for key in ADVANCED {
         attrs.remove(*key);
     }
     // A field still as it opened keeps its original value below without a check.
-    let unchanged = |key: &str| !reset && d.fields.get(key) == original_fields.get(key);
+    let unchanged = |key: &str| !reset && d.get(key) == original_fields.get(key);
     for key in ADVANCED_NUMBERS {
         if unchanged(key) {
             continue;
@@ -613,7 +753,7 @@ fn advanced_attrs(
         }
     }
     if !unchanged("language")
-        && let Some(language) = d.fields.get("language").and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty())
+        && let Some(language) = d.get("language").and_then(Value::as_str).map(str::trim).filter(|v| !v.is_empty())
     {
         let value = match vectorcraft_doc::setup::char_language(language) {
             Ok(tag) => tag.map_or(Value::Null, Value::from),
@@ -633,1841 +773,541 @@ fn advanced_attrs(
     Ok(())
 }
 
-pub(crate) fn reset_basic(d: &mut Dialog) {
-    d.fields.insert("__resetBasic".into(), json!(true));
-    for key in [
-        "font_family",
-        "font_style",
-        "size",
-        "leading",
-        "kerning",
-        "tracking",
-        "case",
-        "position",
-        "underline",
-        "strikethrough",
-        "standardVerticalRoman",
-        "charAlign",
-    ] {
-        d.fields.insert(
-            key.into(),
-            if ["font_family", "font_style", "size", "leading", "kerning", "tracking"].contains(&key) { json!("") } else { Value::Null },
-        );
-    }
+/// The swatches of a [`swatch_choices`] value as (name, paint).
+fn swatch_pairs(swatches: &Value) -> Vec<(String, Value)> {
+    swatches.as_array().into_iter().flatten().filter_map(|pair| Some((pair.get(0)?.as_str()?.to_string(), pair.get(1)?.clone()))).collect()
 }
 
-/// Reset Panel in Advanced Character Formats: its twelve attributes become unset.
-pub(crate) fn reset_advanced(d: &mut Dialog) {
-    d.fields.insert("__resetAdvanced".into(), json!(true));
-    for key in ADVANCED_NUMBERS {
-        d.fields.insert((*key).into(), json!(""));
-    }
-    d.fields.insert("language".into(), Value::Null);
-}
-
-/// Reset Panel in Character Color: its paints, tints, weight and overprint checkboxes become unset.
-pub(crate) fn reset_color(d: &mut Dialog) {
-    d.fields.insert("__resetColor".into(), json!(true));
-    for key in COLOR_FIELDS {
-        let unset = if ["fill_tint", "stroke_tint", "stroke_width"].contains(key) { json!("") } else { Value::Null };
-        d.fields.insert((*key).into(), unset);
-    }
-}
-
-/// Reset Panel in OpenType Features: every control becomes unset, and the style's `features`
-/// with it.
-pub(crate) fn reset_opentype(d: &mut Dialog) {
-    d.fields.insert("__resetOpenType".into(), json!(true));
-    for key in OT_FIELDS {
-        d.fields.insert((*key).into(), Value::Null);
-    }
-}
-
-/// Whether the section `d` shows has a Reset Panel: every section but General.
-pub(crate) fn can_reset(d: &Dialog) -> bool {
-    ["basic", "advanced", "color", "opentype"].contains(&d.str("section").as_str())
-}
-
-/// Reset Panel: clear the settings of the section `d` shows.
-pub(crate) fn reset_section(d: &mut Dialog) {
-    match d.str("section").as_str() {
-        "basic" => reset_basic(d),
-        "advanced" => reset_advanced(d),
-        "color" => reset_color(d),
-        "opentype" => reset_opentype(d),
-        _ => {}
-    }
-}
-
-pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
-    let d = app.ui.dialog.as_mut().ok_or("no dialog open")?;
-    let character_new = d.kind == super::new_text_style::KIND && !d.bool("__para");
-    if (d.kind != KIND && !character_new) || !can_reset(d) {
-        return Err("the open dialog has no Reset".into());
-    }
-    reset_section(d);
-    Ok(json!({"dialog": d.kind}))
-}
-
-/// The section list of Character Style Options and New Character Style.
-pub(crate) fn section_list(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.vertical(|ui| {
-        for (id, label) in [
-            ("general", tl!("General")),
-            ("basic", tl!("Basic Character Formats")),
-            ("advanced", tl!("Advanced Character Formats")),
-            ("color", tl!("Character Color")),
-            ("opentype", tl!("OpenType Features")),
-        ] {
-            if ui.selectable_label(d.str("section") == id, label).clicked() {
-                d.fields.insert("section".into(), json!(id));
-            }
-        }
-    });
-}
-
-/// The Reset Panel button, enabled on every section but General.
-pub(crate) fn reset_button(ui: &mut egui::Ui, d: &mut Dialog) {
-    ui.add_enabled_ui(can_reset(d), |ui| {
-        if ui.button(tl!("Reset Panel")).clicked() {
-            reset_section(d);
-        }
-    });
-}
-
-fn choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str, options: &[(&str, &str)]) {
-    let selected = d.fields.get(key).and_then(Value::as_str).unwrap_or("").to_string();
-    let shown = options.iter().find(|(value, _)| *value == selected).map_or("", |(_, label)| *label);
-    let labels: Vec<&str> = std::iter::once(" ").chain(options.iter().map(|(_, label)| *label)).collect();
-    if let Some(i) = crate::widgets::dropdown(ui, (KIND, key), shown, &labels, 190.0) {
-        d.fields.insert(key.into(), if i == 0 { Value::Null } else { options.get(i - 1).map_or(Value::Null, |(value, _)| json!(value)) });
-    }
-}
-
-pub(crate) fn basic_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    egui::Grid::new("character-style-basic").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        for (key, caption) in [
-            ("font_family", tl!("Font Family:")),
-            ("font_style", tl!("Font Style:")),
-            ("size", tl!("Size")),
-            ("leading", tl!("Leading")),
-            ("kerning", tl!("Kerning")),
-            ("tracking", tl!("Tracking")),
-        ] {
-            let row = ui.label(caption);
-            if d.fields.get(key).is_some_and(Value::is_null) {
-                d.fields.insert(key.into(), json!(""));
-            }
-            ui.label_inputs_by(row.id, |ui| form::text(ui, d, key, 190.0));
-            ui.end_row();
-        }
-        let row = ui.label(tl!("Case"));
-        ui.label_inputs_by(row.id, |ui| {
-            choice(ui, d, "case", &[("normal", tl!("Normal")), ("allCaps", tl!("All Caps")), ("smallCaps", tl!("Small Caps"))]);
-        });
-        ui.end_row();
-        let row = ui.label(tl!("Position"));
-        ui.label_inputs_by(row.id, |ui| {
-            choice(ui, d, "position", &[("normal", tl!("Normal")), ("superscript", tl!("Superscript")), ("subscript", tl!("Subscript"))]);
-        });
-        ui.end_row();
-        for (key, caption) in [
-            ("underline", tl!("Underline")),
-            ("strikethrough", tl!("Strikethrough")),
-            ("standardVerticalRoman", tl!("Standard Vertical Roman Alignment")),
-        ] {
-            ui.label("");
-            let value = d.fields.get(key).and_then(Value::as_bool);
-            if crate::widgets::check3(ui, caption, value, true) {
-                d.fields.insert(
-                    key.into(),
-                    match value {
-                        None => json!(true),
-                        Some(true) => json!(false),
-                        Some(false) => Value::Null,
-                    },
-                );
-            }
-            ui.end_row();
-        }
-        let row = ui.label(tl!("Character Alignment"));
-        ui.label_inputs_by(row.id, |ui| {
-            choice(
-                ui,
-                d,
-                "charAlign",
-                &[
-                    ("romanBaseline", tl!("Roman Baseline")),
-                    ("emBoxTop", tl!("Em Box Top/Right")),
-                    ("emBoxCenter", tl!("Em Box Center")),
-                    ("emBoxBottom", tl!("Em Box Bottom/Left")),
-                    ("icfTop", tl!("ICF Top/Right")),
-                    ("icfBottom", tl!("ICF Bottom/Left")),
-                ],
-            );
-        });
-        ui.end_row();
-    });
-}
-
-/// Advanced Character Formats: Horizontal Scale, Vertical Scale, Baseline Shift, the Tate-chu-yoko
-/// Up/Down and Left/Right, Character Rotation, Insert Aki Left and Right, Tsume and the Adjust
-/// Horizontal and Vertical Diacritic Positions (with the Character panel's presets) and Language,
-/// each empty (unset) or set.
-pub(crate) fn advanced_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    egui::Grid::new("character-style-advanced").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        for (key, caption, unit) in [
-            ("h_scale", tl!("Horizontal Scale"), "%"),
-            ("v_scale", tl!("Vertical Scale"), "%"),
-            ("baseline_shift", tl!("Baseline Shift"), "pt"),
-            ("tcyUpDown", tl!("Tate-chu-yoko Up/Down"), "pt"),
-            ("tcyLeftRight", tl!("Tate-chu-yoko Left/Right"), "pt"),
-            ("rotation", tl!("Character Rotation"), "°"),
-        ] {
-            let row = ui.label(caption);
-            if d.fields.get(key).is_some_and(Value::is_null) {
-                d.fields.insert(key.into(), json!(""));
-            }
-            ui.horizontal(|ui| {
-                ui.label_inputs_by(row.id, |ui| form::text(ui, d, key, 160.0));
-                ui.label(unit);
-            });
-            ui.end_row();
-        }
-        let presets: Vec<String> = crate::panels::character::AKI_PRESETS.iter().map(f64::to_string).collect();
-        let presets: Vec<&str> = presets.iter().map(String::as_str).collect();
-        for (key, caption) in [("akiLeft", tl!("Insert Aki Left")), ("akiRight", tl!("Insert Aki Right"))] {
-            let row = ui.label(caption);
-            let value = if d.fields.get(key).is_none_or(Value::is_null) { String::new() } else { d.str(key) };
-            if let Some(v) = ui.label_inputs_by(row.id, |ui| crate::widgets::text_presets(ui, (KIND, key), &value, &presets, 160.0)) {
-                d.fields.insert(key.into(), json!(v));
-            }
-            ui.end_row();
-        }
-        let presets: Vec<String> = crate::panels::character::TSUME_PRESETS.iter().map(f64::to_string).collect();
-        let presets: Vec<&str> = presets.iter().map(String::as_str).collect();
-        let row = ui.label(tl!("Tsume"));
-        let value = if d.fields.get("tsume").is_none_or(Value::is_null) { String::new() } else { d.str("tsume") };
-        ui.horizontal(|ui| {
-            if let Some(v) = ui.label_inputs_by(row.id, |ui| crate::widgets::text_presets(ui, (KIND, "tsume"), &value, &presets, 160.0)) {
-                d.fields.insert("tsume".into(), json!(v));
-            }
-            ui.label("%");
-        });
-        ui.end_row();
-        let presets: Vec<String> = crate::panels::character::DIACRITIC_PRESETS.iter().map(f64::to_string).collect();
-        let presets: Vec<&str> = presets.iter().map(String::as_str).collect();
-        for (key, caption) in
-            [("diacriticHorizontal", tl!("Adjust Horizontal Diacritic Position")), ("diacriticVertical", tl!("Adjust Vertical Diacritic Position"))]
-        {
-            let row = ui.label(caption);
-            let value = if d.fields.get(key).is_none_or(Value::is_null) { String::new() } else { d.str(key) };
-            if let Some(v) = ui.label_inputs_by(row.id, |ui| crate::widgets::text_presets(ui, (KIND, key), &value, &presets, 160.0)) {
-                d.fields.insert(key.into(), json!(v));
-            }
-            ui.end_row();
-        }
-        let row = ui.label(tl!("Language:"));
-        let names: Vec<&str> = std::iter::once(" ").chain(vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, _, _)| *name)).collect();
-        let current = d.fields.get("language").and_then(Value::as_str).unwrap_or("").to_string();
-        if let Some(i) = ui.label_inputs_by(row.id, |ui| crate::widgets::dropdown(ui, (KIND, "language"), &current, &names, 190.0)) {
-            d.fields.insert("language".into(), if i == 0 { Value::Null } else { names.get(i).map_or(Value::Null, |name| json!(name)) });
-        }
-        ui.end_row();
-    });
-}
-
-/// An on, off or unset checkbox in its own grid row: a click on unset turns it on, on turns it
-/// off, and off makes it unset.
-fn switch(ui: &mut egui::Ui, d: &mut Dialog, key: &str, caption: &str, enabled: bool) {
-    ui.label("");
-    let value = d.fields.get(key).and_then(Value::as_bool);
-    if crate::widgets::check3(ui, caption, value, enabled) {
-        let next = match value {
-            None => json!(true),
-            Some(true) => json!(false),
-            Some(false) => Value::Null,
-        };
-        d.fields.insert(key.into(), next);
-    }
-    ui.end_row();
-}
-
-/// The Fill or Stroke menu (`key`): unset, None, or a swatch of the document. A paint no swatch
-/// gives (a gradient, a pattern, a color from a file) shows as its description and stays as it
-/// is until another entry is chosen.
-fn paint_choice(ui: &mut egui::Ui, d: &mut Dialog, key: &str) {
-    let swatches: Vec<(String, Value)> = d
-        .fields
-        .get("__swatches")
-        .and_then(Value::as_array)
+/// Keeps the flags the tint and weight rows read in step with the paints: whether each paint links to a swatch
+/// (`fill_linked`, `stroke_linked`) and whether the stroke is None (`stroke_none`). Writes only what differs.
+fn paint_flags(fields: &mut DialogFields) {
+    let paint = |fields: &DialogFields, key: &str| fields.get(key).map(value_of).unwrap_or(Value::Null);
+    let mut flags: Vec<(&str, bool)> = ["fill", "stroke"]
         .into_iter()
-        .flatten()
-        .filter_map(|pair| Some((pair.get(0)?.as_str()?.to_string(), pair.get(1)?.clone())))
+        .map(|key| (if key == "fill" { "fill_linked" } else { "stroke_linked" }, paint(fields, key).get("swatch").is_some_and(Value::is_string)))
         .collect();
-    let current = d.fields.get(key).cloned().unwrap_or(Value::Null);
-    let none = tl!("None");
-    let shown = if current.is_null() {
-        String::new()
-    } else if current.get("type").and_then(Value::as_str) == Some("none") {
-        none.to_string()
-    } else if let Some((name, _)) = swatches.iter().find(|(_, paint)| *paint == current) {
-        name.clone()
-    } else if let Some((name, _)) = swatches.iter().find(|(_, paint)| paint.get("swatch").is_some_and(|s| Some(s) == current.get("swatch"))) {
-        name.clone()
-    } else {
-        serde_json::from_value::<vectorcraft_color::Paint>(current).map(|p| p.label()).unwrap_or_default()
-    };
-    let options: Vec<&str> = [" ", none].into_iter().chain(swatches.iter().map(|(name, _)| name.as_str())).collect();
-    if let Some(i) = crate::widgets::dropdown_names(ui, (KIND, key), &shown, &options, 190.0) {
-        let paint = match i {
-            0 => Value::Null,
-            1 => json!({"type": "none"}),
-            _ => swatches.get(i - 2).map_or(Value::Null, |(_, paint)| paint.clone()),
-        };
-        d.fields.insert(format!("{key}_tint"), tint_field(&paint));
-        d.fields.insert(key.into(), paint);
+    flags.push(("stroke_none", paint(fields, "stroke").get("type").and_then(Value::as_str) == Some("none")));
+    for (key, on) in flags {
+        if fields.bool(key) != Some(on) {
+            fields.set(key, FieldValue::Bool(on));
+        }
     }
 }
 
-/// Character Color: the Fill and Stroke paints, the Tint of a paint linked to a global swatch,
-/// the stroke Weight and Overprint Fill and Overprint Stroke, each unset or set.
-pub(crate) fn color_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    egui::Grid::new("character-style-color").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        for (key, caption, tint_name) in [("fill", tl!("Fill"), tl!("Fill Tint")), ("stroke", tl!("Stroke"), tl!("Stroke Tint"))] {
-            let row = ui.label(caption);
-            ui.label_inputs_by(row.id, |ui| paint_choice(ui, d, key));
-            ui.end_row();
-            let tint_key = format!("{key}_tint");
-            ui.label(tl!("Tint"));
-            if d.fields.get(&tint_key).is_none_or(Value::is_null) {
-                d.fields.insert(tint_key.clone(), json!(""));
-            }
-            let linked = d.fields.get(key).and_then(|p| p.get("swatch")).is_some_and(Value::is_string);
-            ui.add_enabled_ui(linked, |ui| {
-                ui.horizontal(|ui| {
-                    form::text_named(ui, d, &tint_key, tint_name, 160.0);
-                    ui.label("%");
-                });
-            });
-            ui.end_row();
-        }
-        let row = ui.label(tl!("Weight"));
-        if d.fields.get("stroke_width").is_none_or(Value::is_null) {
-            d.fields.insert("stroke_width".into(), json!(""));
-        }
-        let stroked = d.fields.get("stroke").and_then(|p| p.get("type")).and_then(Value::as_str) != Some("none");
-        ui.add_enabled_ui(stroked, |ui| {
-            ui.horizontal(|ui| {
-                ui.label_inputs_by(row.id, |ui| form::text(ui, d, "stroke_width", 160.0));
-                ui.label("pt");
-            });
-        });
-        ui.end_row();
-        switch(ui, d, "overprint_fill", tl!("Overprint Fill"), true);
-        switch(ui, d, "overprint_stroke", tl!("Overprint Stroke"), true);
-    });
-}
-
-/// OpenType Features: the Figure and Position menus, the feature checkboxes and the stylistic
-/// sets, each unset or set.
-pub(crate) fn opentype_body(ui: &mut egui::Ui, d: &mut Dialog) {
-    let figures: Vec<(&str, &str)> = FIGURE_VALUES.into_iter().zip(crate::panels::opentype::FIGURES).collect();
-    let positions: Vec<(&str, &str)> = POSITION_VALUES.into_iter().zip(crate::panels::opentype::POSITIONS).collect();
-    egui::Grid::new("character-style-opentype").num_columns(2).spacing([18.0, 8.0]).show(ui, |ui| {
-        let row = ui.label(tl!("Figure:"));
-        ui.label_inputs_by(row.id, |ui| choice(ui, d, "ot_figure", &figures));
-        ui.end_row();
-        let row = ui.label(tl!("Position:"));
-        ui.label_inputs_by(row.id, |ui| choice(ui, d, "ot_position", &positions));
-        ui.end_row();
-        for (key, caption) in [
-            ("ot_liga", tl!("Standard Ligatures")),
-            ("ot_calt", tl!("Contextual Alternates")),
-            ("ot_dlig", tl!("Discretionary Ligatures")),
-            ("ot_swsh", tl!("Swash")),
-            ("ot_salt", tl!("Stylistic Alternates")),
-            ("ot_titl", tl!("Titling Alternates")),
-            ("ot_ordn", tl!("Ordinals")),
-            ("ot_frac", tl!("Fractions")),
-            ("ot_hkna", tl!("H or V Style")),
-            ("ot_ital", tl!("Roman Italics")),
-        ] {
-            switch(ui, d, key, caption, true);
-        }
-    });
-    ui.add_space(6.0);
-    ui.label(tl!("Stylistic Sets"));
-    // Each set is on (`ssNN`), off (`-ssNN`) or unset (not listed), as the other checkboxes are.
-    let mut listed: Vec<String> =
-        d.fields.get("ot_sets").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect();
-    let mut clicked = None;
-    egui::Grid::new("character-style-sets").num_columns(5).spacing([12.0, 4.0]).show(ui, |ui| {
-        for (i, set) in vectorcraft_text::EXTRA_FEATURES[..20].iter().enumerate() {
-            let value = listed.iter().find(|t| bare(t) == *set).map(|t| !t.starts_with('-'));
-            if crate::widgets::check3(ui, set, value, true) {
-                clicked = Some((*set, value));
-            }
-            if i % 5 == 4 {
-                ui.end_row();
-            }
-        }
-    });
-    if let Some((set, value)) = clicked {
-        listed.retain(|t| bare(t) != set);
-        match value {
-            None => listed.push(set.to_string()),
-            Some(true) => listed.push(format!("-{set}")),
-            Some(false) => {}
-        }
-        d.fields.insert("ot_sets".into(), if listed.is_empty() { Value::Null } else { json!(listed) });
+/// The id of the menu entry that shows `paint`: empty for unset, `none`, `swatch:NAME` for a swatch's paint or
+/// another tint of its swatch, else `current` for a paint no swatch gives, which stays as it is until another
+/// entry is chosen.
+fn paint_id(paint: &Value, swatches: &[(String, Value)]) -> String {
+    if paint.is_null() {
+        return String::new();
     }
+    if paint.get("type").and_then(Value::as_str) == Some("none") {
+        return "none".into();
+    }
+    let by_paint = swatches.iter().find(|(_, p)| p == paint);
+    let linked = || swatches.iter().find(|(_, p)| p.get("swatch").is_some_and(|s| Some(s) == paint.get("swatch")));
+    by_paint.or_else(linked).map_or_else(|| "current".into(), |(name, _)| format!("swatch:{name}"))
 }
 
-/// The key under which the dialog keeps the height its section content was drawn at, for the next
-/// frame.
-fn content_id(ui: &egui::Ui) -> egui::Id {
-    ui.layer_id().id.with("char-style-content")
-}
-
-/// The dialog's body: the section list beside the selected section's content, and below them
-/// Reset Panel, the Preview checkbox and an invalid value's error. The content is at most 420 points
-/// tall, and scrolls when it is taller than that or than the screen less the rest of the window
-/// (as drawn last frame). The section list stays put while the content scrolls. Returns whether
-/// the dialog asks to be canceled (never: Cancel comes from the button row in `dialogs::show`).
-fn body(app: &mut VectorcraftApp, ui: &mut egui::Ui, d: &mut Dialog) -> bool {
-    super::modal::fits_itself(ui);
-    let window = ui.ctx().memory(|m| m.area_rect(ui.layer_id().id)).map_or(0.0, |r| r.height());
-    let content = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui))).unwrap_or(0.0);
-    let rest = (window - content).max(0.0);
-    let room = (ui.ctx().content_rect().height() - rest - 2.0 * super::EDGE_GAP).clamp(0.0, 420.0);
-    let drawn = ui.horizontal(|ui| {
-        section_list(ui, d);
-        ui.separator();
-        // The section list handles a click before this frame's content is laid out, so the section
-        // read here is the one just picked: its own scroll offset is used from the first frame.
-        let section = d.str("section");
-        let content_w = ui.available_width();
-        // Long sections scroll both ways: at a large interface scale the window has fewer points, and
-        // a wide row (a character-format grid) must stay inside it rather than widen the window.
-        let shown = egui::ScrollArea::both()
-            .id_salt(("char-style-sections", section))
-            .max_height(room)
-            .min_scrolled_height(room)
-            .max_width(content_w)
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
-                ui.vertical(|ui| {
-                    if d.str("section") == "basic" {
-                        basic_body(ui, d);
-                    } else if d.str("section") == "advanced" {
-                        advanced_body(ui, d);
-                    } else if d.str("section") == "color" {
-                        color_body(ui, d);
-                    } else if d.str("section") == "opentype" {
-                        opentype_body(ui, d);
-                    } else {
-                        ui.horizontal(|ui| {
-                            let row = ui.label(tl!("Style Name:"));
-                            ui.label_inputs_by(row.id, |ui| form::text(ui, d, "name", 190.0));
-                        });
-                        ui.separator();
-                        if let Ok(attrs) = edited_attrs(d) {
-                            for (key, value) in attrs {
-                                ui.label(super::form::attribute_line(&key, &value));
-                            }
+/// The Fill or Stroke menu `key`: unset, None, or a swatch of the document. Choosing an entry also sets the tint
+/// the paint gives, as the Tint row shows it.
+fn paint_row(key: &'static str, label: &'static str, swatches: Vec<(String, Value)>) -> Param {
+    let companions: &[&str] = if key == "fill" { &["fill_linked"] } else { &["stroke_linked", "stroke_none"] };
+    Param::custom(key, label, move |ui, fields, _| {
+        let current = fields.get(key).map(value_of).unwrap_or(Value::Null);
+        let selected = paint_id(&current, &swatches);
+        let mut entries = vec![Entry::new(String::new(), Label::from(" ")), Entry::new("none".to_string(), Label::from(tl!("None")))];
+        entries.extend(swatches.iter().map(|(name, _)| Entry::new(format!("swatch:{name}"), Label::from(name.clone()))));
+        if selected == "current" {
+            let shown = serde_json::from_value::<vectorcraft_color::Paint>(current.clone()).map(|p| p.label()).unwrap_or_default();
+            entries.push(Entry::new(selected.clone(), Label::from(shown)));
+        }
+        let out = Select::new(Label::from(label), Bind::given(selected), &entries).show(ui);
+        if let Some(id) = out.value().cloned() {
+            let paint = match id.as_str() {
+                "" => Some(Value::Null),
+                "none" => Some(json!({"type": "none"})),
+                other => other.strip_prefix("swatch:").and_then(|name| swatches.iter().find(|(n, _)| n == name)).map(|(_, paint)| paint.clone()),
+            };
+            if let Some(paint) = paint {
+                for (field_key, value) in [(key.to_string(), paint.clone()), (format!("{key}_tint"), tint_field(&paint))] {
+                    match field_of(&value) {
+                        Some(value) => fields.set(field_key, value),
+                        None => {
+                            fields.remove(&field_key);
                         }
                     }
-                });
-            });
-        // `inner_rect` is the height offered before a short section shrinks the area to its content.
-        shown.inner_rect.height().min(shown.content_size.y)
-    });
-    let content_h = drawn.inner;
-    let was = ui.ctx().data(|m| m.get_temp::<f32>(content_id(ui)));
-    ui.ctx().data_mut(|m| m.insert_temp(content_id(ui), content_h));
-    if was.is_none_or(|was| (was - content_h).abs() > 0.5) {
-        ui.ctx().request_repaint();
-    }
-    reset_button(ui, d);
-    match edited_attrs(d) {
-        Ok(attrs) => {
-            let params = json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs});
-            form::preview(app, ui, d, tl!("Character Style Options"), "charStyle.edit", params);
+                }
+            }
         }
-        Err(why) => attrs_error(ui, &why),
+        paint_flags(fields);
+        out.response().clone()
+    })
+    .companions(companions.iter().copied())
+    .on_set(|fields, key, value| {
+        match field_of(&value) {
+            Some(value) => fields.set(key, value),
+            None => {
+                fields.remove(key);
+            }
+        }
+        paint_flags(fields);
+        Ok(())
+    })
+}
+
+/// The Stylistic Sets grid: each set is on (`ssNN`), off (`-ssNN`) or unset (not listed), as the other checkboxes are.
+fn sets_row() -> Param {
+    Param::custom("ot_sets", tl!("Stylistic Sets"), |ui, fields, _| {
+        let mut listed: Vec<String> = fields
+            .get("ot_sets")
+            .map(value_of)
+            .and_then(|v| v.as_array().map(|tags| tags.iter().filter_map(Value::as_str).map(str::to_string).collect()))
+            .unwrap_or_default();
+        let mut clicked = None;
+        let line = Row::new().wrap(true).show(ui, |ui, _| {
+            // The row's body may run more than once in a pass: the last run's click applies.
+            clicked = None;
+            for set in &vectorcraft_text::EXTRA_FEATURES[..20] {
+                let current = listed.iter().find(|t| bare(t) == *set).map(|t| !t.starts_with('-'));
+                if let (_, Some(next)) = tri_box(ui, current, Some(Label::from(set.to_string())), set) {
+                    clicked = Some((*set, next));
+                }
+            }
+        });
+        if let Some((set, next)) = clicked {
+            listed.retain(|t| bare(t) != set);
+            match next {
+                Some(true) => listed.push(set.to_string()),
+                Some(false) => listed.push(format!("-{set}")),
+                None => {}
+            }
+            if listed.is_empty() {
+                fields.remove("ot_sets");
+            } else {
+                fields.set("ot_sets", FieldValue::Json(json!(listed)));
+            }
+        }
+        line.output
+    })
+}
+
+fn basic_rows() -> Vec<PropertyRow> {
+    let case = [("normal", tl!("Normal")), ("allCaps", tl!("All Caps")), ("smallCaps", tl!("Small Caps"))];
+    let position = [("normal", tl!("Normal")), ("superscript", tl!("Superscript")), ("subscript", tl!("Subscript"))];
+    let align = [
+        ("romanBaseline", tl!("Roman Baseline")),
+        ("emBoxTop", tl!("Em Box Top/Right")),
+        ("emBoxCenter", tl!("Em Box Center")),
+        ("emBoxBottom", tl!("Em Box Bottom/Left")),
+        ("icfTop", tl!("ICF Top/Right")),
+        ("icfBottom", tl!("ICF Bottom/Left")),
+    ];
+    rows(vec![
+        text("font_family", tl!("Font Family:")),
+        text("font_style", tl!("Font Style:")),
+        text("size", tl!("Size")),
+        text("leading", tl!("Leading")),
+        text("kerning", tl!("Kerning")),
+        text("tracking", tl!("Tracking")),
+        select("case", tl!("Case"), &case),
+        select("position", tl!("Position"), &position),
+        tri_state("underline", tl!("Underline")),
+        tri_state("strikethrough", tl!("Strikethrough")),
+        tri_state("standardVerticalRoman", tl!("Standard Vertical Roman Alignment")),
+        select("charAlign", tl!("Character Alignment"), &align),
+    ])
+}
+
+/// A number row over the text field `key` (empty for unset) whose menu offers `presets`, as the Character panel's field
+/// of the same name does. A typed value stays within `range`; automation sets the field's text, as for a text row.
+fn preset_number(key: &'static str, label: String, range: RangeInclusive<f64>, presets: &'static [f32]) -> Param {
+    let name = label.clone();
+    Param::custom(key, label, move |ui, fields, _| {
+        let value = fields.text(key).and_then(|text| text.trim().parse::<f64>().ok()).filter(|n| n.is_finite());
+        let units = Env::of(ui).units();
+        let rows: Vec<Entry<NumberPick>> = presets
+            .iter()
+            .map(|&p| {
+                let n = f64::from(p);
+                Entry::new(NumberPick::Number(n), units.number(n, 0..=2))
+            })
+            .collect();
+        let out = NumberField::new(name.clone(), Bind::given(value)).range(range.clone()).presets(&rows).id_salt(key).show(ui);
+        if let Some(picked) = out.edit.value() {
+            let text = picked.map(|n| n.to_string()).unwrap_or_default();
+            if fields.text(key) != Some(text.as_str()) {
+                fields.set(key, FieldValue::Text(text));
+            }
+        }
+        out.edit.response.clone()
+    })
+    // Set from outside: the field's text, as a text row takes it.
+    .on_set(|fields, key, value| match value {
+        Value::String(text) => {
+            fields.set(key, FieldValue::Text(text));
+            Ok(())
+        }
+        other => Err(FieldRefusal::Rejects(&other).message(key)),
+    })
+}
+
+fn advanced_rows() -> Vec<PropertyRow> {
+    let mut params: Vec<Param> = [
+        ("h_scale", tl!("Horizontal Scale"), "%"),
+        ("v_scale", tl!("Vertical Scale"), "%"),
+        ("baseline_shift", tl!("Baseline Shift"), "pt"),
+        ("tcyUpDown", tl!("Tate-chu-yoko Up/Down"), "pt"),
+        ("tcyLeftRight", tl!("Tate-chu-yoko Left/Right"), "pt"),
+        ("rotation", tl!("Character Rotation"), "°"),
+    ]
+    .into_iter()
+    .map(|(key, caption, unit)| text(key, format!("{caption} ({unit})")))
+    .collect();
+    let aki = 0.0..=vectorcraft_doc::text::MAX_AKI;
+    let tsume = 0.0..=vectorcraft_doc::text::MAX_TSUME;
+    let diacritic = -vectorcraft_doc::text::MAX_DIACRITIC_POSITION..=vectorcraft_doc::text::MAX_DIACRITIC_POSITION;
+    params.extend([
+        preset_number("akiLeft", tl!("Insert Aki Left").to_string(), aki.clone(), &AKI_PRESETS),
+        preset_number("akiRight", tl!("Insert Aki Right").to_string(), aki, &AKI_PRESETS),
+        preset_number("tsume", format!("{} (%)", tl!("Tsume")), tsume, &TSUME_PRESETS),
+        preset_number("diacriticHorizontal", tl!("Adjust Horizontal Diacritic Position").to_string(), diacritic.clone(), &DIACRITIC_PRESETS),
+        preset_number("diacriticVertical", tl!("Adjust Vertical Diacritic Position").to_string(), diacritic, &DIACRITIC_PRESETS),
+    ]);
+    let languages: Vec<(&'static str, &'static str)> = vectorcraft_doc::setup::LANGUAGES.iter().map(|(name, _, _)| (*name, *name)).collect();
+    params.push(select("language", tl!("Language:"), &languages));
+    rows(params)
+}
+
+fn color_rows(opening: &Opening) -> Vec<PropertyRow> {
+    let swatches = swatch_pairs(&opening.swatches);
+    rows(vec![
+        paint_row("fill", tl!("Fill"), swatches.clone()),
+        text("fill_tint", tl!("Fill Tint")).enabled_when("fill_linked", FieldValue::Bool(true)),
+        paint_row("stroke", tl!("Stroke"), swatches),
+        text("stroke_tint", tl!("Stroke Tint")).enabled_when("stroke_linked", FieldValue::Bool(true)),
+        text("stroke_width", tl!("Weight")).enabled_when("stroke_none", FieldValue::Bool(false)),
+        tri_state("overprint_fill", tl!("Overprint Fill")),
+        tri_state("overprint_stroke", tl!("Overprint Stroke")),
+    ])
+}
+
+fn opentype_rows() -> Vec<PropertyRow> {
+    let figures: Vec<(&'static str, &'static str)> = FIGURE_VALUES.into_iter().zip(crate::panels::opentype::FIGURES).collect();
+    let positions: Vec<(&'static str, &'static str)> = POSITION_VALUES.into_iter().zip(crate::panels::opentype::POSITIONS).collect();
+    let captions = [
+        tl!("Standard Ligatures"),
+        tl!("Contextual Alternates"),
+        tl!("Discretionary Ligatures"),
+        tl!("Swash"),
+        tl!("Stylistic Alternates"),
+        tl!("Titling Alternates"),
+        tl!("Ordinals"),
+        tl!("Fractions"),
+        tl!("H or V Style"),
+        tl!("Roman Italics"),
+    ];
+    let mut params = vec![select("ot_figure", tl!("Figure:"), &figures), select("ot_position", tl!("Position:"), &positions)];
+    params.extend(OT_SWITCHES.iter().zip(captions).map(|((key, _), caption)| tri_state(*key, caption)));
+    let mut rows = rows(params);
+    rows.push(PropertyRow::heading(tl!("Stylistic Sets")));
+    rows.push(PropertyRow::field(sets_row()));
+    rows
+}
+
+/// The five tabs of Character Style Options and New Character Style over the dialog's current values. Every tab
+/// but General has a Reset Panel.
+pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTab> {
+    let titles =
+        [tl!("General"), tl!("Basic Character Formats"), tl!("Advanced Character Formats"), tl!("Character Color"), tl!("OpenType Features")];
+    let bodies = [general_rows(edited_attrs(fields, opening)), basic_rows(), advanced_rows(), color_rows(opening), opentype_rows()];
+    SECTIONS
+        .into_iter()
+        .zip(titles)
+        .zip(bodies)
+        .map(|((id, title), rows)| {
+            let tab = PropertiesTab::new(title, rows).key(id);
+            if id == "general" { tab } else { tab.resettable() }
+        })
+        .collect()
+}
+
+/// The dialog of style `name` over `opening`, which `title` heads, kept open by a held OK.
+pub(crate) fn hosted(key: &'static str, title: &'static str, opening: &Arc<Opening>, name: &str) -> HostedPropertiesDialog {
+    let rows_of = Arc::clone(opening);
+    HostedPropertiesDialog::new(key, opening.fields(name), move |values| {
+        let now = values.value().cloned().unwrap_or_else(DialogFields::new);
+        PropertiesDialog::new(key, title, tabs(&now, &rows_of), values).tab_layout(TabLayout::List)
+    })
+    .held_ok()
+}
+
+/// What a style dialog's pump reads of one frame.
+pub(crate) struct Frame {
+    /// The command's parameters for the values, or why they are refused.
+    pub(crate) params: Result<Value, String>,
+    /// Whether the dialog previews and its Preview check box is on.
+    pub(crate) previewing: bool,
+    /// OK was pressed this frame and waits for the answer.
+    pub(crate) ok: bool,
+}
+
+/// Runs one frame of an options dialog's live preview of `cmd`: previews the values while they are accepted, keeps
+/// the last accepted preview while they are refused, and at OK keeps the preview as one undo step. Returns the
+/// preview state to keep and the commit's answer at OK.
+pub(crate) fn drive(
+    app: &mut VectorcraftApp,
+    mut live: LivePreview,
+    label: &str,
+    cmd: &str,
+    frame: &Frame,
+) -> (LivePreview, Option<Result<Value, String>>) {
+    match (&frame.params, frame.ok) {
+        (Ok(params), true) => (LivePreview::default(), Some(live.commit(app, cmd, params.clone()))),
+        (Err(why), true) => (live, Some(Err(why.clone()))),
+        (Ok(params), false) => {
+            live.run(app, frame.previewing, label, cmd, params);
+            (live, None)
+        }
+        // Refused values keep the last accepted preview; turning Preview off still rolls it back.
+        (Err(_), false) => {
+            if !frame.previewing {
+                live.run(app, false, label, cmd, &Value::Null);
+            }
+            (live, None)
+        }
     }
-    false
 }
 
-/// The message `edited_attrs` gave for a field value it does not accept, drawn under the dialog.
-pub(crate) fn attrs_error(ui: &mut egui::Ui, why: &str) {
-    ui.add_space(6.0);
-    ui.colored_label(crate::theme::Tokens::get(ui.ctx()).error, crate::i18n::message(crate::i18n::current(), why));
+/// Sets `field` of the style dialog `inner` from automation: a number a text row refuses is taken as its text, as
+/// typing it would give.
+pub(crate) fn set_field(inner: &mut HostedPropertiesDialog, ctx: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+    use craft::ui::dialog::StackDialog as _;
+    let refused = match inner.set_json_field(ctx, field, value.clone()) {
+        Err(why) if value.is_number() => why,
+        done => return done,
+    };
+    let text = field_of(&value).map(|typed| value_of(&typed)).unwrap_or(Value::Null);
+    inner.set_json_field(ctx, field, text).map_err(|_| refused)
 }
 
-fn confirm(app: &mut VectorcraftApp, d: &Dialog) -> Result<Value, String> {
-    let attrs = edited_attrs(d)?;
-    form::commit_preview(app, "charStyle.edit", json!({"name": d.str("__style"), "to": d.str("name"), "attrs": attrs}))
+/// Makes a wrapper over a [`HostedPropertiesDialog`] (`inner`) a dialog of its own type: it answers with the values
+/// and delegates everything else to `inner`. The wrapper has `edited()` and `command(attrs)` of its own; `frame` is
+/// what its pump reads each frame, which also keeps OK off while `edited()` refuses.
+macro_rules! style_dialog {
+    ($dialog:ty, $kind:expr) => {
+        impl $dialog {
+            /// The hosted dialog, for Reset Panel and the pump's answers.
+            pub(crate) fn hosted_mut(&mut self) -> &mut craft::ui::patterns::form_dialogs::HostedPropertiesDialog {
+                &mut self.inner
+            }
+
+            /// This frame's state: the refusal is shown under the rows and OK is taken if it was pressed.
+            pub(crate) fn frame(&mut self) -> $crate::dialogs::char_style_options::Frame {
+                let edited = self.edited();
+                self.inner.refuse(edited.as_ref().err().map(|why| $crate::dialogs::char_style_options::reason(why)));
+                $crate::dialogs::char_style_options::Frame {
+                    previewing: self.inner.is_previewing(),
+                    ok: self.inner.take_ok().is_some(),
+                    params: edited.map(|attrs| self.command(attrs)),
+                }
+            }
+        }
+
+        impl craft::ui::dialog::StackDialog for $dialog {
+            type Result = craft::ui::patterns::form_dialogs::DialogFields;
+
+            fn id(&self) -> craft::ui::dialog::DialogId {
+                craft::ui::dialog::StackDialog::id(&self.inner)
+            }
+
+            fn show(&mut self, ui: &mut egui::Ui, stack: &craft::ui::dialog::DialogStack) -> Option<craft::ui::dialog::DialogResult<Self::Result>> {
+                craft::ui::dialog::StackDialog::show(&mut self.inner, ui, stack)
+            }
+
+            fn key(&self) -> Option<&str> {
+                Some($kind)
+            }
+
+            fn confirm(&mut self, ctx: &egui::Context) -> Option<Self::Result> {
+                craft::ui::dialog::StackDialog::confirm(&mut self.inner, ctx)
+            }
+
+            fn held_state(&self) -> Option<craft::ui::dialog::HeldOk> {
+                craft::ui::dialog::StackDialog::held_state(&self.inner)
+            }
+
+            fn json_fields(&self) -> Option<serde_json::Value> {
+                craft::ui::dialog::StackDialog::json_fields(&self.inner)
+            }
+
+            fn set_json_field(&mut self, ctx: &egui::Context, field: &str, value: serde_json::Value) -> Result<(), String> {
+                $crate::dialogs::char_style_options::set_field(&mut self.inner, ctx, field, value)
+            }
+
+            fn cancelled(&mut self, ctx: &egui::Context) {
+                craft::ui::dialog::StackDialog::cancelled(&mut self.inner, ctx);
+            }
+
+            fn can_reset(&self) -> bool {
+                self.inner.can_reset_tab()
+            }
+
+            fn reset(&mut self, _ctx: &egui::Context) -> bool {
+                self.inner.reset_tab()
+            }
+        }
+    };
+}
+pub(crate) use style_dialog;
+
+/// The open Character Style Options dialog.
+pub(crate) struct CharStyleOptions {
+    inner: HostedPropertiesDialog,
+    opening: Arc<Opening>,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
+}
+
+impl CharStyleOptions {
+    /// The style's attributes as the dialog's values set them, or why they are refused.
+    pub(crate) fn edited(&self) -> Result<Map<String, Value>, String> {
+        edited_attrs(self.inner.fields(), &self.opening)
+    }
+
+    fn command(&self, attrs: Map<String, Value>) -> Value {
+        let to = self.inner.fields().text("name").unwrap_or_default();
+        json!({"name": self.opening.style, "to": to, "attrs": attrs})
+    }
+}
+style_dialog!(CharStyleOptions, KIND);
+
+/// The preview and the document activation that owns it, retained until the host reports Cancel.
+#[derive(Default)]
+pub(crate) struct Preview {
+    live: LivePreview,
+    activation: Option<(u64, u64)>,
+    interaction_selection: Option<Arc<vectorcraft_doc::Selection>>,
+}
+
+pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
+    crate::panels::character::end_typing(app);
+    let state = app.session.active().ok_or("no document open")?;
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
+    let def = doc.char_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no character style `{name}`"))?;
+    let opening = Arc::new(Opening::new(name, def.attrs.clone(), &doc.setup, swatch_choices(doc)));
+    let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening, document };
+    app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
+    Ok(json!({"dialog": KIND}))
+}
+
+/// Reset Panel: clears the settings of the tab the open Character Style Options or New Character Style dialog
+/// shows.
+pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
+    let dialogs = app.dialogs().ok_or("no dialog open")?;
+    let reset = dialogs.with(|host| {
+        let options = host.get_mut::<CharStyleOptions>().map(|d| (KIND, d.hosted_mut().reset_tab()));
+        options.or_else(|| {
+            let new = host.get_mut::<super::new_text_style::NewTextStyle>().filter(|d| !d.para);
+            new.map(|d| (super::new_text_style::KIND, d.hosted_mut().reset_tab()))
+        })
+    });
+    match reset {
+        Some((kind, true)) => Ok(json!({"dialog": kind})),
+        _ => Err("the open dialog has no Reset".into()),
+    }
+}
+
+/// The dialog's frame work: previews the values, commits at OK, and rolls the preview back at Cancel.
+pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let refusals = Refusals {
+        busy: "finish the active edit before applying Character Style Options",
+        elsewhere: "switch back to the document where Character Style Options was opened",
+        closed: "the document where Character Style Options was opened has closed",
+    };
+    pump_in_opening_document::<CharStyleOptions>(
+        app,
+        |app| &mut app.char_style_preview,
+        |d| (d.document, d.frame()),
+        CharStyleOptions::hosted_mut,
+        (tl!("Character Style Options"), "charStyle.edit"),
+        &refusals,
+    );
+}
+
+/// Why a style options dialog's OK is refused outside its own preview.
+pub(crate) struct Refusals {
+    /// Another edit is active in the opening document.
+    pub(crate) busy: &'static str,
+    /// Another document is active.
+    pub(crate) elsewhere: &'static str,
+    /// The opening document has closed.
+    pub(crate) closed: &'static str,
+}
+
+/// Runs one frame of the style options dialog `D` that opened on one document: previews and commits `command`
+/// (its undo label and id) only while that document is active, has not been reverted since the dialog opened and
+/// has no other edit active in it, refuses OK elsewhere with `refusals`, and at Cancel rolls back only the preview
+/// the dialog still owns. `preview` is the app's slot for the dialog's preview, `state` gives the opening
+/// document's uid and revert count and this frame's state, and `hosted` gives the hosted dialog that takes OK's
+/// answer.
+pub(crate) fn pump_in_opening_document<D: StackDialog>(
+    app: &mut VectorcraftApp,
+    preview: fn(&mut VectorcraftApp) -> &mut Preview,
+    state: fn(&mut D) -> ((u64, u64), Frame),
+    hosted: fn(&mut D) -> &mut HostedPropertiesDialog,
+    (label, command): (&str, &str),
+    refusals: &Refusals,
+) {
+    let Some(dialogs) = app.dialogs() else { return };
+    let active = app.session.active().map(|doc| (doc.uid, app.session.tool_resets()));
+    let interaction_selection = app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+    let owned = preview(app);
+    let owns_interaction = owned.activation == active
+        && owned.interaction_selection.as_ref().zip(interaction_selection.as_ref()).is_some_and(|(owned, current)| Arc::ptr_eq(owned, current));
+    let Some(((document, reverts), frame)) = dialogs.with(|host| host.get_mut::<D>().map(state)) else {
+        if matches!(dialogs.with(|host| host.take::<D>()), Some(DialogResult::Cancel)) {
+            let owned = std::mem::take(preview(app));
+            if owns_interaction {
+                owned.live.cancel(app);
+            }
+        }
+        return;
+    };
+    let in_opening = app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == (document, reverts));
+    let done = if let Some(activation) = active.filter(|_| in_opening) {
+        if interaction_selection.is_some() && !owns_interaction {
+            frame.ok.then(|| Err(refusals.busy.into()))
+        } else {
+            let owned = std::mem::take(preview(app));
+            let live = if owns_interaction { owned.live } else { LivePreview::default() };
+            let (live, answer) = drive(app, live, label, command, &frame);
+            let interaction_selection =
+                app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+            *preview(app) = Preview { live, activation: Some(activation), interaction_selection };
+            answer
+        }
+    } else if frame.ok {
+        let why = if app.session.active().is_some_and(|doc| doc.uid == document) {
+            "The document was reverted. Reopen this dialog to continue."
+        } else if app.session.documents().iter().any(|doc| doc.uid == document) {
+            refusals.elsewhere
+        } else {
+            refusals.closed
+        };
+        Some(Err(why.into()))
+    } else {
+        None
+    };
+    if let Some(done) = done {
+        let answer = done.map(drop).map_err(|why| reason(&why));
+        dialogs.with(|host| {
+            if let Some(d) = host.get_mut::<D>() {
+                hosted(d).answer_ok(answer);
+            }
+        });
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorcraft_engine::Session;
-
-    fn app() -> VectorcraftApp {
-        let mut app = VectorcraftApp::new(Session::new(), Default::default());
-        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
-        app
-    }
-
-    fn frame(app: &mut VectorcraftApp) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let mut out = ctx.run_ui(Default::default(), |ui| super::super::show(app, ui.ctx()));
-        out.textures_delta.clear();
-    }
-
-    /// The texts a frame drew, with their screen rects.
-    fn texts_of(out: &egui::FullOutput) -> Vec<(String, egui::Rect)> {
-        fn collect(s: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
-            match s {
-                egui::Shape::Text(t) => out.push((t.galley.text().to_string(), t.visual_bounding_rect())),
-                egui::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
-                _ => {}
-            }
-        }
-        let mut texts = vec![];
-        for c in &out.shapes {
-            collect(&c.shape, &mut texts);
-        }
-        texts
-    }
-
-    /// The texts of a few headless frames in `ctx` at a screen `w` by `h`, with their screen rects:
-    /// the dialog lays its scroll area out and measures its footer over the first frames.
-    fn frame_texts_in(ctx: &egui::Context, app: &mut VectorcraftApp, w: f32, h: f32) -> Vec<(String, egui::Rect)> {
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, h));
-        let mut texts = vec![];
-        for _ in 0..5 {
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
-            out.textures_delta.clear();
-            texts = texts_of(&out);
-        }
-        texts
-    }
-
-    /// The texts of a few headless frames at a screen `w` by `h`, and the context they were drawn in.
-    fn frame_texts_at(app: &mut VectorcraftApp, w: f32, h: f32) -> (egui::Context, Vec<(String, egui::Rect)>) {
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let texts = frame_texts_in(&ctx, app, w, h);
-        (ctx, texts)
-    }
-
-    /// The General section lists every attribute of the style, so the sections scroll inside a
-    /// window shorter than that list: the buttons stay on the screen, the window keeps its width in
-    /// every section, and the content is clipped by the scroll area's viewport.
-    #[test]
-    fn the_sections_scroll_in_a_window_shorter_than_the_general_list() {
-        let mut app = app();
-        app.run(
-            "charStyle.new",
-            json!({"name": "Body", "attrs": {
-                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
-                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
-                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
-                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
-                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
-                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
-                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
-            }}),
-        )
-        .unwrap();
-        open(&mut app, "Body").unwrap();
-        let (ctx, texts) = frame_texts_at(&mut app, 900.0, 560.0);
-        let in_screen = |label: &str| {
-            let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1;
-            r.top() >= 0.0 && r.bottom() <= 560.0 + 1.0
-        };
-        assert!(in_screen("OK") && in_screen("Cancel"), "the buttons stay on a 560-point screen");
-        let dialog = egui::Id::unique(("dialog", "charStyleOptions"));
-        let width = ctx.memory(|m| m.area_rect(dialog)).expect("the dialog is drawn").width();
-        assert!((700.0..=820.0).contains(&width), "the dialog keeps its 720-point width: {width}");
-        let reset = texts.iter().find(|(text, _)| text == "Reset Panel").expect("the footer is drawn").1.top();
-        assert!(
-            texts.iter().any(|(text, rect)| text.contains(':') && rect.bottom() > reset + 1.0),
-            "the General list is taller than the scroll area and runs under the footer: {texts:?}"
-        );
-        // A short section uses the same width.
-        app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("basic"));
-        let _ = frame_texts_in(&ctx, &mut app, 900.0, 560.0);
-        let basic = ctx.memory(|m| m.area_rect(dialog)).expect("the dialog is drawn").width();
-        assert!((basic - width).abs() < 0.5, "the width does not change with the section: {width} -> {basic}");
-    }
-
-    /// On a 1920 by 1080 screen the dialog opens with its content 420 points tall when the General
-    /// list is longer than that: the first frame that draws it, with no input, already has the full
-    /// height, and later frames keep it.
-    #[test]
-    fn the_sections_open_at_their_full_height_without_input() {
-        let mut app = app();
-        app.run(
-            "charStyle.new",
-            json!({"name": "Body", "attrs": {
-                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
-                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
-                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
-                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
-                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
-                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
-                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
-            }}),
-        )
-        .unwrap();
-        open(&mut app, "Body").unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1920.0, 1080.0));
-        let mut drawn = 0;
-        for _ in 0..6 {
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
-            out.textures_delta.clear();
-            let texts = texts_of(&out);
-            let top = |label: &str| texts.iter().find(|(text, _)| text == label).map(|r| r.1.top());
-            // The first frame only measures the window and draws no text.
-            let (Some(reset), Some(general)) = (top("Reset Panel"), top("General")) else { continue };
-            drawn += 1;
-            let content = reset - general;
-            assert!(content >= 410.0, "the content is 420 points tall in drawn frame {drawn}: {content}");
-        }
-        assert!(drawn >= 4, "the dialog is drawn: {drawn} frames");
-        // On the smallest window the buttons are on the screen in the first frame that draws them.
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 500.0));
-        for _ in 0..3 {
-            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
-            out.textures_delta.clear();
-            let texts = texts_of(&out);
-            let Some(ok) = texts.iter().find(|(text, _)| text == "OK").map(|r| r.1) else { continue };
-            let cancel = texts.iter().find(|(text, _)| text == "Cancel").expect("Cancel is drawn with OK").1;
-            assert!(ok.bottom() <= 501.0 && cancel.bottom() <= 501.0, "the buttons are on an 800 by 500 screen when first drawn: {ok:?} {cancel:?}");
-            return;
-        }
-        panic!("the dialog is drawn on an 800 by 500 screen");
-    }
-
-    /// Going back to the long General list from a shorter section keeps OK and Cancel on a small
-    /// screen in the first frame after the switch, not only once the window has measured itself again.
-    #[test]
-    fn switching_to_a_long_section_keeps_the_buttons_on_a_small_screen() {
-        let mut app = app();
-        app.run(
-            "charStyle.new",
-            json!({"name": "Body", "attrs": {
-                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
-                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
-                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
-                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
-                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
-                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
-                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
-            }}),
-        )
-        .unwrap();
-        open(&mut app, "Body").unwrap();
-        for h in [560.0, 640.0, 720.0] {
-            let ctx = egui::Context::default();
-            crate::theme::install_fonts(&ctx);
-            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, h));
-            for section in ["basic", "advanced", "color", "opentype"] {
-                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
-                let _ = frame_texts_in(&ctx, &mut app, 900.0, h);
-                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!("general"));
-                let mut out =
-                    ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| super::super::show(&mut app, ui.ctx()));
-                out.textures_delta.clear();
-                let texts = texts_of(&out);
-                for label in ["OK", "Cancel"] {
-                    let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1;
-                    assert!(r.bottom() <= h + 1.0, "{label} stays on a {h}-point screen going from {section} to General: {r:?}");
-                }
-            }
-        }
-    }
-
-    /// The dialog stays usable in the smallest window the app allows (800 by 500 points): in every
-    /// section the section list, OK and Cancel are on the screen.
-    #[test]
-    fn every_section_and_the_buttons_fit_the_smallest_window() {
-        let mut app = app();
-        app.run("charStyle.new", json!({"name": "Body"})).unwrap();
-        open(&mut app, "Body").unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        const W: f32 = 800.0;
-        const H: f32 = 500.0;
-        let labels = ["General", "Basic Character Formats", "Advanced Character Formats", "Character Color", "OpenType Features", "OK", "Cancel"];
-        for section in ["general", "basic", "advanced", "color", "opentype"] {
-            app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
-            let texts = frame_texts_in(&ctx, &mut app, W, H);
-            for label in labels {
-                let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn in {section}")).1;
-                assert!(r.top() >= 0.0 && r.bottom() <= H + 1.0, "{label} stays on an 800 by 500 screen in {section}: {r:?}");
-            }
-        }
-    }
-
-    /// At 2x UI scale the smallest window (800 by 500 pixels) holds only 400 by 250 points: in
-    /// every section the section list and both buttons stay on the screen.
-    #[test]
-    fn every_section_and_the_buttons_fit_the_smallest_window_at_twice_the_scale() {
-        let mut app = app();
-        app.run(
-            "charStyle.new",
-            json!({"name": "Body", "attrs": {
-                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
-                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
-                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
-                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
-                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
-                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
-                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
-            }}),
-        )
-        .unwrap();
-        open(&mut app, "Body").unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        ctx.set_zoom_factor(2.0);
-        const W: f32 = 400.0;
-        const H: f32 = 250.0;
-        let labels = ["General", "Basic Character Formats", "Advanced Character Formats", "Character Color", "OpenType Features", "OK", "Cancel"];
-        for section in ["general", "basic", "advanced", "color", "opentype"] {
-            app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
-            let texts = frame_texts_in(&ctx, &mut app, W, H);
-            for label in labels {
-                let r = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn in {section}")).1;
-                assert!(
-                    r.top() >= 0.0 && r.bottom() <= H + 1.0 && r.left() >= 0.0 && r.right() <= W + 1.0,
-                    "{label} stays on a 400 by 250 point screen at 2x in {section}: {r:?}"
-                );
-            }
-
-            // A wheel over the content scrolls it; the section list and both buttons stay put.
-            let at = egui::Pos2::new(300.0, 60.0);
-            let mut after = texts.clone();
-            for _ in 0..8 {
-                let events = vec![
-                    egui::Event::PointerMoved(at),
-                    egui::Event::MouseWheel {
-                        unit: egui::MouseWheelUnit::Point,
-                        delta: egui::vec2(-40.0, -40.0),
-                        phase: egui::TouchPhase::Move,
-                        modifiers: egui::Modifiers::NONE,
-                        source: egui::MouseWheelSource::Unknown,
-                    },
-                ];
-                let mut out = ctx.run_ui(
-                    egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(W, H))), events, ..Default::default() },
-                    |ui| super::super::show(&mut app, ui.ctx()),
-                );
-                out.textures_delta.clear();
-                after = texts_of(&out);
-            }
-            for label in labels {
-                let r = after.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn in {section}")).1;
-                assert!(r.top() >= 0.0 && r.bottom() <= H + 1.0, "{label} stays after scrolling in {section}: {r:?}");
-            }
-        }
-    }
-
-    /// Switching from a scrolled General section to a shorter one and back keeps General's own
-    /// scroll offset: the section is read after the list handles the click, so the click frame
-    /// stores no offset for the section that is leaving.
-    #[test]
-    fn a_scrolled_section_keeps_its_offset_after_switching_away_and_back() {
-        let mut app = app();
-        app.run(
-            "charStyle.new",
-            json!({"name": "Body", "attrs": {
-                "font_family": "Source Sans 3", "font_style": "Regular", "size": 24.0, "leading": 30.0,
-                "kerning": 0.0, "tracking": 5.0, "all_caps": false, "small_caps": null,
-                "position": {"kind": "normal", "size": 100.0, "position": 0.0}, "underline": false,
-                "strikethrough": false, "standardVerticalRoman": false, "charAlign": "romanBaseline",
-                "h_scale": 100.0, "v_scale": 100.0, "baseline_shift": 0.0, "rotation": 0.0,
-                "language": "English: USA", "overprint_fill": false, "overprint_stroke": false,
-                "stroke_width": 0.0, "features": ["liga", "calt", "dlig", "swsh", "salt", "titl", "ordn", "frac"]
-            }}),
-        )
-        .unwrap();
-        open(&mut app, "Body").unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 560.0));
-        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
-            let mut out =
-                ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| super::super::show(app, ui.ctx()));
-            out.textures_delta.clear();
-            texts_of(&out)
-        };
-        let mut texts = vec![];
-        for _ in 0..5 {
-            texts = frame(&mut app, vec![]);
-        }
-        let y = |texts: &[(String, egui::Rect)], label: &str| {
-            texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1.top()
-        };
-        eprintln!("DEBUG initial texts: {texts:?}");
-        let general_top = y(&texts, "Style Name:");
-        let before = texts.clone();
-        // Scroll General down with the wheel.
-        let at = egui::Pos2::new(600.0, 200.0);
-        for _ in 0..8 {
-            let events = vec![
-                egui::Event::PointerMoved(at),
-                egui::Event::MouseWheel {
-                    unit: egui::MouseWheelUnit::Point,
-                    delta: egui::vec2(0.0, -40.0),
-                    phase: egui::TouchPhase::Move,
-                    modifiers: egui::Modifiers::NONE,
-                    source: egui::MouseWheelSource::Unknown,
-                },
-            ];
-            texts = frame(&mut app, events);
-        }
-        // Let the smooth wheel scroll finish before changing sections.
-        for _ in 0..15 {
-            texts = frame(&mut app, vec![]);
-        }
-        let scrolled = texts.clone();
-        assert!(
-            before.iter().any(|(label, _)| !scrolled.iter().any(|(other, _)| other == label))
-                && scrolled.iter().any(|(label, _)| !before.iter().any(|(other, _)| other == label)),
-            "General scrolls to other attributes"
-        );
-        // Click Basic Character Formats, then General.
-        let click = |app: &mut VectorcraftApp, label: &str| {
-            let texts = frame(app, vec![]);
-            let pos = texts.iter().find(|(text, _)| text == label).unwrap_or_else(|| panic!("{label} is drawn")).1.center();
-            let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
-            for e in [egui::Event::PointerMoved(pos), button(true), button(false)] {
-                let _ = frame(app, vec![e]);
-            }
-            let _ = frame(app, vec![]);
-        };
-        click(&mut app, "Basic Character Formats");
-        let basic = frame(&mut app, vec![]);
-        assert!(y(&basic, "Font Family:") < general_top + 40.0, "a short section opens at its top");
-        click(&mut app, "General");
-        let back = frame(&mut app, vec![]);
-        let mut same = 0;
-        for (label, old) in &scrolled {
-            if let Some((_, new)) = back.iter().find(|(text, _)| text == label) {
-                assert!((new.top() - old.top()).abs() < 1.0, "General keeps its offset at {label}: {old:?} -> {new:?}");
-                same += 1;
-            }
-        }
-        assert!(same > 0, "General draws its content again: {back:?}");
-    }
-    #[test]
-    fn unchanged_basic_fields_preserve_original_keys() {
-        for attrs in [
-            json!({"all_caps": false}),
-            json!({"all_caps": true}),
-            json!({"small_caps": 70.0}),
-            json!({"font_family": "Example", "font_style": "Regular", "font_version": "1", "size": 24,
-                "leading": null, "kerning": null, "tracking": 3, "underline": null,
-                "strikethrough": false, "position": {"kind": "normal", "size": 80}, "charAlign": null}),
-        ] {
-            let original = attrs.as_object().unwrap().clone();
-            let mut fields = fields_from_attrs(&original);
-            fields.insert("__attrs".into(), attrs);
-            let d = Dialog { kind: KIND.into(), fields };
-            assert_eq!(edited_attrs(&d).unwrap(), original);
-        }
-        let original = json!({"all_caps": false}).as_object().unwrap().clone();
-        let mut fields = fields_from_attrs(&original);
-        fields.insert("__attrs".into(), json!(original));
-        fields.insert("case".into(), json!("allCaps"));
-        let d = Dialog { kind: KIND.into(), fields };
-        assert_eq!(edited_attrs(&d).unwrap(), json!({"all_caps": true, "small_caps": null}).as_object().unwrap().clone());
-    }
-
-    #[test]
-    fn unchanged_options_keep_local_small_caps_and_history() {
-        for preview in [false, true] {
-            let mut app = app();
-            app.run("charStyle.new", json!({"name": "Body", "attrs": {"all_caps": false}})).unwrap();
-            let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
-            app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-            app.run("text.setRangeStyle", json!({"id": id, "start": 0, "end": 4, "smallCaps": true})).unwrap();
-            let state = app.session.doc().unwrap();
-            let before = state.doc.clone();
-            let history = (state.history.undo.len(), state.history.redo.len());
-            open(&mut app, "Body").unwrap();
-            app.ui.dialog.as_mut().unwrap().fields.insert("preview".into(), json!(preview));
-            if preview {
-                frame(&mut app);
-                assert_eq!(app.session.doc().unwrap().doc, before);
-            }
-            super::super::confirm(&mut app).unwrap();
-            let state = app.session.doc().unwrap();
-            assert_eq!(state.doc, before);
-            assert_eq!((state.history.undo.len(), state.history.redo.len()), history);
-            assert_eq!(
-                state.doc.node(vectorcraft_doc::NodeId(id)).and_then(|node| match &node.kind {
-                    vectorcraft_doc::NodeKind::Text(text) => text.runs.first().map(|run| run.style.small_caps),
-                    _ => None,
-                }),
-                Some(Some(state.doc.setup.small_caps_size))
-            );
-        }
-    }
-
-    #[test]
-    fn options_preview_cancel_reset_and_commit_keep_sparse_definition() {
-        let mut app = app();
-        app.run("charStyle.new", json!({"name":"Body","attrs":{"size":24.0,"baseline_shift":3.0}})).unwrap();
-        let id = app.run("text.create", json!({"x":10,"y":40,"text":"Text"})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name":"Body","id":id})).unwrap();
-        let before = app.session.doc().unwrap().doc.clone();
-        let undo = app.session.doc().unwrap().history.undo.len();
-        open(&mut app, "Body").unwrap();
-        assert!(app.ui.dialog.as_ref().unwrap().bool("preview"));
-        assert!(app.run("ui.charStyleOptions.resetPanel", json!({})).is_err());
-        assert!(app.ui.dialog.as_ref().unwrap().fields["underline"].is_null());
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("kerning"), "");
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("name".into(), json!("Revised"));
-            d.fields.insert("size".into(), json!(18));
-        }
-        frame(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].name, "Revised");
-        super::super::cancel(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc, before);
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
-        open(&mut app, "Body").unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("section".into(), json!("basic"));
-        }
-        app.run("ui.charStyleOptions.resetPanel", json!({})).unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            assert_eq!(edited_attrs(d).unwrap(), serde_json::from_value(json!({"baseline_shift":3.0})).unwrap());
-            d.fields.insert("name".into(), json!("Revised"));
-        }
-        super::super::confirm(&mut app).unwrap();
-        let state = app.session.doc().unwrap();
-        assert_eq!(state.history.undo.len(), undo + 1);
-        assert_eq!(state.doc.char_styles[0].name, "Revised");
-        assert_eq!(state.doc.char_styles[0].attrs, serde_json::from_value(json!({"baseline_shift":3.0})).unwrap());
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc, before);
-        app.run("edit.redo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].name, "Revised");
-        app.run("select.set", json!({"ids":[id]})).unwrap();
-        app.run("ui.newCharStyle", json!({})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("size"), "12.0");
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("size".into(), json!(36.0));
-            d.fields.insert("name".into(), json!("Future"));
-        }
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc.char_styles.iter().find(|def| def.name == "Future").unwrap().attrs["size"], json!(36.0));
-    }
-
-    /// Basic Character Formats shows Character Alignment under its own name, and Standard Vertical
-    /// Roman Alignment as its own on, off or unset checkbox that the style saves.
-    #[test]
-    fn standard_vertical_roman_alignment_has_its_own_row() {
-        let mut d = Dialog::new(KIND, json!({}));
-        d.fields.extend(fields_from_attrs(&Map::new()));
-        d.fields.insert("__attrs".into(), json!({}));
-        let mut app = app();
-        let shown = crate::tests_labels::painted_text(&mut app, |_, ui| basic_body(ui, &mut d));
-        assert!(shown.contains("Character Alignment"), "{shown}");
-        assert!(shown.contains("Standard Vertical Roman Alignment"), "{shown}");
-        assert!(d.fields["standardVerticalRoman"].is_null());
-        assert_eq!(edited_attrs(&d).unwrap(), Map::new());
-        d.fields.insert("standardVerticalRoman".into(), json!(true));
-        d.fields.insert("charAlign".into(), json!("emBoxCenter"));
-        assert_eq!(edited_attrs(&d).unwrap(), json!({"standardVerticalRoman": true, "charAlign": "emBoxCenter"}).as_object().unwrap().clone());
-        let fields = fields_from_attrs(json!({"standardVerticalRoman": false}).as_object().unwrap());
-        assert_eq!(fields["standardVerticalRoman"], json!(false));
-        reset_basic(&mut d);
-        assert!(d.fields["standardVerticalRoman"].is_null());
-
-        app.run("charStyle.new", json!({"name": "Upright", "attrs": {}})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "AB", "vertical": true})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name": "Upright", "id": id})).unwrap();
-        open(&mut app, "Upright").unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("standardVerticalRoman".into(), json!(true));
-        super::super::confirm(&mut app).unwrap();
-        let doc = &app.session.doc().unwrap().doc;
-        assert_eq!(doc.char_styles[0].attrs["standardVerticalRoman"], json!(true));
-        let vectorcraft_doc::NodeKind::Text(t) = &doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert!(t.runs.iter().all(|r| r.style.standard_vertical_roman));
-    }
-
-    fn attrs(v: Value) -> Map<String, Value> {
-        v.as_object().cloned().unwrap_or_default()
-    }
-
-    fn dialog_for(original: Value) -> Dialog {
-        let mut d = Dialog::new(KIND, json!({}));
-        d.fields.extend(fields_from_attrs(&attrs(original.clone())));
-        d.fields.insert("__attrs".into(), original);
-        d
-    }
-
-    #[test]
-    fn advanced_fields_show_set_values_and_keep_untouched_ones() {
-        let d = dialog_for(json!({}));
-        for key in ADVANCED_NUMBERS {
-            assert_eq!(d.fields[*key], json!(""), "{key}");
-        }
-        assert!(d.fields["language"].is_null());
-        assert_eq!(edited_attrs(&d).unwrap(), Map::new());
-        for original in [
-            json!({"h_scale": 100.0, "rotation": 0.0, "language": null}),
-            json!({"v_scale": 50.0, "baseline_shift": -3.0, "language": "de"}),
-            json!({"language": "x-file", "size": 12.0}),
-            // Values a style captures from text in a scaled type object, Size and Leading below 0.1 included.
-            json!({"h_scale": 20000.0, "baseline_shift": 3000.0, "size": 0.05, "leading": 0.05}),
-        ] {
-            let d = dialog_for(original.clone());
-            assert_eq!(edited_attrs(&d).unwrap(), attrs(original.clone()), "{original}");
-        }
-        let d = dialog_for(json!({"h_scale": 100.0, "rotation": 0.0, "language": null}));
-        assert_eq!((d.fields["h_scale"].clone(), d.fields["v_scale"].clone()), (json!(100.0), json!("")));
-        assert_eq!(d.fields["language"], json!("English: USA"));
-        assert_eq!(dialog_for(json!({"language": "de"})).fields["language"], json!("German"));
-        assert_eq!(dialog_for(json!({"language": "x-file"})).fields["language"], json!("x-file"));
-
-        let mut d = dialog_for(json!({"h_scale": 100.0, "language": "de"}));
-        d.fields.insert("h_scale".into(), json!(""));
-        d.fields.insert("v_scale".into(), json!("150"));
-        d.fields.insert("baseline_shift".into(), json!("-4"));
-        d.fields.insert("rotation".into(), json!("190"));
-        d.fields.insert("language".into(), json!("English: USA"));
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"v_scale": 150.0, "baseline_shift": -4.0, "rotation": -170.0, "language": null})));
-        d.fields.insert("language".into(), json!("French"));
-        assert_eq!(edited_attrs(&d).unwrap()["language"], json!("fr"));
-        d.fields.insert("language".into(), Value::Null);
-        assert!(!edited_attrs(&d).unwrap().contains_key("language"));
-    }
-
-    #[test]
-    fn character_style_numbers_outside_their_limits_are_errors() {
-        for (key, value, message) in [
-            ("size", "1296.1", "Size must be a number at most 1296"),
-            ("leading", "5000.1", "Leading must be a number at most 5000"),
-            ("h_scale", "0", "Horizontal Scale must be a number from 1 to 10000"),
-            ("h_scale", "0.9", "Horizontal Scale must be a number from 1 to 10000"),
-            ("v_scale", "10000.1", "Vertical Scale must be a number from 1 to 10000"),
-            ("baseline_shift", "1296.1", "Baseline Shift must be a number from -1296 to 1296"),
-            ("baseline_shift", "-1296.1", "Baseline Shift must be a number from -1296 to 1296"),
-            ("rotation", "inf", "Character Rotation must be a number"),
-            ("h_scale", "wide", "Horizontal Scale must be a number"),
-        ] {
-            let mut d = dialog_for(json!({}));
-            d.fields.insert(key.into(), json!(value));
-            assert_eq!(edited_attrs(&d).unwrap_err(), message, "{key} {value}");
-        }
-        let mut d = dialog_for(json!({}));
-        for (key, value) in
-            [("size", "1296"), ("leading", "5000"), ("h_scale", "1"), ("v_scale", "10000"), ("baseline_shift", "-1296"), ("rotation", "-200")]
-        {
-            d.fields.insert(key.into(), json!(value));
-        }
-        assert_eq!(
-            edited_attrs(&d).unwrap(),
-            attrs(json!({"size": 1296.0, "leading": 5000.0, "h_scale": 1.0, "v_scale": 10000.0, "baseline_shift": -1296.0, "rotation": 160.0}))
-        );
-    }
-
-    #[test]
-    fn advanced_section_shows_its_seven_controls() {
-        let mut d = dialog_for(json!({}));
-        let mut app = app();
-        let shown = crate::tests_labels::painted_text(&mut app, |_, ui| advanced_body(ui, &mut d));
-        for label in [
-            "Horizontal Scale",
-            "Vertical Scale",
-            "Baseline Shift",
-            "Tate-chu-yoko Up/Down",
-            "Tate-chu-yoko Left/Right",
-            "Character Rotation",
-            "Language:",
-        ] {
-            assert!(shown.contains(label), "{label}: {shown}");
-        }
-    }
-
-    #[test]
-    fn advanced_options_preview_cancel_reset_and_commit() {
-        let mut app = app();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0, "h_scale": 90.0, "baseline_shift": 0.0}})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-        app.run("text.setRangeStyle", json!({"id": id, "start": 2, "end": 4, "baselineShift": 5.0})).unwrap();
-        let before = app.session.doc().unwrap().doc.clone();
-        let undo = app.session.doc().unwrap().history.undo.len();
-        open(&mut app, "Body").unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().fields["h_scale"], json!(90.0));
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("rotation"), "");
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("section".into(), json!("advanced"));
-            d.fields.insert("h_scale".into(), json!("80"));
-            d.fields.insert("baseline_shift".into(), json!("2"));
-            d.fields.insert("rotation".into(), json!("45"));
-            d.fields.insert("language".into(), json!("Turkish"));
-        }
-        assert!(crate::menus::enabled(&app, "ui.charStyleOptions.resetPanel"));
-        frame(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs["rotation"], json!(45.0));
-        super::super::cancel(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc, before);
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
-
-        open(&mut app, "Body").unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("section".into(), json!("advanced"));
-            d.fields.insert("size".into(), json!(18));
-            d.fields.insert("v_scale".into(), json!("70"));
-        }
-        app.run("ui.charStyleOptions.resetPanel", json!({})).unwrap();
-        assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap(), attrs(json!({"size": 18.0})));
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("h_scale".into(), json!("80"));
-            d.fields.insert("v_scale".into(), json!("60"));
-            d.fields.insert("baseline_shift".into(), json!("2"));
-            d.fields.insert("rotation".into(), json!("45"));
-            d.fields.insert("language".into(), json!("Turkish"));
-        }
-        super::super::confirm(&mut app).unwrap();
-        let state = app.session.doc().unwrap();
-        assert_eq!(state.history.undo.len(), undo + 1);
-        assert_eq!(
-            state.doc.char_styles[0].attrs,
-            attrs(json!({"size": 18.0, "h_scale": 80.0, "v_scale": 60.0, "baseline_shift": 2.0, "rotation": 45.0, "language": "tr"}))
-        );
-        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert_eq!(
-            t.runs
-                .iter()
-                .map(|r| (r.style.h_scale, r.style.v_scale, r.style.baseline_shift, r.style.rotation, r.style.language.clone()))
-                .collect::<Vec<_>>(),
-            [(80.0, 60.0, 2.0, 45.0, Some("tr".to_string())), (80.0, 60.0, 5.0, 45.0, Some("tr".to_string()))]
-        );
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc, before);
-    }
-
-    #[test]
-    fn new_character_style_sets_and_resets_advanced_formats() {
-        let mut app = app();
-        app.run("ui.newCharStyle", json!({})).unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("section".into(), json!("advanced"));
-            d.fields.insert("v_scale".into(), json!("130"));
-        }
-        app.run("ui.charStyleOptions.resetPanel", json!({})).unwrap();
-        assert_eq!(app.ui.dialog.as_ref().unwrap().str("v_scale"), "");
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("name".into(), json!("Raised"));
-            d.fields.insert("baseline_shift".into(), json!("3"));
-            d.fields.insert("language".into(), json!("French"));
-        }
-        super::super::confirm(&mut app).unwrap();
-        let doc = &app.session.doc().unwrap().doc;
-        let def = doc.char_styles.iter().find(|def| def.name == "Raised").unwrap();
-        assert_eq!((def.attrs["baseline_shift"].clone(), def.attrs["language"].clone()), (json!(3.0), json!("fr")));
-        assert!(!def.attrs.contains_key("v_scale"));
-    }
-
-    #[test]
-    fn tate_chu_yoko_offsets_show_set_reset_and_keep_their_limits() {
-        let d = dialog_for(json!({"tcyUpDown": 2.0, "size": 12.0}));
-        assert_eq!((d.fields["tcyUpDown"].clone(), d.fields["tcyLeftRight"].clone()), (json!(2.0), json!("")));
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyUpDown": 2.0, "size": 12.0})));
-        // A value a style captured from scaled text stays while its field is untouched.
-        assert_eq!(edited_attrs(&dialog_for(json!({"tcyLeftRight": 3000.0}))).unwrap(), attrs(json!({"tcyLeftRight": 3000.0})));
-
-        let mut d = dialog_for(json!({"tcyUpDown": 2.0}));
-        d.fields.insert("tcyUpDown".into(), json!(""));
-        d.fields.insert("tcyLeftRight".into(), json!("-1296"));
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyLeftRight": -1296.0})));
-        d.fields.insert("tcyLeftRight".into(), json!("0"));
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tcyLeftRight": 0.0})));
-        for (key, value, message) in [
-            ("tcyUpDown", "1296.1", "Tate-chu-yoko Up/Down must be a number from -1296 to 1296"),
-            ("tcyLeftRight", "-1296.1", "Tate-chu-yoko Left/Right must be a number from -1296 to 1296"),
-            ("tcyUpDown", "high", "Tate-chu-yoko Up/Down must be a number"),
-            ("tcyLeftRight", "NaN", "Tate-chu-yoko Left/Right must be a number"),
-        ] {
-            let mut d = dialog_for(json!({}));
-            d.fields.insert(key.into(), json!(value));
-            assert_eq!(edited_attrs(&d).unwrap_err(), message, "{key} {value}");
-        }
-
-        let mut d = dialog_for(json!({"tcyUpDown": 2.0, "tcyLeftRight": -1.0, "size": 12.0}));
-        d.fields.insert("section".into(), json!("advanced"));
-        reset_section(&mut d);
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
-    }
-
-    #[test]
-    fn tate_chu_yoko_offsets_preview_cancel_and_commit_to_the_style_and_its_text() {
-        let mut app = app();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0, "tcyLeftRight": 0.0}})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-        app.run("text.setRangeStyle", json!({"id": id, "start": 2, "end": 4, "tcyLeftRight": 5.0})).unwrap();
-        let before = app.session.doc().unwrap().doc.clone();
-        let undo = app.session.doc().unwrap().history.undo.len();
-        open(&mut app, "Body").unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("section".into(), json!("advanced"));
-            d.fields.insert("tcyUpDown".into(), json!("4"));
-        }
-        frame(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs["tcyUpDown"], json!(4.0));
-        super::super::cancel(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc, before);
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
-
-        open(&mut app, "Body").unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("tcyUpDown".into(), json!("4"));
-            d.fields.insert("tcyLeftRight".into(), json!("-3"));
-        }
-        super::super::confirm(&mut app).unwrap();
-        let state = app.session.doc().unwrap();
-        assert_eq!(state.history.undo.len(), undo + 1);
-        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "tcyUpDown": 4.0, "tcyLeftRight": -3.0})));
-        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert_eq!(t.runs.iter().map(|r| (r.style.tcy_up_down, r.style.tcy_left_right)).collect::<Vec<_>>(), [(4.0, -3.0), (4.0, 5.0)]);
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc, before);
-
-        app.run("ui.newCharStyle", json!({})).unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("name".into(), json!("Shifted"));
-            d.fields.insert("tcyLeftRight".into(), json!("6"));
-        }
-        super::super::confirm(&mut app).unwrap();
-        let doc = &app.session.doc().unwrap().doc;
-        let def = doc.char_styles.iter().find(|def| def.name == "Shifted").unwrap();
-        assert_eq!(def.attrs["tcyLeftRight"], json!(6.0));
-    }
-
-    #[test]
-    fn insert_aki_fields_show_set_reset_and_stop_at_the_character_panel_limits() {
-        let d = dialog_for(json!({"akiLeft": 250.0, "size": 12.0}));
-        assert_eq!((d.fields["akiLeft"].clone(), d.fields["akiRight"].clone()), (json!(250.0), json!("")));
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiLeft": 250.0, "size": 12.0})));
-
-        let mut d = dialog_for(json!({"akiLeft": 250.0}));
-        d.fields.insert("akiLeft".into(), json!(""));
-        d.fields.insert("akiRight".into(), json!("500"));
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiRight": 500.0})));
-        // A typed value stops at 0 and at 1000, as in the Character panel's fields.
-        for (typed, kept) in [("5000", 1000.0), ("-5", 0.0), ("1000", 1000.0)] {
-            d.fields.insert("akiRight".into(), json!(typed));
-            assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"akiRight": kept})), "{typed}");
-        }
-        d.fields.insert("akiLeft".into(), json!("wide"));
-        assert_eq!(edited_attrs(&d).unwrap_err(), "Insert Aki Left must be a number");
-
-        let mut d = dialog_for(json!({"akiLeft": 250.0, "akiRight": 500.0, "size": 12.0}));
-        d.fields.insert("section".into(), json!("advanced"));
-        reset_section(&mut d);
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
-    }
-
-    #[test]
-    fn insert_aki_fields_are_drawn_and_commit_to_the_style_and_its_text() {
-        let mut app = app();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-        open(&mut app, "Body").unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 900.0));
-        let mut d = app.ui.dialog.clone().unwrap();
-        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| advanced_body(ui, &mut d));
-        let texts = texts_of(&out);
-        out.textures_delta.clear();
-        for label in ["Insert Aki Left", "Insert Aki Right"] {
-            assert!(texts.iter().any(|(text, _)| text == label), "{label} is drawn: {texts:?}");
-        }
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("akiLeft".into(), json!("250"));
-            d.fields.insert("akiRight".into(), json!("2000"));
-        }
-        super::super::confirm(&mut app).unwrap();
-        let state = app.session.doc().unwrap();
-        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "akiLeft": 250.0, "akiRight": 1000.0})));
-        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert!(t.runs.iter().all(|r| (r.style.aki_left, r.style.aki_right) == (250.0, 1000.0)));
-    }
-
-    /// The Adjust Diacritic Positions in Advanced Character Formats: empty is unset, a typed value
-    /// stops at -1000 and 1000, Reset Panel unsets them, and the fields are drawn and commit to the
-    /// style and the text set in it.
-    #[test]
-    fn diacritic_position_fields_show_set_reset_and_commit() {
-        let d = dialog_for(json!({"diacriticHorizontal": -250.0, "size": 12.0}));
-        assert_eq!((d.fields["diacriticHorizontal"].clone(), d.fields["diacriticVertical"].clone()), (json!(-250.0), json!("")));
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"diacriticHorizontal": -250.0, "size": 12.0})));
-        let mut d = dialog_for(json!({"diacriticHorizontal": -250.0}));
-        d.fields.insert("diacriticHorizontal".into(), json!(""));
-        for (typed, kept) in [("0", 0.0), ("150", 150.0), ("5000", 1000.0), ("-5000", -1000.0)] {
-            d.fields.insert("diacriticVertical".into(), json!(typed));
-            assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"diacriticVertical": kept})), "{typed}");
-        }
-        d.fields.insert("diacriticHorizontal".into(), json!("left"));
-        assert_eq!(edited_attrs(&d).unwrap_err(), "Adjust Horizontal Diacritic Position must be a number");
-        let mut d = dialog_for(json!({"diacriticHorizontal": 100.0, "diacriticVertical": 200.0, "size": 12.0}));
-        d.fields.insert("section".into(), json!("advanced"));
-        reset_section(&mut d);
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
-
-        let mut app = app();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "بَب"})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-        open(&mut app, "Body").unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 900.0));
-        let mut d = app.ui.dialog.clone().unwrap();
-        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| advanced_body(ui, &mut d));
-        let texts = texts_of(&out);
-        out.textures_delta.clear();
-        for label in ["Adjust Horizontal Diacritic Position", "Adjust Vertical Diacritic Position"] {
-            assert!(texts.iter().any(|(text, _)| text == label), "{label} is drawn: {texts:?}");
-        }
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("diacriticHorizontal".into(), json!("-120"));
-            d.fields.insert("diacriticVertical".into(), json!("3000"));
-        }
-        super::super::confirm(&mut app).unwrap();
-        let state = app.session.doc().unwrap();
-        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "diacriticHorizontal": -120.0, "diacriticVertical": 1000.0})));
-        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert!(t.runs.iter().all(|r| (r.style.diacritic_horizontal, r.style.diacritic_vertical) == (-120.0, 1000.0)));
-    }
-
-    /// Tsume in Advanced Character Formats: empty is unset, an explicit 0 stays set, a typed value
-    /// stops at 0 and 100, Reset Panel unsets it, and the field is drawn and commits to the style
-    /// and the text set in it.
-    #[test]
-    fn tsume_field_shows_sets_resets_and_commits() {
-        let d = dialog_for(json!({"size": 12.0}));
-        assert_eq!(d.fields["tsume"], json!(""));
-        let mut d = dialog_for(json!({"tsume": 50.0}));
-        assert_eq!(d.fields["tsume"], json!(50.0));
-        for (typed, kept) in [("0", 0.0), ("25.5", 25.5), ("150", 100.0), ("-5", 0.0)] {
-            d.fields.insert("tsume".into(), json!(typed));
-            assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"tsume": kept})), "{typed}");
-        }
-        d.fields.insert("tsume".into(), json!(""));
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({})));
-        d.fields.insert("tsume".into(), json!("tight"));
-        assert_eq!(edited_attrs(&d).unwrap_err(), "Tsume must be a number");
-        let mut d = dialog_for(json!({"tsume": 50.0, "size": 12.0}));
-        d.fields.insert("section".into(), json!("advanced"));
-        reset_section(&mut d);
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0})));
-
-        let mut app = app();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-        open(&mut app, "Body").unwrap();
-        let ctx = egui::Context::default();
-        crate::theme::install_fonts(&ctx);
-        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 900.0));
-        let mut d = app.ui.dialog.clone().unwrap();
-        let input = egui::RawInput { screen_rect: Some(screen), ..Default::default() };
-        let mut out = ctx.run_ui(input, |ui| advanced_body(ui, &mut d));
-        let texts = texts_of(&out);
-        out.textures_delta.clear();
-        assert!(texts.iter().any(|(text, _)| text == "Tsume"), "Tsume is drawn: {texts:?}");
-        app.ui.dialog.as_mut().unwrap().fields.insert("tsume".into(), json!("75"));
-        super::super::confirm(&mut app).unwrap();
-        let state = app.session.doc().unwrap();
-        assert_eq!(state.doc.char_styles[0].attrs, attrs(json!({"size": 24.0, "tsume": 75.0})));
-        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert!(t.runs.iter().all(|r| r.style.tsume == 75.0));
-    }
-
-    /// The negated tags of the twenty stylistic sets: an explicit empty Stylistic Sets choice.
-    fn no_sets() -> Vec<String> {
-        vectorcraft_text::EXTRA_FEATURES[..20].iter().map(|s| format!("-{s}")).collect()
-    }
-
-    #[test]
-    fn color_and_opentype_fields_keep_unset_explicit_and_untouched_values() {
-        let d = dialog_for(json!({}));
-        for key in ["fill", "stroke", "overprint_fill", "overprint_stroke", "ot_figure", "ot_position", "ot_liga", "ot_frac", "ot_sets"] {
-            assert!(d.fields[key].is_null(), "{key}");
-        }
-        assert_eq!((d.str("stroke_width"), d.str("fill_tint")), (String::new(), String::new()));
-        assert_eq!(edited_attrs(&d).unwrap(), Map::new());
-
-        let mut explicit =
-            vec!["-tnum", "-onum", "-pnum", "-lnum", "-sups", "-subs", "-numr", "-dnom", "-liga"].into_iter().map(String::from).collect::<Vec<_>>();
-        explicit.extend(no_sets());
-        for original in [
-            json!({"fill": {"type": "none"}, "stroke_width": 0.0, "overprint_fill": false, "features": explicit}),
-            json!({"stroke": {"type": "pattern", "pattern": "Dots"}, "fill": {"type": "solid", "color": {"model": "gray", "k": 0.5}}}),
-            json!({"features": ["zzzz", "dlig", "ss03"], "size": 9.0}),
-        ] {
-            let d = dialog_for(original.clone());
-            assert_eq!(edited_attrs(&d).unwrap(), attrs(original.clone()), "{original}");
-        }
-        let d = dialog_for(json!({"fill": {"type": "none"}, "overprint_fill": false, "features": explicit}));
-        assert_eq!(d.fields["fill"], json!({"type": "none"}));
-        assert_eq!(d.fields["overprint_fill"], json!(false));
-        assert_eq!((d.str("ot_figure"), d.str("ot_position")), ("default".to_string(), "default".to_string()));
-        assert_eq!(
-            (d.fields["ot_liga"].clone(), d.fields["ot_dlig"].clone(), d.fields["ot_sets"].clone()),
-            (json!(false), Value::Null, json!(no_sets()))
-        );
-
-        // One changed control keeps every other tag, unknown ones included.
-        let mut d = dialog_for(json!({"features": ["zzzz", "dlig", "ss03"], "stroke": {"type": "pattern", "pattern": "Dots"}}));
-        assert_eq!((d.fields["ot_dlig"].clone(), d.fields["ot_sets"].clone()), (json!(true), json!(["ss03"])));
-        d.fields.insert("ot_liga".into(), json!(false));
-        d.fields.insert("overprint_stroke".into(), json!(true));
-        assert_eq!(
-            edited_attrs(&d).unwrap(),
-            attrs(json!({"features": ["zzzz", "dlig", "ss03", "-liga"], "stroke": {"type": "pattern", "pattern": "Dots"}, "overprint_stroke": true}))
-        );
-        d.fields.insert("ot_sets".into(), json!(["ss05", "ss03"]));
-        d.fields.insert("ot_figure".into(), json!("proportionalOldstyle"));
-        d.fields.insert("ot_position".into(), json!("numerator"));
-        d.fields.insert("ot_dlig".into(), Value::Null);
-        let features = edited_attrs(&d).unwrap()["features"].clone();
-        // Sets the list leaves out stay unset, so text that uses the style keeps its own.
-        assert_eq!(features, json!(["zzzz", "-liga", "onum", "pnum", "-tnum", "-lnum", "-sups", "-subs", "numr", "-dnom", "ss05", "ss03"]));
-        let reopened = dialog_for(json!({"features": features}));
-        assert_eq!(
-            ["ot_figure", "ot_position", "ot_liga", "ot_dlig"].map(|k| reopened.fields[k].clone()),
-            [json!("proportionalOldstyle"), json!("numerator"), json!(false), Value::Null]
-        );
-        assert_eq!(reopened.fields["ot_sets"], json!(["ss03", "ss05"]));
-        // Every control unset leaves the attribute unset.
-        let mut d = dialog_for(json!({"features": ["dlig"]}));
-        d.fields.insert("ot_dlig".into(), Value::Null);
-        assert_eq!(edited_attrs(&d).unwrap(), Map::new());
-    }
-
-    #[test]
-    fn a_stored_zero_value_reads_as_off_and_turning_it_on_saves_it() {
-        let mut d = dialog_for(json!({"features": ["ss01=0", "salt=0", "ss02=2"]}));
-        assert_eq!(d.fields["ot_salt"], json!(false));
-        assert_eq!(d.fields["ot_sets"], json!(["-ss01", "ss02"]));
-        d.fields.insert("ot_sets".into(), json!(["ss01", "ss02"]));
-        d.fields.insert("ot_salt".into(), json!(true));
-        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["salt", "ss01", "ss02=2"]));
-        for last in ["ss01=0", "-ss01", "ss01=65536"] {
-            let mut d = dialog_for(json!({"features": ["ss01=2", last]}));
-            d.fields.insert("ot_sets".into(), json!(["ss01", "ss02"]));
-            assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["ss01", "ss02"]), "{last}: only a valid last on-value is kept");
-        }
-    }
-
-    #[test]
-    fn figure_tags_no_menu_entry_matches_leave_the_figure_unset() {
-        for features in [json!(["pnum"]), json!(["lnum"]), json!(["onum", "lnum"]), json!(["tnum", "pnum"])] {
-            let mut d = dialog_for(json!({ "features": features }));
-            assert!(d.fields["ot_figure"].is_null(), "{features}");
-            assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({ "features": features })), "{features}");
-            d.fields.insert("ot_figure".into(), json!("default"));
-            assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["-tnum", "-onum", "-pnum", "-lnum"]), "{features}");
-        }
-        for (features, shown) in [(json!(["tnum"]), "tabularLining"), (json!(["-pnum"]), "default"), (json!(["pnum", "lnum"]), "proportionalLining")]
-        {
-            assert_eq!(dialog_for(json!({ "features": features })).str("ot_figure"), shown, "{features}");
-        }
-    }
-
-    #[test]
-    fn color_tint_and_weight_outside_their_limits_are_errors() {
-        let linked = json!({"type": "solid", "color": {"model": "gray", "k": 0.5}, "swatch": "Ink"});
-        for (key, value, message) in [
-            ("fill_tint", "150", "Fill Tint must be a number from 0 to 100"),
-            ("stroke_tint", "-1", "Stroke Tint must be a number from 0 to 100"),
-            ("stroke_width", "-1", "Weight must be a number from 0 to 4000000"),
-            ("stroke_width", "thick", "Weight must be a number"),
-        ] {
-            let mut d = dialog_for(json!({"fill": linked, "stroke": linked}));
-            d.fields.insert(key.into(), json!(value));
-            assert_eq!(edited_attrs(&d).unwrap_err(), message, "{key} {value}");
-        }
-        let mut d = dialog_for(json!({"fill": linked}));
-        assert_eq!(d.fields["fill_tint"], json!(100.0));
-        d.fields.insert("fill_tint".into(), json!("40"));
-        d.fields.insert("stroke_width".into(), json!("1.5"));
-        assert_eq!(
-            edited_attrs(&d).unwrap(),
-            attrs(json!({"fill": {"type": "solid", "color": {"model": "gray", "k": 0.5}, "swatch": "Ink", "tint": 0.4}, "stroke_width": 1.5}))
-        );
-    }
-
-    #[test]
-    fn reset_panel_in_color_and_opentype_clears_only_that_section() {
-        let original = json!({"size": 12.0, "h_scale": 90.0, "fill": {"type": "none"}, "stroke_width": 2.0, "overprint_stroke": true, "features": ["dlig", "zzzz"]});
-        let mut d = dialog_for(original.clone());
-        d.fields.insert("section".into(), json!("color"));
-        assert!(can_reset(&d));
-        reset_section(&mut d);
-        assert_eq!(edited_attrs(&d).unwrap(), attrs(json!({"size": 12.0, "h_scale": 90.0, "features": ["dlig", "zzzz"]})));
-        let mut d = dialog_for(original);
-        d.fields.insert("section".into(), json!("opentype"));
-        reset_section(&mut d);
-        assert!(d.fields["ot_dlig"].is_null());
-        assert_eq!(
-            edited_attrs(&d).unwrap(),
-            attrs(json!({"size": 12.0, "h_scale": 90.0, "fill": {"type": "none"}, "stroke_width": 2.0, "overprint_stroke": true}))
-        );
-        d.fields.insert("ot_frac".into(), json!(true));
-        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["frac"]));
-    }
-
-    /// H or V Style and Roman Italics are on, off or unset switches of OpenType Features: they show
-    /// the style's `hkna` and `ital` tags, a changed switch replaces its tag and keeps the others, an
-    /// unset one removes it, and a style without them keeps none.
-    #[test]
-    fn kana_style_and_roman_italics_are_opentype_switches() {
-        let mut d = dialog_for(json!({"features": ["hkna", "-ital", "dlig"]}));
-        assert_eq!((&d.fields["ot_hkna"], &d.fields["ot_ital"]), (&json!(true), &json!(false)));
-        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["hkna", "-ital", "dlig"]), "untouched");
-        d.fields.insert("ot_ital".into(), json!(true));
-        d.fields.insert("ot_hkna".into(), Value::Null);
-        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["dlig", "ital"]));
-        let mut d = dialog_for(json!({}));
-        assert!(d.fields["ot_hkna"].is_null() && d.fields["ot_ital"].is_null());
-        d.fields.insert("ot_hkna".into(), json!(true));
-        assert_eq!(edited_attrs(&d).unwrap()["features"], json!(["hkna"]));
-    }
-
-    #[test]
-    fn color_and_opentype_sections_show_their_controls() {
-        let mut d = dialog_for(json!({}));
-        let mut app = app();
-        let shown = crate::tests_labels::painted_text(&mut app, |_, ui| section_list(ui, &mut d));
-        for label in ["Character Color", "OpenType Features"] {
-            assert!(shown.contains(label), "{label}: {shown}");
-        }
-        let shown = crate::tests_labels::painted_text(&mut app, |_, ui| color_body(ui, &mut d));
-        for label in ["Fill", "Stroke", "Tint", "Weight", "Overprint Fill", "Overprint Stroke"] {
-            assert!(shown.contains(label), "{label}: {shown}");
-        }
-        let shown = crate::tests_labels::painted_text(&mut app, |_, ui| opentype_body(ui, &mut d));
-        for label in [
-            "Figure:",
-            "Position:",
-            "Standard Ligatures",
-            "Contextual Alternates",
-            "Discretionary Ligatures",
-            "Swash",
-            "Stylistic Alternates",
-            "Titling Alternates",
-            "Ordinals",
-            "Fractions",
-            "H or V Style",
-            "Roman Italics",
-            "Stylistic Sets",
-            "ss01",
-            "ss20",
-        ] {
-            assert!(shown.contains(label), "{label}: {shown}");
-        }
-        assert!(!shown.contains("Small Caps"), "{shown}");
-    }
-
-    #[test]
-    fn color_and_features_preview_cancel_commit_and_new_style() {
-        let mut app = app();
-        app.run("swatch.new", json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-        let before = app.session.doc().unwrap().doc.clone();
-        let undo = app.session.doc().unwrap().history.undo.len();
-        let brand = json!(before.tint_paint("Brand", 1.0).unwrap());
-        open(&mut app, "Body").unwrap();
-        let choices = app.ui.dialog.as_ref().unwrap().fields["__swatches"].as_array().unwrap().clone();
-        assert!(choices.contains(&json!(["Brand", brand])));
-        let registration = vectorcraft_color::swatch::REGISTRATION;
-        assert_eq!(choices.first(), Some(&json!([registration, before.tint_paint(registration, 1.0).unwrap()])));
-        let set = |app: &mut VectorcraftApp| {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("section".into(), json!("color"));
-            d.fields.insert("fill".into(), brand.clone());
-            d.fields.insert("stroke".into(), brand.clone());
-            d.fields.insert("stroke_tint".into(), json!("40"));
-            d.fields.insert("stroke_width".into(), json!("2"));
-            d.fields.insert("overprint_fill".into(), json!(true));
-            d.fields.insert("ot_dlig".into(), json!(true));
-            d.fields.insert("ot_figure".into(), json!("tabularLining"));
-        };
-        set(&mut app);
-        assert!(crate::menus::enabled(&app, "ui.charStyleOptions.resetPanel"));
-        frame(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs["fill"], brand);
-        super::super::cancel(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc, before);
-        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
-
-        open(&mut app, "Body").unwrap();
-        set(&mut app);
-        super::super::confirm(&mut app).unwrap();
-        let state = app.session.doc().unwrap();
-        assert_eq!(state.history.undo.len(), undo + 1);
-        let tint40 = state.doc.tint_paint("Brand", 0.4).unwrap();
-        let def = state.doc.char_styles[0].attrs.clone();
-        assert_eq!(def["stroke"], json!(tint40));
-        assert_eq!(def["features"], json!(["dlig", "tnum", "lnum", "-onum", "-pnum"]));
-        let vectorcraft_doc::NodeKind::Text(t) = &state.doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        for run in &t.runs {
-            assert_eq!(
-                (run.style.fill.clone(), run.style.stroke.clone(), run.style.stroke_width),
-                (state.doc.tint_paint("Brand", 1.0).unwrap(), tint40.clone(), 2.0)
-            );
-            assert_eq!(run.style.features, ["dlig", "tnum", "lnum", "-onum", "-pnum"]);
-        }
-        open(&mut app, "Body").unwrap();
-        let d = app.ui.dialog.as_ref().unwrap();
-        assert_eq!((d.fields["stroke_tint"].clone(), d.str("ot_figure")), (json!(40.0), "tabularLining".to_string()));
-        super::super::cancel(&mut app);
-        app.run("edit.undo", json!({})).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc, before);
-
-        app.run("select.set", json!({"ids": []})).unwrap();
-        app.run("ui.newCharStyle", json!({})).unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            assert!(d.fields["fill"].is_null() && d.fields["ot_sets"].is_null());
-            d.fields.insert("name".into(), json!("Ink"));
-            d.fields.insert("section".into(), json!("opentype"));
-            d.fields.insert("ot_sets".into(), json!(["-ss02", "ss04"]));
-            d.fields.insert("ot_frac".into(), json!(false));
-        }
-        assert!(crate::menus::enabled(&app, "ui.charStyleOptions.resetPanel"));
-        super::super::confirm(&mut app).unwrap();
-        let doc = &app.session.doc().unwrap().doc;
-        let def = doc.char_styles.iter().find(|def| def.name == "Ink").unwrap();
-        assert_eq!(def.attrs["features"], json!(["-frac", "-ss02", "ss04"]));
-        let vectorcraft_doc::NodeKind::Text(t) = &doc.node(vectorcraft_doc::NodeId(id)).unwrap().kind else { panic!("text") };
-        assert!(t.runs.iter().all(|r| r.style.style_name.as_deref() == Some("Body")));
-    }
-
-    #[test]
-    fn invalid_numbers_name_the_visible_field() {
-        let mut d = Dialog::new(KIND, json!({}));
-        for (key, label) in [("size", "Size"), ("leading", "Leading"), ("kerning", "Kerning"), ("tracking", "Tracking")] {
-            d.fields.insert(key.into(), json!("not a number"));
-            assert_eq!(optional_number(&d, key).unwrap_err(), format!("{label} must be a number"));
-        }
-    }
-
-    #[test]
-    fn size_and_leading_below_minimum_do_not_preview_or_commit() {
-        for (key, value) in [("size", json!(0)), ("size", json!(-2)), ("leading", json!(0.09)), ("leading", json!(-1))] {
-            let mut app = app();
-            app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0, "leading": 28.0}})).unwrap();
-            let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
-            app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-            let before = app.session.doc().unwrap().doc.clone();
-            open(&mut app, "Body").unwrap();
-            {
-                let d = app.ui.dialog.as_mut().unwrap();
-                d.fields.insert("name".into(), json!("Revised"));
-                d.fields.insert(key.into(), value);
-                assert!(edited_attrs(d).unwrap_err().contains("at least 0.1"));
-            }
-            frame(&mut app);
-            assert_eq!(app.session.doc().unwrap().doc, before, "{key} preview");
-            assert!(super::super::confirm(&mut app).is_err(), "{key} confirm");
-            assert_eq!(app.session.doc().unwrap().doc, before, "{key} confirm");
-        }
-    }
-
-    #[test]
-    fn new_character_style_shows_size_and_leading_errors_before_ok() {
-        use egui_kittest::kittest::Queryable;
-        for (key, value) in [("size", json!(0)), ("leading", json!(0.05))] {
-            let mut app = app();
-            app.run("ui.newCharStyle", json!({})).unwrap();
-            let why = {
-                let d = app.ui.dialog.as_mut().unwrap();
-                d.fields.insert("section".into(), json!("basic"));
-                d.fields.insert(key.into(), value);
-                edited_attrs(d).unwrap_err()
-            };
-            let shown = crate::i18n::message(crate::i18n::current(), &why);
-            let mut fonts = false;
-            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-                move |ui, app: &mut VectorcraftApp| {
-                    if !std::mem::replace(&mut fonts, true) {
-                        crate::theme::install_fonts(ui.ctx());
-                        return;
-                    }
-                    super::super::show(app, ui.ctx());
-                },
-                app,
-            );
-            h.run_steps(4);
-            assert!(h.query_by_label(&shown).is_some(), "{key}: {shown} is not shown");
-            let app = h.state_mut();
-            let styles = app.session.doc().unwrap().doc.char_styles.len();
-            assert!(super::super::confirm(app).is_err(), "{key} confirm");
-            assert!(app.ui.dialog.is_some(), "{key} dialog stays open");
-            assert_eq!(app.session.doc().unwrap().doc.char_styles.len(), styles, "{key} style count");
-        }
-    }
-
-    #[test]
-    fn every_section_names_its_inputs_in_both_dialogs() {
-        for new_style in [false, true] {
-            for section in ["general", "basic", "advanced", "color", "opentype"] {
-                let mut app = app();
-                if new_style {
-                    app.run("ui.newCharStyle", json!({})).unwrap();
-                } else {
-                    app.run("charStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
-                    open(&mut app, "Body").unwrap();
-                }
-                app.ui.dialog.as_mut().unwrap().fields.insert("section".into(), json!(section));
-                let mut fonts = false;
-                // The harness fails a frame that leaves an input without an accessible name.
-                let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-                    move |ui, app: &mut VectorcraftApp| {
-                        if !std::mem::replace(&mut fonts, true) {
-                            crate::theme::install_fonts(ui.ctx());
-                            return;
-                        }
-                        super::super::show(app, ui.ctx());
-                    },
-                    app,
-                );
-                h.run_steps(4);
-                assert!(h.unnamed_widgets().is_empty(), "new {new_style}, {section}: {:?}", h.unnamed_widgets());
-            }
-        }
-    }
-
-    #[test]
-    fn fill_and_stroke_tint_fields_have_distinct_names() {
-        use egui::accesskit::Role;
-        use egui_kittest::kittest::{NodeT, Queryable};
-        for new_style in [false, true] {
-            let mut app = app();
-            app.run("swatch.new", json!({"name": "Brand", "color": "#2050a0", "global": true})).unwrap();
-            if new_style {
-                app.run("ui.newCharStyle", json!({})).unwrap();
-            } else {
-                app.run("charStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
-                open(&mut app, "Body").unwrap();
-            }
-            let brand = json!(app.session.doc().unwrap().doc.tint_paint("Brand", 1.0).unwrap());
-            {
-                let d = app.ui.dialog.as_mut().unwrap();
-                d.fields.insert("section".into(), json!("color"));
-                d.fields.insert("fill".into(), brand.clone());
-                d.fields.insert("stroke".into(), brand);
-            }
-            let mut fonts = false;
-            let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1100.0, 900.0)).build_ui_state(
-                move |ui, app: &mut VectorcraftApp| {
-                    if !std::mem::replace(&mut fonts, true) {
-                        crate::theme::install_fonts(ui.ctx());
-                        return;
-                    }
-                    super::super::show(app, ui.ctx());
-                },
-                app,
-            );
-            h.run_steps(4);
-            for name in ["Fill Tint", "Stroke Tint"] {
-                let field = h.get_by_role_and_label(Role::TextInput, name);
-                assert!(!field.accesskit_node().is_disabled(), "new {new_style}: {name} is enabled for a linked swatch");
-            }
-            assert!(h.query_by_role_and_label(Role::TextInput, "Tint").is_none(), "new {new_style}: a field is named only Tint");
-        }
-    }
-
-    #[test]
-    fn invalid_number_keeps_last_valid_preview() {
-        let mut app = app();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {"size": 24.0}})).unwrap();
-        let id = app.run("text.create", json!({"x": 10, "y": 40, "text": "Text"})).unwrap()["id"].as_u64().unwrap();
-        app.run("charStyle.apply", json!({"name": "Body", "id": id})).unwrap();
-        open(&mut app, "Body").unwrap();
-        {
-            let d = app.ui.dialog.as_mut().unwrap();
-            d.fields.insert("name".into(), json!("Revised"));
-            d.fields.insert("size".into(), json!(18));
-        }
-        frame(&mut app);
-        let valid = app.session.doc().unwrap().doc.clone();
-        assert_eq!(valid.char_styles[0].name, "Revised");
-        assert_eq!(valid.char_styles[0].attrs["size"], json!(18.0));
-        app.ui.dialog.as_mut().unwrap().fields.insert("size".into(), json!("invalid"));
-        frame(&mut app);
-        assert_eq!(app.session.doc().unwrap().doc, valid);
-    }
-
-    #[test]
-    fn script_positions_use_document_setup_in_existing_and_new_style_dialogs() {
-        let mut app = app();
-        app.run(
-            "document.setup",
-            json!({"superscript": {"size": 67.0, "position": 22.0},
-            "subscript": {"size": 72.0, "position": 18.0}}),
-        )
-        .unwrap();
-        app.run("charStyle.new", json!({"name": "Body", "attrs": {}})).unwrap();
-        open(&mut app, "Body").unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("position".into(), json!("superscript"));
-        assert_eq!(
-            edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap()["position"],
-            json!({"kind": "superscript", "size": 67.0, "position": 22.0})
-        );
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(app.session.doc().unwrap().doc.char_styles[0].attrs["position"], json!({"kind": "superscript", "size": 67.0, "position": 22.0}));
-        app.run("ui.newCharStyle", json!({})).unwrap();
-        app.ui.dialog.as_mut().unwrap().fields.insert("position".into(), json!("subscript"));
-        assert_eq!(edited_attrs(app.ui.dialog.as_ref().unwrap()).unwrap()["position"], json!({"kind": "subscript", "size": 72.0, "position": 18.0}));
-        super::super::confirm(&mut app).unwrap();
-        assert_eq!(
-            app.session.doc().unwrap().doc.char_styles.last().unwrap().attrs["position"],
-            json!({"kind": "subscript", "size": 72.0, "position": 18.0})
-        );
-    }
-}
+mod tests;

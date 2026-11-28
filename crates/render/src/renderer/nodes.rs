@@ -6,17 +6,62 @@ use super::{
 };
 use crate::kept_paths::{self, KeptPath};
 use crate::node_checks::{holds_measured_three_d, measures_three_d};
+use crate::placed_document::{InMode, LayerMode, enter_layer};
+
+/// The key of `a`'s cull bounds in [`Renderer::geom`]: its address, and in its lowest bits what the
+/// bounds depend on besides `a`. For an object other than a path that is the mode it is measured in
+/// ([`LayerMode`]): it sets the mode of the layers in it ([`enter_layer`]), a group's included, and
+/// whether placed documents are crossed ([`vectorcraft_doc::placed_document::Crossed`]), since the
+/// art its effects make from a placed document in it is the crossed box then. Placed documents are
+/// crossed only in a mode. A node's address is aligned to 8 bytes, so no other node has that key.
+fn geom_key(a: &Node) -> usize {
+    let at = std::ptr::from_ref(a) as usize;
+    match a.kind {
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => at,
+        _ => at | LayerMode::now().map_or(0, |m| usize::from(m.options) | usize::from(m.outline) << 1 | usize::from(m.images) << 2),
+    }
+}
+
+const _: () = assert!(std::mem::align_of::<Node>() >= 8, "geom_key keeps three bits below a node's address");
+
+fn needs_three_d_bounds(symbols: &SymbolBoxes, node: &Node) -> bool {
+    measures_three_d(node)
+        || matches!(&node.kind, NodeKind::SymbolInstance { symbol, .. } if symbols.symbol(symbol).is_some_and(
+            |s| holds_measured_three_d(&s.art) || holds_instance(&s.art) && symbols.has_effects(symbol)
+        ))
+}
+
+fn subtree_needs_three_d_bounds(symbols: &SymbolBoxes, node: &Node) -> bool {
+    needs_three_d_bounds(symbols, node)
+        || node.children().is_some_and(|children| children.iter().any(|child| subtree_needs_three_d_bounds(symbols, child)))
+}
 
 impl Renderer {
     /// Cached cull bounds of a node (containers union their cached children), symbol instances
     /// measured by their art box from `symbols`.
     pub(crate) fn bounds_of(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>) -> Option<Rect> {
-        let key = Arc::as_ptr(a) as usize;
+        self.bounds_with_patch(symbols, a, None)
+    }
+
+    pub(crate) fn frame_bounds_of(&mut self, f: &Frame, a: &Arc<Node>) -> Option<Rect> {
+        self.bounds_with_patch(f.symbols, a, f.patch.map(|_| f))
+    }
+
+    fn bounds_with_patch(&mut self, symbols: &SymbolBoxes, a: &Arc<Node>, patch: Option<&Frame<'_>>) -> Option<Rect> {
+        if patch.is_some_and(Frame::patch_rejected) {
+            return None;
+        }
+        let key = geom_key(a);
         if let Some(e) = self.geom.get_mut(&key)
             && Arc::ptr_eq(&e.node, a)
         {
             e.stamp = self.stamp;
             return e.bounds;
+        }
+        // The full renderer can reuse its 3D art. A cold scratch renderer may otherwise
+        // build it while calculating cull bounds, including bounds of symbol definitions.
+        if patch.is_some_and(|f| needs_three_d_bounds(symbols, a) && f.reject_patch()) {
+            return None;
         }
         let b = match &a.kind {
             NodeKind::Layer { children, clip: false, .. } | NodeKind::Group { children, clip: false } if !fx::has_object_fx(a) => {
@@ -25,7 +70,11 @@ impl Renderer {
                 let source = a.extras().trace.is_some().then(|| children.first()).flatten();
                 for c in children {
                     if c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)) {
-                        acc = vectorcraft_geom::union_opt(acc, self.bounds_of(symbols, c));
+                        let _mode = enter_layer(c);
+                        acc = vectorcraft_geom::union_opt(acc, self.bounds_with_patch(symbols, c, patch));
+                        if patch.is_some_and(Frame::patch_rejected) {
+                            return None;
+                        }
                     }
                 }
                 acc
@@ -47,6 +96,14 @@ impl Renderer {
                 }
                 let pad = brush_fx::pad(symbols, a);
                 b.map(|b| fx::with_own_raster_reach(symbols, a, b).inflate(pad, pad))
+            }
+            // The fallback measures the whole subtree without going through the cached
+            // child traversal above. Reject cold measurement before entering it.
+            _ if patch.is_some_and(|f| {
+                a.children().is_some_and(|children| children.iter().any(|child| subtree_needs_three_d_bounds(symbols, child))) && f.reject_patch()
+            }) =>
+            {
+                return None;
             }
             _ => self.kept_bounds(symbols, a).unwrap_or_else(|| brush_fx::cull_bounds(symbols, a)),
         };
@@ -117,6 +174,19 @@ impl Renderer {
             self.geom.retain(|_, e| !holds_measured_three_d(&e.node));
             self.brush_library = None;
         }
+    }
+
+    /// How frame `f` draws art ([`LayerMode`]).
+    pub(crate) fn layer_mode(&self, f: &Frame) -> LayerMode {
+        LayerMode { options: f.opts.dim_templates && !f.opts.skip_templates, outline: f.opts.outline, images: self.shows_outline_images(f) }
+    }
+
+    /// Draw and measure art in frame `f`'s mode ([`Self::layer_mode`]) until the guard returned is
+    /// dropped: placed documents' art ([`vectorcraft_doc::PlacedDocument::art`]) is their box
+    /// crossed from corner to corner in Outline mode without Document Setup → Show Images in
+    /// Outline Mode ([`Self::crosses_placed`]), else their file's art.
+    pub(crate) fn cross_placed(&self, f: &Frame) -> InMode {
+        self.layer_mode(f).enter()
     }
 
     /// When a plug-in has been installed or removed since the last check
@@ -227,7 +297,13 @@ impl Renderer {
         if crate::node_checks::left_out(f.opts, f.doc, a) {
             return true;
         }
-        match self.bounds_of(f.symbols, a) {
+        // A layer is measured in the mode its Layer Options draw it in ([`Self::draw_node`]).
+        let _mode = self.layer_mode(f).inside(a).map(LayerMode::enter);
+        let bounds = self.frame_bounds_of(f, a);
+        if f.patch_rejected() {
+            return true;
+        }
+        match bounds {
             Some(b) => {
                 let pad = f.px * 2.0;
                 // Level of detail: leaves smaller than a quarter pixel are invisible.
@@ -241,7 +317,7 @@ impl Renderer {
     }
 
     pub(crate) fn draw_arc(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
-        if self.skipped(f, a) {
+        if f.patch_rejected() || self.skipped(f, a) {
             return;
         }
         // An image masked by one white shape painted straight into the shape, as an image in a
@@ -272,7 +348,10 @@ impl Renderer {
         let Some(m) = a.extras().mask.as_deref().filter(|m| !m.disabled && !f.opts.outline && !self.is_shape(a)) else { return false };
         // A masked object is a non-isolated group of its own, drawn over its own pixels: the
         // mask is rendered over those only.
-        let bounds = self.bounds_of(f.symbols, a);
+        let bounds = self.frame_bounds_of(f, a);
+        if f.patch_rejected() {
+            return true;
+        }
         let Some((r, sub)) = group::area(ctx, f, bounds) else { return true };
         let Some(mask) = self.mask_values(&sub, m, r.w, r.h) else { return true };
         let blends = a.blend != vectorcraft_color::BlendMode::Normal || (!a.isolate && self.blends_through(a));
@@ -296,6 +375,9 @@ impl Renderer {
     /// The coverage of opacity mask `m` per output pixel (row-major): its art rendered offscreen,
     /// as luminance ([`mask_value`]).
     pub(super) fn mask_values(&mut self, f: &Frame, m: &vectorcraft_doc::OpacityMask, w: u16, h: u16) -> Option<Vec<u8>> {
+        if f.reject_patch() {
+            return None;
+        }
         let mut mctx = f.offscreen_context(w, h);
         // Mask art is a picture of its own: it takes no part in a knockout group around the object,
         // and its luminance is that of its screen colours.
@@ -328,6 +410,13 @@ impl Renderer {
 
     /// Everything [`Self::draw_arc`] does after culling.
     fn draw_arc_body(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
+        // A layer with effects of its own draws them in the mode its Layer Options give it, as
+        // `draw_node` draws any other layer.
+        if let Some(mode) = self.layer_mode(f).inside(a) {
+            let opts = RenderOptions { outline: mode.outline, ..f.opts.clone() };
+            let _mode = mode.enter();
+            return self.draw_arc_body(ctx, &Frame { opts: &opts, ..*f }, a);
+        }
         // Fast path for plain paths: cached geometry, opacity folded into the paint.
         // A blend mode on a single plain fill applies per draw (exact for one paint operation);
         // a blend layer would composite the whole viewport.
@@ -393,7 +482,7 @@ impl Renderer {
             return;
         }
         // A cancelled export stops drawing; whoever asked for the picture drops it (see `cancel`).
-        if vectorcraft_doc::cancel::is_cancelled() {
+        if f.patch_rejected() || f.patch.is_some() && measures_three_d(n) && f.reject_patch() || vectorcraft_doc::cancel::is_cancelled() {
             return;
         }
         if force {
@@ -410,18 +499,15 @@ impl Renderer {
         // Layer Options on screen: a layer whose Preview is off draws in outline, and Dim Images
         // fades its images, a template's too (exports and thumbnails, which leave templates out,
         // ignore both).
-        if let NodeKind::Layer { preview, dim_images, template, .. } = &n.kind
+        if let NodeKind::Layer { dim_images, .. } = &n.kind
             && f.opts.dim_templates
             && !f.opts.skip_templates
         {
             // A template layer stays in Preview while the view is in Outline (and whatever its own
             // Preview option says): its picture is there to be traced (#1486).
-            if *template && f.opts.outline {
-                let opts = RenderOptions { outline: false, ..f.opts.clone() };
-                return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
-            }
-            if !preview && !template && !f.opts.outline {
-                let opts = RenderOptions { outline: true, ..f.opts.clone() };
+            if let Some(mode) = self.layer_mode(f).inside(n) {
+                let opts = RenderOptions { outline: mode.outline, ..f.opts.clone() };
+                let _mode = mode.enter();
                 return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
             }
             if let Some(p) = *dim_images {
@@ -510,8 +596,13 @@ impl Renderer {
                 self.draw_children(ctx, f, children, knockout)
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } if f.opts.outline => {
+                // A piece of a mesh-warped image: the copy of the image it clips is not crossed.
+                let piece = n.warp_piece_image();
                 for c in children {
+                    let outer = self.in_warp_piece;
+                    self.in_warp_piece = piece.is_some_and(|image| std::ptr::eq(image, &**c));
                     self.draw_outline_member(ctx, f, c);
+                    self.in_warp_piece = outer;
                 }
             }
             NodeKind::Group { children, clip: true } | NodeKind::Layer { children, clip: true, .. } => {
@@ -581,7 +672,9 @@ impl Renderer {
             }
             NodeKind::Text(t) => self.draw_text(ctx, f, n, t),
             NodeKind::Image(im) if !n.is_distorted_image() => {
-                self.draw_image_in(ctx, f, &f.doc.shown_image(n, im), None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated)
+                self.draw_image_in(ctx, f, &f.doc.shown_image(n, im), None, images::image_tint(f.doc, n, f.ink), n.extras().pixelated);
+                // Crossed by the node's own link: a color mask's copy of the image has none.
+                self.cross_linked_image(ctx, f, n);
             }
             NodeKind::SymbolInstance { symbol, xf } => {
                 if let Some(sym) = f.symbols.symbol(symbol) {
@@ -672,7 +765,7 @@ impl Renderer {
             let inverse = im.xf.inverse();
             let (mut x0, mut x1, mut y0, mut y1) = (0.0_f64, w, 0.0_f64, h);
             for c in shapes {
-                if let Some(b) = self.bounds_of(f.symbols, c).map(|b| b.inflate(f.px * 2.0, f.px * 2.0)) {
+                if let Some(b) = self.frame_bounds_of(f, c).map(|b| b.inflate(f.px * 2.0, f.px * 2.0)) {
                     for q in [(b.x0, b.y0), (b.x1, b.y0), (b.x1, b.y1), (b.x0, b.y1)] {
                         let p = inverse * kurbo::Point::new(q.0, q.1);
                         if p.x.is_finite() && p.y.is_finite() {
@@ -707,6 +800,7 @@ impl Renderer {
         if view.shows_outlines() {
             let opts = RenderOptions { outline: true, ..f.opts.clone() };
             let frame = Frame { opts: &opts, ..*f };
+            let _crossed = self.cross_placed(&frame);
             // An Abutting trace's seam fills hold no traced outline: a clip group of paths that are
             // each stroked without a fill or (on a stretched image, the strokes' outlines) filled
             // without a stroke, named "Seam Fills" or, renamed, still the lowest shape, where the
@@ -735,7 +829,11 @@ impl Renderer {
         if crate::node_checks::left_out(f.opts, f.doc, c) {
             return;
         }
-        match self.bounds_of(f.symbols, c) {
+        let bounds = self.frame_bounds_of(f, c);
+        if f.patch_rejected() {
+            return;
+        }
+        match bounds {
             Some(b) => {
                 let pad = f.px * 2.0;
                 if !rects_overlap(b.inflate(pad, pad), f.visible) {
@@ -774,7 +872,7 @@ impl Renderer {
                 self.dimmed(ctx, f, &mut |r, c, fr| rest.iter().for_each(|n| r.draw_arc(c, fr, n)));
             }
         } else {
-            for c in children {
+            for c in children.iter().take_while(|_| !f.patch_rejected()) {
                 self.draw_arc(ctx, f, c);
             }
         }
@@ -783,7 +881,7 @@ impl Renderer {
     /// Cull bounds of `n` (symbol instances measured by their art box from `symbols`): cached when
     /// it is a node of the tree being drawn.
     fn node_bounds(&mut self, symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-        match self.geom.get(&(n as *const Node as usize)) {
+        match self.geom.get(&geom_key(n)) {
             // The entry keeps its node alive, so the address is that node's.
             Some(e) if std::ptr::eq(Arc::as_ptr(&e.node), n) => e.bounds,
             _ => fx::cull_bounds(symbols, n),
@@ -797,6 +895,9 @@ impl Renderer {
     /// over the elements below it (the art below the group when the group is non-isolated and
     /// drawn over a copy of it, see [`Self::group`] and [`Self::knockout_over`]).
     pub(crate) fn draw_knockout(&mut self, ctx: &mut RenderContext, f: &Frame, children: &[Arc<Node>]) {
+        if f.reject_patch() {
+            return;
+        }
         let backdrop = self.backdrop.take();
         for c in Node::knockout_elements(children) {
             if self.skipped(f, c) {

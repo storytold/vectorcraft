@@ -2,14 +2,15 @@ use vectorcraft_geom::kurbo::ParamCurveDeriv;
 
 use super::outline::{self, Along, Budget, CURVE_TOLERANCE};
 use super::rings::{
-    CURVE_PIECES, MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, curve_pieces, inset, left, signed_area,
-    solid_rings_traced, square_corners,
+    CURVE_PIECES, MAX_PIECES, MAX_PLANE_POINTS, MAX_SOLID_POINTS, Ring, Span, TOO_COMPLEX_SURFACE, collapse_width, curve_pieces, inset, left,
+    signed_area, solid_rings_traced, square_corners,
 };
 use super::side;
 use super::{
     Bevel, DepthPlane, Extrude, Facet, FillRule, MAX_FACES, MAX_SOLID_FACES, MapCell, ParamCurve, PathData, PlanarFace, Point, Rect, Revolve,
     SolidSurface, SurfaceKind, V3, View, eye_distance, perspective_scale,
 };
+use crate::mesh::MeshPart;
 use crate::shadow::Projection;
 
 /// Turns 3D points into document points and shades faces for one view.
@@ -41,6 +42,11 @@ impl Camera {
         let f = perspective_scale(self.eye, v.2);
         Point::new(self.origin.x + v.0 * f, self.origin.y + v.1 * f)
     }
+    /// The view-space point at depth `z` that [`Camera::project`] takes to `p`.
+    pub(super) fn unproject(&self, p: Point, z: f64) -> V3 {
+        let f = perspective_scale(self.eye, z);
+        V3((p.x - self.origin.x) / f, (p.y - self.origin.y) / f, z)
+    }
     /// The cosine between a face's outward unit normal `n` and the direction from `at` (both in
     /// view space) to the eye: positive when the face is turned towards the viewer.
     pub(super) fn facing(&self, at: V3, n: V3) -> f64 {
@@ -61,9 +67,110 @@ impl Camera {
     }
 }
 
-/// A face of a solid before projection: its contours in view space (holes running the other way)
-/// and its outward normal.
-pub(crate) type Face3 = (Vec<Vec<V3>>, V3);
+/// A face of a solid before projection: its contours in view space (holes running the other way),
+/// its outward normal, the part of the solid it belongs to, and where its corners lie on the
+/// part's texture ([`Attrs`]).
+#[derive(Clone, Debug)]
+pub(crate) struct Face3 {
+    pub(crate) contours: Vec<Vec<V3>>,
+    pub(crate) normal: V3,
+    pub(crate) part: MeshPart,
+    pub(crate) attrs: Attrs,
+}
+
+impl Face3 {
+    /// The texture coordinates of corner `v` of the face, and its own normal when it has one (a
+    /// corner of a smoothed bevel or of a puffed surface). A point that is no corner of the face
+    /// lies at the middle of the texture.
+    pub(crate) fn corner(&self, v: V3) -> ([f64; 2], Option<V3>) {
+        match &self.attrs {
+            Attrs::Planar(plane) => (plane.at(v), None),
+            Attrs::Corners(list) => self
+                .contours
+                .iter()
+                .zip(list)
+                .flat_map(|(c, l)| c.iter().zip(l))
+                .find(|(c, _)| **c == v)
+                .map_or(([0.5, 0.5], None), |(_, (uv, n))| (*uv, *n)),
+        }
+    }
+}
+
+/// Where the corners of a face lie on its part's texture, from 0 to 1 each way (u to the right, v
+/// down), and the normals of the corners that have their own.
+#[derive(Clone, Debug)]
+pub(crate) enum Attrs {
+    /// Each corner's place on a plane ([`PlaneUv`]); every corner takes the face's normal.
+    Planar(PlaneUv),
+    /// For each corner of each contour, in order, its texture coordinates and its own normal
+    /// (`None` takes the face's).
+    Corners(Vec<Vec<([f64; 2], Option<V3>)>>),
+}
+
+/// A plane's texture coordinates: a point `p` on it lies at `origin + x·s + y·t`, and `(s, t)`
+/// within `area` goes to 0..1 each way. `x` and `y` are square to each other. An axis on which
+/// `area` has no extent gives 0.5.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PlaneUv {
+    pub(crate) origin: V3,
+    pub(crate) x: V3,
+    pub(crate) y: V3,
+    pub(crate) area: Rect,
+}
+
+impl PlaneUv {
+    pub(crate) fn at(&self, p: V3) -> [f64; 2] {
+        let d = p.sub(self.origin);
+        let along = |axis: V3| d.dot(axis) / axis.dot(axis);
+        [share(along(self.x), self.area.x0, self.area.x1), share(along(self.y), self.area.y0, self.area.y1)]
+    }
+}
+
+/// Where `v` lies from `lo` (0) to `hi` (1), within 0..1: 0.5 when the two are equal or `v` is not
+/// finite.
+pub(crate) fn share(v: f64, lo: f64, hi: f64) -> f64 {
+    let w = hi - lo;
+    if w > 1e-12 && v.is_finite() { ((v - lo) / w).clamp(0.0, 1.0) } else { 0.5 }
+}
+
+/// The bounds of the points of `rings`, or an empty rectangle at the origin when they have none.
+pub(crate) fn rings_bounds<'a>(rings: impl IntoIterator<Item = &'a [Point]>) -> Rect {
+    let mut points = rings.into_iter().flatten();
+    let Some(first) = points.next() else { return Rect::ZERO };
+    points.fold(Rect::from_points(*first, *first), |b, p| b.union_pt(*p))
+}
+
+/// The texture coordinate along each point of `ring` and back to its first point: the distance
+/// along the ring from its first point over the ring's length, so the first point takes 0 and the
+/// last entry (the first point again) 1. A ring of no length takes 0.5 throughout.
+pub(crate) fn along_ring(ring: &[Point]) -> Vec<f64> {
+    let n = ring.len();
+    let mut at = Vec::with_capacity(n + 1);
+    let mut sum = 0.0;
+    for i in 0..=n {
+        at.push(sum);
+        if let (Some(a), Some(b)) = (ring.get(i % n.max(1)), ring.get((i + 1) % n.max(1))) {
+            sum += a.distance(*b);
+        }
+    }
+    let total = at.last().copied().unwrap_or(0.0);
+    at.iter().map(|d| if total > 1e-12 { (d / total).clamp(0.0, 1.0) } else { 0.5 }).collect()
+}
+
+/// The texture coordinates and corner normals of the faces of one band ([`Builder::curved_band`]):
+/// the coordinate along the ring at each of its points and back at its first ([`along_ring`]), the
+/// coordinate across the band at its two rings, and, for each edge of the rings, the normal of its
+/// corners on each ring when they are smoothed (`None` takes the face's).
+pub(super) struct BandMesh<'a> {
+    pub(super) part: MeshPart,
+    pub(super) u: &'a [f64],
+    pub(super) v: [f64; 2],
+    pub(super) normals: Option<RowNormals<'a>>,
+}
+
+/// The smoothed normals of the corners of each piece of each edge on a band's two rings
+/// ([`BandMesh`]).
+pub(super) type RowNormals<'a> = (&'a [Vec<Option<V3>>], &'a [Vec<Option<V3>>]);
 
 /// What a solid's builder makes: its facets, its faces before projection when a mesh is asked for
 /// (an error when they pass [`MAX_SOLID_FACES`] while the facets are built too), and the
@@ -145,8 +252,22 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// Whether the builder keeps faces for a mesh.
+    pub(super) fn keeps_mesh(&self) -> bool {
+        self.mesh.is_some()
+    }
+
     /// Add a face of view-space contours with outward normal `n` (view space), drawn in `order`.
-    pub(super) fn face(&mut self, contours: Vec<Vec<V3>>, n: V3, order: Order) -> Result<(), String> {
+    /// For a mesh it belongs to `part`, and `attrs` gives where its corners lie on the part's
+    /// texture, from its contours.
+    pub(super) fn face(
+        &mut self,
+        contours: Vec<Vec<V3>>,
+        n: V3,
+        order: Order,
+        part: MeshPart,
+        attrs: impl FnOnce(&[Vec<V3>]) -> Attrs,
+    ) -> Result<(), String> {
         let count: usize = contours.iter().map(Vec::len).sum();
         if count < 3 {
             return Ok(());
@@ -155,7 +276,8 @@ impl<'a> Builder<'a> {
             self.facet(&contours, count, n, order)?;
         }
         let Some(mesh) = &mut self.mesh else { return Ok(()) };
-        mesh.push((contours, n.unit()));
+        let attrs = attrs(&contours);
+        mesh.push(Face3 { contours, normal: n.unit(), part, attrs });
         if mesh.len() > MAX_SOLID_FACES {
             if !self.draw {
                 return Err(TOO_COMPLEX_SURFACE.into());
@@ -245,15 +367,23 @@ impl<'a> Builder<'a> {
     }
 
     /// A planar surface triangle with shared, smooth outward normals. Culling and sorting
-    /// still use its geometry, rather than the normals used only for lighting.
-    pub(super) fn smooth_triangle(&mut self, vertices: [V3; 3], normals: [V3; 3], back: bool) -> Result<(), String> {
+    /// still use its geometry, rather than the normals used only for lighting. For a mesh it
+    /// belongs to `part`, with its corners at `uv` on the part's texture and their normals.
+    pub(super) fn smooth_triangle(
+        &mut self,
+        vertices: [V3; 3],
+        normals: [V3; 3],
+        back: bool,
+        part: MeshPart,
+        uv: [[f64; 2]; 3],
+    ) -> Result<(), String> {
         let contours = vec![vertices.to_vec()];
         let n = newell(&contours);
         let n = if back { V3(-n.0, -n.1, -n.2) } else { n };
         let centre = vertices.iter().fold(V3::default(), |s, v| V3(s.0 + v.0 / 3.0, s.1 + v.1 / 3.0, s.2 + v.2 / 3.0));
         let flip = !self.closed && self.camera.facing(centre, n.unit()) <= 0.0;
         let before = self.facets.len();
-        self.face(contours, n, Order::Depth)?;
+        self.face(contours, n, Order::Depth, part, |_| Attrs::Corners(vec![uv.iter().zip(normals).map(|(uv, n)| (*uv, Some(n))).collect()]))?;
         if self.facets.len() == before || !self.camera.view.shade {
             return Ok(());
         }
@@ -270,42 +400,36 @@ impl<'a> Builder<'a> {
 
     /// The band between two partner rings (same length), as one quad per edge, or for a twisted
     /// wall with `cuts` (see [`cuts`]) as `cuts[i]` quads along edge `i`. `outward` is the
-    /// direction (before rotation) the band faces away from the solid, for orienting normals.
-    pub(super) fn band(&mut self, a: &[V3], b: &[V3], cuts: &[usize], outward: impl Fn(usize) -> V3) -> Result<(), String> {
-        self.curved_band(a, b, cuts, outward, None, None)
-    }
-
-    /// [`Builder::band`], with `curves` the pieces of curve the rings' edges follow and the
-    /// outlines at `a` and `b`: a quad whose edge is not cut keeps its edges along the profile curved.
-    /// With `side`, each quad carries where its corners lie on the side unrolled flat
-    /// ([`Facet::surface`]).
+    /// direction (before rotation) the band faces away from the solid, for orienting normals. For a
+    /// mesh the quads take their part, texture coordinates and corner normals from `mesh`. With
+    /// `curves`, the pieces of curve the rings' edges follow and the outlines at `a` and `b`, each
+    /// quad keeps its edges along the profile curved. An edge cut into pieces is cut at points of
+    /// its curve, each piece taking an equal share of the edge's piece of curve. With `side`, each
+    /// quad carries where its corners lie on the side unrolled flat ([`Facet::surface`]).
     pub(super) fn curved_band(
         &mut self,
-        a: &[V3],
-        b: &[V3],
+        [a, b]: [&[V3]; 2],
         cuts: &[usize],
         outward: impl Fn(usize) -> V3,
         mut curves: Option<WallCurves>,
         side: Option<SideBand>,
+        mesh: &BandMesh,
     ) -> Result<(), String> {
         let n = a.len().min(b.len());
-        // At 0 and 1, the corners themselves.
-        let lerp = |p: V3, q: V3, s: f64| {
-            if s <= 0.0 {
-                p
-            } else if s >= 1.0 {
-                q
-            } else {
-                V3(p.0 + (q.0 - p.0) * s, p.1 + (q.1 - p.1) * s, p.2 + (q.2 - p.2) * s)
-            }
-        };
         let order = if cuts.is_empty() { Order::Depth } else { Order::Twisted };
         for i in 0..n {
             let j = (i + 1) % n;
             let pieces = cuts.get(i).copied().unwrap_or(1).max(1);
+            let span = curves.as_ref().and_then(|w| w.spans.get(i).copied().flatten());
+            let places = curves.as_ref().map_or([None, None], |w| w.places);
+            // Where the edge's curve is at share `s` of it.
+            let t = |s: f64| span.map_or(0.0, |span| span.t0 + (span.t1 - span.t0) * s);
+            let camera = self.camera;
+            let corner = |p: V3, q: V3, s: f64, ring: usize| cut_corner(camera, span, places.get(ring).copied().flatten(), p, q, s);
+            let ends = [[self.camera.project(a[i]), self.camera.project(a[j])], [self.camera.project(b[i]), self.camera.project(b[j])]];
             for k in 0..pieces {
                 let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
-                let quad = vec![lerp(a[i], a[j], s0), lerp(a[i], a[j], s1), lerp(b[i], b[j], s1), lerp(b[i], b[j], s0)];
+                let quad = vec![corner(a[i], a[j], s0, 0), corner(a[i], a[j], s1, 0), corner(b[i], b[j], s1, 1), corner(b[i], b[j], s0, 1)];
                 // A twist bends the strip between two slices into a saddle: its normal is the whole
                 // quad's average (Newell's), not one corner's triangle, which leans far to one side.
                 let mut normal = newell(std::slice::from_ref(&quad));
@@ -316,7 +440,16 @@ impl<'a> Builder<'a> {
                     normal = V3(-normal.0, -normal.1, -normal.2);
                 }
                 let before = self.facets.len();
-                self.face(vec![quad], normal, order)?;
+                let attrs = |_: &[Vec<V3>]| {
+                    let (u0, u1) = (mesh.u.get(i).copied().unwrap_or(0.5), mesh.u.get(i + 1).copied().unwrap_or(0.5));
+                    let (ua, ub) = (u0 + (u1 - u0) * s0, u0 + (u1 - u0) * s1);
+                    let [va, vb] = mesh.v;
+                    // Each piece of a cut edge takes the normals smoothed for that piece.
+                    let na = mesh.normals.and_then(|(na, _)| na.get(i)?.get(k).copied().flatten());
+                    let nb = mesh.normals.and_then(|(_, nb)| nb.get(i)?.get(k).copied().flatten());
+                    Attrs::Corners(vec![vec![([ua, va], na), ([ub, va], na), ([ub, vb], nb), ([ua, vb], nb)]])
+                };
+                self.face(vec![quad], normal, order, mesh.part, attrs)?;
                 if self.facets.len() > before
                     && let Some(f) = self.facets.last_mut()
                 {
@@ -343,10 +476,14 @@ impl<'a> Builder<'a> {
                         });
                     }
                 }
-                if let Some(w) = curves.as_mut().filter(|_| pieces == 1)
-                    && let Some(span) = w.spans.get(i).copied().flatten()
+                if let Some(w) = curves.as_mut()
+                    && let Some(span) = span
                 {
-                    self.outline(before, |c| c.first().and_then(|quad| outline::wall(&span, quad, w.near, w.far, w.budget)));
+                    // An edge cut on its chord, with no place on the curve for its cut corners,
+                    // stays straight.
+                    let near = w.near.filter(|_| pieces == 1 || w.places[0].is_some());
+                    let far = w.far.filter(|_| pieces == 1 || w.places[1].is_some());
+                    self.outline(before, |c| c.first().and_then(|quad| outline::wall(&span, (t(s0), t(s1)), ends, quad, near, far, w.budget)));
                 }
             }
         }
@@ -397,8 +534,14 @@ pub(super) struct WallCurves<'a> {
     pub(super) spans: &'a [Option<Span>],
     pub(super) near: Option<&'a Along<'a>>,
     pub(super) far: Option<&'a Along<'a>>,
+    /// Where a point of a span's curve lies in view space on the band's two rings, for the corners
+    /// where a twisted wall's edge is cut ([`cuts`]).
+    pub(super) places: [Option<&'a Place<'a>>; 2],
     pub(super) budget: &'a mut Budget,
 }
+
+/// Where the point at `t` on a span's curve lies in view space on one ring.
+pub(super) type Place<'a> = dyn Fn(&Span, f64) -> V3 + 'a;
 
 /// Where a band of the side lies on the side unrolled flat ([`super::side`]): the x of each end of
 /// each edge of its rings, and the y of its two rings.
@@ -648,6 +791,185 @@ fn steps(o: &Extrude) -> Vec<Step> {
     out
 }
 
+/// The steps and their shared outline for drawing, surface measurements and mesh export.
+fn extrude_profile(path: &PathData, rule: FillRule, size: f64, o: &Extrude) -> Result<(Vec<Step>, Vec<Ring>), String> {
+    let mut steps = steps(o);
+    let bands = steps.len().saturating_sub(1);
+    let caps = if o.cap { 2 } else { 0 };
+    let most = curve_pieces(path, size, bands, caps)?;
+    let mut rings = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?;
+    if let (Some(bevel), [ring]) = (o.bevel, rings.as_slice())
+        && bevel.inside
+        && let Some(width) = collapse_width(ring)
+        && bevel.width > width
+    {
+        // Use one width for the cap and every end of every band. The profile still runs
+        // through the requested depth and meets the wall at the original outline.
+        let scale = width / bevel.width;
+        for step in &mut steps {
+            step.inset *= scale;
+        }
+        steps.dedup_by(|a, b| (a.inset - b.inset).abs() < 1e-9 && (a.t - b.t).abs() < 1e-12);
+    }
+    // The corners the bevel opens are cut square past the miter limit.
+    if let Some(side) = steps.iter().map(|s| s.inset).find(|w| *w != 0.0) {
+        for ring in &mut rings {
+            *ring = square_corners(ring, side);
+        }
+    }
+    Ok((steps, rings))
+}
+
+/// The face a band between steps `s0` and `s1` borders: +1 between two front bevel steps, -1 when
+/// it reaches a back bevel step, and 0 for a wall.
+fn band_face(s0: &Step, s1: &Step) -> f64 {
+    if s1.face < 0.0 {
+        -1.0
+    } else if s0.face > 0.0 && s1.face > 0.0 {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+/// The part of the mesh a band bordering `face` ([`band_face`]) belongs to.
+fn band_part(face: f64) -> MeshPart {
+    if face > 0.0 {
+        MeshPart::FrontBevel
+    } else if face < 0.0 {
+        MeshPart::BackBevel
+    } else {
+        MeshPart::Side
+    }
+}
+
+/// The texture coordinate across the side at each step, front to back: the distance from the
+/// front cap's edge through the bevels and walls (inset and depth together) over the whole
+/// distance to the back cap's edge. With no distance every step takes 0.5.
+fn step_coordinates(steps: &[Step], depth: f64) -> Vec<f64> {
+    let mut at = Vec::with_capacity(steps.len());
+    let mut sum = 0.0;
+    for (k, s) in steps.iter().enumerate() {
+        if let Some(p) = k.checked_sub(1).and_then(|k| steps.get(k)) {
+            sum += (s.inset - p.inset).hypot((s.t - p.t) * depth);
+        }
+        at.push(sum);
+    }
+    at.iter().map(|d| if sum > 1e-12 { (d / sum).clamp(0.0, 1.0) } else { 0.5 }).collect()
+}
+
+/// The largest angle, in degrees, between two neighboring bands of one bevel whose shared corners
+/// are smoothed for a mesh. A sharper turn (a Step profile's) stays a hard edge.
+pub(crate) const BEVEL_CREASE: f64 = 60.0;
+
+/// For a mesh, the normal of each corner of each piece of each edge of `ring` at each step (one
+/// list per step, one list per edge, one entry per piece: `cuts[i]` pieces along edge `i`, as
+/// [`Builder::curved_band`] cuts it, or one) where the bands on either side are smoothed: two
+/// bands of the same bevel, front or back, that turn by less than [`BEVEL_CREASE`], neither of
+/// them lying flat toward the front or back (as a cap does). Such a corner takes the mean of the
+/// two bands' unit normals at that piece; every other corner is `None` and takes its face's
+/// normal. `placed` holds the ring at each step in view space, `spans` the piece of curve each edge
+/// of the ring follows, and `places` where a point of a span's curve lies on the ring at each step:
+/// the pieces' cut corners lie where [`Builder::curved_band`] puts them ([`cut_corner`]).
+fn smoothed_rows(
+    camera: &Camera,
+    ring: &[Point],
+    steps: &[Step],
+    placed: &[Vec<V3>],
+    cuts: &[usize],
+    spans: &[Option<Span>],
+    places: &[&Place],
+) -> Vec<Vec<Vec<Option<V3>>>> {
+    let n = ring.len();
+    let pieces = |i: usize| cuts.get(i).copied().unwrap_or(1).max(1);
+    let front = camera.rotate(V3(0.0, 0.0, 1.0));
+    // Each band's unit outward normal at each piece of each edge, as [`Builder::curved_band`]
+    // cuts and orients it.
+    let bands: Vec<(MeshPart, Vec<Vec<V3>>)> = placed
+        .windows(2)
+        .zip(steps.windows(2))
+        .enumerate()
+        .map(|(b, (pair, s))| {
+            let face = band_face(&s[0], &s[1]);
+            let (near, far) = (places.get(b).copied(), places.get(b + 1).copied());
+            let normals = (0..n)
+                .map(|i| {
+                    let j = (i + 1) % n;
+                    let pieces = pieces(i);
+                    let span = spans.get(i).copied().flatten();
+                    (0..pieces)
+                        .map(|k| {
+                            let (Some(a), Some(c)) = (pair.first(), pair.get(1)) else { return V3::default() };
+                            let (Some((&ai, &aj)), Some((&ci, &cj))) = (a.get(i).zip(a.get(j)), c.get(i).zip(c.get(j))) else { return V3::default() };
+                            let (s0, s1) = (k as f64 / pieces as f64, (k + 1) as f64 / pieces as f64);
+                            let (corner_a, corner_c) = (|s| cut_corner(camera, span, near, ai, aj, s), |s| cut_corner(camera, span, far, ci, cj, s));
+                            let quad = vec![corner_a(s0), corner_a(s1), corner_c(s1), corner_c(s0)];
+                            let normal = newell(std::slice::from_ref(&quad)).unit();
+                            if normal.dot(camera.rotate(outward(ring, i, face))) < 0.0 { V3(-normal.0, -normal.1, -normal.2) } else { normal }
+                        })
+                        .collect()
+                })
+                .collect();
+            (band_part(face), normals)
+        })
+        .collect();
+    let crease = BEVEL_CREASE.to_radians().cos();
+    let flat = |v: V3| v.dot(front).abs() > 1.0 - 1e-6;
+    (0..steps.len())
+        .map(|k| {
+            let pair = k.checked_sub(1).and_then(|p| bands.get(p)).zip(bands.get(k));
+            let Some(((_, n0), (_, n1))) = pair.filter(|((p0, _), (p1, _))| p0 == p1 && *p0 != MeshPart::Side) else {
+                return (0..n).map(|i| vec![None; pieces(i)]).collect();
+            };
+            n0.iter()
+                .zip(n1)
+                .map(|(e0, e1)| {
+                    e0.iter()
+                        .zip(e1)
+                        .map(|(a, b)| {
+                            let whole = a.dot(*a) > 0.5 && b.dot(*b) > 0.5;
+                            (whole && !flat(*a) && !flat(*b) && a.dot(*b) > crease).then(|| V3(a.0 + b.0, a.1 + b.1, a.2 + b.2).unit())
+                        })
+                        .collect()
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// The corner a share `s` of the way along the edge from `p` to `q` where [`Builder::curved_band`]
+/// cuts it. On a ring that follows a curve (`span`, placed on the ring by `place`) the corner lies on
+/// the curve, moved by the offsets of the edge's corners from it (a bevel's miters), eased across
+/// the edge as the cap's edge eases them, so the pieces' edges follow the same curve as the cap's
+/// edge they meet. The offsets are eased as drawn, and the corner keeps the depth they give it in
+/// view space. Otherwise, and at 0 and 1, the corner lies on the chord ([`along_edge`]).
+fn cut_corner(camera: &Camera, span: Option<Span>, place: Option<&Place>, p: V3, q: V3, s: f64) -> V3 {
+    match (span, place) {
+        (Some(span), Some(place)) if s > 0.0 && s < 1.0 => {
+            let t = span.t0 + (span.t1 - span.t0) * s;
+            let (c, c0, c1) = (place(&span, t), place(&span, span.t0), place(&span, span.t1));
+            let (ep, eq) = (outline::fade(s), outline::fade(1.0 - s));
+            let (dp, dq) = (p.sub(c0), q.sub(c1));
+            let z = c.2 + dp.2 * ep + dq.2 * eq;
+            let (dp, dq) = (camera.project(p) - camera.project(c0), camera.project(q) - camera.project(c1));
+            let v = camera.unproject(camera.project(c) + dp * ep + dq * eq, z);
+            if v.0.is_finite() && v.1.is_finite() && v.2.is_finite() { v } else { along_edge(p, q, s) }
+        }
+        _ => along_edge(p, q, s),
+    }
+}
+
+/// The point a share `s` of the way from `p` to `q`: at 0 and 1, the corners themselves.
+fn along_edge(p: V3, q: V3, s: f64) -> V3 {
+    if s <= 0.0 {
+        p
+    } else if s >= 1.0 {
+        q
+    } else {
+        V3(p.0 + (q.0 - p.0) * s, p.1 + (q.1 - p.1) * s, p.2 + (q.2 - p.2) * s)
+    }
+}
+
 /// Extrude & Bevel: the shape's outline extruded backwards, with optional twist, taper, bevels
 /// and caps.
 pub fn extrude(path: &PathData, rule: FillRule, bounds: Rect, options: Extrude, view: View) -> Result<Vec<Facet>, String> {
@@ -664,17 +986,9 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     if o.depth <= 0.0 {
         return plane_faces(path, rule, bounds, view, keep);
     }
-    let steps = steps(&o);
-    // One face for each edge of the outline in each band between two steps, and the two caps:
-    // counted before any point is sampled, and again on the rings, which can have more points
-    // once contours that meet are merged.
-    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let size = bounds.width().max(bounds.height());
-    let most = curve_pieces(path, size, bands, caps)?;
-    // Every inset of one extrusion goes the same way: into the shape for a bevel inside, out of it
-    // for one outside. The corners that way opens are cut square past the miter limit.
-    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
-    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?.iter().map(|r| square_corners(r, side)).collect();
+    let (steps, traced) = extrude_profile(path, rule, size, &o)?;
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let rings: Vec<&[Point]> = traced.iter().map(|r| r.points.as_slice()).collect();
     let edges = rings.iter().map(|r| r.len()).fold(0usize, usize::saturating_add);
     if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
@@ -704,12 +1018,19 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
     // and within the sampling tolerance (which the inset rings themselves keep to) where it is.
     let sampled = (size / 2000.0).max(0.05);
     let maps: Vec<Placing> = steps.iter().map(|s| Placing::new(&camera, bounds.center(), Turn::new(bounds, o.twist, o.taper, s.t), z(s.t))).collect();
-    let at: Vec<_> = steps
+    let places: Vec<_> = steps
         .iter()
         .zip(&maps)
         .map(|(s, m)| {
-            let (w, camera) = (s.inset, &camera);
-            move |span: &Span, t: f64| camera.project(m.place(offset(span, t, w)))
+            let w = s.inset;
+            move |span: &Span, t: f64| m.place(offset(span, t, w))
+        })
+        .collect();
+    let at: Vec<_> = places
+        .iter()
+        .map(|place| {
+            let camera = &camera;
+            move |span: &Span, t: f64| camera.project(place(span, t))
         })
         .collect();
     // A step that is not inset moves the art point by point, affinely without perspective.
@@ -737,9 +1058,19 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
             Some((k, side::along_ring(rings.get(k)?)?, y))
         })
         .flatten();
+    // For a mesh: the texture coordinate across the side at each step, and the parts of the bands.
+    let across = step_coordinates(&steps, o.depth);
+    let part_of = |s0: &Step, s1: &Step| band_part(band_face(s0, s1));
     for (r, ((ring, traced), pieces)) in rings.iter().zip(&traced).zip(&pieces).enumerate() {
         let unrolled = unrolled.as_ref().filter(|(k, ..)| *k == r);
         let placed: Vec<Vec<V3>> = steps.iter().map(|s| ring_at(ring, s)).collect();
+        let u = along_ring(ring);
+        let rows = if b.keeps_mesh() {
+            let at: Vec<&Place> = places.iter().map(|p| p as &Place).collect();
+            smoothed_rows(&camera, ring, &steps, &placed, pieces, &traced.spans, &at)
+        } else {
+            vec![]
+        };
         for (k, pair) in placed.windows(2).enumerate() {
             let ([a, c], Some(s0), Some(s1)) = (pair, steps.get(k), steps.get(k + 1)) else { continue };
             b.cells = layout.as_ref().and_then(|(sides, spans)| {
@@ -753,32 +1084,41 @@ pub(crate) fn extrude_faces(path: &PathData, rule: FillRule, bounds: Rect, optio
                 let edges = sides.edges.get(r)?.iter().map(|e| e.map(|(section, u0, u1)| (base + section, u0, u1))).collect();
                 Some(BandCells { edges, across: (v0, v1) })
             });
-            // A band between two front bevel steps borders the front, one reaching a back bevel
-            // step the back; the rest are walls.
-            let face = if s1.face < 0.0 {
-                -1.0
-            } else if s0.face > 0.0 && s1.face > 0.0 {
-                1.0
-            } else {
-                0.0
-            };
-            // The edges a band shares with a cap follow the cap's curves; the edges between two bands
-            // stay straight, within the sampling tolerance.
-            let (near, far) = (along.get(k).filter(|_| k == 0), along.get(k + 1).filter(|_| k + 2 == steps.len()));
-            let curves = (near.is_some() || far.is_some()).then(|| WallCurves { spans: &traced.spans, near, far, budget: &mut budget });
+            let face = band_face(s0, s1);
+            // Each ring of a band follows the outline at its step: the edges a band shares with a cap
+            // follow the cap's curves, and an edge two bands share follows the same curves in both.
+            let place = |k: usize| places.get(k).map(|p| p as &Place);
+            let curves = Some(WallCurves {
+                spans: &traced.spans,
+                near: along.get(k),
+                far: along.get(k + 1),
+                places: [place(k), place(k + 1)],
+                budget: &mut budget,
+            });
             let side = unrolled.and_then(|(_, x, y)| Some(SideBand { x, y: [*y.get(k)?, *y.get(k + 1)?] }));
-            b.curved_band(a, c, pieces, |i| outward(ring, i, face), curves, side)?;
+            let normals = rows.get(k).zip(rows.get(k + 1)).map(|(na, nb)| (na.as_slice(), nb.as_slice()));
+            let v = [across.get(k).copied().unwrap_or(0.5), across.get(k + 1).copied().unwrap_or(0.5)];
+            let mesh = BandMesh { part: part_of(s0, s1), u: &u, v, normals };
+            b.curved_band([a, c], pieces, |i| outward(ring, i, face), curves, side, &mesh)?;
         }
     }
     b.cells = None;
     if o.cap {
         // A cap turned toward the viewer covers the walls it overlaps, even those nearer than its
         // center: twisted walls, and the walls of a fill inside the solid of its stroke.
-        let caps = [(steps.first(), along.first(), 1.0, PlanarFace::Front), (steps.last(), along.last(), -1.0, PlanarFace::Back)];
-        for (s, along, n, end) in caps {
-            let Some(s) = s else { continue };
+        let caps = [
+            (steps.first(), maps.first(), along.first(), 1.0, PlanarFace::Front, MeshPart::Front),
+            (steps.last(), maps.last(), along.last(), -1.0, PlanarFace::Back, MeshPart::Back),
+        ];
+        // Each cap's corners take their art points, before any twist or taper, in `bounds`, which
+        // every part of one object shares.
+        let area = bounds;
+        for (s, map, along, n, end, part) in caps {
+            let (Some(s), Some(map)) = (s, map) else { continue };
             let before = b.len();
-            b.face(rings.iter().map(|r| ring_at(r, s)).collect(), camera.rotate(V3(0.0, 0.0, n)), Order::Last)?;
+            let (x, y, origin) = map.frame();
+            let plane = Attrs::Planar(PlaneUv { origin, x, y, area });
+            b.face(rings.iter().map(|r| ring_at(r, s)).collect(), camera.rotate(V3(0.0, 0.0, n)), Order::Last, part, |_| plane)?;
             b.end(before, end);
             if let Some(along) = along {
                 let traced: Vec<&Ring> = traced.iter().collect();
@@ -901,12 +1241,9 @@ pub fn extrude_surfaces(path: &PathData, rule: FillRule, bounds: Rect, options: 
     if o.depth <= 0.0 {
         return Ok(path.bounds().map(|b| end(PlanarFace::Front, b)).into_iter().collect());
     }
-    let steps = steps(&o);
-    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let size = bounds.width().max(bounds.height());
-    let most = curve_pieces(path, size, bands, caps)?;
-    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
-    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most)?.iter().map(|r| square_corners(r, side)).collect();
+    let (steps, traced) = extrude_profile(path, rule, size, &o)?;
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     // A solid past the face limit is refused, as [`extrude_faces`] refuses it.
     let edges = traced.iter().map(|r| r.points.len()).fold(0usize, usize::saturating_add);
     if edges.saturating_mul(bands).saturating_add(caps) > MAX_SOLID_FACES {
@@ -945,12 +1282,9 @@ pub fn extrude_side_size(path: &PathData, rule: FillRule, bounds: Rect, options:
     if o.depth <= 0.0 {
         return None;
     }
-    let steps = steps(&o);
-    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let size = bounds.width().max(bounds.height());
-    let most = curve_pieces(path, size, bands, caps).ok()?;
-    let side = steps.iter().map(|s| s.inset).find(|w| *w != 0.0).unwrap_or(0.0);
-    let traced: Vec<Ring> = solid_rings_traced(path, rule, size, MAX_SOLID_POINTS, most).ok()?.iter().map(|r| square_corners(r, side)).collect();
+    let (steps, traced) = extrude_profile(path, rule, size, &o).ok()?;
+    let (bands, caps) = (steps.len().saturating_sub(1), if o.cap { 2 } else { 0 });
     let rings: Vec<&[Point]> = traced.iter().map(|r| r.points.as_slice()).collect();
     // A solid past the face limit is refused, as [`extrude_faces`] refuses it.
     let edges = rings.iter().map(|r| r.len()).fold(0usize, usize::saturating_add);
@@ -986,9 +1320,12 @@ pub(crate) fn plane_faces(path: &PathData, rule: FillRule, bounds: Rect, view: V
     // it is drawn last, as a cap is, and planes drawn in one order keep the order they are given in.
     let up = camera.rotate(V3(0.0, 0.0, 1.0));
     let n = if camera.facing(V3::default(), up) < 0.0 { V3(-up.0, -up.1, -up.2) } else { up };
-    b.face(contours, n, Order::Last)?;
-    b.end(0, PlanarFace::Front);
     let m = Placing::new(&camera, bounds.center(), Turn::new(bounds, 0.0, 1.0, 0.0), 0.0);
+    // The plane's corners take their art points in `bounds`, which every part of one object shares.
+    let (x, y, origin) = m.frame();
+    let plane = Attrs::Planar(PlaneUv { origin, x, y, area: bounds });
+    b.face(contours, n, Order::Last, MeshPart::Front, |_| plane)?;
+    b.end(0, PlanarFace::Front);
     let at = |span: &Span, t: f64| camera.project(m.place(span.curve.eval(t)));
     let map = |p: Point| camera.project(m.place(p));
     let along = Along { at: &at, map: Some(&map), affine: camera.eye.is_none(), tolerance: CURVE_TOLERANCE };

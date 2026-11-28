@@ -1,13 +1,16 @@
-//! The Script Console panel drawn headless: a full console lays out only the rows in view, output
-//! goes on while the panel is hidden, Clear works during a run, and Copy Selected and Copy All
-//! through `ui.copyScriptConsole`.
+//! The Script Console panel's commands: Clear works during a run, Copy Selected and Copy All through
+//! `ui.scriptConsole.copySelected` and `ui.copyScriptConsole`.
 
+use craft::behavior::Selection;
+use craft::keymap::CommandRef;
+use craft::ui::runtime::commands::CommandStates;
 use serde_json::json;
 use vectorcraft_engine::Session;
+use vectorcraft_engine::script::console::{Ending, Entry};
 
-use super::pstate;
-use super::script_console::{DRAWN, ID, show, shown};
-use crate::tests_labels::painted_text;
+use super::script_console::{menu_states, show, shown};
+use crate::panel_docking::PANEL_MIN_WIDTH;
+use crate::tests::panel_harness::{Panel, Place, ROOM, floated};
 use crate::{Services, VectorcraftApp, script_runs};
 
 fn app() -> VectorcraftApp {
@@ -29,38 +32,49 @@ fn run(app: &mut VectorcraftApp, source: &str) {
     panic!("the script did not end");
 }
 
-#[test]
-fn a_full_console_lays_out_only_the_rows_in_view() {
-    let mut app = app();
-    run(&mut app, "for (var i = 0; i < 3000; i++) $.writeln('line ' + i)");
-    assert_eq!(app.session.script_console().lines().len(), vectorcraft_engine::script::console::MAX_CONSOLE_LINES);
-    let ctx = egui::Context::default();
-    crate::theme::install_fonts(&ctx);
-    let mut drawn = 0;
-    for _ in 0..2 {
-        ctx.run_ui(egui::RawInput::default(), |ui| {
-            show(&mut app, ui);
-            drawn = pstate::<usize>(ui.ctx(), DRAWN);
-        })
-        .textures_delta
-        .clear();
-    }
-    assert!(drawn > 0 && drawn < 40, "{drawn} rows laid out");
-    let text = painted_text(&mut app, show);
-    assert!(text.contains("#1 c.js: line 2999"), "the newest line is in view: {text}");
-    assert!(text.contains("lines dropped"), "the panel says lines were dropped: {text}");
+/// Whether `menu_states` enables the console command `id`.
+fn enabled(app: &VectorcraftApp, id: &str) -> bool {
+    let mut states = CommandStates::new();
+    menu_states(app, &mut states);
+    states.get(&CommandRef::new(id)).is_some_and(|s| s.is_enabled())
 }
 
 #[test]
-fn output_goes_on_while_the_panel_is_hidden_and_shows_when_it_opens() {
-    let mut app = app();
-    assert!(crate::state::rail_panel(ID).is_some());
-    run(&mut app, "$.writeln('hidden'); vc.log({n: 1}); throw new Error('late')");
-    app.run("window.panel", json!({"panel": ID})).unwrap();
-    let text = painted_text(&mut app, show);
-    for want in ["#1 c.js: ▶", "#1 c.js: hidden", "#1 c.js: {\"n\":1}", "#1 c.js: c.js:1:", "#1 c.js: ■ Ended with an error", "host calls"] {
-        assert!(text.contains(want), "{want} in {text}");
+fn the_console_footer_stays_inside_the_panel_at_minimum_width() {
+    let names = ["Clear", "Copy Selected", "Copy All"];
+    for lang in ["en", "fr", "de"] {
+        let mut app = app();
+        run(&mut app, "$.writeln('one')");
+        let panel = floated(app, "scriptConsole", lang, Place::Floating(PANEL_MIN_WIDTH), &names);
+        for name in names {
+            let bounds = panel.rects(name);
+            assert!(
+                bounds.iter().all(|rect| panel.body.expand(0.5).contains_rect(*rect)),
+                "{lang}: {name} at {bounds:?} is outside {:?}",
+                panel.body
+            );
+        }
     }
+
+    let wide = floated(app(), "scriptConsole", "en", Place::Floating(380.0), &names);
+    assert!(wide.middles(&names).windows(2).all(|pair| (pair[0] - pair[1]).abs() < 1.0), "the wide footer uses one row");
+}
+
+#[test]
+fn the_console_footer_buttons_run_their_commands_at_minimum_width() {
+    let mut app = app();
+    run(&mut app, "$.writeln('one'); $.writeln('two')");
+    let mut panel = Panel::new(app, show);
+    panel.room(egui::vec2(PANEL_MIN_WIDTH, ROOM.y)).frame();
+    assert!(!panel.enabled("Copy Selected"));
+    panel.click("#1 c.js: one");
+    panel.click("Copy Selected");
+    assert_eq!(panel.app().clipboard_out.take().as_deref(), Some("#1 c.js: one"));
+    panel.click("Copy All");
+    assert!(panel.app().clipboard_out.take().is_some_and(|text| text.contains("#1 c.js: two")));
+    panel.click("Clear");
+    assert!(panel.app().session.script_console().lines().is_empty());
+    assert!(!panel.enabled("Copy All"));
 }
 
 #[test]
@@ -74,8 +88,9 @@ fn clear_works_during_a_run_and_the_run_goes_on_writing() {
     app.run("script.stop", json!({})).unwrap();
     script_runs::poll(&mut app);
     assert!(!app.session.script_running());
-    let text = painted_text(&mut app, show);
-    assert!(!text.contains("before") && text.contains("■ Stopped"), "{text}");
+    let lines = app.session.script_console().lines();
+    assert!(lines.iter().all(|l| !shown(l).contains("before")), "the cleared lines stay gone");
+    assert!(lines.iter().any(|l| matches!(l.entry, Entry::End(Ending::Stopped))), "the run wrote its end after the clear");
 }
 
 #[test]
@@ -97,47 +112,20 @@ fn copy_all_and_copy_selected_put_the_lines_on_the_clipboard() {
     assert!(all.lines().next().is_some_and(|l| l.contains("lines dropped")), "Copy All starts with the notice: {}", &all[..80]);
 }
 
-/// A report line reads in English as `script.console` gives it: "time unavailable" for a run
-/// without a clock, one host call in the singular, and the slowest commands.
 #[test]
-fn a_report_line_reads_as_script_console_gives_it() {
-    use vectorcraft_engine::script::console::{ConsoleLine, Entry, Slow};
-    let slow = vec![Slow { id: "a.b".into(), calls: 2, total_ms: 7, max_ms: 4 }, Slow { id: "c".into(), calls: 1, total_ms: 1, max_ms: 1 }];
-    for ms in [None, Some(0), Some(12)] {
-        for host_calls in [0, 1, 2] {
-            for slowest in [vec![], slow.clone()] {
-                let entry = Entry::Report { ms, host_calls, slowest };
-                let want = format!("#3 c.js: {}", entry.text());
-                assert_eq!(shown(&ConsoleLine { run: 3, name: "c.js".into(), entry }), want);
-            }
-        }
-    }
-    let line = |ms, host_calls| shown(&ConsoleLine { run: 1, name: "c.js".into(), entry: Entry::Report { ms, host_calls, slowest: vec![] } });
-    assert_eq!(line(None, 1), "#1 c.js: time unavailable, 1 host call");
-    assert_eq!(line(Some(0), 2), "#1 c.js: 0 ms, 2 host calls");
-}
-
-/// The notice counts the lines dropped and the lines cut each in its own form, a count of one in
-/// the singular; Copy All starts with it.
-#[test]
-fn the_notice_counts_one_line_in_the_singular() {
-    for (dropped, cut, want) in [
-        (1, 0, "1 earlier line dropped, 0 lines cut"),
-        (0, 1, "0 earlier lines dropped, 1 line cut"),
-        (1, 2, "1 earlier line dropped, 2 lines cut"),
-        (2, 1, "2 earlier lines dropped, 1 line cut"),
-        (2, 2, "2 earlier lines dropped, 2 lines cut"),
-    ] {
-        let mut app = app();
-        // A run adds a start, an end and a report line to its output lines.
-        let lines = if dropped > 0 { vectorcraft_engine::script::console::MAX_CONSOLE_LINES - 3 + dropped } else { cut + 1 };
-        let source = format!("var big = 'x'; while (big.length < 5000) big += big; for (var i = 0; i < {lines}; i++) $.writeln(i < {cut} ? big : i)");
-        run(&mut app, &source);
-        let c = app.session.script_console();
-        assert_eq!((c.dropped_lines(), c.truncated_lines()), (dropped as u64, cut as u64));
-        app.run("ui.copyScriptConsole", json!({})).unwrap();
-        let all = app.clipboard_out.take().unwrap();
-        assert_eq!(all.lines().next(), Some(want));
-        assert!(painted_text(&mut app, show).contains(want));
-    }
+fn copy_selected_copies_from_the_first_to_the_last_selected_line() {
+    let mut app = app();
+    run(&mut app, "for (var i = 0; i < 12; i++) $.writeln('l' + i)");
+    assert!(!enabled(&app, "ui.scriptConsole.copySelected"), "nothing is selected");
+    assert!(app.run("ui.scriptConsole.copySelected", json!({})).is_err());
+    // Several rows in any order: lines 2 to 9 are copied.
+    app.ui.script_console_selection = Selection::new(vec![5, 2, 9], Some(9), Some(5));
+    assert!(enabled(&app, "ui.scriptConsole.copySelected"));
+    assert_eq!(app.run("ui.scriptConsole.copySelected", json!({})).unwrap()["lines"], 8);
+    let want = (1..=8).map(|i| format!("#1 c.js: l{i}")).collect::<Vec<_>>().join("\n");
+    assert_eq!(app.clipboard_out.take(), Some(want));
+    app.run("script.console.clear", json!({})).unwrap();
+    assert!(!enabled(&app, "ui.scriptConsole.copySelected"), "the selected lines are gone");
+    assert!(!enabled(&app, "script.console.clear") && !enabled(&app, "ui.copyScriptConsole"));
+    assert!(app.run("ui.scriptConsole.copySelected", json!({})).is_err());
 }

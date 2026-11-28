@@ -96,6 +96,18 @@ impl Unit {
             _ => None,
         }
     }
+    /// The SVG length unit an export writes this unit's sizes in: the unit itself when SVG has it,
+    /// else an SVG unit of the same kind (inches for feet and yards, centimeters for meters,
+    /// millimeters for Q and Ha). `None` for points and pixels.
+    pub fn svg_unit(self) -> Option<Unit> {
+        match self {
+            Unit::Millimeters | Unit::Centimeters | Unit::Inches | Unit::Picas => Some(self),
+            Unit::FeetInches | Unit::Feet | Unit::Yards => Some(Unit::Inches),
+            Unit::Meters => Some(Unit::Centimeters),
+            Unit::Q | Unit::Ha => Some(Unit::Millimeters),
+            Unit::Points | Unit::Pixels => None,
+        }
+    }
     pub const fn label(self) -> &'static str {
         match self {
             Unit::Points => "Points",
@@ -154,6 +166,19 @@ impl Unit {
     pub fn format(self, pt: f64) -> String {
         format!("{} {}", self.number(pt), self.suffix())
     }
+    /// Format an area in square points into this unit (e.g. `12.5 mm²`, `4.5 in²`, `100 pt²`).
+    pub fn format_area(self, pt2: f64) -> String {
+        if !pt2.is_finite() || pt2 <= 0.0 {
+            return format!("0 {}²", self.suffix());
+        }
+        let side = self.from_pt(1.0);
+        let val = pt2 * side * side;
+        let decimals = if matches!(self, Unit::Points | Unit::Pixels | Unit::Picas | Unit::Q | Unit::Ha) { 3 } else { 4 };
+        let s = format!("{:.*}", decimals, val);
+        let s = s.trim_end_matches('0').trim_end_matches('.');
+        let s = if s == "-0" || s.is_empty() { "0" } else { s };
+        format!("{s} {}²", self.suffix())
+    }
     /// [`Unit::format`] without the suffix (`12.5`), for narrow fields.
     pub fn number(self, pt: f64) -> String {
         // Three decimals for the small units (`595.276 pt`), four for the large ones (`8.2677 in`,
@@ -183,6 +208,15 @@ impl Unit {
             return None;
         }
         parse_measure(&times_as_asterisks(s), self).filter(|v| v.is_finite())
+    }
+
+    /// Parse a measurement with decimal points or commas and no input locale. Refuse a
+    /// number that looks like a grouped integer, even when it is part of an expression.
+    pub fn parse_with_decimal_comma(self, text: &str) -> Option<f64> {
+        if text.contains(',') && times_as_asterisks(text).split(['+', '-', '*', '/']).any(thousands_operand) {
+            return None;
+        }
+        self.parse(&decimal_point(text))
     }
     /// The value naming this unit in the Units preferences (`points`, `millimeters`,
     /// `feetInches`).
@@ -383,6 +417,19 @@ fn percent(s: &str) -> Option<f64> {
 /// number that reads as thousands ([`thousands`]).
 pub fn decimal_point(text: &str) -> std::borrow::Cow<'_, str> {
     if text.contains(',') && !thousands(text) { text.replace(',', ".").into() } else { text.into() }
+}
+
+/// Does the operand contain a thousands comma? Check both parts of a compact pica value and
+/// read a percentage's number without its percent sign.
+fn thousands_operand(operand: &str) -> bool {
+    let operand = operand.trim();
+    if let Some((picas, points)) = operand.split_once('p')
+        && !points.trim().is_empty()
+        && points.trim().bytes().all(|b| b.is_ascii_digit() || matches!(b, b'.' | b','))
+    {
+        return thousands(picas) || thousands(points);
+    }
+    thousands(operand.strip_suffix('%').unwrap_or(operand))
 }
 
 /// Is `text` a number written with a thousands comma, as `1,000`, `+1,000`, `12,500 mm` or
