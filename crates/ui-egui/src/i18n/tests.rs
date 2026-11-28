@@ -7,9 +7,9 @@ fn lang(code: &str) -> Lang {
     Lang::from_code(code).unwrap_or_else(|| panic!("{code} registered"))
 }
 
-/// The languages that are not English, the source language.
+/// The languages that are not English, the source language, and have complete catalogs.
 fn translated() -> Vec<Lang> {
-    Lang::all().filter(|l| *l != Lang::EN).collect()
+    Lang::all().filter(|l| l.complete_menus()).collect()
 }
 
 /// (language, context, English source, the term the language's glossary gives it). One row per
@@ -171,6 +171,28 @@ fn numbered_labels_translate_the_name_before_the_number() {
         assert_eq!(numbered_label(fr, kept), kept);
     }
     assert_eq!(numbered_label(Lang::EN, "Grays 12"), "Grays 12");
+}
+
+#[test]
+fn arabic_is_preparatory_and_unavailable_to_users() {
+    assert_eq!(Lang::from_code("ar"), None);
+    assert!(!Lang::for_picker().iter().any(|l| l.code() == "ar"));
+    assert_eq!(Lang::from_pref("ar"), Lang::from_pref("auto"));
+}
+
+#[test]
+fn arabic_plural_rule_and_catalog_infrastructure() {
+    let (i18n, problems) = I18n::new(EMBEDDED, &["ar"]);
+    assert!(problems.is_empty(), "{problems:?}");
+    let ar = i18n.from_code("ar").expect("ar offered in custom instance");
+    assert_eq!(i18n.name(ar), "العربية");
+    for tag in ["ar", "AR", "ar-SA", "ar_EG", "ar_EG.UTF-8", "ar-AE", "ar-MA"] {
+        assert_eq!(i18n.match_tag(tag), Some(ar), "{tag}");
+    }
+    for (n, want) in [(0, "0 إيداع"), (1, "1 إيداع"), (2, "2 إيداعين"), (3, "3 إيداعات"), (11, "11 إيداعًا"), (100, "100 إيداع")]
+    {
+        assert_eq!(i18n.trn_plain(ar, n, "{n} commit", "{n} commits"), want, "for n={n}");
+    }
 }
 
 #[test]

@@ -69,13 +69,15 @@ static EMBEDDED: &Embedded = &[
     ("fi", "", include_str!("i18n/fi.tsv")),
     ("tr", "", include_str!("i18n/tr.tsv")),
     ("ca", "", include_str!("i18n/ca.tsv")),
+    ("ar", "", include_str!("i18n/ar.tsv")),
 ];
 
 /// The codes of [`EMBEDDED`] the interface offers. Browsers cannot use the native installed-font
 /// fallback, so on the web a language whose text would be missing-glyph boxes (Gujarati without a
-/// bundled Gujarati face) is not offered, including when restoring a preference.
+/// bundled Gujarati face) is not offered, including when restoring a preference. Arabic is kept
+/// unavailable to users until the shared catalog in `storytold/craft-i18n` is consumed.
 fn offered_codes(web: bool, gujarati_font: bool) -> Vec<&'static str> {
-    EMBEDDED.iter().map(|(code, ..)| *code).filter(|code| *code != "gu" || !web || gujarati_font).collect()
+    EMBEDDED.iter().map(|(code, ..)| *code).filter(|code| *code != "ar" && (*code != "gu" || !web || gujarati_font)).collect()
 }
 
 /// The one catalog set of the process, built on first use.
@@ -141,7 +143,7 @@ impl LangExt for Lang {
     }
 
     fn complete_menus(self) -> bool {
-        self != Lang::EN
+        self != Lang::EN && self.code() != "ar"
     }
 
     fn from_code(code: &str) -> Option<Lang> {

@@ -1,0 +1,8 @@
+# Arabic (ar) catalog. Same format as zh-hant.tsv: context <TAB> source <TAB> translation
+# (empty context = a plain UI string; `@id` = a command id; `@plural` = 6 CLDR forms;
+# `@msg` = a status or error message).
+#
+# Translations are maintained upstream in storytold/craft-i18n (locales/ar/vectorcraft.tsv)
+# under AGENTS.md rule 16.
+@id	language.name	العربية
+@plural	{n} commit|{n} commits	{n} إيداع|{n} إيداع|{n} إيداعين|{n} إيداعات|{n} إيداعًا|{n} إيداع
