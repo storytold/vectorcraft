@@ -9655,7 +9655,14 @@ highlighted until another category is shown) and clears `__search`. Cmd/Ctrl+F f
 field with text clears it, and Escape in the empty field closes the dialog. Its Reset Preferences button opens a
 `resetPreferences` question (fields `message`, `detail`) over Preferences: `ui.dialog.cancel` shows Preferences again
 as it was, and `ui.dialog.confirm` shows it again with every preference at its default value, applied by OK in
-Preferences. `prefs.reset` resets the preferences at once, without the question.
+Preferences. `prefs.reset` resets the preferences at once, without the question. OK in Preferences writes only the
+fields changed in the dialog since it opened or since its last Apply, so a preference, Smart Guides, Snap to Grid,
+Enable Contextual Task Bar or the document's units changed some other way while it is open (a command, a panel menu,
+a script) keeps its new value when its dialog field is unchanged. A field changed both ways takes the dialog's value.
+An opening-time correction of Hold Shortcut Delay does not overwrite a later command change. Apply refreshes the
+dialog's baseline from the current preferences and UI values. OK also saves an opening-time Hold Shortcut Delay
+correction when no later command changed that value. With no field change or delay correction, OK writes nothing
+and adds no undo step.
 
 ```json
 {"name":"run_command","arguments":{"command":"prefs.set","params":{"key":"unitsGeneral","value":"millimeters"}}}
@@ -9664,7 +9671,7 @@ Preferences. `prefs.reset` resets the preferences at once, without the question.
 Reset Preferences also sets the dialog's `__smartGuides`, `__snapToGrid` and `__taskBar` fields to their defaults
 (`__taskBar` takes the value the current workspace was saved with). A category's own reset sets the field of that
 category (Smart Guides, Guides & Grid or General), and File Handling's also resets the app chosen for Edit Original.
-`prefs.reset` run while Preferences is open shows the values it reset in the dialog. In the app, `prefs.reset` also resets Smart Guides,
+`prefs.reset` run while Preferences is open updates its unchanged fields and preserves edits in the dialog. In the app, `prefs.reset` also resets Smart Guides,
 Snap to Grid and Enable Contextual Task Bar when it resets every category or their category (Smart Guides, Guides &
 Grid and General), and the app chosen for Edit Original when it resets every category or File Handling. A `category`
 left out or `null` resets every category, and one that is not a string is an error.
