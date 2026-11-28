@@ -472,6 +472,10 @@ struct BrushesKept {
     bending: HashMap<String, f64>,
 }
 
+/// What the pages the art may be compared with are worked out from: the move into the document,
+/// the number of artboards, the first artboard and the art's bounding box.
+type PageSources = (Option<Affine>, usize, Option<Rect>, Option<Rect>);
+
 struct Reader<'a> {
     lex: Lexer<'a>,
     stack: Vec<V>,
@@ -604,6 +608,8 @@ struct Reader<'a> {
     envelope_checks: usize,
     /// How far the live envelopes read so far draw from their drawn art ([`super::envelope::Spent`]).
     envelope_spent: super::envelope::Spent,
+    /// [`Self::pages_in_doc`] as last worked out, with what it was worked out from.
+    page_cache: Option<(PageSources, Arc<[Rect]>)>,
     /// How many more strokes with dashes aligned to corners this import may draw to check
     /// ([`super::MAX_DASH_CHECKS`]).
     dash_checks: usize,
@@ -877,6 +883,7 @@ impl<'a> Reader<'a> {
             envelopes: Vec::new(),
             envelope_checks: super::envelope::MAX_CHECKED,
             envelope_spent: super::envelope::Spent::default(),
+            page_cache: None,
             dash_checks: super::MAX_DASH_CHECKS,
             defs_only: false,
             warped_type: Vec::new(),

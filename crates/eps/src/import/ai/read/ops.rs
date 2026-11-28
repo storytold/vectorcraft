@@ -787,7 +787,7 @@ impl<'a> Reader<'a> {
         }
         let space = self.space();
         self.note_brushes_kept();
-        let page = self.page_in_doc();
+        let pages = self.pages_in_doc();
         let Some(f) = self.frames.last_mut() else { return };
         let n = f.children.len();
         let (Some(object), Some(look)) = (n.checked_sub(1).and_then(|i| f.children.get(i)), n.checked_sub(2).and_then(|i| f.children.get(i))) else {
@@ -873,7 +873,8 @@ impl<'a> Reader<'a> {
                     let layer = self.doc.alloc_id();
                     let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
                     let shown = !hidden && object.visible && look.visible;
-                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, page.filter(|_| shown), &mut self.envelope_spent)
+                    let on: &[Rect] = if shown { &pages } else { &[] };
+                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, on, &mut self.envelope_spent)
                 };
                 alike.then_some(ap)
             }
@@ -885,7 +886,7 @@ impl<'a> Reader<'a> {
                     let layer = self.doc.alloc_id();
                     let shared = crate::import::ai::envelope::Shared { patterns: &self.doc.patterns, images: &self.doc.images };
                     let mut spent = crate::import::ai::envelope::Spent::default();
-                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, None, &mut spent)
+                    look_alike(object, &ap, look, &self.hidden_ids, hidden, layer, &shared, &[], &mut spent)
                 };
                 alike.then_some(ap)
             }
@@ -1314,7 +1315,7 @@ fn look_alike(
     hidden: bool,
     layer: NodeId,
     shared: &crate::import::ai::envelope::Shared<'_>,
-    page: Option<Rect>,
+    pages: &[Rect],
     spent: &mut crate::import::ai::envelope::Spent,
 ) -> bool {
     let mut live = object.clone();
@@ -1329,7 +1330,7 @@ fn look_alike(
     for n in [&mut live, &mut plain] {
         (n.visible, n.opacity, n.blend) = (true, 1.0, BlendMode::Normal);
     }
-    crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, page, spent)
+    crate::import::ai::envelope::warped_alike(&live, &plain, layer, shared, pages, spent)
 }
 
 /// Does `appearance` stroke with dashes aligned to corners and path ends?

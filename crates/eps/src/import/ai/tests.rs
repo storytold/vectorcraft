@@ -9395,24 +9395,35 @@ fn warped_type_gets_what_the_envelopes_left_of_the_budget() {
     let exact = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&flat))));
     let beside = format!("{RED}{}f\n", rect_path(40.5, 20.0, 160.5, 80.0));
     let shifted = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &beside)));
+    let page = Rect::new(0.0, 0.0, 200.0, 100.0);
     for r in [&exact, &shifted] {
         assert_eq!(r.warped_type.checks, super::envelope::MAX_CHECKED - 1);
-        assert!(r.warped_type.page.is_some());
+        assert_eq!(r.warped_type.pages, [page]);
     }
     live_envelope(&art(&shifted.doc)[0]);
-    assert!(shifted.warped_type.spent.any > exact.warped_type.spent.any);
+    assert!(shifted.warped_type.spent.on(page).0 > exact.warped_type.spent.on(page).0);
 }
 
-/// In a file with an artboard list, warped type is held to the first artboard, not to the crop marks.
+/// In a file with an artboard list, warped type is held to every artboard, not to the crop marks.
 #[test]
-fn warped_type_is_held_to_the_first_artboard() {
+fn warped_type_is_held_to_every_artboard() {
     let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
                   %_/Dictionary :\n%_0 200 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_300 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
                   %_/Dictionary :\n%_400 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_600 -150 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_; ,\n\
                   %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
     let r = read_ok(&format!("{boards}{}", layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 40.0, 40.0)))));
     assert_eq!(r.doc.artboards[0].rect, Rect::new(0.0, 0.0, 300.0, 200.0));
-    assert_eq!(r.warped_type.page, Some(Rect::new(0.0, 0.0, 300.0, 200.0)));
+    assert_eq!(r.warped_type.pages, [Rect::new(0.0, 0.0, 300.0, 200.0), Rect::new(400.0, 200.0, 600.0, 350.0)]);
+}
+
+/// Artboards that are an earlier one to half a point, and an art box that is one of them, add no
+/// page of their own.
+#[test]
+fn pages_that_repeat_an_artboard_are_held_once() {
+    let boards = boards_at(&[[0.0, 0.0, 200.0, 100.0], [0.2, 0.0, 200.0, 100.3], [0.0, 0.0, 200.0, 100.0], [300.0, 0.0, 400.0, 100.0]]);
+    let data = format!("{boards}{}", layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 40.0, 40.0))));
+    let r = read(stream_with_header("%%HiResBoundingBox: 300 0 400 100.4\n", &data).as_bytes()).unwrap();
+    assert_eq!(r.warped_type.pages, [Rect::new(0.0, 0.0, 200.0, 100.0), Rect::new(300.0, 0.0, 400.0, 100.0)]);
 }
 
 /// Type whose Warp is hidden draws no warp, so it stays type even with no check left.
@@ -9454,15 +9465,37 @@ fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
         w.look = Node::group(vectorcraft_doc::NodeId(u64::MAX - 10 - i as u64), vec![Arc::new(w.look.clone()), mark.clone()]);
     }
     let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
-    let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
+    let page = Rect::new(0.0, 60.0, 60.0, 100.0);
     let settle = |w: &super::envelope::WarpedLook, spent| {
-        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, page, ..Default::default() };
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, pages: vec![page], ..Default::default() };
         warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
     };
-    let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
+    let spent = || super::envelope::Spent { pages: vec![(page, MAX_DIFFERENCE / 2.0, MAX_SOLID_DIFFERENCE / 2.0)], ..Default::default() };
     assert_eq!(settle(&looks[1], Default::default()), 0);
     assert_eq!(settle(&looks[1], spent()), 1);
     assert_eq!(settle(&looks[0], spent()), 0);
+}
+
+/// Each page the art may be compared with has its own share of the budget: warped type on the
+/// second page spends that page's share, whatever is left of the first page's.
+#[test]
+fn warped_type_on_a_later_page_spends_that_pages_share_of_the_budget() {
+    use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE};
+    let (doc, mut looks) = warped_type_doc(2);
+    // The second object shows. Its look draws a little more than it.
+    let mark = read_ok(&layer(&format!("{RED}{}f\n", rect_path(2.0, 2.0, 2.6, 2.6))));
+    let mark = art(&mark.doc)[0].clone();
+    let w = looks.remove(1);
+    let look = Node::group(vectorcraft_doc::NodeId(u64::MAX - 10), vec![Arc::new(w.look.clone()), mark]);
+    let (first, second) = (Rect::new(200.0, 0.0, 260.0, 40.0), Rect::new(0.0, 60.0, 60.0, 100.0));
+    let settle = |spent| {
+        let looks = vec![super::envelope::WarpedLook { slot: w.slot, look: look.clone(), left_out: None }];
+        let warped = super::envelope::WarpedType { looks, checks: 1, spent, pages: vec![first, second], ..Default::default() };
+        warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
+    };
+    let full = |page| super::envelope::Spent { pages: vec![(page, MAX_DIFFERENCE / 2.0, MAX_SOLID_DIFFERENCE / 2.0)], ..Default::default() };
+    assert_eq!(settle(full(first)), 0);
+    assert_eq!(settle(full(second)), 1);
 }
 
 /// An envelope that comes out close to its drawn art, but with more of the page differing than the
@@ -9477,6 +9510,58 @@ fn an_envelope_that_differs_from_its_drawn_art_over_the_page_keeps_it() {
     assert_eq!(a.len(), 1, "{a:#?}");
     assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
     assert_eq!(r.warnings, [super::envelope::DRAWN]);
+}
+
+/// The document data of artboards in art space, each `[x0, y0, x1, y1]`.
+fn boards_at(boards: &[[f64; 4]]) -> String {
+    let boards: String = boards
+        .iter()
+        .map(|[x0, y0, x1, y1]| {
+            format!("%_/Dictionary :\n%_{x0} {y1} /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{x1} {y0} /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n")
+        })
+        .collect();
+    format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{boards}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n")
+}
+
+/// The envelope of [`an_envelope_that_differs_from_its_drawn_art_over_the_page_keeps_it`] on the
+/// second artboard, the first a strip along the top that it doesn't reach: a page of the second
+/// artboard can be compared with the layers, so it is held to that page and keeps its drawn art.
+/// One that draws as its drawn art opens live there.
+#[test]
+fn an_envelope_on_a_later_artboard_that_differs_over_its_page_keeps_its_drawn_art() {
+    let boards = boards_at(&[[0.0, 98.0, 20.0, 100.0], [0.0, 0.0, 200.0, 100.0]]);
+    let shifted = format!("{RED}{}f\n", rect_path(42.0, 20.0, 162.0, 80.0));
+    let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &shifted);
+    let r = read_ok(&format!("{boards}{}", layer(&body)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(r.warnings, [super::envelope::DRAWN]);
+    assert_eq!(r.warped_type.pages, [Rect::new(0.0, 0.0, 20.0, 2.0), Rect::new(0.0, 0.0, 200.0, 100.0)]);
+    let flat = vectorcraft_doc::live::EnvelopeKind::Mesh {
+        rows: 1,
+        cols: 1,
+        points: vec![Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(40.0, 80.0), Point::new(160.0, 80.0)],
+        handles: vec![],
+    };
+    let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&flat));
+    let r = read_ok(&format!("{boards}{}", layer(&body)));
+    live_envelope(&art(&r.doc)[0]);
+}
+
+/// The same envelope on no artboard, inside the art's bounding box: a page cropped to the art
+/// shows it, so it is held to that page too.
+#[test]
+fn an_envelope_off_the_artboards_that_differs_over_the_arts_box_keeps_its_drawn_art() {
+    let shifted = format!("{RED}{}f\n", rect_path(42.0, 20.0, 162.0, 80.0));
+    let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &shifted);
+    let data = format!("{}{}", boards_at(&[[0.0, 98.0, 20.0, 100.0]]), layer(&body));
+    let r = read(stream_with_header("%%HiResBoundingBox: 0 0 200 100\n", &data).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(r.warnings, [super::envelope::DRAWN]);
+    assert_eq!(r.warped_type.pages, [Rect::new(0.0, 0.0, 20.0, 2.0), Rect::new(0.0, 0.0, 200.0, 100.0)]);
 }
 
 /// An envelope whose drawn art holds an object the reader can't read keeps that drawn art, which
