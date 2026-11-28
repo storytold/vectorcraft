@@ -254,8 +254,10 @@ fn ok(app: &mut VectorcraftApp, answer: &ParamResult) -> Result<(), String> {
         return Err(why);
     }
     let (cmd, p, _) = s.request(&answer.fields);
-    // OK must validate afresh: the live preview also caches refused requests.
-    s.preview = LivePreview::default();
+    // OK must validate afresh: the live preview also caches refused requests. The running preview is ended first;
+    // a fresh preview refuses to start while another interaction is open, which left OK refused and the old
+    // preview's interaction open.
+    s.cancel_preview(app);
     match s.run_preview(app, cmd, &p) {
         Some(Ok(())) if finish_unchanged_preview(app) => return Ok(()),
         Some(Err(why)) => {
