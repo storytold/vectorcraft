@@ -36,6 +36,8 @@ pub(crate) const OPTION_TOOLS: [&str; 4] = ["rectangularGrid", "polarGrid", "arc
 const SIZE_KINDS: [&str; 3] = ["rectangle", "roundedRectangle", "ellipse"];
 
 const CLICK_DOCUMENT: &str = "__clickDocument";
+/// The clicked document's revert count: File > Revert keeps its uid and replaces the content clicked on.
+const CLICK_REVERTS: &str = "__clickReverts";
 const CLICK_ALT: &str = "__clickAlt";
 
 /// Where a shape tool was clicked: the dialog's shape is drawn there, and with `alt` held a box shape
@@ -92,13 +94,14 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: &str, click: Option<Click>) {
     }
     // Keep the placement with the draft whose fields OK receives.
     if let Some(click) = click {
-        let Some(document) = app.session.active().map(|doc| doc.uid) else {
+        let Some((document, reverts)) = app.session.active().map(|doc| (doc.uid, doc.reverts)) else {
             app.status(tl!("Open a document before drawing a shape").to_string());
             return;
         };
         values.insert("x".into(), json!(click.at.x));
         values.insert("y".into(), json!(click.at.y));
         values.insert(CLICK_DOCUMENT.into(), json!(document.to_string()));
+        values.insert(CLICK_REVERTS.into(), json!(reverts.to_string()));
         values.insert(CLICK_ALT.into(), json!(click.alt));
     }
     let ink = (kind == "arc" && click.is_none()).then(|| ArcInk::of(&app.session));
@@ -488,13 +491,16 @@ fn confirm(app: &mut VectorcraftApp, kind: &str, fields: &DialogFields) -> Resul
         };
     };
     let document = document.parse::<u64>().map_err(|_| tl!("The shape click document is missing").to_string())?;
-    if app.session.active().is_none_or(|doc| doc.uid != document) {
+    let Some(active) = app.session.active().filter(|doc| doc.uid == document) else {
         let reason = if app.session.documents().iter().any(|doc| doc.uid == document) {
             tl!("Switch back to the document where you clicked to draw the shape")
         } else {
             tl!("The document where you clicked to draw the shape has closed")
         };
         return Err(reason.into());
+    };
+    if fields.text(CLICK_REVERTS).and_then(|r| r.parse::<u64>().ok()) != Some(active.reverts) {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
     }
     let (Some(x), Some(y)) = (fields.number("x"), fields.number("y")) else {
         return Err(tl!("The shape click position is missing").into());
@@ -697,6 +703,33 @@ mod tests {
         let bounds = doc.layers[0].children().unwrap()[0].geometric_bounds().unwrap();
         assert!((bounds.x0 - 40.0).abs() < 1e-6 && (bounds.y0 - 60.0).abs() < 1e-6);
         assert!((bounds.width() - 32.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn rectangle_click_draws_nothing_after_file_revert() {
+        let (mut app, mut fx) = shown();
+        let dir = vectorcraft_testkit::TempDir::new("shape-click-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 40.0, "y": 60.0}));
+        set(&app, &fx, "rectangle", "width", json!(32.0)).unwrap();
+
+        app.run("shape.rectangle", json!({"x": 200, "y": 200, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.doc().unwrap().history.undo.len();
+        press_ok(&mut app, &mut fx, "rectangle");
+        assert_eq!(drawn(&app), 0, "OK must not draw on the restored drawing");
+        assert_eq!(app.session.doc().unwrap().history.undo.len(), undo);
+        assert!(matches!(
+            app.dialogs().unwrap().with(|h| h.held_state(dialog_id("rectangle"))),
+            Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+
+        cancel(&mut app, &mut fx, "rectangle");
+        super::super::open_tool_dialog(&mut app, "rectangle", json!({"x": 40.0, "y": 60.0}));
+        press_ok(&mut app, &mut fx, "rectangle");
+        assert_eq!(drawn(&app), 1, "a click after the revert draws");
     }
 
     #[test]

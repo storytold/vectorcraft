@@ -149,7 +149,8 @@ pub struct CompositeFontsDialog {
     entry_mode: EntryMode,
     /// The index of the character picked in the set picked.
     picked_char: Option<usize>,
-    /// Show Sample's fields ([`sample::defaults`]).
+    /// Show Sample's fields ([`sample::defaults`]). Zoom previews menu choices and restores its opening
+    /// percentage on cancellation; a later automation edit takes precedence over that older gesture.
     sample: Map<String, Value>,
     /// The view settings of the Composite Font row's picker and of the Character Set row's.
     pickers: (PresetState<String>, PresetState<String>),

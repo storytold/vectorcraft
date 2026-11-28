@@ -6,6 +6,7 @@ use craft::ui::buttons::{Button, IconButton};
 use craft::ui::canvas::CanvasSpace;
 use craft::ui::canvas_controls::{TaskBar, TaskBarGrip, TaskBarHang};
 use craft::ui::contract::{Bind, Gap, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::display::Text;
 use craft::ui::menu::PanelRow;
 use craft::ui::popover::Popover;
 use craft::ui::primitives::IconSpec;
@@ -465,8 +466,7 @@ pub(super) fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, space: &CanvasSpac
                 if *cmd == TASK_BAR_FIDELITY {
                     // The Smooth tool's Fidelity, labeled, sets the tool's option as it is typed or stepped.
                     if let Some(v) = offer.fidelity {
-                        // PLAN: assumed `freehand::fidelity_field` draws no label of its own
-                        ui.label(*label);
+                        Text::new(*label).show(ui);
                         if let Some(x) = crate::dialogs::freehand::fidelity_field(ui, "task-bar-fidelity", v, "smooth").filter(|x| *x != v) {
                             run = Some(("tool.setOption", json!({"tool": "smooth", "values": {"fidelity": x}})));
                         }
