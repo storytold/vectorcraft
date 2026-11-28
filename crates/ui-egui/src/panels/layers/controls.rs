@@ -452,12 +452,12 @@ pub(crate) fn footer(tree: &DocLayers, ui: &mut Ui, out: &mut Vec<(String, Value
         let (nodes, guides) = row_ids(&drag.layers());
         own(drag) && !nodes.is_empty() && guides.is_empty() && !root.is_some_and(|r| nodes.contains(&r.0))
     };
+    let (uid, reverts) = (st.uid, st.reverts);
     let actions = [
-        // PLAN: the framework's `accepts_drops` takes one payload type, so Delete cannot also take
-        // `PanelDrag` (the appearance drop `footer_drop` maps); it needs a second payload there.
         FooterAction::new(icon("trash-2"), tl!("Delete Selection").to_string())
             .takes_drops_disabled(true)
-            .accepts_drops(move |d: &LayersDrag<RowId>| own(d) && !d.layers().is_empty()),
+            .accepts_drops(move |d: &LayersDrag<RowId>| own(d) && !d.layers().is_empty())
+            .also_accepts_drops(move |d: &PanelDrag| d.appearance_for(uid, reverts).is_some()),
         FooterAction::new(icon("file-plus"), tl!("Create New Layer").to_string()).enabled(new_layer_ok).accepts_drops(duplicate),
         FooterAction::new(icon("plus"), tl!("Create New Sublayer").to_string()).enabled(new_sublayer_ok),
         FooterAction::new(icon("frame"), tl!("Make/Release Clipping Mask").to_string()),
