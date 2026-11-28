@@ -56,7 +56,7 @@ jxl-oxide = { workspace = true }
 jxl-color = { workspace = true }
 jxl-grid = { workspace = true }
 # Pure Rust, no unsafe; pinned at the version photocraft-heif uses.
-heic-rs = { version = "=0.1.4", default-features = false, features = ["std"], optional = true }
+heic-rs = { version = "=0.1.5", default-features = false, features = ["std"], optional = true }
 flate2 = { workspace = true }
 chrono = { workspace = true }
 # The XML parts of Word documents placed as type (place/docx.rs).
