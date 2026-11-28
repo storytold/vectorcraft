@@ -190,7 +190,7 @@ fn swatch_add(drag: &PanelDrag, library: &str) -> Option<(ItemKind, Value)> {
 /// which keep their test, can read it: what a drop into a group, or out of every group, does.
 struct Membership {
     library: String,
-    active_document: Option<u64>,
+    active_document: Option<(u64, u64)>,
     /// The group of each grouped item, by its index in the library's groups.
     index: HashMap<(ItemKind, String), usize>,
     /// The groups' names, in the library's order.
@@ -198,7 +198,7 @@ struct Membership {
 }
 
 impl Membership {
-    fn of(library: &str, lib: &Library, active_document: Option<u64>) -> Self {
+    fn of(library: &str, lib: &Library, active_document: Option<(u64, u64)>) -> Self {
         let index = lib.group_index().into_iter().map(|((kind, item), group)| ((kind, item.to_string()), group)).collect();
         Membership { library: library.to_string(), active_document, index, names: lib.groups.iter().map(|g| g.name.clone()).collect() }
     }
@@ -210,8 +210,9 @@ impl Membership {
             PanelDrag::Paint { library: Some((l, item)), .. } if l == library => Some(Grab::Item(ItemKind::Color, item.clone())),
             PanelDrag::LibraryGraphic { library: l, item } if l == library => Some(Grab::Item(ItemKind::Graphic, item.clone())),
             PanelDrag::LibraryItem { library: l, kind, item } if l == library => Some(Grab::Item(*kind, item.clone())),
-            PanelDrag::Art { document, ids } if Some(*document) == self.active_document => {
-                let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
+            PanelDrag::Art { .. } => {
+                let (uid, reverts) = self.active_document?;
+                let ids: Vec<u64> = drag.artwork_for(uid, reverts)?.iter().map(|id| id.0).collect();
                 Some(Grab::New(ItemKind::Graphic, json!({ "kind": "graphic", "ids": ids })))
             }
             PanelDrag::Paint { .. } => swatch_add(drag, library).map(|(kind, add)| Grab::New(kind, add)),
@@ -305,7 +306,15 @@ struct View<'a> {
 }
 
 impl<'a> View<'a> {
-    fn new(library: &'a str, lib: &'a Library, query: &str, list: bool, fill_active: bool, active_document: Option<u64>, can_apply: bool) -> Self {
+    fn new(
+        library: &'a str,
+        lib: &'a Library,
+        query: &str,
+        list: bool,
+        fill_active: bool,
+        active_document: Option<(u64, u64)>,
+        can_apply: bool,
+    ) -> Self {
         let membership = Membership::of(library, lib, active_document);
         let query = query.trim().to_lowercase();
         let searching = !query.is_empty();
@@ -353,15 +362,19 @@ impl<'a> View<'a> {
 
     fn contents(&self, ui: &mut Ui, cx: &mut BodyCx<'_>, closed: &mut HashSet<(String, String)>, acts: &RefCell<Vec<Act>>) {
         if self.empty {
-            Notice::new(Tone::Neutral, tl!("Drag art or swatches here, or use + to add the selection's colors and text styles."))
-                .title(tl!("This library is empty"))
-                .layout(NoticeLayout::Centred)
-                .show(ui);
+            super::notice_frame(ui, |ui| {
+                Notice::new(Tone::Neutral, tl!("Drag art or swatches here, or use + to add the selection's colors and text styles."))
+                    .title(tl!("This library is empty"))
+                    .layout(NoticeLayout::Centred)
+                    .show(ui);
+            });
             return;
         }
         if self.searching && self.counts.iter().all(|n| *n == 0) {
             let message = crate::i18n::fmt(tl!("No items in this library match “{query}”."), &[("query", &self.query)]);
-            Notice::new(Tone::Neutral, message).title(tl!("No results")).layout(NoticeLayout::Centred).show(ui);
+            super::notice_frame(ui, |ui| {
+                Notice::new(Tone::Neutral, message.clone()).title(tl!("No results")).layout(NoticeLayout::Centred).show(ui);
+            });
             return;
         }
         if !self.kinds(ui, cx, None, acts) && self.dragging_grouped(ui) {
@@ -776,7 +789,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         return;
     };
     let acts = RefCell::new(Vec::new());
-    let active_document = app.session.active().map(|st| st.uid);
+    let active_document = app.session.active().map(|st| (st.uid, st.reverts));
     let has_doc = active_document.is_some();
     {
         // PLAN: assumed `UiState::{libraries_list_view: bool, library_search: String, library_groups_closed: HashSet<(String, String)>}` (ap.AS17, hub-w1).
@@ -800,19 +813,22 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The panel with no library: what libraries are, and Create New Library. → whether it was pressed.
 fn no_library(ui: &mut Ui) -> bool {
     let shown = Panel::new(tl!("Libraries")).show(ui, |ui, _| {
-        Notice::new(
-            Tone::Neutral,
-            tl!(
-                "Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required."
-            ),
-        )
-        .title(tl!("Local Libraries"))
-        .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new("library"))))
-        .layout(NoticeLayout::Centred)
-        .action(NoticeAction::new(tl!("Create New Library")))
-        .show(ui)
-        .action
-        .is_some()
+        super::notice_frame(ui, |ui| {
+            Notice::new(
+                Tone::Neutral,
+                tl!(
+                    "Keep graphics, colors and text styles here to use them in any document. Libraries are stored on this machine — no account required."
+                ),
+            )
+            .title(tl!("Local Libraries"))
+            .icon(NoticeIcon::Custom(IconSpec::svg(IconId::new("library"))))
+            .layout(NoticeLayout::Centred)
+            .action(NoticeAction::new(tl!("Create New Library")))
+            .show(ui)
+            .action
+            .is_some()
+        })
+        .unwrap_or_default()
     });
     shown.inner.unwrap_or_default()
 }

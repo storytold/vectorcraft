@@ -46,7 +46,8 @@ fn scope_label(scope: &str) -> Label {
 
 /// Open the dialog on the images and placed documents `ids` (default: the selected ones).
 pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
-    let document = app.session.active().ok_or("no document open")?.uid;
+    let st = app.session.active().ok_or("no document open")?;
+    let document = (st.uid, st.reverts);
     let ids = match p.get("ids").filter(|v| !v.is_null()) {
         Some(v) => v.as_array().cloned().ok_or_else(|| format!("`ids` must be an array of object ids, not {v}"))?,
         None => crate::panels::links::selected_ids(app).into_iter().map(Value::from).collect(),
@@ -86,10 +87,15 @@ pub fn open(app: &mut VectorcraftApp, p: &Value) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-/// The relink rule: one `links.relink` call with the answer's parameters, and the status it earns.
-fn relink(app: &mut VectorcraftApp, (document, params): &(u64, Value)) -> Result<(), String> {
-    if app.session.active().is_none_or(|st| st.uid != *document) {
-        let reason = tl!("Relink can only change links in the document where it was opened.");
+/// The relink rule: one `links.relink` call with the answer's parameters, and the status it earns. OK is refused in
+/// another document, and in the opening document after File > Revert has replaced its content.
+fn relink(app: &mut VectorcraftApp, ((document, reverts), params): &((u64, u64), Value)) -> Result<(), String> {
+    let refusal = match app.session.active() {
+        Some(st) if st.uid == *document && st.reverts == *reverts => None,
+        Some(st) if st.uid == *document => Some(tl!("The document was reverted. Reopen this dialog to continue.")),
+        _ => Some(tl!("Relink can only change links in the document where it was opened.")),
+    };
+    if let Some(reason) = refusal {
         app.status(reason);
         return Err(reason.to_owned());
     }
@@ -122,8 +128,8 @@ impl ItemSource<usize> for Names<'_> {}
 /// app (`HoldsOk`); with Each Link Separately it stays open until every link has a file.
 pub(crate) struct RelinkDialog {
     id: DialogId,
-    /// The document that owns the link IDs.
-    document: u64,
+    /// The document that owns the link IDs: its uid and revert count.
+    document: (u64, u64),
     ids: Vec<Value>,
     links: Vec<Value>,
     scope: String,
@@ -135,7 +141,7 @@ pub(crate) struct RelinkDialog {
 }
 
 impl RelinkDialog {
-    fn new(document: u64, ids: Vec<Value>, links: Vec<Value>) -> Self {
+    fn new(document: (u64, u64), ids: Vec<Value>, links: Vec<Value>) -> Self {
         RelinkDialog {
             id: dialog_id(KEY),
             document,
@@ -194,7 +200,7 @@ impl RelinkDialog {
 }
 
 impl HoldsOk for RelinkDialog {
-    type Answer = (u64, Value);
+    type Answer = ((u64, u64), Value);
 
     fn held_ok(self) -> Self {
         self
@@ -256,9 +262,7 @@ impl StackDialog for RelinkDialog {
                     }
                 });
                 Field::new(tl!("Replace:")).show(ui, |ui, _| {
-                    if let Some(next) = Select::new(tl!("Replace:"), Bind::given(scope.clone()), &entries).show(ui).value().cloned() {
-                        *scope = next;
-                    }
+                    Select::new(tl!("Replace:"), Bind::bound(scope), &entries).show(ui);
                 });
                 true
             });
@@ -451,6 +455,142 @@ mod tests {
     #[test]
     fn relink_opening_drawing_is_required_when_the_file_picker_answers() {
         check_relink_stays_in_opening_drawing(true);
+    }
+
+    /// Opens Relink on a saved document's linked image and chooses a replacement (in `path`, or from the file picker
+    /// with `native_picker`) around File > Revert, then presses OK: the restored image keeps its link, no undo step is
+    /// recorded and the status line reports the revert. Reopened on the restored document, Relink relinks again.
+    fn check_relink_refused_after_file_revert(native_picker: bool) {
+        use crate::tests::panel_harness::Panel;
+
+        let (mut app, dir) = setup(if native_picker { "revert-picker" } else { "revert-path" }, &["photo.png"]);
+        let picker = scripted(&mut app);
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        let original = dir.join("photo.png").to_string_lossy().into_owned();
+        let id = place(&mut app, &dir.join("photo.png"));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let chosen = new_file(&dir, "replacement.png");
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(900.0, 700.0));
+        panel.app().run("ui.relinkDialog", json!({"ids": [id]})).unwrap();
+        panel.frame();
+        if native_picker {
+            panel.click("Relink…");
+            assert_eq!(picker.requests().len(), 1);
+        } else {
+            let dialog = relink_dialog(&panel.app()).id;
+            answer_dialog(&mut panel.app(), dialog, &[("path", json!(chosen))], false);
+        }
+        panel.app().run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap();
+
+        panel.app().run("file.revert", json!({"confirmed": true})).unwrap();
+        assert_eq!(link_path(&panel.app(), id), original, "the same id names the restored image");
+        let undo = panel.app().session.active().unwrap().history.undo.len();
+        if native_picker {
+            picker.answer(&[&chosen]);
+            panel.frame();
+            panel.frame();
+        } else {
+            panel.click("Relink…");
+            panel.frame();
+        }
+        {
+            let app = panel.app();
+            assert_eq!(link_path(&app, id), original, "OK leaves the restored image's link unchanged");
+            assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+            assert_eq!(app.ui.status, "The document was reverted. Reopen this dialog to continue.");
+            let dialog = relink_dialog(&app).id;
+            assert!(matches!(app.dialogs().unwrap().with(|h| h.held_state(dialog)), Some(HeldOk::Refused(_))));
+        }
+
+        let ctx = ctx(&panel.app());
+        let dialogs = panel.app().dialogs().expect("a window");
+        let dialog = relink_dialog(&panel.app()).id;
+        dialogs.with(|host| host.cancel_by_id(&ctx, dialog));
+        panel.frame();
+        assert!(open_dialogs(&panel.app()).is_empty());
+        panel.app().run("ui.relinkDialog", json!({"ids": [id]})).unwrap();
+        panel.frame();
+        let dialog = relink_dialog(&panel.app()).id;
+        answer_dialog(&mut panel.app(), dialog, &[("path", json!(chosen))], false);
+        panel.click("Relink…");
+        panel.frame();
+        let app = panel.app();
+        assert!(open_dialogs(&app).is_empty());
+        assert_eq!(link_path(&app, id), chosen, "reopened, Relink relinks the restored image");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+        drop(app);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn relink_is_refused_after_file_revert_for_a_path_confirmation() {
+        check_relink_refused_after_file_revert(false);
+    }
+
+    #[test]
+    fn relink_is_refused_after_file_revert_when_the_file_picker_answers() {
+        check_relink_refused_after_file_revert(true);
+    }
+
+    #[test]
+    fn replace_popup_cancel_preserves_selected_instances_and_enter_relinks_all() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        struct Scratch(std::path::PathBuf);
+        impl Drop for Scratch {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        for commit in [false, true] {
+            let (mut app, dir) = setup(if commit { "popup-commit" } else { "popup-cancel" }, &["photo.png", "other.png"]);
+            let _scratch = Scratch(dir.clone());
+            let a = place(&mut app, &dir.join("photo.png"));
+            let b = place(&mut app, &dir.join("photo.png"));
+            let c = place(&mut app, &dir.join("other.png"));
+            let picker = scripted(&mut app);
+            let chosen = new_file(&dir, "replacement.png");
+            let original_path = dir.join("photo.png").to_string_lossy().into_owned();
+            let other_path = link_path(&app, c);
+            let original = app.session.active().unwrap().doc.clone();
+            let revision = app.session.active().unwrap().revision;
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(900.0, 700.0));
+            panel.app().run("ui.relinkDialog", json!({"ids": [a]})).unwrap();
+            panel.frame();
+            let before = fields(&panel.app());
+            panel.click_role("Replace:", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            assert_eq!(fields(&panel.app())["scope"], "all", "the open popup previews All Instances");
+            panel.key(if commit { Key::Enter } else { Key::Escape }, Modifiers::NONE);
+            assert_eq!(fields(&panel.app())["scope"], if commit { "all" } else { "selected" });
+            if !commit {
+                assert_eq!(fields(&panel.app()), before, "Escape preserves all pending Relink fields");
+            }
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(panel.app().session.active().unwrap().revision, revision);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            panel.click("Relink…");
+            assert_eq!(picker.requests().len(), 1);
+            picker.answer(&[&chosen]);
+            panel.frame();
+            panel.frame();
+            assert!(open_dialogs(&panel.app()).is_empty());
+            {
+                let app = panel.app();
+                assert_eq!(link_path(&app, a), chosen);
+                assert_eq!(link_path(&app, b), if commit { chosen.clone() } else { original_path.clone() });
+                assert_eq!(link_path(&app, c), other_path);
+                assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+            }
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
     }
 
     #[test]

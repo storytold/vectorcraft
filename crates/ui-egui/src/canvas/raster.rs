@@ -313,6 +313,18 @@ pub(super) fn frame_ppp(size: egui::Vec2, ppp: f32, max_side: usize) -> f32 {
     if longest.round() <= max { ppp } else { ppp * (max / longest) }
 }
 
+/// Where a frame drawn `size` points across from `min` goes on a display of `device_ppp` pixels a
+/// point: `min` moved to the nearest device pixel, the size unchanged. A canvas whose corner falls
+/// between device pixels would otherwise draw every pixel of the frame across two device pixels,
+/// and each edge in the art would show as a soft double line.
+pub(super) fn snapped_rect(min: egui::Pos2, size: egui::Vec2, device_ppp: f32) -> egui::Rect {
+    if !(device_ppp.is_finite() && device_ppp > 0.0) {
+        return egui::Rect::from_min_size(min, size);
+    }
+    let snap = |c: f32| (c * device_ppp).round() / device_ppp;
+    egui::Rect::from_min_size(pos2(snap(min.x), snap(min.y)), size)
+}
+
 /// Pixel Preview: the whole document pixels (x0, y0, x1, y1) under the canvas, rotated view
 /// included. None when the view is degenerate, or when a side of the region is more than
 /// `max_side` pixels, the largest texture side the display supports.
@@ -584,11 +596,14 @@ fn report_deferred(app: &mut VectorcraftApp, effects: &vectorcraft_plugins::defe
     }
 }
 
-/// Start the render worker, and upload the frame it finished.
+/// Start the render worker, and upload the frame it finished. In unit tests no worker thread
+/// starts and every frame renders on this thread, as with `VECTORCRAFT_SYNC_RENDER` set: a test
+/// that needs a worker gives the canvas one whose frames it finishes itself
+/// ([`crate::render_worker::Worker::test_channel`]).
 pub(super) fn poll_worker(app: &mut VectorcraftApp, ui: &Ui, key_doc: usize) {
     if !app.canvas.worker_started {
         app.canvas.worker_started = true;
-        if std::env::var_os("VECTORCRAFT_SYNC_RENDER").is_none() {
+        if !cfg!(test) && std::env::var_os("VECTORCRAFT_SYNC_RENDER").is_none() {
             app.canvas.worker = crate::render_worker::Worker::spawn(ui.ctx().clone());
             app.canvas.fill_worker = crate::render_worker::Worker::spawn(ui.ctx().clone());
         }
@@ -710,6 +725,42 @@ struct Frame<'a> {
 /// shows the document's paper without the art: about a frame at 60 Hz.
 pub(crate) const FIRST_FRAME_GRACE: std::time::Duration = std::time::Duration::from_millis(16);
 
+/// How long a render on this thread that began at `t0` ([`monotonic_ms`]) took, in milliseconds.
+#[cfg(not(test))]
+fn render_ms(t0: f64) -> f64 {
+    monotonic_ms() - t0
+}
+
+/// How long the UI thread waits for a document's first frame: [`FIRST_FRAME_GRACE`].
+#[cfg(not(test))]
+fn first_frame_grace() -> std::time::Duration {
+    FIRST_FRAME_GRACE
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The time a render on the UI thread takes in unit tests, in milliseconds: what a frame's
+    /// time decides (whether the next frame is slow) is the same on every run. A test
+    /// can set it to make the canvas's renders slow or fast.
+    pub(crate) static TEST_RENDER_MS: std::cell::Cell<f64> = const { std::cell::Cell::new(1.0) };
+    /// How long the UI thread waits for a document's first frame in unit tests: none, so only a
+    /// frame the test finished before it lands in the wait. A test that answers the job from
+    /// another thread sets [`std::time::Duration::MAX`] to wait for that answer.
+    pub(crate) static TEST_FIRST_FRAME_GRACE: std::cell::Cell<std::time::Duration> = const { std::cell::Cell::new(std::time::Duration::ZERO) };
+}
+
+/// [`render_ms`] in unit tests: the time [`TEST_RENDER_MS`] holds.
+#[cfg(test)]
+fn render_ms(_t0: f64) -> f64 {
+    TEST_RENDER_MS.with(std::cell::Cell::get)
+}
+
+/// [`first_frame_grace`] in unit tests: the time [`TEST_FIRST_FRAME_GRACE`] holds.
+#[cfg(test)]
+fn first_frame_grace() -> std::time::Duration {
+    TEST_FIRST_FRAME_GRACE.with(std::cell::Cell::get)
+}
+
 /// Draw `region` of `frame` again, into the texture of the frame shown, which then shows `frame`'s
 /// key: only the document changed since the frame shown, in that part of it
 /// ([`changed_pixels`]). `None`: nothing in view changed. `last_ms` stays the whole frame's.
@@ -760,7 +811,7 @@ fn draw_changed(app: &mut VectorcraftApp, frame: &Frame, region: Option<[u32; 4]
     }
     app.canvas.key = Some((*key).clone());
     app.canvas.shown = Some(((*doc).clone(), opts.clone()));
-    app.perf.render_ms = monotonic_ms() - t0;
+    app.perf.render_ms = render_ms(t0);
     true
 }
 
@@ -855,7 +906,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             // A light document's first frame is ready within the grace and shows in this frame,
             // with no frame of bare paper. Waited for once, when the frame is queued.
             if first && queued {
-                landed = worker.wait(FIRST_FRAME_GRACE);
+                landed = worker.wait(first_frame_grace());
             }
         }
         _ => {
@@ -868,7 +919,7 @@ fn draw_frame(app: &mut VectorcraftApp, ui: &Ui, frame: Frame) {
             upload(app, ui.ctx(), img, pixel.is_some());
             app.canvas.key = Some(key.clone());
             app.canvas.shown = Some((doc.clone(), opts.clone()));
-            app.perf.render_ms = monotonic_ms() - t0;
+            app.perf.render_ms = render_ms(t0);
             app.canvas.last_ms = app.perf.render_ms;
             app.canvas.moved = app.canvas.renderer.stats.moved > 0;
             let stats = app.canvas.renderer.stats;
@@ -936,7 +987,8 @@ fn reproject_frame(app: &VectorcraftApp, painter: &egui::Painter, view: &CanvasV
                 let old = CanvasView::new(old_rect, Point::new(k.cx, k.cy), k.zoom).rotation(rotation);
                 let a = view.to_screen(old.to_doc(old_rect.min));
                 let b = view.to_screen(old.to_doc(old_rect.max));
-                painter.image(tex.id(), egui::Rect::from_min_max(a, b), egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+                let placed = snapped_rect(a, b - a, painter.pixels_per_point());
+                painter.image(tex.id(), placed, egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
             }
             // The view turned after the last frame was rendered, and the worker renders the frame at
             // the new angle. Until it arrives, the last frame is drawn turned into this view: each

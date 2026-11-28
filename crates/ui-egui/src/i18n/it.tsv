@@ -2691,6 +2691,9 @@ file-filter	Templates	Modelli
 	Only Web Colors	Solo colori web
 	Opacity	Opacità
 	Show Opacity	Mostra opacità
+	Show Hex Field	Mostra campo hex
+	Hex or CSS color	Colore hex o CSS
+	Parse Color	Analizza colore
 	Opacity & Mask Define Knockout Shape	Opacità e maschera definiscono la forma di foratura
 	Opacity Mask	Maschera di opacità
 	Opacity Mask Info	Informazioni maschera di opacità
@@ -5294,6 +5297,7 @@ liquify-list-end	{0}, {1}	{0} e {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` deve essere hue, saturation, brightness, red, green o blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` deve essere none, oklch o hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH richiede sRGB come spazio di lavoro RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` deve essere un colore hex (#rgb, #rgba, #rrggbb o #rrggbbaa) o un colore CSS rgb(), hsl() o oklch() di al massimo 48 caratteri
 @msg	`{k}` must be [x, y]	`{k}` deve essere [x, y]
 @msg	`{name}` has no options	`{name}` non ha opzioni
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` è un'area di lavoro integrata; scegli un altro nome
@@ -7061,6 +7065,15 @@ axis	Y Axis	Asse Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	è stato omesso un oggetto di sola lettura: restituiscilo come {{"id": …}} da solo o così come è stato fornito
 @msg	a string	una stringa
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	una traccia ha solo `paint`, `width`, `join`, `cap` e `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	un pezzo di un effetto dinamico di pittura ha solo `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` e `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	una traccia ha solo `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` e `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` può essere solo true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` vale solo per un effetto dinamico che dichiara `paintOutput`, con `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` deve essere un numero da 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	metodo di fusione sconosciuto; `blend` è uno di {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` deve essere un elenco di al massimo {MAX_LOOK_EFFECTS} record
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	un risultato porta al massimo {MAX_RESULT_EFFECTS} record di effetto
+@msg	this host takes no effects here	questo host qui non accetta effetti
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	una traccia deve essere {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	un effetto deve essere {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un effetto su un riempimento restituisce solo `fills`
@@ -8157,6 +8170,7 @@ breakText	Glyphs	Glifi
 	Place Brush Art	Inserisci grafica del pennello
 	Replace Brush Art	Sostituisci grafica del pennello
 	Replace Pattern Art	Sostituisci grafica del motivo
+	Place Pattern Art	Inserisci grafica del motivo
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Alcune tracce usano questo pennello. Applicare la nuova grafica a queste tracce, o lasciarle come sono e aggiungere una copia del pennello con la nuova grafica?
 	Apply to Strokes	Applica alle tracce
 	Leave Strokes	Lascia le tracce
@@ -8226,6 +8240,8 @@ breakText	Glyphs	Glifi
 	Tangent Circle	Cerchio tangente
 	Tangent Circle Tool	Strumento Cerchio tangente
 	No tangent circle here	Nessun cerchio tangente qui
+	Ask For Circle Radius	Chiedi il raggio del cerchio
+	Auto-Update Default	Aggiorna automaticamente il valore predefinito
 	Circle:	Cerchio:
 @msg	`ids` names an object twice	`ids` indica due volte lo stesso oggetto
 @msg	select two or three paths or compound paths	seleziona due o tre tracciati o tracciati composti
@@ -8792,7 +8808,9 @@ breakText	Glyphs	Glifi
 @msg	missing `picks`	`picks` mancante
 @msg	missing `word`	`word` mancante
 @msg	must be an object with `kind` and `value`	deve essere un oggetto con `kind` e `value`
-@msg	must have `kind` alert, confirm or prompt	deve avere `kind` alert, confirm o prompt
+@msg	must have `kind` alert, confirm, prompt or window	deve avere `kind` alert, confirm, prompt o window
+@msg	is a window's answer, whose `value` must be a list of steps	è la risposta di una finestra, il cui `value` deve essere un elenco di passaggi
+@msg	has a step {i} that is not a valid click, change or close	ha un passaggio {i} che non è un clic, una modifica o una chiusura validi
 @msg	must have exactly `kind` and `value`	deve avere esattamente `kind` e `value`
 @msg	needs a closing quote after the name	richiede una virgoletta di chiusura dopo il nome
 @msg	needs a name	richiede un nome

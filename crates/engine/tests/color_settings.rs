@@ -1233,6 +1233,23 @@ fn color_management_policies_are_checked_and_kept() {
     assert_eq!(cms::active_settings(), cms::ColorSettings::default());
 }
 
+/// `color.parse` takes `oklch()` only while the working RGB space is sRGB; a hex color still gives
+/// its numbers as the document's RGB numbers in another working space.
+#[test]
+fn color_parse_takes_oklch_only_in_an_srgb_working_space() {
+    let _g = settings();
+    let old = cms::active_settings();
+    let mut s = session();
+    s.execute("edit.colorSettings", &json!({"rgb": cms::WIDE_GAMUT_RGB})).unwrap();
+    let oklch = s.execute("color.parse", &json!({"text": "oklch(0.6 0.1 30)"})).map_err(|e| e.to_string());
+    let hex = s.execute("color.parse", &json!({"text": "#33669980"})).map_err(|e| e.to_string());
+    cms::set_active(&old).unwrap();
+    assert!(oklch.as_ref().unwrap_err().ends_with("OKLCH needs sRGB as the working RGB space"), "{oklch:?}");
+    let hex = hex.unwrap();
+    assert_eq!((&hex["hex"], &hex["opacity"]), (&json!("#336699"), &json!(50.2)));
+    assert!(s.execute("color.parse", &json!({"text": "oklch(0.6 0.1 30)"})).is_ok(), "sRGB again");
+}
+
 /// The Ask boxes of Edit › Color Settings are checked, come back in the reply and are kept in
 /// `Color Settings.json`.
 #[test]

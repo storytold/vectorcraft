@@ -2683,6 +2683,9 @@ file-filter	Templates	Шаблони
 	Only Web Colors	Тільки web-кольору
 	Opacity	Непрозорість
 	Show Opacity	Показати непрозорість
+	Show Hex Field	Показати поле hex
+	Hex or CSS color	Колір hex або CSS
+	Parse Color	Розібрати колір
 	Opacity & Mask Define Knockout Shape	Непрозорість та маска визначають форму вирізування
 	Opacity Mask	Маска непрозорості
 	Opacity Mask Info	Відомості про маску непрозорості
@@ -5278,6 +5281,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` має бути hue, saturation, brightness, red, green або blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` має бути none, oklch або hsl
 @msg	OKLCH needs sRGB as the working RGB space	Для OKLCH робочим простором RGB має бути sRGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` має бути кольором hex (#rgb, #rgba, #rrggbb або #rrggbbaa) або кольором CSS rgb(), hsl() або oklch() довжиною не більше 48 символів
 @msg	`{k}` must be [x, y]	`{k}` має бути [x, y]
 @msg	`{name}` has no options	`{name}` не має параметрів
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` - вбудоване робоче середовище; виберіть інше ім’я
@@ -7043,6 +7047,15 @@ axis	Y Axis	Вісь Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
 @msg	a string	рядок
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	обведення має лише `paint`, `width`, `join`, `cap` і `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` і `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	обведення має лише `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` і `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` може бути лише true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` дозволено лише для динамічного ефекту, що оголошує `paintOutput`, з `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` має бути числом від 0 до 1
+@msg	unknown blending mode; `blend` is one of {_1}	невідомий режим накладання; `blend` має одне зі значень {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` має бути масивом щонайбільше з {MAX_LOOK_EFFECTS} записів
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	результат містить щонайбільше {MAX_RESULT_EFFECTS} записів ефектів
+@msg	this host takes no effects here	цей хост тут не приймає ефектів
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обведення має мати вигляд {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	ефект має мати вигляд {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ефект на заливці повертає лише `fills`
@@ -8139,6 +8152,7 @@ breakText	Glyphs	Гліфи
 	Place Brush Art	Розмістити малюнок пензля
 	Replace Brush Art	Замінити малюнок пензля
 	Replace Pattern Art	Замінити малюнок візерунка
+	Place Pattern Art	Розмістити малюнок візерунка
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обведення використовують цей пензель. Застосувати новий малюнок до цих обведень чи залишити їх як є і додати копію пензля з новим малюнком?
 	Apply to Strokes	Застосувати до обведень
 	Leave Strokes	Залишити обведення
@@ -8208,6 +8222,8 @@ breakText	Glyphs	Гліфи
 	Tangent Circle	Дотичне коло
 	Tangent Circle Tool	Інструмент «Дотичне коло»
 	No tangent circle here	Тут немає дотичного кола
+	Ask For Circle Radius	Запитувати радіус кола
+	Auto-Update Default	Автоматично оновлювати значення за замовчуванням
 	Circle:	Коло:
 @msg	`ids` names an object twice	`ids` указує об’єкт двічі
 @msg	select two or three paths or compound paths	виділіть два або три контури чи складені контури
@@ -9626,7 +9642,9 @@ breakText	Glyphs	Гліфи
 @msg	more than {MAX_IMPORT} presets	понад {MAX_IMPORT} наборів
 @msg	moved must be [[x,y]…]	moved має бути [[x,y]…]
 @msg	must be an object with `kind` and `value`	має бути об’єктом із `kind` і `value`
-@msg	must have `kind` alert, confirm or prompt	повинен мати `kind` зі значенням alert, confirm або prompt
+@msg	must have `kind` alert, confirm, prompt or window	повинен мати `kind` зі значенням alert, confirm, prompt або window
+@msg	is a window's answer, whose `value` must be a list of steps	є відповіддю вікна, `value` якої має бути списком кроків
+@msg	has a step {i} that is not a valid click, change or close	має крок {i}, який не є допустимим клацанням, зміною або закриттям
 @msg	must have exactly `kind` and `value`	повинен мати рівно `kind` і `value`
 @msg	name (a toolbar's name) is required	name (ім’я панелі інструментів) є обов’язковим
 @msg	name (a toolbar's name) must be a string	name (ім’я панелі інструментів) має бути рядком

@@ -467,7 +467,7 @@ const AT_START: usize = 2;
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The document is shared (an `Arc`): holding it while drawing copies nothing.
-    let Some((uid, doc)) = app.session.active().map(|d| (d.uid, d.doc.clone())) else {
+    let Some((uid, reverts, doc)) = app.session.active().map(|d| (d.uid, d.reverts, d.doc.clone())) else {
         super::empty_state(ui, "dc-graphic-styles", tl!("No document"), tl!("Open a document to see its graphic styles."));
         return;
     };
@@ -484,7 +484,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // The browser's own state (an open rename field, the scroll position) is kept per document.
     let browser_id = ui.make_persistent_id(("graphic-styles-browser", uid));
     let list = PresetBrowser::<StyleKey>::list_id(browser_id);
-    let takes_object = move |drag: &PanelDrag, _: &DropAt<StyleKey>| dropped_object(drag, uid).is_some();
+    let takes_object = move |drag: &PanelDrag, _: &DropAt<StyleKey>| dropped_object(drag, uid, reverts).is_some();
     // A style dragged from this panel's list.
     let ours = move |drag: &ListDrag<StyleKey>| drag.list == list;
     let svg = |name: &'static str| IconSpec::svg(IconId::new(name));
@@ -608,12 +608,12 @@ fn reorder(app: &mut VectorcraftApp, edit: EditEvent<ReorderMove<StyleKey>>) {
     }
 }
 
-/// The object whose look a dropped payload carries: the first of the art dragged from this document, or the
-/// Appearance panel's object.
-fn dropped_object(drag: &PanelDrag, uid: u64) -> Option<NodeId> {
+/// The object whose look a dropped payload carries: the first of the art dragged from this document's current
+/// contents, or the Appearance panel's object from them.
+fn dropped_object(drag: &PanelDrag, uid: u64, reverts: u64) -> Option<NodeId> {
     match drag {
-        PanelDrag::Art { document, ids } if *document == uid => ids.first().copied(),
-        PanelDrag::Appearance(id) => Some(*id),
+        PanelDrag::Art { .. } => drag.artwork_for(uid, reverts)?.first().copied(),
+        PanelDrag::Appearance { .. } => drag.appearance_for(uid, reverts),
         _ => None,
     }
 }
@@ -624,7 +624,7 @@ fn dropped(app: &mut VectorcraftApp, at: &DropAt<StyleKey>, payload: &DropPayloa
         DropAt::Onto(name) => Some(name.as_str()),
         _ => None,
     };
-    let object = app.session.active().and_then(|st| dropped_object(payload.get::<PanelDrag>()?, st.uid));
+    let object = app.session.active().and_then(|st| dropped_object(payload.get::<PanelDrag>()?, st.uid, st.reverts));
     let style = payload.get::<ListDrag<StyleKey>>().map(|drag| drag.grabbed.as_str());
     drop_on(app, onto, object, style, alt);
 }
@@ -1427,9 +1427,10 @@ mod tests {
         app.run("paint.setFill", json!({"color": "#00ff00", "ids": [oval.0]})).unwrap();
         let (red, green) = (doc(&app).graphic_style("Red").unwrap().appearance.fill_paint(), doc(&app).node(oval).unwrap().appearance.fill_paint());
         let n = names(&app);
-        let document = app.session.active().unwrap().uid;
-        for payload in [PanelDrag::Art { document, ids: vec![oval] }, PanelDrag::Appearance(oval)] {
-            drop_on(&mut app, Some("Red"), dropped_object(&payload, document), None, true);
+        let st = app.session.active().unwrap();
+        let (document, reverts) = (st.uid, st.reverts);
+        for payload in [PanelDrag::Art { document, reverts, ids: vec![oval] }, PanelDrag::Appearance { document, reverts, source: oval }] {
+            drop_on(&mut app, Some("Red"), dropped_object(&payload, document, reverts), None, true);
             let d = doc(&app);
             assert_eq!(d.graphic_style("Red").unwrap().appearance.fill_paint(), green);
             assert_eq!(d.node(oval).unwrap().extras().graphic_style, d.graphic_style("Red").map(|g| g.id));
@@ -1455,7 +1456,7 @@ mod tests {
 
         fn with_artwork(app: &mut VectorcraftApp, ui: &mut Ui) {
             let st = app.session.active().unwrap();
-            let payload = PanelDrag::Art { document: st.uid, ids: st.selection.objects.clone() };
+            let payload = PanelDrag::Art { document: st.uid, reverts: st.reverts, ids: st.selection.objects.clone() };
             ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
                 let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
                 List::<usize>::new("Artwork")
@@ -1492,6 +1493,122 @@ mod tests {
 
         p.drag("Dragged artwork", "Drop Target", egui::Modifiers::NONE);
         assert_eq!(names(&p.app()).len(), before.len() + 1, "a same-document drop still makes a style");
+    }
+
+    #[test]
+    fn graphic_styles_rejects_a_foreign_appearance_after_next_document() {
+        use crate::tests::panel_harness::Panel as PanelHarness;
+        use craft::ui::contract::ShowCollection as _;
+        use craft::ui::list::{List, ListRow};
+        use craft::ui::runtime::drag;
+
+        fn with_appearance(app: &mut VectorcraftApp, ui: &mut Ui) {
+            let st = app.session.active().unwrap();
+            let source = st.selection.objects.first().copied();
+            let (document, reverts) = (st.uid, st.reverts);
+            ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
+                let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+                List::<usize>::new("Appearance source")
+                    .drag_payload(move |_: &ListDrag<usize>| source.map(|source| PanelDrag::Appearance { document, reverts, source }))
+                    .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged appearance"));
+            });
+            show(app, ui);
+        }
+
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+        let first = app.session.active().unwrap();
+        let (source_document, source_reverts, source_object) = (first.uid, first.reverts, first.selection.objects[0]);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 50, "height": 50})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+        let second = app.session.active().unwrap();
+        assert_eq!(source_object, second.selection.objects[0], "both documents have distinct objects with the same local ID");
+        let target_document = second.uid;
+        let before = names(&app);
+        assert!(app.session.set_active(0));
+
+        let mut p = PanelHarness::new(app, with_appearance);
+        let from = p.rect("Dragged appearance").center();
+        let to = p.rect("Drop Target").center();
+        p.drag_hold_role("Dragged appearance", craft::ui::contract::Role::LIST_ITEM, to - from);
+        assert!(drag::mark(p.ctx()).is_some());
+        p.key(egui::Key::F6, egui::Modifiers::COMMAND);
+        assert_eq!(p.app().session.active().unwrap().uid, target_document, "Next Document switches tabs during the drag");
+        let carried = drag::active::<PanelDrag>(p.ctx());
+        let foreign = PanelDrag::Appearance { document: source_document, reverts: source_reverts, source: source_object };
+        assert_eq!(carried.as_deref(), Some(&foreign));
+        assert!(drag::mark(p.ctx()).is_none(), "the target withdraws its drop indicator for the foreign appearance");
+        p.release();
+        assert_eq!(names(&p.app()), before, "the foreign drop creates no style from the current document's same-ID object");
+
+        p.drag("Dragged appearance", "Drop Target", egui::Modifiers::NONE);
+        assert_eq!(names(&p.app()).len(), before.len() + 1, "a same-document appearance still makes a style");
+    }
+
+    /// The Appearance panel's thumbnail held across File › Revert makes no style of the restored object with the same
+    /// ID; a thumbnail drag started after the revert still makes one.
+    #[test]
+    fn graphic_styles_rejects_an_appearance_carried_across_file_revert() {
+        use crate::tests::panel_harness::Panel as PanelHarness;
+        use craft::ui::runtime::drag;
+
+        fn appearance_and_styles(app: &mut VectorcraftApp, ui: &mut Ui) {
+            egui::Panel::top("appearance").exact_size(240.0).show(ui, |ui| crate::panels::appearance::show(app, ui));
+            show(app, ui);
+        }
+
+        let mut app = app();
+        let rect = app.session.active().unwrap().selection.objects[0];
+        app.run("paint.setFill", json!({"color": "#ff0000", "ids": [rect.0]})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+        let folder = vectorcraft_testkit::TempDir::new("graphic-styles-appearance-revert");
+        let path = folder.join("drawing.vectorcraft");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+        app.run("file.saveAs", json!({"path": path.to_string_lossy()})).unwrap();
+        app.run("shape.ellipse", json!({"x": 60, "y": 60, "width": 20, "height": 20})).unwrap();
+        app.run("select.set", json!({"ids": [rect.0]})).unwrap();
+        let before = names(&app);
+
+        let mut p = PanelHarness::new(app, appearance_and_styles);
+        let hold = |p: &mut PanelHarness| {
+            // The thumbnail is the first part of the object row, at its start.
+            let row = p.rect("Rectangle: Drop Target");
+            let (from, to) = (row.left_center() + egui::vec2(14.0, 0.0), p.rect("Drop Target").center());
+            p.drag_hold_between(from, to);
+            let carried = drag::active::<PanelDrag>(p.ctx());
+            assert!(
+                matches!(carried.as_deref(), Some(PanelDrag::Appearance { source, .. }) if *source == rect),
+                "the thumbnail drags the appearance"
+            );
+        };
+        hold(&mut p);
+        assert!(drag::mark(p.ctx()).is_some(), "Graphic Styles takes an appearance from the current contents");
+        let opening = {
+            let app = p.app();
+            let st = app.session.active().unwrap();
+            (st.uid, st.reverts)
+        };
+        p.app().run("file.revert", json!({"confirmed": true})).unwrap();
+        p.frame();
+        {
+            let app = p.app();
+            let st = app.session.active().unwrap();
+            assert_eq!((st.uid, st.reverts), (opening.0, opening.1 + 1));
+            assert!(st.doc.node(rect).is_some(), "the restored object keeps the same ID");
+        }
+        assert!(drag::active::<PanelDrag>(p.ctx()).is_some(), "the revert leaves the drag held");
+        assert!(drag::mark(p.ctx()).is_none(), "Graphic Styles refuses an appearance carried from before the revert");
+        p.release();
+        assert_eq!(names(&p.app()), before, "the stale drop makes no style of the restored object");
+
+        p.app().run("select.set", json!({"ids": [rect.0]})).unwrap();
+        p.frame();
+        hold(&mut p);
+        p.release();
+        assert_eq!(names(&p.app()).len(), before.len() + 1, "a thumbnail drag started after the revert still makes a style");
     }
 
     /// A style dropped on another with Alt takes that style's look; on itself it does nothing.

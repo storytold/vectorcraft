@@ -94,6 +94,7 @@ mod interaction_commands;
 mod interactivity;
 mod interpolate_handles;
 mod intertwine;
+mod isolation_removed;
 mod journal;
 mod keyanchor;
 mod keyguide;
@@ -184,7 +185,9 @@ mod script_folder;
 mod script_include;
 mod script_io;
 mod script_run;
+mod script_scriptui;
 mod script_tags;
+mod script_variables;
 mod script_xmp;
 mod scripts;
 mod segment_nudge;
@@ -375,15 +378,23 @@ fn unknown_command_names_the_nearest_id() {
     assert!(e.to_string().contains("did you mean `select.all`?"), "{e}");
 }
 
+/// An unknown command id or parameter key of 200,000 characters is answered without measuring
+/// its distance to every id and key: it takes no more character comparisons than one of 20.
 #[test]
 fn a_long_unknown_command_id_is_answered_at_once() {
+    use crate::cmd::params::DISTANCE_CELLS;
     let mut s = session();
-    let long = "x".repeat(200_000);
-    let start = std::time::Instant::now();
-    assert!(matches!(s.execute(&long, &json!({})), Err(EngineError::UnknownCommand(_))));
-    let e = crate::check_params("file.new", &json!({ long.as_str(): 1 })).unwrap_err();
-    assert!(e.to_string().contains("the command takes:"), "{e}");
-    assert!(start.elapsed() < std::time::Duration::from_secs(2), "{:?}", start.elapsed());
+    let mut compared = |id: &str| {
+        DISTANCE_CELLS.set(0);
+        assert!(matches!(s.execute(id, &json!({})), Err(EngineError::UnknownCommand(_))), "{}", id.len());
+        let e = crate::check_params("file.new", &json!({ id: 1 })).unwrap_err();
+        assert!(e.to_string().contains("the command takes:"), "{e}");
+        DISTANCE_CELLS.get()
+    };
+    let short = compared(&"x".repeat(20));
+    let long = compared(&"x".repeat(200_000));
+    assert!(short > 0, "a 20-character id is measured against the ids near its length");
+    assert!(long <= short, "200,000 characters: {long} comparisons, 20 characters: {short}");
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -4508,6 +4519,69 @@ fn object_mosaic_tiles_follow_the_image_colours() {
     // 4 pt spacing: each 50 pt tile shrinks to 46 pt; the image is gone.
     assert!((tiles[0].geometric_bounds().unwrap().width() - 46.0).abs() < 1e-6);
     assert!(!st.doc.layers[0].children().unwrap().iter().any(|n| matches!(n.kind, vectorcraft_doc::NodeKind::Image(_))));
+}
+
+/// On an image changed by Perspective Distort, each tile is its cell placed between the image's corners: its four
+/// anchors are the cell's corners mapped as the image's pixels are, in one undo step. A new size resizes the warped
+/// tiles as it resizes the image's bounds, and spacing is measured at the mean length of the image's sides.
+#[test]
+fn object_mosaic_tiles_of_a_distorted_image_follow_its_corners() {
+    use vectorcraft_geom::Point;
+    let mut s = session();
+    let a = rect(&mut s, 0.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#ff0000", "ids": [a.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true, "ids": [a.0]})).unwrap();
+    let b = rect(&mut s, 50.0, 0.0, 50.0, 50.0);
+    s.execute("paint.setFill", &json!({"color": "#0000ff", "ids": [b.0]})).unwrap();
+    s.execute("paint.setStroke", &json!({"none": true, "ids": [b.0]})).unwrap();
+    s.execute("select.set", &json!({"ids": [a.0, b.0]})).unwrap();
+    s.execute("object.rasterize", &json!({"ppi": 72})).unwrap();
+    s.execute("object.distort", &json!({"corners": [[20, 0], [80, 0], [100, 50], [0, 50]]})).unwrap();
+    let image = s.doc().unwrap().selection.objects.clone();
+    let node = s.doc().unwrap().doc.node(image[0]).unwrap().clone();
+    assert!(node.is_distorted_image());
+    let vectorcraft_doc::NodeKind::Image(im) = &node.kind else { panic!("not an image") };
+    let (w, h) = (f64::from(im.width), f64::from(im.height));
+    let map = node.image_map().unwrap();
+    let at = |x: f64, y: f64| map.apply(Point::new(x, y)).unwrap();
+    let anchors = |n: &vectorcraft_doc::Node| n.path_data().unwrap().anchors().map(|(_, _, a)| a.p).collect::<Vec<_>>();
+    let near = |got: &[Point], want: &[Point]| got.len() == want.len() && got.iter().zip(want).all(|(g, w)| g.distance(*w) < 1e-6);
+    let tiles_of = |s: &Session, r: &serde_json::Value| {
+        s.doc().unwrap().doc.node(NodeId(r["id"].as_u64().unwrap())).unwrap().children().unwrap().iter().map(|t| (**t).clone()).collect::<Vec<_>>()
+    };
+    let undo = s.doc().unwrap().history.undo.len();
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 2, "rows": 2})).unwrap();
+    assert_eq!(s.doc().unwrap().history.undo.len(), undo + 1);
+    let tiles = tiles_of(&s, &r);
+    assert_eq!(tiles.len(), 4);
+    for (i, t) in tiles.iter().enumerate() {
+        let (x0, y0) = ((i % 2) as f64 * w / 2.0, (i / 2) as f64 * h / 2.0);
+        let want = [at(x0, y0), at(x0 + w / 2.0, y0), at(x0 + w / 2.0, y0 + h / 2.0), at(x0, y0 + h / 2.0)];
+        assert!(near(&anchors(t), &want), "tile {i}: {:?} against {want:?}", anchors(t));
+    }
+    // The first tile starts at the image's top left corner and its right side halves the top edge; the row line is
+    // nearer the narrow top, as the perspective puts the image's middle row there.
+    assert!(anchors(&tiles[0])[0].distance(Point::new(20.0, 0.0)) < 1e-6, "{:?}", anchors(&tiles[0]));
+    assert!((anchors(&tiles[0])[1].x - 50.0).abs() < 1e-6, "{:?}", anchors(&tiles[0]));
+    assert!(anchors(&tiles[0])[2].y < 24.0, "{:?}", anchors(&tiles[0]));
+    let fill = |n: &vectorcraft_doc::Node| n.appearance.fill_paint();
+    assert_eq!(fill(&tiles[0]), vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(1.0, 0.0, 0.0)));
+    assert_eq!(fill(&tiles[1]), vectorcraft_color::Paint::solid(vectorcraft_color::Color::rgb(0.0, 0.0, 1.0)));
+    // Twice the width: the warped tiles stretch from the left of the image's bounds.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 2, "rows": 2, "width": 200, "percentages": true})).unwrap();
+    let tiles = tiles_of(&s, &r);
+    let stretched = |p: Point| Point::new(p.x * 2.0, p.y);
+    assert!(near(&anchors(&tiles[3]), &[at(w / 2.0, h / 2.0), at(w, h / 2.0), at(w, h), at(w / 2.0, h)].map(stretched)), "{:?}", anchors(&tiles[3]));
+    // 8 pt between columns: the image's top and bottom sides are 60 and 100 pt long, so a pixel is 80 / w pt across
+    // and the gap is w / 10 pixels, half of it on each side of a tile.
+    s.execute("edit.undo", &json!({})).unwrap();
+    s.execute("select.set", &json!({ "ids": image })).unwrap();
+    let r = s.execute("object.createObjectMosaic", &json!({"columns": 2, "rows": 1, "spacingX": 8})).unwrap();
+    let tiles = tiles_of(&s, &r);
+    let g = w / 20.0;
+    assert!(near(&anchors(&tiles[0]), &[at(g, 0.0), at(w / 2.0 - g, 0.0), at(w / 2.0 - g, h), at(g, h)]), "{:?}", anchors(&tiles[0]));
 }
 
 /// Columns and rows that are not whole numbers (a fraction, a negative number, a string or another value) are an

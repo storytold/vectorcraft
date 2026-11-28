@@ -166,9 +166,10 @@ pub fn refresh(app: &VectorcraftApp, ctx: &egui::Context) {
     }
     if let Some(queue) = &state.queue {
         let read = root.clone();
+        let clock = app.session.script_listing_clock();
         // The app's own folder, read for the person at the keyboard.
         queue.submit(root, Priority::VISIBLE, move |_| {
-            vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&read))
+            vectorcraft_engine::file_access::unconfined(|| vectorcraft_engine::script::folder::list(&read, clock))
         });
     }
     if !state.loaded && state.first_read.is_none() {
@@ -200,13 +201,13 @@ fn take() {
     }
 }
 
-/// Wait for the reads under way and take them in.
+/// Wait for the reads under way, however long they take, and take them in.
 #[cfg(test)]
 pub(crate) fn finish() {
     {
         let state = state();
         if let Some(queue) = &state.queue {
-            queue.finish(Duration::from_secs(10));
+            assert!(queue.finish(Duration::MAX), "the reads of the Scripts folder could not finish");
         }
     }
     take();

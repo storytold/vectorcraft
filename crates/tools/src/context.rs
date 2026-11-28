@@ -295,10 +295,14 @@ pub struct ToolContext<'a> {
     /// General → Double-Click Adds Anchor Points: a plain double-click on a path segment with Direct
     /// Selection adds an anchor there.
     pub double_click_adds_anchor: bool,
-    /// Selection & Anchor Display → Command Click to Select Objects Behind: Cmd/Ctrl-click with the
-    /// Selection tool selects the object under the selected one, the next click the one under
-    /// that.
+    /// Selection & Anchor Display → Command Click to Select Objects Behind: once a Cmd/Ctrl press
+    /// with the Selection tool has armed it ([`Self::behind_armed`]), a Cmd/Ctrl-click selects the
+    /// object under the selected one, the next click the one under that.
     pub select_behind: bool,
+    /// A Cmd/Ctrl press with the Selection tool came before, and Cmd/Ctrl has been held since: the
+    /// next Cmd/Ctrl-click over the selection selects behind ([`Self::select_behind`]). The first
+    /// press is lent to Direct Selection or Group Selection.
+    pub behind_armed: bool,
     /// Selection & Anchor Display → Highlight anchors on mouse over: Direct Selection marks the
     /// anchor under the pointer.
     pub highlight_anchors: bool,
@@ -463,16 +467,20 @@ impl ToolContext<'_> {
             clip_outlines: false,
             area_type_interior: false,
             ignore_layer_preview: false,
+            unfilled_interiors: false,
         }
     }
 
     /// [`Self::hit_options`] for the selection tools (Selection, Direct Selection, Group
-    /// Selection): a clipping path is also hit on its outline ([`HitOptions::clip_outlines`]).
+    /// Selection): a clipping path is also hit on its outline ([`HitOptions::clip_outlines`]), and
+    /// where nothing else is hit, an unfilled closed path is hit inside unless Object Selection by
+    /// Path Only is on ([`HitOptions::unfilled_interiors`]).
     /// Only for what a press or a hover selects: a double-click, loaded text or a guide's release
     /// acts on what is drawn and takes [`Self::hit_options`].
     ///
     /// [`HitOptions::clip_outlines`]: vectorcraft_doc::hit::HitOptions::clip_outlines
+    /// [`HitOptions::unfilled_interiors`]: vectorcraft_doc::hit::HitOptions::unfilled_interiors
     pub fn selection_hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
-        vectorcraft_doc::hit::HitOptions { clip_outlines: true, ..self.hit_options() }
+        vectorcraft_doc::hit::HitOptions { clip_outlines: true, unfilled_interiors: true, ..self.hit_options() }
     }
 }

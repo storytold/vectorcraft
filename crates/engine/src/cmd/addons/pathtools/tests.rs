@@ -563,6 +563,86 @@ fn set_keeps_the_reference_point_of_the_bounding_box_in_place() {
 }
 
 #[test]
+fn set_takes_a_linked_mask_and_placed_gradient_with_the_shape() {
+    let mut s = session();
+    let id =
+        id_of(&s.execute("addon.pathtools.shape.create", &json!({"kind": "rectangle", "center": [200, 150], "width": 100, "height": 60})).unwrap());
+    s.execute("paint.setFill", &json!({"ids": [id.0], "gradient": {"kind": "linear"}})).unwrap();
+    s.execute("paint.setGradientGeom", &json!({"ids": [id.0], "start": [170, 150], "end": [230, 150]})).unwrap();
+    let m = id_of(&s.execute("shape.rectangle", &json!({"x": 160, "y": 130, "width": 40, "height": 40})).unwrap());
+    s.execute("transparency.makeOpacityMask", &json!({"ids": [id.0, m.0]})).unwrap();
+    // Where the mask art and the gradient's vector sit in the shape's own frame: the same before and after.
+    let local = |s: &Session| {
+        let n = s.doc().unwrap().doc.node(id).unwrap().clone();
+        let frame = shape_of(s, id).unwrap();
+        let to_local = vectorcraft_geom::Affine::scale_non_uniform(1.0 / frame.width, 1.0 / frame.height) * frame.frame().inverse();
+        let mask = n.extras().mask.as_deref().unwrap().art.geometric_bounds().unwrap();
+        let vectorcraft_color::Paint::Gradient(g) = n.appearance.fill_paint() else { panic!("a gradient fill") };
+        let geom = g.geom.unwrap();
+        [to_local * mask.center(), to_local * geom.start, to_local * geom.end]
+    };
+    let was = local(&s);
+    for edit in [
+        json!({"center": [320, 260]}),
+        json!({"width": 180}),
+        json!({"rotation": 90}),
+        json!({"height": 90, "reference": 0}),
+        json!({"count": 6, "kind": "polygon"}),
+    ] {
+        let mut p = edit.clone();
+        p["id"] = json!(id.0);
+        s.execute("addon.pathtools.shape.set", &p).unwrap();
+        for (now, then) in local(&s).iter().zip(&was) {
+            assert!(now.distance(*then) < 1e-9, "{edit}: moved off the shape to {now:?} from {then:?}");
+        }
+    }
+    // With Scale Strokes & Effects on, a new size scales the stroke as a transform does; off, it keeps its weight.
+    let weight = |s: &Session| s.doc().unwrap().doc.node(id).unwrap().appearance.stroke_width();
+    s.execute("stroke.set", &json!({"ids": [id.0], "weight": 4})).unwrap();
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 360, "height": 180, "strokes": false})).unwrap();
+    assert!((weight(&s) - 4.0).abs() < 1e-9);
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "width": 720, "height": 360, "strokes": true})).unwrap();
+    assert!(weight(&s) > 4.0 + 1.0, "the stroke scaled with the shape");
+    refuses(&mut s, "addon.pathtools.shape.set", &[json!({"id": id.0, "width": 50, "strokes": "yes"})]);
+}
+
+#[test]
+fn a_slice_cuts_the_shape_through_its_center_in_one_step() {
+    let mut s = session();
+    let n = steps(&s);
+    let r = s
+        .execute(
+            "addon.pathtools.shape.create",
+            &json!({"kind": "ellipse", "center": [200, 150], "width": 100, "height": 60, "sliceStart": 0, "sliceEnd": 90}),
+        )
+        .unwrap();
+    let id = id_of(&r);
+    assert_eq!(steps(&s), n + 1, "one undo step");
+    assert_eq!((r["shape"]["sliceStart"].clone(), r["shape"]["sliceEnd"].clone()), (json!(0.0), json!(90.0)));
+    // The top right quarter, from the center.
+    let b = path(&s, id).bounds().unwrap();
+    assert!((b.x0 - 200.0).abs() < 1e-9 && (b.x1 - 250.0).abs() < 1e-9 && (b.y0 - 120.0).abs() < 1e-9 && (b.y1 - 150.0).abs() < 1e-9, "{b:?}");
+    assert_eq!(path(&s, id).subpaths[0].anchors[0].p, Point::new(200.0, 150.0));
+    // Turned the other way round: the three quarters left, one more step; moving keeps the slice.
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "sliceStart": 90, "sliceEnd": 0})).unwrap();
+    assert_eq!(steps(&s), n + 2);
+    let b = path(&s, id).bounds().unwrap();
+    assert!((b.x0 - 150.0).abs() < 1e-9 && (b.y1 - 180.0).abs() < 1e-9, "{b:?}");
+    s.execute("object.move", &json!({"dx": 10, "dy": 0})).unwrap();
+    assert_eq!(shape_of(&s, id).map(|g| (g.slice_start, g.slice_end)), Some((90.0, 0.0)));
+    // The same start and end: the whole ellipse again.
+    s.execute("addon.pathtools.shape.set", &json!({"id": id.0, "sliceEnd": 90})).unwrap();
+    assert_eq!(path(&s, id).anchor_count(), 4);
+    s.execute("edit.undo", &json!({})).unwrap();
+    assert!(path(&s, id).anchor_count() > 4, "undo brings the slice back");
+    refuses(
+        &mut s,
+        "addon.pathtools.shape.set",
+        &[json!({"id": id.0, "sliceStart": -10}), json!({"id": id.0, "sliceEnd": 361}), json!({"id": id.0, "sliceEnd": "90"})],
+    );
+}
+
+#[test]
 fn bad_shape_params_are_refused() {
     let mut s = session();
     let id = star(&mut s);

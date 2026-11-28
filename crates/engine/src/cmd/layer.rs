@@ -84,7 +84,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Layer Options…",
             ["Window", "Layers"],
             None,
-            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked, and `ids` may name ruler guides (their `guide.list` id), which hide or lock on their own. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. A path directly in a Live Paint group can't take the name Face or Edge, which name the group's faces and edges, unless it has it already. One undo step",
+            "{ids?|id? (default: the highlighted rows, else the current layer), name? (with prefs.identifyObjectsBy xmlId: a valid XML ID, stored as the object name), visible?, locked?, template?, printable?, preview?, dimImages?: 0..100|false, color?: index 0..26|\"#rrggbb\"|preset name (a hex color with an alpha part, #rrggbbaa or #rgba, is an error)} Layer Options; rows that are not layers take name, visible and locked, and `ids` may name ruler guides (their `guide.list` id), which hide or lock on their own. Template on also locks the layer and dims its images to 50% (unless given); off unlocks it and stops dimming. A path directly in a Live Paint group can't take the name Face or Edge, which name the group's faces and edges, unless it has it already. One undo step, and none when every row already has every option given",
             has_doc,
             set_props
         ),
@@ -400,6 +400,18 @@ fn apply_options(n: &mut Node, p: &Value, xml_id: bool) {
     }
 }
 
+/// Whether Layer Options `p` ([`apply_options`]) would change row `n`: its name, eye, lock or
+/// layer options.
+fn changes_options(n: &Node, p: &Value, xml_id: bool) -> bool {
+    let mut after = n.clone();
+    apply_options(&mut after, p, xml_id);
+    let options = |n: &Node| match &n.kind {
+        NodeKind::Layer { color, template, printable, preview, dim_images, .. } => Some((*color, *template, *printable, *preview, *dim_images)),
+        _ => None,
+    };
+    after.name != n.name || after.visible != n.visible || after.locked != n.locked || options(&after) != options(n)
+}
+
 /// Bad values in Layer Options params, as an error for `cmd`.
 /// `xml_id`: Preferences › Units › Identify Objects By › XML ID — a non-empty `name` must be a
 /// valid XML id.
@@ -705,6 +717,17 @@ fn set_props(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(v) = str_param(p, "name").filter(|v| !v.trim().is_empty()) {
         let name = if xml_id { vectorcraft_doc::xml_id::to_object_name(v) } else { v.to_string() };
         super::buildcmds::check_part_name(&s.doc()?.doc, &ids, &name)?;
+    }
+    // When every row already has every option given, the document and its undo history stay as
+    // they are.
+    let d = &s.doc()?.doc;
+    if ids.iter().all(|id| d.node(*id).is_some_and(|n| !changes_options(n, p, xml_id))) {
+        // Hidden or locked rows' art can't stay selected.
+        let flag = |k: &str| p.get(k).and_then(Value::as_bool);
+        if flag("visible") == Some(false) || flag("locked") == Some(true) || flag("template") == Some(true) {
+            s.select(|d, sel| sel.deselect_uneditable(d))?;
+        }
+        return ok();
     }
     s.edit("Layer Options", |d, sel| {
         for id in &ids {

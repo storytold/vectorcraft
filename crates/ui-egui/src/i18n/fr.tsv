@@ -2634,6 +2634,9 @@ font-technology	Variable	Variables
 	Only Web Colors	Couleurs Web uniquement
 	Opacity	Opacité
 	Show Opacity	Afficher l’opacité
+	Show Hex Field	Afficher le champ hex
+	Hex or CSS color	Couleur hex ou CSS
+	Parse Color	Analyser la couleur
 	Opacity & Mask Define Knockout Shape	L’opacité et le masque définissent la forme de masquage
 	Opacity Mask	Masque d’opacité
 	Opacity Mask Info	Infos sur le masque d’opacité
@@ -5223,6 +5226,7 @@ liquify-list-end	{0}, {1}	{0} et {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` doit valoir hue, saturation, brightness, red, green ou blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` doit valoir none, oklch ou hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH nécessite sRGB comme espace de travail RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` doit être une couleur hex (#rgb, #rgba, #rrggbb ou #rrggbbaa) ou une couleur CSS rgb(), hsl() ou oklch() d’au plus 48 caractères
 @msg	`{k}` must be [x, y]	`{k}` doit être [x, y]
 @msg	`{name}` has no options	`{name}` n’a pas d’options
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` est un espace de travail intégré ; choisissez un autre nom
@@ -7437,6 +7441,15 @@ axis	Y Axis	Axe Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	un objet en lecture seule a été omis : renvoyez-le, sous la forme {{"id": …}} seul ou tel qu’il a été fourni
 @msg	a string	une chaîne
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	un contour a seulement `paint`, `width`, `join`, `cap` et `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	une pièce d’un effet dynamique de peinture a seulement `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` et `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	un contour a seulement `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` et `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` ne peut valoir que true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` est réservé à un effet dynamique qui déclare `paintOutput`, avec `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` doit être un nombre de 0 à 1
+@msg	unknown blending mode; `blend` is one of {_1}	mode de fusion inconnu, `blend` vaut l’un de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` doit être une liste d’au plus {MAX_LOOK_EFFECTS} enregistrements
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	un résultat porte au plus {MAX_RESULT_EFFECTS} enregistrements d’effet
+@msg	this host takes no effects here	cet hôte n’accepte aucun effet ici
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	un contour doit être {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	un effet doit être {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	un effet sur un fond renvoie seulement `fills`
@@ -8492,6 +8505,7 @@ breakText	Glyphs	Glyphes
 	Place Brush Art	Placer l’illustration de la forme
 	Replace Brush Art	Remplacer l’illustration de la forme
 	Replace Pattern Art	Remplacer l’illustration du motif
+	Place Pattern Art	Placer l’illustration du motif
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Des contours utilisent cette forme. Appliquer la nouvelle illustration à ces contours, ou les laisser tels quels et ajouter une copie de la forme avec la nouvelle illustration ?
 	Apply to Strokes	Appliquer aux contours
 	Leave Strokes	Conserver les contours
@@ -8561,6 +8575,8 @@ breakText	Glyphs	Glyphes
 	Tangent Circle	Cercle tangent
 	Tangent Circle Tool	Outil Cercle tangent
 	No tangent circle here	Aucun cercle tangent ici
+	Ask For Circle Radius	Demander le rayon du cercle
+	Auto-Update Default	Mettre à jour automatiquement la valeur par défaut
 	Circle:	Cercle :
 @msg	`ids` names an object twice	`ids` désigne deux fois le même objet
 @msg	select two or three paths or compound paths	sélectionnez deux ou trois tracés ou tracés transparents
@@ -9847,7 +9863,9 @@ breakText	Glyphs	Glyphes
 @msg	more than {MAX_IMPORT} presets	plus de {MAX_IMPORT} paramètres prédéfinis
 @msg	moved must be [[x,y]…]	moved doit être [[x,y]…]
 @msg	must be an object with `kind` and `value`	doit être un objet avec `kind` et `value`
-@msg	must have `kind` alert, confirm or prompt	doit avoir `kind` alert, confirm ou prompt
+@msg	must have `kind` alert, confirm, prompt or window	doit avoir `kind` alert, confirm, prompt ou window
+@msg	is a window's answer, whose `value` must be a list of steps	est la réponse d’une fenêtre, dont la `value` doit être une liste d’étapes
+@msg	has a step {i} that is not a valid click, change or close	a une étape {i} qui n’est ni un clic, ni une modification, ni une fermeture valide
 @msg	must have exactly `kind` and `value`	doit avoir exactement `kind` et `value`
 @msg	name (a toolbar's name) is required	name (le nom d’une barre d’outils) est obligatoire
 @msg	name (a toolbar's name) must be a string	name (le nom d’une barre d’outils) doit être une chaîne

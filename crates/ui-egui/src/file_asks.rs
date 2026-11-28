@@ -39,6 +39,8 @@ pub(crate) enum Owner {
 /// A pick asked for and not yet answered.
 struct Waiting {
     ticket: PickId,
+    /// The file service is writing bytes that the caller already prepared.
+    saving: bool,
     /// The active drawing's UID and Revert counter when asked, if the request is document-owned.
     doc: Option<(u64, u64)>,
     /// The automation roots in force when asked: the continuation runs under them, not under the
@@ -122,7 +124,7 @@ pub(crate) fn ask(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.pick(request), None, then)
+    start(app, owner, |files| files.pick(request), false, None, then)
 }
 
 /// Like [`ask`], but drops a reply if its requester is gone, before choosing a document or reporting a picker error.
@@ -133,7 +135,7 @@ pub(crate) fn ask_while(
     current: impl FnOnce(&VectorcraftApp) -> bool + 'static,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.pick(request), Some(Box::new(current)), then)
+    start(app, owner, |files| files.pick(request), false, Some(Box::new(current)), then)
 }
 
 /// Save `bytes` as the file service saves them (`Files::save`: the desktop asks where with `request` and
@@ -146,7 +148,7 @@ pub(crate) fn save(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.save(request, bytes), None, then)
+    start(app, owner, |files| files.save(request, bytes), true, None, then)
 }
 
 /// Asks the file service with `ask` and files `then` for its answer.
@@ -154,6 +156,7 @@ fn start(
     app: &mut VectorcraftApp,
     owner: Owner,
     ask: impl FnOnce(&dyn Files) -> PickId,
+    saving: bool,
     current: Option<PickGuard>,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
@@ -164,7 +167,7 @@ fn start(
         Owner::Free => None,
     };
     let (scope, automated) = (ScopeHandle::capture(), app.automation_asked());
-    app.file_asks.waiting.push(Waiting { ticket, doc, scope, automated, current, then: Box::new(then) });
+    app.file_asks.waiting.push(Waiting { ticket, saving, doc, scope, automated, current, then: Box::new(then) });
     json!({ "pending": "fileDialog" })
 }
 
@@ -266,12 +269,19 @@ pub(crate) fn open_params(picked: &Picked) -> Option<Map<String, Value>> {
 /// Make the original drawing active before running a continuation. The status bar explains why
 /// a closed drawing or a different loaded generation cannot receive the result.
 fn on_document(app: &mut VectorcraftApp, uid: u64, generation: Option<u64>) -> bool {
+    back_to(app, uid, generation, closed(), tl!("The drawing was reverted while its file dialog was open"))
+}
+
+/// Makes drawing `uid` active again, at its revert count `generation` when one is given. When the
+/// drawing is closed, or was reverted since, the status bar shows `closed` or `reverted` and the
+/// answer is false.
+pub(crate) fn back_to(app: &mut VectorcraftApp, uid: u64, generation: Option<u64>, closed: &str, reverted: &str) -> bool {
     let Some((i, state)) = app.session.documents().iter().enumerate().find(|(_, d)| d.uid == uid) else {
-        app.status(closed());
+        app.status(closed);
         return false;
     };
     if generation.is_some_and(|reverts| state.reverts != reverts) {
-        app.status(tl!("The drawing was reverted while its file dialog was open"));
+        app.status(reverted);
         return false;
     }
     if app.session.active_index() != Some(i)
@@ -311,6 +321,11 @@ pub(crate) fn poll(app: &mut VectorcraftApp) {
         }
         match &picked {
             Picked::Cancelled => continue,
+            Picked::Failed(error) if w.saving => {
+                // The file service already had the bytes. It can report a failure without a drawing.
+                report(app, Err(error.clone()));
+                continue;
+            }
             Picked::Unavailable(why) => {
                 // The desktop says what gives it a file dialog; the browser has none for this kind of pick.
                 #[cfg(not(target_arch = "wasm32"))]

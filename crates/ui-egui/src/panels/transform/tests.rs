@@ -158,6 +158,94 @@ fn a_rectangle_shows_linked_and_unlinked_corner_types() {
     assert!(!p.shows("Corner") && p.shows("Top Left Corner") && p.shows("Bottom Left Corner"));
 }
 
+/// Checks a live rectangle's Corner menu `menu` drawn by `draw`, with Corner Radius linked
+/// (`single`) or not: a kind highlighted in the open menu leaves the rectangle as it is, Escape
+/// closes the menu with the kind and the undo history unchanged, and Enter sets the highlighted
+/// kind, on the corners `changed` marks, as one undo step.
+fn check_corner_kind_menu(draw: fn(&mut VectorcraftApp, &mut Ui), single: bool, menu: &str, changed: [bool; 4]) {
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+    use vectorcraft_doc::{LiveCorners, NodeId};
+    use vectorcraft_geom::shapes::CornerKind;
+    let mut app = new_app();
+    let id = app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 120, "height": 80, "radius": 10})).unwrap()["id"].as_u64().unwrap();
+    set_pref(&mut app, "singleCornerRadius", single);
+    let mut p = Panel::new(app, draw);
+    let kinds = |p: &Panel| {
+        let app = p.app();
+        let corners = LiveCorners::of(app.session.active().unwrap().doc.node(NodeId(id)).unwrap()).unwrap();
+        [0, 1, 2, 3].map(|k| corners.kind(k))
+    };
+    let original = p.app().session.active().unwrap().doc.clone();
+    assert_eq!(kinds(&p), [CornerKind::ALL[0]; 4]);
+    let undo = undo_depth(&p.app());
+
+    p.click_role(menu, Role::COMBO_BOX);
+    p.key(Key::ArrowDown, Modifiers::NONE);
+    assert!(p.app().session.active().unwrap().doc == original, "{menu}: highlighting a kind leaves the rectangle as it was");
+    p.key(Key::Escape, Modifiers::NONE);
+    assert!(p.shows(menu), "{menu}: the panel still shows the menu after Escape");
+    assert!(p.app().session.active().unwrap().doc == original, "{menu}: Escape leaves the rectangle as it was");
+    assert_eq!(undo_depth(&p.app()), undo, "{menu}: Escape records no undo step");
+
+    p.click_role(menu, Role::COMBO_BOX);
+    p.key(Key::ArrowDown, Modifiers::NONE);
+    p.key(Key::Enter, Modifiers::NONE);
+    let expected = changed.map(|c| if c { CornerKind::ALL[1] } else { CornerKind::ALL[0] });
+    assert_eq!(kinds(&p), expected, "{menu}: Enter sets the highlighted kind");
+    assert_eq!(undo_depth(&p.app()), undo + 1, "{menu}: the kind is one undo step");
+}
+
+/// The Transform panel's Corner menu for all four corners of a live rectangle applies only the
+/// kind chosen.
+#[test]
+fn transform_panel_rectangle_corner_kind_applies_only_when_chosen() {
+    check_corner_kind_menu(show, true, "Corner", [true; 4]);
+}
+
+/// The Transform panel's Corner menu for one corner of a live rectangle applies only the kind
+/// chosen.
+#[test]
+fn transform_panel_single_rectangle_corner_kind_applies_only_when_chosen() {
+    check_corner_kind_menu(show, false, "Top Right Corner", [false, true, false, false]);
+}
+
+/// The Properties panel's Corner menu for all four corners of a live rectangle applies only the
+/// kind chosen.
+#[test]
+fn properties_panel_rectangle_corner_kind_applies_only_when_chosen() {
+    check_corner_kind_menu(crate::panels::properties::transform_section, true, "Corner", [true; 4]);
+}
+
+/// The Properties panel's Corner menu for one corner of a live rectangle applies only the kind
+/// chosen.
+#[test]
+fn properties_panel_single_rectangle_corner_kind_applies_only_when_chosen() {
+    check_corner_kind_menu(crate::panels::properties::transform_section, false, "Top Right Corner", [false, true, false, false]);
+}
+
+/// The four corner labels of an unlinked Corner Radius, in the Transform panel and in the
+/// Properties panel, start at one edge of their column whatever their widths, and the radius
+/// fields after them line up.
+#[test]
+fn unlinked_corner_labels_start_in_one_column() {
+    use craft::ui::contract::Role;
+    let corners = ["Top Left", "Top Right", "Bottom Right", "Bottom Left"];
+    for draw in [show as fn(&mut VectorcraftApp, &mut Ui), crate::panels::properties::transform_section] {
+        let mut app = new_app();
+        app.run("shape.rectangle", json!({"x": 50, "y": 50, "width": 120, "height": 80, "radius": 10})).unwrap();
+        set_pref(&mut app, "singleCornerRadius", false);
+        let p = Panel::new(app, draw);
+        let labels = corners.map(|name| p.rect_role(name, Role::LABEL));
+        let fields = corners.map(|name| p.rect_role(name, Role::SPIN_BUTTON));
+        assert!(labels[2].width() > labels[0].width() + 1.0, "Bottom Right {:?} is wider than Top Left {:?}", labels[2], labels[0]);
+        for (name, (label, field)) in corners.iter().zip(labels.iter().zip(&fields)) {
+            assert!((label.left() - labels[0].left()).abs() < 0.5, "{name} starts at {}, Top Left at {}", label.left(), labels[0].left());
+            assert!((field.left() - fields[0].left()).abs() < 0.5, "{name}'s field starts at {}, Top Left's at {}", field.left(), fields[0].left());
+        }
+    }
+}
+
 /// A corner kind set with no live rectangle selected leaves the selected polygon, the document and
 /// its undo history as they are.
 #[test]

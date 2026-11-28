@@ -32,7 +32,7 @@ use std::sync::Arc;
 use kurbo::{Affine, BezPath, Point, Rect, Vec2};
 use vectorcraft_doc::live::{
     EnvelopeKind, EnvelopeOptions, GradientMesh, H_DOWN, H_LEFT, H_RIGHT, H_UP, PreserveShape, default_fidelity, envelope_content_boxes,
-    envelope_content_boxes_with, envelope_stroke_margin,
+    envelope_content_boxes_with, envelope_margin_lengths, envelope_stroke_margin,
 };
 use vectorcraft_doc::{Appearance, Document, Effect, ImageBlob, LayerColor, Node, NodeId, NodeKind, PatternDef};
 use vectorcraft_geom::PathData;
@@ -59,6 +59,9 @@ pub(crate) fn drawn_note(typed: bool) -> &'static str {
 pub(super) const MAX_PENDING: usize = 64;
 /// The most envelopes and warped text objects one import draws to check; more keep their drawn art.
 pub(crate) const MAX_CHECKED: usize = 256;
+/// The most comparisons with pages those checks make in one import, one for each page an object
+/// is on ([`drawn_alike`]); an object that needs more keeps its drawn art.
+pub(crate) const MAX_PAGE_COMPARISONS: usize = 4 * MAX_CHECKED;
 /// The most strokes with dashes aligned to corners one import draws to check against their drawn
 /// looks (apart from [`MAX_CHECKED`]); more keep their drawn looks.
 pub(crate) const MAX_DASH_CHECKS: usize = 256;
@@ -133,7 +136,7 @@ pub(super) fn options(o: &Obj) -> Option<(EnvelopeOptions, f64)> {
 /// `AIDeformArtHeightKey`) matches its bounds with its strokes within [`SAVED_SIZE_SLACK`] and lies
 /// nearer them than its geometric bounds. The saved size is in art space, and `scale` takes it to the
 /// contents' space (a Large Canvas copy read at its declared scale). None without that size, or for
-/// contents with no width or no height.
+/// contents with neither a width nor a height.
 fn saved_margin(o: &Obj, content: &[Arc<Node>], scale: f64) -> Option<[f32; 4]> {
     let saved = |key: &str| match o.nums(key).as_slice() {
         [v] if v.is_finite() => Some(*v * scale).filter(|v| v.is_finite()),
@@ -220,14 +223,51 @@ const PAINTED_SLACK: f64 = 1e-4;
 /// applied, so a stroke a Transform effect moves counts where it is moved to), measured by its
 /// visual bounds. Those are exact for miter joins (a tip counts where the miter limit keeps it) and
 /// round joins, and an upper bound for bevel joins, miters the limit cuts, width profiles and
-/// square-capped dashes; a contour of zero length, which paints nothing, doesn't count. Effects on
-/// the type object itself are left out: VectorCraft applies them after the envelope bends the type.
-/// `None` when nothing in it has bounds.
+/// square-capped dashes; a contour of zero length, which paints nothing in the files' drawn art,
+/// doesn't count, even where VectorCraft draws it as the dot of a round or projecting cap. Effects
+/// on the type object itself are left out: VectorCraft applies them after the envelope bends the
+/// type. `None` when nothing in it has bounds.
 fn painted_outlines(outlines: &Node) -> Option<Rect> {
     outlines.children().into_iter().flatten().fold(None, |acc, piece| {
         let baked = vectorcraft_effects::bake_type_appearance(None, piece);
-        vectorcraft_geom::union_opt(acc, baked.as_ref().unwrap_or(piece).visual_bounds())
+        let baked = baked.as_ref().unwrap_or(piece);
+        let painted = without_zero_length_contours(baked);
+        vectorcraft_geom::union_opt(acc, painted.as_ref().unwrap_or(baked).visual_bounds())
     })
+}
+
+/// `n` with its paths, and the paths in its groups and compound paths, without their subpaths of
+/// one anchor (contours of zero length, which have no segment); a path with nothing else is left
+/// empty, with no bounds. `None` when nothing changes.
+fn without_zero_length_contours(n: &Node) -> Option<Node> {
+    if let Some(path) = n.path_data() {
+        let lone = |s: &vectorcraft_geom::SubPath| s.segment_count() == 0;
+        if !path.subpaths.iter().any(lone) {
+            return None;
+        }
+        let mut kept = n.clone();
+        if let Some(p) = kept.path_data_mut() {
+            p.subpaths.retain(|s| !lone(s));
+        }
+        return Some(kept);
+    }
+    if !matches!(n.kind, NodeKind::Group { .. } | NodeKind::Layer { .. } | NodeKind::Compound { .. }) {
+        return None;
+    }
+    let members = n.children()?;
+    let changed: Vec<Option<Node>> = members.iter().map(|c| without_zero_length_contours(c)).collect();
+    if changed.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut kept = n.clone();
+    if let Some(children) = kept.children_mut() {
+        for (c, new) in children.iter_mut().zip(changed) {
+            if let Some(new) = new {
+                *c = Arc::new(new);
+            }
+        }
+    }
+    Some(kept)
 }
 
 /// The box of `content` an envelope of type with Distort Appearance may map from in a file besides
@@ -268,7 +308,7 @@ fn painted_margin(painted: Rect, plain: Rect) -> Option<[f32; 4]> {
 /// Do bounds margins `a` and `b` give contents with geometric box `plain` the same box, each side
 /// within [`PAINTED_SLACK`]?
 fn same_box(a: [f32; 4], b: [f32; 4], plain: Rect) -> bool {
-    let sizes = [plain.height(), plain.height(), plain.width(), plain.width()];
+    let Some(sizes) = envelope_margin_lengths(plain) else { return a == b };
     a.iter().zip(b).zip(sizes).all(|((a, b), size)| (f64::from(*a) - f64::from(b)).abs() * size <= PAINTED_SLACK)
 }
 
@@ -627,13 +667,31 @@ fn differing(live: &Document, drawn: &Document, region: Rect, scale: f64) -> Opt
 }
 
 /// The differences from their drawn art that the live envelopes and warped type of one import may
-/// add up to, as shares of the page drawn as the page check draws it: half of what that check allows
-/// ([`MAX_DIFFERENCE`], [`MAX_SOLID_DIFFERENCE`]), so they never make the file open from its PDF part
-/// instead.
+/// add up to on each page the art may be compared with, as shares of that page drawn as the page
+/// check draws it: half of what that check allows ([`MAX_DIFFERENCE`], [`MAX_SOLID_DIFFERENCE`]),
+/// so they never make the file open from its PDF part instead. Each page has its own share.
 #[derive(Debug, Default)]
 pub(crate) struct Spent {
-    pub(super) any: f64,
-    pub(super) solid: f64,
+    /// Each page with the shares of it spent so far: of pixels that differ at all, and of those
+    /// whose neighbors all differ too.
+    pub(super) pages: Vec<(Rect, f64, f64)>,
+    /// How many comparisons with pages have been made ([`MAX_PAGE_COMPARISONS`]).
+    pub(super) compared: usize,
+}
+
+impl Spent {
+    /// The shares of `page` spent so far.
+    pub(super) fn on(&self, page: Rect) -> (f64, f64) {
+        self.pages.iter().find(|(p, ..)| *p == page).map_or((0.0, 0.0), |&(_, any, solid)| (any, solid))
+    }
+
+    /// Set the shares of `page` spent so far.
+    fn set(&mut self, page: Rect, any: f64, solid: f64) {
+        match self.pages.iter_mut().find(|(p, ..)| *p == page) {
+            Some(spent) => *spent = (page, any, solid),
+            None => self.pages.push((page, any, solid)),
+        }
+    }
 }
 
 /// A text object read with a Warp.
@@ -701,7 +759,8 @@ pub struct WarpedType {
     pub(super) envelopes: Vec<TypedEnvelope>,
     pub(super) checks: usize,
     pub(super) spent: Spent,
-    pub(super) page: Option<Rect>,
+    /// The pages the art may be compared with, each with its own share of the budget ([`Spent`]).
+    pub(super) pages: Vec<Rect>,
     /// [`super::Structure::type_clips`]: type in an envelope's contents clips its clipping group too.
     pub(super) type_clips: HashMap<NodeId, NodeId>,
     /// The envelopes of type that may open live in layers built without a page, by their place
@@ -847,7 +906,7 @@ impl WarpedType {
         let (id, layer) = (doc.alloc_id(), doc.alloc_id());
         let mut plain = art.clone();
         (plain.visible, plain.opacity) = (true, 1.0);
-        let page = self.page.filter(|_| shown.contains(&drawn));
+        let pages: Vec<Rect> = if shown.contains(&drawn) { self.pages.clone() } else { vec![] };
         let mut alike = None;
         // In Edit Contents, a grid that draws the type elsewhere than its drawn art is tried again
         // moved onto that art ([`moved_onto`]), after every other way.
@@ -880,7 +939,7 @@ impl WarpedType {
             let shared = Shared { patterns: &doc.patterns, images: &doc.images };
             let mut live_one = envelope.clone();
             (live_one.visible, live_one.opacity) = (true, 1.0);
-            if drawn_alike(&live_one, &plain, layer, &shared, page, &mut self.spent) {
+            if drawn_alike(&live_one, &plain, layer, &shared, &pages, &mut self.spent) {
                 alike = Some(envelope);
                 break;
             }
@@ -905,7 +964,8 @@ impl WarpedType {
     /// budget has no check left for) with that look: `made` gives the text object a slot became. A
     /// frame in `threaded` stays type, since the frames of a thread share one story. A replaced
     /// object's box goes back into the comparisons with the page (out of `restyled`), and only what
-    /// `doc` shows counts against the page's share of the budget. Returns how many were replaced.
+    /// `doc` shows counts against the share of the budget of each page it is on. Returns how many
+    /// were replaced.
     pub(crate) fn settle(
         self,
         doc: &mut Document,
@@ -913,7 +973,7 @@ impl WarpedType {
         threaded: &BTreeSet<NodeId>,
         restyled: &mut Vec<Rect>,
     ) -> usize {
-        let Self { looks, mut checks, mut spent, page, .. } = self;
+        let Self { looks, mut checks, mut spent, pages, .. } = self;
         let mut shown_ids = BTreeSet::new();
         doc.layers.iter().for_each(|l| collect_shown(l, &mut shown_ids));
         let mut replaced = 0;
@@ -928,7 +988,8 @@ impl WarpedType {
                 let (mut shown, mut plain) = (text.clone(), look.clone());
                 (shown.visible, shown.opacity) = (true, 1.0);
                 (plain.visible, plain.opacity) = (true, 1.0);
-                alike = warped_alike(&shown, &plain, layer, &shared, page.filter(|_| shown_ids.contains(&id)), &mut spent);
+                let on: &[Rect] = if shown_ids.contains(&id) { &pages } else { &[] };
+                alike = warped_alike(&shown, &plain, layer, &shared, on, &mut spent);
             }
             if alike {
                 continue;
@@ -995,23 +1056,24 @@ pub(super) fn warps(appearance: &Appearance) -> bool {
 }
 
 /// Do `live` and `drawn` draw alike? Either neither has any paint ([`paints`]), or few of the
-/// pixels either inks differ and fewer still where a whole patch differs, and, on `page` (when the
-/// file has one), they differ little enough that with the differences in `spent` the page check
-/// still takes the layers' art (it is added to `spent` when they do). Both are drawn on `layer`, a
-/// layer id no other node has.
-pub(super) fn drawn_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
-    alike_within(live, drawn, live.visual_bounds(), layer, shared, page, spent)
+/// pixels either inks differ and fewer still where a whole patch differs, and, on each of `pages`
+/// they are on (the pages the art may be compared with), they differ little enough that with the
+/// differences `spent` holds for that page the page check still takes the layers' art (they are
+/// added to `spent` when they do on every one). Both are drawn on `layer`, a layer id no other node
+/// has.
+pub(super) fn drawn_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Shared<'_>, pages: &[Rect], spent: &mut Spent) -> bool {
+    alike_within(live, drawn, live.visual_bounds(), layer, shared, pages, spent)
 }
 
 /// [`drawn_alike`] for type under a Warp, compared over all that its effects draw, which can reach
 /// past its own box.
-pub(super) fn warped_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
+pub(super) fn warped_alike(live: &Node, drawn: &Node, layer: NodeId, shared: &Shared<'_>, pages: &[Rect], spent: &mut Spent) -> bool {
     let reach = vectorcraft_render::effect_bounds(&alone(live, layer, shared).symbol_boxes(), live);
-    alike_within(live, drawn, vectorcraft_geom::union_opt(live.visual_bounds(), reach), layer, shared, page, spent)
+    alike_within(live, drawn, vectorcraft_geom::union_opt(live.visual_bounds(), reach), layer, shared, pages, spent)
 }
 
 /// [`drawn_alike`], with `live` measured as `reach`.
-fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, shared: &Shared<'_>, page: Option<Rect>, spent: &mut Spent) -> bool {
+fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, shared: &Shared<'_>, pages: &[Rect], spent: &mut Spent) -> bool {
     // Neither has any paint (type with no fill and no stroke, its drawn art the outlines unpainted):
     // both draw nothing, so they draw alike and add nothing to what the page check sees. Their
     // shapes aren't compared. Art that paints, however faintly, is compared as before.
@@ -1032,21 +1094,31 @@ fn alike_within(live: &Node, drawn: &Node, reach: Option<Rect>, layer: NodeId, s
     if share(solid) > MAX_SOLID || share(any) > MAX_ANY {
         return false;
     }
-    let Some(page) = page.filter(|p| p.is_finite() && p.width() > 0.0 && p.height() > 0.0) else { return true };
-    // Only what is on the page counts, drawn as the page check draws it (about 400 pixels along the
-    // page's longer side).
-    let on_page = region.intersect(page);
-    let scale = compare_scale(page);
-    if on_page.width() * scale < 1.0 || on_page.height() * scale < 1.0 {
-        return true;
+    let mut added = vec![];
+    for &page in pages.iter().filter(|p| p.is_finite() && p.width() > 0.0 && p.height() > 0.0) {
+        // Only what is on the page counts, drawn as the page check draws it (about 400 pixels along
+        // the page's longer side).
+        let on_page = region.intersect(page);
+        let scale = compare_scale(page);
+        if on_page.width() * scale < 1.0 || on_page.height() * scale < 1.0 {
+            continue;
+        }
+        if spent.compared >= MAX_PAGE_COMPARISONS {
+            return false;
+        }
+        spent.compared += 1;
+        let Some((any, solid, _)) = differing(&x, &y, on_page, scale) else { return false };
+        let pixels = (page.width() * scale * page.height() * scale).max(1.0);
+        let (was_any, was_solid) = spent.on(page);
+        let (any, solid) = (was_any + any as f64 / pixels, was_solid + solid as f64 / pixels);
+        if any > MAX_DIFFERENCE / 2.0 || solid > MAX_SOLID_DIFFERENCE / 2.0 {
+            return false;
+        }
+        added.push((page, any, solid));
     }
-    let Some((any, solid, _)) = differing(&x, &y, on_page, scale) else { return false };
-    let pixels = (page.width() * scale * page.height() * scale).max(1.0);
-    let (any, solid) = (spent.any + any as f64 / pixels, spent.solid + solid as f64 / pixels);
-    if any > MAX_DIFFERENCE / 2.0 || solid > MAX_SOLID_DIFFERENCE / 2.0 {
-        return false;
+    for (page, any, solid) in added {
+        spent.set(page, any, solid);
     }
-    *spent = Spent { any, solid };
     true
 }
 
@@ -1124,12 +1196,28 @@ mod tests {
     #[test]
     fn art_with_no_paint_draws_alike_and_faint_art_is_still_compared() {
         let shared = Shared { patterns: &[], images: &BTreeMap::new() };
-        let alike = |a: &Node, b: &Node| drawn_alike(a, b, NodeId(999), &shared, None, &mut Spent::default());
+        let alike = |a: &Node, b: &Node| drawn_alike(a, b, NodeId(999), &shared, &[], &mut Spent::default());
         let (none, other_none) = (square_node(1, None), square_node(2, None));
         assert!(alike(&none, &other_none));
         let (faint, other_faint) = (square_node(1, Some(0.02)), square_node(2, Some(0.02)));
         assert!(!alike(&faint, &other_faint));
         assert!(!alike(&none, &square_node(2, Some(1.0))));
+    }
+
+    /// Each page an object is on takes one of the import's comparisons with pages. With none left,
+    /// art on a page keeps its drawn art, and art on no page needs none.
+    #[test]
+    fn comparisons_with_pages_stop_at_their_limit() {
+        let shared = Shared { patterns: &[], images: &BTreeMap::new() };
+        let (live, drawn) = (square_node(1, Some(1.0)), square_node(2, Some(1.0)));
+        let (page, other) = (Rect::new(0.0, 0.0, 100.0, 100.0), Rect::new(0.0, 0.0, 60.0, 60.0));
+        let mut spent = Spent { compared: MAX_PAGE_COMPARISONS - 2, ..Default::default() };
+        assert!(drawn_alike(&live, &drawn, NodeId(999), &shared, &[page, other], &mut spent));
+        assert_eq!(spent.compared, MAX_PAGE_COMPARISONS);
+        assert!(!drawn_alike(&live, &drawn, NodeId(999), &shared, &[page], &mut spent));
+        let off = Rect::new(500.0, 500.0, 600.0, 600.0);
+        assert!(drawn_alike(&live, &drawn, NodeId(999), &shared, &[off], &mut spent));
+        assert_eq!(spent.compared, MAX_PAGE_COMPARISONS);
     }
 
     /// "AVA" at 40 points, at (10, 60).
@@ -1365,6 +1453,30 @@ mod tests {
         appearance.items.push(AppearanceItem::Stroke(stroke));
         let piece = Node::path(NodeId(1), PathData::from_bezpath(&bp), appearance);
         let outlines = Node::group(NodeId(2), vec![Arc::new(piece)]);
+        assert_eq!(painted_outlines(&outlines), Some(Rect::new(9.0, 9.0, 21.0, 21.0)));
+    }
+
+    /// A piece of type outlines that is only contours of zero length paints nothing either: a dot
+    /// piece with a round 2 point stroke beside a stroked square adds nothing to the square's box.
+    #[test]
+    fn a_piece_of_only_zero_length_contours_paints_nothing() {
+        let mut stroke = StrokeLayer::new(Paint::solid(Color::BLACK), 2.0);
+        (stroke.join, stroke.cap) = (LineJoin::Round, LineCap::Round);
+        let mut appearance = Appearance::default();
+        appearance.items.push(AppearanceItem::Fill(vectorcraft_doc::FillLayer::new(Paint::solid(Color::BLACK))));
+        appearance.items.push(AppearanceItem::Stroke(stroke));
+        let mut square = BezPath::new();
+        square.move_to((10.0, 10.0));
+        square.line_to((20.0, 10.0));
+        square.line_to((20.0, 20.0));
+        square.line_to((10.0, 20.0));
+        square.close_path();
+        let mut dot = BezPath::new();
+        dot.move_to((50.0, 50.0));
+        dot.line_to((50.0, 50.0));
+        dot.close_path();
+        let pieces = [(1, square), (2, dot)].map(|(id, bp)| Arc::new(Node::path(NodeId(id), PathData::from_bezpath(&bp), appearance.clone())));
+        let outlines = Node::group(NodeId(3), pieces.to_vec());
         assert_eq!(painted_outlines(&outlines), Some(Rect::new(9.0, 9.0, 21.0, 21.0)));
     }
 

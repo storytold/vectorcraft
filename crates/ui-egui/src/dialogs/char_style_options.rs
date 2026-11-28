@@ -11,7 +11,7 @@ use craft::behavior::Mixed;
 use craft::text::ui::character::{AKI_PRESETS, DIACRITIC_PRESETS, TSUME_PRESETS};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _};
-use craft::ui::dialog::{DialogResult, FieldRefusal};
+use craft::ui::dialog::{DialogResult, FieldRefusal, StackDialog};
 use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{
     DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, TabLayout,
@@ -21,6 +21,7 @@ use craft::ui::runtime::env::{Env, Label};
 use craft::ui::text::{NumberField, NumberPick};
 use serde_json::{Map, Value, json};
 use vectorcraft_doc::setup::DocSetup;
+use vectorcraft_engine::cmd::textstyles::NORMAL_CHAR;
 
 use super::preview::LivePreview;
 use crate::VectorcraftApp;
@@ -290,9 +291,11 @@ pub(crate) fn tri_state(key: impl Into<String>, label: impl Into<Label>) -> Para
     })
 }
 
-/// The General tab's rows: the style's name and what it sets, or nothing of that while `attrs` is refused.
-pub(crate) fn general_rows(attrs: Result<Map<String, Value>, String>) -> Vec<PropertyRow> {
-    let mut rows = vec![PropertyRow::field(text("name", tl!("Style Name:")))];
+/// The General tab's rows: the style's name and what it sets, or nothing of that while `attrs` is refused. The name
+/// row is disabled when `fixed_name` (a Normal style, which keeps its name).
+pub(crate) fn general_rows(attrs: Result<Map<String, Value>, String>, fixed_name: bool) -> Vec<PropertyRow> {
+    let name = text("name", tl!("Style Name:"));
+    let mut rows = vec![PropertyRow::field(if fixed_name { name.disabled() } else { name })];
     rows.extend(attrs.into_iter().flatten().map(|(key, value)| PropertyRow::value(Label::Empty, super::form::attribute_line(&key, &value))));
     rows
 }
@@ -1020,7 +1023,8 @@ fn opentype_rows() -> Vec<PropertyRow> {
 pub(crate) fn tabs(fields: &DialogFields, opening: &Opening) -> Vec<PropertiesTab> {
     let titles =
         [tl!("General"), tl!("Basic Character Formats"), tl!("Advanced Character Formats"), tl!("Character Color"), tl!("OpenType Features")];
-    let bodies = [general_rows(edited_attrs(fields, opening)), basic_rows(), advanced_rows(), color_rows(opening), opentype_rows()];
+    let general = general_rows(edited_attrs(fields, opening), opening.style == NORMAL_CHAR);
+    let bodies = [general, basic_rows(), advanced_rows(), color_rows(opening), opentype_rows()];
     SECTIONS
         .into_iter()
         .zip(titles)
@@ -1165,7 +1169,8 @@ pub(crate) use style_dialog;
 pub(crate) struct CharStyleOptions {
     inner: HostedPropertiesDialog,
     opening: Arc<Opening>,
-    document: u64,
+    /// The opening document's uid and revert count.
+    document: (u64, u64),
 }
 
 impl CharStyleOptions {
@@ -1192,9 +1197,14 @@ pub(crate) struct Preview {
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     crate::panels::character::end_typing(app);
     let state = app.session.active().ok_or("no document open")?;
-    let (document, doc) = (state.uid, &state.doc);
-    let def = doc.char_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no character style `{name}`"))?;
-    let opening = Arc::new(Opening::new(name, def.attrs.clone(), &doc.setup, swatch_choices(doc)));
+    let (document, doc) = ((state.uid, state.reverts), &state.doc);
+    // [Normal Character Style] has no definition until it is first redefined: it sets nothing.
+    let attrs = match doc.char_styles.iter().find(|s| s.name == name) {
+        Some(def) => def.attrs.clone(),
+        None if name == NORMAL_CHAR => Map::new(),
+        None => return Err(format!("no character style `{name}`")),
+    };
+    let opening = Arc::new(Opening::new(name, attrs, &doc.setup, swatch_choices(doc)));
     let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening, document };
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(json!({"dialog": KIND}))
@@ -1219,52 +1229,90 @@ pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 /// The dialog's frame work: previews the values, commits at OK, and rolls the preview back at Cancel.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let refusals = Refusals {
+        busy: "finish the active edit before applying Character Style Options",
+        elsewhere: "switch back to the document where Character Style Options was opened",
+        closed: "the document where Character Style Options was opened has closed",
+    };
+    pump_in_opening_document::<CharStyleOptions>(
+        app,
+        |app| &mut app.char_style_preview,
+        |d| (d.document, d.frame()),
+        CharStyleOptions::hosted_mut,
+        (tl!("Character Style Options"), "charStyle.edit"),
+        &refusals,
+    );
+}
+
+/// Why a style options dialog's OK is refused outside its own preview.
+pub(crate) struct Refusals {
+    /// Another edit is active in the opening document.
+    pub(crate) busy: &'static str,
+    /// Another document is active.
+    pub(crate) elsewhere: &'static str,
+    /// The opening document has closed.
+    pub(crate) closed: &'static str,
+}
+
+/// Runs one frame of the style options dialog `D` that opened on one document: previews and commits `command`
+/// (its undo label and id) only while that document is active, has not been reverted since the dialog opened and
+/// has no other edit active in it, refuses OK elsewhere with `refusals`, and at Cancel rolls back only the preview
+/// the dialog still owns. `preview` is the app's slot for the dialog's preview, `state` gives the opening
+/// document's uid and revert count and this frame's state, and `hosted` gives the hosted dialog that takes OK's
+/// answer.
+pub(crate) fn pump_in_opening_document<D: StackDialog>(
+    app: &mut VectorcraftApp,
+    preview: fn(&mut VectorcraftApp) -> &mut Preview,
+    state: fn(&mut D) -> ((u64, u64), Frame),
+    hosted: fn(&mut D) -> &mut HostedPropertiesDialog,
+    (label, command): (&str, &str),
+    refusals: &Refusals,
+) {
     let Some(dialogs) = app.dialogs() else { return };
     let active = app.session.active().map(|doc| (doc.uid, app.session.tool_resets()));
     let interaction_selection = app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
-    let owns_interaction = app.char_style_preview.activation == active
-        && app
-            .char_style_preview
-            .interaction_selection
-            .as_ref()
-            .zip(interaction_selection.as_ref())
-            .is_some_and(|(owned, current)| Arc::ptr_eq(owned, current));
-    let Some((document, frame)) = dialogs.with(|host| host.get_mut::<CharStyleOptions>().map(|d| (d.document, d.frame()))) else {
-        if matches!(dialogs.with(|host| host.take::<CharStyleOptions>()), Some(DialogResult::Cancel)) {
-            let preview = std::mem::take(&mut app.char_style_preview);
+    let owned = preview(app);
+    let owns_interaction = owned.activation == active
+        && owned.interaction_selection.as_ref().zip(interaction_selection.as_ref()).is_some_and(|(owned, current)| Arc::ptr_eq(owned, current));
+    let Some(((document, reverts), frame)) = dialogs.with(|host| host.get_mut::<D>().map(state)) else {
+        if matches!(dialogs.with(|host| host.take::<D>()), Some(DialogResult::Cancel)) {
+            let owned = std::mem::take(preview(app));
             if owns_interaction {
-                preview.live.cancel(app);
+                owned.live.cancel(app);
             }
         }
         return;
     };
-    let done = if let Some(activation) = active.filter(|(uid, _)| *uid == document) {
+    let in_opening = app.session.active().is_some_and(|doc| (doc.uid, doc.reverts) == (document, reverts));
+    let done = if let Some(activation) = active.filter(|_| in_opening) {
         if interaction_selection.is_some() && !owns_interaction {
-            frame.ok.then(|| Err("finish the active edit before applying Character Style Options".into()))
+            frame.ok.then(|| Err(refusals.busy.into()))
         } else {
-            let preview = std::mem::take(&mut app.char_style_preview);
-            let live = if owns_interaction { preview.live } else { LivePreview::default() };
-            let (live, answer) = drive(app, live, tl!("Character Style Options"), "charStyle.edit", &frame);
+            let owned = std::mem::take(preview(app));
+            let live = if owns_interaction { owned.live } else { LivePreview::default() };
+            let (live, answer) = drive(app, live, label, command, &frame);
             let interaction_selection =
                 app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
-            app.char_style_preview = Preview { live, activation: Some(activation), interaction_selection };
+            *preview(app) = Preview { live, activation: Some(activation), interaction_selection };
             answer
         }
     } else if frame.ok {
-        let reason = if app.session.documents().iter().any(|doc| doc.uid == document) {
-            "switch back to the document where Character Style Options was opened"
+        let why = if app.session.active().is_some_and(|doc| doc.uid == document) {
+            "The document was reverted. Reopen this dialog to continue."
+        } else if app.session.documents().iter().any(|doc| doc.uid == document) {
+            refusals.elsewhere
         } else {
-            "the document where Character Style Options was opened has closed"
+            refusals.closed
         };
-        Some(Err(reason.into()))
+        Some(Err(why.into()))
     } else {
         None
     };
     if let Some(done) = done {
         let answer = done.map(drop).map_err(|why| reason(&why));
         dialogs.with(|host| {
-            if let Some(d) = host.get_mut::<CharStyleOptions>() {
-                d.hosted_mut().answer_ok(answer);
+            if let Some(d) = host.get_mut::<D>() {
+                hosted(d).answer_ok(answer);
             }
         });
     }

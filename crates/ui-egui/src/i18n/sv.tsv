@@ -2574,6 +2574,9 @@ font-technology	Variable	Variabla
 	Only Web Colors	Endast webbfärger
 	Opacity	Opacitet
 	Show Opacity	Visa opacitet
+	Show Hex Field	Visa hexfält
+	Hex or CSS color	Hex- eller CSS-färg
+	Parse Color	Tolka färg
 	Opacity & Mask Define Knockout Shape	Opacitet och mask definierar utsparningsform
 	Opacity Mask	Opacitetsmask
 	Opacity Mask Info	Info om opacitetsmask
@@ -4991,7 +4994,9 @@ liquify-list-end	{0}, {1}	{0} och {1}
 @msg	is a confirm's answer, whose `value` must be true or false	är svaret på en confirm, vars `value` måste vara true eller false
 @msg	is longer than 16 KiB	är längre än 16 KiB
 @msg	is a prompt's answer, whose `value` must be a string or null	är svaret på en prompt, vars `value` måste vara en sträng eller null
-@msg	must have `kind` alert, confirm or prompt	måste ha `kind` alert, confirm eller prompt
+@msg	must have `kind` alert, confirm, prompt or window	måste ha `kind` alert, confirm, prompt eller window
+@msg	is a window's answer, whose `value` must be a list of steps	är ett fönsters svar, vars `value` måste vara en lista med steg
+@msg	has a step {i} that is not a valid click, change or close	har ett steg {i} som inte är ett giltigt klick, en giltig ändring eller en giltig stängning
 @msg	`answers` is only for a run with nobody to ask: in the app, the person answers each dialog	`answers` är bara för en körning utan någon att fråga: i appen svarar personen på varje dialogruta
 @msg	`maxFuel` must be a whole number from 1 to {_1}	`maxFuel` måste vara ett heltal från 1 till {_1}
 @msg	`args{place}` is nested more than 64 levels deep	`args{place}` är kapslat mer än 64 nivåer djupt
@@ -7070,6 +7075,7 @@ theme	Appearance	Utseende
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` måste vara hue, saturation, brightness, red, green eller blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` måste vara none, oklch eller hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH kräver sRGB som RGB-arbetsfärgrymd
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` måste vara en hexfärg (#rgb, #rgba, #rrggbb eller #rrggbbaa) eller en CSS-färg rgb(), hsl() eller oklch() på högst 48 tecken
 @msg	`{key}` must be an array of these names: {_1}	`{key}` måste vara en lista med dessa namn: {_1}
 @msg	choose a destination folder	välj en målmapp
 @msg	choose a source folder	välj en källmapp
@@ -7441,6 +7447,15 @@ axis	Y Axis	Y-axel
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	ett skrivskyddat objekt utelämnades: returnera det som enbart {{"id": …}} eller som det gavs
 @msg	a string	en sträng
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	en kontur har bara `paint`, `width`, `join`, `cap` och `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	en del av en målande live-effekt har bara `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` och `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	en kontur har bara `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` och `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` får bara vara true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` gäller bara en liveeffekt som anger `paintOutput`, med `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` måste vara ett tal från 0 till 1
+@msg	unknown blending mode; `blend` is one of {_1}	okänt blandningsläge; `blend` är ett av {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` måste vara en lista med högst {MAX_LOOK_EFFECTS} poster
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	ett resultat har högst {MAX_RESULT_EFFECTS} effektposter
+@msg	this host takes no effects here	den här värden tar inte emot effekter här
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	en kontur måste vara {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	en effekt måste vara {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	en effekt på en fyllning returnerar bara `fills`
@@ -8504,6 +8519,7 @@ breakText	Glyphs	Glyfer
 	Place Brush Art	Placera penselgrafik
 	Replace Brush Art	Ersätt penselgrafik
 	Replace Pattern Art	Ersätt mönstergrafik
+	Place Pattern Art	Placera mönstergrafik
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Konturer använder den här penseln. Använd den nya grafiken på konturerna, eller låt dem vara som de är och lägg till en kopia av penseln med den nya grafiken?
 	Apply to Strokes	Använd på konturer
 	Leave Strokes	Behåll konturer
@@ -8573,6 +8589,8 @@ breakText	Glyphs	Glyfer
 	Tangent Circle	Tangentcirkel
 	Tangent Circle Tool	Tangentcirkelverktyget
 	No tangent circle here	Ingen tangentcirkel här
+	Ask For Circle Radius	Fråga efter cirkelradie
+	Auto-Update Default	Uppdatera standard automatiskt
 	Circle:	Cirkel:
 @msg	`ids` names an object twice	`ids` anger ett objekt två gånger
 @msg	select two or three paths or compound paths	markera två eller tre banor eller sammansatta banor

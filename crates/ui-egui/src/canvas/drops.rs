@@ -120,6 +120,9 @@ pub(crate) struct CanvasDrops<'a> {
     kind: BodyKind,
     /// The uid of the document the canvas shows.
     document: u64,
+    /// The revert count of the document the canvas shows: an appearance dragged from contents File › Revert replaced is
+    /// refused.
+    reverts: u64,
     /// `(uid, revision)` of every open document: carried art whose source is not listed unchanged is refused.
     sources: Vec<(u64, u64)>,
     /// Whether the art being carried is taken though its source's revision moved: its move was given up and the source
@@ -170,7 +173,11 @@ impl Component for CanvasDrops<'_> {
         }
         if self.kind == BodyKind::Live {
             // The art of this canvas's own document is not accepted as a panel payload: its move resumes.
-            let panel = Target::new(rect, view, covered, |p: &PanelDrag| (!matches!(p, PanelDrag::Art { .. })).then(|| Payload::Panel(p.clone())));
+            let panel = Target::new(rect, view, covered, |p: &PanelDrag| match p {
+                PanelDrag::Art { .. } => None,
+                PanelDrag::Appearance { .. } if p.appearance_for(self.document, self.reverts).is_none() => None,
+                _ => Some(Payload::Panel(p.clone())),
+            });
             let style = Target::new(rect, view, covered, |d: &StyleDrag| (d.document == self.document).then(|| Payload::Style(d.clone())));
             let symbol = Target::new(rect, view, covered, |d: &ListDrag<SymbolKey>| Some(Payload::Symbol(d.grabbed.clone())));
             let brush = Target::new(rect, view, covered, |d: &ListDrag<BrushKey>| {
@@ -214,7 +221,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
         BodyKind::Live => app.canvas_view(),
         BodyKind::Pane => pane_view(app, win, rect),
     };
-    let (Some(view), Some(document)) = (view, app.session.documents().get(win.0).map(|d| d.uid)) else { return };
+    let (Some(view), Some((document, reverts))) = (view, app.session.documents().get(win.0).map(|d| (d.uid, d.reverts))) else { return };
     let sources = app.session.documents().iter().map(|d| (d.uid, d.revision)).chain(app.canvas.panes.released_from).collect();
     // A tab rest leaves the art to the document it showed while that is the current one: any canvas or pane takes it
     // then, and nothing once that document was closed or left by other means.
@@ -227,7 +234,7 @@ pub(crate) fn show(app: &mut VectorcraftApp, ui: &mut Ui, win: Win, kind: BodyKi
     let ctx = ui.ctx().clone();
     let covered = |at: Pos2| crate::panel_docking::os_window_at(app, &ctx, at);
     let files = (CanvasFiles::new(app, rect, &view), &files_out);
-    let drops = CanvasDrops { common: Common::new(), view, kind, document, sources, given_up, covered: &covered, out: &out, files };
+    let drops = CanvasDrops { common: Common::new(), view, kind, document, reverts, sources, given_up, covered: &covered, out: &out, files };
     drops.id_salt(("canvas-drops", win)).show_at(ui, rect);
     if let Some(files) = files_out.take() {
         crate::place::canvas_drop(app, ui.ctx(), files);
@@ -279,8 +286,9 @@ pub(crate) fn released_on_pane(app: &VectorcraftApp, art: CarriedArt, at: Pos2, 
 /// to the drag session. Moves of anchors or segments stay reshapes. `covered`: another window is over the canvas at the
 /// pointer. → whether a carry runs.
 pub(crate) fn carry_out(app: &mut VectorcraftApp, cx: &mut ToolContext<'_>, pointer: &ToolPointer, covered: bool) -> bool {
+    let Some(reverts) = app.session.active().map(|st| st.reverts) else { return false };
     let Some(art) = carried(app, cx, pointer, covered) else { return false };
-    let panel = PanelDrag::Art { document: art.document, ids: art.ids.clone() };
+    let panel = PanelDrag::Art { document: art.document, reverts, ids: art.ids.clone() };
     cx.start_drag_also(art, Arc::new(panel), DragPreview::None);
     true
 }
@@ -339,7 +347,9 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             run(app, "library.use", json!({"library": library, "kind": "graphic", "item": item, "center": [at.x, at.y]}))
         }
         Payload::Brush(key) if app.session.active().is_some_and(|st| st.uid == key.doc) => match hit() {
-            None if brush_has_art(app, key) => run(app, "brush.placeArt", json!({"name": key.name, "x": at.x, "y": at.y})),
+            None if brush_has_art(app, key) && no_art_at(app, at, zoom) => {
+                run(app, "brush.placeArt", json!({"name": key.name, "x": at.x, "y": at.y}))
+            }
             None => Ok(()),
             Some(hit) => {
                 let owner = owner(app, &hit)?;
@@ -353,6 +363,12 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             run(app, "graphicStyle.apply", json!({"name": style.name, "ids": [top], "add": drop.op == DropOperation::Copy}))
         }
         Payload::Style(_) => Ok(()),
+        // A pattern swatch from the Swatches panel dropped where there is no art: a copy of its tile art with its tile.
+        Payload::Panel(PanelDrag::Paint { paint: vectorcraft_color::Paint::Pattern { pattern, .. }, rows: Some(_), .. })
+            if hit().is_none() && no_art_at(app, at, zoom) =>
+        {
+            run(app, "pattern.placeArt", json!({"name": pattern, "x": at.x, "y": at.y}))
+        }
         Payload::Panel(drag @ PanelDrag::Paint { params, paint, rows, .. }) if !params.is_null() => {
             if let Some(color) = paint.color()
                 && crate::panels::proxy_cmd(app, false) == "paint.setFill"
@@ -381,7 +397,8 @@ pub(crate) fn apply_drop(app: &mut VectorcraftApp, drop: &Dropped) -> Result<(),
             }
             run(app, cmd, params)
         }
-        Payload::Panel(PanelDrag::Appearance(source)) => {
+        Payload::Panel(drag @ PanelDrag::Appearance { .. }) => {
+            let Some(source) = app.session.active().and_then(|st| drag.appearance_for(st.uid, st.reverts)) else { return Ok(()) };
             let Some(hit) = hit() else { return Ok(()) };
             let target = top_object(app, &hit)?;
             if target == source.0 {
@@ -417,6 +434,16 @@ fn brush_has_art(app: &VectorcraftApp, key: &BrushKey) -> bool {
         .and_then(|d| vectorcraft_brush::find(&d.doc, &key.name))
         .and_then(|b| serde_json::to_value(b).ok()) // PLAN: assumed `Brush: Serialize` with a "type" tag, as the panel's `def`
         .is_some_and(|v| matches!(v["type"].as_str(), Some("scatter" | "art" | "pattern")))
+}
+
+/// Whether no art is under document point `p` at `zoom`, with fills counted even with Object Selection by Path Only and
+/// type objects by their area even with Type Object Selection by Path Only: a brush's or a pattern swatch's art is
+/// placed only there.
+fn no_art_at(app: &VectorcraftApp, p: Point, zoom: f64) -> bool {
+    hit_with(app, p, zoom, |doc, p, opt| {
+        vectorcraft_doc::hit::hit_test(doc, p, vectorcraft_doc::hit::HitOptions { path_only: false, type_path_only: false, ..opt })
+    })
+    .is_none()
 }
 
 /// The selected, editable gradient mesh and its points that a solid color dropped at document

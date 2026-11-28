@@ -12,7 +12,9 @@ use super::*;
 
 /// [`super::read`] as an EPS reads it.
 fn read(data: &[u8]) -> Result<Structure, String> {
-    super::read(data, true)
+    let mut r = super::read(data, true)?;
+    super::super::native::placed_documents(&mut r.doc, &[], &r.placed_eps);
+    Ok(r)
 }
 
 /// Editing data: header comments (crop marks 0 0 200 100), then `body`.
@@ -3495,6 +3497,178 @@ fn a_placed_file_keeps_its_folder_relative_to_the_document() {
     assert_eq!(relative_of(&cut), None);
 }
 
+/// An EPS file of `w` × `h` points filled red, its lines ended by `eol`.
+fn red_eps(w: u32, h: u32, eol: &str) -> Vec<u8> {
+    format!("%!PS-Adobe-3.0 EPSF-3.0{eol}%%BoundingBox: 0 0 {w} {h}{eol}%%EndComments{eol}1 0 0 setrgbcolor{eol}0 0 {w} {h} rectfill{eol}%%EOF{eol}")
+        .into_bytes()
+}
+
+/// `data` with the first `from` in it replaced by `to`.
+fn splice(data: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
+    let at = data.windows(from.len()).position(|w| w == from).unwrap();
+    [&data[..at], to, &data[at + from.len()..]].concat()
+}
+
+/// [`placed`]'s file with the placed file `/old/place/src/shape.eps` in the box 0 0 80 50, in the
+/// folder `src/`, without a preview, and `doc` included between `%%BeginDocument:` and
+/// `%%EndDocument` in place of `%%IncludeFile:` (`%%FileType: 0`).
+fn placed_eps_file(doc: &[u8]) -> Vec<u8> {
+    let data = placed(true, "[5 0 0 -5 0 200]", "/old/place/src/shape.eps", None, "");
+    let data = splice(&data, b"10 20 14 22 4 4 0", b"0 0 80 50 4 4 0");
+    let data = splice(&data, b"\r()\r", b"\r(src/)\r");
+    let data = splice(&data, b"%%FileType: 1", b"%%FileType: 0");
+    let included = [&b"%%BeginDocument: /old/place/src/shape.eps\r"[..], doc, b"\r%%EndDocument\r"].concat();
+    splice(&data, b"%%IncludeFile:/old/place/src/shape.eps\r", &included)
+}
+
+/// The one placed document of `data`, with the blob its key names.
+fn one_placed(data: &[u8]) -> (Node, vectorcraft_doc::PlacedDocument, vectorcraft_doc::ImageBlob, Structure) {
+    let r = read(data).unwrap();
+    let a = art(&r.doc);
+    let [n] = &a[..] else { panic!("one object: {a:?}") };
+    let NodeKind::PlacedDocument(p) = &n.kind else { panic!("a placed document: {:?}", n.kind) };
+    let blob = r.doc.images[&p.key].clone();
+    ((**n).clone(), (**p).clone(), blob, r)
+}
+
+#[test]
+fn a_placed_eps_file_whose_bytes_the_data_includes_is_a_placed_document_of_them() {
+    let eps = red_eps(80, 50, "\n");
+    let (_, p, blob, r) = one_placed(&placed_eps_file(&eps));
+    assert_eq!(*blob.bytes, eps, "the file's own bytes, without the line end the data adds");
+    assert_eq!((blob.mime.as_str(), blob.proxy.is_none()), ("application/postscript", true));
+    assert_eq!((p.link.path.as_str(), p.link.relative.as_deref()), ("/old/place/src/shape.eps", Some("src/shape.eps")));
+    assert_eq!((p.link.page, p.link.size, p.link.hash.clone()), (Some(1), Some(eps.len() as u64), Some(vectorcraft_doc::links::hash_bytes(&eps))));
+    assert_eq!((p.width, p.height, p.bounding, p.page_box), (80.0, 50.0, false, vectorcraft_doc::PageBox::Crop));
+    assert!(r.unread.is_empty() && r.hidden_unread.is_empty() && r.unread_elsewhere.is_empty(), "{:?}", r.unread);
+    assert!(!r.warnings.iter().any(|w| w == read::LINKED_PLACEHOLDERS), "{:?}", r.warnings);
+    // The matrix takes the file's own space (y up) into art space; the box's top left corner is the
+    // file's (0, 50).
+    let m = Affine::new([5.0, 0.0, 0.0, -5.0, 0.0, 200.0]);
+    for (corner, file) in [((0.0, 0.0), (0.0, 50.0)), ((80.0, 50.0), (80.0, 0.0)), ((80.0, 0.0), (80.0, 50.0))] {
+        let (got, want) = (p.xf * Point::from(corner), r.to_doc * m * Point::from(file));
+        assert!((got - want).hypot() < 1e-9, "{corner:?}: {got:?} {want:?}");
+    }
+}
+
+#[test]
+fn a_placed_eps_file_with_included_bytes_and_a_preview_keeps_only_the_bytes() {
+    let eps = red_eps(80, 50, "\n");
+    let preview = [&b"2 1 12 32 17 "[..], &[255, 255, 0, 0, 128, 0, 64, 0, 9, 9, 9, 9]].concat();
+    let section =
+        [&b"%AI17_Begin_Content_if_version_gt:24 5\r%AI26_BeginPlacedObjectPreview\r"[..], &preview, b"\r%AI26_EndPlacedObjectPreview\r"].concat();
+    let data = splice(&placed_eps_file(&eps), b"%AI17_Begin_Content_if_version_gt:24 5\r", &section);
+    // The placed document has no preview, so a save keeps its bytes.
+    let (_, _, blob, _) = one_placed(&data);
+    assert_eq!((&*blob.bytes, blob.proxy.is_none()), (&eps, true));
+    // The same bytes placed twice share the blob.
+    let one = placed_eps_file(&eps);
+    let (from, to) = (|d: &[u8], w: &[u8]| d.windows(w.len()).position(|x| x == w).unwrap(), b"%AI5_EndPlace\r");
+    let first = &one[from(&one, b"%AI5_BeginPlace")..from(&one, to) + to.len()];
+    let twice = splice(&data, b"%AI5_BeginPlace", &[first, b"%AI5_BeginPlace"].concat());
+    let r = read(&twice).unwrap();
+    let a = art(&r.doc);
+    let keys: Vec<_> = a.iter().filter_map(|n| if let NodeKind::PlacedDocument(p) = &n.kind { Some(p.key.clone()) } else { None }).collect();
+    assert!(keys.len() == 2 && keys[0] == keys[1], "{keys:?}");
+    assert!(r.doc.images[&keys[0]].proxy.is_none());
+}
+
+#[test]
+fn a_placed_eps_files_box_is_its_high_resolution_bounding_box() {
+    let eps = splice(&red_eps(80, 50, "\n"), b"%%EndComments", b"%%HiResBoundingBox: 0.5 0.5 79.5 49.5\n%%EndComments");
+    let (_, p, _, r) = one_placed(&placed_eps_file(&eps));
+    assert_eq!((p.width, p.height), (79.0, 49.0));
+    // The box's top left corner is the file's (0.5, 49.5), where the matrix puts it.
+    let m = Affine::new([5.0, 0.0, 0.0, -5.0, 0.0, 200.0]);
+    let (got, want) = (p.xf * Point::ZERO, r.to_doc * m * Point::new(0.5, 49.5));
+    assert!((got - want).hypot() < 1e-9, "{got:?} {want:?}");
+}
+
+#[test]
+fn a_placed_eps_files_box_with_its_corners_reversed_leaves_it_unread() {
+    let data = splice(&placed_eps_file(&red_eps(80, 50, "\n")), b"0 0 80 50 4 4 0", b"80 50 0 0 4 4 0");
+    let r = read(&data).unwrap();
+    assert!(!art(&r.doc).iter().any(|n| matches!(n.kind, NodeKind::PlacedDocument(_))), "{:?}", art(&r.doc));
+}
+
+#[test]
+fn an_included_eps_files_own_last_line_end_is_kept() {
+    // The data's line end after the file's own is taken off; a single one is the file's.
+    let (lf, crlf) = ("%!PS\n%%BoundingBox: 0 0 80 50\n%%EOF\n", "%!PS\r\n%%BoundingBox: 0 0 80 50\r\n%%EOF\r\n");
+    for (eps, written) in [(lf, format!("{lf}\r")), (lf, lf.to_string()), (crlf, format!("{crlf}\r\n"))] {
+        let data = splice(&placed_eps_file(b"%!@@"), b"%!@@\r%%EndDocument", format!("{written}%%EndDocument").as_bytes());
+        let (_, _, blob, _) = one_placed(&data);
+        assert_eq!(String::from_utf8_lossy(&blob.bytes), eps, "{written:?}");
+    }
+    // The line end added is the one the `%%BeginDocument:` line ends with: an LF after a file whose
+    // lines end with CR isn't read as a CRLF of the file's.
+    let data =
+        splice(&placed_eps_file(b"%!@@"), b"shape.eps\r%!@@\r%%EndDocument", b"shape.eps\n%!PS\r%%BoundingBox: 0 0 80 50\r%%EOF\r\n%%EndDocument");
+    let (_, _, blob, _) = one_placed(&data);
+    assert_eq!(String::from_utf8_lossy(&blob.bytes), "%!PS\r%%BoundingBox: 0 0 80 50\r%%EOF\r");
+    // A file whose lines end with CRLF, included as it is after an LF: its last CRLF is its own.
+    let data = splice(&placed_eps_file(b"%!@@"), b"shape.eps\r%!@@\r%%EndDocument", format!("shape.eps\n{crlf}%%EndDocument").as_bytes());
+    let (_, _, blob, _) = one_placed(&data);
+    assert_eq!(String::from_utf8_lossy(&blob.bytes), crlf);
+}
+
+#[test]
+fn a_placed_eps_file_on_commented_lines_keeps_its_bytes() {
+    let eps = red_eps(80, 50, "\r");
+    let hidden = hide_placed(&placed_eps_file(&eps));
+    let (_, _, blob, _) = one_placed(&hidden);
+    assert_eq!(String::from_utf8_lossy(&blob.bytes), String::from_utf8_lossy(&eps), "the `%_` that starts each line taken off");
+    // The line end added before `%%EndDocument` on a `%_` line of its own.
+    let (_, _, blob, _) = one_placed(&splice(&hidden, b"%%EOF\r\r%_%%EndDocument", b"%%EOF\r%_\r%_%%EndDocument"));
+    assert_eq!(String::from_utf8_lossy(&blob.bytes), String::from_utf8_lossy(&eps), "the added line end taken off");
+}
+
+#[test]
+fn an_included_postscript_file_named_as_an_ai_file_stays_unread() {
+    // Read through its name with the artboard its header gives, not the box the placed one shows.
+    for name in ["shape.ai", "SHAPE.AIT"] {
+        let mut data = placed_eps_file(&red_eps(80, 50, "\n"));
+        while data.windows(9).any(|w| w == b"shape.eps") {
+            data = splice(&data, b"shape.eps", name.as_bytes());
+        }
+        let r = read(&data).unwrap();
+        assert!(!art(&r.doc).iter().any(|n| matches!(n.kind, NodeKind::PlacedDocument(_))), "{name}: {:?}", art(&r.doc));
+        assert!(r.unread.iter().any(|(_, kinds)| kinds.iter().any(|k| k == "placed files")), "{name}: {:?}", r.unread);
+    }
+}
+
+#[test]
+fn included_eps_with_a_native_document_leaves_the_placed_file_unread() {
+    // Even unreadable native data leaves the file unread: the loader can read an artboard
+    // larger than the EPS bounding box, which would shrink and offset the art when placed.
+    for eol in ["\n", "\r", "\r\n"] {
+        let section = format!("%VectorCraft_BeginData: native \t{eol}%unreadable native data{eol}%VectorCraft_EndData{eol}%%EOF");
+        let eps = splice(&red_eps(80, 50, eol), b"%%EOF", section.as_bytes());
+        let r = read(&placed_eps_file(&eps)).unwrap();
+        assert!(
+            !art(&r.doc).iter().any(|n| matches!(n.kind, NodeKind::PlacedDocument(_))),
+            "included EPS with a native document must stay on the fallback path"
+        );
+        assert!(r.unread.iter().any(|(_, kinds)| kinds.iter().any(|k| k == "placed files")), "{:?}", r.unread);
+    }
+}
+
+#[test]
+fn included_bytes_that_arent_an_eps_file_leave_the_placed_file_unread() {
+    // A DCS file, which the placed document reader doesn't read (File › Place makes it a linked
+    // image), stays unread too.
+    let dcs = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 60 60\n%%PlateFile: (Black) EPS Local pic.K\n%%EndComments\n%%EOF\n";
+    // An EPS file without a bounding box, whose art is read on a page of another size, stays unread.
+    let boxless = b"%!PS-Adobe-3.0 EPSF-3.0\n%%EndComments\n1 0 0 setrgbcolor\n0 0 80 50 rectfill\n%%EOF\n";
+    // An EPS file whose program doesn't read draws nothing, so it stays unread too.
+    let broken = b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 80 50\n%%EndComments\n0 0 80 50 nosuchoperator\n%%EOF\n";
+    for bytes in [&b"hello\rworld"[..], dcs, boxless, broken] {
+        let r = read(&placed_eps_file(bytes)).unwrap();
+        assert!(!art(&r.doc).iter().any(|n| matches!(n.kind, NodeKind::PlacedDocument(_))), "{:?}", art(&r.doc));
+        assert!(r.unread.iter().any(|(_, kinds)| kinds.iter().any(|k| k == "placed files")), "{:?}", r.unread);
+    }
+}
+
 #[test]
 fn hidden_placed_file_ended_by_comment_stays_hidden() {
     let mut data = hide_placed(&placed(true, "[5 0 0 -5 0 200]", "/pics/photo.png", None, ""));
@@ -3588,6 +3762,7 @@ fn art_kinds(doc: &Document) -> Vec<&'static str> {
             NodeKind::Group { .. } => "group",
             NodeKind::Path { .. } => "path",
             NodeKind::Image(_) => "image",
+            NodeKind::PlacedDocument(_) => "placed",
             _ => "other",
         })
         .collect()
@@ -3596,13 +3771,16 @@ fn art_kinds(doc: &Document) -> Vec<&'static str> {
 #[test]
 fn version7_placed_file_included_whole_is_read() {
     // The included document's operators, a `~`, a nested document and counted data in it aren't
-    // the editing data's.
-    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n1 0 0 setrgbcolor frobnicate ~\n\
+    // the editing data's (the file defines them, so its program reads).
+    let eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 10 20 50 50\n%%EndComments\n/frobnicate {} def /~ {} def\n1 0 0 setrgbcolor frobnicate ~\n\
                %%BeginDocument: inner.eps\n~\n%%EndDocument\n%%BeginData: 14 Binary Bytes\n%%EndDocument\n%%EOF\n";
     let body = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}%%EndDocument\n~\n");
     let r = placed_read7(true, &body).unwrap();
-    assert_eq!(art_kinds(&r.doc), ["path"]);
-    assert_unread(&r, "placed files");
+    // A placed document of the file's bytes.
+    assert_eq!(art_kinds(&r.doc), ["placed"]);
+    let NodeKind::PlacedDocument(p) = &art(&r.doc)[0].kind else { panic!() };
+    assert_eq!(r.doc.images[&p.key].bytes.as_slice(), eps.as_bytes());
+    assert!(r.unread.is_empty(), "{:?}", r.unread);
     // One that doesn't end leaves the layer without its end.
     let cut = format!("[1 0 0 1 10 20] 10 20 50 50 (art.eps) `\n%%BeginDocument: art.eps\n{eps}~\n");
     assert!(placed_read7(true, &cut).is_err());
@@ -6440,13 +6618,82 @@ fn a_zstandard_frame_ending_in_a_zero_byte_is_read_whole() {
     }
 }
 
+/// A reader that gives at most `.1` bytes of `.0` at a time, as private data streams read one after
+/// the other give them.
+struct Trickle<'a>(&'a [u8], usize);
+
+impl std::io::Read for Trickle<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = buf.len().min(self.1).min(self.0.len());
+        let (now, rest) = self.0.split_at(n);
+        buf[..n].copy_from_slice(now);
+        self.0 = rest;
+        Ok(n)
+    }
+}
+
+/// The editing data decoded as it is read gives what decoding it whole gives, whatever the size of
+/// the reads: the compression's marker, its header and its frames may be split between them.
+#[test]
+fn editing_data_decoded_as_it_is_read_is_the_data_decoded_whole() {
+    let body = stream(&layer(""));
+    let body = body.as_bytes();
+    let header = b"%%BoundingBox: 0 0 1 1\r\n";
+    let frame = [0x28, 0xB5, 0x2F, 0xFD, 0x20, 3, 0x19, 0, 0, b'a', b'b', 0];
+    for raw in [
+        [&b"%AI24_ZStandard_Data"[..], &zstd(body)].concat(),
+        [&header[..], b"%AI12_CompressedData", &crate::ps::deflate(body)].concat(),
+        [&b"%AI24_ZStandard_Data"[..], &frame, &frame, &[0; 64]].concat(),
+        body.to_vec(),
+    ] {
+        let whole = decode_private(&raw).unwrap();
+        for step in [1, 3, 7, 19, 64 << 10] {
+            assert_eq!(decode_private_from(Trickle(&raw, step)).unwrap(), whole, "{step} bytes at a time");
+        }
+    }
+    let zeros_between = [&b"%AI24_ZStandard_Data"[..], &frame, &[0; 4], &frame].concat();
+    for damaged in [&b"%AI12_CompressedDataxx"[..], &zeros_between] {
+        assert!(decode_private(damaged).is_err());
+        for step in 1..=damaged.len() {
+            assert!(decode_private_from(Trickle(damaged, step)).is_err(), "{step} bytes at a time");
+        }
+    }
+}
+
+/// The first marker read is the one the compressed data follows: the other marker's bytes after it
+/// are not a marker.
+#[test]
+fn editing_data_is_decoded_after_the_first_marker() {
+    let body = stream(&layer(""));
+    let mut raw = [&b"%AI12_CompressedData"[..], &crate::ps::deflate(body.as_bytes())].concat();
+    let data = decode_private(&raw).unwrap();
+    // Bytes after the end of the zlib data aren't read.
+    raw.extend_from_slice(b"%AI24_ZStandard_Data");
+    assert_eq!(decode_private(&raw).unwrap(), data);
+}
+
+/// Of the editing data's streams, no more is read than the limit: data that goes on past it is
+/// refused as too large, even where all it holds past the limit is zero padding.
+#[test]
+fn no_more_of_the_private_data_streams_is_read_than_the_limit() {
+    let frame = [0x28, 0xB5, 0x2F, 0xFD, 0x20, 3, 0x19, 0, 0, b'a', b'b', 0];
+    let raw = [&b"%AI24_ZStandard_Data"[..], &frame, &[0; 100]].concat();
+    let most = raw.len() as u64;
+    assert_eq!(decode_private_within(raw.as_slice(), most).unwrap(), b"ab\0");
+    assert_eq!(decode_private_within(raw.as_slice(), most - 1), Err(too_large()));
+    assert_eq!(max_encoded(), max_data() + max_data() / 16);
+}
+
+/// A `]` without its `[` looks at a few operand stack slots, not at every slot below it: hundreds
+/// of thousands of them look at no more than four slots each.
 #[test]
 fn closing_brackets_without_their_opening_dont_rescan_the_stack() {
     let n = 200_000;
     let body = format!("{}\n{}\n", "1 ".repeat(n), "] ".repeat(n));
-    let started = std::time::Instant::now();
+    let before = read::array_slots();
     let _ = read(stream(&layer(&body)).as_bytes());
-    assert!(started.elapsed() < std::time::Duration::from_secs(20), "{:?}", started.elapsed());
+    let slots = read::array_slots() - before;
+    assert!(slots <= 4 * u64::try_from(n).unwrap(), "{n} brackets looked at {slots} slots");
 }
 
 #[test]
@@ -9042,7 +9289,7 @@ fn an_envelope_without_distort_appearance_maps_from_the_geometric_box() {
 
 /// An envelope maps from the geometric box when its file saves that box's size, saves no size,
 /// saves a size that isn't a number or saves a size far from both boxes; contents without a stroke
-/// have one box, and contents with no height have no margins.
+/// have one box.
 #[test]
 fn an_envelope_not_saved_with_its_stroke_maps_from_the_geometric_box() {
     use vectorcraft_doc::live::{EnvelopeKind, EnvelopeMap};
@@ -9083,13 +9330,52 @@ fn an_envelope_not_saved_with_its_stroke_maps_from_the_geometric_box() {
     let thin = format!("{RED}0 1 1 0 1 0 0 XA\n0.2 w\n{}b\n", rect_path(40.0, 20.0, 160.0, 80.0));
     let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &thin, 2, &plain)));
     assert_eq!(live_envelope(&art(&r.doc)[0]).4.bounds_margin, [0.0; 4]);
-    // A stroked straight line: 120 × 0 without its stroke, and 120 × 10 as saved.
-    let keys = format!("{ENVELOPE_KEYS}10 /Real (AIDeformArtHeightKey) ,\n120 /Real (AIDeformArtWidthKey) ,\n");
-    let line = format!("{RED}0 1 1 0 1 0 0 XA\n10 w\n40 20 m\n160 20 L\nS\n");
-    let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &line, 2, &plain)));
-    for n in art(&r.doc) {
-        if let NodeKind::Envelope { options, .. } = &n.kind {
-            assert_eq!(options.bounds_margin, [0.0; 4]);
+}
+
+/// A stroked straight line, 120 × 0 without its stroke, whose file saves its size with the stroke
+/// (120 × 10) maps from that box: the margins across the line are shares of its length. Lines
+/// along either axis, in a mesh envelope and in a top object envelope.
+#[test]
+fn a_stroked_straight_line_saved_with_its_stroke_maps_from_the_stroked_box() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeMap};
+    for vertical in [false, true] {
+        let (w, h) = if vertical { (10.0, 120.0) } else { (120.0, 10.0) };
+        let outer = Rect::from_center_size((100.0, 50.0), (w, h));
+        let at = move |(i, j): (usize, usize)| (outer.x0 + i as f64 * w, outer.y0 + j as f64 * h);
+        let third = move |p: (usize, usize), q: (usize, usize)| {
+            let ((x, y), (u, v)) = (at(p), at(q));
+            (x + (u - x) / 3.0, y + (v - y) / 3.0)
+        };
+        let mesh = mesh_text(1, 1, &at, &third, None);
+        let flat = EnvelopeKind::Mesh {
+            rows: 1,
+            cols: 1,
+            points: vec![
+                Point::new(outer.x0, outer.y0),
+                Point::new(outer.x1, outer.y0),
+                Point::new(outer.x0, outer.y1),
+                Point::new(outer.x1, outer.y1),
+            ],
+            handles: vec![],
+        };
+        let drawn = drawn_box(&flat, outer, outer);
+        let keys = format!("{ENVELOPE_KEYS}{h} /Real (AIDeformArtHeightKey) ,\n{w} /Real (AIDeformArtWidthKey) ,\n");
+        let line = if vertical { "100 -10 m\n100 110 L\n" } else { "40 50 m\n160 50 L\n" };
+        let line = format!("{RED}0 1 1 0 1 0 0 XA\n10 w\n{line}S\n");
+        for kind in [2, 3] {
+            let r = read_ok(&layer(&envelope_of(&mesh, &keys, &line, kind, &drawn)));
+            let a = art(&r.doc);
+            assert_eq!(a.len(), 1, "{vertical} {kind}: {a:#?}");
+            assert!(r.warnings.is_empty(), "{vertical} {kind}: {:?}", r.warnings);
+            let (.., options) = live_envelope(&a[0]);
+            let across = 5.0_f32 / 120.0;
+            let want = if vertical { [0.0, 0.0, across, across] } else { [across, across, 0.0, 0.0] };
+            assert!(options.bounds_margin.iter().zip(want).all(|(m, w)| (m - w).abs() < 1e-6), "{vertical} {kind}: {:?}", options.bounds_margin);
+            let src = EnvelopeMap::of(&a[0]).unwrap().src();
+            assert!(
+                (src.x0 - outer.x0).abs() + (src.y0 - outer.y0).abs() + (src.x1 - outer.x1).abs() + (src.y1 - outer.y1).abs() < 1e-3,
+                "{vertical} {kind}: {src:?}"
+            );
         }
     }
 }
@@ -9356,24 +9642,35 @@ fn warped_type_gets_what_the_envelopes_left_of_the_budget() {
     let exact = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&flat))));
     let beside = format!("{RED}{}f\n", rect_path(40.5, 20.0, 160.5, 80.0));
     let shifted = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &beside)));
+    let page = Rect::new(0.0, 0.0, 200.0, 100.0);
     for r in [&exact, &shifted] {
         assert_eq!(r.warped_type.checks, super::envelope::MAX_CHECKED - 1);
-        assert!(r.warped_type.page.is_some());
+        assert_eq!(r.warped_type.pages, [page]);
     }
     live_envelope(&art(&shifted.doc)[0]);
-    assert!(shifted.warped_type.spent.any > exact.warped_type.spent.any);
+    assert!(shifted.warped_type.spent.on(page).0 > exact.warped_type.spent.on(page).0);
 }
 
-/// In a file with an artboard list, warped type is held to the first artboard, not to the crop marks.
+/// In a file with an artboard list, warped type is held to every artboard, not to the crop marks.
 #[test]
-fn warped_type_is_held_to_the_first_artboard() {
+fn warped_type_is_held_to_every_artboard() {
     let boards = "%_/Document :\n%_/Dictionary :\n%_/Array :\n\
                   %_/Dictionary :\n%_0 200 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_300 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n\
                   %_/Dictionary :\n%_400 0 /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_600 -150 /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_; ,\n\
                   %_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n";
     let r = read_ok(&format!("{boards}{}", layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 40.0, 40.0)))));
     assert_eq!(r.doc.artboards[0].rect, Rect::new(0.0, 0.0, 300.0, 200.0));
-    assert_eq!(r.warped_type.page, Some(Rect::new(0.0, 0.0, 300.0, 200.0)));
+    assert_eq!(r.warped_type.pages, [Rect::new(0.0, 0.0, 300.0, 200.0), Rect::new(400.0, 200.0, 600.0, 350.0)]);
+}
+
+/// Artboards that are an earlier one to half a point, and an art box that is one of them, add no
+/// page of their own.
+#[test]
+fn pages_that_repeat_an_artboard_are_held_once() {
+    let boards = boards_at(&[[0.0, 0.0, 200.0, 100.0], [0.2, 0.0, 200.0, 100.3], [0.0, 0.0, 200.0, 100.0], [300.0, 0.0, 400.0, 100.0]]);
+    let data = format!("{boards}{}", layer(&format!("{RED}{}f\n", rect_path(20.0, 20.0, 40.0, 40.0))));
+    let r = read(stream_with_header("%%HiResBoundingBox: 300 0 400 100.4\n", &data).as_bytes()).unwrap();
+    assert_eq!(r.warped_type.pages, [Rect::new(0.0, 0.0, 200.0, 100.0), Rect::new(300.0, 0.0, 400.0, 100.0)]);
 }
 
 /// Type whose Warp is hidden draws no warp, so it stays type even with no check left.
@@ -9415,15 +9712,37 @@ fn warped_type_on_the_page_spends_what_is_left_of_the_budget() {
         w.look = Node::group(vectorcraft_doc::NodeId(u64::MAX - 10 - i as u64), vec![Arc::new(w.look.clone()), mark.clone()]);
     }
     let copy = |w: &super::envelope::WarpedLook| super::envelope::WarpedLook { slot: w.slot, look: w.look.clone(), left_out: None };
-    let page = Some(Rect::new(0.0, 60.0, 60.0, 100.0));
+    let page = Rect::new(0.0, 60.0, 60.0, 100.0);
     let settle = |w: &super::envelope::WarpedLook, spent| {
-        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, page, ..Default::default() };
+        let warped = super::envelope::WarpedType { looks: vec![copy(w)], checks: 1, spent, pages: vec![page], ..Default::default() };
         warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
     };
-    let spent = || super::envelope::Spent { any: MAX_DIFFERENCE / 2.0, solid: MAX_SOLID_DIFFERENCE / 2.0 };
+    let spent = || super::envelope::Spent { pages: vec![(page, MAX_DIFFERENCE / 2.0, MAX_SOLID_DIFFERENCE / 2.0)], ..Default::default() };
     assert_eq!(settle(&looks[1], Default::default()), 0);
     assert_eq!(settle(&looks[1], spent()), 1);
     assert_eq!(settle(&looks[0], spent()), 0);
+}
+
+/// Each page the art may be compared with has its own share of the budget: warped type on the
+/// second page spends that page's share, whatever is left of the first page's.
+#[test]
+fn warped_type_on_a_later_page_spends_that_pages_share_of_the_budget() {
+    use crate::import::native::compare::{MAX_DIFFERENCE, MAX_SOLID_DIFFERENCE};
+    let (doc, mut looks) = warped_type_doc(2);
+    // The second object shows. Its look draws a little more than it.
+    let mark = read_ok(&layer(&format!("{RED}{}f\n", rect_path(2.0, 2.0, 2.6, 2.6))));
+    let mark = art(&mark.doc)[0].clone();
+    let w = looks.remove(1);
+    let look = Node::group(vectorcraft_doc::NodeId(u64::MAX - 10), vec![Arc::new(w.look.clone()), mark]);
+    let (first, second) = (Rect::new(200.0, 0.0, 260.0, 40.0), Rect::new(0.0, 60.0, 60.0, 100.0));
+    let settle = |spent| {
+        let looks = vec![super::envelope::WarpedLook { slot: w.slot, look: look.clone(), left_out: None }];
+        let warped = super::envelope::WarpedType { looks, checks: 1, spent, pages: vec![first, second], ..Default::default() };
+        warped.settle(&mut doc.clone(), Some, &Default::default(), &mut vec![])
+    };
+    let full = |page| super::envelope::Spent { pages: vec![(page, MAX_DIFFERENCE / 2.0, MAX_SOLID_DIFFERENCE / 2.0)], ..Default::default() };
+    assert_eq!(settle(full(first)), 0);
+    assert_eq!(settle(full(second)), 1);
 }
 
 /// An envelope that comes out close to its drawn art, but with more of the page differing than the
@@ -9438,6 +9757,58 @@ fn an_envelope_that_differs_from_its_drawn_art_over_the_page_keeps_it() {
     assert_eq!(a.len(), 1, "{a:#?}");
     assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
     assert_eq!(r.warnings, [super::envelope::DRAWN]);
+}
+
+/// The document data of artboards in art space, each `[x0, y0, x1, y1]`.
+fn boards_at(boards: &[[f64; 4]]) -> String {
+    let boards: String = boards
+        .iter()
+        .map(|[x0, y0, x1, y1]| {
+            format!("%_/Dictionary :\n%_{x0} {y1} /RealPointRelToROrigin\n%_ (PositionPoint1) ,\n%_{x1} {y0} /RealPointRelToROrigin\n%_ (PositionPoint2) ,\n%_; ,\n")
+        })
+        .collect();
+    format!("%_/Document :\n%_/Dictionary :\n%_/Array :\n{boards}%_; (ArtboardArray) ,\n%_; /NotRecorded ,\n%_;\n")
+}
+
+/// The envelope of [`an_envelope_that_differs_from_its_drawn_art_over_the_page_keeps_it`] on the
+/// second artboard, the first a strip along the top that it doesn't reach: a page of the second
+/// artboard can be compared with the layers, so it is held to that page and keeps its drawn art.
+/// One that draws as its drawn art opens live there.
+#[test]
+fn an_envelope_on_a_later_artboard_that_differs_over_its_page_keeps_its_drawn_art() {
+    let boards = boards_at(&[[0.0, 98.0, 20.0, 100.0], [0.0, 0.0, 200.0, 100.0]]);
+    let shifted = format!("{RED}{}f\n", rect_path(42.0, 20.0, 162.0, 80.0));
+    let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &shifted);
+    let r = read_ok(&format!("{boards}{}", layer(&body)));
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(r.warnings, [super::envelope::DRAWN]);
+    assert_eq!(r.warped_type.pages, [Rect::new(0.0, 0.0, 20.0, 2.0), Rect::new(0.0, 0.0, 200.0, 100.0)]);
+    let flat = vectorcraft_doc::live::EnvelopeKind::Mesh {
+        rows: 1,
+        cols: 1,
+        points: vec![Point::new(40.0, 20.0), Point::new(160.0, 20.0), Point::new(40.0, 80.0), Point::new(160.0, 80.0)],
+        handles: vec![],
+    };
+    let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &drawn_content(&flat));
+    let r = read_ok(&format!("{boards}{}", layer(&body)));
+    live_envelope(&art(&r.doc)[0]);
+}
+
+/// The same envelope on no artboard, inside the art's bounding box: a page cropped to the art
+/// shows it, so it is held to that page too.
+#[test]
+fn an_envelope_off_the_artboards_that_differs_over_the_arts_box_keeps_its_drawn_art() {
+    let shifted = format!("{RED}{}f\n", rect_path(42.0, 20.0, 162.0, 80.0));
+    let body = envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), ENVELOPE_KEYS, &envelope_content(), 2, &shifted);
+    let data = format!("{}{}", boards_at(&[[0.0, 98.0, 20.0, 100.0]]), layer(&body));
+    let r = read(stream_with_header("%%HiResBoundingBox: 0 0 200 100\n", &data).as_bytes()).unwrap();
+    let a = art(&r.doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    assert!(matches!(a[0].kind, NodeKind::Group { .. }), "{a:#?}");
+    assert_eq!(r.warnings, [super::envelope::DRAWN]);
+    assert_eq!(r.warped_type.pages, [Rect::new(0.0, 0.0, 20.0, 2.0), Rect::new(0.0, 0.0, 200.0, 100.0)]);
 }
 
 /// An envelope whose drawn art holds an object the reader can't read keeps that drawn art, which
@@ -10794,9 +11165,9 @@ fn an_objects_on_path_record_that_doesnt_fit_leaves_a_plain_group() {
 }
 
 /// The path and objects of a group are measured once however many records name it: a thousand
-/// copies of a record open about as fast as one copy followed by 999 records whose path id is
-/// missing, when the group opens live, when its long path has no length, and when its first object
-/// is a group of many paths and its last object has no bounds.
+/// copies of a record measure as many paths and objects as one copy followed by 999 records whose
+/// path id is missing, when the group opens live, when its long path has no length, and when its
+/// first object is a group of many paths and its last object has no bounds.
 #[test]
 fn repeated_objects_on_path_records_dont_measure_the_objects_again() {
     use vectorcraft_testkit::ai::{on_path_member, on_path_options, on_path_record};
@@ -10821,23 +11192,18 @@ fn repeated_objects_on_path_records_dont_measure_the_objects_again() {
         let unresolved = copy.replace(ids[0], "0a6d1e52-ffff-4000-8000-000000000000");
         let one = format!("{}{copy}{}{}", &record[..start], unresolved.repeat(999), &record[end..]);
         let many = format!("{}{}{}", &record[..start], copy.repeat(1000), &record[end..]);
-        let time = |data: &str| {
-            let started = std::time::Instant::now();
+        let measure = |data: &str| {
+            let before = read::on_path_measured();
             let doc = read_ok(&format!("{data}{}", layer(&group))).doc;
-            let elapsed = started.elapsed();
+            let measured = read::on_path_measured() - before;
             let g = art(&doc)[0].clone();
             assert_eq!(g.children().unwrap().len(), n, "{why}");
             assert_eq!(g.extras().objects_on_path.is_some(), live, "{why}");
-            elapsed
+            measured
         };
-        // The fastest of three runs each, taken in turn, so that other tests running at the same
-        // time weigh on both.
-        let (mut fastest_one, mut fastest_many) = (std::time::Duration::MAX, std::time::Duration::MAX);
-        for _ in 0..3 {
-            fastest_one = fastest_one.min(time(&one));
-            fastest_many = fastest_many.min(time(&many));
-        }
-        assert!(fastest_many < fastest_one * 5, "{why}: one copy: {fastest_one:?}, 1000 copies: {fastest_many:?}");
+        let (measured_one, measured_many) = (measure(&one), measure(&many));
+        assert!(measured_one > 0, "{why}");
+        assert_eq!(measured_many, measured_one, "{why}: 1000 copies measured {measured_many} times, one copy {measured_one}");
     }
 }
 

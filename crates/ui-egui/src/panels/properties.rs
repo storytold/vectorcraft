@@ -44,9 +44,12 @@ pub(crate) struct QuickAction {
 /// The panel for what is selected: the selection's kind as its heading, then its sections (Edit
 /// Artboards' with the Artboard tool, the document's with nothing selected).
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    let inspector = Inspector::new(tl!("Properties")).title_strength(HeaderStrength::Quiet).empty(tl!("No document open"));
+    let inspector = Inspector::new(tl!("Properties")).title_strength(HeaderStrength::Quiet);
     let Some(key) = target_key(app) else {
-        inspector.show(ui, |_, _| {});
+        // The panel's own empty state, inside the roomy pad: the inspector's notice has no pad of its own.
+        inspector.target("no-document").show(ui, |ui, _| {
+            super::empty_state(ui, "settings", tl!("No document open"), tl!("Open a document to see its properties."));
+        });
         return;
     };
     let n_sel = app.session.active().map_or(0, |st| st.selection.len());
@@ -156,7 +159,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
 }
 
 fn quick_action_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
+    // Several images and nothing else: Embed and Unembed… for them, first.
+    let images = crate::place::SeveralImages::selected(app);
     Grid::new(&HALVES).show(ui, |ui, _| {
+        if let Some(images) = &images {
+            for action in images.shown(app) {
+                if Button::new(action.label()).show(ui).clicked() {
+                    images.run(app, action);
+                }
+            }
+        }
         for action in quick_actions(app) {
             Button::command(action.command).label(action.label).show(ui);
         }

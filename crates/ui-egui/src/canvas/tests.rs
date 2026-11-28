@@ -230,9 +230,9 @@ fn a_release_ends_the_image_trace_hold_without_the_panel() {
     frame(&mut app, &ctx, vec![press(false)]);
 }
 
-/// The canvas decides which tool's marks and widgets to show for the pointer where it is in the same frame: over the
-/// selected blend a Cmd press selects behind, so the Selection tool's stay; moved away in the next frame, where Cmd
-/// lends Direct Selection, they are Direct Selection's in that frame.
+/// The canvas decides which tool's marks and widgets to show for the pointer where it is in the same frame: once a
+/// Cmd-click has armed Select Behind, over the selected blend a Cmd press selects behind, so the Selection tool's
+/// stay; moved away in the next frame, where Cmd lends Direct Selection, they are Direct Selection's in that frame.
 #[test]
 fn the_shown_tool_follows_the_pointer_in_the_frame_it_moves() {
     let mut app = VectorcraftApp::new(Session::new(), Default::default());
@@ -245,14 +245,22 @@ fn the_shown_tool_follows_the_pointer_in_the_frame_it_moves() {
     app.session.execute("select.set", &json!({"ids": [a, b]})).unwrap();
     let blend = id(app.session.execute("object.blend.make", &json!({})).unwrap());
     app.select_tool("selection");
-    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
     let ctx = crate::testing::ui_context();
     frame(&mut app, &ctx, vec![]);
     let xf = app.canvas_view().unwrap();
+    let held = |events: Vec<egui::Event>| std::iter::once(egui::Event::ModifiersChanged(egui::Modifiers::COMMAND)).chain(events).collect();
     let cmd_frame = |app: &mut VectorcraftApp, at: Point| {
-        frame(app, &ctx, vec![egui::Event::ModifiersChanged(egui::Modifiers::COMMAND), egui::Event::PointerMoved(xf.to_screen(at))]);
+        frame(app, &ctx, held(vec![egui::Event::PointerMoved(xf.to_screen(at))]));
         app.session.hover_tool_id(&Mods { cmd: true, ..Default::default() })
     };
+    // A Cmd-click on empty canvas arms Select Behind; Cmd stays held.
+    let empty = xf.to_screen(Point::new(200.0, 380.0));
+    let button =
+        |pressed| egui::Event::PointerButton { pos: empty, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::COMMAND };
+    frame(&mut app, &ctx, held(vec![egui::Event::PointerMoved(empty), button(true)]));
+    frame(&mut app, &ctx, held(vec![button(false)]));
+    assert!(app.session.behind_armed());
+    app.session.execute("select.set", &json!({"ids": [blend]})).unwrap();
     // Inside the first key object, away from its anchors and the spine.
     assert_eq!(cmd_frame(&mut app, Point::new(80.0, 175.0)), "selection", "over the selected blend, the press selects behind");
     assert_eq!(cmd_frame(&mut app, Point::new(200.0, 380.0)), "directSelection", "away from it, in the same frame");
@@ -1183,6 +1191,45 @@ fn the_art_renders_within_the_largest_texture_side() {
     assert_eq!(pixel_region(&view, 1024), None, "more than the display's largest texture");
 }
 
+/// On a display of 2 pixels a point, a canvas whose corner falls between device pixels still draws
+/// its art's frame on whole device pixels at its own size, so each frame pixel covers one device
+/// pixel and a stroke's edges stay sharp instead of spreading over two device pixels.
+#[test]
+fn the_art_lands_on_whole_device_pixels() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width":400,"height":300})).unwrap();
+    app.canvas.worker_started = true; // every frame on this thread
+    let ctx = crate::testing::ui_context();
+    ctx.set_pixels_per_point(2.0);
+    let mut shapes = vec![];
+    // The first frame sets the pixels a point, the second draws at them.
+    for _ in 0..2 {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(pos2(31.3, 19.7), vec2(800.3, 600.35))), ..Default::default() };
+        let mut out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        out.textures_delta.clear();
+        shapes = flat_shapes(out.shapes);
+    }
+    let ppp = ctx.pixels_per_point();
+    assert_eq!(ppp, 2.0);
+    let rect = app.canvas_view().unwrap().rect;
+    let off_grid = |c: f32| ((c * ppp) - (c * ppp).round()).abs() > 0.01;
+    assert!(off_grid(rect.min.x) || off_grid(rect.min.y), "the canvas {rect:?} starts between device pixels");
+    let tex = app.canvas.texture.as_ref().expect("a rendered frame");
+    let (tid, size) = (tex.id(), tex.size());
+    let drawn = shapes
+        .iter()
+        .find_map(|s| match s {
+            Shape::Mesh(m) if m.texture_id == tid => Some(m.calc_bounds()),
+            _ => None,
+        })
+        .expect("the frame is drawn");
+    for (c, what) in [(drawn.min.x, "left"), (drawn.min.y, "top")] {
+        assert!(!off_grid(c), "the frame's {what} edge {c} is not on a device pixel");
+    }
+    assert!((drawn.width() * ppp - size[0] as f32).abs() < 0.01, "{} device pixels across for {} frame pixels", drawn.width() * ppp, size[0]);
+    assert!((drawn.height() * ppp - size[1] as f32).abs() < 0.01, "{} device pixels down for {} frame pixels", drawn.height() * ppp, size[1]);
+}
+
 /// `rgb` as the display transform `t` shows it.
 fn convert8(t: &craft::color_ui::display::DisplayTransform, rgb: [u8; 3]) -> [u8; 3] {
     let mut px = [rgb[0], rgb[1], rgb[2], 255];
@@ -1191,8 +1238,8 @@ fn convert8(t: &craft::color_ui::display::DisplayTransform, rgb: [u8; 3]) -> [u8
 }
 
 /// Run a test that compares two renders with the color settings that are active when it starts,
-/// and the default proof view. A test on another thread can change the process's active settings;
-/// this thread keeps its own. The proof view is the whole process's, so it is held still.
+/// and the default proof view. A test on another thread can change the process's active and working
+/// settings; this thread keeps its own. The proof view is the whole process's, so it is held still.
 fn keeping_color_settings(test: fn()) {
     let _view = crate::testing::DefaultProofView::new();
     vectorcraft_color::cms::with_active(vectorcraft_color::cms::active(), test);
@@ -6473,22 +6520,62 @@ fn the_render_worker_waits_for_a_frame_only_as_long_as_asked() {
     let job = jobs.try_recv().expect("a job to finish");
 
     let (mut w, _, done_tx) = crate::render_worker::Worker::test_channel();
-    let t0 = std::time::Instant::now();
-    assert!(w.wait(std::time::Duration::from_millis(20)).is_none());
-    assert!(t0.elapsed() >= std::time::Duration::from_millis(20), "waited the time asked");
+    // No frame finishes: the time is up at once.
+    assert!(w.wait(std::time::Duration::ZERO).is_none(), "nothing once the time is up");
 
     w.pending = Some(job.key.clone());
     done_tx.send(finished(&job)).unwrap();
-    assert_eq!(w.wait(std::time::Duration::from_secs(5)).map(|d| d.key), Some(job.key.clone()), "finished before the wait");
+    assert_eq!(w.wait(super::raster::FIRST_FRAME_GRACE).map(|d| d.key), Some(job.key.clone()), "finished before the wait");
     assert!(w.pending.is_none());
 
+    // The frame is sent once both sides reach the barrier; with no time limit, the wait returns
+    // it whether it arrives before or during the wait.
     let late = finished(&job);
-    let sender = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(30));
-        done_tx.send(late).unwrap();
+    let ready = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let sender = std::thread::spawn({
+        let ready = ready.clone();
+        move || {
+            ready.wait();
+            done_tx.send(late).unwrap();
+        }
     });
-    assert!(w.wait(std::time::Duration::from_secs(5)).is_some(), "finished during the wait");
+    ready.wait();
+    assert!(w.wait(std::time::Duration::MAX).is_some(), "finished during the wait");
     sender.join().unwrap();
+}
+
+/// A document's first frame that the worker finishes within the wait (`FIRST_FRAME_GRACE`) shows
+/// in the frame that queued it, with no frame of bare paper; one that is not finished in time shows
+/// once it lands ([`a_documents_first_frame_renders_on_the_worker`]).
+#[test]
+fn a_first_frame_finished_within_the_wait_shows_in_the_frame_that_queued_it() {
+    keeping_color_settings(a_first_frame_finished_within_the_wait);
+}
+
+fn a_first_frame_finished_within_the_wait() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+    app.canvas.worker_started = true;
+    let (worker, jobs, done_tx) = crate::render_worker::Worker::test_channel();
+    app.canvas.worker = Some(worker);
+    // The worker finishes the job as soon as it receives it, and the canvas waits for it.
+    super::raster::TEST_FIRST_FRAME_GRACE.with(|g| g.set(std::time::Duration::MAX));
+    let answer = std::thread::spawn(move || {
+        let job = jobs.recv().expect("the first frame is queued on the worker");
+        done_tx.send(finished(&job)).unwrap();
+        job.key
+    });
+    let ctx = crate::testing::ui_context();
+    let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(200.0, 150.0))), ..Default::default() };
+    ctx.run_ui(raw, |ui| show(&mut app, ui)).textures_delta.clear();
+    assert!(app.canvas.texture.is_some(), "shown in the frame that queued it");
+    assert!(app.canvas.from_worker);
+    // Dropping the worker ends the answering thread's wait for a job if none was queued.
+    let worker = app.canvas.worker.take().expect("the worker");
+    assert!(worker.pending.is_none(), "the job is done");
+    drop(worker);
+    let key = answer.join().expect("the first frame was queued on the worker");
+    assert_eq!(app.canvas.key.as_ref(), Some(&key));
 }
 
 /// An edit to a 3D effect renders the part it changed on this thread, measured by the renderer

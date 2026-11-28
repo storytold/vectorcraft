@@ -79,7 +79,7 @@ fn effect_specs() -> Vec<CommandSpec> {
             "Effect Options",
             [],
             None,
-            "{index: int, params?: {…} (merged into the current parameters), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place; params are checked against the new style), threeDType?: plane|extrude|revolve|inflate (the 3D and Materials panel's object type: changes only an applied 3D effect in place into Rotate, Extrude & Bevel, Revolve or Inflate; the settings the new effect also takes keep their values, rotation angles wrapped into -180..180 outside Revolve, and the others start at its defaults; params then merge into the new effect's; the type the effect already has, with nothing else given, changes nothing and records no undo step), visible?: bool (any other value but null is refused, when a step plays too), item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), savedBevel?: [[x, y]…] (as effect.apply)} → {ids}",
+            "{index: int, params?: {…} (merged into the current parameters; without a type, style or visibility setting, validated 3D values equal to their current values including defaults change nothing and add no undo step), warpStyle?: string (an existing Warp style suffix, e.g. arc or flag; changes only an applied Warp in place; params are checked against the new style), threeDType?: plane|extrude|revolve|inflate (the 3D and Materials panel's object type: changes only an applied 3D effect in place into Rotate, Extrude & Bevel, Revolve or Inflate; the settings the new effect also takes keep their values, rotation angles wrapped into -180..180 outside Revolve, and the others start at its defaults; params then merge into the new effect's; the type the effect already has, with nothing else given, changes nothing and records no undo step), visible?: bool (any other value but null is refused, when a step plays too), item?: appearance item index|null (as effect.remove), ids?|id?: [..], target?: \"object\"|\"contents\", aligned?: bool (index and item are rows of the first target's stack: each other target edits its equal one, as the Appearance panel does for a mixed selection; with the art of a graph design in a series given first, rows of the art's stack: docs/mcp.md), savedBevel?: [[x, y]…] (as effect.apply)} → {ids}",
             has_doc,
             set_params
         ),
@@ -896,6 +896,15 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
             }
         }
     }
+    // Supplying the current 3D values, including omitted defaults and numeric JSON representations,
+    // must not rewrite the effect or make an otherwise unchanged preview into an Undo step.
+    if kind.is_none() && warp_id.is_none() && visible.is_none() {
+        let d = &s.doc()?.doc;
+        let fx: Vec<&Effect> = targets.iter().filter_map(|&(id, at, index)| d.node(id)?.appearance.effects_at(at)?.get(index)).collect();
+        if !fx.is_empty() && fx.iter().all(|e| three_d_edit_changes_nothing(e, &params)) {
+            return Ok(json!({ "ids": [] }));
+        }
+    }
     // The effect edited, when every target has one at `index` and all are the same: a dialog's
     // preview names its step after it.
     let one = edited.first().filter(|e| edited.len() == targets.len() && edited.iter().all(|other| other == *e)).cloned().unwrap_or_default();
@@ -935,6 +944,30 @@ pub(crate) fn set_params(s: &mut Session, p: &Value) -> Result<Value> {
 /// custom bevel given by name?
 fn bevel_effect(id: &str) -> bool {
     id == effects::EXTRUDE || id == effects::CLASSIC_EXTRUDE
+}
+
+/// Whether validated parameters leave a 3D effect unchanged, including values supplied by its defaults.
+fn three_d_edit_changes_nothing(effect: &Effect, params: &Value) -> bool {
+    if !effects::is_three_d(&effect.id) {
+        return false;
+    }
+    let upgraded = effects::upgrade_params(&effect.id, params);
+    let Some(given) = upgraded.as_object() else { return true };
+    let current = effects::merged_params(&effect.id, &effect.params);
+    given.iter().all(|(key, value)| current.get(key).is_some_and(|stored| same_three_d_value(stored, value)))
+}
+
+/// JSON numbers compare by value; arrays and objects keep their structure and every component.
+fn same_three_d_value(stored: &Value, given: &Value) -> bool {
+    if stored == given {
+        return true;
+    }
+    match (stored, given) {
+        (Value::Number(a), Value::Number(b)) if a.is_f64() || b.is_f64() => a.as_f64() == b.as_f64(),
+        (Value::Array(a), Value::Array(b)) => a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_three_d_value(a, b)),
+        (Value::Object(a), Value::Object(b)) => a.len() == b.len() && a.iter().all(|(key, a)| b.get(key).is_some_and(|b| same_three_d_value(a, b))),
+        _ => false,
+    }
 }
 
 /// Does merging `params` into Pathfinder effect `e` leave it drawing as it does: the same Pathfinder

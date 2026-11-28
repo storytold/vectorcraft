@@ -847,6 +847,87 @@ fn pie_legend_labels_follow_wedges_that_take_the_documents_swatch() {
     assert_eq!(north, Some(Paint::solid(Color::WHITE)), "in an opacity mask");
 }
 
+/// A pie in the art of a symbol or a pattern that a paste brings in follows the document's swatch as a pasted pie does:
+/// with Merge, its legend label in the wedge that turned dark is white, and pasting again uses the symbol or pattern the
+/// first paste added. With Add the label stays black.
+#[test]
+fn pie_legend_labels_in_a_pasted_symbol_or_pattern_follow_wedges_that_take_the_documents_swatch() {
+    let csv = ",North,South\nP,1,1";
+    /// A pie with Legends in Wedges whose first wedge is filled with the global swatch "Brand", light yellow.
+    fn branded_pie(s: &mut Session, csv: &str) -> NodeId {
+        if doc(s).swatch("Brand").is_none() {
+            s.execute("swatch.new", &json!({"name": "Brand", "color": "#ffff66", "global": true})).unwrap();
+        }
+        let g = id_of(&s.execute("graph.create", &json!({"type": "pie", "x": 50, "y": 50, "width": 200, "height": 200, "csv": csv})).unwrap());
+        s.execute("graph.setType", &json!({"id": g.0, "pieLegend": "wedges"})).unwrap();
+        let mut wedges = vec![];
+        for c in node(s, g).children().unwrap().iter().filter(|c| c.extras().series_index == Some(0)) {
+            c.walk(&mut |m| {
+                if matches!(m.kind, NodeKind::Path { .. }) {
+                    wedges.push(m.id.0);
+                }
+            });
+        }
+        assert!(!wedges.is_empty());
+        s.execute("paint.setFill", &json!({"ids": wedges, "swatch": "Brand"})).unwrap();
+        s.execute("graph.setData", &json!({"id": g.0, "csv": csv})).unwrap();
+        g
+    }
+    /// The fill of the legend label that says `name` in `art`.
+    fn label_in(art: &[std::sync::Arc<Node>], name: &str) -> Paint {
+        let mut out = None;
+        for a in art {
+            a.walk(&mut |n| {
+                if let NodeKind::Text(t) = &n.kind
+                    && t.plain_text() == name
+                {
+                    out = Some(t.first_style().fill.clone());
+                }
+            });
+        }
+        out.unwrap()
+    }
+    let symbol_art = |s: &Session| vec![doc(s).symbols.iter().find(|x| x.name == "Chart").unwrap().art.clone()];
+    let pattern_art = |s: &Session| doc(s).pattern("Chart").unwrap().art.clone();
+
+    let mut s = session();
+    let g = branded_pie(&mut s, csv);
+    sel(&mut s, &[g]);
+    let instance = id_of(&s.execute("symbol.new", &json!({"name": "Chart"})).unwrap());
+    assert_eq!(label_in(&symbol_art(&s), "North"), Paint::solid(Color::BLACK), "black on the light wedge");
+    copy(&mut s, &[instance]);
+    for (choice, north) in [("merge", Color::WHITE), ("add", Color::BLACK)] {
+        new_doc(&mut s);
+        s.execute("swatch.new", &json!({"name": "Brand", "color": "#202020", "global": true})).unwrap();
+        s.execute("edit.paste", &json!({"swatchConflict": choice})).unwrap();
+        assert_eq!(label_in(&symbol_art(&s), "North"), Paint::solid(north), "symbol {choice}");
+        assert_eq!(label_in(&symbol_art(&s), "South"), Paint::solid(Color::BLACK), "symbol {choice}");
+        // Pasting again uses the symbol the first paste added.
+        s.execute("edit.paste", &json!({"swatchConflict": choice})).unwrap();
+        let names: Vec<&str> = doc(&s).symbols.iter().map(|x| x.name.as_str()).collect();
+        assert_eq!(names, ["Chart"], "symbol {choice}");
+    }
+
+    let mut s = session();
+    let g = branded_pie(&mut s, csv);
+    s.execute("object.pattern.make", &json!({"name": "Chart", "edit": false, "ids": [g.0]})).unwrap();
+    assert_eq!(label_in(&pattern_art(&s), "North"), Paint::solid(Color::BLACK), "black on the light wedge");
+    let r = rect(&mut s, 300.0, 300.0, 100.0, 100.0);
+    s.execute("paint.setFill", &json!({"ids": [r.0], "swatch": "Chart"})).unwrap();
+    copy(&mut s, &[r]);
+    for (choice, north) in [("merge", Color::WHITE), ("add", Color::BLACK)] {
+        new_doc(&mut s);
+        s.execute("swatch.new", &json!({"name": "Brand", "color": "#202020", "global": true})).unwrap();
+        s.execute("edit.paste", &json!({"swatchConflict": choice})).unwrap();
+        assert_eq!(label_in(&pattern_art(&s), "North"), Paint::solid(north), "pattern {choice}");
+        assert_eq!(label_in(&pattern_art(&s), "South"), Paint::solid(Color::BLACK), "pattern {choice}");
+        // Pasting again uses the pattern the first paste added.
+        s.execute("edit.paste", &json!({"swatchConflict": choice})).unwrap();
+        let names: Vec<&str> = doc(&s).patterns.iter().map(|x| x.name.as_str()).collect();
+        assert_eq!(names, ["Chart"], "pattern {choice}");
+    }
+}
+
 /// A two-line legend label in a narrow dark wedge, whose text sits off the wedge's middle line, stays white when its graph
 /// is pasted without formatting.
 #[test]

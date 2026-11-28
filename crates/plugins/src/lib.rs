@@ -26,12 +26,14 @@
 //! time it is drawn, from an appearance stack, and at `api` 2 may paint what it returns
 //! ([`painted`]); an **exporter** ([`export`]) writes the whole
 //! document in a file format of its own; an **importer** ([`import`]) reads a file in a format of
-//! its own into a new document. The process-wide [`registry`] holds the installed
+//! its own into a new document; a **generator** ([`generate`]) draws art from its parameters alone,
+//! which the document keeps with them so the art can be drawn again. The process-wide [`registry`] holds the installed
 //! plug-ins; in [`safe_mode`] none of them loads or runs. A plug-in's parameters ([`manifest`]) come with what the host's dialogs need to show
 //! them well: labels, units, groups, help and conditions ([`dialog`]). What a plug-in may do is
 //! the set of [`permissions`] its manifest lists, which the user approves when it is installed. A
 //! filter or a live effect may also add menu commands of its own ([`Command`]), which the host
-//! runs through `vc_run` with the command's id in `_context`.
+//! runs through `vc_run` with the command's id in `_context`. The web build checks modules and
+//! runs filters in a worker of its own ([`worker`]).
 //!
 //! An object filter may also be written in JavaScript ([`js`]): its manifest gives
 //! `"runtime": "js"` and names a `.js` file, which runs in a fresh `vectorcraft-js` realm for each
@@ -42,6 +44,7 @@ pub mod deferred;
 pub mod dialog;
 pub mod effect;
 pub mod export;
+pub mod generate;
 pub mod host;
 pub mod import;
 pub mod js;
@@ -53,13 +56,18 @@ pub mod permissions;
 pub mod registry;
 mod runtime;
 pub mod safe_mode;
+#[cfg(any(test, feature = "test-steady"))]
+pub mod steady;
 pub mod storage;
 pub mod wat;
+pub mod worker;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
-pub use manifest::{Budget, Command, ContextSection, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec, Runtime};
-pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, heavy_terms};
+pub use manifest::{
+    Budget, Command, ContextMenu, ContextPlace, ContextSection, ContextWhen, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec, Runtime,
+};
+pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, RunJob, Step, heavy_terms, keep_modules};
 #[doc(hidden)]
 pub use runtime::{BYTES_COPIED_PER_FUEL, FUEL_SLICE};
 

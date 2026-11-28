@@ -180,7 +180,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Paste",
             ["Edit"],
             Some("Cmd+V"),
-            "{center?: [x, y], artboardsAt?: [x, y], dx?, dy?, swatchConflict?, profileMismatch?: \"preserveNumbers\"|\"convert\"|{rgb?, cmyk?}} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch; legend labels in a pie's wedges that it turns dark or light take a redraw's contrast, unless their fill is their own) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. profileMismatch, for colors copied from a document whose RGB or CMYK profile is not this document's (clipboard.profileMismatch): \"preserveNumbers\" keeps their numbers, \"convert\" converts them into this document's profile with the working intent, and {rgb?, cmyk?} gives one of those for each model (default, also for a model left out and for null: as the model's policy of edit.colorSettings says; any other value is an error; colors whose source or destination profile is not available keep their numbers, also with \"convert\" (clipboard.profileMismatch's convertible: false); every paste command takes it, and the reply's profileMismatch lists [{model, clipboard, document, choice}]). With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers and sublayers they came from (by the names of the layer and the layers around it in another document; a missing sublayer is made inside its layer; a hidden or locked one is an error and nothing is pasted). Artboards copied with artboard.copy come with their art, together right of the last artboard as they lay, or centered on `artboardsAt` (the Artboard tool's canvas menu passes the right-click point; a value that is not [x, y] is an error) (the other paste commands but Paste on All Artboards: where they were), their art back in the layers it came from, and the Artboard tool, when chosen, selects them. In Draw Inside (view.drawMode) the objects go inside the object drawn into, as new art does, and Paste Remembers Layers doesn't apply; edit.pasteInPlace and edit.pasteOnAllArtboards do the same, and in Draw Behind they go behind the selection as edit.pasteInBack puts them; edit.pasteInFront and edit.pasteInBack ignore the drawing mode → {ids, artboard: the first new artboard's index or null, artboards: the new artboards' indices, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
+            "{center?: [x, y], artboardsAt?: [x, y], dx?, dy?, swatchConflict?, profileMismatch?: \"preserveNumbers\"|\"convert\"|{rgb?, cmyk?}} paste centred on `center` (the app passes the view centre), else offset by dx/dy (default: the Paste Offset preference). Pasting brings the image blobs, symbols, patterns, global and spot swatches (with the tint swatches of the tints used), gradient swatches, graphic styles, character and paragraph styles and brushes the objects use; one of the same name that differs comes in renamed. swatchConflict, for a swatch whose name the document gives another colour (clipboard.conflicts): \"merge\" (default: the objects take the document's swatch; legend labels in a pie's wedges that it turns dark or light take a redraw's contrast, unless their fill is their own, also for a pie in the art of a symbol, pattern, brush or graph design the paste brings) | \"add\" (the pasted swatch comes in renamed) | {name: \"merge\"|\"add\"}. profileMismatch, for colors copied from a document whose RGB or CMYK profile is not this document's (clipboard.profileMismatch): \"preserveNumbers\" keeps their numbers, \"convert\" converts them into this document's profile with the working intent, and {rgb?, cmyk?} gives one of those for each model (default, also for a model left out and for null: as the model's policy of edit.colorSettings says; any other value is an error; colors whose source or destination profile is not available keep their numbers, also with \"convert\" (clipboard.profileMismatch's convertible: false); every paste command takes it, and the reply's profileMismatch lists [{model, clipboard, document, choice}]). With Paste Remembers Layers on (layer.pasteRemembersLayers), objects go back into the layers and sublayers they came from (by the names of the layer and the layers around it in another document; a missing sublayer is made inside its layer; a hidden or locked one is an error and nothing is pasted). Artboards copied with artboard.copy come with their art, together right of the last artboard as they lay, or centered on `artboardsAt` (the Artboard tool's canvas menu passes the right-click point; a value that is not [x, y] is an error) (the other paste commands but Paste on All Artboards: where they were), their art back in the layers it came from, and the Artboard tool, when chosen, selects them. In Draw Inside (view.drawMode) the objects go inside the object drawn into, as new art does, and Paste Remembers Layers doesn't apply; edit.pasteInPlace and edit.pasteOnAllArtboards do the same, and in Draw Behind they go behind the selection as edit.pasteInBack puts them; edit.pasteInFront and edit.pasteInBack ignore the drawing mode → {ids, artboard: the first new artboard's index or null, artboards: the new artboards' indices, added: resources added, merged: conflicts merged, renamed: [{kind, from, to}]}",
             has_clipboard,
             |s, p| paste(s, p, PasteMode::Offset)
         ),
@@ -823,7 +823,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     super::symboledit::follow_history(st, editing_symbol.as_ref());
-    leave_isolation_if_gone(st);
+    st.leave_isolation_if_gone();
     super::globaledit::follow_history(st);
     st.drop_stale_variables_highlight();
     if let Some((before, _)) = paints {
@@ -860,22 +860,13 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     super::symboledit::follow_history(st, editing_symbol.as_ref());
-    leave_isolation_if_gone(st);
+    st.leave_isolation_if_gone();
     super::globaledit::follow_history(st);
     st.drop_stale_variables_highlight();
     if let Some((_, after)) = paints {
         s.paint = after;
     }
     Ok(json!({ "redone": label }))
-}
-
-/// After undo or redo, isolation mode ends when the isolated object is no longer in the document,
-/// such as the clip group Draw Inside made around the isolated object (#3705), rather than naming
-/// an id a later object may take.
-fn leave_isolation_if_gone(st: &mut crate::DocState) {
-    if st.isolation.is_some_and(|i| st.doc.node(i).is_none()) {
-        st.isolation = None;
-    }
 }
 
 /// History panel › Clear History: removes the steps after the current state and the steps before
@@ -960,8 +951,12 @@ fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::
 /// instance as it is. Copy copies the instance whole ([`copy_cut_targets`]).
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
     refuse_symbol_part(s)?;
-    let st = s.doc()?;
-    Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+    Ok(selection_roots(s.doc()?))
+}
+
+/// [`selected_roots`] of one document's selection.
+pub(crate) fn selection_roots(st: &crate::DocState) -> Vec<NodeId> {
+    roots_of(&st.doc, st.selection.in_paint_order(&st.doc))
 }
 
 /// [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art is selected:
@@ -1592,6 +1587,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         for xf in placements {
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
+                // A pasted object never goes in as a clip group's clipping path, so a copied clipping
+                // path comes back as an ordinary path that the path commands work on (#9227).
+                if let NodeKind::Path { clipping, .. } = &mut c.kind {
+                    *clipping = false;
+                }
                 // A pasted symbol set packs from the density recorded for it at Copy.
                 d.carry_set_densities(n, &c, &clip.set_densities);
                 imported.apply(&mut c, d);

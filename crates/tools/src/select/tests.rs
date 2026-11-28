@@ -1255,6 +1255,42 @@ fn an_alt_copy_snaps_to_the_original_left_behind() {
     assert_eq!(dx(&t.pointer(&c, &ev(PointerKind::Drag, 253.0, 150.0))), 103.0);
 }
 
+/// With Use Preview Bounds on, Smart Guides line up the moved selection's geometric bounds with
+/// the other art's, as they do with it off: an edge lands exactly on the other path's edge, and the
+/// edge of a stroke does not pull it there (#6436).
+#[test]
+fn a_move_lines_up_geometric_edges_with_use_preview_bounds_on() {
+    use vectorcraft_color::{Color, Paint};
+    use vectorcraft_doc::{Appearance, Node};
+    // An artboard whose edges and center are out of reach, and two rectangles stroked 20 pt.
+    let mut d = Document::new(1000.0, 1000.0);
+    let l = d.layers[0].id;
+    let mut add = |r: Rect| {
+        let id = d.alloc_id();
+        let wide = Appearance::basic(Paint::solid(Color::WHITE), Paint::solid(Color::BLACK), 20.0);
+        d.insert(Some(l), 0, Node::path(id, vectorcraft_geom::shapes::rectangle(r), wide)).unwrap();
+        id
+    };
+    let a = add(Rect::new(100.0, 100.0, 200.0, 200.0));
+    add(Rect::new(300.0, 100.0, 400.0, 200.0));
+    let s = Selection { objects: vec![a], ..Default::default() };
+    let p = paint();
+    for preview in [false, true] {
+        let c = ToolContext { preview_bounds: preview, ..cx(&d, &s, &p) };
+        let dragged = |to: f64| {
+            let mut t = SelectionTool::default();
+            t.pointer(&c, &ev(PointerKind::Down, 150.0, 150.0));
+            let a = t.pointer(&c, &ev(PointerKind::Drag, to, 150.0));
+            let Some(Action::Preview(_, v)) = a.last() else { panic!("{a:?}") };
+            (v["matrix"][4].as_f64().unwrap(), v["matrix"][5].as_f64().unwrap())
+        };
+        // The right edge, 1 pt short of the other rectangle's left edge (x = 300), lands on it.
+        assert_eq!(dragged(249.0), (100.0, 0.0), "preview {preview}");
+        // 9 pt short, it stays where it is dragged, though the edge of its stroke is 1 pt past there.
+        assert_eq!(dragged(241.0), (91.0, 0.0), "preview {preview}");
+    }
+}
+
 /// Smart Guides › Snap to Last Location: a move that comes within Snapping Tolerance of where it
 /// began goes back there, labeled "last location", a Shift move too; farther out, with the option
 /// or Smart Guides off, it stays where it is dragged, and an Alt copy snaps as it does with the
@@ -2917,14 +2953,15 @@ fn a_double_click_on_a_symbol_instance_edits_its_symbol() {
 
 /// #4891 for the Selection tool: a press on a selected object's centre point (Attributes › Show
 /// Center) moves the selection, also where no art is painted (an unfilled shape), which the press
-/// would otherwise take for a marquee; anywhere else a press still starts one.
+/// would otherwise take for a marquee; anywhere else a press still starts one. With Object
+/// Selection by Path Only, so that the inside of the unfilled shape takes no press of its own.
 #[test]
 fn a_press_on_the_centre_point_moves_an_unfilled_shape() {
     let (d, id) = doc_with_live_rect();
     let mut s = Selection::default();
     s.add(id);
     let p = paint();
-    let c = cx(&d, &s, &p);
+    let c = ToolContext { path_only: true, ..cx(&d, &s, &p) };
     let centre = Point::new(150.0, 150.0);
     let mut t = SelectionTool::default();
     assert_eq!(t.cursor(&c, centre, Mods::default()), Cursor::Move);

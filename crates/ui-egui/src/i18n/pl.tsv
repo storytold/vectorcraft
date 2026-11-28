@@ -481,6 +481,9 @@
 	Fill Color	Kolor wypełnienia
 	Opacity	Krycie
 	Show Opacity	Pokaż krycie
+	Show Hex Field	Pokaż pole hex
+	Hex or CSS color	Kolor hex lub CSS
+	Parse Color	Analizuj kolor
 	Stroke Color	Kolor obrysu
 	Fill Gradient	Gradient wypełnienia
 	Stroke Gradient	Gradient obrysu
@@ -5395,6 +5398,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`channel` must be hue, saturation, brightness, red, green or blue	`channel` musi mieć wartość hue, saturation, brightness, red, green lub blue
 @msg	`sliders` must be none, oklch or hsl	`sliders` musi mieć wartość none, oklch lub hsl
 @msg	OKLCH needs sRGB as the working RGB space	OKLCH wymaga sRGB jako roboczej przestrzeni RGB
+@msg	`text` must be a hex color (#rgb, #rgba, #rrggbb or #rrggbbaa) or a CSS rgb(), hsl() or oklch() color of at most 48 characters	`text` musi być kolorem hex (#rgb, #rgba, #rrggbb lub #rrggbbaa) albo kolorem CSS rgb(), hsl() lub oklch() o długości najwyżej 48 znaków
 @msg	`{k}` must be [x, y]	`{k}` musi mieć postać [x, y]
 @msg	`{name}` has no options	`{name}` nie ma opcji
 @msg	`{name}` is a built-in workspace; choose another name	`{name}` to wbudowany obszar roboczy; wybierz inną nazwę
@@ -7294,6 +7298,15 @@ axis	Y Axis	Oś Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	pominięto obiekt tylko do odczytu: zwróć go jako samo {{"id": …}} lub w postaci, w jakiej został przekazany
 @msg	a string	ciągiem znaków
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	obrys ma tylko `paint`, `width`, `join`, `cap` i `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	element malującego efektu dynamicznego ma tylko `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` i `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	obrys ma tylko `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` i `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` może mieć tylko wartość true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` dotyczy tylko efektu na żywo, który deklaruje `paintOutput`, z `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` musi być liczbą od 0 do 1
+@msg	unknown blending mode; `blend` is one of {_1}	nieznany tryb mieszania; `blend` to jeden z {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` musi być tablicą najwyżej {MAX_LOOK_EFFECTS} rekordów
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	wynik zawiera najwyżej {MAX_RESULT_EFFECTS} rekordów efektów
+@msg	this host takes no effects here	ten host nie przyjmuje tu efektów
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	obrys musi mieć postać {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	efekt musi mieć postać {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	efekt wypełnienia zwraca tylko `fills`
@@ -8353,6 +8366,7 @@ breakText	Glyphs	Glify
 	Place Brush Art	Umieść kompozycję pędzla
 	Replace Brush Art	Zastąp kompozycję pędzla
 	Replace Pattern Art	Zastąp kompozycję wzorka
+	Place Pattern Art	Umieść kompozycję wzorka
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Obrysy używają tego pędzla. Zastosować nową kompozycję do tych obrysów, czy pozostawić je bez zmian i dodać kopię pędzla z nową kompozycją?
 	Apply to Strokes	Zastosuj do obrysów
 	Leave Strokes	Pozostaw obrysy
@@ -8422,6 +8436,8 @@ breakText	Glyphs	Glify
 	Tangent Circle	Okrąg styczny
 	Tangent Circle Tool	Narzędzie Okrąg styczny
 	No tangent circle here	Brak okręgu stycznego w tym miejscu
+	Ask For Circle Radius	Pytaj o promień okręgu
+	Auto-Update Default	Automatycznie aktualizuj wartość domyślną
 	Circle:	Okrąg:
 @msg	`ids` names an object twice	`ids` wskazuje ten sam obiekt dwa razy
 @msg	select two or three paths or compound paths	zaznacz dwie lub trzy ścieżki lub ścieżki złożone
@@ -8996,7 +9012,9 @@ breakText	Glyphs	Glify
 @msg	missing `picks`	brak `picks`
 @msg	missing `word`	brak `word`
 @msg	must be an object with `kind` and `value`	musi być obiektem z `kind` i `value`
-@msg	must have `kind` alert, confirm or prompt	`kind` musi mieć wartość alert, confirm lub prompt
+@msg	must have `kind` alert, confirm, prompt or window	`kind` musi mieć wartość alert, confirm, prompt lub window
+@msg	is a window's answer, whose `value` must be a list of steps	jest odpowiedzią okna, której `value` musi być listą kroków
+@msg	has a step {i} that is not a valid click, change or close	ma krok {i}, który nie jest prawidłowym kliknięciem, zmianą ani zamknięciem
 @msg	must have exactly `kind` and `value`	musi mieć dokładnie `kind` i `value`
 @msg	needs a closing quote after the name	wymaga zamykającego cudzysłowu po nazwie
 @msg	needs a name	wymaga nazwy

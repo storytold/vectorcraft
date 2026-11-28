@@ -529,6 +529,58 @@ fn boards(app: &VectorcraftApp) -> (Vec<vectorcraft_geom::Rect>, usize, Vec<Stri
     (st.doc.artboards.iter().map(|a| a.rect).collect(), st.history.undo.len(), st.doc.artboards.iter().map(|a| a.name.clone()).collect())
 }
 
+#[test]
+fn control_bar_name_cancels_typing_and_commits_one_rename() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+    use egui::{Key, Modifiers};
+
+    fn draw(app: &mut VectorcraftApp, ui: &mut Ui) {
+        assert!(control_bar(app, ui, true, false));
+    }
+
+    for commit in [Key::Enter, Key::Tab] {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100, "artboards": 3})).unwrap();
+        app.select_tool("artboard");
+        select(&mut app, 1);
+        let mut panel = Panel::new(app, draw);
+        panel.room(egui::vec2(1000.0, 500.0));
+        let original = panel.app().session.active().unwrap().doc.clone();
+        let revision = panel.app().session.active().unwrap().revision;
+        let undo = undo_steps(&panel.app());
+        let name = panel.value_role("Name:", Role::TEXT_INPUT);
+        panel.click_role("Name:", Role::TEXT_INPUT);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("Discarded");
+        panel.type_text(" draft");
+        assert_eq!(panel.value_role("Name:", Role::TEXT_INPUT).as_deref(), Some("Discarded draft"));
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "typing only changes the field draft");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(panel.value_role("Name:", Role::TEXT_INPUT), name);
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+        assert_eq!(panel.app().session.active().unwrap().revision, revision);
+        assert_eq!(undo_steps(&panel.app()), undo);
+
+        panel.click_role("Name:", Role::TEXT_INPUT);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text("Renamed");
+        panel.type_text(" board");
+        panel.key(commit, Modifiers::NONE);
+        {
+            let app = panel.app();
+            let doc = &app.session.active().unwrap().doc;
+            assert_eq!(doc.artboards[1].name, "Renamed board");
+            assert_eq!(doc.artboards[0], original.artboards[0]);
+            assert_eq!(doc.artboards[2], original.artboards[2]);
+            assert_eq!(undo_steps(&app), undo + 1);
+        }
+        panel.app().run("edit.undo", json!({})).unwrap();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().doc, original);
+    }
+}
+
 /// The Control bar's size fields resize the active artboard about the reference point in one undo
 /// step: about its center, and from its top-left corner once the top-left point is chosen.
 #[test]
@@ -1221,4 +1273,72 @@ fn select_all_artboards_chooses_the_tool_and_needs_a_document() {
     assert_eq!(app.session.tool_id(), "artboard");
     let mut empty = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
     assert_eq!(empty.run("artboard.selectAll", json!({})).unwrap_err(), "no document");
+}
+
+thread_local! {
+    /// The row and section gaps the last frame's interface resolved.
+    static GAPS: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((0.0, 0.0)) };
+}
+
+/// Artboard Options shows its groups (the preset, the size and position, the colors, the marks and Global) a
+/// section gap apart, and the rows inside a group a row gap apart.
+#[test]
+fn artboard_options_groups_are_a_section_gap_apart() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150})).unwrap();
+    let mut panel = crate::tests::panel_harness::Panel::new(app, |app, ui| {
+        let gap = craft::ui::runtime::env::Env::of(ui).tokens.space.gap;
+        GAPS.with(|c| c.set((gap.row, gap.section)));
+        crate::tests::picks::dialogs(app, ui);
+    });
+    panel.room(egui::vec2(800.0, 1200.0));
+    panel.app().run("tool.options", json!({"tool": "artboard"})).unwrap();
+    panel.frame();
+    panel.frame();
+    let (row, section) = GAPS.with(std::cell::Cell::get);
+    assert!(row > 0.0 && section > row, "the interface resolved its gaps: row {row}, section {section}");
+    let between = |upper: &str, lower: &str| panel.rect(lower).min.y - panel.rect(upper).max.y;
+    let groups =
+        [("Preset:", "Name:"), ("Y:", "Background Color:"), ("Guide Label:", "Show Center Mark"), ("Video Ruler Pixel Aspect Ratio:", "Global")];
+    for (upper, lower) in groups {
+        let gap = between(upper, lower);
+        assert!((gap - section).abs() < 0.01, "{upper} to {lower}: {gap} apart, the section gap is {section}");
+    }
+    let rows = [
+        ("Name:", "Width:"),
+        ("Background Color:", "Guide Label:"),
+        ("Show Center Mark", "Show Cross Hairs"),
+        ("Global", "Fade Region Outside Artboard"),
+    ];
+    for (upper, lower) in rows {
+        let gap = between(upper, lower);
+        assert!((gap - row).abs() < 0.01, "{upper} to {lower}: {gap} apart, the row gap is {row}");
+    }
+}
+
+/// The list fills the panel above its footer, so the footer's buttons sit at the bottom of the panel and follow its
+/// height, as the Layers panel's do, and a list longer than the panel scrolls above them (#6085).
+#[test]
+fn the_list_fills_the_panel_and_the_bottom_bar_follows_its_height() {
+    use crate::tests::panel_harness::Panel;
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.session.execute("file.new", &json!({"width": 200, "height": 150, "artboards": 36})).unwrap();
+    let mut panel = Panel::new(app, show);
+    // The bottom of the footer's New Artboard button in a panel `h` points tall.
+    let bar_bottom = |panel: &mut Panel, h: f32| {
+        panel.room(egui::vec2(300.0, h));
+        panel.frame();
+        panel.frame();
+        panel.rect("New Artboard").bottom()
+    };
+    let short = bar_bottom(&mut panel, 300.0);
+    assert!(short <= 300.0, "the buttons end inside a 300 pt panel, not below it: {short}");
+    assert!(short > 300.0 - 40.0, "the buttons sit at the bottom of a 300 pt panel: {short}");
+    // The 36th row lies at or below the footer: the rows overflow the panel and scroll above it.
+    let footer_top = panel.rect("New Artboard").top();
+    let hidden = !panel.shows("Artboard 36") || panel.rect("Artboard 36").top() >= footer_top;
+    assert!(hidden, "the 36 rows overflow a 300 pt panel and scroll above the buttons at {footer_top}");
+    let tall = bar_bottom(&mut panel, 700.0);
+    assert!(tall <= 700.0, "the buttons end inside a 700 pt panel: {tall}");
+    assert!(tall - short > 350.0, "the buttons follow the panel's height: {short} -> {tall}");
 }

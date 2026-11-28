@@ -20,13 +20,13 @@ use serde_json::{Map, Value, json};
 use vectorcraft_doc::{Background, ColorMode, Unit};
 use vectorcraft_engine::cmd::newdoc::{self, ArtboardLayout, DocSettings, MAX_ARTBOARDS, PreviewMode, RASTER_PPI};
 
-use craft::behavior::{IconId, Mixed};
+use craft::behavior::{ColumnWidth, IconId, Mixed};
 use craft::ui::buttons::Button;
 use craft::ui::choice::{Checkbox, Segmented};
-use craft::ui::contract::{Bind, Entry, Props as _, Show as _, ShowContainer as _, clicked};
-use craft::ui::display::Text;
+use craft::ui::contract::{Bind, Entry, Gap, Props as _, Show as _, ShowContainer as _, clicked};
+use craft::ui::display::{Shade, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::Row;
+use craft::ui::layout_components::{Grid, Row};
 use craft::ui::patterns::form_dialogs::{
     CardCx, CardSource, DetailsCx, DocumentCard, DocumentSettings, HostedNewDocument, NewDocumentDialog, Orientation, PresetCategory,
 };
@@ -35,6 +35,7 @@ use craft::ui::pickers::Select;
 use craft::ui::popover::Popover;
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::sections::Section;
+use craft::ui::style::TypeRole;
 use craft::ui::text::{LinkMode, LinkedFields, LinkedLayout, NumberField};
 
 use super::host::open_held;
@@ -290,28 +291,28 @@ impl DocumentSettings for VcNewDocument {
         Field::new(width.clone()).show(ui, |ui, _| {
             Row::new().show(ui, |ui, _| {
                 size_field(ui, &width, &mut s.width, lengths);
-                if let Some(u) = Select::new(text(tl!("Units")), Bind::given(unit), &units).show(ui).value().cloned() {
+                if let Some(u) = Select::new(text(tl!("Units")), Bind::given(unit), &units).show(ui).events.committed().cloned() {
                     s.units = u;
                     memory.units_chosen = true;
                 }
             });
         });
-        // Host viewports below the desktop main window's 800-point minimum need this row to wrap.
-        Row::new().wrap(ui.ctx().content_rect().width() < 800.0).show(ui, |ui, _| {
+        // The row wraps whenever its fields do not fit the column, so Artboards is never cut off at its right edge.
+        Row::new().wrap(true).show(ui, |ui, _| {
             Field::new(height.clone()).show(ui, |ui, _| size_field(ui, &height, &mut s.height, lengths));
             Field::new(orientation.clone()).show(ui, |ui, _| {
                 let entries = [
                     Entry::new(Orientation::Portrait, portrait.clone()).icon(IconId::new("orientation_portrait")),
                     Entry::new(Orientation::Landscape, landscape.clone()).icon(IconId::new("orientation_landscape")),
                 ];
-                picked = Segmented::new(orientation.clone(), Bind::given(current), &entries).show(ui).value().cloned();
+                picked = Segmented::new(orientation.clone(), Bind::given(current), &entries).show(ui).events.committed().cloned();
             });
             Field::new(artboards.clone()).show(ui, |ui, _| {
                 let field = NumberField::new(artboards.clone(), Bind::given(Some(f64::from(s.artboards))))
                     .range(1.0..=f64::from(MAX_ARTBOARDS))
                     .step(1.0)
                     .commit_decimals(0);
-                if let Some(n) = field.show(ui).value().copied().flatten().filter(|n| n.is_finite()) {
+                if let Some(n) = field.show(ui).edit.events.committed().copied().flatten().filter(|n| n.is_finite()) {
                     s.artboards = n.round().clamp(1.0, f64::from(MAX_ARTBOARDS)) as u32;
                 }
             });
@@ -335,7 +336,7 @@ impl DocumentSettings for VcNewDocument {
                 .range(0.0..=vectorcraft_doc::setup::MAX_BLEED)
                 .lengths(lengths)
                 .show(ui);
-            if let Some(edited) = out.edit.value().copied() {
+            if let Some(edited) = out.edit.events.committed().copied() {
                 for (side, part) in s.bleed.iter_mut().zip(edited) {
                     if let Mixed::Same(Some(b)) = part {
                         *side = b.clamp(0.0, vectorcraft_doc::setup::MAX_BLEED);
@@ -347,26 +348,34 @@ impl DocumentSettings for VcNewDocument {
 
         Field::new(background.clone()).show(ui, |ui, _| {
             let entries: Vec<Entry<Background>> = BACKGROUNDS.iter().map(|(b, name)| Entry::new(*b, text(tl!(name)))).collect();
-            if let Some(b) = Select::new(background.clone(), Bind::given(s.background), &entries).show(ui).value().copied() {
+            if let Some(b) = Select::new(background.clone(), Bind::given(s.background), &entries).show(ui).events.committed().copied() {
                 s.background = b;
             }
         });
 
         Section::new(text(tl!("Advanced Options"))).initially_open(false).show(ui, |ui, _| advanced(ui, s));
 
-        let more = Button::new(text(tl!("More Settings"))).id_salt("more-settings").show(ui);
-        let mut more_open = memory.more_open != clicked(&more);
-        Popover::new(text(tl!("More Settings")), Bind::bound(&mut more_open)).opened_by(&more).show(ui, |ui, _| more_settings(ui, s, lengths));
-        memory.more_open = more_open;
+        // The two buttons side by side, the item gap apart.
+        let (mut more, mut manage) = (None, None);
+        Row::new().gap(Gap::Item).wrap(true).show(ui, |ui, _| {
+            more = Some(Button::new(text(tl!("More Settings"))).id_salt("more-settings").show(ui));
+            manage = Some(Button::new(text(tl!("Manage Profiles"))).id_salt("manage-profiles").show(ui));
+        });
+        if let Some(more) = &more {
+            let mut more_open = memory.more_open != clicked(more);
+            Popover::new(text(tl!("More Settings")), Bind::bound(&mut more_open)).opened_by(more).show(ui, |ui, _| more_settings(ui, s, lengths));
+            memory.more_open = more_open;
+        }
+        if let Some(manage) = &manage {
+            let mut profiles_open = memory.profiles_open != clicked(manage);
+            Popover::new(text(tl!("Manage Profiles")), Bind::bound(&mut profiles_open))
+                .opened_by(manage)
+                .show(ui, |ui, _| manage_profiles(ui, &setup, &mut action));
+            memory.profiles_open = profiles_open;
+        }
 
-        let manage = Button::new(text(tl!("Manage Profiles"))).id_salt("manage-profiles").show(ui);
-        let mut profiles_open = memory.profiles_open != clicked(&manage);
-        Popover::new(text(tl!("Manage Profiles")), Bind::bound(&mut profiles_open))
-            .opened_by(&manage)
-            .show(ui, |ui, _| manage_profiles(ui, &setup, &mut action));
-        memory.profiles_open = profiles_open;
-
-        // Units and the orientation only change how the page shows; any other edit ends the preset.
+        // Drafts stay in their controls until committed: ending the preset or choosing units cannot be undone by
+        // restoring only a scalar value. Units and orientation only change how the page shows; other edits end the preset.
         let mut after = values.settings.clone();
         after.units = before.units;
         if !turned && after != before {
@@ -427,7 +436,7 @@ fn pixels_per_inch() -> f64 {
 /// A side of the page in points, shown in the chosen units.
 fn size_field(ui: &mut egui::Ui, name: &Label, points: &mut f64, lengths: LengthUnits) {
     let field = NumberField::length(name.clone(), Bind::given(Some(*points)), lengths).range(MIN_SIDE..=MAX_SIDE);
-    if let Some(v) = field.show(ui).value().copied().flatten().filter(|v| v.is_finite()) {
+    if let Some(v) = field.show(ui).edit.events.committed().copied().flatten().filter(|v| v.is_finite()) {
         *points = v;
     }
 }
@@ -450,23 +459,23 @@ fn advanced(ui: &mut egui::Ui, s: &mut DocSettings) {
         .collect();
     let (mode, effects, preview) = (text(tl!("Color Mode")), text(tl!("Raster Effects")), text(tl!("Preview Mode")));
     Field::new(mode.clone()).show(ui, |ui, _| {
-        if let Some(m) = Select::new(mode.clone(), Bind::given(s.color_mode), &modes).show(ui).value().copied() {
+        if let Some(m) = Select::new(mode.clone(), Bind::given(s.color_mode), &modes).show(ui).events.committed().copied() {
             s.color_mode = m;
         }
     });
     Field::new(effects.clone()).show(ui, |ui, _| {
         let current = s.raster_effects_ppi.clamp(1.0, 2400.0).round() as u32;
-        if let Some(v) = Select::new(effects.clone(), Bind::given(current), &ppi).show(ui).value().copied() {
+        if let Some(v) = Select::new(effects.clone(), Bind::given(current), &ppi).show(ui).events.committed().copied() {
             s.raster_effects_ppi = f64::from(v);
         }
     });
     Field::new(preview.clone()).show(ui, |ui, _| {
-        if let Some(m) = Select::new(preview.clone(), Bind::given(s.preview_mode), &previews).show(ui).value().copied() {
+        if let Some(m) = Select::new(preview.clone(), Bind::given(s.preview_mode), &previews).show(ui).events.committed().copied() {
             s.preview_mode = m;
         }
     });
     let align = Checkbox::new(Bind::given(s.align_new_objects_to_pixel_grid)).label(text(tl!("Align New Objects to Pixel Grid"))).show(ui);
-    if let Some(on) = align.value().copied() {
+    if let Some(on) = align.events.committed().copied() {
         s.align_new_objects_to_pixel_grid = on;
     }
 }
@@ -474,23 +483,27 @@ fn advanced(ui: &mut egui::Ui, s: &mut DocSettings) {
 /// More Settings' pop-up: the artboard layout, spacing and columns. All three are off with one
 /// artboard, Columns also for the row and column layouts; columns stay within the artboards.
 fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
+    crate::panels::popover_body(ui, |ui| more_settings_rows(ui, s, lengths));
+}
+
+fn more_settings_rows(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
     let several = s.artboards > 1;
     let grid = matches!(s.layout, ArtboardLayout::GridByRow | ArtboardLayout::GridByColumn);
     let (layout, spacing, columns, right_to_left) =
         (text(tl!("Artboard Layout")), text(tl!("Spacing")), text(tl!("Columns")), text(tl!("Change to Right-to-Left Layout")));
     Field::new(layout.clone()).show(ui, |ui, _| {
         let entries: Vec<Entry<ArtboardLayout>> = ArtboardLayout::ALL.iter().map(|l| Entry::new(*l, text(tl!(l.label())))).collect();
-        if let Some(l) = Segmented::new(layout.clone(), Bind::given(s.layout), &entries).enabled(several).show(ui).value().copied() {
+        if let Some(l) = Segmented::new(layout.clone(), Bind::given(s.layout), &entries).enabled(several).show(ui).events.committed().copied() {
             choose_layout(s, l);
         }
     });
     let rtl = Checkbox::new(Bind::given(s.right_to_left)).label(right_to_left).enabled(several).show(ui);
-    if let Some(on) = rtl.value().copied() {
+    if let Some(on) = rtl.events.committed().copied() {
         s.right_to_left = on;
     }
     Field::new(spacing.clone()).show(ui, |ui, _| {
         let field = NumberField::length(spacing.clone(), Bind::given(Some(s.spacing)), lengths).range(0.0..=MAX_SPACING).enabled(several);
-        if let Some(v) = field.show(ui).value().copied().flatten().filter(|v| v.is_finite()) {
+        if let Some(v) = field.show(ui).edit.events.committed().copied().flatten().filter(|v| v.is_finite()) {
             s.spacing = v;
         }
     });
@@ -498,7 +511,7 @@ fn more_settings(ui: &mut egui::Ui, s: &mut DocSettings, lengths: LengthUnits) {
         let n = f64::from(s.artboards.max(1));
         let shown = f64::from(shown_columns(s));
         let field = NumberField::new(columns.clone(), Bind::given(Some(shown))).range(1.0..=n).step(1.0).commit_decimals(0).enabled(several && grid);
-        if let Some(v) = field.show(ui).value().copied().flatten().filter(|v| v.is_finite()) {
+        if let Some(v) = field.show(ui).edit.events.committed().copied().flatten().filter(|v| v.is_finite()) {
             // A column count replaces a preset's rows.
             s.columns = v.round().clamp(1.0, n) as u32;
             s.rows = 0;
@@ -530,21 +543,25 @@ fn choose_layout(s: &mut DocSettings, l: ArtboardLayout) {
 /// Manage Profiles' pop-up: a row per New Document profile with Edit, which opens the profile as a
 /// document, and Reset, which brings back the shipped profile. The button pressed is put in `action`.
 fn manage_profiles(ui: &mut egui::Ui, setup: &Setup, action: &mut Option<String>) {
-    Text::new(text(tl!("NEW DOCUMENT PROFILES"))).show(ui);
-    for (name, customized) in &setup.profiles {
-        ui.push_id(name, |ui| {
-            Row::new().show(ui, |ui, _| {
-                Text::new(text(tl!(name))).show(ui);
-                if clicked(&Button::new(text(tl!("Edit"))).id_salt("edit").enabled(setup.has_profile_folder).show(ui)) {
+    crate::panels::popover_body(ui, |ui| {
+        Text::new(text(tl!("NEW DOCUMENT PROFILES"))).role(TypeRole::SectionCaption).shade(Shade::Muted).show(ui);
+        // The names in one column and the Edit and Reset buttons in columns of their own, so the buttons line up.
+        Grid::new(&PROFILE_COLUMNS).gap(Gap::Item).show(ui, |ui, _| {
+            for (name, customized) in &setup.profiles {
+                Text::new(text(tl!(name))).id_salt(("profile", name)).show(ui);
+                if clicked(&Button::new(text(tl!("Edit"))).id_salt(("edit", name)).enabled(setup.has_profile_folder).show(ui)) {
                     *action = Some(format!("{EDIT_PROFILE}:{name}"));
                 }
-                if clicked(&Button::new(text(tl!("Reset"))).id_salt("reset").enabled(*customized).show(ui)) {
+                if clicked(&Button::new(text(tl!("Reset"))).id_salt(("reset", name)).enabled(*customized).show(ui)) {
                     *action = Some(format!("{RESET_PROFILE}:{name}"));
                 }
-            });
+            }
         });
-    }
+    });
 }
+
+/// The columns of Manage Profiles' rows: the profile's name, Edit and Reset.
+const PROFILE_COLUMNS: [ColumnWidth; 3] = [ColumnWidth::Content, ColumnWidth::Content, ColumnWidth::Content];
 
 /// The category of the settings New Document opens on: the most recent, else Print.
 fn first_category(app: &VectorcraftApp) -> &'static str {
@@ -737,7 +754,10 @@ pub(crate) fn preset_name(name: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
     use craft::ui::dialog::StackDialog;
+    use egui::{Key, Modifiers};
     use serde_json::json;
     use vectorcraft_engine::Session;
 
@@ -757,6 +777,190 @@ mod tests {
     /// The open dialog's fields, as `ui.dialog.get` lists them.
     fn fields(app: &VectorcraftApp) -> Value {
         app.dialogs().unwrap().with(|h| h.get::<Hosted>().unwrap().json_fields().unwrap())
+    }
+
+    fn actual_preset_dialog() -> Panel {
+        let mut app = app();
+        let preset = DocSettings {
+            name: "Cancel fixture".into(),
+            width: 200.0,
+            height: 100.0,
+            units: Unit::Points,
+            artboards: 5,
+            layout: ArtboardLayout::GridByColumn,
+            columns: 2,
+            rows: 4,
+            spacing: 10.0,
+            color_mode: ColorMode::Rgb,
+            background: Background::Transparent,
+            raster_effects_ppi: 72.0,
+            preview_mode: PreviewMode::Default,
+            ..DocSettings::default()
+        };
+        app.session.prefs.new_doc_presets = vec![preset.clone(), DocSettings { name: "Inch fixture".into(), units: Unit::Inches, ..preset }];
+        let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+        panel.room(egui::vec2(1280.0, 1100.0));
+        // The hosted opening belongs to the fixture's window context.
+        open(&mut panel.app());
+        set(&panel.app(), "preset", json!("Cancel fixture")).unwrap();
+        panel.frame();
+        panel.frame();
+        assert_eq!(fields(&panel.app())["basedOn"], "Cancel fixture");
+        panel
+    }
+
+    fn actual_create(panel: &mut Panel, expected: &Value) {
+        let expected: VcNewDocument = serde_json::from_value(expected.clone()).unwrap();
+        panel.click("Create");
+        panel.frame();
+        let app = panel.app();
+        assert!(!app.dialogs().unwrap().with(|h| h.is_open::<Hosted>()), "{:?}", app.ui.status);
+        assert_eq!(app.session.prefs.recent_new_docs[0], expected.settings, "Create preserves the accepted settings and preset metadata");
+        let doc = &app.session.active().unwrap().doc;
+        assert_eq!(doc.units, expected.settings.units);
+        assert_eq!(doc.color_mode, expected.settings.color_mode);
+        assert_eq!(doc.artboards.len(), expected.settings.artboards as usize);
+        assert_eq!(doc.artboards[0].rect.width(), expected.settings.width);
+        assert_eq!(doc.artboards[0].rect.height(), expected.settings.height);
+        assert_eq!(doc.setup.background, expected.settings.background);
+    }
+
+    fn canceled_detail_choice(label: &str) {
+        let mut panel = actual_preset_dialog();
+        if matches!(label, "Color Mode" | "Raster Effects" | "Preview Mode") {
+            panel.click("Advanced Options");
+        }
+        let original = fields(&panel.app());
+        panel.click_role(label, Role::COMBO_BOX);
+        panel.key(Key::End, Modifiers::NONE);
+        panel.frame();
+        assert_eq!(fields(&panel.app()), original, "a proposed choice preserves the preset and its full settings");
+        panel.key(Key::Escape, Modifiers::NONE);
+        assert_eq!(fields(&panel.app()), original, "Escape leaves no setting or preset change");
+        if label == "Units" {
+            // This follows the same apply_card route as a card pick. A canceled Units proposal must not set
+            // units_chosen, which would make this saved preset incorrectly keep Points.
+            set(&panel.app(), "preset", json!("Inch fixture")).unwrap();
+            panel.frame();
+            assert_eq!(fields(&panel.app())["units"], "Inches");
+        }
+        let expected = fields(&panel.app());
+        actual_create(&mut panel, &expected);
+    }
+
+    #[test]
+    fn canceled_new_document_units_preserve_preset_unit_policy() {
+        canceled_detail_choice("Units");
+    }
+    #[test]
+    fn canceled_new_document_background_preserves_preset() {
+        canceled_detail_choice("Background Contents");
+    }
+    #[test]
+    fn canceled_new_document_color_mode_preserves_preset() {
+        canceled_detail_choice("Color Mode");
+    }
+    #[test]
+    fn canceled_new_document_raster_effects_preserve_preset() {
+        canceled_detail_choice("Raster Effects");
+    }
+    #[test]
+    fn canceled_new_document_preview_preserves_preset() {
+        canceled_detail_choice("Preview Mode");
+    }
+
+    fn canceled_detail_number(label: &str, typed: &str) {
+        let mut panel = actual_preset_dialog();
+        if matches!(label, "Spacing" | "Columns") {
+            panel.click("More Settings");
+        }
+        let original = fields(&panel.app());
+        panel.click(label);
+        panel.key(Key::A, Modifiers::COMMAND);
+        panel.type_text(typed);
+        assert_eq!(panel.value(label).as_deref(), Some(typed), "the actual numeric field holds the typed draft");
+        assert_eq!(fields(&panel.app()), original, "numeric drafts preserve the preset, including its rows");
+        panel.key(Key::Escape, Modifiers::NONE);
+        if matches!(label, "Spacing" | "Columns") {
+            assert_eq!(fields(&panel.app()), original, "closing More Settings keeps the selected preset");
+            if panel.shows("Columns") {
+                panel.click("More Settings");
+            }
+        } else {
+            {
+                let app = panel.app();
+                assert!(!app.dialogs().unwrap().with(|h| h.is_open::<Hosted>()), "Escape from a modal field cancels New Document");
+                assert!(app.session.documents().is_empty());
+            }
+            open(&mut panel.app());
+            set(&panel.app(), "preset", json!("Cancel fixture")).unwrap();
+            panel.frame();
+            assert_eq!(fields(&panel.app()), original);
+        }
+        actual_create(&mut panel, &original);
+    }
+
+    #[test]
+    fn canceled_new_document_width_preserves_preset() {
+        canceled_detail_number("Width", "250");
+    }
+    #[test]
+    fn canceled_new_document_height_preserves_preset() {
+        canceled_detail_number("Height", "150");
+    }
+    #[test]
+    fn canceled_new_document_bleed_preserves_preset() {
+        canceled_detail_number("Top", "3");
+    }
+    #[test]
+    fn canceled_new_document_spacing_preserves_preset() {
+        canceled_detail_number("Spacing", "20");
+    }
+    #[test]
+    fn canceled_new_document_columns_preserve_preset_rows() {
+        canceled_detail_number("Columns", "3");
+    }
+
+    #[test]
+    fn new_document_choice_enter_commits_before_create() {
+        // Preview Mode's last choice, Overprint, turns on the whole process's Overprint Preview.
+        let _view = crate::testing::DefaultProofView::new();
+        let mut panel = actual_preset_dialog();
+        panel.click("Advanced Options");
+        for (label, key) in [
+            ("Units", "units"),
+            ("Background Contents", "backgroundContents"),
+            ("Color Mode", "colorMode"),
+            ("Raster Effects", "rasterEffectsPpi"),
+            ("Preview Mode", "previewMode"),
+        ] {
+            let before = fields(&panel.app())[key].clone();
+            panel.click_role(label, Role::COMBO_BOX);
+            panel.key(Key::End, Modifiers::NONE);
+            panel.key(Key::Enter, Modifiers::NONE);
+            assert_ne!(fields(&panel.app())[key], before, "Enter commits {label}");
+        }
+        assert_eq!(fields(&panel.app())["basedOn"], CUSTOM);
+        let expected = fields(&panel.app());
+        actual_create(&mut panel, &expected);
+    }
+
+    #[test]
+    fn create_commits_the_focused_width_without_a_prior_tab() {
+        for tab_first in [false, true] {
+            let mut panel = actual_preset_dialog();
+            panel.click("Width");
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text("250");
+            assert_eq!(panel.value("Width").as_deref(), Some("250"));
+            if tab_first {
+                panel.key(Key::Tab, Modifiers::NONE);
+            }
+            let mut expected = fields(&panel.app());
+            expected["width"] = json!(250.0);
+            expected["basedOn"] = json!(CUSTOM);
+            actual_create(&mut panel, &expected);
+        }
     }
 
     /// Set a field of the open dialog, as `ui.dialog.set` does.
@@ -821,7 +1025,8 @@ mod tests {
         };
         let landscape = bounds("Landscape", egui::accesskit::Role::RadioButton);
         let artboards = bounds("Artboards", egui::accesskit::Role::SpinButton);
-        assert!(landscape.x1 <= artboards.x0, "Landscape {landscape:?} stays left of Artboards {artboards:?}");
+        // Artboards follows Landscape on its line, or wraps below it when the column has no room for it.
+        assert!(landscape.x1 <= artboards.x0 || landscape.y1 <= artboards.y0, "Landscape {landscape:?} stays clear of Artboards {artboards:?}");
         let group = bounds("Orientation", egui::accesskit::Role::RadioGroup);
         let mut drawn = Vec::new();
         out.shapes.iter().for_each(|s| texts(&s.shape, &mut drawn));

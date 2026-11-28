@@ -173,7 +173,9 @@ fn east_asian_hidden(app: &VectorcraftApp, id: &str) -> bool {
 /// another stands in for ([`swapped_out`]) or an East Asian item with those options hidden
 /// ([`east_asian_hidden`]).
 pub fn shown_state(app: &VectorcraftApp, id: &str, p: &Value) -> Option<(bool, Option<bool>)> {
-    let en = enabled(app, id) && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p));
+    let en = enabled(app, id)
+        && (id != crate::addons::select::link_status::COMMAND || crate::addons::select::link_status::enabled(app, p))
+        && (!vectorcraft_engine::cmd::plugin::is_command_id(id) || crate::dialogs::plugin::canvas_item_enabled(app, id, p));
     if (!en && hidden_when_disabled(id)) || swapped_out(app, id) || east_asian_hidden(app, id) {
         return None;
     }
@@ -306,6 +308,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "file.cancelOpen" => !app.opening.pending.is_empty(),
         "file.openInBackground" => crate::opening::any_shown(app),
         "file.cancelPlace" => crate::placing::can_cancel(app),
+        crate::dialogs::failed_plugins::COMMAND => vectorcraft_engine::cmd::plugin::failed_load_count(&app.session) > 0,
         "plugin.cancelRuns" => crate::plugin_runs::any_running(app),
         "plugin.hideRuns" => crate::plugin_runs::any_shown(app),
         "imageTrace.cancelRuns" => crate::trace_runs::any_running(app),
@@ -402,6 +405,7 @@ fn ui_enabled(app: &VectorcraftApp, id: &str) -> bool {
         "view.guides" | "view.grid" => !app.ui.view.trim_view,
         "view.refreshMonitorProfile" => app.session.prefs.monitor_profile_display && app.display_profile.has_reader(),
         "plugin.dialog" => app.session.active().is_some(),
+        crate::dialogs::plugin::EDIT_COMMAND => crate::dialogs::plugin::one_generated_selected(app),
         // A filter may take no objects and add new ones, so no selection is needed.
         crate::dialogs::plugin::APPLY_LAST | crate::dialogs::plugin::LAST => {
             app.session.active().is_some() && crate::dialogs::plugin::last_filter(app).is_some()

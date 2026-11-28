@@ -146,8 +146,9 @@ object is where the art was.
 
 Holes stay holes, with walls of their own. Bevels move each corner along its bisector. A corner the bevel opens (a
 sharp point with the bevel outside, a narrow notch with it inside) whose miter would reach past four times the width is
-cut square across instead; at the other corners the miter is limited to four times the width. A bevel wider than a
-narrow part of the shape folds over itself. Each facet has a seam ([Seams](#seams)).
+cut square across instead; at the other corners the miter is limited to four times the width. An inside bevel on
+a single straight triangle or parallelogram with ordinary miters stops before its edges meet, keeping the requested
+bevel height. Other outlines can still fold where a bevel is wider than a narrow part of the shape. Each facet has a seam ([Seams](#seams)).
 
 ### Custom bevels
 
@@ -372,6 +373,8 @@ presets, drawn at the current X, Y and Z rotation inside a ring
 The drag changes the effect's `rotationX`, `rotationY` and `rotationZ` and previews live; X, Y and Z and the
 presets follow it (**Custom** off a preset). OK keeps the change as one undo step. The angles stay between -180°
 and 180°: of the two sets of angles that give the same turn, the cube writes the one nearest the current values.
+Untouched axes retain their original precision; only a changed axis is rounded to the fields' precision. Page Up
+and Page Down change Z while preserving fractional X and Y values.
 In the 3D and Materials panel, a drag is one undo step when the pointer is released, and the cube is off while the
 selected effects hold different rotations. The cube's 0.5° per point of drag, Escape during a drag and its keyboard
 steps are VectorCraft's own.
@@ -671,6 +674,11 @@ is VectorCraft's own.
 
 ## Parameters (`effect.apply`, `effect.setParams`)
 
+Approving an existing effect without changing its values preserves its stored parameters, document revision and
+Undo history, with Preview on or off. Supplying only the same validated parameters through `effect.setParams`
+also changes nothing and returns an empty `ids` array. Omitted defaults and equivalent numeric JSON count as the same
+values. Changed options save in one step, and invalid parameters are still refused.
+
 `threeD.extrude`: `depth`, `twist`, `taper` (%), `cap`, `bevel` (`none`, `classic`, `rounded`, `cove`, `step`,
 `ogee`, or `custom` with `bevelName` and `bevelProfile`; `{custom: name}` takes a bevel of the bevels file), `bevelWidth`, `bevelHeight`, `bevelRepeat`, `bevelSpace` (%), `bevelInside`, `bevelBothSides`.
 `threeD.inflate`: `depth`, `volume` (%), `bothSides`. All three take the view and lighting parameters Revolve
@@ -757,6 +765,8 @@ Release measurements and a repeatable CLI scene are in [3D lighting performance]
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Unchanged 3D effect options preserve the exact effect, document revision and Undo; the same rule applies to validated `effect.setParams` calls. |
+| 2026-11-27 | Classic track cube screen-plane keyboard turns preserve untouched fractional X/Y angles through preview, OK, Cancel and Undo. |
 | 2026-11-13 | Extrude & Bevel cuts its walls into slices only for a twist. A taper alone keeps each wall flat, so it is one face, without the light ticks at the joints between slices or the light line down a wall (#7019). Inflate still slices its sides for a taper. |
 | 2026-11-12 | The seams of Extrude & Bevel, Inflate and Rotate under a white light, and of the faces of Extrude & Bevel (Classic), Revolve (Classic) and Rotate (Classic), went from miter to round joins (the seams of Revolve and of colored lights, and 3D (Classic) Wireframe edges, were already round): no thorns on edge-on facets, and facets with no neighbor now have rounded convex corners ([Seams](#seams)). |
 | 2026-11-08 | Contours that cross, touch or overlap are merged by vectorcraft-pathops before Extrude & Bevel, Inflate and Rotate build a solid, sharing its limits; others are built as drawn. |

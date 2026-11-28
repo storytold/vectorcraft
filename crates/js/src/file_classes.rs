@@ -92,6 +92,19 @@ fn slot(i: &Interp, o: ObjId, name: &str) -> JsResult<Value> {
     })
 }
 
+/// The path of `id` when it is a `File`: an object whose prototype is `File.prototype` and whose
+/// path is in its own slot. `None` for anything else, a `Folder` included.
+pub(crate) fn file_path(i: &Interp, id: ObjId) -> JsResult<Option<String>> {
+    let Some(c) = &i.files else { return Ok(None) };
+    if i.object(id)?.proto != Some(c.file_proto) {
+        return Ok(None);
+    }
+    Ok(match slot(i, id, PATH)? {
+        Value::String(s) => Some(s.to_rust_string()),
+        _ => None,
+    })
+}
+
 fn set_slot(i: &mut Interp, o: ObjId, name: &str, value: Value) -> JsResult<()> {
     if let Value::String(s) = &value {
         i.rooted(std::slice::from_ref(&value), |i| i.reserve_heap(PROP_BYTES + string_bytes(s.len())))?;
@@ -646,6 +659,7 @@ fn ask_pick(i: &mut Interp, kind: &'static str, me: Option<&Value>, prompt: &Val
         args: vec![Value::str(kind), prompt, Value::Bool(multi), start, types],
         keep: vec![Value::Bool(kind == "folder"), me.cloned().unwrap_or(Value::Null), filter.clone()],
         resume: picked,
+        failed: None,
     })
 }
 

@@ -26,7 +26,8 @@ use crate::canvas::{BodyKind, show_document};
 
 mod views;
 pub(crate) use views::{
-    Views, Win, close_current, close_window, current, label, new_window, retain as retain_views, show_window, unfit_all, view, view_mut, windows,
+    Views, Win, close_current, close_window, current, label, new_window, retain as retain_views, show_window, unfit_all, view, view_by_id_mut,
+    view_mut, windows,
 };
 use views::{find, key, window_param};
 
@@ -449,6 +450,10 @@ fn show_windows(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
         let window = DocumentWindow::new(title).id_salt((w.uid, w.number, w.generation)).first_placed(w.place.translate(origin));
         let window = if raise == Some((w.uid, w.view)) { window.raise() } else { window };
         let out = window.show(ui, |ui, _| {
+            // In an OS window of its own, a Copy or Cut that the window's labels copy nothing for runs on the art.
+            if ui.ctx().viewport_id() != egui::ViewportId::ROOT {
+                crate::shortcuts::leave_to_labels(app, ui.ctx());
+            }
             // A press anywhere on the window, its title bar and tab included, makes its document current.
             pressed = pressed_on_layer(ui);
             crate::chrome::window_tab(app, ui, win);

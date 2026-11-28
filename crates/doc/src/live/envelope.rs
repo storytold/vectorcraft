@@ -95,7 +95,9 @@ pub struct EnvelopeOptions {
     /// Distort Pattern Fills (with Distort Appearance): pattern tiles bend with the art.
     pub distort_pattern_fills: bool,
     /// With Distort Appearance, how far the box the content maps from reaches past its geometric
-    /// bounds at the top, bottom, left and right, as shares of their height and width. An envelope
+    /// bounds at the top, bottom, left and right, as shares of their height and width; when the
+    /// height or width is shorter than 1e-6 pt, the margins along that side are shares of the other side
+    /// ([`envelope_margin_lengths`]). An envelope
     /// opened from a `.ai` whose saved size includes its strokes has these margins. New envelopes
     /// have none. Leaving Edit Contents measures them again when the strokes reach differently.
     #[serde(skip_serializing_if = "crate::skip::is_default")]
@@ -140,7 +142,8 @@ impl EnvelopeOptions {
         if !self.distort_appearance || !self.bounds_margin.iter().all(|m| m.is_finite() && *m >= 0.0) {
             return r;
         }
-        let grown = crate::marks::outset(r, [top * r.height(), bottom * r.height(), left * r.width(), right * r.width()]);
+        let Some([v, _, h, _]) = envelope_margin_lengths(r) else { return r };
+        let grown = crate::marks::outset(r, [top * v, bottom * v, left * h, right * h]);
         if grown.is_finite() { grown } else { r }
     }
 }
@@ -382,26 +385,53 @@ fn find_type(n: &Node, typed: &mut std::collections::HashSet<usize>) -> bool {
 /// those axes. A character's strokes reach as far past its glyphs as past the laid-out box. Type
 /// that draws nothing has its laid-out box with `blank_type_box`, and no box without it.
 fn content_box(n: &Arc<Node>, stroked: bool, to: Affine, blank_type_box: bool) -> Option<Rect> {
-    let mut typed = std::collections::HashSet::new();
-    find_type(n, &mut typed);
+    let mut typed = Typed::default();
+    find_type(n, &mut typed.holds);
     content_box_in(n, stroked, to, &typed, blank_type_box)
 }
 
-/// [`content_box`], with the addresses of the objects in `n` that hold type ([`find_type`]).
-fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collections::HashSet<usize>, blank_type_box: bool) -> Option<Rect> {
-    // `n` in the axes of `to`.
-    let moved = || {
-        if to == Affine::IDENTITY {
-            return std::borrow::Cow::Borrowed(&**n);
-        }
-        let mut m = (**n).clone();
-        m.transform(to, true);
-        std::borrow::Cow::Owned(m)
-    };
-    let own = |m: &Node| if stroked { m.visual_bounds() } else { m.geometric_bounds() };
-    if !typed.contains(&(Arc::as_ptr(n) as usize)) {
-        return own(&moved());
+/// The objects in an envelope's contents that hold type ([`find_type`]), by address, and the
+/// boxes [`content_box_in`] has measured for them with their strokes, so that measuring a
+/// container's own strokes along its members ([`container_strokes_in`]) does not measure them
+/// again.
+#[derive(Default)]
+struct Typed {
+    holds: std::collections::HashSet<usize>,
+    stroked: std::cell::RefCell<std::collections::HashMap<usize, Option<Rect>>>,
+}
+
+/// `n` in the axes of `to`, with its strokes scaled as [`Node::transform`] scales them.
+fn moved_into(n: &Node, to: Affine) -> std::borrow::Cow<'_, Node> {
+    if to == Affine::IDENTITY {
+        return std::borrow::Cow::Borrowed(n);
     }
+    let mut m = n.clone();
+    m.transform(to, true);
+    std::borrow::Cow::Owned(m)
+}
+
+/// [`content_box`], with the objects in `n` that hold type ([`Typed`]).
+fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &Typed, blank_type_box: bool) -> Option<Rect> {
+    let key = Arc::as_ptr(n) as usize;
+    if !typed.holds.contains(&key) {
+        let m = moved_into(n, to);
+        return if stroked { m.visual_bounds() } else { m.geometric_bounds() };
+    }
+    if !stroked {
+        return typed_box_in(n, false, to, typed, blank_type_box);
+    }
+    if let Some(b) = typed.stroked.borrow().get(&key) {
+        return *b;
+    }
+    let b = typed_box_in(n, true, to, typed, blank_type_box);
+    typed.stroked.borrow_mut().insert(key, b);
+    b
+}
+
+/// [`content_box_in`] of `n`, which holds type.
+fn typed_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &Typed, blank_type_box: bool) -> Option<Rect> {
+    let moved = || moved_into(n, to);
+    let own = |m: &Node| if stroked { m.visual_bounds() } else { m.geometric_bounds() };
     match &n.kind {
         NodeKind::Text(t) => {
             // Type in perspective: its outlines as its projection draws them.
@@ -442,11 +472,16 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
             let members = n.editing_children().iter();
             if stroked {
                 // The container's own strokes, scaled by `to` as `Node::transform` scales them,
-                // without copying its members.
+                // measured along its members as in `Node::visual_bounds`.
                 let mut own_strokes = Node::new(n.id, NodeKind::Group { children: Vec::new(), clip: false });
                 own_strokes.appearance = n.appearance.clone();
                 own_strokes.transform(to, true);
-                own_strokes.visual_of_members(members.map(|c| content_box_in(c, true, to, typed, blank_type_box)))
+                let painted = own_strokes.appearance.painted_strokes().next().is_some();
+                members.fold(None, |acc, c| {
+                    let b = content_box_in(c, true, to, typed, blank_type_box);
+                    let own = if painted { container_strokes_in(c, &own_strokes.appearance, Some(b), to, typed, blank_type_box) } else { None };
+                    vectorcraft_geom::union_opt(vectorcraft_geom::union_opt(acc, b), own)
+                })
             } else {
                 members
                     .filter(|c| c.visible || !layer)
@@ -457,19 +492,66 @@ fn content_box_in(n: &Arc<Node>, stroked: bool, to: Affine, typed: &std::collect
     }
 }
 
-/// The [`EnvelopeOptions::bounds_margin`] of content with bounds `stroked` and `plain`. `None` for
-/// content with no width or no height, or for margins an `f32` can't hold.
-pub fn envelope_stroke_margin(stroked: Rect, plain: Rect) -> Option<[f32; 4]> {
-    if plain.width() < 1e-6 || plain.height() < 1e-6 {
+/// The box the strokes of `appearance`, the appearance of a group or layer that holds `n` scaled
+/// by `to`, paint along `n` in the axes of `to`, as [`Node::painted_by_container`] measures them;
+/// `measured` is the box [`content_box_in`] gives `n` with its strokes, when known. Type, alone or
+/// in a clip group, has that box grown by the farthest the strokes can reach
+/// ([`crate::Appearance::outset`]); the strokes paint nothing round hidden members and guides.
+fn container_strokes_in(
+    n: &Arc<Node>,
+    appearance: &crate::Appearance,
+    measured: Option<Option<Rect>>,
+    to: Affine,
+    typed: &Typed,
+    blank_type_box: bool,
+) -> Option<Rect> {
+    if !n.visible || n.is_guide() {
         return None;
     }
-    let margin = [
-        (plain.y0 - stroked.y0) / plain.height(),
-        (stroked.y1 - plain.y1) / plain.height(),
-        (plain.x0 - stroked.x0) / plain.width(),
-        (stroked.x1 - plain.x1) / plain.width(),
-    ]
-    .map(|m| m as f32);
+    if !typed.holds.contains(&(Arc::as_ptr(n) as usize)) {
+        if to == Affine::IDENTITY {
+            return n.painted_by_container(appearance, None);
+        }
+        // Moved with its own strokes scaled, as `content_box_in` moves it, for a member measured
+        // by its visual box.
+        let mut m = (**n).clone();
+        m.transform(to, true);
+        return m.painted_by_container(appearance, None);
+    }
+    match &n.kind {
+        NodeKind::Group { clip: false, .. } | NodeKind::Layer { clip: false, .. } if !n.is_compound_shape() => n
+            .editing_children()
+            .iter()
+            .fold(None, |acc, c| vectorcraft_geom::union_opt(acc, container_strokes_in(c, appearance, None, to, typed, blank_type_box))),
+        _ => {
+            let o = appearance.outset();
+            measured.unwrap_or_else(|| content_box_in(n, true, to, typed, blank_type_box)).map(|b| b.inflate(o, o))
+        }
+    }
+}
+
+/// The lengths the top, bottom, left and right [`EnvelopeOptions::bounds_margin`] of content with
+/// geometric bounds `plain` are shares of: its height for the top and bottom and its width for the
+/// left and right. A side shorter than 1e-6 pt takes the other side's length, so a stroked straight
+/// line along an axis has margins across it. `None` when neither side has a length.
+pub fn envelope_margin_lengths(plain: Rect) -> Option<[f64; 4]> {
+    let long = |l: f64| l.is_finite() && l >= 1e-6;
+    let (h, w) = match (long(plain.height()), long(plain.width())) {
+        (true, true) => (plain.height(), plain.width()),
+        (false, true) => (plain.width(), plain.width()),
+        (true, false) => (plain.height(), plain.height()),
+        (false, false) => return None,
+    };
+    Some([h, h, w, w])
+}
+
+/// The [`EnvelopeOptions::bounds_margin`] of content with bounds `stroked` and `plain`, as shares
+/// of [`envelope_margin_lengths`]. `None` for content with neither a width nor a height, or for
+/// margins an `f32` can't hold.
+pub fn envelope_stroke_margin(stroked: Rect, plain: Rect) -> Option<[f32; 4]> {
+    let [v, _, h, _] = envelope_margin_lengths(plain)?;
+    let margin =
+        [(plain.y0 - stroked.y0) / v, (stroked.y1 - plain.y1) / v, (plain.x0 - stroked.x0) / h, (stroked.x1 - plain.x1) / h].map(|m| m as f32);
     margin.iter().all(|m| m.is_finite()).then_some(margin)
 }
 
@@ -867,6 +949,57 @@ mod tests {
             nested = Arc::new(Node::group(NodeId(10 + i), vec![nested]));
         }
         assert!(content_box(&nested, false, Affine::IDENTITY, true).is_some());
+    }
+
+    /// A group of type and a square with its own 10 pt miter-joined stroke reaches 5 pt past the
+    /// square in a scaled frame, as the group moved into the frame does ([`Node::visual_bounds`]),
+    /// not the 50 pt a miter spike could reach. Round a clip group they reach that far past its
+    /// box, with the clipping path's own stroke scaled into the frame, and in nested groups too.
+    #[test]
+    fn a_groups_own_miter_stroke_is_measured_along_its_members_with_type() {
+        let paint = |fill, stroke, w| crate::Appearance::basic(fill, stroke, w);
+        let path = |id, r: Rect| {
+            let square = vectorcraft_geom::shapes::rectangle(r);
+            Arc::new(Node::path(NodeId(id), square, paint(vectorcraft_color::Paint::solid(Color::BLACK), vectorcraft_color::Paint::None, 0.0)))
+        };
+        let text = type_node(1, "Type");
+        let mut group = Node::group(NodeId(2), vec![text, path(3, Rect::new(100.0, 100.0, 200.0, 200.0))]);
+        group.appearance = paint(vectorcraft_color::Paint::None, vectorcraft_color::Paint::solid(Color::BLACK), 10.0).into();
+        assert_eq!(group.appearance.outset(), 50.0, "a 10 pt miter-joined stroke can reach 50 pt");
+        let group = Arc::new(group);
+        let to = Affine::scale(0.5);
+        let mut moved = (*group).clone();
+        moved.transform(to, true);
+        let want = moved.visual_bounds();
+        // The square's lower right corner, 100 pt in the frame, with half the 5 pt scaled stroke.
+        assert_eq!(want.map(|b| (b.x1, b.y1)), Some((102.5, 102.5)));
+        assert_eq!(content_box(&group, true, to, true), want);
+        // A clip group whose clipping path has a 40 pt stroke, which the group's own strokes grow
+        // by their reach, measured with that stroke scaled into the frame.
+        let mut clip = (*path(5, Rect::new(300.0, 300.0, 400.0, 400.0))).clone();
+        clip.appearance = paint(vectorcraft_color::Paint::None, vectorcraft_color::Paint::solid(Color::BLACK), 40.0).into();
+        let clipped =
+            Node::new(NodeId(4), NodeKind::Group { children: vec![Arc::new(clip), path(6, Rect::new(320.0, 320.0, 380.0, 380.0))], clip: true });
+        let mut group = Node::group(NodeId(2), vec![type_node(1, "Type"), Arc::new(clipped)]);
+        group.appearance = paint(vectorcraft_color::Paint::None, vectorcraft_color::Paint::solid(Color::BLACK), 10.0).into();
+        let group = Arc::new(group);
+        let mut moved = (*group).clone();
+        moved.transform(to, true);
+        let want = moved.visual_bounds();
+        // 200 pt in the frame, with half the 20 pt scaled clip stroke and the 25 pt scaled reach.
+        assert_eq!(want.map(|b| (b.x1, b.y1)), Some((235.0, 235.0)));
+        assert_eq!(content_box(&group, true, to, true), want);
+        // Stroked groups of type nested in plain groups, each measured once.
+        let mut nested = group;
+        for i in 0..50 {
+            let plain = Arc::new(Node::group(NodeId(100 + 2 * i), vec![nested]));
+            let mut stroked = Node::group(NodeId(101 + 2 * i), vec![type_node(1, "Type"), plain]);
+            stroked.appearance = paint(vectorcraft_color::Paint::None, vectorcraft_color::Paint::solid(Color::BLACK), 10.0).into();
+            nested = Arc::new(stroked);
+        }
+        let mut moved = (*nested).clone();
+        moved.transform(to, true);
+        assert_eq!(content_box(&nested, true, to, true), moved.visual_bounds());
     }
 
     /// A warp envelope of `style` at `bend` with map `version` around a 200×100 rectangle at

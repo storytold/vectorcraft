@@ -23,11 +23,10 @@ mod tests {
         let ns = "<!DOCTYPE svg [<!ENTITY ns_svg \"http://www.w3.org/2000/svg\">]><svg xmlns=\"&ns_svg;\"/>";
         assert!(!expansion_too_large(ns));
         assert!(!expansion_too_large("<svg a=\"&amp;&#10;\"/>"));
-        // Many `&`s with no `;` after them are read in linear time.
+        // Many `&`s with no `;` after them expand to nothing. The guard's own tests in craft-libs
+        // check that it reads them in linear time.
         let ampersands = format!("<!DOCTYPE svg [<!ENTITY a \"x\">]><svg id=\"{}\"/>", "&".repeat(1 << 20));
-        let start = std::time::Instant::now();
         assert!(!expansion_too_large(&ampersands));
-        assert!(start.elapsed() < std::time::Duration::from_secs(5), "{:?}", start.elapsed());
     }
 
     #[test]

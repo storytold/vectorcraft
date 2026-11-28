@@ -305,6 +305,8 @@ impl Realm {
         interp.waiting_hosted = false;
         interp.constructing = false;
         interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
         interp.error_tag = UNKNOWN_SOURCE;
         interp.thrown_mark = None;
         interp.finally_marks.clear();
@@ -363,6 +365,8 @@ impl Realm {
         interp.waiting_hosted = false;
         interp.constructing = false;
         interp.resuming = None;
+        interp.again = None;
+        crate::scriptui::end_run(interp);
         interp.passing = Value::Undefined;
         interp.end_jobs(result.is_ok());
         if let Some(es2015) = interp.next_es2015.take() {
@@ -601,6 +605,19 @@ impl Realm {
         }
     }
 
+    /// Adds ScriptUI's global constructor `Window` ([`crate::scriptui`]), whose dialogs the host
+    /// functions in `items` show: `open` and `wait`, each given the dialog's description, and
+    /// `end`, given the result of `show()` and whether `show()` ended normally. A run that ends
+    /// while `show()` waits for `wait`'s answer, because it is stopped or the host does not resume
+    /// it, ends without a call to `end`: the host releases what it holds for the dialog when the run
+    /// ends, and does not wait for `end`.
+    pub fn define_script_ui(&mut self, items: Vec<(String, crate::HostItem)>) -> Result<(), RunError> {
+        match crate::scriptui::install(&mut self.interp, items) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Adds the global constructors `File` and `Folder`, whose file system work the host functions
     /// in `items` do: `parse`, `relative`, `tempName`, `stat`, `open`, `close`, `read`, `readln`,
     /// `readch`, `seek`, `tell`, `eof`, `encoding`, `setEncoding`, `list`, `resolve`, `execute`,
@@ -672,7 +689,9 @@ impl Realm {
     /// Adds the script extensions: the global `localize(object, ...values)`, which gives a
     /// localization object's text for the locale of [`Realm::localization`], the global
     /// `toSource(value)` and `Object.prototype.toSource()`, which write plain data as source text,
-    /// and the localized `Object.prototype.toString` while [`crate::Localization::enabled`].
+    /// `Object.prototype.reflect`, which describes an object's properties and methods (a host
+    /// class's from its [`crate::HostClass`]), and the localized `Object.prototype.toString` while
+    /// [`crate::Localization::enabled`].
     pub fn add_script_extensions(&mut self) -> Result<(), RunError> {
         match crate::builtins::extensions::install(&mut self.interp) {
             Ok(()) => Ok(()),
