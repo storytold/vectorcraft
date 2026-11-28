@@ -92,8 +92,8 @@ rayon = { version = "1.12", optional = true }
 # The MAC that `grants.json` carries (grant_keys.rs) and the random key it is made with, which the
 # user's key store keeps: Keychain on macOS, Credential Manager on Windows, the Secret Service on
 # Linux. All MIT OR Apache-2.0.
-hmac = "0.12.1"
-sha2 = { version = "0.10", default-features = false }
+hmac = "0.13.0"
+sha2 = { version = "0.11", default-features = false }
 getrandom = "0.4"
 keyring-core = "1.1"
 

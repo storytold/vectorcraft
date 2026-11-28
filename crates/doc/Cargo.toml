@@ -29,7 +29,7 @@ craft-stream-codecs = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # The hash of a generated art object's art, which its file holds (`generated`).
-sha2 = { version = "0.10", default-features = false }
+sha2 = { version = "0.11", default-features = false }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 

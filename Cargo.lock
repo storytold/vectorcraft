@@ -118,22 +118,11 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aes"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
-dependencies = [
- "cfg-if",
- "cipher 0.4.4",
- "cpufeatures 0.2.17",
-]
-
-[[package]]
-name = "aes"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc0fc36d7440d015b45468ba08a21e80e056ebbd014c611c6298bb7503e04bd1"
 dependencies = [
- "cipher 0.5.2",
+ "cipher",
  "cpubits",
  "cpufeatures 0.3.1",
 ]
@@ -873,7 +862,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce2dc9ee5f88d11e0beb842c88b33c8a5cf0d1329c4b19494af42b07dbfe8896"
 dependencies = [
- "cipher 0.5.2",
+ "cipher",
 ]
 
 [[package]]
@@ -966,22 +955,12 @@ dependencies = [
 
 [[package]]
 name = "cipher"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
-dependencies = [
- "crypto-common 0.1.7",
- "inout 0.1.4",
-]
-
-[[package]]
-name = "cipher"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8cf2a2c93cd704877c0858356ed03480ff301ee950b43f1cbe4573b088bfa6c"
 dependencies = [
  "crypto-common 0.2.2",
- "inout 0.2.6",
+ "inout",
 ]
 
 [[package]]
@@ -1390,7 +1369,7 @@ name = "craft-cms"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=51fcc3b0413af193db952df28dffae2321745703#51fcc3b0413af193db952df28dffae2321745703"
 dependencies = [
- "md-5",
+ "md-5 0.10.6",
  "rayon",
 ]
 
@@ -4376,15 +4355,6 @@ dependencies = [
 
 [[package]]
 name = "inout"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
-dependencies = [
- "generic-array",
-]
-
-[[package]]
-name = "inout"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a580c13f0ffc335ef42dd3f6b1a41b726051c5e1656d9a3aa6fddb3c5dfbbf9"
@@ -5029,6 +4999,16 @@ checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
  "cfg-if",
  "digest 0.10.7",
+]
+
+[[package]]
+name = "md-5"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
+dependencies = [
+ "cfg-if",
+ "digest 0.11.3",
 ]
 
 [[package]]
@@ -7073,7 +7053,7 @@ version = "5.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5107b24b91445dd2aa449a258a1807b63240942157292354dc5bfdbeb8bc6db8"
 dependencies = [
- "aes 0.9.4",
+ "aes",
  "cbc",
  "futures-util",
  "getrandom 0.4.3",
@@ -8641,7 +8621,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
 ]
 
@@ -8659,7 +8639,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
  "tiff",
  "vectorcraft-color",
@@ -8710,7 +8690,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hayro-ccitt",
  "heic-rs",
- "hmac 0.12.1",
+ "hmac 0.13.0",
  "image",
  "jxl-color",
  "jxl-grid",
@@ -8725,7 +8705,7 @@ dependencies = [
  "same-file",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "skrifa 0.47.0",
  "thiserror 2.0.21",
  "tiff",
@@ -8904,7 +8884,7 @@ dependencies = [
 name = "vectorcraft-pdf"
 version = "0.24.1"
 dependencies = [
- "aes 0.8.4",
+ "aes",
  "chrono",
  "craft",
  "craft-image-codecs",
@@ -8917,12 +8897,12 @@ dependencies = [
  "krilla",
  "kurbo 0.13.1",
  "log",
- "md-5",
+ "md-5 0.11.0",
  "objc2-core-foundation",
  "objc2-core-graphics",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "siphasher",
  "skrifa 0.47.0",
  "smallvec",
@@ -8957,7 +8937,7 @@ dependencies = [
  "rustix 1.1.6",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
  "vectorcraft-color",
  "vectorcraft-doc",
