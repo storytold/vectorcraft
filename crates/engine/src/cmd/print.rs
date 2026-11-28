@@ -12,7 +12,7 @@ use vectorcraft_pdf::{PrintLayers, PrintOptions, PrintPreview, PrintSettings};
 use super::fileio::pdf::{merge, pdf_error};
 use super::fileio::{extension, write_or_return};
 use super::flatten::has_transparent_tile_images;
-use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, str_param};
+use super::{CommandSpec, EngineError, Result, Session, bad, bool_or, cmd, has_doc, str_param, u64_req};
 
 const SETUP: &str = "print.setup";
 
@@ -41,7 +41,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Print",
             [],
             Some("Cmd+P"),
-            "{preset?: name (as print.setup's: its settings instead of the document's; the saved settings stay), settings?: {…settings of print.setup} (over the document's or the preset's), includeArtboardFill?: true (each artboard's background color prints behind its art; false leaves it out), path?, format?: pdf (default: a print-ready PDF) | postscript (the default for a .ps path: a PostScript file with DSC comments, %%Pages, a page per sheet with its paper size, marks, separations with their ink and halftone screen, the fixed flatness, negatives), level?: 3|2 (the PostScript language level), flattenerPreset?: \"medium\" (PostScript: the preset transparency is flattened with — high, low or a saved one, see flattener.presets.list), acknowledgeLoss?: bool (with path: write over the file the document was read from although reading it left things out), forPrinter?: bool (the PDF goes to a print queue: a page whose paper is turned to landscape is written upright, the art turned a quarter anticlockwise, as a printer driver turns a landscape job; macOS prints a landscape page as it is, cut off on upright paper; paper wide in Portrait and transverse pages stay as they are)} print the document, one page per sheet of paper (per tile, per ink, per copy; with copiesPerSheet, a sheet holds as many copies of an artboard as fit) → {pages, format, path, bytes, warnings}; no path → {dataBase64, bytes, pages, format, warnings}. Raster effects print at the document's raster effects resolution; a PDF leaves halftone screens and flatness to the output device",
+            "{preset?: name (as print.setup's: its settings instead of the document's; the saved settings stay), settings?: {…settings of print.setup} (over the document's or the preset's), includeArtboardFill?: true (each artboard's background color prints behind its art; false leaves it out), path?, format?: pdf (default: a print-ready PDF) | postscript (the default for a .ps path: a PostScript file with DSC comments, %%Pages, a page per sheet with its paper size, marks, separations with their ink and halftone screen, the fixed flatness, negatives), level?: 3|2 (the PostScript language level), flattenerPreset?: \"medium\" (PostScript: the preset transparency is flattened with — high, low or a saved one, see flattener.presets.list), acknowledgeLoss?: bool (with path: write over the file the document was read from although reading it left things out), maxPages?: n (a whole number: the job is composed only when it prints at most n pages, copies counted; with more, nothing is composed or written and the reply is {pages, format}), forPrinter?: bool (the PDF goes to a print queue: a page whose paper is turned to landscape is written upright, the art turned a quarter anticlockwise, as a printer driver turns a landscape job; macOS prints a landscape page as it is, cut off on upright paper; paper wide in Portrait and transverse pages stay as they are)} print the document, one page per sheet of paper (per tile, per ink, per copy; with copiesPerSheet, a sheet holds as many copies of an artboard as fit) → {pages, format, path, bytes, warnings}; no path → {dataBase64, bytes, pages, format, warnings}. Raster effects print at the document's raster effects resolution; a PDF leaves halftone screens and flatness to the output device",
             has_doc,
             print
         ),
@@ -222,6 +222,11 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         super::fileio::check_not_lossy_overwrite(s.doc()?, path, p, PRINT)?;
     }
     let postscript = to_postscript(p)?;
+    let max_pages = match p.get("maxPages") {
+        None => None,
+        Some(_) => Some(u64_req(p, "maxPages", PRINT)?),
+    };
+    let too_many = |pages: usize| max_pages.is_some_and(|m| pages as u64 > m);
     let doc = &s.doc()?.doc;
     let mut set = preset_or_saved(PRINT, s, doc, p)?;
     if postscript {
@@ -244,6 +249,27 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         && !bitmap
         && super::printadvanced::flattener(PRINT, &set, &s.prefs.flattener_presets)?
             .is_some_and(|o| has_transparent_tile_images(&vectorcraft_pdf::printed_document(doc, &set), &o));
+    let level = match p.get("level").filter(|v| postscript && !v.is_null()) {
+        Some(v) => {
+            let t = super::fileio::dxf::text(v);
+            Level::from_id(&t).ok_or_else(|| bad(PRINT, format!("level `{t}`: 2 or 3")))?
+        }
+        None => Level::default(),
+    };
+    // A job past `maxPages` is turned away before Print as Bitmap or a flattener preset prepares it,
+    // once the options are checked, when its pages follow from the artboards alone (composite, no
+    // `skipBlank`, artboards not ignored); the pages are counted again on the prepared art.
+    super::printadvanced::flattener(PRINT, &set, &s.prefs.flattener_presets)?;
+    let by_artboards = !set.skip_blank
+        && !matches!(set.artboards, vectorcraft_pdf::PrintArtboards::Ignore)
+        && set.output.mode == vectorcraft_pdf::OutputMode::Composite;
+    if max_pages.is_some()
+        && by_artboards
+        && let Ok(pv) = vectorcraft_pdf::preview(doc, &set)
+        && too_many(pv.pages)
+    {
+        return Ok(json!({ "pages": pv.pages, "format": if postscript { "postscript" } else { "pdf" } }));
+    }
     // Print as Bitmap and the flattener preset (Advanced) render and flatten it first.
     let prepared = super::printadvanced::prepare(PRINT, doc, &set, &s.prefs.flattener_presets, s.prefs.black_output == "rich")?;
     let path = str_param(p, "path");
@@ -251,7 +277,12 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     let which = set.print_layers;
     if !postscript {
         let printed = prepared.as_ref().unwrap_or(doc);
-        let typed = type_warnings(&full, which, &areas(&vectorcraft_pdf::preview(printed, &set).map_err(|e| pdf_error(PRINT, e))?));
+        let laid_out = vectorcraft_pdf::preview(printed, &set).map_err(|e| pdf_error(PRINT, e))?;
+        // `maxPages` is checked on the art as it prints, before the job is composed.
+        if too_many(laid_out.pages) {
+            return Ok(json!({ "pages": laid_out.pages, "format": "pdf" }));
+        }
+        let typed = type_warnings(&full, which, &areas(&laid_out));
         let mut r =
             vectorcraft_pdf::print(printed, &PrintOptions { settings: set, for_printer: bool_or(p, "forPrinter", false), ..Default::default() })
                 .map_err(|e| pdf_error(PRINT, e))?;
@@ -260,13 +291,6 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
         r.warnings.extend(r.setting_notes);
         return write_or_return(path, &r.bytes, json!({ "pages": r.pages, "format": "pdf", "warnings": r.warnings }));
     }
-    let level = match p.get("level").filter(|v| !v.is_null()) {
-        Some(v) => {
-            let t = super::fileio::dxf::text(v);
-            Level::from_id(&t).ok_or_else(|| bad(PRINT, format!("level `{t}`: 2 or 3")))?
-        }
-        None => Level::default(),
-    };
     // What the job loses, then the notes on the options: a reply lists them in that order.
     let (mut warnings, mut setting_notes) = (vec![], vec![]);
     if !bitmap && (tile_images || doc.layers.iter().any(|l| l.shows_transparency())) {
@@ -283,6 +307,9 @@ fn print(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let plan = vectorcraft_pdf::plan(prepared.as_ref().unwrap_or(doc), &PrintOptions { settings: set, postscript: true, ..Default::default() })
         .map_err(|e| pdf_error(PRINT, e))?;
+    if too_many(plan.order.len()) {
+        return Ok(json!({ "pages": plan.order.len(), "format": "postscript" }));
+    }
     let pages: Vec<PrintPage> = plan
         .sheets
         .iter()

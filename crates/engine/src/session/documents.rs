@@ -188,6 +188,9 @@ impl Session {
             startup_failures: vec![],
             script_high_water: Default::default(),
             script_in_run: false,
+            script_unfenced: None,
+            script_printers: None,
+            script_prints: Vec::new(),
             script_copy_first: cfg!(target_arch = "wasm32"),
         }
     }

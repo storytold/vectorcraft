@@ -312,6 +312,9 @@ pub(crate) struct ScriptGate {
     /// The paths of the open documents' files, as the documents held them when the person last
     /// opened or saved them. A document a script's command opened has none here.
     pub(crate) documents: Vec<String>,
+    /// The real paths of the files the script's `File` objects hold open for writing, which a
+    /// command does not write: the run's end would write the objects' bytes over them.
+    pub(crate) held: Vec<PathBuf>,
     /// The files the documents link to as the person left them when the run began: readable, not
     /// writable.
     pub(crate) linked: LinkedFiles,
@@ -372,8 +375,11 @@ impl ScriptGate {
                 Access::Read => self.read.allows(&real) || self.write.allows(&real),
                 Access::Write => self.write.allows(&real),
             };
+            // A read-only file is not written over, also where a rename could replace it.
+            let read_only = matches!(access, Access::Write) && std::fs::metadata(&real).is_ok_and(|m| m.is_file() && m.permissions().readonly());
+            let held = matches!(access, Access::Write) && self.held.contains(&real);
             let linked = matches!(access, Access::Read) && self.linked.has(&real) && !self.read.keeps_out(&real);
-            scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)) || linked
+            !read_only && !held && (scoped || self.documents.iter().any(|d| resolve(d).is_ok_and(|d| d == real)) || linked)
         });
         if allowed { Ok(()) } else { Err(format!("Script file access denied: {path}")) }
     }
@@ -998,6 +1004,7 @@ mod tests {
             read: ScriptScope::of_folder(&base.join(dir)),
             write: ScriptScope::default(),
             documents: vec![],
+            held: vec![],
             linked: LinkedFiles::default(),
             also: None,
         };
@@ -1027,6 +1034,7 @@ mod tests {
             read: ScriptScope::of_folder(dir),
             write: ScriptScope::default(),
             documents: vec![],
+            held: vec![],
             linked: LinkedFiles::default(),
             also: None,
         };
@@ -1055,8 +1063,14 @@ mod tests {
         let later = base.join("outside/later.svg");
         let linked = ScriptGate::real_files([s(secret.clone()), s(later.clone()), s(base.join("outside"))]);
         assert_eq!(linked.files.len(), 1, "a missing file and a folder are left out: {linked:?}");
-        let gate =
-            ScriptGate { read: ScriptScope::of_folder(&base.join("in")), write: ScriptScope::default(), documents: vec![], linked, also: None };
+        let gate = ScriptGate {
+            read: ScriptScope::of_folder(&base.join("in")),
+            write: ScriptScope::default(),
+            documents: vec![],
+            held: vec![],
+            linked,
+            also: None,
+        };
         std::fs::write(&later, "<svg/>").unwrap();
         let (read, write) =
             (|p: &Path| gate.check(&s(p.to_path_buf()), Access::Read).is_ok(), |p: &Path| gate.check(&s(p.to_path_buf()), Access::Write).is_ok());
@@ -1087,6 +1101,7 @@ mod tests {
             read,
             write: ScriptScope::default(),
             documents: vec![],
+            held: vec![],
             linked: ScriptGate::real_files([s(kept.clone()), s(open.clone())]),
             also: None,
         };
@@ -1122,6 +1137,7 @@ mod tests {
             read: ScriptScope::default(),
             write: ScriptScope::default(),
             documents: vec![],
+            held: vec![],
             linked: ScriptGate::real_files([doc.clone()]),
             also: None,
         };
@@ -1143,12 +1159,41 @@ mod tests {
         std::fs::write(&other, "<svg/>").unwrap();
         std::os::unix::fs::symlink(&secret, &link).unwrap();
         let linked = ScriptGate::real_files([s(link.clone())]);
-        let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::default(), documents: vec![], linked, also: None };
+        let gate = ScriptGate { read: ScriptScope::default(), write: ScriptScope::default(), documents: vec![], held: vec![], linked, also: None };
         assert!(gate.check(&s(link.clone()), Access::Read).is_ok() && gate.check(&s(secret.clone()), Access::Read).is_ok());
         std::fs::remove_file(&link).unwrap();
         std::os::unix::fs::symlink(&other, &link).unwrap();
         assert!(gate.check(&s(link.clone()), Access::Read).is_err(), "the link leads to another file now");
         assert!(gate.check(&s(other), Access::Read).is_err());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_script_gate_does_not_write_over_a_read_only_file() {
+        let (base, _) = folders("gate-read-only");
+        let out = base.join("out/kept.svg");
+        std::fs::write(&out, "<svg/>").unwrap();
+        let gate = ScriptGate {
+            read: ScriptScope::default(),
+            write: ScriptScope::of_folder(&base.join("out")),
+            documents: vec![],
+            held: vec![],
+            linked: LinkedFiles::default(),
+            also: None,
+        };
+        let (kept, fresh) = (s(out.clone()), s(base.join("out/new.svg")));
+        let check = |p: &str| with_script_gate(gate.clone(), || (check_write(p).is_ok(), check_read(p).is_ok()));
+        assert_eq!(check(&kept), (true, true));
+        let mut perms = std::fs::metadata(&out).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&out, perms.clone()).unwrap();
+        assert_eq!(check(&kept), (false, true), "a read-only file is read but not written");
+        assert!(check(&fresh).0, "a new file next to it is written");
+        let documents = ScriptGate { documents: vec![kept.clone()], ..gate.clone() };
+        assert!(!with_script_gate(documents, || check_write(&kept).is_ok()), "also when it is an open document's file");
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(false);
+        std::fs::set_permissions(&out, perms).unwrap();
         let _ = std::fs::remove_dir_all(base);
     }
 

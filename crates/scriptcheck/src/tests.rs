@@ -530,6 +530,119 @@ fn the_scripts_own_platform_names_are_not_the_platforms() {
     assert_eq!(r.outside.iter().map(|o| o.id).collect::<Vec<_>>(), ["filesWritten"]);
 }
 
+/// A document's `saveAs` and `exportFile` write the file they are given; `app.open` only reads one.
+#[test]
+fn save_as_and_export_file_write_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = app.open(f);\n",
+        "d.saveAs(f);\n",
+        "app.activeDocument.exportFile(f, ExportType.PNG24);\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
+/// `saveAs` and `exportFile` called with their names as string literals in brackets write the file
+/// too; reading the method without calling it does not.
+#[test]
+fn save_as_and_export_file_in_brackets_write_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "app.activeDocument['open'](f);\n",
+        "app.activeDocument[\"saveAs\"](f);\n",
+        "var d = app.activeDocument; d['exportFile'] (f, ExportType.SVG);\n",
+        "var n = d['saveAs'];\n",
+    ));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[3, 4][..]));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", &[3, 4][..])]);
+}
+
+/// `app.open` reads the file it is given, called by name or with its name as a string literal in
+/// brackets, also through a variable that holds the application; a document has no `open` method, and
+/// a property or a variable named `app` is not the application.
+#[test]
+fn app_open_reads_a_file() {
+    let r = report(concat!(
+        "var f = new File(p);\n",
+        "var d = app.open(f);\n",
+        "app['open'](f);\n",
+        "app.activeDocument['open'](f);\n",
+        "x.app.open(f);\n",
+        "x.app['open'](f);\n",
+        "var a = app; a.open(f);\n",
+        "a['open'](f);\n",
+        "var b = x.app; b.open(f); b['open'](f);\n",
+    ));
+    assert_eq!(feature(&r, "file.read").map(|f| f.lines.as_slice()), Some(&[2, 3, 7, 8][..]));
+    assert!(r.outside.is_empty());
+    let r = report("var app = {};\napp.open(f);\napp['open'](f);\n");
+    assert!(feature(&r, "file.read").is_none());
+    // A short echo limit cuts the member chains the report lists, not what the check finds.
+    let short = Limits { echo: 4, ..Limits::default() };
+    let src =
+        "app.open(f);\napp['open'](f);\nvar a = app; a.open(f);\nvar d = app['open'](f); d.print(o);\napp.documents.addDocumentNoUI('P').print(o);\n";
+    let r = check("t.jsx", src.as_bytes(), None, &short);
+    assert_eq!(feature(&r, "file.read").map(|f| f.lines.as_slice()), Some(&[1, 2, 3, 4][..]));
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(&[4, 5][..]));
+    assert!(!r.members.is_empty());
+    assert!(r.members.iter().all(|m| m.name.chars().count() <= short.echo));
+}
+
+/// A document's `print` writes the file its options' `jobOptions.file` names, called with a dot or
+/// with its name in brackets, on a document (also one `add`, `addDocument`, `addDocumentNoUI`, `getByName`,
+/// `index` or `app.open`, with or without brackets, returns) or a variable that holds one; reading the method without
+/// calling it, and a `print` method of another object, do not.
+#[test]
+fn print_writes_a_file() {
+    let r = report(concat!(
+        "var o = new PrintOptions(); o.jobOptions.file = new File(p);\n",
+        "app.activeDocument.print(o);\n",
+        "app.activeDocument['print'](o);\n",
+        "var n = app.activeDocument['print'];\n",
+        "var d = app.documents[0]; d.print(o);\n",
+        "logger.print('hello'); logger['print']('hello');\n",
+        "app.activeDocument.name.concat(logger.print('x'));\n",
+        "app.print(o); app.activeDocument.layers[0]['print'](o); app.documents['print'](o); app.preferences.activeDocument.print(o);\n",
+        "var e = app.open(new File(p)); e.print(o);\n",
+        "activeDocument.print(o);\n",
+        "documents.addDocument('Print').print(o);\n",
+        "app.documents.addDocument('Print', s, false).print(o);\n",
+        "documents.addDocumentNoUI('Print').print(o);\n",
+        "app.documents.addDocumentNoUI('Print').print(o);\n",
+        "var g = app['open'](new File(p)); g.print(o);\n",
+        "var h = app['activeDocument'](new File(p)); h.print(o);\n",
+        "app.documents.index(0).print(o);\n",
+        "documents.index('Print')['print'](o);\n",
+        "var i = app.documents.index(1); i.print(o);\n",
+        "app.documents['index'](0).print(o);\n",
+        "var j = documents['getByName']('Print'); j['print'](o);\n",
+        "app.documents['length'](0).print(o);\n",
+    ));
+    let lines = &[2, 3, 5, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21][..];
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(lines));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", lines)]);
+}
+
+/// A string literal in brackets that names `activeDocument` or `documents` reads that property, so the
+/// `print` of the document it gives writes a file; any other name in the brackets, a name that is not
+/// a property's, and a computed name do not give a document.
+#[test]
+fn print_on_a_document_named_in_brackets_writes_a_file() {
+    let r = report(concat!(
+        "var o = new PrintOptions(); o.jobOptions.file = new File(p);\n",
+        "app['activeDocument'].print(o);\n",
+        "app[\"documents\"][0].print(o);\n",
+        "var d = app['documents'][1]; d.print(o);\n",
+        "app['documents']['add']().print(o);\n",
+        "app['preferences'].print(o); app['activeDocuments'].print(o); app['documents[]'].print(o);\n",
+        "app['documents'].print(o); app[k].print(o); x.app['activeDocument'].print(o);\n",
+    ));
+    let lines = &[2, 3, 4, 5][..];
+    assert_eq!(feature(&r, "file.write").map(|f| f.lines.as_slice()), Some(lines));
+    assert_eq!(r.outside.iter().map(|o| (o.id, o.lines.as_slice())).collect::<Vec<_>>(), [("filesWritten", lines)]);
+}
+
 /// Setting a File object's length, hidden or read-only flag changes the file; reading them, comparing
 /// them and setting them on another object does not.
 #[test]

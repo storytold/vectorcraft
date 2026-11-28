@@ -4,9 +4,15 @@
 //! it, or saves the PDF when asked to (`toFile`, `path`) or when there is no print service; a
 //! PostScript file (`format: "postscript"`, or a `.ps` path) is always saved. `print.printers`
 //! lists the printers.
+//!
+//! A script run started in the app gets the printers of a service that lets scripts print
+//! ([`PrintService::scripts_may_print`], the desktop's), as names only. The jobs a script prepares
+//! for them are sent after the run's changes are kept and the person approves them
+//! ([`crate::dialogs::script_run::PRINT_KIND`], [`send_script_prints`]).
 
 use serde_json::{Value, json};
 use vectorcraft_engine::cmd::fileio;
+use vectorcraft_engine::script::printing::{PreparedPrint, Printers};
 
 use crate::{VectorcraftApp, io};
 
@@ -48,6 +54,11 @@ pub trait PrintService {
     fn has_setup(&self) -> bool {
         false
     }
+    /// Whether scripts may list this service's printers and send jobs to them once the person
+    /// approves them. The browser's print dialog picks its own printer, so the web's does not.
+    fn scripts_may_print(&self) -> bool {
+        false
+    }
     /// Setup…: open the system's settings of `printer` (`None`: the printers).
     fn setup(&mut self, _printer: Option<&str>) -> Result<(), String> {
         Err("there are no printer settings to open here".into())
@@ -59,6 +70,71 @@ pub fn printers(app: &mut VectorcraftApp) -> Value {
     let (printers, setup) = app.services.print.as_mut().map(|s| (s.printers(), s.has_setup())).unwrap_or_default();
     let printers: Vec<Value> = printers.iter().map(|p| json!({ "name": p.name, "default": p.default })).collect();
     json!({ "printers": printers, "service": app.services.print.is_some(), "setup": setup })
+}
+
+/// The printers a script run may print to: the print service's, by name, when it lets scripts
+/// print; `None` otherwise.
+pub fn script_printers(app: &mut VectorcraftApp) -> Option<Printers> {
+    let service = app.services.print.as_mut().filter(|s| s.scripts_may_print())?;
+    let for_printer = !service.turns_landscape();
+    Some(Printers::new(service.printers().into_iter().map(|p| (p.name, p.default)), for_printer))
+}
+
+/// Runs the engine command `id`. A `script.run` started here lists the printers it may print to
+/// ([`script_printers`]), and only that run lists them.
+pub(crate) fn execute_listing_printers(app: &mut VectorcraftApp, id: &str, params: &Value) -> Result<Value, String> {
+    if id == "script.run" {
+        app.session.script_printers = script_printers(app);
+    }
+    let r = app.session.execute(id, params).map_err(|e| e.to_string());
+    app.session.script_printers = None;
+    r
+}
+
+/// The error for a script's jobs when the print service does not let scripts print.
+const NO_SCRIPT_PRINTING: &str = "Printing from scripts is not available here: the script's print jobs were not sent";
+
+/// Sends the jobs a script prepared, which the person approved, each to its printer. Every printer
+/// must still be one the service lists, by its exact name, or no job is sent. → `{sent}`, or
+/// `{background: true}` while the desktop's worker sends them.
+pub(crate) fn send_script_prints(app: &mut VectorcraftApp, jobs: Vec<PreparedPrint>) -> Result<Value, String> {
+    let service = app.services.print.as_mut().filter(|s| s.scripts_may_print()).ok_or(NO_SCRIPT_PRINTING)?;
+    let listed: Vec<String> = service.printers().into_iter().map(|p| p.name).collect();
+    if let Some(gone) = jobs.iter().find(|j| !listed.contains(&j.printer)) {
+        return Err(format!("The printer {} is no longer installed: the script's print jobs were not sent", gone.printer));
+    }
+    let count = jobs.len();
+    if let Some(submit) = service.shared_print() {
+        return crate::background::run(
+            app,
+            true,
+            "Printing from a script".into(),
+            None,
+            move |_| send_each(&mut |job| submit(job), &jobs).map(|notes| json!({ "notes": notes })),
+            move |app, result| {
+                let notes = result?;
+                app.status(notes["notes"].as_array().and_then(|n| n.last()).and_then(Value::as_str).unwrap_or_default());
+                Ok(json!({ "sent": count }))
+            },
+        );
+    }
+    let notes = send_each(&mut |job| service.print(job), &jobs)?;
+    app.status(notes.last().cloned().unwrap_or_default());
+    Ok(json!({ "sent": count }))
+}
+
+/// Gives each of `jobs` to `submit`, in order, stopping at the first that fails. → what each one
+/// gave, or the error, which says how many were sent before it.
+fn send_each(submit: &mut dyn FnMut(&PrintJob<'_>) -> Result<String, String>, jobs: &[PreparedPrint]) -> Result<Vec<String>, String> {
+    let mut notes = Vec::new();
+    for (sent, job) in jobs.iter().enumerate() {
+        match submit(&PrintJob { printer: Some(&job.printer), title: &job.title, pdf: &job.pdf, direct_pdf: false }) {
+            Ok(note) => notes.push(note),
+            Err(e) if sent == 0 => return Err(e),
+            Err(e) => return Err(format!("{e} ({sent} of {} print jobs were sent)", jobs.len())),
+        }
+    }
+    Ok(notes)
 }
 
 /// `file.print` with settings: print the active document with `settings` (over the document's, or

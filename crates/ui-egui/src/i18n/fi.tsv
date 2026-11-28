@@ -5354,6 +5354,8 @@ liquify-list-end	{0}, {1}	{0} ja {1}
 @msg	Script file could not be written	Komentosarjan tiedostoa ei voitu kirjoittaa
 @msg	Script file dialogs need a person to answer them	Komentosarjan tiedostovalintaikkunoihin tarvitaan vastaava henkilö
 @msg	Script file is not open for writing	Komentosarjan tiedosto ei ole auki kirjoittamista varten
+@msg	Script file is read-only	Komentosarjan tiedosto on vain luku -tilassa
+@msg	Script file is open for writing	Komentosarjan tiedosto on auki kirjoittamista varten
 @msg	Script file name is already in use	Komentosarjan tiedoston nimi on jo käytössä
 @msg	Script file name must be a name without a folder	Komentosarjan tiedoston nimen on oltava nimi ilman kansiota
 @msg	Script file permission can be kept only for a script run from a file	Tiedostolupa voidaan säilyttää vain tiedostosta suoritetulle komentosarjalle

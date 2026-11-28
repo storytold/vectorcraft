@@ -342,10 +342,11 @@ impl<'l> Acc<'l> {
     }
 
     pub fn member(&mut self, path: &str) {
-        if let Some(n) = self.members.get_mut(path) {
+        let key = self.echoed(path);
+        if let Some(n) = self.members.get_mut(&*key) {
             *n = n.saturating_add(1);
         } else if self.room(self.members.len()) {
-            self.members.insert(path.to_string(), 1);
+            self.members.insert(key.into_owned(), 1);
         }
     }
 

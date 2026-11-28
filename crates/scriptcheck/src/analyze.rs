@@ -411,6 +411,10 @@ struct Chain {
     group: Option<usize>,
 }
 
+/// Characters a member chain holds at least, more than the longest chain the checks compare
+/// (`app.documents.addDocumentNoUI().print()` has 39).
+const CHAIN_CHARS: usize = 64;
+
 impl Chain {
     fn new(root: String, bare: bool, line: usize) -> Self {
         let (chars, cut) = (root.chars().count(), root.ends_with('…'));
@@ -458,6 +462,42 @@ impl Chain {
         self.change_call |= call && self.last_change;
         self.last_change = false;
         self.append(if call { "()" } else { "[]" }, cap);
+    }
+
+    /// The index that ends the chain is of the member `name`, which a string literal in brackets
+    /// named: `[]` becomes `.name` when one of [`catalog::DOM_DOCUMENTS`] reads that member as a
+    /// property (`app['activeDocument']`, `app['documents'][0]`). Any other name keeps the index.
+    fn name_index(&mut self, name: &str, cap: usize) {
+        let Some(base) = self.path.strip_suffix("[]").filter(|_| !self.cut) else { return };
+        let property = |d: &&str| {
+            d.strip_prefix(base)
+                .and_then(|m| m.strip_prefix('.'))
+                .and_then(|m| m.strip_prefix(name))
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('.') || rest.starts_with('['))
+        };
+        let ident = !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '$');
+        if !ident || !catalog::DOM_DOCUMENTS.iter().any(property) {
+            return;
+        }
+        self.path.truncate(self.path.len() - 2);
+        self.chars = self.chars.saturating_sub(2);
+        self.last_change = false;
+        for s in [".", name] {
+            self.append(s, cap);
+        }
+    }
+
+    /// The call that ends the chain is of the member `name`, which a string literal in brackets
+    /// named: `[]()` becomes `.name()`.
+    fn name_call(&mut self, name: &str, cap: usize) {
+        if self.cut || !self.path.ends_with("[]()") {
+            return;
+        }
+        self.path.truncate(self.path.len() - 4);
+        self.chars = self.chars.saturating_sub(4);
+        for s in [".", name, "()"] {
+            self.append(s, cap);
+        }
     }
 }
 
@@ -551,6 +591,8 @@ struct Analyzer<'s, 'a, 'l> {
     file: Option<&'a str>,
     /// The four significant tokens before this one, the latest first.
     h: [Option<Sig<'s>>; 4],
+    /// The significant token before the four in `h`.
+    h4: Option<Sig<'s>>,
     brackets: Brackets,
     /// Nesting too deep to follow was reported: it is reported once.
     deep: bool,
@@ -636,6 +678,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             acc,
             file,
             h: [None; 4],
+            h4: None,
             brackets: Brackets::default(),
             deep: false,
             active: None,
@@ -758,15 +801,22 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.features(&t);
         self.newer(&t);
         self.module_check(&t);
+        self.h4 = self.h[3];
         self.h = [Some(t), self.h[0], self.h[1], self.h[2]];
     }
 
     // ---------- member chains ----------
 
+    /// The most characters a member chain holds while it is read: [`crate::Limits::echo`], and at least
+    /// [`CHAIN_CHARS`], so a short echo limit cuts only the chains the report lists.
+    fn chain_cap(&self) -> usize {
+        self.acc.limits.echo.max(CHAIN_CHARS)
+    }
+
     /// Whether the active chain takes `t` (a `.`, a member's name, `[` or `(`); any other token ends
     /// it.
     fn continue_chain(&mut self, t: &Sig<'s>) -> bool {
-        let cap = self.acc.limits.echo;
+        let cap = self.chain_cap();
         let Some(c) = self.active.as_mut() else { return false };
         if c.after_dot {
             c.after_dot = false;
@@ -1151,6 +1201,16 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
                     }
                     if self.suspended.last().is_some_and(|c| c.wait == self.depth()) {
                         self.active = self.suspended.pop();
+                        // `app['activeDocument']`: a string literal in the brackets names a member.
+                        if t.text == "]"
+                            && is(self.h[1], "[")
+                            && let Some(name) = self.h[0].filter(|s| s.kind == T::Str).map(|s| unquote(s.text, 32))
+                        {
+                            let cap = self.chain_cap();
+                            if let Some(c) = self.active.as_mut() {
+                                c.name_index(&name, cap);
+                            }
+                        }
                     }
                     self.close_scopes();
                     let grouped = self.close_parens(t);
@@ -1537,6 +1597,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
         self.var_depth = None;
         self.conds.clear();
         self.h = [None; 4];
+        self.h4 = None;
         self.acc.steps = self.acc.steps.saturating_add(1);
         let d = directives::parse(t.text);
         let Some(name) = d.known else {

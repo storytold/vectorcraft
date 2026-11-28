@@ -27,11 +27,24 @@
 //! allows are the ones Choose… picked, at most 2,048; no field sets them. Escape, `ui.dialog.cancel`
 //! and `ui.dialog.confirm` without an `answer` give Deny. Enter allows nothing: both Allow buttons
 //! are not the dialog's default. `selectDlg` opens the host's folder picker in its own folder.
+//!
+//! The jobs a script prepared for a printer (`Document.print` without a file) wait for the dialog of
+//! kind `scriptPrint`, which opens once the run has ended and its changes are kept, when no other
+//! dialog is open and no text field or text being typed on the canvas has the keyboard. Its fields
+//! are `jobs` (each job's `document`, `printer` and `pages`, read from the jobs when it opens; no
+//! field sets them) and `answer`. Only the person at the keyboard prints them, with a click on its
+//! Print button or Space once Tab gave it the focus: the button takes no click for
+//! [`PRINT_ENABLE_DELAY_SECS`] after the dialog is first drawn, and Enter does not print.
+//! `ui.dialog.set` refuses `answer: "print"`, `ui.dialog.confirm` without `answer: "cancel"` is
+//! refused, and a click made by automation is refused and the dialog opens again. Cancel, Escape,
+//! `ui.dialog.cancel` and `answer: "cancel"` drop the jobs, from anyone; the script's changes stay
+//! either way.
 
 use std::path::Path;
 use std::sync::Arc;
 
 use craft::host::{PickRequest, Picked};
+use craft::keymap::Key;
 use craft::theme::variant::Tone;
 use craft::ui::buttons::Button;
 use craft::ui::contract::{Bind, Outcome as _, Props as _, Scroll, Show as _, ShowContainer as _};
@@ -40,6 +53,7 @@ use craft::ui::dialog::{
 };
 use craft::ui::display::Text;
 use craft::ui::layout_components::Stack;
+use craft::ui::runtime::keys;
 use craft::ui::sections::{DialogRole, FooterButton};
 use craft::ui::text::TextField;
 use egui::Ui;
@@ -48,6 +62,7 @@ use vectorcraft_engine::cmd::scripts::{RUN_EXTS, TOO_LARGE, runs};
 use vectorcraft_engine::file_access::ScopeHandle;
 use vectorcraft_engine::script::dialogs::{MAX_PROMPT_BYTES, cut_to, shown_text};
 use vectorcraft_engine::script::files::{MAX_ENTRIES, PickAnswer, PickerKind, ScriptPicker};
+use vectorcraft_engine::script::printing::PreparedPrint;
 use vectorcraft_engine::script::{DialogAnswer, MAX_SOURCE_BYTES, ScriptDialog};
 
 use crate::VectorcraftApp;
@@ -63,6 +78,8 @@ pub const CLOSE_KIND: &str = "scriptClose";
 pub const NOTICE_KIND: &str = "scriptDialog";
 /// The dialog kind of a script's file dialogs.
 pub const PICKER_KIND: &str = "scriptFiles";
+/// The dialog kind of the question before the jobs a script prepared for a printer are sent.
+pub const PRINT_KIND: &str = "scriptPrint";
 
 /// Why Allow Once and Always Allow are refused to automation.
 pub(crate) const BY_PERSON: &str = "Only the person at the keyboard can allow a script's file access";
@@ -564,17 +581,21 @@ pub(crate) fn settle_close(app: &mut VectorcraftApp) {
 
 /// Takes the answers of the script's dialogs, once per frame, and gives them to the run.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
-    let Some((notice, files, run, growth, close)) = with_host(app, |host, _| {
+    let Some((notice, files, run, growth, close, print)) = with_host(app, |host, _| {
         (
             host.take::<ScriptNotice>(),
             host.take::<ScriptFiles>(),
             host.take::<RunQuestion>(),
             host.take::<GrowthQuestion>(),
             host.take::<CloseQuestion>(),
+            host.take::<ScriptPrint>(),
         )
     }) else {
         return;
     };
+    if let Some(result) = print {
+        settle_print(app, result);
+    }
     if let Some(result) = notice {
         settle_notice(app, result);
     }
@@ -764,3 +785,157 @@ fn choose(app: &mut VectorcraftApp) {
         Ok(Value::Null)
     });
 }
+
+/// How long the print question's Print button takes no click after the dialog is first drawn, in
+/// seconds: VectorCraft's own value, so a click or key meant for what was there before does not
+/// send a job.
+pub(crate) const PRINT_ENABLE_DELAY_SECS: f64 = 1.0;
+
+/// Opens the question before the jobs a script prepared for a printer are sent, once the run has
+/// ended, no other dialog is open and nothing is being typed: while a text field or text on the
+/// canvas has the keyboard it waits, and a later poll opens it.
+pub(crate) fn ask_print(app: &mut VectorcraftApp) {
+    if app.session.script_running() || !app.session.script_prints_waiting() || busy(app) {
+        return;
+    }
+    let typing = app.ui_ctx.as_ref().is_some_and(egui::Context::text_edit_focused) || app.session.tool_wants_text();
+    if typing {
+        return;
+    }
+    let dialog = ScriptPrint::new(app.session.script_prints());
+    with_host(app, |host, _| host.open(dialog));
+}
+
+/// One job as the print question lists it.
+#[derive(Clone)]
+struct PrintRow {
+    document: String,
+    printer: String,
+    pages: u64,
+}
+
+/// What the print question answers with: whether Print was clicked.
+pub(crate) struct PrintAnswer {
+    pub(crate) print: bool,
+}
+
+/// The question before the jobs a script prepared for a printer are sent. It lists the jobs as they
+/// were when it opened, so no field of the dialog changes what the person reads.
+pub(crate) struct ScriptPrint {
+    jobs: Vec<PrintRow>,
+    /// When the dialog was first drawn, on egui's clock.
+    shown_at: Option<f64>,
+    answer: Option<&'static str>,
+}
+
+impl ScriptPrint {
+    fn new(jobs: &[PreparedPrint]) -> Self {
+        let jobs = jobs.iter().map(|j| PrintRow { document: j.title.clone(), printer: j.printer.clone(), pages: j.sheets }).collect();
+        Self { jobs, shown_at: None, answer: None }
+    }
+}
+
+impl StackDialog for ScriptPrint {
+    type Result = PrintAnswer;
+
+    fn id(&self) -> DialogId {
+        dialog_id(PRINT_KIND)
+    }
+
+    fn key(&self) -> Option<&str> {
+        Some(PRINT_KIND)
+    }
+
+    /// Print takes no click until [`PRINT_ENABLE_DELAY_SECS`] after the dialog was first drawn, and
+    /// is not the dialog's default: Enter never prints, also on the focused button.
+    fn show(&mut self, ui: &mut Ui, _: &DialogStack) -> Option<DialogResult<PrintAnswer>> {
+        let now = ui.input(|i| i.time);
+        // A focused button takes Enter as a click: an Enter held, or pressed in this pass and let go in it too, refuses Print.
+        let pressed = |e: &egui::Event| matches!(e, egui::Event::Key { key: egui::Key::Enter, pressed: true, .. });
+        let enter = keys::held(ui.ctx()).contains(&Key::Enter) || ui.input(|i| i.raw.events.iter().any(pressed));
+        let wait = (*self.shown_at.get_or_insert(now) + PRINT_ENABLE_DELAY_SECS - now).max(0.0);
+        if wait > 0.0 {
+            ui.ctx().request_repaint_after_secs(wait as f32);
+        }
+        // Print pressed with Enter is refused and leaves the question open.
+        let buttons = [
+            FooterButton::new(tl!("Print"), DialogRole::Other).enabled(wait <= 0.0).stays_open(enter),
+            FooterButton::new(tl!("Cancel"), DialogRole::Cancel),
+        ];
+        let jobs = &self.jobs;
+        let prompt =
+            Prompt::new(tl!("Print"), tl!("The script asks to print these jobs. Its changes to the documents are kept whether or not you print."))
+                .answers(buttons)
+                .extras(move |ui| {
+                    egui::ScrollArea::vertical().id_salt("script-print-jobs").max_height(200.0).show(ui, |ui| {
+                        egui::Grid::new("script-print-jobs").num_columns(3).spacing([16.0, 4.0]).show(ui, |ui| {
+                            for head in [tl!("Document"), tl!("Printer"), tl!("Pages")] {
+                                Text::new(head).show(ui);
+                            }
+                            ui.end_row();
+                            for job in jobs {
+                                Text::new(shown_text(&job.document, false)).show(ui);
+                                Text::new(shown_text(&job.printer, false)).show(ui);
+                                Text::new(job.pages.to_string()).show(ui);
+                                ui.end_row();
+                            }
+                        });
+                    });
+                });
+        match prompt.show(ui).picked? {
+            0 if wait <= 0.0 && !enter => Some(DialogResult::Ok(PrintAnswer { print: true })),
+            0 => None,
+            _ => Some(DialogResult::Cancel),
+        }
+    }
+
+    /// `ui.dialog.confirm` takes only Cancel.
+    fn confirm(&mut self, _: &egui::Context) -> Option<PrintAnswer> {
+        (self.answer == Some("cancel")).then_some(PrintAnswer { print: false })
+    }
+
+    fn json_fields(&self) -> Option<Value> {
+        let jobs: Vec<Value> = self.jobs.iter().map(|j| json!({"document": j.document, "printer": j.printer, "pages": j.pages})).collect();
+        Some(json!({ "jobs": jobs, "answer": self.answer }))
+    }
+
+    fn set_json_field(&mut self, _: &egui::Context, field: &str, value: Value) -> Result<(), String> {
+        if field != "answer" {
+            return Err(FieldRefusal::Unknown.message(field));
+        }
+        self.answer = Some(match value.as_str() {
+            Some("cancel") => "cancel",
+            Some("print") => return Err(PRINT_BY_PERSON.into()),
+            _ => return Err("`answer` for the print question must be one of: print, cancel".into()),
+        });
+        Ok(())
+    }
+}
+
+/// Sends the jobs when the person at the keyboard clicked Print; drops them on Cancel, from anyone.
+/// Print from a pass automation drove is refused and the question opens again.
+pub(crate) fn settle_print(app: &mut VectorcraftApp, result: DialogResult<PrintAnswer>) {
+    let print = result.ok().is_some_and(|a| a.print);
+    if print && app.automation_asked() {
+        app.status(PRINT_BY_PERSON);
+        ask_print(app);
+        return;
+    }
+    let jobs = app.session.take_script_prints();
+    if jobs.is_empty() {
+        return;
+    }
+    if !print {
+        app.status(PRINTS_DROPPED);
+        return;
+    }
+    // The dialog is closed and the jobs are taken: a failure is reported in the status bar.
+    if let Err(e) = crate::print::send_script_prints(app, jobs) {
+        app.status(e);
+    }
+}
+
+/// Print's refusal when automation asked for it.
+pub(crate) const PRINT_BY_PERSON: &str = "Only the person at the keyboard can print a script's print jobs";
+/// The status after Cancel.
+pub(crate) const PRINTS_DROPPED: &str = "The script's print jobs were not sent";

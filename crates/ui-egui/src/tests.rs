@@ -43,6 +43,7 @@ mod saveext;
 mod screenmode;
 mod script_check;
 mod script_dialogs;
+mod script_print;
 mod script_run;
 mod scripts_menu;
 mod scrub;

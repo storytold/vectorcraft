@@ -47,12 +47,17 @@
 //! run. An engine keeps no document and no run: its host functions reach the run through a link
 //! that holds the run's host only while the run goes on. An error, a limit or a stop puts the
 //! documents back and keeps the engine's globals; an internal error drops the engine.
+//!
+//! `Document.print` to a printer prepares its job in memory; the session holds the jobs of a run
+//! only after the run's changes are kept, for the frontend to send once the person approves them
+//! ([`printing`]).
 
 pub mod console;
 pub mod dialogs;
 pub mod dollar;
 pub mod dom;
 pub mod include;
+pub mod printing;
 
 pub use dialogs::{DialogAnswer, DialogKind, ScriptDialog};
 
@@ -1350,6 +1355,17 @@ fn command(host: &Host, id: &str, params: &Value) -> std::result::Result<Data, H
 
 /// [`command`], with the command's result as it gave it as well as the script's copy of it.
 fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(Data, Value), HostError> {
+    command_crossing(host, id, params, true).map(|(data, value)| (data.unwrap_or(Data::Undefined), value))
+}
+
+/// [`command`] for a member that keeps the command's result itself: the result does not cross to
+/// the script, so it is not held to the limits of a crossing. → the result as the command gave it.
+fn command_kept(host: &Host, id: &str, params: &Value) -> std::result::Result<Value, HostError> {
+    command_crossing(host, id, params, false).map(|(_, value)| value)
+}
+
+/// [`command_value`], with the script's copy of the result made only when `cross` is true.
+fn command_crossing(host: &Host, id: &str, params: &Value, cross: bool) -> std::result::Result<(Option<Data>, Value), HostError> {
     let id = id.to_string();
     let params = params.clone();
     let session = host.session.clone();
@@ -1373,10 +1389,13 @@ fn command_value(host: &Host, id: &str, params: &Value) -> std::result::Result<(
         Err(e) => return Err(HostError::Error(e.to_string())),
     };
     let crossed = host.charge_growth(objects, added).and_then(|()| {
+        if !cross {
+            return Ok(None);
+        }
         let data = to_data(&value, &result_limits(), 0, &mut (0, 0))
             .map_err(|place| HostError::Range(format!("vc.run: the result{place} is too large for a script")))?;
         host.charge_call(data_size(&data))?;
-        Ok(data)
+        Ok(Some(data))
     });
     // A command whose result does not reach the script is put back, like one that failed.
     if let Some(save) = save {
@@ -1829,6 +1848,22 @@ impl Session {
         self.script_report.as_ref()
     }
 
+    /// Whether jobs a run prepared for a printer wait to be sent or dropped ([`printing`]).
+    pub fn script_prints_waiting(&self) -> bool {
+        !self.script_prints.is_empty()
+    }
+
+    /// The jobs that wait, as [`Self::take_script_prints`] would give them.
+    pub fn script_prints(&self) -> &[printing::PreparedPrint] {
+        &self.script_prints
+    }
+
+    /// The jobs the last run that printed to a printer prepared, which the session no longer holds:
+    /// the frontend sends them or drops them ([`printing`]).
+    pub fn take_script_prints(&mut self) -> Vec<printing::PreparedPrint> {
+        std::mem::take(&mut self.script_prints)
+    }
+
     /// The Script Console: the lines of this session's runs, oldest first.
     pub fn script_console(&self) -> &console::Console {
         &self.script_console
@@ -2144,6 +2179,9 @@ impl Session {
             ),
             linked: std::cell::OnceCell::new(),
         });
+        // The printers the frontend listed are this run's alone, and a run may not print while
+        // jobs an earlier run prepared still wait for the person.
+        host.dom.start_printing(self.script_printers.take(), !self.script_prints.is_empty());
         *link.borrow_mut() = Some(host.clone());
         let args = match to_data(&Value::Object(request.args), &DataLimits::default(), 0, &mut (0, 0)) {
             Ok(args) => args,
@@ -2395,6 +2433,12 @@ impl Session {
             "hostCalls": host.calls.get(),
         });
         host.more_written(&mut report);
+        // The jobs it prepared for a printer wait for the frontend now that its changes are kept.
+        let prints = host.dom.take_prints();
+        if !prints.is_empty() {
+            report["prints"] = json!(prints.len());
+            self.script_prints = prints;
+        }
         let rejections = rejections_report(host, &job.realm);
         if let (false, Some(o)) = (rejections.is_empty(), report.as_object_mut()) {
             o.insert("unhandledRejections".into(), Value::Array(rejections));

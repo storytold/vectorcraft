@@ -37,13 +37,16 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("Document.prototype.saveAs", "app.activeDocument.saveAs(f);", "filesWritten"),
+    ("Document.prototype.exportFile", "app.activeDocument.exportFile(f, ExportType.PNG24);", "filesWritten"),
+    ("Document.prototype.print", "var o = new PrintOptions(); o.jobOptions.file = new File(p); app.activeDocument.print(o);", "filesWritten"),
     ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
 /// Reading a file or a folder, a file dialog and a message to the person do not change anything
 /// outside it. The document model (`app`, its classes and the enumerations) acts on the open
-/// documents; `Document.saveAs` and `close` throw "not available yet".
+/// documents; `Document.close` throws "not available yet". `app.open` reads the file it is given.
 const INSIDE: &[(&str, &str)] = &[
     ("", "$ File Folder UnitValue alert confirm localize prompt toSource"),
     ("Object.prototype.", "toSource"),
@@ -86,7 +89,8 @@ const INSIDE: &[(&str, &str)] = &[
     (
         "Application.prototype.",
         "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents executeMenuCommand \
-         getIsFileOpen selection selection= toString typename",
+         getIsFileOpen open PPDFileList printPresetsList printerList selection selection= toString typename \
+         userInteractionLevel userInteractionLevel=",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -103,7 +107,7 @@ const INSIDE: &[(&str, &str)] = &[
         "Document.prototype.",
         "activeLayer activeLayer= artboards artboards= close close= constructor convertCoordinate documentColorSpace \
          groupItems groupItems= height layers layers= name pageItems parent pathItems pathItems= rulerOrigin rulerOrigin= \
-         rulerUnits saveAs saveAs= selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
+         rulerUnits selection selection= swatches swatches= symbols symbols= tags textFrames textFrames= toString \
          typename views views= width",
     ),
     ("Layer.", "prototype"),
@@ -138,11 +142,109 @@ const INSIDE: &[(&str, &str)] = &[
     ("ElementPlacement.", "INSIDE PLACEAFTER PLACEATBEGINNING PLACEATEND PLACEBEFORE"),
     ("RulerUnits.", "Centimeters Inches Millimeters Picas Pixels Points Qs Unknown"),
     ("ZOrderMethod.", "BRINGFORWARD BRINGTOFRONT SENDBACKWARD SENDTOBACK"),
+    // The enumerations of saving, exporting and opening.
+    ("", "Compatibility EPSPostScriptLevelEnum EPSPreview ExportType PDFBoxType PDFCompatibility PDFOverprint UserInteractionLevel"),
+    (
+        "Compatibility.",
+        "ILLUSTRATOR10 ILLUSTRATOR11 ILLUSTRATOR12 ILLUSTRATOR13 ILLUSTRATOR14 ILLUSTRATOR15 ILLUSTRATOR16 ILLUSTRATOR17 \
+         ILLUSTRATOR19 ILLUSTRATOR8 ILLUSTRATOR9 JAPANESEVERSION3",
+    ),
+    ("EPSPostScriptLevelEnum.", "LEVEL2 LEVEL3"),
+    ("EPSPreview.", "BWTIFF COLORTIFF None TRANSPARENTCOLORTIFF"),
+    ("ExportType.", "AutoCAD FLASH GIF JPEG PNG24 PNG8 SVG TIFF"),
+    ("PDFBoxType.", "PDFARTBOX PDFBLEEDBOX PDFBOUNDINGBOX PDFCROPBOX PDFMEDIABOX PDFTRIMBOX"),
+    ("PDFCompatibility.", "ACROBAT4 ACROBAT5 ACROBAT6 ACROBAT7 ACROBAT8"),
+    ("PDFOverprint.", "DISCARDPDFOVERPRINT PRESERVEPDFOVERPRINT"),
+    ("UserInteractionLevel.", "DISPLAYALERTS DONTDISPLAYALERTS"),
+    // The print option classes and the enumerations of printing.
+    (
+        "",
+        "FontSubstitutionPolicy PageMarksTypes PostScriptImageCompressionType PrintArtworkDesignation PrintColorIntent \
+         PrintColorManagementOptions PrintColorProfile PrintColorSeparationMode PrintColorSeparationOptions \
+         PrintCoordinateOptions PrintFlattenerOptions PrintFontDownloadMode PrintFontOptions PrintJobOptions PrintOptions \
+         PrintOrientation PrintPageMarksOptions PrintPaperOptions PrintPosition PrintPostScriptOptions PrintTiling \
+         Printer PrinterPostScriptLevelEnum PrintingBounds",
+    ),
+    ("Printer.", "prototype"),
+    ("Printer.prototype.", "constructor name printerInfo printerInfo= typename"),
+    ("PrintOptions.", "prototype"),
+    (
+        "PrintOptions.prototype.",
+        "PPDName PPDName= colorManagementOptions colorManagementOptions= colorSeparationOptions colorSeparationOptions= \
+         constructor coordinateOptions coordinateOptions= flattenerOptions flattenerOptions= flattenerPreset \
+         flattenerPreset= fontOptions fontOptions= jobOptions jobOptions= pageMarksOptions pageMarksOptions= paperOptions \
+         paperOptions= postScriptOptions postScriptOptions= printPreset printPreset= printerName printerName= typename",
+    ),
+    ("PrintJobOptions.", "prototype"),
+    (
+        "PrintJobOptions.prototype.",
+        "artboardRange artboardRange= bitmapResolution bitmapResolution= collate collate= constructor copies copies= \
+         designation designation= file file= name name= printAllArtboards printAllArtboards= printArea printArea= \
+         printAsBitmap printAsBitmap= reversePages reversePages= typename",
+    ),
+    ("PrintColorManagementOptions.", "prototype"),
+    ("PrintColorManagementOptions.prototype.", "colorProfileMode colorProfileMode= constructor intent intent= name name= typename"),
+    ("PrintColorSeparationOptions.", "prototype"),
+    (
+        "PrintColorSeparationOptions.prototype.",
+        "colorSeparationMode colorSeparationMode= constructor convertSpotColors convertSpotColors= inkList inkList= \
+         overPrintBlack overPrintBlack= typename",
+    ),
+    ("PrintCoordinateOptions.", "prototype"),
+    (
+        "PrintCoordinateOptions.prototype.",
+        "constructor emulsion emulsion= fitToPage fitToPage= horizontalScale horizontalScale= orientation orientation= \
+         position position= tiling tiling= typename verticalScale verticalScale=",
+    ),
+    ("PrintFlattenerOptions.", "prototype"),
+    (
+        "PrintFlattenerOptions.prototype.",
+        "clipComplexRegions clipComplexRegions= constructor convertStrokesToOutlines convertStrokesToOutlines= \
+         convertTextToOutlines convertTextToOutlines= flatteningBalance flatteningBalance= gradientResolution \
+         gradientResolution= overprint overprint= rasterizationResolution rasterizationResolution= typename",
+    ),
+    ("PrintFontOptions.", "prototype"),
+    ("PrintFontOptions.prototype.", "constructor downloadFonts downloadFonts= fontSubstitution fontSubstitution= typename"),
+    ("PrintPageMarksOptions.", "prototype"),
+    (
+        "PrintPageMarksOptions.prototype.",
+        "bleedOffsetRect bleedOffsetRect= colorBars colorBars= constructor marksOffsetRect marksOffsetRect= pageInfoMarks \
+         pageInfoMarks= pageMarksType pageMarksType= registrationMarks registrationMarks= trimMarks trimMarks= \
+         trimMarksWeight trimMarksWeight= typename",
+    ),
+    ("PrintPaperOptions.", "prototype"),
+    ("PrintPaperOptions.prototype.", "constructor height height= name name= offset offset= transverse transverse= typename width width="),
+    ("PrintPostScriptOptions.", "prototype"),
+    (
+        "PrintPostScriptOptions.prototype.",
+        "binaryPrinting binaryPrinting= compatibleShading compatibleShading= constructor forceContinuousTone \
+         forceContinuousTone= imageCompression imageCompression= negativePrinting negativePrinting= postScriptLevel \
+         postScriptLevel= shadingResolution shadingResolution= typename",
+    ),
+    ("FontSubstitutionPolicy.", "SUBSTITUTEDEVICE SUBSTITUTEOBLIQUE SUBSTITUTETINT"),
+    ("PageMarksTypes.", "Japanese Roman"),
+    ("PostScriptImageCompressionType.", "IMAGECOMPRESSIONNONE JPEG RLE"),
+    ("PrintArtworkDesignation.", "ALLLAYERS VISIBLELAYERS VISIBLEPRINTABLELAYERS"),
+    ("PrintColorIntent.", "ABSOLUTECOLORIMETRIC PERCEPTUALINTENT RELATIVECOLORIMETRIC SATURATIONINTENT"),
+    ("PrintColorProfile.", "CUSTOMPROFILE OLDSTYLEPROFILE PRINTERPROFILE SOURCEPROFILE"),
+    ("PrintColorSeparationMode.", "COMPOSITE HOSTBASEDSEPARATION INRIPSEPARATION"),
+    ("PrintFontDownloadMode.", "DOWNLOADCOMPLETE DOWNLOADNONE DOWNLOADSUBSET"),
+    ("PrintOrientation.", "AUTOROTATE LANDSCAPE PORTRAIT REVERSELANDSCAPE REVERSEPORTRAIT"),
+    (
+        "PrintPosition.",
+        "TRANSLATEBOTTOM TRANSLATEBOTTOMLEFT TRANSLATEBOTTOMRIGHT TRANSLATECENTER TRANSLATELEFT TRANSLATERIGHT TRANSLATETOP \
+         TRANSLATETOPLEFT TRANSLATETOPRIGHT",
+    ),
+    ("PrintTiling.", "TILEFULLPAGES TILEIMAGEABLEAREAS TILESINGLEFULLPAGE"),
+    ("PrinterPostScriptLevelEnum.", "PSLEVEL1 PSLEVEL2 PSLEVEL3"),
+    ("PrintingBounds.", "ARTBOARDBOUNDS ARTWORKBOUNDS"),
 ];
 
-/// The classes the host adds with nothing but a prototype and its constructor: the page item types.
+/// The classes the host adds with nothing but a prototype and its constructor: the page item types
+/// and the save and export option classes.
 const BARE_CLASSES: &str = "BlendItem CompoundPathItem EnvelopeItem GraphItem GroupItem IntertwineItem MeshItem PathItem \
-     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame";
+     PlacedDocumentItem PlacedItem RasterItem RepeatItem SymbolItem TextFrame EPSSaveOptions ExportOptionsJPEG ExportOptionsPNG24 \
+     ExportOptionsSVG IllustratorSaveOptions PDFSaveOptions";
 
 /// The name the checker does not read, which also stands for its members: `vc` is VectorCraft's
 /// own API, and what `vc.run` does depends on the command it runs.

@@ -369,6 +369,16 @@ pub struct Session {
     pub(crate) script_high_water: std::collections::HashMap<u64, u64>,
     /// While a slice of a script runs in this session.
     pub(crate) script_in_run: bool,
+    /// The one command a member of the script object model runs past
+    /// [`script::refused_to_scripts`] while it is set: `file.print` for `Document.print`, after the
+    /// member checked its options and its file.
+    pub(crate) script_unfenced: Option<&'static str>,
+    /// The printers the frontend lists for the next run, which takes them: `app.printerList` and
+    /// `Document.print` to a printer read them. `None`: scripts cannot print to a printer here.
+    pub script_printers: Option<script::printing::Printers>,
+    /// The jobs the last run that printed to a printer prepared, until the frontend takes them
+    /// ([`Session::take_script_prints`]).
+    pub(crate) script_prints: Vec<script::printing::PreparedPrint>,
     /// Write recovery copies of the unsaved documents before a run, and don't start without them.
     pub script_copy_first: bool,
     /// While the active tool's actions run: their commands aren't "a command from outside the
