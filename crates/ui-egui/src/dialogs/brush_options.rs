@@ -538,7 +538,7 @@ fn bristle_slider(key: &'static str, label: &'static str, range: (f64, f64)) -> 
     Param::custom(key, label, move |ui, d, _| {
         let shown =
             SliderField::new(label, Bind::given(clamped(d, key, range)), range.0..=range.1).layout(SliderFieldLayout::Inline).id_salt(key).show(ui);
-        if let Some(v) = shown.edit.value() {
+        if let Some(v) = shown.edit.events.landed() {
             d.set(key, *v);
         }
         shown.edit.response.clone()
@@ -562,10 +562,10 @@ fn variation_row(key: &'static str, label: Label, suffix: &'static str, decimals
                 .fixed_decimals(decimals as _)
                 .id_salt("value")
                 .show(ui);
-            if let Some(Some(v)) = typed.edit.value() {
+            if let Some(Some(v)) = typed.edit.events.landed() {
                 edits.push((key.to_string(), FieldValue::Number(v.clamp(range.0, range.1))));
             }
-            if let Some(picked) = Select::new(name.clone(), Bind::given(mode.clone()), &entries).id_salt("mode").show(ui).value() {
+            if let Some(picked) = Select::new(name.clone(), Bind::given(mode.clone()), &entries).id_salt("mode").show(ui).events.committed() {
                 edits.push((mode_id.clone(), FieldValue::Text(picked.clone())));
             }
             Field::new(tl!("Variation:")).id_salt("variation").show(ui, |ui, _| {
@@ -576,7 +576,7 @@ fn variation_row(key: &'static str, label: Label, suffix: &'static str, decimals
                     .enabled(mode != Variation::Fixed.id())
                     .id_salt("amount")
                     .show(ui);
-                if let Some(Some(v)) = typed.edit.value() {
+                if let Some(Some(v)) = typed.edit.events.landed() {
                     edits.push((variation_id.clone(), FieldValue::Number(v.clamp(0.0, max))));
                 }
             });

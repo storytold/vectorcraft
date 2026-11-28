@@ -256,9 +256,7 @@ impl StackDialog for RelinkDialog {
                     }
                 });
                 Field::new(tl!("Replace:")).show(ui, |ui, _| {
-                    if let Some(next) = Select::new(tl!("Replace:"), Bind::given(scope.clone()), &entries).show(ui).value().cloned() {
-                        *scope = next;
-                    }
+                    Select::new(tl!("Replace:"), Bind::bound(scope), &entries).show(ui);
                 });
                 true
             });
@@ -451,6 +449,66 @@ mod tests {
     #[test]
     fn relink_opening_drawing_is_required_when_the_file_picker_answers() {
         check_relink_stays_in_opening_drawing(true);
+    }
+
+    #[test]
+    fn replace_popup_cancel_preserves_selected_instances_and_enter_relinks_all() {
+        use crate::tests::panel_harness::Panel;
+        use craft::ui::contract::Role;
+        use egui::{Key, Modifiers};
+
+        struct Scratch(std::path::PathBuf);
+        impl Drop for Scratch {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        for commit in [false, true] {
+            let (mut app, dir) = setup(if commit { "popup-commit" } else { "popup-cancel" }, &["photo.png", "other.png"]);
+            let _scratch = Scratch(dir.clone());
+            let a = place(&mut app, &dir.join("photo.png"));
+            let b = place(&mut app, &dir.join("photo.png"));
+            let c = place(&mut app, &dir.join("other.png"));
+            let picker = scripted(&mut app);
+            let chosen = new_file(&dir, "replacement.png");
+            let original_path = dir.join("photo.png").to_string_lossy().into_owned();
+            let other_path = link_path(&app, c);
+            let original = app.session.active().unwrap().doc.clone();
+            let revision = app.session.active().unwrap().revision;
+            let undo = app.session.active().unwrap().history.undo.len();
+            let mut panel = Panel::new(app, crate::tests::picks::dialogs);
+            panel.room(egui::vec2(900.0, 700.0));
+            panel.app().run("ui.relinkDialog", json!({"ids": [a]})).unwrap();
+            panel.frame();
+            let before = fields(&panel.app());
+            panel.click_role("Replace:", Role::COMBO_BOX);
+            panel.key(Key::ArrowDown, Modifiers::NONE);
+            assert_eq!(fields(&panel.app())["scope"], "all", "the open popup previews All Instances");
+            panel.key(if commit { Key::Enter } else { Key::Escape }, Modifiers::NONE);
+            assert_eq!(fields(&panel.app())["scope"], if commit { "all" } else { "selected" });
+            if !commit {
+                assert_eq!(fields(&panel.app()), before, "Escape preserves all pending Relink fields");
+            }
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(panel.app().session.active().unwrap().revision, revision);
+            assert_eq!(panel.app().session.active().unwrap().history.undo.len(), undo);
+            panel.click("Relink…");
+            assert_eq!(picker.requests().len(), 1);
+            picker.answer(&[&chosen]);
+            panel.frame();
+            panel.frame();
+            assert!(open_dialogs(&panel.app()).is_empty());
+            {
+                let app = panel.app();
+                assert_eq!(link_path(&app, a), chosen);
+                assert_eq!(link_path(&app, b), if commit { chosen.clone() } else { original_path.clone() });
+                assert_eq!(link_path(&app, c), other_path);
+                assert_eq!(app.session.active().unwrap().history.undo.len(), undo + 1);
+            }
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
     }
 
     #[test]

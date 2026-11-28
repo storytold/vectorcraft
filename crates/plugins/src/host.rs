@@ -303,7 +303,7 @@ impl LogLevel {
         }
     }
 
-    fn log_level(self) -> log::Level {
+    pub(crate) fn log_level(self) -> log::Level {
         match self {
             LogLevel::Error => log::Level::Error,
             LogLevel::Warn => log::Level::Warn,

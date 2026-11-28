@@ -34,6 +34,8 @@ pub(crate) struct Spec {
 pub(crate) struct AddonDialogs {
     open: Option<Open>,
     preview: LivePreview,
+    /// The open Tangent Circle Tool radius dialog.
+    pub(crate) tangent_radius: Option<super::pathtools::tangent_circle_radius::Open>,
 }
 
 #[derive(Clone, Copy)]
@@ -105,6 +107,7 @@ pub(crate) fn open_from_menu(app: &mut VectorcraftApp, id: &str) -> Option<Resul
 /// by type: two hosted parameter dialogs would take each other's answers.
 pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
     pump_commit(app);
+    super::pathtools::tangent_circle_radius::pump(app, ctx);
     super::color::nearest::pump(app, ctx);
     super::select::pump(app, ctx);
     super::select::link_status::pump(app, ctx);

@@ -2,17 +2,88 @@ use super::containers::close;
 use super::document::TEXT_SLOT;
 use super::raster::{self, Limits, Shape};
 use super::types::{
-    FLIP, Frame, GState, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE, MAX_POINTS,
-    MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedPage, PlacedTail,
+    EPS_MIME, FLIP, Frame, GState, IMAGE_TOO_LARGE, Kind, LARGE_IMAGES, LINKED_PLACEHOLDERS, LINKED_PREVIEWS, MAX_PIXELS, MAX_PLACED_ELSEWHERE,
+    MAX_POINTS, MAX_SIDE, NON_NATIVE_ART, NON_NATIVE_ART_UNREAD, PLACED_CROP, PLACED_PAGE, Place, PlacedEps, PlacedPage, PlacedTail,
 };
 use super::{
     Affine, AnchorKind, Appearance, AppearanceItem, Arc, BezPath, CANVAS_CENTRE, FillLayer, ImageBlob, ImageObject, Inks, Instance, LinkInfo, Node,
     NodeId, NodeKind, Obj, OpacityMask, PageBox, Paint, PathData, PathEl, Point, Reader, Rect, StrokeLayer, V, ps,
 };
-use vectorcraft_doc::links::missing_placeholder;
+use vectorcraft_doc::PlacedDocument;
+use vectorcraft_doc::links::{hash_bytes, missing_placeholder};
 use vectorcraft_doc::placed_document::key_for;
+use vectorcraft_pdf::is_postscript;
+
+/// Open-check results by content and nesting depth: the remaining depth changes their warnings.
+type EpsChecks = Vec<((String, usize), Option<Vec<String>>)>;
+
+/// The most open-check results kept during one outer check; no file bytes are retained.
+const MAX_EPS_CHECKS: usize = 64;
+
+std::thread_local! {
+    /// How many included EPS files [`readable_eps`] is reading inside one another on this thread.
+    static READING_EPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Checks completed during this thread's outer check, including files that do not read.
+    static EPS_CHECKS: std::cell::RefCell<EpsChecks> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// An included EPS file being read by [`readable_eps`] ([`READING_EPS`]): the count goes down when
+/// this goes.
+struct ReadingEps;
+
+impl ReadingEps {
+    /// `None` when 8 are being read.
+    fn enter() -> Option<Self> {
+        READING_EPS.with(|d| (d.get() < 8).then(|| d.set(d.get() + 1))).map(|()| Self)
+    }
+}
+
+impl Drop for ReadingEps {
+    fn drop(&mut self) {
+        READING_EPS.with(|d| d.set(d.get().saturating_sub(1)));
+        if READING_EPS.with(std::cell::Cell::get) == 0 {
+            EPS_CHECKS.with_borrow_mut(Vec::clear);
+        }
+    }
+}
+
+/// The warnings of reading `bytes` as an EPS file, the way a placed document's art is read from
+/// them (art left out after an operator that isn't read, for one); `None` when they don't read.
+/// Past 8 included files read inside one another they count as readable without warnings; drawing
+/// reads a bounded number of them in turn. The check uses previews for placed documents, so
+/// drawing does not start another chain of checks inside this one. Repeated structural reads
+/// share completed checks at the same depth until the outer check ends.
+fn readable_eps(bytes: &[u8]) -> Option<Vec<String>> {
+    let key = (hash_bytes(bytes), READING_EPS.with(std::cell::Cell::get));
+    if let Some(warnings) = EPS_CHECKS.with_borrow(|c| c.iter().find(|(k, _)| *k == key).map(|(_, warnings)| warnings.clone())) {
+        return warnings;
+    }
+    let Some(_reading) = ReadingEps::enter() else { return Some(vec![]) };
+    #[cfg(any(test, feature = "work-count"))]
+    crate::INCLUDED_EPS_READS.with(|n| n.set(n.get() + 1));
+    let warnings = vectorcraft_doc::placed_document::with_previews(|| {
+        crate::import_names(bytes, true, false, crate::NameEncoding::default()).ok().map(|r| r.warnings)
+    });
+    EPS_CHECKS.with_borrow_mut(|c| {
+        if c.len() >= MAX_EPS_CHECKS {
+            c.remove(0);
+        }
+        c.push((key, warnings.clone()));
+    });
+    warnings
+}
 
 impl<'a> Reader<'a> {
+    /// Do the bytes `eps` of an included EPS file read ([`readable_eps`])? When they do, what reading
+    /// them warns of is a warning of this file's too.
+    fn read_included(&mut self, eps: &[u8]) -> bool {
+        let Some(warnings) = readable_eps(eps) else { return false };
+        for w in warnings {
+            self.warn(&format!("a placed EPS file: {w}"));
+        }
+        true
+    }
+
     /// A text object (`/AI11Text`): an empty group standing for it, named after its story.
     pub(super) fn text_slot(&mut self, o: &Obj) -> Result<(), String> {
         if self.pattern.is_some() {
@@ -838,8 +909,9 @@ impl<'a> Reader<'a> {
     }
 
     /// `~`: the placed file read since `%AI5_BeginPlace` becomes a linked image in its place that
-    /// shows the preview the data keeps of it, as a linked image whose file is missing does. One
-    /// without a preview, a path or a matrix isn't read.
+    /// shows the preview the data keeps of it, as a linked image whose file is missing does. An EPS
+    /// file whose bytes the data includes becomes a placed document of them ([`Self::placed_eps`]).
+    /// One without a preview or those bytes, a path or a matrix isn't read.
     pub(super) fn end_place(&mut self, hidden: bool) -> Result<(), String> {
         // Where a symbol's art puts a placed file's pixels isn't known.
         if self.symbol.is_some() {
@@ -847,10 +919,42 @@ impl<'a> Reader<'a> {
             self.left_out_of_symbol();
             return Ok(());
         }
+        let mut deferred = None;
         let (m, b, path, png, w, h, folder) = match self.place.take() {
             Some(Place { broken: true, .. }) => {
                 self.unreadable("placed files", hidden);
                 return Ok(());
+            }
+            Some(Place { matrix: Some(m), bounds: Some(b), path, document: Some(eps), preview, folder, .. })
+                // A file without a bounding box of its own has its art read on a page of another
+                // size, which the placed box can't be matched to.
+                // One named `.ai` or `.ait` is read with the artboard its header gives rather than
+                // its bounding box, so it isn't read either. Bytes that don't read as an EPS file
+                // leave it as a placed file without them: its preview, or an unread one.
+                if !path.is_empty()
+                    && !ai_named(&path)
+                    && is_postscript(&eps)
+                    // A native document's artboard, rather than its bounding box, frames what the loader reads.
+                    && !native_eps(&eps)
+                    && crate::dcs::read(&eps).is_none()
+                    && sane(b)
+                    && b.width() > 0.0
+                    && b.height() > 0.0
+                    && eps_box(&eps).is_some()
+                    && self.read_included(&eps) =>
+            {
+                let Some((placed, blob)) = self.placed_eps(m, path.clone(), eps, folder.clone(), hidden) else { return Ok(()) };
+                if let Some((png, w, h)) = preview {
+                    // No image variable binds pattern or brush art, which a reader of its own
+                    // reads: there the placed document goes in at once.
+                    if self.pattern.is_some() {
+                        return self.add_placed_eps(placed, blob, hidden);
+                    }
+                    deferred = Some((placed, blob));
+                    (m, b, path, png, w, h, folder)
+                } else {
+                    return self.add_placed_eps(placed, blob, hidden);
+                }
             }
             Some(Place { matrix: Some(m), bounds: Some(b), path, preview: Some((png, w, h)), folder, .. }) if !path.is_empty() => {
                 (m, b, path, png, w, h, folder)
@@ -902,6 +1006,10 @@ impl<'a> Reader<'a> {
             .filter(|a| a.as_coeffs().iter().all(|v| v.is_finite()));
         let xf = self.space() * m * over_file;
         if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            // An included EPS file is still read when its preview can't be placed.
+            if let Some((placed, blob)) = deferred {
+                return self.add_placed_eps(placed, blob, hidden);
+            }
             self.unreadable("placed files", hidden);
             return Ok(());
         }
@@ -911,7 +1019,11 @@ impl<'a> Reader<'a> {
         let key = linked_key(&blob, &path);
         let fresh = !self.doc.images.contains_key(&key);
         self.doc.images.entry(key.clone()).or_insert(blob);
-        self.warn(LINKED_PREVIEWS);
+        // An included EPS file shows its preview only when an image variable binds it, which the
+        // importer notes then.
+        if deferred.is_none() {
+            self.warn(LINKED_PREVIEWS);
+        }
         let id = NodeId(self.doc.peek_next_id());
         if let Some(shift) = elsewhere
             && self.placed_elsewhere.len() < MAX_PLACED_ELSEWHERE
@@ -928,7 +1040,11 @@ impl<'a> Reader<'a> {
         self.placed_tails.push(PlacedTail { id, key: key.clone(), size: (b.width(), b.height()), fresh, depth });
         let mut link = LinkInfo::new(path);
         link.relative = folder.and_then(|f| relative_path(&f, link.name()));
-        self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(link), placement: Default::default(), pixels: None }, hidden)
+        self.add_image(ImageObject { key, width: w, height: h, xf, link: Some(link), placement: Default::default(), pixels: None }, hidden)?;
+        if let Some((placed, blob)) = deferred {
+            self.placed_eps.push(PlacedEps { id, placed, blob });
+        }
+        Ok(())
     }
 
     /// The dictionary `o` after the placed file just read: with a page or a box in it, that file is
@@ -960,6 +1076,54 @@ impl<'a> Reader<'a> {
             self.doc.images.entry(key).or_insert(blob);
         }
         self.placed_pages.push(PlacedPage { id: tail.id, page, bounding, page_box, size: tail.size });
+    }
+
+    /// The placed EPS file at `path` whose bytes `eps` the data includes, its box (in its own space,
+    /// y up: the bounding box its comments give, [`eps_box`], which its art is read in) taken into
+    /// art space by `m`: a placed document showing that box, which keeps the bytes and draws them
+    /// whether or not its file is found. Its link has the size and hash of those bytes, so a file
+    /// found unchanged isn't reported as modified. The placed document has no preview, so a save
+    /// keeps the bytes. Not read without that box.
+    fn placed_eps(&mut self, m: Affine, path: String, eps: Vec<u8>, folder: Option<String>, hidden: bool) -> Option<(PlacedDocument, ImageBlob)> {
+        let Some(b) = eps_box(&eps) else {
+            self.unreadable("placed files", hidden);
+            return None;
+        };
+        // The placed document's box runs down from the file's top left corner.
+        let xf = self.space() * m * Affine::new([1.0, 0.0, 0.0, -1.0, b.x0, b.y1]);
+        if !xf.as_coeffs().iter().all(|v| v.is_finite()) || xf.determinant().abs() < 1e-12 {
+            self.unreadable("placed files", hidden);
+            return None;
+        }
+        let hash = hash_bytes(&eps);
+        let key = key_for(&hash, 1, false, PageBox::Crop);
+        let mut link = LinkInfo::new(path);
+        link.relative = folder.and_then(|f| relative_path(&f, link.name()));
+        (link.page, link.size, link.hash) = (Some(1), u64::try_from(eps.len()).ok(), Some(hash));
+        let blob = ImageBlob { mime: EPS_MIME.into(), bytes: Arc::new(eps), proxy: None, file_font: Default::default() };
+        let placed = PlacedDocument {
+            link,
+            key,
+            bounding: false,
+            page_box: PageBox::Crop,
+            width: b.width(),
+            height: b.height(),
+            xf,
+            placement: Default::default(),
+        };
+        Some((placed, blob))
+    }
+
+    /// `placed` ([`Self::placed_eps`]) added as an object, its bytes `blob` kept under its key.
+    /// Placements of the same bytes share one blob.
+    fn add_placed_eps(&mut self, placed: PlacedDocument, blob: ImageBlob, hidden: bool) -> Result<(), String> {
+        self.doc.images.entry(placed.key.clone()).or_insert(blob);
+        let gs = self.gs.clone();
+        let mut node = self.new_node(NodeKind::PlacedDocument(Box::new(placed)), &gs);
+        node.opacity = gs.opacity;
+        node.blend = gs.blend;
+        node.knockout_shape = gs.knockout_shape;
+        self.add(node, hidden)
     }
 
     pub(super) fn warn(&mut self, w: &str) {
@@ -1083,6 +1247,65 @@ fn placed_crop(v: f64) -> Option<(bool, PageBox)> {
     }
 }
 
+/// The bytes of a placed file the data includes (`doc`: between the `%%BeginDocument:` line and
+/// the `%%EndDocument` one), as the file has them: on `%_` lines (`hidden`) without the `%_` that
+/// starts each line, then without a line end the data adds before `%%EndDocument` after the file's
+/// own last one. A single line end at the end is the file's own. The line end added is `sep`, the
+/// one the data ends its `%%BeginDocument:` line with, when the bytes end with it; otherwise the
+/// last line end they end with. An LF `sep` after a CR isn't taken apart from it when the file's
+/// first line ends with CRLF: that CRLF is one line end of the file's.
+pub(super) fn included_document(doc: &[u8], hidden: bool, sep: Option<&[u8]>) -> Vec<u8> {
+    let mut out = if hidden { unhidden(doc) } else { doc.to_vec() };
+    let eol = |b: &[u8]| b.ends_with(b"\r") || b.ends_with(b"\n");
+    let first_eol = out.iter().position(|&b| b == b'\r' || b == b'\n').and_then(|i| out.get(i..i + 2));
+    let crlf_file = first_eol == Some(b"\r\n") && out.ends_with(b"\r\n");
+    let added = sep
+        .filter(|s| out.ends_with(s) && !(crlf_file && *s == b"\n"))
+        .or_else(|| [&b"\r\n"[..], b"\r", b"\n"].into_iter().find(|e| out.ends_with(e)))
+        .map(|e| out.len() - e.len());
+    if let Some(n) = added.filter(|&n| out.get(..n).is_some_and(eol)) {
+        out.truncate(n);
+    }
+    out
+}
+
+/// The bounding box an EPS file's comments give (`%%HiResBoundingBox` when it has one), in its
+/// own space; `None` without one, or when it is empty or out of range.
+fn eps_box(eps: &[u8]) -> Option<Rect> {
+    let [x0, y0, x1, y1] = crate::import::bounding_box(eps)?;
+    Some(Rect::new(x0, y0, x1, y1)).filter(|r| sane(*r) && r.width() > 0.0 && r.height() > 0.0)
+}
+
+/// Does `eps` have a native document's begin comment line, without reading that document?
+fn native_eps(eps: &[u8]) -> bool {
+    eps.split(|b| *b == b'\r' || *b == b'\n')
+        .any(|line| line.strip_prefix(crate::BEGIN_DATA.as_bytes()).is_some_and(|name| name.trim_ascii() == crate::NATIVE.as_bytes()))
+}
+
+/// Does the file name at the end of `path` (`/` or `\` separators) end in `.ai` or `.ait`, any case?
+fn ai_named(path: &str) -> bool {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    name.rsplit_once('.').is_some_and(|(_, ext)| ext.eq_ignore_ascii_case("ai") || ext.eq_ignore_ascii_case("ait"))
+}
+
+/// `doc` without the `%_` that starts each of its lines.
+fn unhidden(doc: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(doc.len());
+    let mut line_start = true;
+    let mut i = 0;
+    while let Some(&b) = doc.get(i) {
+        if line_start && doc.get(i..i + 2) == Some(b"%_") {
+            i += 2;
+            line_start = false;
+            continue;
+        }
+        out.push(b);
+        line_start = b == b'\r' || b == b'\n';
+        i += 1;
+    }
+    out
+}
+
 /// A placed file's path relative to the document's folder (`/` separators): its relative `folder`
 /// (`src/`, `..\art`) followed by its file `name`; the name alone when the folder is empty (the
 /// document's own folder). `None` when the folder is absolute or holds control characters, or
@@ -1153,5 +1376,38 @@ pub(crate) fn join_and(items: &[&str]) -> String {
         [] => String::new(),
         [one] => (*one).to_string(),
         [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ReadingEps, readable_eps};
+
+    /// Check results keep their warnings and failures, respect depth, and expire with the outer check.
+    #[test]
+    fn included_eps_checks_keep_the_depth_limit_and_expire() {
+        let eps = b"%!PS\n%%BoundingBox: 0 0 60 60\n%%EndComments\n1 0 0 setrgbcolor 0 0 60 60 rectfill nosuchoperator\n%%EOF\n";
+        {
+            let _outer = ReadingEps::enter().unwrap();
+            let warnings = readable_eps(eps).unwrap();
+            assert!(!warnings.is_empty(), "a partly read file still passes, with warnings");
+            let reads = crate::included_eps_reads();
+            assert_eq!(readable_eps(eps).unwrap(), warnings);
+            assert_eq!(crate::included_eps_reads(), reads, "the repeated check did not parse again");
+            let limits: Vec<_> = std::iter::from_fn(ReadingEps::enter).collect();
+            assert!(!limits.is_empty());
+            assert!(readable_eps(eps).unwrap().is_empty(), "past the depth limit, warnings are not read");
+            drop(limits);
+            assert_eq!(readable_eps(eps).unwrap(), warnings, "the deeper check did not replace the cached warnings");
+            let broken = b"%!PS\n%%BoundingBox: 0 0 60 60\n%%EndComments\n0 0 60 60 nosuchoperator\n%%EOF\n";
+            assert!(readable_eps(broken).is_none());
+            let reads = crate::included_eps_reads();
+            assert!(readable_eps(broken).is_none());
+            assert_eq!(crate::included_eps_reads(), reads, "a repeated failed check did not parse again");
+        }
+        let _outer = ReadingEps::enter().unwrap();
+        let reads = crate::included_eps_reads();
+        assert!(readable_eps(eps).is_some());
+        assert!(crate::included_eps_reads() > reads, "the outer check's results were discarded");
     }
 }

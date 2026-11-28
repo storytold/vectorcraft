@@ -16,8 +16,8 @@ save step started saves nothing: its old entries stay, and this exits 1, so "Re-
 runs it again beside the re-run leg. A save step that is canceled or fails after the old entries
 were deleted leaves no rolling entry, so the next run starts cold, and this exits 1 too. A failure
 in a later post step does not count once the save step has succeeded. This also exits 1 when the
-leg has not reached its save, or its save has not finished, GIVE_UP_SECONDS after the leg started.
-An absent warm leg is treated as finished only
+leg has not started START_SECONDS after this script started, and when the leg has not reached its
+save, or its save has not finished, GIVE_UP_SECONDS after the leg started. An absent warm leg is treated as finished only
 when the most recent earlier attempt that lists it reports success and the current attempt lists
 no `cache prune` job, which runs from the start of "Re-run all jobs". Otherwise this keeps polling
 because reusable-workflow dependencies may still be scheduling it.
@@ -46,6 +46,12 @@ PAGE_SIZE = 100
 # Longer than the gate's `timeout-minutes` in ci.yml and timed from the leg's own start, so a cold
 # leg that starts late and runs to its limit still reaches its save before this gives up.
 GIVE_UP_SECONDS = 160 * 60
+# How long the leg may take to start, timed from this script's start: the leg waits for
+# `gate / select legs` and then for a runner, which took 44 minutes on a push to main on
+# 2026-11-28. The `cold-cache-clear` job's `timeout-minutes` in ci.yml is longer than
+# START_SECONDS and GIVE_UP_SECONDS together, so this exits with its own error before the job
+# times out.
+START_SECONDS = 120 * 60
 STOPPED = ('failure', 'cancelled', 'timed_out')
 # Steps with continue-on-error in craft-common-actions .github/workflows/gate.yml.
 TOLERATED_FAILURES = ('Trim the cache entry to this build',)
@@ -85,11 +91,28 @@ def save_finished(job):
     return job.get('status') == 'completed' or (step is not None and step['status'] == 'completed')
 
 
-def gave_up(job, now, began):
-    """True once GIVE_UP_SECONDS have passed since the warm leg started, or since `began` (this
-    script's start) while the leg has not started."""
+def started_at(job):
+    """The warm leg's start time, or None while the leg has not started."""
     started = job.get('started_at') if job and job.get('status') in ('in_progress', 'completed') else None
-    return (now - (parse_time(started) if started else began)).total_seconds() > GIVE_UP_SECONDS
+    return parse_time(started) if started else None
+
+
+def start_overdue(job, now, began):
+    """True once START_SECONDS have passed since `began` (this script's start) and the warm leg
+    has not started."""
+    return started_at(job) is None and (now - began).total_seconds() > START_SECONDS
+
+
+def started_late(job, began):
+    """True when the warm leg started more than START_SECONDS after `began` (this script's start)."""
+    started = started_at(job)
+    return started is not None and (started - began).total_seconds() > START_SECONDS
+
+
+def gave_up(job, now):
+    """True once GIVE_UP_SECONDS have passed since the warm leg started."""
+    started = started_at(job)
+    return started is not None and (now - started).total_seconds() > GIVE_UP_SECONDS
 
 
 def all_caches(fetch):
@@ -150,6 +173,9 @@ def main():
     while True:
         jobs = gh(jobs_url) or {}
         job = warm_job(jobs.get('jobs', []))
+        if started_late(job, began):
+            print(f'::error::the cache warm leg did not start within {START_SECONDS // 60} minutes; nothing deleted')
+            return 1
         if job and saving(job):
             break
         if job is None:
@@ -171,7 +197,11 @@ def main():
                 return 1
             print('the cache warm leg finished without a save step; nothing deleted')
             return
-        if gave_up(job, datetime.now(timezone.utc), began):
+        now = datetime.now(timezone.utc)
+        if start_overdue(job, now, began):
+            print(f'::error::the cache warm leg did not start within {START_SECONDS // 60} minutes; nothing deleted')
+            return 1
+        if gave_up(job, now):
             print('::error::the cache warm leg never reached its save; nothing deleted')
             return 1
         time.sleep(POLL_SECONDS)
@@ -190,7 +220,7 @@ def main():
                 print(result.stderr, end='', file=sys.stderr)
                 return result.returncode
     while not save_finished(job):
-        if gave_up(job, datetime.now(timezone.utc), began):
+        if gave_up(job, datetime.now(timezone.utc)):
             print(f'::error::{SAVE_LOST}')
             return 1
         time.sleep(POLL_SECONDS)

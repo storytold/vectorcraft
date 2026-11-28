@@ -6,6 +6,23 @@ use super::{
 };
 use crate::kept_paths::{self, KeptPath};
 use crate::node_checks::{holds_measured_three_d, measures_three_d};
+use crate::placed_document::{InMode, LayerMode, enter_layer};
+
+/// The key of `a`'s cull bounds in [`Renderer::geom`]: its address, and in its lowest bits what the
+/// bounds depend on besides `a`. For an object other than a path that is the mode it is measured in
+/// ([`LayerMode`]): it sets the mode of the layers in it ([`enter_layer`]), a group's included, and
+/// whether placed documents are crossed ([`vectorcraft_doc::placed_document::Crossed`]), since the
+/// art its effects make from a placed document in it is the crossed box then. Placed documents are
+/// crossed only in a mode. A node's address is aligned to 8 bytes, so no other node has that key.
+fn geom_key(a: &Node) -> usize {
+    let at = std::ptr::from_ref(a) as usize;
+    match a.kind {
+        NodeKind::Path { .. } | NodeKind::Compound { .. } => at,
+        _ => at | LayerMode::now().map_or(0, |m| usize::from(m.options) | usize::from(m.outline) << 1 | usize::from(m.images) << 2),
+    }
+}
+
+const _: () = assert!(std::mem::align_of::<Node>() >= 8, "geom_key keeps three bits below a node's address");
 
 fn needs_three_d_bounds(symbols: &SymbolBoxes, node: &Node) -> bool {
     measures_three_d(node)
@@ -34,7 +51,7 @@ impl Renderer {
         if patch.is_some_and(Frame::patch_rejected) {
             return None;
         }
-        let key = Arc::as_ptr(a) as usize;
+        let key = geom_key(a);
         if let Some(e) = self.geom.get_mut(&key)
             && Arc::ptr_eq(&e.node, a)
         {
@@ -53,6 +70,7 @@ impl Renderer {
                 let source = a.extras().trace.is_some().then(|| children.first()).flatten();
                 for c in children {
                     if c.visible || source.is_some_and(|s| Arc::ptr_eq(s, c)) {
+                        let _mode = enter_layer(c);
                         acc = vectorcraft_geom::union_opt(acc, self.bounds_with_patch(symbols, c, patch));
                         if patch.is_some_and(Frame::patch_rejected) {
                             return None;
@@ -156,6 +174,19 @@ impl Renderer {
             self.geom.retain(|_, e| !holds_measured_three_d(&e.node));
             self.brush_library = None;
         }
+    }
+
+    /// How frame `f` draws art ([`LayerMode`]).
+    pub(crate) fn layer_mode(&self, f: &Frame) -> LayerMode {
+        LayerMode { options: f.opts.dim_templates && !f.opts.skip_templates, outline: f.opts.outline, images: self.shows_outline_images(f) }
+    }
+
+    /// Draw and measure art in frame `f`'s mode ([`Self::layer_mode`]) until the guard returned is
+    /// dropped: placed documents' art ([`vectorcraft_doc::PlacedDocument::art`]) is their box
+    /// crossed from corner to corner in Outline mode without Document Setup → Show Images in
+    /// Outline Mode ([`Self::crosses_placed`]), else their file's art.
+    pub(crate) fn cross_placed(&self, f: &Frame) -> InMode {
+        self.layer_mode(f).enter()
     }
 
     /// When a plug-in has been installed or removed since the last check
@@ -266,6 +297,8 @@ impl Renderer {
         if crate::node_checks::left_out(f.opts, f.doc, a) {
             return true;
         }
+        // A layer is measured in the mode its Layer Options draw it in ([`Self::draw_node`]).
+        let _mode = self.layer_mode(f).inside(a).map(LayerMode::enter);
         let bounds = self.frame_bounds_of(f, a);
         if f.patch_rejected() {
             return true;
@@ -377,6 +410,13 @@ impl Renderer {
 
     /// Everything [`Self::draw_arc`] does after culling.
     fn draw_arc_body(&mut self, ctx: &mut RenderContext, f: &Frame, a: &Arc<Node>) {
+        // A layer with effects of its own draws them in the mode its Layer Options give it, as
+        // `draw_node` draws any other layer.
+        if let Some(mode) = self.layer_mode(f).inside(a) {
+            let opts = RenderOptions { outline: mode.outline, ..f.opts.clone() };
+            let _mode = mode.enter();
+            return self.draw_arc_body(ctx, &Frame { opts: &opts, ..*f }, a);
+        }
         // Fast path for plain paths: cached geometry, opacity folded into the paint.
         // A blend mode on a single plain fill applies per draw (exact for one paint operation);
         // a blend layer would composite the whole viewport.
@@ -459,18 +499,15 @@ impl Renderer {
         // Layer Options on screen: a layer whose Preview is off draws in outline, and Dim Images
         // fades its images, a template's too (exports and thumbnails, which leave templates out,
         // ignore both).
-        if let NodeKind::Layer { preview, dim_images, template, .. } = &n.kind
+        if let NodeKind::Layer { dim_images, .. } = &n.kind
             && f.opts.dim_templates
             && !f.opts.skip_templates
         {
             // A template layer stays in Preview while the view is in Outline (and whatever its own
             // Preview option says): its picture is there to be traced (#1486).
-            if *template && f.opts.outline {
-                let opts = RenderOptions { outline: false, ..f.opts.clone() };
-                return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
-            }
-            if !preview && !template && !f.opts.outline {
-                let opts = RenderOptions { outline: true, ..f.opts.clone() };
+            if let Some(mode) = self.layer_mode(f).inside(n) {
+                let opts = RenderOptions { outline: mode.outline, ..f.opts.clone() };
+                let _mode = mode.enter();
                 return self.draw_node(ctx, &Frame { opts: &opts, ..*f }, n, force);
             }
             if let Some(p) = *dim_images {
@@ -763,6 +800,7 @@ impl Renderer {
         if view.shows_outlines() {
             let opts = RenderOptions { outline: true, ..f.opts.clone() };
             let frame = Frame { opts: &opts, ..*f };
+            let _crossed = self.cross_placed(&frame);
             // An Abutting trace's seam fills hold no traced outline: a clip group of paths that are
             // each stroked without a fill or (on a stretched image, the strokes' outlines) filled
             // without a stroke, named "Seam Fills" or, renamed, still the lowest shape, where the
@@ -843,7 +881,7 @@ impl Renderer {
     /// Cull bounds of `n` (symbol instances measured by their art box from `symbols`): cached when
     /// it is a node of the tree being drawn.
     fn node_bounds(&mut self, symbols: &SymbolBoxes, n: &Node) -> Option<Rect> {
-        match self.geom.get(&(n as *const Node as usize)) {
+        match self.geom.get(&geom_key(n)) {
             // The entry keeps its node alive, so the address is that node's.
             Some(e) if std::ptr::eq(Arc::as_ptr(&e.node), n) => e.bounds,
             _ => fx::cull_bounds(symbols, n),

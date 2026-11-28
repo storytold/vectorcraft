@@ -52,6 +52,9 @@ fn a_click_outside_an_outside_stroke_selects_it() {
     s.execute("paint.setFill", &json!({"none": true})).unwrap();
     s.execute("stroke.set", &json!({"weight": 20, "align": "outside"})).unwrap();
     s.execute("select.none", &json!({})).unwrap();
+    // Object Selection by Path Only: the inside of the unfilled square takes no click of its own,
+    // so only the stroke is tested.
+    s.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": true})).unwrap();
     // 0.8 × the weight outside the path: past where a centred stroke (plus the tolerance) reaches.
     assert_eq!(click(&mut s, 84.0, 200.0), [r]);
     s.execute("select.none", &json!({})).unwrap();
@@ -59,6 +62,9 @@ fn a_click_outside_an_outside_stroke_selects_it() {
     s.execute("stroke.set", &json!({"ids": [r.0], "align": "center"})).unwrap();
     s.execute("select.none", &json!({})).unwrap();
     assert!(click(&mut s, 84.0, 200.0).is_empty(), "a centred stroke doesn't reach");
+    // With it off, a click inside the unfilled square selects it (#9175).
+    s.execute("prefs.set", &json!({"key": "objectSelectionByPathOnly", "value": false})).unwrap();
+    assert_eq!(click(&mut s, 116.0, 200.0), [r]);
 }
 
 #[test]

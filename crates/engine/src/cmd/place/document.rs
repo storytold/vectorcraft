@@ -1,6 +1,7 @@
 //! Placed documents (`file.place` of a VectorCraft document, a PDF, a `.ai` file or an EPS file
 //! from a file, with `link`): one locked object showing an artboard of the document, a page of the
-//! PDF or the EPS file's art, a [`PlacedDocument`].
+//! PDF or the EPS file's art, a [`PlacedDocument`]. An EPS file whose bytes a `.ai` file's editing
+//! data includes opens as one too, read from those bytes.
 //!
 //! The object keeps the file's bytes (in the document's images, like image data) and the link; the
 //! art it shows is read from them the way placing the file without Link reads it
@@ -223,6 +224,27 @@ impl Drop for Reading {
     }
 }
 
+std::thread_local! {
+    /// How many placed documents [`read_document`] is reading inside one another on this thread.
+    static DRAWING: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// A placed document being read for drawing ([`DRAWING`]): the count goes down when this goes.
+struct Drawing;
+
+impl Drawing {
+    /// `None` when [`MAX_NESTED_READS`] are being read.
+    fn enter() -> Option<Self> {
+        DRAWING.with(|d| (d.get() < MAX_NESTED_READS).then(|| d.set(d.get() + 1))).map(|()| Drawing)
+    }
+}
+
+impl Drop for Drawing {
+    fn drop(&mut self) {
+        DRAWING.with(|d| d.set(d.get().saturating_sub(1)));
+    }
+}
+
 /// `nodes` as one group, clipped to `clip` (its own ids: what drawing reads).
 fn group(nodes: Vec<Node>, clip: Option<Rect>) -> Node {
     let mut children: Vec<Arc<Node>> = nodes.into_iter().map(Arc::new).collect();
@@ -234,9 +256,20 @@ fn group(nodes: Vec<Node>, clip: Option<Rect>) -> Node {
 
 /// `p`'s file (`bytes`) read as the art it shows: how the document model reads placed documents
 /// ([`vectorcraft_doc::placed_document::set_loader`]).
+/// `None` past [`MAX_NESTED_READS`] placed documents read inside one another: opening a file can
+/// draw the placed documents in it, whose files can place others.
 pub(crate) fn read_document(p: &PlacedDocument, bytes: &[u8]) -> Option<(Document, Node, Rect)> {
+    let _drawing = Drawing::enter()?;
+    #[cfg(test)]
+    DOCUMENT_READS.with(|n| n.set(n.get() + 1));
     let a = document_art(p.link.name(), bytes, Some(&p.link.path), p.page(), p.bounding, p.page_box, "draw").ok()?;
     Some((a.doc, group(a.nodes, a.clip), a.frame))
+}
+
+#[cfg(test)]
+std::thread_local! {
+    /// Placed documents read for drawing on this thread, for tests that count work.
+    pub(crate) static DOCUMENT_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// `p`'s file read again, while it is the file it was read from (how the document model gets it

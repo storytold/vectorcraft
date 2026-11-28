@@ -369,6 +369,114 @@ fn panel_readout_info_names_and_truncated_link_metadata_copy_full_displayed_text
     copy_long_link_value(&mut a);
 }
 
+#[test]
+fn empty_link_info_values_do_not_offer_copy() {
+    use egui::accesskit::{Action, ActionRequest, TreeId};
+
+    let mut a = App::new();
+    let folder = vectorcraft_testkit::TempDir::new("empty-link-readout");
+    let path = folder.join("Original.vectorcraft");
+    // The linked file is saved from this test's two generated rectangles.
+    let bytes = vectorcraft_format::save_with(&a.app.session.active().unwrap().doc, &vectorcraft_format::SaveOptions::default()).unwrap();
+    std::fs::write(&path, bytes).unwrap();
+    let placed = a.app.run("file.place", json!({"path": path})).unwrap();
+    let info = a.app.run("links.info", json!({"id": placed["ids"][0]})).unwrap();
+    assert_eq!(info["document"], true, "the fixture places the original document as a link");
+    assert!(info["colorMode"].is_null(), "the linked document has no image color-mode value");
+    a.panel("links");
+    // A tall float shows every Link Info row, so no row is clipped away.
+    a.app.run("window.panel.float", json!({"panel": "links", "x": 520, "y": 120, "width": 300, "height": 700})).unwrap();
+    a.app.run("window.panel.activate", json!({"panel": "links"})).unwrap();
+    let out = a.settle();
+    let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+    assert!(
+        nodes.iter().any(|(_, node)| node.value() == Some("Original.vectorcraft") && node.supports_action(Action::Click)),
+        "the nonempty Name remains copyable"
+    );
+    let empty: Vec<_> = nodes.iter().filter(|(_, node)| node.label() == Some("Color Space")).collect();
+    assert!(!empty.is_empty(), "the actual Color Space row is present");
+    assert!(empty.iter().all(|(_, node)| node.description() != Some("Copy")), "the empty Color Space value must not advertise Copy");
+    let values: Vec<_> = empty.iter().filter(|(_, node)| node.value() == Some("")).collect();
+    assert!(!values.is_empty(), "the actual empty value is present in the accessibility tree");
+    assert!(values.iter().all(|(_, node)| !node.supports_action(Action::Click)), "the empty value has no copy action");
+    let requests = empty
+        .iter()
+        .map(|(id, _)| {
+            Event::AccessKitActionRequest(ActionRequest { action: Action::Click, target_node: *id, target_tree: TreeId::ROOT, data: None })
+        })
+        .collect();
+    let before = a.snapshot();
+    let sets = a.app.ui.status_sets;
+    assert!(copies(&a.frame(requests)).is_empty(), "a forged empty-value action does not copy");
+    assert_no_delayed_copy(&mut a, "empty value");
+    assert_eq!(a.app.ui.status_sets, sets, "an empty-value action reports no copy");
+    assert_eq!(a.snapshot(), before, "an empty-value action leaves the document and history intact");
+}
+
+#[test]
+fn link_info_stays_visible_while_a_long_image_list_scrolls() {
+    use egui::accesskit::{Action, Role};
+
+    // Each layout places 32 generated images before scrolling and copying.
+    for size in ["none", "small", "medium", "large"] {
+        let mut a = App::new();
+        for index in 0..32 {
+            place_original_png(&mut a, &format!("Original-image-{index:02}.png"));
+        }
+        let selected = "Original-image-31.png";
+        a.app.run("ui.links.thumbnails", json!({"size": size})).unwrap();
+        a.panel("links");
+        a.app.run("window.panel.float", json!({"panel": "links", "x": 520, "y": 120, "width": 220, "height": 700})).unwrap();
+        a.app.run("window.panel.activate", json!({"panel": "links"})).unwrap();
+        let out = a.settle();
+        let nodes = &out.platform_output.accesskit_update.as_ref().unwrap().nodes;
+        let body = nodes
+            .iter()
+            .filter(|(_, node)| node.role() == Role::TabPanel)
+            .map(|(_, node)| location_node_rect(node))
+            .find(|rect| (rect.left() - 520.0).abs() < 1.0)
+            .unwrap();
+        let name_rect = |out: &egui::FullOutput| {
+            let fields: Vec<_> = out
+                .platform_output
+                .accesskit_update
+                .as_ref()
+                .unwrap()
+                .nodes
+                .iter()
+                .filter(|(_, node)| node.label() == Some("Name") && node.value() == Some(selected) && node.supports_action(Action::Click))
+                .collect();
+            assert_eq!(fields.len(), 1, "{size}: the selected image has one visible Name copy target");
+            let rect = location_node_rect(&fields[0].1);
+            assert!(body.contains_rect(rect), "{size}: the selected image's Name remains inside the panel");
+            rect
+        };
+        let before = name_rect(&out);
+        let row = nodes.iter().find(|(_, node)| node.role() == Role::ListItem && node.label() == Some(selected)).unwrap();
+        let row = location_node_rect(&row.1);
+        let snapshot = a.snapshot();
+        let first_visible = |out: &egui::FullOutput| {
+            out.platform_output.accesskit_update.as_ref().unwrap().nodes.iter().any(|(_, node)| {
+                node.role() == Role::ListItem && node.label() == Some("Original-image-00.png") && body.contains_rect(location_node_rect(node))
+            })
+        };
+        assert!(!first_visible(&out), "{size}: the list starts with its oldest image scrolled out of view");
+        let mut scrolled = out;
+        for _ in 0..32 {
+            a.frame(vec![Event::PointerMoved(row.center())]);
+            a.frame(vec![craft::ui::testing::pointer::wheel(-body.height() * 32.0)]);
+            scrolled = a.settle();
+            assert_eq!(name_rect(&scrolled), before, "{size}: scrolling the list keeps Link Info in place");
+            if first_visible(&scrolled) {
+                break;
+            }
+        }
+        assert!(first_visible(&scrolled), "{size}: scrolling the list reaches its oldest image");
+        copy_at(&mut a, before.center(), selected);
+        assert_eq!(a.snapshot(), snapshot, "{size}: scrolling and copying leave the drawing and history unchanged");
+    }
+}
+
 fn assert_no_delayed_copy(a: &mut App, kind: &str) {
     let copied = copies(&a.deadline());
     assert!(copied.is_empty(), "{kind}: unexpected delayed copy {copied:?}");
@@ -704,4 +812,34 @@ fn review_4714788866_readout_copy_requires_an_inside_primary_press() {
     assert_eq!(visible_text_count(&feedback, COPIED), 1);
     assert_no_delayed_copy(&mut a, "accepted inside readout press");
     assert_eq!(a.snapshot(), before);
+}
+
+#[test]
+fn info_readout_copy_requires_the_press_and_release_inside_its_bounds() {
+    for same_frame in [true, false] {
+        let mut a = App::new();
+        let out = a.panel("info");
+        let value = "W: 37 pt";
+        let id = review_8826_readout_node(&out, value);
+        let node = &out.platform_output.accesskit_update.as_ref().unwrap().nodes.iter().find(|(key, _)| *key == id).unwrap().1;
+        let bounds = location_node_rect(node);
+        let outside = egui::pos2(bounds.left() - 1.0, bounds.center().y);
+        let inside = egui::pos2(bounds.left() + 1.0, bounds.center().y);
+        assert!(!bounds.contains(outside) && bounds.contains(inside));
+        assert!(outside.distance(inside) < a.ctx.options(|o| o.input_options.max_click_dist), "CONTROL: the motion is a click, not a drag");
+        let before = a.snapshot();
+        let sets = a.app.ui.status_sets;
+        let mut events = vec![Event::PointerMoved(outside), button(outside, true)];
+        if !same_frame {
+            assert!(copies(&a.frame(events)).is_empty());
+            events = Vec::new();
+        }
+        events.extend([Event::PointerMoved(inside), button(inside, false)]);
+        let release = a.frame(events);
+        assert!(copies(&release).is_empty(), "a press outside cannot copy on a release inside; same frame: {same_frame}");
+        assert_no_delayed_copy(&mut a, "outside press");
+        assert_eq!(a.app.ui.status_sets, sets, "the rejected gesture does not report a copy");
+        assert_eq!(a.snapshot(), before, "the rejected gesture preserves the document, selection and history");
+        copy_at(&mut a, bounds.center(), value);
+    }
 }

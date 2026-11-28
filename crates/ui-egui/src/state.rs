@@ -1260,6 +1260,11 @@ pub struct CustomToolbar {
     /// Older files: the groups torn off it. Read by the conversion, never written.
     #[serde(default, skip_serializing)]
     pub floating: Vec<FloatingFlyout>,
+    /// Its command buttons, after its tools: Command Palette result ids (a command's id, or
+    /// `plugin:`, `effect:` or `panel:` and an id). A command that is gone, such as an uninstalled
+    /// plug-in's, is kept and shows as unavailable until it comes back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<String>,
 }
 
 /// A category of an edited toolbar: its name (one of the Basic toolbar's; none in the Advanced
