@@ -557,6 +557,16 @@ fn feather_fades_to_nothing_at_the_outline() {
 }
 
 #[test]
+fn feather_keeps_a_silhouette_thinner_than_a_pixel() {
+    // A strip under half a pixel wide covers no pixel half: it still shows, not wiped out as all outline.
+    let strip = Rect::new(20.0, 20.0, 20.4, 80.0);
+    let ink = |fx: Vec<(&str, serde_json::Value)>| WHITE - lum(render(&doc_with(strip, Color::BLACK, fx)).pixel(20, 50));
+    let (plain, feathered) = (ink(vec![]), ink(vec![("stylize.feather", json!({"radius": 0.1}))]));
+    assert!(plain > 0, "the strip draws: {plain}");
+    assert!(feathered > plain / 4, "feathered it keeps its ink: {feathered} of {plain}");
+}
+
+#[test]
 fn an_outer_glow_blurs_a_solid_silhouette_of_faint_art() {
     // GUARDS: the glow's strength comes from where the art is, not how opaque it is (a glow round a glow relies on it).
     let r = Rect::new(30.0, 30.0, 70.0, 70.0);
