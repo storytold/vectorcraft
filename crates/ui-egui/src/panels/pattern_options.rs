@@ -22,7 +22,7 @@ use craft::ui::text::{NumberField, TextField};
 use egui::Ui;
 use serde_json::{Value, json};
 use vectorcraft_doc::pattern::{PatternDef, RepeatKind, TileType};
-use vectorcraft_doc::{NodeKind, Unit};
+use vectorcraft_doc::{NodeId, NodeKind};
 
 use super::attributes::side_name;
 use crate::VectorcraftApp;
@@ -41,10 +41,10 @@ pub(crate) struct PatternOptionsPanel {
     pub(crate) chosen: String,
 }
 
-fn editing(app: &VectorcraftApp) -> Option<(PatternDef, Unit)> {
+fn editing(app: &VectorcraftApp) -> Option<(PatternDef, (u64, NodeId))> {
     let st = app.session.active()?;
     let pe = st.doc.pattern_edit.as_ref()?;
-    Some((st.doc.pattern(&pe.pattern)?.clone(), app.session.general_unit()))
+    Some((st.doc.pattern(&pe.pattern)?.clone(), (st.uid, pe.layer)))
 }
 
 fn set(app: &mut VectorcraftApp, name: &str, mut p: Value) {
@@ -95,7 +95,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
             .show(ui);
         return;
     }
-    let Some((def, _)) = editing(app) else {
+    let Some((def, edit_scope)) = editing(app) else {
         idle(app, ui);
         return;
     };
@@ -110,7 +110,8 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let sized = def.size_tile_to_art;
     let canvas = crate::doc_windows::current(app).map(crate::canvas::canvas_id);
-    FieldGroup::new(tl!("Pattern Options")).show(ui, |ui, _| {
+    // The temporary layer identifies this editing session even when the pattern is renamed.
+    FieldGroup::new(tl!("Pattern Options")).id_salt(edit_scope).show(ui, |ui, _| {
         // Name commits on Enter or focus loss; Shift+Enter commits too and keeps the focus, so the
         // renamed pattern's name stays selected for the next edit. Enter ends the editing: the keys go
         // to the document canvas, as with nothing focused.
@@ -279,5 +280,33 @@ mod tests {
         panel.type_into("Name", "Waves");
         assert!(named(&panel, "Waves"), "Enter applies the name");
         assert!(!panel.focused("Name"), "Enter ends the editing");
+    }
+
+    #[test]
+    fn a_name_draft_does_not_follow_pattern_options_to_the_next_document() {
+        let mut panel = editing_panel();
+        {
+            let mut app = panel.app();
+            app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+            app.run("shape.rectangle", json!({"x": 0, "y": 0, "width": 10, "height": 10})).unwrap();
+            app.run("object.pattern.make", json!({"name": "Dots"})).unwrap();
+        }
+        let source = panel.app().session.active().unwrap().uid;
+        panel.click_role("Name", craft::ui::contract::Role::TEXT_INPUT);
+        panel.type_text("Stripes");
+        assert_eq!(panel.value("Name").as_deref(), Some("Stripes"));
+
+        panel.app().run("window.nextDocument", json!({})).unwrap();
+        panel.frame();
+        assert_ne!(panel.app().session.active().unwrap().uid, source);
+        assert_eq!(panel.value("Name").as_deref(), Some("Dots"));
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert!(panel.app().session.active().unwrap().doc.pattern("Dots").is_some());
+
+        panel.app().run("window.previousDocument", json!({})).unwrap();
+        panel.frame();
+        assert_eq!(panel.app().session.active().unwrap().uid, source);
+        assert_eq!(panel.value("Name").as_deref(), Some("Dots"));
+        assert!(panel.app().session.active().unwrap().doc.pattern("Dots").is_some());
     }
 }

@@ -4,7 +4,9 @@
 //! JavaScript recursion uses the heap, not the Rust stack. The loop runs again inside a Rust call
 //! only where the language needs a function's result in the middle of an operation (a getter or
 //! setter, `valueOf` and `toString` during a conversion, indirect `eval`); those nested runs are
-//! counted against [`crate::Limits::reentry`].
+//! counted against [`crate::Limits::reentry`]. A generator's body runs in a frame of its own,
+//! which `yield` moves into the generator object, operands included, and a call to its `next`,
+//! `return` or `throw` pushes again ([`crate::generator`]).
 //!
 //! Before each instruction the interpreter takes one unit of fuel, checks the interrupt flag and,
 //! when the heap has grown past its threshold, collects garbage. Running out of fuel, the heap
@@ -55,10 +57,35 @@ pub(crate) fn internal<T>(message: &str) -> JsResult<T> {
 
 /// The hash an error the interpreter throws keeps of its description ([`Interp::throw`]).
 fn description_hash(text: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::hash::DefaultHasher::new();
-    text.hash(&mut h);
+    let mut h = DescriptionHash::default();
+    h.text(text);
     h.finish()
+}
+
+/// A [`description_hash`] fed the description's code units a run at a time, so a long string is
+/// hashed without being copied.
+#[derive(Default)]
+struct DescriptionHash(std::hash::DefaultHasher);
+
+impl DescriptionHash {
+    fn units(&mut self, units: &[u16]) {
+        use std::hash::Hasher;
+        for &u in units {
+            self.0.write_u16(u);
+        }
+    }
+
+    fn text(&mut self, text: &str) {
+        use std::hash::Hasher;
+        for u in text.encode_utf16() {
+            self.0.write_u16(u);
+        }
+    }
+
+    fn finish(&self) -> u64 {
+        use std::hash::Hasher;
+        self.0.finish()
+    }
 }
 
 /// The kinds of error object the engine throws.
@@ -173,22 +200,24 @@ pub(crate) struct Frame {
     pub(crate) code: Rc<Code>,
     pub(crate) pc: usize,
     /// Where this frame's operands start on the operand stack.
-    base: usize,
+    pub(crate) base: usize,
     pub(crate) env: EnvId,
     pub(crate) var_env: EnvId,
     /// `with` and catch environments entered and not yet left.
-    env_depth: u32,
-    this: Value,
-    callee: Option<ObjId>,
+    pub(crate) env_depth: u32,
+    pub(crate) this: Value,
+    pub(crate) callee: Option<ObjId>,
     /// The object `new` made, returned unless the function returns an object.
-    construct: Option<ObjId>,
-    completion: Value,
+    pub(crate) construct: Option<ObjId>,
+    pub(crate) completion: Value,
     /// Returning from this frame returns from the Rust call that pushed it.
-    boundary: bool,
+    pub(crate) boundary: bool,
+    /// The generator object whose body this frame runs, once [`Op::GeneratorStart`] has made it.
+    pub(crate) generator: Option<ObjId>,
 }
 
 /// Where the exception being thrown was raised: the code and the instruction.
-type ThrowSite = (Rc<Code>, usize);
+pub(crate) type ThrowSite = (Rc<Code>, usize);
 
 /// What [`crate::Realm::observe_code`] calls with each source evaluated at run time.
 pub(crate) type CodeObserver = Rc<dyn Fn(&[u16])>;
@@ -279,6 +308,9 @@ pub(crate) struct Interp {
     pub(crate) install_error: Option<String>,
     /// `File` and `Folder`, once a host has added them ([`crate::Realm::define_file_classes`]).
     pub(crate) files: Option<crate::file_classes::Classes>,
+    /// `ExternalObject` and the XMP classes it loads, once a host has added them
+    /// ([`crate::Realm::define_external_object`]).
+    pub(crate) xmp: Option<crate::xmp_classes::Classes>,
     /// The classes a host added ([`crate::Realm::define_host_classes`]), in the order it added them.
     pub(crate) host_classes: Vec<crate::host_classes::Entry>,
     /// Whether [`Self::write_data`] makes objects of host classes from their [`crate::host_ref`].
@@ -354,6 +386,8 @@ pub(crate) struct Interp {
     pub(crate) error_mark: Option<u32>,
     /// [`crate::bytecode::Source::strict_writes`] for the scripts the realm runs.
     pub(crate) strict_writes: bool,
+    /// `Promise` and the run's promise job queue ([`crate::builtins::promise`]).
+    pub(crate) promises: crate::builtins::promise::Promises,
     /// The well-known Symbols, `Symbol.for`'s registry and the objects that go with them, in a
     /// realm with [`crate::Options::es2015`].
     pub(crate) symbols: crate::symbol::Symbols,
@@ -503,7 +537,7 @@ fn arguments_bytes(args: usize) -> usize {
 }
 
 /// A call to a function written in JavaScript, ready to enter.
-struct Entry {
+pub(crate) struct Entry {
     callee: ObjId,
     code: Rc<Code>,
     env: EnvId,
@@ -512,9 +546,11 @@ struct Entry {
 }
 
 /// What a call resolved to.
-enum Prepared {
+pub(crate) enum Prepared {
     Closure(Entry),
     Done(Value),
+    /// A generator's `next`, `return` or `throw` that goes on with its body.
+    Resume(Box<crate::generator::Resumed>),
 }
 
 /// A variable found in the environment chain.
@@ -596,6 +632,7 @@ impl Interp {
             held_bytes: 0,
             install_error: None,
             files: None,
+            xmp: None,
             host_classes: Vec::new(),
             write_hosted: false,
             host_objects: crate::host_classes::Made::default(),
@@ -625,6 +662,7 @@ impl Interp {
             finally_sites: Vec::new(),
             error_mark: None,
             strict_writes: false,
+            promises: crate::builtins::promise::Promises::default(),
             symbols: crate::symbol::Symbols::default(),
         };
         // With `Options::es2015`, the first run names the built-in functions, under the limits
@@ -676,7 +714,7 @@ impl Interp {
         let Value::Object(o) = v else { return true };
         let Some(Class::Error(Some(hash))) = self.heap.object(*o).map(|o| &o.class) else { return true };
         let hash = *hash;
-        description_hash(&self.describe(v)) != hash
+        self.describe_hash(*o) != hash
     }
 
     pub(crate) fn type_error(&mut self, message: &str) -> Abrupt {
@@ -840,7 +878,7 @@ impl Interp {
 
     /// Removes the [`Self::finally_sites`] entries whose stack slot is at or above `len`: those of
     /// `finally` blocks that were left. The slots rise along the list, so only its end is looked at.
-    fn drop_left_finally_sites(&mut self, len: usize) {
+    pub(crate) fn drop_left_finally_sites(&mut self, len: usize) {
         while let Some(&(_, slot)) = self.finally_sites.last() {
             #[cfg(test)]
             SITE_CHECKS.with(|c| c.set(c.get() + 1));
@@ -854,6 +892,7 @@ impl Interp {
     pub(crate) fn collect_garbage(&mut self) {
         self.drop_left_finally_marks();
         self.drop_left_finally_sites(self.stack.len());
+        self.promises.forget_handled(&self.heap);
         let mut roots = Roots::default();
         roots.values.extend(self.stack.iter());
         roots.values.extend(self.temp_roots.iter());
@@ -867,7 +906,7 @@ impl Interp {
         for f in &self.frames {
             roots.values.push(&f.this);
             roots.values.push(&f.completion);
-            roots.objects.extend(f.callee.iter().chain(f.construct.iter()));
+            roots.objects.extend(f.callee.iter().chain(f.construct.iter()).chain(f.generator.iter()));
             roots.envs.push(f.env);
             roots.envs.push(f.var_env);
             roots.codes.push(&f.code);
@@ -875,6 +914,7 @@ impl Interp {
         roots.objects.push(self.global);
         roots.objects.extend(self.intrinsics.all());
         roots.objects.extend(self.files.iter().flat_map(crate::file_classes::Classes::objects));
+        roots.objects.extend(self.xmp.iter().flat_map(crate::xmp_classes::Classes::objects));
         roots.objects.extend(self.host_classes.iter().flat_map(crate::host_classes::Entry::objects));
         roots.values.extend(self.symbols.root_values());
         roots.objects.extend(self.symbols.root_objects());
@@ -890,13 +930,21 @@ impl Interp {
         }
         self.template_objects.retain(|(site, _), (code, _)| Rc::strong_count(code) > sites.get(site).copied().unwrap_or(0));
         roots.objects.extend(self.template_objects.values().map(|&(_, id)| id));
+        self.promises.add_roots(&mut roots);
         self.heap.collect(&roots);
         crate::host_classes::forget_collected(&mut self.host_objects, &self.heap, &self.host_classes);
         // The collection counts the live total again, so bytes already released are not in it.
         self.held.released.set(0);
         self.flattened.set(0);
-        self.heap.bytes =
-            self.heap.bytes.saturating_add(self.held_bytes).saturating_add(self.held.now.get()).saturating_add(self.symbols.registry_bytes());
+        let queued = self.promises.queue_bytes();
+        self.heap.bytes = self
+            .heap
+            .bytes
+            .saturating_add(self.held_bytes)
+            .saturating_add(self.held.now.get())
+            .saturating_add(self.symbols.registry_bytes())
+            .saturating_add(self.xmp.as_ref().map_or(0, crate::xmp_classes::Classes::bytes))
+            .saturating_add(queued);
     }
 
     /// Runs frames until the boundary frame on top returns, and returns its value.
@@ -959,6 +1007,8 @@ impl Interp {
                 let v = self.frame()?.completion.clone();
                 self.return_value(v)
             }
+            Op::GeneratorStart => self.op_generator_start(),
+            Op::Yield(raw) => self.op_yield(raw),
             _ => self.exec(op).map(|()| None),
         }
     }
@@ -1013,6 +1063,7 @@ impl Interp {
             }
             let Some(frame) = self.frames.pop() else { return Err(Abrupt::Throw(v)) };
             self.stack.truncate(frame.base);
+            self.end_generator(frame.generator);
             if frame.boundary {
                 self.passing = v.clone();
                 return Err(Abrupt::Throw(v));
@@ -1029,6 +1080,7 @@ impl Interp {
     fn abort_to_boundary(&mut self) {
         while let Some(frame) = self.frames.pop() {
             self.stack.truncate(frame.base);
+            self.end_generator(frame.generator);
             if frame.boundary {
                 break;
             }
@@ -1036,8 +1088,15 @@ impl Interp {
     }
 
     fn return_value(&mut self, v: Value) -> JsResult<Option<Value>> {
+        // A generator's body that returns ends it, and its caller gets `{ value, done: true }`,
+        // made while the frame is still there to fail in.
+        let v = match self.frames.last().and_then(|f| f.generator) {
+            Some(_) => crate::builtins::iterator::iter_result(self, v, true)?,
+            None => v,
+        };
         let Some(frame) = self.frames.pop() else { return internal("return without a frame") };
         self.stack.truncate(frame.base);
+        self.end_generator(frame.generator);
         // A `return` in a finally block leaves the block, and the value takes its exception's slot.
         self.drop_left_finally_sites(frame.base);
         let v = match frame.construct {
@@ -1218,7 +1277,12 @@ impl Interp {
             Op::PatternGet(n) => self.op_pattern_get(n),
             Op::InitIndex => self.op_init_index(),
             Op::InitAccessorIndex(getter) => self.op_init_accessor_index(getter),
-            Op::Return | Op::ReturnCompletion => internal("return reached the dispatcher"),
+            Op::Resume(t) => self.op_resume(t),
+            Op::DelegateIterator => self.op_delegate_iterator(),
+            Op::DelegateCall(t) => self.op_delegate_call(t),
+            Op::DelegateResult(t) => self.op_delegate_result(t),
+            Op::DelegateDone(t) => self.op_delegate_done(t),
+            Op::Return | Op::ReturnCompletion | Op::GeneratorStart | Op::Yield(_) => internal("a frame-ending instruction reached the dispatcher"),
         }
     }
 
@@ -1904,16 +1968,18 @@ impl Interp {
             None => {}
         }
         let proto = self.object(id)?.proto;
-        match proto.map(|p| self.find_property(p, &k)).transpose()?.flatten() {
+        let inherited = proto.map(|p| self.find_property(p, &k)).transpose()?.flatten();
+        match inherited {
             Some(Prop::Accessor { set: Some(s), .. }) => return self.call(&Value::Object(s), &Value::Object(id), &[v]).map(drop),
             Some(Prop::Accessor { set: None, .. }) => return self.reject(throw, &k, "it has only a getter"),
             Some(Prop::Data { flags, .. }) if flags & WRITABLE == 0 => return self.reject(throw, &k, "it is read-only"),
             _ => {}
         }
         if !self.object(id)?.extensible {
-            // A name that an object of a host class with an indexer lacks is read with the indexer
-            // first, so assigning it throws what reading it throws.
-            if array_index(&k).is_none()
+            // A name that an object of a host class with an indexer lacks, and its prototypes lack
+            // too, is read with the indexer first, so assigning it throws what reading it throws.
+            if inherited.is_none()
+                && array_index(&k).is_none()
                 && let Some(f) = self.host_indexer(id)?
             {
                 self.host_index(&f, id, Self::indexer_key(&k), false)?;
@@ -2369,7 +2435,8 @@ impl Interp {
             Some(_) => self.heap.alloc_env(Env::Decl { bindings: PropMap::default(), outer: Some(env) }),
             None => env,
         };
-        let proto = self.intrinsics.function_proto;
+        let generator = code.generator.then(|| self.symbols.objects.map(|o| (o.generator_function_proto, o.generator_proto))).flatten();
+        let proto = generator.map_or(self.intrinsics.function_proto, |(function_proto, _)| function_proto);
         let length = code.length;
         let strict = code.strict;
         let arrow = code.arrow;
@@ -2382,6 +2449,18 @@ impl Interp {
         self.define(f, key("length"), Prop::Data { value: Value::Number(f64::from(length)), flags: length_flags })?;
         if let Some(name) = own_name {
             self.define(f, key("name"), Prop::Data { value: Value::String(Str::from_rc(name)), flags: CONFIGURABLE })?;
+        }
+        // A generator function's `prototype`, a generator method's included, inherits from
+        // %GeneratorPrototype% and has no `constructor` (ECMA-262 11th edition, section 14.4.13).
+        // A generator function has no own `caller` or `arguments`, strict or not
+        // (section 16.2).
+        if let (false, Some((_, generator_proto))) = (arrow, generator) {
+            let p = self.heap.alloc_object(Object::new(Class::Ordinary, Some(generator_proto)));
+            self.define(f, key("prototype"), Prop::Data { value: Value::Object(p), flags: WRITABLE })?;
+            if let Some(name) = self_name {
+                self.env_insert(env, name, Binding::new(Value::Object(f), false, false))?;
+            }
+            return Ok(f);
         }
         // An arrow function, a method and an accessor of ECMAScript 2015 code have no
         // `prototype` and cannot be constructed (sections 14.2.16 and 14.3.8).
@@ -2781,6 +2860,11 @@ impl Interp {
                     let callee = f.as_object().ok_or_else(|| Abrupt::Internal("callee is not an object".into()))?;
                     return Ok(Prepared::Closure(Entry { callee, code, env, this, args }));
                 }
+                Func::Native { kind: NativeKind::Resume(mode), .. } => {
+                    self.use_fuel()?;
+                    let sent = args.into_iter().next().unwrap_or(Value::Undefined);
+                    return self.prepare_resume(this, mode, sent);
+                }
                 Func::Native { kind: NativeKind::Call, .. } => {
                     self.use_fuel()?;
                     f = this;
@@ -2792,9 +2876,12 @@ impl Interp {
                         return Err(self.type_error("apply was called on a value that is not a function"));
                     }
                     let list = args.get(1).cloned().unwrap_or(Value::Undefined);
+                    let mut roots = vec![f.clone(), this.clone()];
+                    roots.extend(args.iter().cloned());
+                    let expanded = self.rooted(&roots, |i| i.list_from_array_like(&list))?;
                     f = this;
                     this = args.first().cloned().unwrap_or(Value::Undefined);
-                    args = self.list_from_array_like(&list)?;
+                    args = expanded;
                 }
                 Func::Bound { target, this: bound_this, args: bound_args } => {
                     self.use_fuel()?;
@@ -2903,6 +2990,10 @@ impl Interp {
                 self.stack.truncate(start);
                 self.enter_function(entry, None, false)
             }
+            Prepared::Resume(r) => {
+                self.stack.truncate(start);
+                self.enter_resumed(*r, false)
+            }
         }
     }
 
@@ -2923,6 +3014,7 @@ impl Interp {
         }
         match self.func_of(&f) {
             Some(Func::Closure { code, .. }) if code.arrow => Err(self.type_error("an arrow function is not a constructor")),
+            Some(Func::Closure { code, .. }) if code.generator => Err(self.type_error("a generator function is not a constructor")),
             Some(Func::Closure { code, .. }) if code.method => Err(self.type_error("a method is not a constructor")),
             Some(Func::Closure { code, env }) => {
                 let Some(callee) = f.as_object() else { return internal("callee is not an object") };
@@ -3025,6 +3117,7 @@ impl Interp {
             construct,
             completion: Value::Undefined,
             boundary,
+            generator: None,
         });
         Ok(())
     }
@@ -3247,12 +3340,33 @@ impl Interp {
         r
     }
 
+    /// Starts a call to `f` with no frame running, for a promise job: a native or host function
+    /// runs now and gives `Some` with its result, and a function written in JavaScript gets a
+    /// boundary frame that the caller runs, and gives `None`. A host function called here cannot
+    /// wait for its result, since no script code is running; a function written in JavaScript
+    /// runs as the script's own code does.
+    pub(crate) fn start_call(&mut self, f: Value, this: Value, args: Vec<Value>) -> JsResult<Option<Value>> {
+        self.reentry += 1;
+        let prepared = self.prepare_call(f, this, args);
+        self.reentry -= 1;
+        match prepared? {
+            Prepared::Done(v) => Ok(Some(v)),
+            Prepared::Closure(entry) => self.enter_function(entry, None, true).map(|()| None),
+            Prepared::Resume(resumed) => self.enter_resumed(*resumed, true).map(|()| None),
+        }
+    }
+
     fn call_rooted(&mut self, f: Value, this: Value, args: Vec<Value>, saved: usize) -> JsResult<Value> {
         match self.prepare_call(f, this, args)? {
             Prepared::Done(v) => Ok(v),
             Prepared::Closure(entry) => {
                 self.stack.truncate(saved);
                 self.enter_function(entry, None, true)?;
+                self.execute()
+            }
+            Prepared::Resume(r) => {
+                self.stack.truncate(saved);
+                self.enter_resumed(*r, true)?;
                 self.execute()
             }
         }
@@ -3504,6 +3618,7 @@ impl Interp {
             construct: None,
             completion: Value::Undefined,
             boundary,
+            generator: None,
         });
         Ok(())
     }
@@ -4078,9 +4193,15 @@ impl Interp {
     /// A description of a thrown value that runs no JavaScript: `Name: message` for an error,
     /// the text of a primitive.
     pub(crate) fn describe(&mut self, v: &Value) -> String {
-        let Value::Object(o) = v else { return self.primitive_to_str(v).to_rust_string() };
+        self.describe_prefix(v, usize::MAX)
+    }
+
+    /// [`Interp::describe`] with each string it reads cut to its first `max_units` code units
+    /// before it is copied.
+    pub(crate) fn describe_prefix(&mut self, v: &Value, max_units: usize) -> String {
+        let Value::Object(o) = v else { return self.primitive_to_str(v).prefix_to_rust_string(max_units) };
         let data = |interp: &Self, k: &str| match interp.find_property(*o, &key(k)) {
-            Ok(Some(Prop::Data { value: Value::String(s), .. })) => Some(s.to_rust_string()),
+            Ok(Some(Prop::Data { value: Value::String(s), .. })) => Some(s.prefix_to_rust_string(max_units)),
             _ => None,
         };
         match (data(self, "name"), data(self, "message")) {
@@ -4089,6 +4210,26 @@ impl Interp {
             (None, Some(m)) => m,
             (None, None) => format!("[object {}]", self.heap.object(*o).map_or("Object", |o| o.class.name())),
         }
+    }
+
+    /// The [`description_hash`] of the text [`Interp::describe`] gives for the object `o`, read
+    /// along its strings without copying them.
+    fn describe_hash(&self, o: ObjId) -> u64 {
+        let data = |k: &str| match self.find_property(o, &key(k)) {
+            Ok(Some(Prop::Data { value: Value::String(s), .. })) => Some(s),
+            _ => None,
+        };
+        let mut h = DescriptionHash::default();
+        match (data("name"), data("message")) {
+            (Some(n), Some(m)) if m.len() != 0 => {
+                n.for_each_chunk(|c| h.units(c));
+                h.text(": ");
+                m.for_each_chunk(|c| h.units(c));
+            }
+            (Some(s), _) | (None, Some(s)) => s.for_each_chunk(|c| h.units(c)),
+            (None, None) => h.text(&format!("[object {}]", self.heap.object(o).map_or("Object", |o| o.class.name()))),
+        }
+        h.finish()
     }
 }
 

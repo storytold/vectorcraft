@@ -1065,7 +1065,7 @@ impl<'a> Reader<'a> {
     /// whose name another swatch has, take the first free "Name 2", "Name 3"…
     /// ([`Document::free_swatch_name`]) once the other colors and the patterns have their swatches;
     /// a pattern a swatch already paints with gets no other.
-    fn file_swatches(&self, doc: &mut Document, own_palette: bool) -> HashMap<String, String> {
+    fn file_swatches(&self, doc: &mut Document, own_palette: bool, type_colors: &[super::Named]) -> HashMap<String, String> {
         let mut defined = std::collections::HashSet::new();
         let mut clashes = vec![];
         // The swatch names there are, looked up rather than scanned for each name a file defines
@@ -1075,7 +1075,8 @@ impl<'a> Reader<'a> {
         // The names a swatch of another kind than a gradient or pattern has.
         let mut solid: std::collections::HashSet<String> =
             doc.swatches_iter().filter(|s| !matches!(s.paint, Paint::Gradient(_) | Paint::Pattern { .. })).map(|s| s.name.clone()).collect();
-        let colors = self.spots.iter().chain(&self.stop_spots).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
+        let colors =
+            self.spots.iter().chain(&self.stop_spots).chain(type_colors).map(|n| (n, n.spot)).chain(self.custom_colors.iter().map(|n| (n, true)));
         for (n, spot) in colors {
             let first = defined.insert(n.name.clone());
             let swatch = Swatch { name: n.name.clone(), paint: Paint::solid(n.color), global: true, spot };
@@ -1327,7 +1328,26 @@ impl<'a> Reader<'a> {
             }
             None => false,
         };
-        let renamed = self.file_swatches(&mut doc, own_palette);
+        // The swatch colors of the styles that are one paint, which the text document's characters
+        // name for their fills and strokes, in the order of the styles' names.
+        let mut type_colors: Vec<(&String, &(Paint, Option<super::Named>))> =
+            self.styles.iter().filter_map(|(style, st)| Some((style, st.simple_color.as_ref()?))).collect();
+        type_colors.sort_by_key(|(style, _)| *style);
+        let type_named: Vec<super::Named> = type_colors.iter().filter_map(|(_, (_, named))| named.clone()).collect();
+        let renamed = self.file_swatches(&mut doc, own_palette, &type_named);
+        let type_colors: Vec<(String, Paint)> = type_colors
+            .into_iter()
+            .map(|(style, (paint, _))| {
+                let mut paint = paint.clone();
+                // A color that took a free name is linked by that name.
+                if let Paint::Solid { swatch: Some(link), .. } = &mut paint
+                    && let Some(new) = renamed.get(link.as_str())
+                {
+                    link.clone_from(new);
+                }
+                (style.clone(), paint)
+            })
+            .collect();
         if let Some(author) = self.author.take() {
             doc.metadata.author = author;
         }
@@ -1394,8 +1414,9 @@ impl<'a> Reader<'a> {
         }
         warnings.extend(self.names.notes());
         // The patterns of the styles that are one paint, which the text document's characters
-        // name for their fills and strokes: those that place in the document.
-        let text_patterns = self
+        // name for their fills and strokes: those that place in the document. With them, those
+        // styles' swatch colors.
+        let text_paints = self
             .styles
             .iter()
             .filter_map(|(style, st)| {
@@ -1403,6 +1424,7 @@ impl<'a> Reader<'a> {
                 let paint = super::ops::style_pattern(name, *matrix, controls, &self.pattern_tiles, &self.v7_patterns, &self.global_names, to_doc)?;
                 Some((style.clone(), paint))
             })
+            .chain(type_colors)
             .collect();
         Ok(Structure {
             doc,
@@ -1430,7 +1452,7 @@ impl<'a> Reader<'a> {
                 type_clips: self.type_clips,
             },
             styles_read,
-            text_patterns,
+            text_paints,
             canvas_scale: self.canvas_scale,
             symbols_own_size: self.symbols_own_size,
             xml_ids: self.xml_ids,

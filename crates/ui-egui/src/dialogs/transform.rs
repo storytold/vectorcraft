@@ -106,12 +106,33 @@ impl Kind {
 pub(crate) struct Open {
     /// The dialog's id on the window's host.
     pub id: DialogId,
+    /// The drawing whose selection and reference point the dialog acts on.
+    document: Option<u64>,
     /// Which transform it is.
     pub kind: Kind,
     /// The reference point of a tool click, sent with every command but Move's.
     pub origin: Option<Value>,
     /// The preview on the canvas.
     pub preview: LivePreview,
+}
+
+impl Open {
+    fn in_source(&self, app: &VectorcraftApp) -> bool {
+        self.document == app.session.active().map(|doc| doc.uid)
+    }
+
+    fn owns_preview(&self, app: &VectorcraftApp) -> bool {
+        app.session.active().and_then(|doc| doc.interaction.as_ref()).is_some_and(|interaction| {
+            interaction.preview.as_ref().map_or_else(|| interaction.label == self.kind.title(), |(command, _)| command == self.kind.command())
+        })
+    }
+
+    fn cancel_preview(&mut self, app: &mut VectorcraftApp) {
+        let preview = std::mem::take(&mut self.preview);
+        if self.in_source(app) && self.owns_preview(app) {
+            preview.cancel(app);
+        }
+    }
 }
 
 /// Opens the dialog of `kind`; `tool` is the tool click's params (its `origin`), or `{}` from a menu.
@@ -121,6 +142,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: Kind, tool: &Value) {
         return;
     };
     let Value::Object(opening) = opening(app, kind) else { return };
+    let document = app.session.active().map(|doc| doc.uid);
     let rows = rows(app, kind, &opening);
     let fields = fields_of(&rows, &opening);
     let dialog = HostedParamDialog::new(&ctx, kind.command(), fields, move |f| {
@@ -138,13 +160,13 @@ pub(crate) fn open(app: &mut VectorcraftApp, kind: Kind, tool: &Value) {
         app.status("no window".to_string());
         return;
     };
-    app.object_dialogs.transform = Some(Open { id, kind, origin: tool.get("origin").cloned(), preview: LivePreview::default() });
+    app.object_dialogs.transform = Some(Open { id, document, kind, origin: tool.get("origin").cloned(), preview: LivePreview::default() });
 }
 
 /// Rolls the preview back and drops the record: Cancel, Esc and the close box.
 fn cancel_preview(app: &mut VectorcraftApp) {
-    if let Some(open) = app.object_dialogs.transform.take() {
-        open.preview.cancel(app);
+    if let Some(mut open) = app.object_dialogs.transform.take() {
+        open.cancel_preview(app);
     }
 }
 
@@ -156,6 +178,14 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let shown = dialogs.with(|host| host.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), d.fields().clone())));
     let Some((on, fields)) = shown else { return };
     let Some(mut open) = app.object_dialogs.transform.take() else { return };
+    if !open.in_source(app) {
+        open.preview = LivePreview::default();
+        app.object_dialogs.transform = Some(open);
+        return;
+    }
+    if !open.owns_preview(app) {
+        open.preview = LivePreview::default();
+    }
     let (cmd, mut params) = command(app, kind, &fields, open.origin.as_ref());
     if kind == Kind::Scale {
         add_scale_options(app, &fields, &mut params);
@@ -168,16 +198,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
 /// OK: the preview is rolled back and the command run as without one, so its undo step, its journal
 /// entry and Transform Again are the same either way.
 fn ok(app: &mut VectorcraftApp, kind: Kind, ctx: &egui::Context, result: &ParamResult) -> Result<(), String> {
-    let origin = match app.object_dialogs.transform.take() {
-        Some(open) => {
-            let origin = open.origin;
-            open.preview.cancel(app);
-            origin
-        }
-        None => None,
-    };
+    let Some(mut open) = app.object_dialogs.transform.take() else { return Err("the Transform dialog is closed".into()) };
+    if open.id != result.id || open.kind != kind {
+        app.object_dialogs.transform = Some(open);
+        return Err("the Transform dialog was replaced".into());
+    }
+    if !open.in_source(app) {
+        app.object_dialogs.transform = Some(open);
+        return Err(tl!("Return to the original drawing to apply the transform").into());
+    }
+    open.cancel_preview(app);
     let fields = &result.fields;
-    let (cmd, mut params) = command(app, kind, fields, origin.as_ref());
+    let (cmd, mut params) = command(app, kind, fields, open.origin.as_ref());
+    app.object_dialogs.transform = Some(open);
     if kind == Kind::Scale {
         params = with_scale_options(app, fields, params)?;
     }
@@ -190,6 +223,7 @@ fn ok(app: &mut VectorcraftApp, kind: Kind, ctx: &egui::Context, result: &ParamR
         }
     }
     result.remember(ctx);
+    app.object_dialogs.transform = None;
     Ok(())
 }
 
@@ -456,6 +490,68 @@ mod tests {
         fn last_command(&self) -> (String, Value) {
             self.app.session.journal.last().cloned().unwrap()
         }
+    }
+
+    #[test]
+    fn transform_preview_pauses_before_editing_a_second_drawing() {
+        let mut rig = two_drawings();
+        rig.open("object.move");
+        rig.set("dx", json!(35));
+        assert_eq!(rig.bounds().x0, 135.0);
+        rig.app.run("document.activate", json!({"index": 1})).unwrap();
+        rig.frame();
+        assert_eq!(rig.bounds().x0, 10.0);
+        assert!(!rig.app.session.in_interaction());
+
+        rig.app.run("document.activate", json!({"index": 0})).unwrap();
+        rig.frame();
+        assert_eq!(rig.bounds().x0, 135.0);
+        rig.confirm();
+        assert_eq!(rig.bounds().x0, 135.0);
+        assert!(!rig.app.session.in_interaction());
+    }
+
+    #[test]
+    fn transform_ok_waits_for_its_original_drawing() {
+        let mut rig = two_drawings();
+        rig.open("object.scale");
+        rig.set("preview", json!(false));
+        rig.set("sx", json!(200));
+        rig.app.run("document.activate", json!({"index": 1})).unwrap();
+        let steps = rig.undo_steps();
+        let id = rig.id();
+        let dialogs = rig.app.dialogs().unwrap();
+        rig.confirm();
+        assert!(matches!(dialogs.with(|h| h.held_state(id)), Some(craft::ui::dialog::HeldOk::Refused(_))));
+        assert_eq!(rig.size(), (25.0, 15.0));
+        assert_eq!(rig.undo_steps(), steps);
+
+        rig.app.run("document.activate", json!({"index": 0})).unwrap();
+        crate::tests::picks::answer_dialog(&mut rig.app, id, &[], true);
+        assert_eq!(rig.size().0, 120.0);
+        assert!(rig.app.object_dialogs.transform.is_none());
+        assert!(dialogs.with(|h| h.get_by_id::<HostedParamDialog>(id).is_none()));
+    }
+
+    #[test]
+    fn cancelling_transform_leaves_a_second_drawings_interaction_alone() {
+        let mut rig = two_drawings();
+        rig.open("object.move");
+        rig.set("dx", json!(35));
+        assert!(rig.app.session.in_interaction());
+        rig.app.run("document.activate", json!({"index": 1})).unwrap();
+        rig.app.session.begin_interaction("The second drawing's edit").unwrap();
+        rig.cancel();
+        assert_eq!(rig.app.session.active().unwrap().interaction.as_ref().unwrap().label, "The second drawing's edit");
+        assert_eq!(rig.bounds().x0, 10.0);
+    }
+
+    fn two_drawings() -> Rig {
+        let mut rig = Rig::new();
+        rig.app.run("file.new", json!({"width": 300, "height": 300})).unwrap();
+        rig.app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 25, "height": 15})).unwrap();
+        rig.app.run("document.activate", json!({"index": 0})).unwrap();
+        rig
     }
 
     #[test]

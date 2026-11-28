@@ -417,23 +417,36 @@ fn presentation_mode_shows_the_floating_current_document_in_the_main_window() {
 
 #[test]
 fn a_document_made_current_in_presentation_mode_comes_to_the_front_after_it() {
-    let mut app = app_with(2);
-    let ctx = crate::testing::ui_context();
-    frame(&mut app, &ctx, vec![]);
-    app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    // Where the two windows overlap: document 1's title bar, over document 0's body.
-    let overlap = app.ui.floating[1].place.min + vec2(60.0, 10.0);
-    app.run("view.presentation", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.run("document.activate", json!({"index": 0})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    app.run("view.presentation", json!({})).unwrap();
-    frame(&mut app, &ctx, vec![]);
-    frame(&mut app, &ctx, vec![]);
-    click(&mut app, &ctx, overlap);
-    assert_eq!(app.session.active_index(), Some(0), "document 0's window is in front where they overlap");
+    for change_during_presentation in [false, true] {
+        let mut app = app_with(2);
+        let ctx = crate::testing::ui_context();
+        frame(&mut app, &ctx, vec![]);
+        app.run("window.arrange.floatAllInWindows", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        // Where the two windows overlap: document 1's title bar, over document 0's body.
+        let overlap = app.ui.floating[1].place.min + vec2(60.0, 10.0);
+        // Cover both an unchanged current document and one chosen while the windows are hidden.
+        if !change_during_presentation {
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            frame(&mut app, &ctx, vec![]);
+        }
+        app.run("view.presentation", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        if change_during_presentation {
+            app.run("document.activate", json!({"index": 0})).unwrap();
+            frame(&mut app, &ctx, vec![]);
+        }
+        app.run("view.presentation", json!({})).unwrap();
+        frame(&mut app, &ctx, vec![]);
+        frame(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, overlap);
+        assert_eq!(
+            app.session.active_index(),
+            Some(0),
+            "document 0's window is in front (changed during presentation: {change_during_presentation})"
+        );
+    }
 }
 
 /// A stand-in for the window system of the documents' OS windows: it runs each one's frame and asks
@@ -1198,4 +1211,198 @@ fn a_tab_transfer_whose_target_is_no_longer_current_drops_nothing_in_a_floating_
     assert_eq!(app.session.documents()[1].doc, target, "the floating window's document does not take the art");
     assert_eq!(app.session.documents()[1].history.undo.len(), target_undo);
     assert_eq!(app.session.active_index(), Some(0), "the window does not become current");
+}
+
+/// Runs view command `command` on window `win`'s view at once, in a 500 × 400 pt canvas at one
+/// pixel per point, as the canvas runs a queued one ([`crate::canvas::show_document`]).
+fn run_view(app: &mut VectorcraftApp, win: Win, command: craft::ui::canvas::ViewCommands) {
+    app.before_view_command(win, command);
+    let target = crate::canvas::view_target(app, win);
+    let scheme = crate::app::view::zoom_scheme(app.print_ppi_of(Some(win)), 1.0);
+    let scaling = app.ui_scaling();
+    let Some(v) = view_mut(app, win) else { return };
+    let mut cv = v.canvas(scaling, egui::Rect::from_min_size(Pos2::ZERO, vec2(500.0, 400.0)));
+    if command.apply(&mut cv, &target, None, 1.0, &scheme) {
+        v.set_canvas(&cv, scaling);
+    }
+    app.after_view_command(win, command);
+}
+
+/// #9051: an OS window's display is the one at the window's scale factor that covers most of it. A
+/// 1× display to the right of a 2× one on macOS starts, in pixels, inside the 2× display's pixels.
+#[test]
+fn an_os_window_finds_the_display_at_its_own_scale() {
+    use crate::ScreenPpi::Read;
+    use crate::services::{ScreenDensity, screen_ppi_at};
+    let screens = [
+        ScreenDensity { rect: [0, 0, 3024, 1964], scale: 2.0, ppi: Read(Some(127.0)) },
+        ScreenDensity { rect: [1512, 0, 1920, 1080], scale: 1.0, ppi: Read(Some(92.0)) },
+    ];
+    let at = |center: Pos2, native: f32| {
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput::default();
+        let info = input.viewports.entry(egui::ViewportId::ROOT).or_default();
+        info.native_pixels_per_point = Some(native);
+        info.outer_rect = Some(egui::Rect::from_center_size(center, vec2(200.0, 100.0)));
+        let mut found = None;
+        let mut out = ctx.run_ui(input, |ui| found = screen_ppi_at(&screens, ui.ctx()));
+        out.textures_delta.clear();
+        found
+    };
+    assert_eq!(at(pos2(1800.0, 300.0), 1.0), Some(Read(Some(92.0))), "on the 1× display");
+    assert_eq!(at(pos2(700.0, 300.0), 2.0), Some(Read(Some(127.0))), "on the 2× display");
+    assert_eq!(at(pos2(2000.0, 1100.0), 1.0), Some(Read(Some(92.0))), "partly below the 1× display, its center off it");
+    assert_eq!(at(pos2(9000.0, 300.0), 1.0), None, "off every display");
+}
+
+/// #9051: with Display Print Size at 100% Zoom on, a document floating in an OS window of its own
+/// counts 100% from the display that shows that window. A move of its window to a display of
+/// another density keeps its zoom percentage; a move of the main window leaves its zoom alone and
+/// keeps the percentage of the documents under the tabs.
+#[test]
+fn a_floating_window_counts_100_percent_from_its_own_display() {
+    use craft::ui::canvas::ViewCommands;
+    let mut app = app_with(2);
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    run_view(&mut app, (1, 1), ViewCommands::ActualPixels);
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let pct = |app: &VectorcraftApp, i: usize| crate::state::zoom_display_percent(app.views[i].zoom, app.print_ppi_of(Some((i, 1))));
+    let uid = app.session.documents()[1].uid;
+    set_window_ppi(&mut app, (uid, 1), Some(91.0));
+    app.settle_screen_ppi();
+    assert!((pct(&app, 1) - 100.0).abs() < 1e-9, "the floating document stays at 100%: {}", pct(&app, 1));
+    assert!((app.views[1].zoom * 72.0 - 91.0).abs() < 1e-9, "an inch of the document fills an inch of its display");
+    let (floating, tabbed, tabbed_pct) = (app.views[1].zoom, app.views[0].zoom, pct(&app, 0));
+    assert!(app.set_screen_ppi(Some(150.0)), "the main window moved to a denser display");
+    assert_eq!(app.views[1].zoom, floating, "the floating window did not move");
+    assert!(app.views[0].zoom > tabbed, "the tabbed document zooms with the denser display");
+    assert!((pct(&app, 0) - tabbed_pct).abs() < 1e-9, "and keeps its percentage");
+    // Presentation Mode shows the floating document in the main window, on the main window's
+    // display, and it keeps its 100% there.
+    app.settle_screen_ppi_if_changed();
+    app.ui.screen_mode = 3;
+    app.settle_screen_ppi_if_changed();
+    assert!((app.views[1].zoom * 72.0 - 150.0).abs() < 1e-9, "presented on the main window's display: {}", app.views[1].zoom * 72.0);
+    assert!((pct(&app, 1) - 100.0).abs() < 1e-9);
+    // Back from its own display under the tabs, a fit made there is kept.
+    app.ui.screen_mode = 0;
+    app.settle_screen_ppi_if_changed();
+    app.run("window.arrange.consolidateAllWindows", json!({})).unwrap();
+    run_view(&mut app, (1, 1), ViewCommands::FitArtboard);
+    let fitted = app.views[1].zoom;
+    app.settle_screen_ppi_if_changed();
+    assert_eq!(app.views[1].zoom, fitted, "the fit is made for the main window's display");
+}
+
+/// What the host found for a floating OS window's display reaches its view: its first display and
+/// a move to another keep 100%, a window off every display is unread and keeps its zoom, a fit made
+/// in the frame its window reached a new display stays the fit, and the window drawn in the main
+/// window again counts from the main window's display.
+#[test]
+fn a_floating_os_window_takes_the_density_of_the_display_it_is_found_on() {
+    use crate::ScreenPpi::Read;
+    use craft::ui::canvas::ViewCommands;
+    let mut app = app_with(2);
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    run_view(&mut app, (1, 1), ViewCommands::ActualPixels);
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    let body = vec2(500.0, 400.0);
+    let inch = |app: &VectorcraftApp| app.views[1].zoom * 72.0;
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (Some(Read(Some(91.0))), Some(body), false));
+    assert!((inch(&app) - 91.0).abs() < 1e-9, "its first display keeps 100%: {}", inch(&app));
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (Some(Read(Some(150.0))), Some(body), false));
+    assert!((inch(&app) - 150.0).abs() < 1e-9, "and so does a move to a denser one: {}", inch(&app));
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (None, Some(body), false));
+    assert_eq!(screen_ppi(&app, win), Some(crate::ScreenPpi::Unread), "off every display it is unread");
+    assert!((inch(&app) - 150.0).abs() < 1e-9, "and keeps its zoom");
+    // A fit made in the frame the window reaches a display of another density stays the fit.
+    run_view(&mut app, win, ViewCommands::FitArtboard);
+    crate::canvas::panes::note_fit(&mut app, win, body);
+    let zoom = app.views[1].zoom;
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (Some(Read(Some(110.0))), Some(body), true));
+    assert_eq!(app.views[1].zoom, zoom, "the fit was made for that display");
+    app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+    take_window_ppi(&mut app, &ctx, ((uid, 1), false), win, (Some(Read(Some(110.0))), Some(body), false));
+    assert!((inch(&app) - 127.0).abs() < 1e-9, "drawn in the main window, 100% counts from the main window's display: {}", inch(&app));
+}
+
+/// A fit made while a floating OS window is off every display keeps counting from the density the
+/// window was last shown at, and the reading that follows leaves the fit's zoom alone.
+#[test]
+fn a_fit_made_while_a_floating_window_is_unread_counts_from_its_last_reading() {
+    use crate::ScreenPpi::Read;
+    use craft::ui::canvas::ViewCommands;
+    let mut app = app_with(2);
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (Some(Read(Some(150.0))), None, false));
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (None, None, false));
+    run_view(&mut app, win, ViewCommands::FitArtboard);
+    let zoom = app.views[1].zoom;
+    assert_eq!(app.print_ppi_of(Some(win)), Some(150.0), "the fit counts from the last reading");
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (Some(Read(Some(110.0))), None, false));
+    assert_eq!(app.views[1].zoom, zoom, "the reading leaves the fit alone");
+    assert_eq!(app.print_ppi_of(Some(win)), Some(110.0));
+}
+
+/// A zoom set as a percentage on a floating OS window that has not been read yet is not a fit,
+/// even when the window recorded that zoom and center as its fit: the first reading of its display
+/// keeps the percentage.
+#[test]
+fn a_zoom_set_before_a_floating_window_is_first_read_keeps_its_percentage() {
+    let mut app = app_with(2);
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    let body = vec2(500.0, 400.0);
+    app.run("view.setZoom", json!({"zoom": 100})).unwrap();
+    crate::canvas::panes::note_fit(&mut app, win, body);
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (Some(crate::ScreenPpi::Read(Some(91.0))), Some(body), true));
+    let pct = crate::state::zoom_display_percent(app.views[1].zoom, app.print_ppi_of(Some(win)));
+    assert!((pct - 100.0).abs() < 1e-9, "the first reading keeps 100%: {pct}");
+    assert!((app.views[1].zoom * 72.0 - 91.0).abs() < 1e-9, "an inch of the document fills an inch of its display");
+}
+
+/// A floating OS window whose view still fits it, moved between two displays read before, keeps
+/// fitting it at the zoom the new density gives: the fit kept is the settled one.
+#[test]
+fn a_fitted_floating_window_moved_to_another_density_keeps_fitting() {
+    use crate::ScreenPpi::Read;
+    use craft::ui::canvas::ViewCommands;
+    let mut app = app_with(2);
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    app.session.execute("prefs.set", &json!({"key": "displayPrintSize", "value": true})).unwrap();
+    app.set_screen_ppi(Some(127.0));
+    app.run("window.arrange.floatInWindow", json!({})).unwrap();
+    let uid = app.session.documents()[1].uid;
+    let win = (1, 1);
+    let body = vec2(500.0, 400.0);
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (Some(Read(Some(91.0))), Some(body), false));
+    run_view(&mut app, win, ViewCommands::FitArtboard);
+    // Fitted to its window's body, as the canvas leaves a view it fits.
+    app.views[1].fitted = true;
+    crate::canvas::panes::note_fit(&mut app, win, body);
+    let zoom = app.views[1].zoom;
+    take_window_ppi(&mut app, &ctx, ((uid, 1), true), win, (Some(Read(Some(150.0))), Some(body), false));
+    let v = app.views[1];
+    assert_ne!(v.zoom, zoom, "the move to a denser display keeps the zoom percentage");
+    assert_eq!(crate::canvas::panes::fit_of(&app, win), Some((body, v.zoom, v.center)), "and the fit kept is the settled zoom");
 }

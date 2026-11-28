@@ -134,6 +134,128 @@ fn right_click_on_empty_canvas_offers_the_view_and_selects_nothing() {
     assert_eq!(app.session.active().unwrap().doc.art_bounds(), None);
 }
 
+/// The document point at the centre of the canvas view, where a key request reports itself.
+fn view_centre(app: &VectorcraftApp) -> Point {
+    let view = app.canvas_view().unwrap();
+    view.to_doc(view.rect.center())
+}
+
+/// `key` with `modifiers`, pressed on the focused canvas, then a frame to show the result.
+fn menu_key(app: &mut VectorcraftApp, ctx: &egui::Context, key: egui::Key, modifiers: egui::Modifiers) {
+    frame(app, ctx, vec![Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }]);
+    frame(app, ctx, vec![]);
+}
+
+/// Rectangle A, selected with a click (which also gives the canvas the keyboard focus), and an unselected
+/// rectangle B under the view's centre with a locked rectangle over it.
+fn selection_away_from_the_centre(app: &mut VectorcraftApp, ctx: &egui::Context) -> (NodeId, NodeId) {
+    let a = rect(app, 0.0, 0.0);
+    frame(app, ctx, vec![]);
+    let c = view_centre(app);
+    let b = rect(app, c.x - 50.0, c.y - 50.0);
+    let locked = rect(app, c.x - 25.0, c.y - 25.0);
+    app.run("layer.setProps", json!({"ids": [locked.0], "locked": true})).unwrap();
+    app.run("select.none", json!({})).unwrap();
+    let p = screen(app, 50.0, 50.0);
+    click(app, ctx, p, PointerButton::Primary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [a]);
+    (a, b)
+}
+
+/// Asserts the menu opened for `a` as selected, at a point over it, without what lies under the view's centre.
+fn opened_for_the_selection(app: &VectorcraftApp, a: NodeId) {
+    assert_eq!(app.session.active().unwrap().selection.objects, [a], "a key request keeps the selection");
+    let at = app.ui.context_menu_at.expect("the menu is open");
+    let over_a = Rect::from_two_pos(screen(app, 0.0, 0.0), screen(app, 100.0, 100.0));
+    assert!(over_a.contains(at), "the menu opens at the selection: {at:?} in {over_a:?}");
+    assert!(has(app, "Arrange") && has_command(app, "object.arrange.bringToFront"), "{:?}", labels(app));
+    assert!(app.ui.context_locked.is_none() && !has(app, "Unlock"), "nothing under the view's centre is measured");
+}
+
+#[test]
+fn shift_f10_opens_the_menu_for_the_selection_without_changing_it() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    let (a, _) = selection_away_from_the_centre(&mut app, &ctx);
+    menu_key(&mut app, &ctx, egui::Key::F10, egui::Modifiers::SHIFT);
+    opened_for_the_selection(&app, a);
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn menu_key_opens_the_menu_for_the_selection_without_changing_it() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    let (a, _) = selection_away_from_the_centre(&mut app, &ctx);
+    menu_key(&mut app, &ctx, egui::Key::Menu, egui::Modifiers::NONE);
+    opened_for_the_selection(&app, a);
+}
+
+/// With nothing selected, Shift+F10 opens the menu at the view's centre and selects nothing, even over an object.
+#[test]
+fn shift_f10_with_nothing_selected_opens_the_menu_at_the_view_centre() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    let c = view_centre(&app);
+    rect(&mut app, c.x - 50.0, c.y - 50.0);
+    app.run("select.none", json!({})).unwrap();
+    // A click on the empty artboard gives the canvas the focus and keeps the selection empty.
+    let p = screen(&app, 380.0, 280.0);
+    click(&mut app, &ctx, p, PointerButton::Primary);
+    assert!(app.session.active().unwrap().selection.objects.is_empty());
+    menu_key(&mut app, &ctx, egui::Key::F10, egui::Modifiers::SHIFT);
+    assert!(app.session.active().unwrap().selection.objects.is_empty(), "the object under the view's centre stays unselected");
+    let at = app.ui.context_menu_at.expect("the menu is open");
+    let centre = app.canvas_view().unwrap().rect.center();
+    assert!(at.distance(centre) < 0.5, "{at:?} at {centre:?}");
+    assert!(has(&app, "Select All") && !has(&app, "Arrange"), "{:?}", labels(&app));
+}
+
+/// With the Artboard tool, Shift+F10 opens the menu for the selected artboard, at it, and selects no other artboard;
+/// the menu's Paste would put artboards on it.
+#[test]
+fn shift_f10_with_the_artboard_tool_keeps_the_selected_artboard() {
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 100, "height": 100, "artboards": 3})).unwrap();
+    let ctx = crate::testing::ui_context();
+    frame(&mut app, &ctx, vec![]);
+    crate::menus::invoke(&mut app, "view.fitAll", json!({}));
+    for _ in 0..3 {
+        frame(&mut app, &ctx, vec![]);
+    }
+    let boards: Vec<vectorcraft_geom::Rect> = app.session.active().unwrap().doc.artboards.iter().map(|a| a.rect).collect();
+    let centre = view_centre(&app);
+    let away = boards.iter().position(|r| !r.contains(centre)).unwrap();
+    app.select_tool("artboard");
+    // A click on the artboard selects it and gives the canvas the focus.
+    let c = boards[away].center();
+    let p = screen(&app, c.x, c.y);
+    click(&mut app, &ctx, p, PointerButton::Primary);
+    assert_eq!(crate::panels::artboards::picked(&app, boards.len()), [away]);
+    menu_key(&mut app, &ctx, egui::Key::F10, egui::Modifiers::SHIFT);
+    assert_eq!(crate::panels::artboards::picked(&app, boards.len()), [away], "a key request keeps the selected artboard");
+    let at = app.ui.context_menu_at.expect("the menu is open");
+    let on_board = Rect::from_two_pos(screen(&app, boards[away].x0, boards[away].y0), screen(&app, boards[away].x1, boards[away].y1));
+    assert!(on_board.contains(at), "the menu opens at the selected artboard: {at:?} in {on_board:?}");
+    let pasted_at = app.ui.context_artboards.as_ref().map(|f| f.at).expect("the menu's artboard facts");
+    assert!(boards[away].contains(pasted_at), "{pasted_at:?} on {:?}", boards[away]);
+}
+
+/// A right-click on an object that is not selected still selects it, with another object selected before.
+#[test]
+fn right_click_still_selects_the_object_under_the_pointer() {
+    let mut app = app();
+    let ctx = crate::testing::ui_context();
+    let (_, b) = selection_away_from_the_centre(&mut app, &ctx);
+    // Inside B, outside the locked rectangle over its middle.
+    let c = view_centre(&app);
+    let p = screen(&app, c.x - 40.0, c.y - 40.0);
+    click(&mut app, &ctx, p, PointerButton::Secondary);
+    assert_eq!(app.session.active().unwrap().selection.objects, [b]);
+    assert!(app.ui.context_menu_at.is_some_and(|at| at.distance(p) < 0.5), "the menu opens at the pointer");
+}
+
 /// A right-click over a locked object adds an Unlock submenu that lists the object by its name; once
 /// the menu is closed, the menu lists no Unlock items.
 #[test]
@@ -180,6 +302,27 @@ fn cmd_alt_shift_u_switches_to_the_next_unit() {
     app.run("document.setUnits", json!({"units": "Feet"})).unwrap();
     press(&mut app);
     assert_eq!(app.session.general_unit(), Unit::Points, "Feet → Points");
+}
+
+/// With the Quick Pen, the menu has Delete, which removes the selected anchor points; with another
+/// tool it does not.
+#[test]
+fn the_quick_pen_menu_deletes_the_selected_anchors() {
+    let mut app = app();
+    let a = rect(&mut app, 0.0, 0.0);
+    app.run("select.anchors", json!({"id": a.0, "anchors": [[0, 0]], "mode": "set"})).unwrap();
+    assert!(!has(&app, "Delete"), "the Selection tool");
+    app.select_tool("quickPen");
+    assert!(has(&app, "Delete"), "{:?}", labels(&app));
+    let delete = menus::context_entries(&app).into_iter().find(|e| e.label == "Delete").expect("Delete");
+    assert_eq!(delete.command.as_deref(), Some("edit.clear"));
+    menus::invoke(&mut app, "edit.clear", json!({}));
+    let st = app.session.active().unwrap();
+    let pd = st.doc.node(a).unwrap().path_data().unwrap().clone();
+    assert_eq!(pd.subpaths[0].anchors.len(), 3, "one anchor removed");
+    // Nothing selected: no Delete.
+    app.run("select.none", json!({})).unwrap();
+    assert!(!has(&app, "Delete"));
 }
 
 #[test]
@@ -481,6 +624,214 @@ fn every_context_label_is_a_menu_string() {
     assert!(missing.is_empty(), "context menu labels missing from menu_strings: {missing:?}");
     for label in menus::CONTEXT_LABELS {
         assert!(shown.iter().any(|s| s == *label), "`{label}` is listed but the context menu never shows it");
+    }
+}
+
+/// A canvas in the same fixture and command lifecycle as a window.
+struct CanvasMenu {
+    app: std::rc::Rc<std::cell::RefCell<VectorcraftApp>>,
+    fixture: craft::ui::testing::Fixture,
+}
+
+impl CanvasMenu {
+    fn new(app: VectorcraftApp) -> Self {
+        let app = std::rc::Rc::new(std::cell::RefCell::new(app));
+        let shown = std::rc::Rc::clone(&app);
+        let mut fixture = craft::ui::testing::Fixture::new(move |ui| canvas::show(&mut shown.borrow_mut(), ui));
+        fixture.room(vec2(800.0, 600.0));
+        app.borrow_mut().ui_ctx = Some(fixture.ctx().clone());
+        let mut canvas = Self { app, fixture };
+        canvas.frame(vec![]);
+        canvas
+    }
+
+    fn frame(&mut self, events: Vec<Event>) {
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fixture);
+        self.fixture.frame(events);
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fixture);
+    }
+
+    fn right_click(&mut self, x: f64, y: f64) {
+        let p = screen(&self.app.borrow(), x, y);
+        self.frame(vec![Event::PointerMoved(p)]);
+        self.frame(vec![press(p, PointerButton::Secondary, true)]);
+        self.frame(vec![press(p, PointerButton::Secondary, false)]);
+        self.frame(vec![]);
+        assert!(self.app.borrow().ui.context_menu_at.is_some(), "the menu opened");
+    }
+
+    fn outline_item(&self) -> Option<craft::ui::testing::Target> {
+        let app = self.app.borrow();
+        let entry = menus::menu_entries(&app).into_iter().find(|e| e.command.as_deref() == Some("object.path.outlineStroke")).unwrap();
+        let label = menus::shown_label(&app, entry.command.as_deref().unwrap(), &entry.params, &entry.label);
+        let tree = self.fixture.tree();
+        self.fixture.by_role(craft::ui::contract::Role::MENU_ITEM).into_iter().find(|item| tree.name_of(item.node) == Some(label.as_str()))
+    }
+
+    fn click_outline(&mut self) {
+        let item = self.outline_item().expect("the rendered outline item is present");
+        assert!(!self.fixture.tree().is_disabled_key(item.node), "the rendered outline item is enabled");
+        self.fixture.click(&item);
+        crate::testing::fixture_input(&mut self.app.borrow_mut(), &mut self.fixture);
+        self.frame(vec![]);
+    }
+
+    fn escape(&mut self) {
+        self.frame(vec![Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: Default::default() }]);
+    }
+}
+
+/// #5267: a right-click on a stroked object offers Outline Stroke, which runs
+/// `object.path.outlineStroke` (the Object › Path item) and leaves filled art; an object with no
+/// stroke to outline has no such item.
+#[test]
+fn the_canvas_context_menu_offers_outline_stroke_for_a_stroked_selection() {
+    use vectorcraft_doc::AppearanceItem;
+    let mut app = app();
+    let id = rect(&mut app, 50.0, 50.0);
+    // Stroked: a visible stroke of some weight.
+    app.run("stroke.set", json!({"weight": 6})).unwrap();
+    let strokes = |app: &VectorcraftApp| {
+        let st = app.session.active().unwrap();
+        let n = st.doc.node(st.selection.objects[0]).unwrap();
+        n.appearance.items.iter().filter(|i| matches!(i, AppearanceItem::Stroke(s) if s.visible && !s.paint.is_none() && s.width > 0.0)).count()
+    };
+    assert!(strokes(&app) > 0, "the rectangle starts with a stroke");
+    app.run("select.none", json!({})).unwrap();
+    let mut canvas = CanvasMenu::new(app);
+    canvas.right_click(100.0, 100.0);
+    canvas.click_outline();
+    {
+        let app = canvas.app.borrow();
+        let st = app.session.active().unwrap();
+        assert!(st.doc.node(id).is_none(), "the stroked rectangle was replaced by its outline");
+        assert_eq!(strokes(&app), 0, "the outline is filled art with no stroke left");
+    }
+
+    // The outline has no stroke any more: nothing to outline, so no item.
+    canvas.right_click(100.0, 100.0);
+    assert!(canvas.outline_item().is_none(), "no stroke, no rendered outline item");
+}
+
+#[test]
+fn outline_stroke_menu_ignores_a_point_with_a_nonpainting_cap() {
+    for (cap, closed) in [("butt", false), ("round", false), ("square", false), ("butt", true), ("round", true), ("square", true)] {
+        let mut app = app();
+        let point = NodeId(
+            app.run("path.create", json!({"closed": closed, "anchors": [{"x": 250, "y": 200}, {"x": 250, "y": 200}]})).unwrap()["id"]
+                .as_u64()
+                .unwrap(),
+        );
+        app.run("paint.setFill", json!({"none": true})).unwrap();
+        app.run("paint.setStroke", json!({"color": "#000000"})).unwrap();
+        app.run("stroke.set", json!({"weight": 8, "cap": cap})).unwrap();
+        let visible = rect(&mut app, 50.0, 50.0);
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        app.run("select.set", json!({"ids": [point.0, visible.0]})).unwrap();
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let mut canvas = CanvasMenu::new(app);
+        canvas.right_click(100.0, 100.0);
+        assert_eq!(canvas.app.borrow().session.active().unwrap().selection.objects, selected);
+        if cap == "butt" {
+            assert!(canvas.outline_item().is_none(), "the point paints nothing with a butt cap");
+        } else {
+            canvas.click_outline();
+            let app = canvas.app.borrow();
+            let st = app.session.active().unwrap();
+            assert!(st.doc.node(point).is_none(), "{cap} cap was outlined");
+            assert!(st.doc.node(visible).is_some(), "the fill-only object is unchanged");
+            let outlined = st.selection.objects.iter().find(|&&id| id != visible).and_then(|&id| st.doc.node(id)).expect("selected outline art");
+            assert!(
+                outlined.appearance.items.iter().any(|i| matches!(i, vectorcraft_doc::AppearanceItem::Fill(f) if f.visible && !f.paint.is_none())),
+                "{cap} cap becomes filled art"
+            );
+            let bounds = outlined.geometric_bounds().expect("the cap outline has geometry");
+            assert!(bounds.width() > 0.0 && bounds.height() > 0.0, "{cap} cap paints an area");
+        }
+    }
+}
+
+/// A compound path of two rectangles, filled and stroked with `weight`, isolated, with a member
+/// right-clicked. The member stays selected and has no appearance of its own: the compound holds
+/// the paint.
+fn right_click_member_of_compound(weight: f64) -> (CanvasMenu, NodeId) {
+    let mut app = app();
+    let (a, b) = (rect(&mut app, 50.0, 50.0), rect(&mut app, 200.0, 50.0));
+    app.run("select.set", json!({"ids": [a.0, b.0]})).unwrap();
+    app.run("object.compoundPath.make", json!({})).unwrap();
+    let compound = app.session.active().unwrap().selection.objects[0];
+    // Filled, so that a click inside a member hits it whether or not the compound has a stroke.
+    app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+    app.run("stroke.set", json!({"weight": weight})).unwrap();
+    app.run("object.isolate", json!({"id": compound.0})).unwrap();
+    let member = app.session.active().unwrap().doc.node(compound).and_then(|n| n.children().and_then(|c| c.first()).map(|m| m.id)).unwrap();
+    app.run("select.set", json!({"ids": [member.0]})).unwrap();
+    let mut canvas = CanvasMenu::new(app);
+    canvas.right_click(100.0, 100.0);
+    {
+        let app = canvas.app.borrow();
+        let st = app.session.active().unwrap();
+        assert_eq!(st.selection.objects, [member], "the right-click leaves the member selected");
+        assert!(st.doc.node(member).is_some_and(|m| m.appearance.items.is_empty()), "a member has no appearance of its own");
+    }
+    (canvas, compound)
+}
+
+/// With a member of an isolated compound path selected (a right-click inside the isolated compound
+/// leaves a member selected), the member's own appearance is empty: the compound holds the paint.
+/// `object.path.outlineStroke` promotes the member to its compound, so the menu offers Outline
+/// Stroke exactly when the compound has a stroke to outline.
+#[test]
+fn outline_stroke_is_offered_for_a_member_of_a_stroked_compound_path() {
+    // No stroke on the compound path: nothing to outline.
+    let (canvas, _) = right_click_member_of_compound(0.0);
+    assert!(canvas.outline_item().is_none(), "no stroke, no rendered outline item");
+
+    // Stroked: the item is offered for the member, and the command outlines the compound.
+    let (mut canvas, compound) = right_click_member_of_compound(6.0);
+    canvas.click_outline();
+    assert!(canvas.app.borrow().session.active().unwrap().doc.node(compound).is_none(), "the stroked compound path was replaced by its outline");
+}
+
+#[test]
+fn outline_stroke_ignores_a_linked_dimensions_lines_when_its_source_is_selected() {
+    for grouped in [false, true] {
+        let mut app = app();
+        let source = rect(&mut app, 50.0, 50.0);
+        app.run("paint.setFill", json!({"color": "#ff8010"})).unwrap();
+        app.run("paint.setStroke", json!({"none": true})).unwrap();
+        let dimension =
+            NodeId(
+                app.run("dimension.create", json!({"source": {"kind": "segment", "edge": {"node": source.0, "subpath": 0, "segment": 0}}})).unwrap()
+                    ["id"]
+                    .as_u64()
+                    .unwrap(),
+            );
+        app.run("select.set", json!({"ids": [source.0, dimension.0]})).unwrap();
+        if grouped {
+            app.run("object.group", json!({})).unwrap();
+        }
+        let selected = app.session.active().unwrap().selection.objects.clone();
+        let mut canvas = CanvasMenu::new(app);
+        canvas.right_click(100.0, 125.0);
+        assert_eq!(canvas.app.borrow().session.active().unwrap().selection.objects, selected, "grouped: {grouped}");
+        assert!(canvas.outline_item().is_none(), "only the protected dimension has strokes");
+        canvas.escape();
+
+        let dimension_art = {
+            let mut app = canvas.app.borrow_mut();
+            app.run("paint.setStroke", json!({"ids": [source.0], "color": "#000000"})).unwrap();
+            app.run("stroke.set", json!({"ids": [source.0], "weight": 6})).unwrap();
+            app.session.active().unwrap().doc.node(dimension).unwrap().children().unwrap().to_vec()
+        };
+        canvas.right_click(100.0, 125.0);
+        assert_eq!(canvas.app.borrow().session.active().unwrap().selection.objects, selected, "grouped: {grouped}");
+        canvas.click_outline();
+        let app = canvas.app.borrow();
+        let st = app.session.active().unwrap();
+        assert!(st.doc.node(source).is_none(), "the source was replaced by filled outlines");
+        assert_eq!(st.doc.node(dimension).unwrap().children().unwrap(), dimension_art.as_slice(), "the dimension keeps its own art");
     }
 }
 
