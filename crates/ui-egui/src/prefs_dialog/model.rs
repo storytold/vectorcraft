@@ -17,7 +17,7 @@ use serde_json::{Map, Value, json};
 use vectorcraft_engine::Prefs;
 use vectorcraft_engine::cmd::prefscmds::{PREF_CATEGORIES, PREF_SPECS, PrefKind, PrefSpec, folder_check, spec};
 
-use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions};
+use super::{APP_TITLE_BAR_SHOWN, PrefsWindow, UI_FIELDS, descriptions, script_access};
 use crate::VectorcraftApp;
 use crate::i18n::{Lang, LangExt as _};
 use craft::color_ui::ui::ColorPickerDialog;
@@ -129,6 +129,8 @@ impl Live<'_> {
             "appTitleBar" => APP_TITLE_BAR_SHOWN,
             "linuxDisplayServer" => cfg!(target_os = "linux"),
             "monitorProfileDisplay" | "lowLatencyDrawing" => !cfg!(target_arch = "wasm32"),
+            // Only where the session keeps script grants: not without a settings folder, and not on the web.
+            script_access::KEY => self.w.script_access.is_some(),
             "editOriginal" => self.app.services.check_application.is_some() && self.app.services.open_in_application.is_some(),
             _ => true,
         }
@@ -258,6 +260,10 @@ impl Live<'_> {
             if sp.key == "editOriginalSystemDefaults" {
                 groups.add(sp.section, self.row("editOriginal", "", "Edit Original with PhotoCraft", RowKind::Custom));
             }
+            if sp.key == "showExternalScriptWarning" {
+                let english = "Script File Access revoke read write file folder";
+                groups.add(sp.section, self.row(script_access::KEY, tl!("Script File Access"), english, RowKind::CustomRows));
+            }
         }
         if cat == PREF_CATEGORIES[0] {
             let tools = self.row("prefsFile", "", "export import reset preferences", RowKind::Custom);
@@ -269,12 +275,23 @@ impl Live<'_> {
         page
     }
 
-    /// Sets every key of the draft to its default, as the answered Reset question does.
+    /// Sets every key of the draft to its default, the UI-only rows ([`UI_FIELDS`]) included, as the answered
+    /// Reset question does.
     fn reset_all(&mut self) {
         let keys: Vec<String> =
             Prefs::default().to_json().as_object().into_iter().flatten().map(|(k, _)| k.clone()).filter(|k| super::is_known(k)).collect();
         self.w.reset_keys(keys.iter().map(String::as_str));
+        self.reset_ui_rows(|_| true);
         crate::original_editor::reset(self.app);
+    }
+
+    /// Sets the UI-only rows of the categories `reset` names to their defaults.
+    fn reset_ui_rows(&mut self, reset: impl Fn(&str) -> bool) {
+        for (key, value) in super::default_ui_fields(&self.app.ui) {
+            if UI_FIELDS.iter().any(|&(k, c, _)| k == key && reset(c)) {
+                self.w.draft.set(key, &value);
+            }
+        }
     }
 
     /// The answers of the dialogs the window opened: the Reset question and the colour picker.
@@ -349,6 +366,10 @@ impl PreferencesModel for Live<'_> {
                 crate::original_editor::show(self.app, ui, enabled);
                 false
             }
+            script_access::KEY => {
+                script_access::show(self.app, &mut self.w.script_access, ui);
+                false
+            }
             "prefsFile" => {
                 let (mut export, mut import, mut reset) = (false, false, false);
                 let web = crate::io::is_web(self.app);
@@ -388,6 +409,11 @@ impl PreferencesModel for Live<'_> {
     fn reset_page(&mut self, page: &str) {
         let keys: Vec<&str> = PREF_SPECS.iter().filter(|s| s.category == page).map(|s| s.key).collect();
         self.w.reset_keys(keys);
+        self.reset_ui_rows(|c| c == page);
+        // The Edit Original row of its page.
+        if spec("editOriginalSystemDefaults").is_some_and(|s| s.category == page) {
+            crate::original_editor::reset(self.app);
+        }
     }
 
     fn nested(&mut self, ui: &mut egui::Ui) {
@@ -406,20 +432,33 @@ impl PreferencesDraft for Live<'_> {
     }
 
     fn apply(&mut self) -> Result<(), String> {
+        // A `prefs.reset` run since the last frame shows in the draft before OK reads it.
+        super::apply_prefs_resets_to(self.app, Some(&mut *self.w));
         let values: Map<String, Value> =
             self.w.draft.to::<Map<String, Value>>().unwrap_or_default().into_iter().filter(|(k, _)| !k.starts_with("__")).collect();
         let touch_ws = values.get("touchWorkspace").and_then(Value::as_bool);
         let document_units = self.w.reset_units.as_deref().is_none_or(|u| values.get("unitsGeneral").and_then(Value::as_str) != Some(u));
         // A refused folder, typed or picked, comes back here as the engine's message.
         self.app.run("prefs.set", json!({ "values": values, "documentUnits": document_units }))?;
+        // When OK enters the Touch workspace, the task bar is set before the switch, so it goes to the workspace being
+        // left; otherwise after it, so a return from Touch gives it to the workspace returned to.
+        let before_switch = touch_ws.is_some() && crate::workspaces::enters_touch(self.app, self.app.touch_screen);
+        if before_switch && let Some(on) = self.w.draft.get::<bool>("__taskBar") {
+            self.app.ui.task_bar = on;
+        }
+        let was_touch = crate::workspaces::is_current(&self.app.ui, crate::workspaces::TOUCH);
         if touch_ws.is_some() {
             crate::workspaces::sync_touch_workspace(self.app, self.app.touch_screen);
         }
+        // When OK leaves Touch, the workspace returned to takes the row only when it changed since the window opened or
+        // last applied; otherwise it keeps its own.
+        let left_touch = was_touch && !crate::workspaces::is_current(&self.app.ui, crate::workspaces::TOUCH);
+        let task_bar_row = self.w.draft.get::<bool>("__taskBar").filter(|on| !left_touch || self.w.opened.get::<bool>("__taskBar") != Some(*on));
         let flag = |key: &str, now: bool| self.w.draft.get::<bool>(key).unwrap_or(now);
         let (smart_guides, snap_to_grid, task_bar) = (
             flag("__smartGuides", self.app.ui.view.smart_guides),
             flag("__snapToGrid", self.app.ui.view.snap_to_grid),
-            flag("__taskBar", self.app.ui.task_bar),
+            if before_switch { self.app.ui.task_bar } else { task_bar_row.unwrap_or(self.app.ui.task_bar) },
         );
         self.app.ui.view.smart_guides = smart_guides;
         self.app.ui.view.snap_to_grid = snap_to_grid;
@@ -427,6 +466,9 @@ impl PreferencesDraft for Live<'_> {
         crate::original_editor::commit(self.app);
         super::snapshot(self.app);
         self.app.prefs_changed = true;
+        // The row shows the task bar in use: after OK enters Touch, that is Touch's, not the value the workspace left
+        // took, so a later Apply does not give the workspace left's value to Touch.
+        self.w.draft.set("__taskBar", &self.app.ui.task_bar);
         self.w.opened = self.w.draft.clone();
         Ok(())
     }

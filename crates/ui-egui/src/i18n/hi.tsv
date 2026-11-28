@@ -6401,6 +6401,8 @@ arrowhead	Feather	पंख
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	पिछली बार VectorCraft सामान्य तरीके से बंद नहीं हुआ था। इन डॉक्यूमेंट्स में बिना सेव किए बदलाव थे:
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft डॉक्यूमेंट्स: एक लॉक्ड ऑब्जेक्ट, जो फ़ाइल बदलने पर अपडेट होता है।
 	VectorCraft Generic CMYK (SWOP-like)	वेक्टर क्रेफ्ट जेनेरिक CMYK (SWOP-like)
+	VectorCraft Coated CMYK (FOGRA51)	वेक्टर क्रेफ्ट कोटेड CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	वेक्टर क्रेफ्ट अनकोटेड CMYK (FOGRA52)
 	VectorCraft Help…	VectorCraft मदद…
 	VectorCraft on getartcraft.com	getartcraft.com पर VectorCraft
 	VectorCraft on GitHub	GitHub पर VectorCraft
@@ -6704,6 +6706,35 @@ arrowhead	Feather	पंख
 @msg	`inputs` lists `{shown}` twice	`inputs` में `{shown}` दो बार सूचीबद्ध है
 @msg	`inputs` needs `api` 2 or later	`inputs` के लिए `api` 2 या बाद का स्तर आवश्यक है
 @msg	`inputs` needs the permission `doc.read`	`inputs` के लिए अनुमति `doc.read` आवश्यक है
+@msg	only a filter declares `writes`	केवल फ़िल्टर `writes` घोषित करता है
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	`writes` में अज्ञात ऑब्जेक्ट प्रकार `{shown}` है: type, image या symbolInstance का उपयोग करें
+@msg	`writes` lists `{shown}` twice	`writes` में `{shown}` दो बार सूचीबद्ध है
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	`writes` में `{shown}` सूचीबद्ध है, जो `inputs` में सूचीबद्ध नहीं है
+@msg	`writes` needs `api` {WRITES_API} or later	`writes` के लिए `api` {WRITES_API} या बाद का स्तर आवश्यक है
+@msg	`writes` needs the permission `doc.write`	`writes` के लिए अनुमति `doc.write` आवश्यक है
+@msg	{_1} is not type, an image or a symbol instance	{_1} न टेक्स्ट है, न इमेज, न सिंबल इंस्टेंस
+@msg	the text of type given as `truncated` can't be changed	`truncated` के रूप में दिए गए टेक्स्ट ऑब्जेक्ट का टेक्स्ट बदला नहीं जा सकता
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	अधिकतम {MAX_INPUT_RUNS} प्रविष्टियों की सूची होनी चाहिए
+@msg	type needs at least one run	टेक्स्ट में कम से कम एक रन होना चाहिए
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	टेक्स्ट के {bytes} बाइट (सीमा {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} अनुच्छेद (सीमा {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	पूरे आउटपुट में {MAX_INPUT_TEXT_TOTAL} बाइट से अधिक टेक्स्ट
+@msg	unknown key '{k}'	अज्ञात कुंजी '{k}'
+@msg	must be a list of 6 numbers	6 संख्याओं की सूची होनी चाहिए
+@msg	a number is out of range (limit ±{MAX_COORD})	एक संख्या सीमा से बाहर है (सीमा ±{MAX_COORD})
+@msg	flattens the object to a line or a point	ऑब्जेक्ट को एक रेखा या बिंदु में चपटा कर देता है
+@msg	an object flattened to a line or a point can't be placed again	रेखा या बिंदु में चपटे हुए ऑब्जेक्ट को फिर से रखा नहीं जा सकता
+@msg	must be a number from 0 to 1	0 से 1 तक की संख्या होनी चाहिए
+@msg	must be the name of a symbol	किसी सिंबल का नाम होना चाहिए
+@msg	'{shown}' is not a symbol in this document	'{shown}' इस दस्तावेज़ में कोई सिंबल नहीं है
+@msg	a run must be {{"text", "style", "inline"?}}	रन {{"text", "style", "inline"?}} होना चाहिए
+@msg	`text` holds the character of an inline graphic	`text` में इनलाइन ग्राफ़िक का वर्ण है
+@msg	inline graphics can't be added, removed, reordered or changed	इनलाइन ग्राफ़िक जोड़े, हटाए, पुनः क्रमित या बदले नहीं जा सकते
+@msg	the characters of threaded type can't be changed	थ्रेडेड टेक्स्ट के वर्ण बदले नहीं जा सकते
+@msg	the characters of type with ruby can't be changed	रूबी वाले टेक्स्ट के वर्ण बदले नहीं जा सकते
+@msg	expected {count} paragraph styles, one per paragraph	{count} पैराग्राफ़ स्टाइल अपेक्षित थे, हर पैराग्राफ़ के लिए एक
+@msg	the document has no Kinsoku set named '{shown}'	दस्तावेज़ में '{shown}' नाम का कोई किनसोकू सेट नहीं है
+@msg	must be 1-{MAX_FAMILY} printable characters	1-{MAX_FAMILY} प्रिंट करने योग्य वर्ण होने चाहिए
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	उसे दिए गए ऑब्जेक्ट्स, और डॉक्यूमेंट की सेटिंग्स, आर्टबोर्ड्स, लेयर्स और स्वॉचेस पढ़ना
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` में अलग-अलग सेक्शन होने चाहिए: settings, artboards, layers या swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` केवल फ़िल्टर, या `commands` वाले लाइव इफ़ेक्ट के लिए है, `api` 3 या उसके बाद और अनुमति `doc.read` के साथ
@@ -7609,6 +7640,14 @@ arrowhead	Feather	पंख
 	The script asks to read and write a folder you choose, with everything in it.	स्क्रिप्ट आपका चुना हुआ फ़ोल्डर और उसकी सारी सामग्री पढ़ने और लिखने की अनुमति माँगती है।
 	Allow Once	एक बार अनुमति दें
 	Always Allow This Script	इस स्क्रिप्ट को हमेशा अनुमति दें
+	No script has kept file access.	किसी भी स्क्रिप्ट के पास रखी गई फ़ाइल पहुँच नहीं है।
+	Read file	फ़ाइल पढ़ें
+	Read and write file	फ़ाइल पढ़ें और लिखें
+	Read and write folder	फ़ोल्डर पढ़ें और लिखें
+	Revoke	वापस लें
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	वापस लें स्क्रिप्ट के हर संस्करण के लिए रखी गई पहुँच हटा देता है। किसी फ़ोल्डर की पहुँच में उसके भीतर का सब कुछ शामिल है।
+@msg	Script file access revoked	स्क्रिप्ट की फ़ाइल पहुँच वापस ली गई
+@msg	The script file access was already revoked	स्क्रिप्ट की फ़ाइल पहुँच पहले ही वापस ली जा चुकी थी
 	Deny	अस्वीकार करें
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	स्क्रिप्ट खुले दस्तावेज़ बदल सकती है और अपने चलाए कमांड से फ़ाइलें लिख सकती है। केवल भरोसेमंद स्क्रिप्ट चलाएँ।
 	Do not show this warning again	यह चेतावनी फिर न दिखाएँ
@@ -7807,6 +7846,7 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	स्क्रिप्ट के फ़ाइल डायलॉग के लिए `answer` इनमें से एक होना चाहिए: once, always, deny, stop
 @msg	choose a file or folder first, or deny	पहले कोई फ़ाइल या फ़ोल्डर चुनें, या अस्वीकार करें
 @msg	the script file permissions could not be saved: {e}	स्क्रिप्ट की फ़ाइल अनुमतियाँ सेव नहीं की जा सकीं: {e}
+@msg	the script file permissions could not be read: {e}	स्क्रिप्ट की फ़ाइल अनुमतियाँ पढ़ी नहीं जा सकीं: {e}
 @msg	this script's file access can be allowed only once	इस स्क्रिप्ट की फ़ाइल पहुँच केवल एक बार दी जा सकती है
 @msg	Only the person at the keyboard can allow a script's file access	किसी स्क्रिप्ट को फ़ाइल पहुँच केवल कीबोर्ड पर मौजूद व्यक्ति दे सकता है
 @msg	A script is given at most 2,048 files: the files picked after them were left out	किसी स्क्रिप्ट को अधिकतम 2,048 फ़ाइलें दी जाती हैं: उनके बाद चुनी गई फ़ाइलें छोड़ दी गईं
@@ -8786,6 +8826,21 @@ liquify-list-end	{0}, {1}	{0} और {1}
 @msg	outlineText {v}: true or false	outlineText {v}: true या false
 @msg	output intent profile: {e}	उत्पादन आशय प्रोफ़ाइल: {e}
 @msg	output size ({what} is {len} bytes, limit {max})	आउटपुट का आकार ({what} {len} बाइट्स का है, सीमा {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} पंक्ति {line}, स्तंभ {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	स्मृति बजट
+@msg	call depth	कॉल गहराई
+@msg	run(input, params) returned no output object	run(input, params) ने कोई आउटपुट ऑब्जेक्ट नहीं लौटाया
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" को `script` चाहिए: मैनिफ़ेस्ट के पास प्लग-इन की .js फ़ाइल का नाम
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` मैनिफ़ेस्ट के फ़ोल्डर में किसी .js फ़ाइल का नाम होना चाहिए: 1-128 बाइट्स, कोई फ़ोल्डर नहीं, कोई `:` नहीं, `.` से शुरू नहीं
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` स्क्रिप्ट का टेक्स्ट है, जो केवल उस JSON में दिया जाता है जिसे plugin.install का dataBase64 लेता है: .vcplugin फ़ाइल अपनी स्क्रिप्ट का नाम `script` में देती है
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript प्लग-इन का मैनिफ़ेस्ट `runtime` "js" देता है
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" ऑब्जेक्ट फ़िल्टर (`kind` "filter") के लिए है, `kind` "{kind}" के लिए नहीं
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript प्लग-इन अनुमति `{name}` सूचीबद्ध नहीं कर सकता: होस्ट की अनुमतियों में से वह `progress` सूचीबद्ध कर सकता है
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly मॉड्यूल का मैनिफ़ेस्ट `runtime` छोड़ देता है: "js" JavaScript प्लग-इन के लिए है
+@msg	a JavaScript plug-in makes no command calls	JavaScript प्लग-इन कोई कमांड कॉल नहीं करता
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) दो संख्याएँ लेता है
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) एक स्तर, 0 (त्रुटि), 1 (चेतावनी), 2 (जानकारी) या 3 (डीबग), और एक स्ट्रिंग लेता है
 @msg	output.destination: {_1} files are CMYK, and “{name}” is an RGB profile	output.destination: {_1} फ़ाइलें CMYK हैं, और "{name}" एक RGB प्रोफ़ाइल है
 @msg	output.destination: {e}	output.destination: {e}
 @msg	output.destination: no RGB or CMYK profile is called “{name}”	output.destination: "{name}" नाम की कोई RGB या CMYK प्रोफ़ाइल नहीं है
@@ -10423,6 +10478,11 @@ theme	Appearance	अपीयरेंस
 	No objects are selected.	कोई ऑब्जेक्ट सिलेक्ट नहीं है।
 	Open a document to mark its fold lines.	फ़ोल्ड लाइनें मार्क करने के लिए कोई डॉक्यूमेंट ओपन करें।
 	Remove Fold Line Role	लाइन प्रकार हटाएँ
+	Fold Angle	फ़ोल्ड कोण
+	Set Fold Angle…	फ़ोल्ड कोण सेट करें…
+	Set Fold Angle	फ़ोल्ड कोण सेट करें
+	Reset Fold Angle	फ़ोल्ड कोण रीसेट करें
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	ऐसी क्रीज़, आंशिक कट या परफ़ोरेशन लाइन चुनें जो न लॉक हो न छिपी हो
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	टूलबार का टूल और उसकी कुंजियाँ क्या करती हैं, यह टिप की जगह एक कार्ड में दिखाता है; इसके लिए टूल युक्तियाँ दिखाएँ चालू होना चाहिए।
 	Selects whole objects and groups to move, resize or rotate them.	पूरे ऑब्जेक्ट और समूह चुनता है, ताकि उन्हें खिसकाया, आकार बदला या घुमाया जा सके।

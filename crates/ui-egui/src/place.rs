@@ -68,8 +68,10 @@ pub enum DropTarget {
 /// Where a dropped file landed, as far as the platform says.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DropSpot {
-    /// On the canvas, at this document point.
+    /// On the active canvas, at this document point.
     Canvas(Point),
+    /// On a tiled canvas, identified by its document uid and point.
+    TiledCanvas { doc: u64, at: Point },
     /// Off the canvas: a panel, the tab bar, a dialog.
     Elsewhere,
     /// The platform gives no place (floating panel windows, desktop drags without a position).
@@ -120,6 +122,18 @@ const ASKED: &str = "__placeCursorAsk";
 /// [`DropAt`]) through the import options dialog the drop opened, so its OK places the file in that
 /// document; hidden from the dialog's fields and removed before the file is placed.
 const DROPPED: &str = "__dropTarget";
+
+/// Normal Place import options wait for their opening drawing. Canvas drops already name their destination.
+pub(crate) fn import_options_drawing(app: &VectorcraftApp, params: &Value) -> Option<u64> {
+    app.session.active().filter(|_| params.get(DROPPED).is_none()).map(|st| st.uid)
+}
+
+pub(crate) fn check_import_options_drawing(app: &VectorcraftApp, drawing: Option<u64>) -> Result<(), String> {
+    if drawing.is_some_and(|drawing| app.session.active().is_none_or(|st| st.uid != drawing)) {
+        return Err(tl!("Return to the original drawing to place the file").into());
+    }
+    Ok(())
+}
 
 /// The `file.place` param that holds the import options a Shift-click of the place cursor set
 /// aside ([`set_aside_import_options`]): the file is placed with them when no import options dialog
@@ -304,9 +318,9 @@ fn place_file_in(app: &mut VectorcraftApp, p: &Value, read: Read) -> Result<Valu
         o.remove(ASKED);
         o.remove(DROPPED);
     }
-    if matches!(read, Read::ForUser { .. }) {
-        crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
-    }
+    // An embedded PDF without `textAs` takes the `pdfTextAs` preference, placed by the user or run
+    // as a command.
+    crate::dialogs::import_pdf::place_with_preferred_text_as(app, &mut p);
     match read {
         Read::ForUser { dropped } if crate::placing::available(app) => {
             let r = crate::placing::start(app, &p, dropped);
@@ -329,16 +343,23 @@ fn pick(app: &mut VectorcraftApp, p: &Value) -> Value {
     // The web answers with the files' contents instead of paths.
     crate::file_asks::ask(app, request, Owner::Document, move |app, picked| {
         let files = match picked {
-            Picked::Paths(paths) => paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect(),
-            Picked::Contents(files) => files
-                .into_iter()
-                .map(|(name, bytes)| {
-                    app.place.picked.retain(|(n, _)| *n != name);
-                    let entry = with_importer(json!({ "name": name }), &with);
-                    app.place.picked.push((name, bytes));
-                    entry
-                })
-                .collect(),
+            Picked::Paths(paths) => {
+                app.place.picked.clear();
+                paths.into_iter().map(|path| with_importer(json!({ "path": path.to_string_lossy() }), &with)).collect()
+            }
+            Picked::Contents(files) => {
+                // The next Place dialog replaces the previous selection, including its source bytes.
+                app.place.picked.clear();
+                files
+                    .into_iter()
+                    .map(|(name, bytes)| {
+                        app.place.picked.retain(|(n, _)| *n != name);
+                        let entry = with_importer(json!({ "name": name }), &with);
+                        app.place.picked.push((name, bytes));
+                        entry
+                    })
+                    .collect()
+            }
             // Only an open's answers carry files.
             _ => return Ok(Value::Null),
         };
@@ -384,12 +405,18 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
     use crate::dialogs::place::PlaceDialog;
     use craft::ui::dialog::DialogResult;
     let Some(dialogs) = app.dialogs() else { return };
-    let (reading, answer) = dialogs.with(|host| {
+    let (reading, answer, current_open) = dialogs.with(|host| {
         let reading = host.get_mut::<PlaceDialog>().is_some_and(|d| fill_lines(app, &d.files, &mut d.info));
-        (reading, host.take::<PlaceDialog>())
+        let answer = host.take::<PlaceDialog>();
+        (reading, answer, host.is_open::<PlaceDialog>())
     });
     if reading {
         ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    // Place answers only after closing. Replacing an open Place leaves its Cancel while the new
+    // dialog is open; that retired selection must not clear the current selection's cache.
+    if current_open {
+        return;
     }
     match answer {
         Some(DialogResult::Ok((files, options))) => {
@@ -397,7 +424,10 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &egui::Context) {
                 app.status(e);
             }
         }
-        Some(_) => app.place.reading_lines = None,
+        Some(_) => {
+            app.place.reading_lines = None;
+            app.place.picked.clear();
+        }
         None => {}
     }
 }
@@ -505,6 +535,19 @@ pub(crate) fn fill_lines(app: &mut VectorcraftApp, files: &[Value], info: &mut V
             false
         }
     }
+}
+
+/// Unit tests: waits until the open Place dialog's lines have been read, and leaves them for
+/// [`fill_lines`].
+#[cfg(test)]
+pub(crate) fn wait_lines(app: &mut VectorcraftApp) {
+    let Some((_, read)) = &mut app.place.reading_lines else { return };
+    let (tx, rx) = std::sync::mpsc::channel();
+    // A read that stopped without lines leaves the new channel closed too.
+    if let Ok(lines) = read.recv() {
+        let _ = tx.send(lines);
+    }
+    *read = rx;
 }
 
 /// One line about `file` for the Place dialog, read at once ([`line`]).
@@ -793,41 +836,41 @@ impl VectorcraftApp {
     /// plug-in reads opens wherever it is dropped, as File → Open opens it ([`io::opens_as`],
     /// [`fileio::opens_with_importer`]).
     pub fn drop_target(&self, name: &str, spot: DropSpot, shift: bool) -> DropTarget {
-        let (Some(st), Some(v)) = (self.session.active(), self.view()) else { return DropTarget::Open };
-        let at = match spot {
-            _ if io::opens_as(name).is_some() || fileio::opens_with_importer(name) => return DropTarget::Open,
-            DropSpot::Elsewhere => return DropTarget::Open,
-            DropSpot::Canvas(at) => at,
-            DropSpot::Unknown if is_document(name) => return DropTarget::Open,
-            DropSpot::Unknown => v.center,
+        if io::opens_as(name).is_some() || fileio::opens_with_importer(name) {
+            return DropTarget::Open;
+        }
+        let (st, at) = match spot {
+            DropSpot::Canvas(at) => (self.view().and(self.session.active()), at),
+            DropSpot::TiledCanvas { doc, at } => (self.session.documents().iter().find(|st| st.uid == doc), at),
+            DropSpot::Unknown if !is_document(name) => {
+                let Some(view) = self.view() else { return DropTarget::Open };
+                (self.session.active(), view.center)
+            }
+            _ => return DropTarget::Open,
         };
-        DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift })
+        st.map_or(DropTarget::Open, |st| DropTarget::Place(DropAt { doc: st.uid, reverts: st.reverts, at, embed: shift }))
     }
 
     /// Where a drop at `pos` on the window lands, for a host that follows its file drags itself (the
-    /// web's): on the active canvas as it last showed, else elsewhere; without a position, unknown.
+    /// web's): on the canvas shown under the pointer, else elsewhere; without a position, unknown.
     pub fn drop_spot(&self, pos: Option<egui::Pos2>) -> DropSpot {
         let Some(pos) = pos else { return DropSpot::Unknown };
-        match self.canvas_view() {
-            Some(view) if view.rect.contains(pos) => {
-                let at = view.to_doc(pos);
-                DropSpot::Canvas(Point::new(at.x, at.y))
-            }
-            _ => DropSpot::Elsewhere,
+        if let Some(view) = self.canvas_view().filter(|view| view.rect.contains(pos)) {
+            return DropSpot::Canvas(view.to_doc(pos));
         }
+        crate::canvas::panes::file_drop_at(self, pos).map_or(DropSpot::Elsewhere, |(doc, at)| DropSpot::TiledCanvas { doc, at })
     }
 }
 
-/// Files held over, or dropped on, a canvas that would be placed there.
+/// A file drop that includes artwork for this canvas.
 pub struct CanvasDrop {
     files: Vec<OsFile>,
     at: Point,
 }
 
-/// The canvas as a target of files dragged from the OS: it takes those [`VectorcraftApp::drop_target`]
-/// places, and outlines the canvas while they hover. On the web the browser gives a hovered file's
-/// type but not its name, so any file is taken then, including libraries, presets, plug-ins and
-/// shortcut sets, which open when dropped.
+/// The canvas accepts a file drop when [`VectorcraftApp::drop_target`] would place any member and
+/// outlines the canvas while it hovers. The drop router places or opens each member of the batch.
+/// A file hovering without a name is also eligible until its name arrives.
 pub struct CanvasFiles<'a> {
     app: &'a VectorcraftApp,
     rect: egui::Rect,
@@ -847,13 +890,11 @@ impl FilesTarget<OsFiles> for CanvasFiles<'_> {
     fn accept(&self, payload: &OsFiles, at: egui::Pos2, _op: DropOperation) -> Option<CanvasDrop> {
         let doc = self.view.to_doc(at);
         let at = Point::new(doc.x, doc.y);
-        let files: Vec<OsFile> = payload
+        let accepts = payload
             .files
             .iter()
-            .filter(|f| f.name.is_empty() || matches!(self.app.drop_target(&f.name, DropSpot::Canvas(at), false), DropTarget::Place(_)))
-            .cloned()
-            .collect();
-        (!files.is_empty()).then_some(CanvasDrop { files, at })
+            .any(|file| file.name.is_empty() || matches!(self.app.drop_target(&file.name, DropSpot::Canvas(at), false), DropTarget::Place(_)));
+        accepts.then(|| CanvasDrop { files: payload.files.clone(), at })
     }
 
     fn mark(&self, _: &CanvasDrop) -> DropMark {
@@ -866,7 +907,7 @@ impl FilesTarget<OsFiles> for CanvasFiles<'_> {
     }
 }
 
-/// Files dropped on the canvas ([`CanvasFiles`]), placed where they landed; Shift embeds them.
+/// Route the whole canvas drop. Shift embeds its placed artwork.
 // PLAN: `DropOperation` has no Shift, so the held modifiers of the drop's frame are read here.
 pub fn canvas_drop(app: &mut VectorcraftApp, ctx: &egui::Context, dropped: CanvasDrop) {
     let shift = ctx.input(|i| i.modifiers.shift);
@@ -1067,9 +1108,14 @@ pub(crate) enum LinkAction {
 }
 
 impl LinkAction {
-    /// The actions that apply to an image, `linked` or embedded.
-    pub(crate) fn shown(linked: bool) -> &'static [LinkAction] {
-        if linked { &[LinkAction::Embed, LinkAction::EditOriginal] } else { &[LinkAction::Unembed] }
+    /// The actions that apply to an image, `linked` or embedded. An image placed from a DCS file
+    /// (`dcs`) stays linked, as `links.embed` refuses it, so it has no Embed.
+    pub(crate) fn shown(linked: bool, dcs: bool) -> &'static [LinkAction] {
+        match (linked, dcs) {
+            (true, false) => &[LinkAction::Embed, LinkAction::EditOriginal],
+            (true, true) => &[LinkAction::EditOriginal],
+            (false, _) => &[LinkAction::Unembed],
+        }
     }
 
     /// The action's label in the interface language.
@@ -1084,12 +1130,91 @@ impl LinkAction {
     /// Runs the action for image `id`, named `name`.
     pub(crate) fn run(self, app: &mut VectorcraftApp, id: u64, name: &str) {
         match self {
-            LinkAction::Embed => {
-                app.run("links.embed", json!({ "ids": [id] })).ok();
-            }
+            LinkAction::Embed => crate::panels::links::embed_images(app, vec![id]),
             LinkAction::EditOriginal => crate::menus::invoke(app, "links.editOriginal", json!({ "id": id })),
             LinkAction::Unembed => crate::panels::links::unembed(app, id, name),
         }
+    }
+}
+
+/// Is image `id` of the active document placed from a DCS file (its pixels hold plates), which
+/// `links.embed` refuses?
+pub(crate) fn is_dcs_image(app: &VectorcraftApp, id: u64) -> bool {
+    let Some(st) = app.session.active() else { return false };
+    let Some(NodeKind::Image(im)) = st.doc.node(vectorcraft_doc::NodeId(id)).map(|n| &n.kind) else { return false };
+    im.link.is_some() && st.doc.images.get(&im.key).is_some_and(vectorcraft_doc::ImageBlob::is_separated)
+}
+
+/// Several selected objects that are all images: the ids of the linked ones that can be embedded
+/// and of the embedded ones, in selection order. Images placed from DCS files are in neither.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SeveralImages {
+    /// The linked images, except those placed from DCS files.
+    pub(crate) linked: Vec<u64>,
+    /// The embedded images.
+    pub(crate) embedded: Vec<u64>,
+}
+
+impl SeveralImages {
+    /// The selection as [`SeveralImages`], when two or more objects are selected and each is an
+    /// image.
+    pub(crate) fn selected(app: &VectorcraftApp) -> Option<SeveralImages> {
+        let st = app.session.active()?;
+        if st.selection.objects.len() < 2 {
+            return None;
+        }
+        let mut out = SeveralImages::default();
+        for id in &st.selection.objects {
+            let NodeKind::Image(im) = &st.doc.node(*id)?.kind else { return None };
+            match &im.link {
+                None => out.embedded.push(id.0),
+                Some(_) if st.doc.images.get(&im.key).is_some_and(vectorcraft_doc::ImageBlob::is_separated) => {}
+                Some(_) => out.linked.push(id.0),
+            }
+        }
+        Some(out)
+    }
+
+    /// The actions that apply to these images: Embed while one of them is linked and not placed
+    /// from a DCS file, and Unembed… while one is embedded and they can be written out. Edit
+    /// Original opens one file, so the
+    /// surfaces offer it for one image only.
+    pub(crate) fn shown(&self, app: &VectorcraftApp) -> Vec<LinkAction> {
+        let mut shown = vec![];
+        if !self.linked.is_empty() {
+            shown.push(LinkAction::Embed);
+        }
+        if crate::panels::links::can_unembed(app, self.embedded.len()) {
+            shown.push(LinkAction::Unembed);
+        }
+        shown
+    }
+
+    /// Runs `action` on these images: Embed embeds every linked one, and Unembed… writes every
+    /// embedded one out, each in one undo step.
+    pub(crate) fn run(&self, app: &mut VectorcraftApp, action: LinkAction) {
+        match (action, &self.embedded[..]) {
+            (LinkAction::Embed, _) => crate::panels::links::embed_images(app, self.linked.clone()),
+            (LinkAction::EditOriginal, _) | (LinkAction::Unembed, []) => {}
+            (LinkAction::Unembed, [one]) => {
+                let info = app.session.execute("image.info", &json!({ "id": one })).unwrap_or_default();
+                let (name, _) = image_summary(&info);
+                crate::panels::links::unembed(app, *one, &name);
+            }
+            (LinkAction::Unembed, ids) => crate::panels::links::unembed_several(app, ids.to_vec()),
+        }
+    }
+}
+
+/// The Control bar for several selected images and nothing else: Embed and Unembed… for them
+/// ([`SeveralImages::shown`]), each a ranked row.
+fn control_bar_several(app: &mut VectorcraftApp, ui: &mut egui::Ui, images: &SeveralImages) {
+    for action in images.shown(app) {
+        Row::new().fit_rank(crate::chrome::rank::GROUP).show(ui, |ui, _| {
+            if clicked(&Button::new(action.label().to_string()).show(ui)) {
+                images.run(app, action);
+            }
+        });
     }
 }
 
@@ -1097,9 +1222,14 @@ impl LinkAction {
 /// resolution, Embed or Unembed, Edit Original (a linked file), Image Trace, Mask, Crop Image and
 /// Remove Background, each a ranked row that leaves a shrinking bar whole. While the Crop Image
 /// tool is in use, the bar shows the file name, colour mode and resolution only, and the tool's
-/// cropping options follow them. Whether one image is selected.
+/// cropping options follow them. For several selected images and nothing else, the bar shows
+/// their Embed and Unembed… ([`SeveralImages`]). Whether one image is selected.
 pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool {
     use crate::chrome::rank;
+    if let Some(images) = SeveralImages::selected(app) {
+        control_bar_several(app, ui, &images);
+        return false;
+    }
     let Some(i) = selected_image_info(app) else { return false };
     let (name, details) = image_summary(i);
     let (Some(id), linked) = (i["id"].as_u64(), i["linked"] == true) else { return false };
@@ -1135,7 +1265,7 @@ pub fn control_bar_details(app: &mut VectorcraftApp, ui: &mut egui::Ui) -> bool 
     if app.session.tool_id() == vectorcraft_tools::cropimage::ID {
         return true;
     }
-    for action in LinkAction::shown(linked) {
+    for action in LinkAction::shown(linked, is_dcs_image(app, id)) {
         let at = if *action == LinkAction::EditOriginal { rank::DETAIL } else { rank::GROUP };
         Row::new().fit_rank(at).show(ui, |ui, _| {
             if clicked(&Button::new(action.label().to_string()).show(ui)) {

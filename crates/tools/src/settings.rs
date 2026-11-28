@@ -80,6 +80,8 @@ const ROWS: &[Row] = &[
     (&["ellipse"], None, &["anchors"]),
     // Circle Tool Options (`circle::CircleTool`) and the Control bar's From Center.
     (&[crate::circle::ID], None, &["center", "radii", "diameter", "color", "standardAnchors", "dragThird", "fromCenter"]),
+    // Curvature Circle Tool Options (`curvature_circle::CurvatureCircleTool`).
+    (&[crate::curvature_circle::ID], None, &["snapTolerance", "snapWithoutGuides", "annotateRadius", "standardAnchors", "constantRadius"]),
     (&["freeTransform"], None, &["constrain"]),
     // Shape Builder Tool Options (`builder::ShapeBuilderOptions`).
     (
@@ -111,7 +113,7 @@ const ROWS: &[Row] = &[
     (
         &[crate::addons::tangent_circle::ID],
         None,
-        &["radius", "center", "radii", "color", "snapTolerance", "snapWithoutGuides", "askRadius", "autoUpdateDefault"],
+        &["radius", "addPoints", "center", "radii", "color", "snapTolerance", "snapWithoutGuides", "askRadius", "autoUpdateDefault"],
     ),
     (&[crate::addons::smart_pen::ID], None, &["next"]),
     // The kind first: a new kind resets the values after it.

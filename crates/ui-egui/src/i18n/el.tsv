@@ -2639,6 +2639,14 @@ axis	Both	Και τα δύο
 	The script asks to read and write a folder you choose, with everything in it.	Το σενάριο ζητά να διαβάσει και να γράψει έναν φάκελο που θα επιλέξετε, με όλο το περιεχόμενό του.
 	Allow Once	Να επιτραπεί μία φορά
 	Always Allow This Script	Να επιτρέπεται πάντα αυτό το σενάριο
+	No script has kept file access.	Κανένα σενάριο δεν έχει αποθηκευμένη πρόσβαση σε αρχεία.
+	Read file	Ανάγνωση αρχείου
+	Read and write file	Ανάγνωση και εγγραφή αρχείου
+	Read and write folder	Ανάγνωση και εγγραφή φακέλου
+	Revoke	Ανάκληση
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Η ανάκληση αφαιρεί την πρόσβαση που έχει αποθηκευτεί για κάθε έκδοση του σεναρίου. Η πρόσβαση σε φάκελο καλύπτει όλο το περιεχόμενό του.
+@msg	Script file access revoked	Η πρόσβαση του σεναρίου σε αρχεία ανακλήθηκε
+@msg	The script file access was already revoked	Η πρόσβαση του σεναρίου σε αρχεία είχε ήδη ανακληθεί
 	Deny	Άρνηση
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Ένα σενάριο μπορεί να αλλάξει τα ανοιχτά έγγραφα και να γράψει αρχεία μέσω των εντολών που εκτελεί. Εκτελείτε μόνο σενάρια που εμπιστεύεστε.
 	Do not show this warning again	Να μην εμφανιστεί ξανά αυτή η προειδοποίηση
@@ -2837,6 +2845,7 @@ liquify-list-end	{0}, {1}	{0} και {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	το `answer` για το παράθυρο διαλόγου αρχείων ενός σεναρίου πρέπει να είναι ένα από: once, always, deny, stop
 @msg	choose a file or folder first, or deny	επιλέξτε πρώτα ένα αρχείο ή έναν φάκελο, ή απορρίψτε
 @msg	the script file permissions could not be saved: {e}	δεν ήταν δυνατή η αποθήκευση των αδειών αρχείων των σεναρίων: {e}
+@msg	the script file permissions could not be read: {e}	δεν ήταν δυνατή η ανάγνωση των αδειών αρχείων των σεναρίων: {e}
 @msg	this script's file access can be allowed only once	η πρόσβαση αυτού του σεναρίου σε αρχεία μπορεί να επιτραπεί μόνο μία φορά
 @msg	Only the person at the keyboard can allow a script's file access	Μόνο το άτομο στο πληκτρολόγιο μπορεί να επιτρέψει την πρόσβαση ενός σεναρίου σε αρχεία
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Ένα σενάριο λαμβάνει το πολύ 2.048 αρχεία: τα αρχεία που επιλέχθηκαν μετά από αυτά παραλείφθηκαν
@@ -6625,6 +6634,8 @@ arrowhead	Feather	Φτερό
 	VectorCraft Default	Προεπιλογή VectorCraft
 	VectorCraft Defaults	Προεπιλογές VectorCraft
 	VectorCraft Generic CMYK (SWOP-like)	Γενικό CMYK του VectorCraft (τύπου SWOP)
+	VectorCraft Coated CMYK (FOGRA51)	CMYK επιχρισμένου χαρτιού του VectorCraft (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	CMYK μη επιχρισμένου χαρτιού του VectorCraft (FOGRA52)
 	VectorCraft Swatches (.vcswatches)	Δείγματα χρωμάτων VectorCraft (.vcswatches)
 	Vertical Align	Κατακόρυφη στοίχιση
 	Vertical Area Type	Κατακόρυφο κείμενο περιοχής
@@ -7532,6 +7543,35 @@ axis	Y Axis	Άξονας Y
 @msg	`inputs` lists `{shown}` twice	το `inputs` αναφέρει το `{shown}` δύο φορές
 @msg	`inputs` needs `api` 2 or later	το `inputs` απαιτεί `api` 2 ή νεότερο
 @msg	`inputs` needs the permission `doc.read`	το `inputs` απαιτεί το δικαίωμα `doc.read`
+@msg	only a filter declares `writes`	μόνο ένα φίλτρο δηλώνει `writes`
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	το `writes` αναφέρει άγνωστο είδος αντικειμένου `{shown}`: χρησιμοποιήστε type, image ή symbolInstance
+@msg	`writes` lists `{shown}` twice	το `writes` αναφέρει το `{shown}` δύο φορές
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	το `writes` αναφέρει το `{shown}`, το οποίο δεν αναφέρει το `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	το `writes` απαιτεί `api` {WRITES_API} ή νεότερο
+@msg	`writes` needs the permission `doc.write`	το `writes` απαιτεί το δικαίωμα `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	το {_1} δεν είναι κείμενο, εικόνα ή στιγμιότυπο συμβόλου
+@msg	the text of type given as `truncated` can't be changed	το κείμενο ενός αντικειμένου κειμένου που δόθηκε ως `truncated` δεν μπορεί να αλλάξει
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	πρέπει να είναι λίστα με έως {MAX_INPUT_RUNS} στοιχεία
+@msg	type needs at least one run	το κείμενο χρειάζεται τουλάχιστον ένα τμήμα
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} byte κειμένου (όριο {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} παράγραφοι (όριο {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	περισσότερα από {MAX_INPUT_TEXT_TOTAL} byte κειμένου σε όλη την έξοδο
+@msg	unknown key '{k}'	άγνωστο κλειδί '{k}'
+@msg	must be a list of 6 numbers	πρέπει να είναι λίστα 6 αριθμών
+@msg	a number is out of range (limit ±{MAX_COORD})	ένας αριθμός είναι εκτός εύρους (όριο ±{MAX_COORD})
+@msg	flattens the object to a line or a point	συμπιέζει το αντικείμενο σε γραμμή ή σημείο
+@msg	an object flattened to a line or a point can't be placed again	ένα αντικείμενο που συμπιέστηκε σε γραμμή ή σημείο δεν μπορεί να τοποθετηθεί ξανά
+@msg	must be a number from 0 to 1	πρέπει να είναι αριθμός από 0 έως 1
+@msg	must be the name of a symbol	πρέπει να είναι το όνομα ενός συμβόλου
+@msg	'{shown}' is not a symbol in this document	το '{shown}' δεν είναι σύμβολο σε αυτό το έγγραφο
+@msg	a run must be {{"text", "style", "inline"?}}	ένα τμήμα πρέπει να είναι {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	το `text` περιέχει τον χαρακτήρα ενός ενσωματωμένου γραφικού
+@msg	inline graphics can't be added, removed, reordered or changed	τα ενσωματωμένα γραφικά δεν μπορούν να προστεθούν, να αφαιρεθούν, να αναδιαταχθούν ή να αλλάξουν
+@msg	the characters of threaded type can't be changed	οι χαρακτήρες συνδεδεμένου κειμένου δεν μπορούν να αλλάξουν
+@msg	the characters of type with ruby can't be changed	οι χαρακτήρες κειμένου με ruby δεν μπορούν να αλλάξουν
+@msg	expected {count} paragraph styles, one per paragraph	αναμένονταν {count} στυλ παραγράφων, ένα ανά παράγραφο
+@msg	the document has no Kinsoku set named '{shown}'	το έγγραφο δεν έχει σύνολο Kinsoku με όνομα '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	πρέπει να έχει 1-{MAX_FAMILY} εκτυπώσιμους χαρακτήρες
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Ανάγνωση των αντικειμένων που του δίνονται, καθώς και των ρυθμίσεων, των πινάκων σχεδίασης, των επιπέδων και των δειγμάτων χρωμάτων του εγγράφου
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	το `context` πρέπει να απαριθμεί διαφορετικές ενότητες: settings, artboards, layers ή swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	το `context` ισχύει για φίλτρο ή ζωντανό εφέ με `commands`, με `api` 3 ή νεότερο και το δικαίωμα `doc.read`
@@ -7542,6 +7582,21 @@ axis	Y Axis	Άξονας Y
 @msg	time budget	χρονικός προϋπολογισμός
 @msg	memory budget (the selection is too large to hand over)	προϋπολογισμός μνήμης (η επιλογή είναι πολύ μεγάλη για να παραδοθεί)
 @msg	output size ({what} is {len} bytes, limit {max})	μέγεθος εξόδου ({what}: {len} byte, όριο {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} γραμμή {line}, στήλη {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	προϋπολογισμός μνήμης
+@msg	call depth	βάθος κλήσεων
+@msg	run(input, params) returned no output object	η run(input, params) δεν επέστρεψε αντικείμενο εξόδου
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	το `runtime` "js" χρειάζεται `script`: το όνομα του αρχείου .js του προσθέτου, δίπλα στο αρχείο δηλώσεων
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	το `script` πρέπει να είναι το όνομα ενός αρχείου .js στον φάκελο του αρχείου δηλώσεων: 1-128 byte, χωρίς φάκελο, χωρίς `:`, χωρίς να αρχίζει με `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	το `source` είναι το κείμενο του σεναρίου και δίνεται μόνο στο JSON που δέχεται το dataBase64 της plugin.install: ένα αρχείο .vcplugin ονομάζει το σενάριό του στο `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	το αρχείο δηλώσεων ενός προσθέτου JavaScript δίνει `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	το `runtime` "js" είναι για φίλτρο αντικειμένων (`kind` "filter"), όχι για `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	ένα πρόσθετο JavaScript δεν μπορεί να δηλώσει την άδεια `{name}`: από τις άδειες του κεντρικού υπολογιστή μπορεί να δηλώσει την `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	το αρχείο δηλώσεων μιας μονάδας WebAssembly παραλείπει το `runtime`: το "js" είναι για πρόσθετο JavaScript
+@msg	a JavaScript plug-in makes no command calls	ένα πρόσθετο JavaScript δεν καλεί εντολές
+@msg	vc.progress(done, total) takes two numbers	η vc.progress(done, total) δέχεται δύο αριθμούς
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	η vc.log(level, text) δέχεται ένα επίπεδο, 0 (σφάλμα), 1 (προειδοποίηση), 2 (πληροφορία) ή 3 (εντοπισμός σφαλμάτων), και μια συμβολοσειρά
 @msg	the plug-in's grant can't be removed from the plug-in store	η άδεια του πρόσθετου δεν μπορεί να αφαιρεθεί από τον χώρο αποθήκευσης πρόσθετων
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	το δικαίωμα `{shown}` είναι δεσμευμένο για μεταγενέστερο API προσθέτων· αυτός ο κεντρικός υπολογιστής δεν το παραχωρεί
 @msg	unknown permission `{shown}`	άγνωστο δικαίωμα `{shown}`
@@ -8995,6 +9050,11 @@ breakText	Glyphs	Γλύφοι
 	No objects are selected.	Δεν έχουν επιλεγεί αντικείμενα.
 	Open a document to mark its fold lines.	Ανοίξτε ένα έγγραφο για να σημειώσετε τις γραμμές δίπλωσής του.
 	Remove Fold Line Role	Αφαίρεση τύπου γραμμής
+	Fold Angle	Γωνία δίπλωσης
+	Set Fold Angle…	Ορισμός γωνίας δίπλωσης…
+	Set Fold Angle	Ορισμός γωνίας δίπλωσης
+	Reset Fold Angle	Επαναφορά γωνίας δίπλωσης
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	επιλέξτε μια γραμμή πτύχωσης, μερικής κοπής ή διάτρησης που δεν είναι κλειδωμένη ούτε κρυφή
 	Check	Έλεγχος
 	Check Fold Lines	Έλεγχος γραμμών δίπλωσης
 @msg	No cut lines are in the selection.	Η επιλογή δεν περιέχει γραμμές κοπής.

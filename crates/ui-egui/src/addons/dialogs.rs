@@ -4,7 +4,7 @@
 
 use std::mem;
 
-use craft::ui::dialog::{DialogResult, StackDialog};
+use craft::ui::dialog::{DialogId, DialogResult, StackDialog};
 use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, ParamDialog};
 use egui::Context;
 use serde_json::{Value, json};
@@ -32,15 +32,29 @@ pub(crate) struct Spec {
 /// The add-on dialog open now and the live preview it drives; one at a time, since a preview owns the document.
 #[derive(Default)]
 pub(crate) struct AddonDialogs {
-    open: Option<(craft::ui::dialog::DialogId, &'static Spec)>,
+    open: Option<Open>,
     preview: LivePreview,
     /// The open Tangent Circle Tool radius dialog.
     pub(crate) tangent_radius: Option<super::pathtools::tangent_circle_radius::Open>,
 }
 
+#[derive(Clone, Copy)]
+struct Open {
+    id: DialogId,
+    spec: &'static Spec,
+    document: Option<u64>,
+}
+
+impl Open {
+    fn on_document(self, app: &VectorcraftApp) -> bool {
+        self.document == app.session.active().map(|state| state.uid)
+    }
+}
+
 /// Closes the open add-on dialog without an answer and rolls its preview back.
 fn close_open(app: &mut VectorcraftApp) {
-    let Some((id, _)) = app.addon_dialogs.open.take() else { return };
+    let Some(open) = app.addon_dialogs.open.take() else { return };
+    let id = open.id;
     if let (Some(host), Some(ctx)) = (app.dialogs(), app.ui_ctx.clone()) {
         host.with(|h| {
             h.cancel_by_id(&ctx, id);
@@ -48,7 +62,10 @@ fn close_open(app: &mut VectorcraftApp) {
             let _ = h.take_by_id::<HostedParamDialog>(id);
         });
     }
-    mem::take(&mut app.addon_dialogs.preview).cancel(app);
+    let preview = mem::take(&mut app.addon_dialogs.preview);
+    if open.on_document(app) {
+        preview.cancel(app);
+    }
 }
 
 /// Opens the dialog `spec` describes over `fields`, built each pass by `build`.
@@ -64,7 +81,7 @@ pub(crate) fn open(
     close_open(app);
     let id = dialog.id();
     host.with(|h| h.open(dialog));
-    app.addon_dialogs.open = Some((id, spec));
+    app.addon_dialogs.open = Some(Open { id, spec, document: app.session.active().map(|state| state.uid) });
     Ok(json!({ "dialog": spec.command }))
 }
 
@@ -97,13 +114,19 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
 }
 
 fn pump_commit(app: &mut VectorcraftApp) {
-    let Some((id, spec)) = app.addon_dialogs.open else { return };
+    let Some(open) = app.addon_dialogs.open else { return };
     let Some(host) = app.dialogs() else { return };
+    let Open { id, spec, .. } = open;
+    let on_document = open.on_document(app);
+    if !on_document {
+        // Switching drawings already ends the old preview. Discard its bookkeeping without touching the other drawing.
+        app.addon_dialogs.preview = LivePreview::default();
+    }
     let live = host.with(|h| h.get_mut_by_id::<HostedParamDialog>(id).map(|d| (d.is_previewing(), (spec.params)(d.fields()))));
-    if let Some((previewing, params)) = &live {
+    if on_document && let Some((previewing, params)) = &live {
         let mut preview = mem::take(&mut app.addon_dialogs.preview);
-        // PLAN: the undo step's label is the command id; `Spec` carries no heading (wg.A20 takes a label)
-        let answer = preview.run(app, *previewing, spec.command, spec.command, params);
+        let label = vectorcraft_engine::find_command(spec.command).map_or(spec.command, |command| command.label);
+        let answer = preview.run(app, *previewing, label, spec.command, params);
         app.addon_dialogs.preview = preview;
         if let (Some(found), Some(answer)) = (spec.found, answer) {
             host.with(|h| {
@@ -118,7 +141,9 @@ fn pump_commit(app: &mut VectorcraftApp) {
             app.addon_dialogs.open = None;
             let preview = mem::take(&mut app.addon_dialogs.preview);
             // The dialog is closed already, so a refusal can only go to the status line.
-            if let Err(error) = preview.commit(app, spec.command, (spec.params)(&result.fields)) {
+            if !on_document {
+                app.status(tl!("The add-on settings apply only to the drawing where the dialog opened.").to_owned());
+            } else if let Err(error) = preview.commit(app, spec.command, (spec.params)(&result.fields)) {
                 app.status(error);
             }
         }

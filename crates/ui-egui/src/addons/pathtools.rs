@@ -19,10 +19,10 @@ pub mod tangent_circle_radius;
 use craft::behavior::ColumnWidth;
 use craft::menu::Node;
 use craft::ui::buttons::Button;
-use craft::ui::contract::{Bind, Props as _, Show as _, ShowContainer as _, Sizing, clicked};
+use craft::ui::contract::{Bind, Props as _, Scroll, Show as _, ShowContainer as _, Sizing, clicked};
 use craft::ui::display::{Divider, Text};
 use craft::ui::form::Field;
-use craft::ui::layout_components::{Grid, Row};
+use craft::ui::layout_components::{Grid, Row, Stack};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use craft::ui::runtime::env::{Label, LengthUnits, UnitKind};
 use craft::ui::text::NumberField;
@@ -194,6 +194,10 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         empty_state(ui, "dc-anchor-smooth", tl!("No document"), tl!("Open a document to edit its anchor points."));
         return;
     }
+    Stack::new().label(tl!("Anchor Inspector")).fill().scroll(Scroll::vertical()).show(ui, |ui, _| show_inspector(app, ui));
+}
+
+fn show_inspector(app: &mut VectorcraftApp, ui: &mut Ui) {
     let readout = readout(app);
     let anchor = readout.anchor.as_ref();
     let selected = app.session.active().is_some_and(|st| !st.selection.is_empty());
@@ -309,6 +313,7 @@ fn options_params(tool: &str, lengths: LengthUnits) -> Vec<Param> {
         let snap = ParamKind::number(Some(snap_lo), Some(snap_hi), tangent_circle_tool::SNAP_PX, 1.0, 2);
         return vec![
             Param::new("radius", tl!("Radius"), kind).length(lengths),
+            Param::new("addPoints", tl!(tangent_circle_tool::ADD_POINTS), ParamKind::bool(false)),
             Param::new("center", tl!("Circle Center"), ParamKind::bool(true)),
             Param::new("radii", tl!("Circle Radii Lines"), ParamKind::bool(true)),
             Param::new("color", tl!("Color"), ParamKind::choice(colors, Some("red".into()))),
