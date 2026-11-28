@@ -15,6 +15,9 @@ impl Session {
         if self.script_running() {
             return Err(EngineError::Busy);
         }
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
+        }
         // An edit made while typing (the Transform panel) is a step of its own: inside the typing
         // session, the next keystroke's preview would start again from before it (#1881).
         if !self.previewing && cmd::typing_in_progress(self) {
@@ -515,6 +518,9 @@ impl Session {
     pub fn begin_interaction(&mut self, label: &str) -> Result<()> {
         if self.script_running() {
             return Err(EngineError::Busy);
+        }
+        if self.plugin_calls_open() {
+            return Err(EngineError::PluginBusy);
         }
         // Typing in progress is kept first: a drag or a dialog's preview would otherwise start
         // from the snapshot taken before the typing, and drop it (#1881).

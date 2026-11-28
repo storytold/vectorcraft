@@ -467,16 +467,20 @@ impl ToolContext<'_> {
             clip_outlines: false,
             area_type_interior: false,
             ignore_layer_preview: false,
+            unfilled_interiors: false,
         }
     }
 
     /// [`Self::hit_options`] for the selection tools (Selection, Direct Selection, Group
-    /// Selection): a clipping path is also hit on its outline ([`HitOptions::clip_outlines`]).
+    /// Selection): a clipping path is also hit on its outline ([`HitOptions::clip_outlines`]), and
+    /// where nothing else is hit, an unfilled closed path is hit inside unless Object Selection by
+    /// Path Only is on ([`HitOptions::unfilled_interiors`]).
     /// Only for what a press or a hover selects: a double-click, loaded text or a guide's release
     /// acts on what is drawn and takes [`Self::hit_options`].
     ///
     /// [`HitOptions::clip_outlines`]: vectorcraft_doc::hit::HitOptions::clip_outlines
+    /// [`HitOptions::unfilled_interiors`]: vectorcraft_doc::hit::HitOptions::unfilled_interiors
     pub fn selection_hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
-        vectorcraft_doc::hit::HitOptions { clip_outlines: true, ..self.hit_options() }
+        vectorcraft_doc::hit::HitOptions { clip_outlines: true, unfilled_interiors: true, ..self.hit_options() }
     }
 }

@@ -481,6 +481,44 @@ fn arb_object() -> impl Strategy<Value = (Option<usize>, Value)> {
         })
 }
 
+/// The keys a piece or a fill or stroke of an effect that declares `appearanceOutput` may carry:
+/// opacity, a blending mode (known, wrongly spelled or junk) and effect records (built-in ones
+/// with random parameters, plug-in effects including the effect itself, junk), up to past the cap.
+fn arb_look() -> impl Strategy<Value = Map<String, Value>> {
+    let id = prop_oneof![
+        Just(json!("path.offsetPath")),
+        Just(json!("stylize.dropShadow")),
+        Just(json!("distort.twist")),
+        Just(json!("blur.gaussianBlur")),
+        Just(json!("threeD.extrude")),
+        Just(json!("plugin.fuzz.looks")),
+        arb_junk(),
+    ];
+    let params = prop_oneof![Just(Value::Null), arb_num().prop_map(|n| json!({"offset": n, "angle": n, "radius": n, "opacity": n})), arb_junk()];
+    let record = (id, params, prop::option::of(prop_oneof![any::<bool>().prop_map(Value::from), arb_junk()])).prop_map(|(id, params, visible)| {
+        let mut r = Map::new();
+        r.insert("id".into(), id);
+        if !params.is_null() {
+            r.insert("params".into(), params);
+        }
+        if let Some(v) = visible {
+            r.insert("visible".into(), v);
+        }
+        Value::Object(r)
+    });
+    let blend = prop_oneof![Just(json!("Multiply")), Just(json!("Screen")), Just(json!("multiply")), arb_junk()];
+    let effects = prop_oneof![prop::collection::vec(record, 0..20).prop_map(Value::from), arb_junk()];
+    (prop::option::of(arb_num()), prop::option::of(blend), prop::option::of(effects)).prop_map(|(opacity, blend, effects)| {
+        let mut m = Map::new();
+        for (k, v) in [("opacity", opacity), ("blend", blend), ("effects", effects)] {
+            if let Some(v) = v {
+                m.insert(k.into(), v);
+            }
+        }
+        m
+    })
+}
+
 /// The output document: objects (ids resolved against `inputs`; out-of-range indices become
 /// unknown ids), or junk.
 fn output(objects: &[(Option<usize>, Value)], inputs: &[u64], junk: Option<Value>) -> String {
@@ -548,6 +586,50 @@ proptest! {
         install(&mut s, &wat::parse_str(tpl::returning(manifest, &out)).unwrap()).unwrap();
         let item = if on_fill { json!(0) } else { Value::Null };
         let r = catch_quiet(|| s.execute("effect.apply", &json!({"effect": "plugin.fuzz.painted", "item": item})).map(|_| ()));
+        if let Err(msg) = r {
+            return Err(TestCaseError::fail(format!("panicked on {out}: {msg}")));
+        }
+        renders(&s, &out)?;
+        let r = catch_quiet(|| s.execute("effect.expandAppearance", &json!({})).map(|_| ()));
+        if let Err(msg) = r {
+            return Err(TestCaseError::fail(format!("expanding panicked on {out}: {msg}")));
+        }
+        renders(&s, &out)?;
+    }
+
+    /// A live effect that declares `appearanceOutput` returning pieces whose own looks, and their
+    /// first fill's, are hostile, on objects or on a fill: drawing, export and Expand Appearance
+    /// never crash.
+    #[test]
+    fn hostile_piece_looks_never_crash(
+        objects in prop::collection::vec((arb_object(), arb_look(), prop::option::of(arb_look())), 0..4),
+        on_fill in any::<bool>(),
+    ) {
+        let mut s = rich_session();
+        s.execute("select.all", &json!({})).unwrap();
+        let pieces: Vec<(Option<usize>, Value)> = objects
+            .into_iter()
+            .map(|((_, mut o), look, fill_look)| {
+                if let Some(m) = o.as_object_mut() {
+                    m.remove("name");
+                    m.extend(look);
+                    if let (Some(fl), Some(Value::Array(fills))) = (fill_look, m.get_mut("fills"))
+                        && let Some(first) = fills.first_mut()
+                    {
+                        let mut row = Map::new();
+                        row.insert("paint".into(), first.take());
+                        row.extend(fl);
+                        *first = Value::Object(row);
+                    }
+                }
+                (None, o)
+            })
+            .collect();
+        let out = output(&pieces, &[], None);
+        let manifest = r#"{"id":"fuzz.looks","name":"Fuzz","version":"1","kind":"effect","api":3,"paintOutput":true,"appearanceOutput":true,"params":{}}"#;
+        install(&mut s, &wat::parse_str(tpl::returning(manifest, &out)).unwrap()).unwrap();
+        let item = if on_fill { json!(0) } else { Value::Null };
+        let r = catch_quiet(|| s.execute("effect.apply", &json!({"effect": "plugin.fuzz.looks", "item": item})).map(|_| ()));
         if let Err(msg) = r {
             return Err(TestCaseError::fail(format!("panicked on {out}: {msg}")));
         }
