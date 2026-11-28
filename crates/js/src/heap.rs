@@ -1185,6 +1185,7 @@ fn trace_object(o: &Object, work: &mut Vec<u32>, strings: &mut StringSizes) -> u
             extra = std::mem::size_of::<PropMap<Value>>() + PROP_BYTES * fields.len();
         }
         Class::UnitValue(_) => extra = UNIT_VALUE_BYTES,
+        Class::Host(h) => extra = crate::host_classes::handle_bytes(h.handle.len()),
         Class::Promise(p) => {
             for v in p.values() {
                 mark_value(&v, work, strings);
