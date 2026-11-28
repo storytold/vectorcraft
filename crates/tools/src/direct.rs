@@ -1725,6 +1725,17 @@ impl DirectSelectionTool {
         }
         vec![]
     }
+    /// A Shift-press on the fill of object `id` toggles it. On an object inside a selected group or
+    /// other selected object, it deselects the object and keeps the rest of that group selected
+    /// (`select.remove`), and a drag from the press moves nothing.
+    fn shift_press(&mut self, cx: &ToolContext, id: NodeId) -> Vec<Action> {
+        let around = cx.doc.ancestry(id).is_some_and(|a| a.iter().rev().skip(1).any(|x| cx.selection.contains(*x)));
+        if around {
+            self.state = State::Idle;
+            return vec![Action::Exec("select.remove".into(), json!({"id": id.0}))];
+        }
+        vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))]
+    }
     fn press_object(&mut self, cx: &ToolContext, ev: &PointerEvent, p: Point, tol: f64, mut h: vectorcraft_doc::hit::Hit) -> Vec<Action> {
         if let Some(part) = cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)) {
             h.ancestry.push(part);
@@ -1804,7 +1815,7 @@ impl DirectSelectionTool {
             self.click_group = next_group(cx, &h.ancestry);
         }
         if ev.mods.shift {
-            return vec![Action::Exec("select.toggle".into(), json!({"id": h.leaf.0}))];
+            return self.shift_press(cx, h.leaf);
         }
         self.frame.clear();
         // A press inside a selected group keeps the group: a drag moves it whole.
