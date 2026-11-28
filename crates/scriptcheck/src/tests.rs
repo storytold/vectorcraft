@@ -670,12 +670,13 @@ fn only_a_whole_var_value_makes_save_as_the_scripts_own() {
 /// A literal's `saveAs` stays the script's own only while no code the check does not follow may give
 /// the variable another value: a declaration after a label, which `if` may skip, a function body that
 /// assigns the variable (its own method's, or a declaration's that runs before its text), a member
-/// assignment of a property of that name, which may be the global object's, code given as text and an
-/// included file each leave the write reported. A function that declares its own variable of the name
-/// leaves it the script's own.
+/// assignment of a property of that name, which may be the global object's, a function body that
+/// assigns a `saveAs` or `exportFile` property of any object, code given as text, a `with` statement
+/// and an included file each leave the write reported. A function that declares its own variable of the
+/// name, or assigns another property of it, leaves it the script's own.
 #[test]
 fn a_save_as_other_code_may_replace_writes_a_file() {
-    let cases: [(&str, &[usize]); 9] = [
+    let cases: [(&str, &[usize]); 12] = [
         ("var f = new File(p);\nvar d = app.activeDocument;\nif (flag) label:\nvar d = {saveAs: function () {}};\nd.saveAs(f);\n", &[5]),
         (
             "var f = new File(p);\nvar d = {\n    saveAs: function () {},\n    useDocument: function () {\n        d = null;\n        d = app.activeDocument;\n    }\n};\nd.useDocument();\nd.saveAs(f);\n",
@@ -687,6 +688,15 @@ fn a_save_as_other_code_may_replace_writes_a_file() {
         ("#include \"other.jsx\"\nvar f = new File(p);\nvar d = {saveAs: function () {}};\nd.saveAs(f);\n", &[4]),
         ("var f = new File(p);\nvar d = {saveAs: function () {}};\n#include \"other.jsx\"\nd.saveAs(f);\n", &[4]),
         ("var f = new File(p);\nvar d = {saveAs: function () {}};\nwith ({d: app.activeDocument}) {\n    d.saveAs(f);\n}\n", &[4]),
+        (
+            "var f = new File(p);\nfunction replace() { d.saveAs = app.activeDocument.saveAs; }\nvar d = {saveAs: function () {}};\nreplace();\nd.saveAs(f);\n",
+            &[5],
+        ),
+        (
+            "var f = new File(p);\nfunction replace(o) { o['exportFile'] = w; }\nvar d = {exportFile: function () {}};\nreplace(d);\nd.exportFile(f);\n",
+            &[5],
+        ),
+        ("var f = new File(p);\nfunction note() { d.n = 1; }\nvar d = {saveAs: function () {}};\nnote();\nd.saveAs(f);\n", &[]),
         ("var f = new File(p);\nvar d = {saveAs: function () {}};\nfunction g() { var d = app.activeDocument; d = 1; }\nd.saveAs(f);\n", &[]),
     ];
     for (src, lines) in cases {

@@ -45,6 +45,11 @@ pub(crate) struct Declared<'s> {
     /// also before its body in the text when it is a declaration, so a variable of that name may lose
     /// the value an assignment the analysis read gave it.
     pub(super) body_assigned: HashSet<&'s str>,
+    /// A function body assigns a property named as one of [`catalog::DOM_FILE_WRITES`]
+    /// (`o.saveAs = …`, `this['exportFile'] = …`). The function may run at any time after it is
+    /// defined, and the object may be any variable's, so no variable's method of that name stays
+    /// the script's own.
+    pub(super) body_writer_assigned: bool,
     /// The file has an `#include` line: the included file's code may give its variables values.
     pub(super) includes: bool,
     /// The file gives names values the analysis doesn't read in other ways ([`UNREAD_BINDINGS`] or
@@ -245,6 +250,9 @@ impl<'s> Declarations<'s, '_, '_> {
                 None
             };
             if let Some(name) = property {
+                if (!self.bodies.is_empty() || self.untracked.is_some()) && catalog::DOM_FILE_WRITES.contains(&name.as_str()) {
+                    self.out.body_writer_assigned = true;
+                }
                 if self.out.rebound.contains(&name) || self.acc.room(self.out.rebound.len()) {
                     self.out.rebound.insert(name);
                 } else {

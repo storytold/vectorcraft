@@ -1441,8 +1441,10 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
     /// closes a function body, so a literal given to the body's own variable stays inside the body.
     /// No variable joins when code the scan does not follow at that point may give it another value:
     /// a function body that assigns its name ([`Declared::body_assigned`]), a member assignment of a
-    /// property of that name, which may be the global object's ([`Declared::rebound`]), code given as
-    /// text or a `with` statement ([`Analyzer::unsure`]), and an included file ([`Analyzer::others`]).
+    /// property of that name, which may be the global object's ([`Declared::rebound`]), a function
+    /// body that assigns a `saveAs` or `exportFile` property of any object
+    /// ([`Declared::body_writer_assigned`]), code given as text or a `with` statement
+    /// ([`Analyzer::unsure`]), and an included file ([`Analyzer::others`]).
     fn settle_literal(&mut self, t: &Sig<'s>) {
         if let Some((name, bits)) = self.closed.take()
             && (t.is(";") || t.is(",") || (t.nl && !goes_on_with(t)))
@@ -1450,6 +1452,7 @@ impl<'s, 'a, 'l> Analyzer<'s, 'a, 'l> {
             && !self.others
             && !self.declared.rebound.contains(&name)
             && !self.declared.body_assigned.contains(name.as_str())
+            && !self.declared.body_writer_assigned
             && (self.writers.contains_key(&name) || self.acc.room(self.writers.len()))
         {
             self.writers.insert(name, bits);
