@@ -433,14 +433,14 @@ impl DimensionSource {
     /// A node without a path, or missing from both, counts as changed. For a dimension of a whole
     /// path placed with Use Preview Bounds on, so does a change to the strokes the path paints
     /// ([`stroked_by`]): their appearance, the node they come from, or which arrowheads they draw
-    /// on it.
+    /// on it, and the path being made into a guide or released from one.
     pub fn art_changed(&self, before: &Document, after: &Document) -> bool {
         let strokes = matches!(self, Self::Extent { preview: true, .. });
         self.nodes().into_iter().any(|id| match (before.node(id), after.node(id)) {
             (Some(old), Some(new)) => {
                 old.path_data().is_none()
                     || (!std::ptr::eq(old, new) && old.path_data() != new.path_data())
-                    || (strokes && stroked_by(before, id) != stroked_by(after, id))
+                    || (strokes && (old.is_guide() != new.is_guide() || stroked_by(before, id) != stroked_by(after, id)))
             }
             _ => true,
         })

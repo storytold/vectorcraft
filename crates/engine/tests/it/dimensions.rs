@@ -584,21 +584,31 @@ fn a_dimension_of_a_whole_path_with_preview_bounds_measures_the_outside_of_the_s
 }
 
 /// A path made into a guide paints no strokes, so a dimension of the whole guide with Use Preview
-/// Bounds measures between its outermost points, as one without the flag does.
+/// Bounds measures between its outermost points, as one without the flag does. A dimension placed
+/// before the path became a guide measures the same, and the stroke again once it is released.
 #[test]
 fn a_preview_bounds_dimension_of_a_guide_does_not_measure_its_stroke() {
     let mut s = session();
     let rect = run(&mut s, "shape.rectangle", json!({"x":100,"y":100,"width":100,"height":60}))["id"].as_u64().unwrap();
     run(&mut s, "select.set", json!({"ids":[rect]}));
     run(&mut s, "stroke.set", json!({"weight": 10.0}));
-    run(&mut s, "view.guides.make", json!({}));
-    assert!(s.doc().unwrap().doc.node(NodeId(rect)).unwrap().is_guide());
     let create = |s: &mut Session, orientation: &str| {
         let source = json!({"kind":"extent","node":rect,"preview":true});
         run(s, "dimension.create", json!({"source":source,"orientation":orientation,"offset":-30}))["id"].as_u64().unwrap()
     };
+    let (before_wide, before_tall) = (create(&mut s, "horizontal"), create(&mut s, "vertical"));
+    assert_eq!([text(&s, before_wide), text(&s, before_tall)], ["110.00 pt", "70.00 pt"]);
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "view.guides.make", json!({}));
+    assert!(s.doc().unwrap().doc.node(NodeId(rect)).unwrap().is_guide());
     let (wide, tall) = (create(&mut s, "horizontal"), create(&mut s, "vertical"));
     assert_eq!([text(&s, wide), text(&s, tall)], ["100.00 pt", "60.00 pt"]);
+    // Dimensions placed before follow the path into a guide and back out of it.
+    assert_eq!([text(&s, before_wide), text(&s, before_tall)], ["100.00 pt", "60.00 pt"]);
+    run(&mut s, "select.set", json!({"ids":[rect]}));
+    run(&mut s, "view.guides.release", json!({}));
+    assert!(!s.doc().unwrap().doc.node(NodeId(rect)).unwrap().is_guide());
+    assert_eq!([text(&s, before_wide), text(&s, wide)], ["110.00 pt", "110.00 pt"]);
 }
 
 /// With Use Preview Bounds, a dimension of a member of a compound path measures only the
