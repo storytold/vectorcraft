@@ -79,7 +79,7 @@ const INSIDE: &[(&str, &str)] = &[
     ),
     (
         "",
-        "activeDocument activeDocument= app Application CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
+        "activeDocument activeDocument= app Application BlendModes CoordinateSystem Document DocumentArtboardLayout DocumentColorSpace \
          DocumentPreset DocumentPresetType DocumentPreviewMode DocumentRasterResolution DocumentTransparencyGrid documents \
          Documents ElementPlacement Layer PageItem PageItems RulerUnits selection selection= Tag Tags ZOrderMethod",
     ),
@@ -125,6 +125,11 @@ const INSIDE: &[(&str, &str)] = &[
     ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
     ("Tag.", "prototype"),
     ("Tag.prototype.", "constructor name name= parent remove typename value value="),
+    (
+        "BlendModes.",
+        "COLORBLEND COLORBURN COLORDODGE DARKEN DIFFERENCE EXCLUSION HARDLIGHT HUE LIGHTEN LUMINOSITY MULTIPLY NORMAL \
+         OVERLAY SATURATIONBLEND SCREEN SOFTLIGHT",
+    ),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
     ("DocumentColorSpace.", "CMYK RGB"),

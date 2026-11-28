@@ -2823,7 +2823,9 @@ other files through `$`:
   Attributes panel's note, trimmed as `attributes.set` trims it), `hidden`, `locked`, `selected` (assigning it adds
   or removes only that object, as `select.add` and `select.toggle` do, and the other objects stay selected as they
   were), `opacity` (0 to
-  100), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
+  100), `blendingMode` (the object's own blend mode as a `BlendModes` value such as `"BlendModes.MULTIPLY"`
+  (https://ai-scripting.docsforadobe.dev/jsobjref/scripting-constants/), set with `object.setProps`; `COLORBLEND` and `SATURATIONBLEND` are the Color and Saturation modes, and any other value
+  throws `blendingMode needs a BlendModes value`), `position`, `left`, `top`, `width`, `height`, `geometricBounds`, `visibleBounds`, `controlBounds` (the
   visible bounds, widened to take in the direction points of every path in the object), `editable` (false for an
   object that is hidden or locked, in a hidden or locked layer or group, or on a locked artboard), `zOrderPosition`,
   `duplicate(relativeObject?, insertionLocation?)`,
@@ -2837,12 +2839,12 @@ other files through `$`:
   the undo history as they were before the call. `move` on an object that is hidden or locked, inside a hidden or
   locked layer or group, or on a locked artboard throws `Cannot move` and moves nothing. `duplicate` on such an
   object, with or without a relative object, throws `Cannot duplicate` and makes no copy. Assigning `hidden`,
-  `locked`, `opacity`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer or on a locked artboard
+  `locked`, `opacity`, `blendingMode`, `position`, `left`, `top`, `width` or `height` to an object in a hidden or locked layer or on a locked artboard
   throws `Cannot edit` and changes nothing, even when the value is the one the object has, and `zOrder()` on such
-  an object throws `Cannot edit` too. The one exception is `opacity` given the value the object already has, which
-  changes nothing and does not throw; on a graph's mark or label whose series or kind keeps another opacity, that
+  an object throws `Cannot edit` too. The one exception is `opacity` or `blendingMode` given the value the object already has, which
+  changes nothing and does not throw; on a graph's mark or label whose series or kind keeps another opacity or blend mode, that
   value would still change the graph, so it throws `Cannot edit` as well. Its `name` and `note` still change, and an
-  object that is hidden or locked itself takes `hidden`, `locked` and `opacity` (VectorCraft's own rule). Position,
+  object that is hidden or locked itself takes `hidden`, `locked`, `opacity` and `blendingMode` (VectorCraft's own rule). Position,
   size and stacking-order changes also require a selectable object. Other targets excluded by selection filtering,
   including guide paths while Lock Guides is on, throw `Cannot select`. `move` with the object itself
   as the relative object and `PLACEBEFORE` or `PLACEAFTER` leaves it where it is and adds no undo step. When `move`
@@ -2853,7 +2855,7 @@ other files through `$`:
   `Duplicating a path inside a compound path is not available yet`, and `zOrder` on one throws
   `Reordering a path inside a compound path is not available yet` and leaves the document unchanged. A script that
   holds a placed image keeps the same object when the image is embedded: the next read gives that object, now a
-  `RasterItem`. The enumerations `ElementPlacement`, `ZOrderMethod`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
+  `RasterItem`. The enumerations `ElementPlacement`, `ZOrderMethod`, `BlendModes`, `RulerUnits`, `DocumentColorSpace`, `CoordinateSystem`,
   `DocumentArtboardLayout`, `DocumentPresetType`, `DocumentPreviewMode`, `DocumentRasterResolution` and
   `DocumentTransparencyGrid` hold strings such as `"ZOrderMethod.BRINGTOFRONT"`.
   `pageItems` lists the art topmost first, as the example on
@@ -2896,7 +2898,7 @@ other files through `$`:
   letter case is ignored and `\` matches `/`) and does not resolve the path it is given. A document counts only when
   the automation read roots allow its file, and that check can look the document's file up on disk. A path with
   `..`, a network path, a NUL character or more than 4,096 bytes throws an error. Some members the Application,
-  Document and PageItem pages list, such as `Document.layers`, `PageItem.blendingMode`, `PageItem.rotate` and
+  Document and PageItem pages list, such as `Document.layers`, `PageItem.isIsolated`, `PageItem.rotate` and
   `app.beep`, throw an error that says they are not available yet when they are read or assigned.
   `hasOwnProperty` and `propertyIsEnumerable` are false for those members and true for every other member of an
   object's class, so `item.hasOwnProperty("opacity")` is true on a page item, and `for (k in item)` lists the

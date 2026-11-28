@@ -576,23 +576,36 @@ struct ObjectOpacity {
     knockout_shape: bool,
 }
 
+/// The series `id` belongs to when it is a graph series group or a path directly in one, as [`series_members`] finds
+/// it. Looked up through its parents, with no pass over the document.
+fn series_group_or_mark(doc: &Document, id: NodeId) -> Option<SeriesRef> {
+    let node = doc.node(id)?;
+    let chain = doc.ancestry(id)?;
+    let parent = doc.node(*chain.iter().rev().nth(1)?)?;
+    let in_graph = |group: &Node, graph: &Node| {
+        let index = group.extras().series_index.and_then(|i| usize::try_from(i).ok())?;
+        graph.extras().graph.as_deref().filter(|spec| index < series_count(spec)).map(|_| SeriesRef { graph: graph.id, group: group.id, index })
+    };
+    if let Some(r) = in_graph(node, parent) {
+        return Some(r);
+    }
+    // Only the paths the graph draws again, not the copy of a graph design.
+    if !matches!(node.kind, NodeKind::Path { .. }) {
+        return None;
+    }
+    in_graph(parent, doc.node(*chain.iter().rev().nth(2)?)?)
+}
+
 /// The graph, series, whether it is the series group itself (`true`) or a path directly in it, and the object
-/// transparency of each of `edited` that is one of those, in order.
+/// transparency of each of `edited` that is one of those, in order. Each object is looked up through its parents
+/// ([`series_group_or_mark`]), so an edit of a few objects does not read the rest of the document.
 fn object_opacity_captures(doc: &Document, edited: &[NodeId]) -> Vec<(NodeId, usize, bool, ObjectOpacity)> {
-    if edited.is_empty() {
-        return Vec::new();
-    }
-    let members = series_members(doc);
-    if members.is_empty() {
-        return Vec::new();
-    }
     edited
         .iter()
         .filter_map(|id| {
-            let r = members.get(id)?;
+            let r = series_group_or_mark(doc, *id)?;
             let group = r.group == *id;
-            // Only the series group and the paths the graph draws again, not the copy of a graph design.
-            let node = doc.node(*id).filter(|n| group || (doc.parent_of(*id) == Some(r.group) && matches!(n.kind, NodeKind::Path { .. })))?;
+            let node = doc.node(*id)?;
             let mut look = ObjectOpacity {
                 opacity: (node.opacity < 1.0).then_some(node.opacity),
                 blend: (node.blend != BlendMode::Normal).then_some(node.blend),
@@ -673,6 +686,25 @@ fn graph_labels(doc: &Document) -> HashMap<NodeId, (NodeId, Role)> {
         }
     });
     out
+}
+
+/// The graph and kind of generated label `id`, as [`graph_labels`] finds it. Only the graphs among its parent and
+/// grandparent are read, with no pass over the document; `own` keeps each graph's labels read so far.
+fn graph_label_of(doc: &Document, id: NodeId, own: &mut HashMap<NodeId, HashMap<NodeId, Role>>) -> Option<(NodeId, Role)> {
+    if !doc.node(id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_))) {
+        return None;
+    }
+    let chain = doc.ancestry(id)?;
+    // The nearer graph first: [`graph_labels`] visits it later, so its entry is the one kept.
+    for graph in chain.iter().rev().skip(1).take(2) {
+        let Some(n) = doc.node(*graph) else { continue };
+        let Some(spec) = n.extras().graph.as_deref() else { continue };
+        let labels = own.entry(*graph).or_insert_with(|| own_labels(n, spec).into_iter().collect());
+        if let Some(role) = labels.get(&id) {
+            return Some((*graph, *role));
+        }
+    }
+    None
 }
 
 /// The generated labels of graph `n` (with spec `g`) and what each shows, as [`graph_labels`] finds them.
@@ -1725,9 +1757,9 @@ fn label_rows_of(doc: &Document, ids: &[NodeId]) -> Vec<(NodeId, Role, Option<ve
     if !ids.iter().any(|id| doc.node(*id).is_some_and(|n| matches!(n.kind, NodeKind::Text(_)))) {
         return vec![];
     }
-    let labels = graph_labels(doc);
+    let mut own = HashMap::new();
     let mut picked: Vec<(NodeId, Role, Option<vectorcraft_doc::LabelRows>)> = vec![];
-    for (&(g, role), n) in ids.iter().rev().filter_map(|id| Some((labels.get(id)?, doc.node(*id)?))) {
+    for ((g, role), n) in ids.iter().rev().filter_map(|id| Some((graph_label_of(doc, *id, &mut own)?, doc.node(*id)?))) {
         if !picked.iter().any(|(pg, pr, _)| *pg == g && *pr == role) {
             picked.push((g, role, label_rows(n)));
         }
