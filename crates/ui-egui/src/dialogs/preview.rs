@@ -94,6 +94,12 @@ impl LivePreview {
         Some(answer)
     }
 
+    /// Forgets the values last previewed and keeps the interaction they ran in, so the next [`Self::run`] previews
+    /// them again inside that interaction and returns the command's answer, a refusal included.
+    pub(crate) fn rerun_next(&mut self) {
+        self.previewed = None;
+    }
+
     /// OK: keeps the previewed `cmd` as one undo step, or, when its preview is not running, keeps typing in progress
     /// and runs `cmd` as a step of its own; the command's warning, or a plug-in run's notice, shows in the status bar
     /// either way. Another edit in progress is left as it is and OK is refused. On an error the dialog stays open.
