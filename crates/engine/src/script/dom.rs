@@ -1193,8 +1193,58 @@ fn preset_of(h: &Host, d: &Data) -> Option<usize> {
     (i < h.dom.presets.borrow().len()).then_some(i)
 }
 
-/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`, and
-/// a value is checked when `addDocument` uses it.
+/// The enumeration whose values the `DocumentPreset` setting `key` takes, when it takes one.
+fn preset_enum(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "artboardLayout" => "DocumentArtboardLayout",
+        "colorMode" => "DocumentColorSpace",
+        "previewMode" => "DocumentPreviewMode",
+        "rasterResolution" => "DocumentRasterResolution",
+        "transparencyGrid" => "DocumentTransparencyGrid",
+        "units" => "RulerUnits",
+        _ => return None,
+    })
+}
+
+/// Checks that `value` is of the kind the `DocumentPreset` setting `key` holds: a value of its
+/// enumeration, a finite number, a title of at most [`MAX_TEXT_BYTES`] bytes, `true` or `false` for
+/// `documentBleedLink`, or four finite numbers for `documentBleedOffsetRect`. `undefined` unsets any
+/// setting, and the three settings `addDocument` does not apply yet also take `null`.
+fn check_preset_value(key: &str, value: &Data) -> std::result::Result<(), HostError> {
+    let wrong = |kind: &str| Err(HostError::Type(format!("DocumentPreset.{key} must be {kind}")));
+    match value {
+        Data::Undefined => return Ok(()),
+        Data::Null if matches!(key, "documentBleedLink" | "documentBleedOffsetRect" | "transparencyGrid") => return Ok(()),
+        _ => {}
+    }
+    if let Some(name) = preset_enum(key) {
+        let member = ENUMS.iter().find(|(n, _)| *n == name).map_or(&[][..], |(_, m)| *m);
+        return match value {
+            Data::String(s) if s.strip_prefix(name).and_then(|r| r.strip_prefix('.')).is_some_and(|m| member.contains(&m)) => Ok(()),
+            _ => wrong(&format!("a {name} value")),
+        };
+    }
+    match key {
+        "title" => match value {
+            Data::String(t) if t.len() > MAX_TEXT_BYTES => Err(HostError::Range("the title is too long".into())),
+            Data::String(_) => Ok(()),
+            _ => wrong("a string"),
+        },
+        "documentBleedLink" => match value {
+            Data::Bool(_) => Ok(()),
+            _ => wrong("true or false"),
+        },
+        "documentBleedOffsetRect" => match value {
+            Data::Array(r) if r.len() == 4 && r.iter().all(|n| matches!(n, Data::Number(n) if n.is_finite())) => Ok(()),
+            _ => wrong("an array of four finite numbers"),
+        },
+        _ => number(value, &format!("DocumentPreset.{key}")).map(|_| ()),
+    }
+}
+
+/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`. The
+/// setter checks the kind and size of a value ([`check_preset_value`]) and keeps the old value when
+/// it throws; `addDocument` checks the ranges.
 fn preset_field(link: &Link, key: &'static str) -> HostMember {
     let not_preset = || HostError::Type("this is not a DocumentPreset".into());
     let l = link.clone();
@@ -1214,6 +1264,7 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         let value = arg(&a, 1).clone();
         h.charge_call(16 + data_size(&value))?;
         let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        check_preset_value(key, &value)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
         match fields.iter_mut().find(|(k, _)| k == key) {
