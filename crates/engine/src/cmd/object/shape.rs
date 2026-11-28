@@ -2,9 +2,10 @@ use vectorcraft_doc::AnchorRef;
 use vectorcraft_geom::PathData;
 
 use super::spans::Span;
+use super::transform::{scaling_options, transform_patterns};
 use super::{
-    BTreeSet, CornerKind, EngineError, LiveCorners, LiveShape, NodeId, NodeKind, Result, Session, Value, bad, check_numbers, check_switches,
-    convert_radii_relative, ok, selected_roots, set_corners, targets,
+    Affine, BTreeSet, CornerKind, EngineError, LiveCorners, LiveShape, NodeId, NodeKind, Result, Scaling, Session, Value, bad, check_numbers,
+    check_switches, convert_radii_relative, ok, selected_roots, set_corners, targets,
 };
 use crate::MAX_COORD;
 
@@ -129,8 +130,51 @@ fn line_edit(l: &LiveShape, len: Option<f64>, angle: Option<f64>) -> Option<Live
     (changed && new != *l).then_some(new)
 }
 
+/// The transform that takes live shape `old` to `new` where they differ only in place, angle and
+/// size (a new Rectangle, Ellipse or Polygon Angle, Polygon Radius, Side Length, Make Sides Equal,
+/// Line Length or Line Angle): what moves, turns and scales the rest of the object (a linked
+/// opacity mask, gradients and patterns placed on it) with the new shape. A line takes the turn
+/// and even scale that take its old ends to its new ones. None when the shape keeps its place,
+/// angle and size (a new side count or pie), for a line whose ends met, and when no finite
+/// transform takes one to the other.
+fn carry(old: &LiveShape, new: &LiveShape) -> Option<Affine> {
+    let ratio = |was: f64, now: f64| if was == now { 1.0 } else { now / was };
+    let xf = match (old, new) {
+        (LiveShape::Rectangle { w, h, xf, .. }, LiveShape::Rectangle { w: w2, h: h2, xf: xf2, .. })
+        | (LiveShape::Ellipse { w, h, xf, .. }, LiveShape::Ellipse { w: w2, h: h2, xf: xf2, .. }) => {
+            if xf == xf2 && w == w2 && h == h2 {
+                return None;
+            }
+            *xf2 * Affine::scale_non_uniform(ratio(*w, *w2), ratio(*h, *h2)) * xf.inverse()
+        }
+        (LiveShape::Polygon { radius, xf, .. }, LiveShape::Polygon { radius: r2, xf: xf2, .. }) => {
+            if xf == xf2 && radius == r2 {
+                return None;
+            }
+            *xf2 * Affine::scale(ratio(*radius, *r2)) * xf.inverse()
+        }
+        (LiveShape::Line { a, b }, LiveShape::Line { a: a2, b: b2 }) => {
+            let (d, d2) = (*b - *a, *b2 - *a2);
+            let len2 = d.hypot2();
+            if (a == a2 && b == b2) || len2 <= 0.0 {
+                return None;
+            }
+            // `d2` divided by `d` as complex numbers: the turn and even scale between them.
+            let (c, s) = ((d2.x * d.x + d2.y * d.y) / len2, (d2.y * d.x - d2.x * d.y) / len2);
+            let turn = Affine::new([c, s, -s, c, 0.0, 0.0]);
+            Affine::translate(*a2 - turn * *a) * turn
+        }
+        _ => return None,
+    };
+    xf.as_coeffs().iter().all(|c| c.is_finite()).then_some(xf)
+}
+
 pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
-    check_switches(p, &["constrainPie", "invertPie", "makeSidesEqual", "rectanglesOnly", "relativeRadii"], "object.setLiveShape")?;
+    check_switches(
+        p,
+        &["constrainPie", "invertPie", "makeSidesEqual", "rectanglesOnly", "relativeRadii", "strokes", "patterns"],
+        "object.setLiveShape",
+    )?;
     check_numbers(p, &["radius", "sides"], "object.setLiveShape")?;
     // `items`: objects each with its own `corners`; else `ids` (or the selection) sharing them.
     let items = match p.get("items").filter(|v| !v.is_null()) {
@@ -317,50 +361,87 @@ pub(super) fn set_live_shape(s: &mut Session, p: &Value) -> Result<Value> {
     if ids.is_empty() {
         return ok();
     }
+    // The live shapes that the polygon, rectangle, ellipse and line values change: each as it is and
+    // as it becomes.
+    let mut reshaped = std::collections::BTreeMap::new();
+    for id in &ids {
+        let Some(NodeKind::Path { live: Some(old), .. }) = st.doc.node(*id).map(|n| &n.kind) else { continue };
+        let mut new = (**old).clone();
+        let mut edited = false;
+        if let l @ LiveShape::Polygon { .. } = &mut new
+            && (sides.is_some() || polygon_angle.is_some() || polygon_radius.is_some() || side.is_some() || equal)
+        {
+            if let Some(n) = sides {
+                l.set_sides(n);
+            }
+            if equal {
+                l.make_sides_equal();
+            }
+            if let Some(a) = polygon_angle {
+                l.set_polygon_angle(a);
+            }
+            // A side length sets the radius that gives it (with the new side count).
+            if let Some(r) = side.and_then(|len| l.polygon_radius_for_side(len)).or(polygon_radius) {
+                l.set_polygon_radius(r);
+            }
+            edited = true;
+        }
+        if let Some(a) = rectangle_angle
+            && let l @ LiveShape::Rectangle { .. } = &mut new
+        {
+            l.set_shape_angle(a);
+            edited = true;
+        }
+        if let l @ LiveShape::Ellipse { .. } = &mut new
+            && (pie_start.is_some() || pie_end.is_some() || invert || ellipse_angle.is_some())
+        {
+            if let Some(a) = ellipse_angle {
+                l.set_shape_angle(a);
+            }
+            if let LiveShape::Ellipse { pie, .. } = l {
+                *pie = pie_of(*pie);
+            }
+            edited = true;
+        }
+        if let Some(line) = lines.get(id) {
+            new = line.clone();
+            edited = true;
+        }
+        if edited {
+            reshaped.insert(*id, ((**old).clone(), new));
+        }
+    }
+    // A shape that moves, turns or scales takes the rest of the object along as a transform does:
+    // Scale Strokes & Effects and Transform Patterns come from `strokes` and `patterns` or the
+    // preferences, and are noted in the journal so a replay does the same. Corner radii in the rest
+    // of the object keep their size, as the shape's own do; Scale Corners does not apply.
+    let carried: Vec<NodeId> = reshaped.iter().filter(|(_, (old, new))| carry(old, new).is_some()).map(|(id, _)| *id).collect();
+    let scales = reshaped.values().any(|(old, new)| carry(old, new).is_some_and(|xf| Scaling::factor(xf).is_some()));
+    let base = if scales {
+        let sc = scaling_options(s, p);
+        s.note_journal("strokes", serde_json::json!(sc.strokes));
+        sc
+    } else {
+        Scaling::default()
+    };
+    let sc = Scaling { patterns: !carried.is_empty() && transform_patterns(s, p, &carried)?, keep_corners: true, ..base };
     s.edit("Live Shape", |d, sel| {
+        // Each object once, however often `ids` or `items` names it.
+        for (id, (old, new)) in &reshaped {
+            let n = d.node_mut(*id).ok_or(EngineError::NoNode(*id))?;
+            if let Some(xf) = carry(old, new) {
+                // The bounding box keeps its angle: a shape angle is the shape's own.
+                let bbox_angle = n.bbox_angle;
+                n.transform(xf, sc);
+                n.bbox_angle = bbox_angle;
+            }
+            if let NodeKind::Path { path, live, .. } = &mut n.kind {
+                *live = Some(Box::new(new.clone()));
+                *path = new.to_path();
+            }
+        }
         for id in &ids {
             let Some(NodeKind::Path { path, live, .. }) = d.node_mut(*id).map(|n| &mut n.kind) else { continue };
-            if let Some(l @ LiveShape::Polygon { .. }) = live.as_deref_mut()
-                && (sides.is_some() || polygon_angle.is_some() || polygon_radius.is_some() || side.is_some() || equal)
-            {
-                if let Some(n) = sides {
-                    l.set_sides(n);
-                }
-                if equal {
-                    l.make_sides_equal();
-                }
-                if let Some(a) = polygon_angle {
-                    l.set_polygon_angle(a);
-                }
-                // A side length sets the radius that gives it (with the new side count).
-                if let Some(r) = side.and_then(|len| l.polygon_radius_for_side(len)).or(polygon_radius) {
-                    l.set_polygon_radius(r);
-                }
-                *path = l.to_path();
-            }
-            if let Some(a) = rectangle_angle
-                && let Some(l @ LiveShape::Rectangle { .. }) = live.as_deref_mut()
-            {
-                l.set_shape_angle(a);
-                *path = l.to_path();
-            }
-            if let Some(l @ LiveShape::Ellipse { .. }) = live.as_deref_mut()
-                && (pie_start.is_some() || pie_end.is_some() || invert || ellipse_angle.is_some())
-            {
-                if let Some(a) = ellipse_angle {
-                    l.set_shape_angle(a);
-                }
-                if let LiveShape::Ellipse { pie, .. } = l {
-                    *pie = pie_of(*pie);
-                }
-                *path = l.to_path();
-            }
-            if let Some(new) = lines.get(id)
-                && let Some(l) = live.as_deref_mut()
-            {
-                *l = new.clone();
-                *path = l.to_path();
-            }
             if let Some(on) = relative_radii
                 && let Some(l) = live.as_deref_mut()
             {

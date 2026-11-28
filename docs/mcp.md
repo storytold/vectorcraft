@@ -2432,7 +2432,8 @@ undo history as they were: the options `copy`, `strokes`, `corners`, `patterns`,
 `object.transformAgain` and `object.setBounds`; `anchors`, `releaseOutside` and `drawBehind` in `object.transform`; `big` in `object.nudge`;
 `absolute` in `object.rotate`; `proportional` in `object.setBounds`; `patterns` in `object.align`, `object.distribute`
 and `object.distributeSpacing`; `visible`, `locked`, `isolate` and `knockoutShape` in `object.setProps`; and
-`invertPie`, `makeSidesEqual` and `relativeRadii` in `object.setLiveShape`. A null is read as a key left out.
+`invertPie`, `makeSidesEqual`, `relativeRadii`, `strokes` and `patterns` in `object.setLiveShape`. A null is read as a
+key left out.
 
 They also refuse a string or another value that is not a number with `` `opacity` must be a number, not "50" ``,
 naming the key, and leave the document and its undo history as they were: `opacity` in `object.setProps`; `radius` and
@@ -8678,6 +8679,14 @@ midpoint; any finite value is brought into 0 to 360). With both, the length appl
 0° and keeps its place under `lineAngle`; `lineLength` points it to the right. A length that isn't a number above 0,
 and a line that would reach past the coordinate limit (±4,000,000 pt), are errors that change no line. Each call is
 one undo step.
+
+A new `rectangleAngle`, `ellipseAngle`, `polygonAngle`, `polygonRadius` or `sideLength`, `makeSidesEqual`, `lineLength`
+or `lineAngle` moves, scales or turns the object as a transform does: a linked opacity mask and placed gradients go
+with the shape, pattern tiles go with it when `patterns` (or General › Transform Pattern Tiles) is on, and strokes and
+effects scale when `strokes` (or Scale Strokes & Effects) is on. Corner radii in the mask keep their size, as the
+shape's own do, whatever Scale Corners is set to. A line takes the turn and even scale that take its old ends to its new
+ones; a line whose ends met takes none. The bounding box keeps its angle. An object named more than once in `ids` or
+`items` moves once. A new `sides` or pie leaves the rest of the object where it is.
 
 A live rectangle's Rectangle Angle and a live ellipse's Ellipse Angle are `rectangleAngle` and `ellipseAngle`
 (degrees counterclockwise, 0 for a shape drawn level; any number is read modulo 360). The help page
