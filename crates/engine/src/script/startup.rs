@@ -37,11 +37,10 @@ pub fn takes(name: &str) -> bool {
         && Path::new(name).extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("jsx"))
 }
 
-/// The startup scripts in `root`, within the Scripts folder's limits. A folder that does not exist
-/// gives an empty listing.
-pub fn list(root: &Path) -> Listing {
-    let start = std::time::Instant::now();
-    list_with(root, &folder::Limits::default(), &mut || start.elapsed())
+/// The startup scripts in `root`, within the Scripts folder's limits, with the time measured by
+/// `clock`. A folder that does not exist gives an empty listing.
+pub fn list(root: &Path, clock: folder::Clock) -> Listing {
+    clock.time(|elapsed| list_with(root, &folder::Limits::default(), elapsed))
 }
 
 /// The startup scripts in `root`, within `limits` (the entries, scripts and time ones);
