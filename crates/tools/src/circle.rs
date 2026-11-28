@@ -224,6 +224,12 @@ fn round_diameter(cx: &ToolContext, first: Point, p: Point, mods: Mods, centered
     if mods.alt && d > 0.0 && rounded > 0.0 && rounded.is_finite() { first + (p - first) * (rounded / d) } else { p }
 }
 
+/// Whether a circle preview of radius `r` is drawn dashed. The canvas draws a dashed outline dash by
+/// dash along its whole length, so a circle longer than [`DASHED_PX`] on screen is drawn solid.
+pub(crate) fn preview_dashed(cx: &ToolContext, r: f64) -> bool {
+    std::f64::consts::TAU * r <= cx.tol(DASHED_PX)
+}
+
 /// Are the points two or more different points through which no circle is drawn: three on one
 /// line, or a circle that would reach past the canvas?
 fn too_large(points: &[Point], centered: bool, standard_anchors: bool) -> bool {
@@ -573,10 +579,7 @@ impl Tool for CircleTool {
                 let on_outline = if self.centered { points.get(1..).unwrap_or(&[]) } else { &points[..] };
                 shapes::circle_with_anchors_at(c, r, on_outline).to_bezpath()
             };
-            // The canvas draws a dashed outline dash by dash along its whole length: a circle longer
-            // than DASHED_PX on screen is drawn solid instead.
-            let dashed = std::f64::consts::TAU * r <= cx.tol(DASHED_PX);
-            o.push(Overlay::Path { path, color, width: 1.0, dashed });
+            o.push(Overlay::Path { path, color, width: 1.0, dashed: preview_dashed(cx, r) });
             let opts = self.options;
             let lines = COLORS.get(opts.color).map_or(color, |(_, rgb)| *rgb);
             if opts.radii {

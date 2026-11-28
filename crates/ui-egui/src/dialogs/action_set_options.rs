@@ -6,8 +6,8 @@
 //! Options also holds the action's function key and color (`key`, `cmd`, `shift`, `color`,
 //! `automaticAlignTo`, see [`ActionOptions`]). OK adds the set and makes it the current one,
 //! renames the set, or changes the action's name, function key and color (`ui.action.options`).
-//! An invalid `set`, `action` or function key is an error, and so is a name the list refuses. OK
-//! then changes no set or action, and the dialog stays open.
+//! An invalid `set`, `action` or function key is an error, as are a name the list refuses and a
+//! library change while editing an existing set or action. The dialog stays open with the error.
 
 use craft::ui::contract::{Bind, Show as _, ShowContainer as _};
 use craft::ui::dialog::{DialogId, DialogResult, DialogStack, FieldRefusal, HeldOk, StackDialog, dialog_id};
@@ -67,12 +67,14 @@ pub struct SetOptionsDialog {
     pub set: Option<usize>,
     /// The index of the action in its set; only for Action Options.
     pub action: Option<usize>,
+    /// The action library revision these addresses described when Options opened.
+    revision: Option<u64>,
     form: Form<SetOptionsFields>,
 }
 
 impl SetOptionsDialog {
-    fn new(kind: SetOptionsKind, set: Option<usize>, action: Option<usize>, fields: SetOptionsFields) -> Self {
-        SetOptionsDialog { id: dialog_id(KEY), kind, set, action, form: Form::new(fields, check) }
+    fn new(kind: SetOptionsKind, set: Option<usize>, action: Option<usize>, revision: Option<u64>, fields: SetOptionsFields) -> Self {
+        SetOptionsDialog { id: dialog_id(KEY), kind, set, action, revision, form: Form::new(fields, check) }
     }
 }
 
@@ -81,14 +83,15 @@ pub fn open_new(app: &mut VectorcraftApp) {
     let sets = app.ui.actions.sets();
     let n = (1..).find(|n| !sets.contains(&format!("Set {n}").as_str())).unwrap_or(1);
     let fields = SetOptionsFields { name: format!("Set {n}"), ..SetOptionsFields::default() };
-    open_or_say(app, SetOptionsDialog::new(SetOptionsKind::NewSet, None, None, fields));
+    open_or_say(app, SetOptionsDialog::new(SetOptionsKind::NewSet, None, None, None, fields));
 }
 
 /// Open Set Options for the set at `set`, if there is one.
 pub fn open(app: &mut VectorcraftApp, set: usize) {
     if let Some(name) = model::set_name(&app.ui.actions, set) {
         let fields = SetOptionsFields { name: name.to_owned(), ..SetOptionsFields::default() };
-        open_or_say(app, SetOptionsDialog::new(SetOptionsKind::Set, Some(set), None, fields));
+        let revision = app.ui.actions.revision();
+        open_or_say(app, SetOptionsDialog::new(SetOptionsKind::Set, Some(set), None, Some(revision), fields));
     }
 }
 
@@ -105,22 +108,26 @@ pub fn open_action(app: &mut VectorcraftApp, set: usize, action: usize) {
         automatic_align_to: model::automatic_align_to(a),
     };
     let fields = SetOptionsFields { name: a.name.clone(), options };
-    open_or_say(app, SetOptionsDialog::new(SetOptionsKind::Action, Some(set), Some(action), fields));
+    let revision = app.ui.actions.revision();
+    open_or_say(app, SetOptionsDialog::new(SetOptionsKind::Action, Some(set), Some(action), Some(revision), fields));
 }
 
 impl ActionDialog for SetOptionsDialog {
-    /// What OK files, with the kind and place the dialog had.
-    type Answer = (SetOptionsKind, Option<usize>, Option<usize>, SetOptionsFields);
+    /// What OK files, with the kind, place and library revision the dialog had.
+    type Answer = (SetOptionsKind, Option<usize>, Option<usize>, Option<u64>, SetOptionsFields);
 
     fn take_ok(&mut self) -> Option<Self::Answer> {
-        self.form.take().map(|fields| (self.kind, self.set, self.action, fields))
+        self.form.take().map(|fields| (self.kind, self.set, self.action, self.revision, fields))
     }
 
     fn answer_ok(&mut self, answer: Result<(), Label>) {
         self.form.answer(answer);
     }
 
-    fn run(app: &mut VectorcraftApp, (kind, set, action, fields): Self::Answer) -> Result<(), String> {
+    fn run(app: &mut VectorcraftApp, (kind, set, action, revision, fields): Self::Answer) -> Result<(), String> {
+        if revision.is_some_and(|revision| app.ui.actions.revision() != revision) {
+            return Err("The action library changed. Reopen Options to edit it.".into());
+        }
         match kind {
             SetOptionsKind::NewSet => edits::new_set(app, &fields.name),
             SetOptionsKind::Set => {

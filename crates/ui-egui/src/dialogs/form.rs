@@ -171,6 +171,13 @@ fn field_value(row: Option<&Param>, value: &Value) -> Option<FieldValue> {
         },
         // A pair of radio buttons over a flag (Relative / Absolute): the ids are "true" and "false".
         Some(ParamKind::Radio { .. }) if value.is_boolean() => value.as_bool().map(|b| FieldValue::Text(b.to_string())),
+        // Use the renderer's mode for each spelling, including Normal for unknown names and the effect's default for
+        // a legacy value that is not text.
+        Some(ParamKind::Blend { default, .. }) => value
+            .as_str()
+            .map(|s| vectorcraft_effects::blend_mode_id(vectorcraft_effects::blend_mode(s)))
+            .or_else(|| default.clone())
+            .map(FieldValue::Text),
         // A custom row's list, and one a key no row has carries through (an export's `artboards: [0, 1]`), stay JSON: a
         // list of whole numbers would read back as a grid, and one of two or three as a point or colour.
         Some(ParamKind::Custom(_)) | None if value.is_array() => Some(FieldValue::Json(value.clone())),
@@ -298,7 +305,10 @@ fn plugin_row(key: &str, p: &PluginParam) -> Param {
             // there. Past it, the number typed is read as an integer.
             const EXACT: i64 = 1 << 53;
             let start = (*default).max(*min).min(*max);
-            if -EXACT <= *min && *max <= EXACT {
+            if let Some(range) = p.ui.slider_range(&p.spec) {
+                // A slider over the whole numbers of the range, as the framework's range row with no decimals.
+                Param::new(key, name, ParamKind::range(*range.start(), *range.end(), start as f64, SliderScale::Linear)).decimals(0)
+            } else if -EXACT <= *min && *max <= EXACT {
                 Param::new(key, name, ParamKind::int(Some(*min), Some(*max), start))
             } else {
                 let (min, max) = (*min, *max);

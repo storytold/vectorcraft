@@ -1461,6 +1461,7 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
                 Some(Some("cancel")) => Some("ui.dialog.cancel"),
                 Some(_) => return err("`action` must be confirm or cancel"),
             };
+            let pdf = app.save_pdf.as_ref().map(|open| open.id).filter(|_| method == "ui.dialog.set");
             let reply = dialogs.with(|host| {
                 // The answer goes to the dialog the fields went to, even when setting them opens another over it.
                 if answer.is_some()
@@ -1469,9 +1470,18 @@ fn dispatch(app: &mut VectorcraftApp, ctx: &egui::Context, method: &str, p: &Val
                 {
                     params["dialog"] = json!(top.id.value().to_string());
                 }
+                if method == "ui.dialog.set"
+                    && let Ok(id) = craft::automation::dialogs::dialog_id(host, &params)
+                {
+                    crate::dialogs::effect::normalize_set_mode(app, id, &mut params);
+                }
                 let sets = params.as_object().is_some_and(|o| o.keys().any(|k| k != "dialog"));
                 let set = if answer.is_none() || sets {
-                    craft::automation::dialogs::dialog_method(host, ctx, method, &params)
+                    // A Save PDF settings object keeps the options it leaves out.
+                    match pdf.and_then(|id| crate::dialogs::save_pdf::set_settings_objects(host, ctx, id, &params)) {
+                        Some(set) => Some(set.map(|()| Value::Null)),
+                        None => craft::automation::dialogs::dialog_method(host, ctx, method, &params),
+                    }
                 } else {
                     Some(Ok(Value::Null))
                 };

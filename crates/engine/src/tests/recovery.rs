@@ -789,6 +789,23 @@ fn an_area_tidied_away_before_it_is_locked_is_busy() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
+/// A dropped hold frees its area while a copy of the lock file's handle is open, as a child
+/// process that is starting holds one: the area can be locked again.
+#[test]
+fn a_dropped_hold_frees_the_area_while_a_copy_of_its_handle_is_open() {
+    use cmd::recovery::Lock;
+    let base = std::env::temp_dir().join(format!("vc-recovery-copied-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let store = FolderStore::new(&base);
+    let Ok(Lock::Held(hold)) = store.lock("6-1") else { panic!("the area is locked") };
+    let copy = hold.downcast_ref::<crate::store::LockedFile>().map(|locked| locked.file().try_clone().unwrap());
+    assert!(copy.is_some(), "the hold is the locked file");
+    drop(hold);
+    assert!(matches!(store.lock("6-1"), Ok(Lock::Held(_))), "a dropped hold frees the area");
+    drop(copy);
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 /// Opening an area's lock file failed. When the folder went after it was checked, or the lock file
 /// is there but can't be opened (a removed lock file that another app still has open, on file
 /// systems that keep it until it is closed), the area is busy. A lock file that can't be made is an
