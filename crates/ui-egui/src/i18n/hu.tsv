@@ -5776,6 +5776,14 @@ imageTrace	Outline	Körvonal
 	The script asks to read and write a folder you choose, with everything in it.	A parancsfájl egy Ön által választott mappa és teljes tartalma olvasását és írását kéri.
 	Allow Once	Engedélyezés egyszer
 	Always Allow This Script	A parancsfájl engedélyezése mindig
+	No script has kept file access.	Egy parancsfájlnak sincs megőrzött fájlhozzáférése.
+	Read file	Fájl olvasása
+	Read and write file	Fájl olvasása és írása
+	Read and write folder	Mappa olvasása és írása
+	Revoke	Engedély visszavonása
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Az Engedély visszavonása a parancsfájl minden verziójához megőrzött hozzáférést eltávolítja. Egy mappához való hozzáférés a teljes tartalmára kiterjed.
+@msg	Script file access revoked	A parancsfájl fájlhozzáférése visszavonva
+@msg	The script file access was already revoked	A parancsfájl fájlhozzáférése már vissza volt vonva
 	Deny	Elutasítás
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
@@ -5953,6 +5961,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	a parancsfájl fájlpárbeszédpaneléhez tartozó `answer` értéke a következők egyike kell legyen: once, always, deny, stop
 @msg	choose a file or folder first, or deny	először válasszon fájlt vagy mappát, vagy utasítsa el
 @msg	the script file permissions could not be saved: {e}	a parancsfájlok fájlengedélyeit nem sikerült menteni: {e}
+@msg	the script file permissions could not be read: {e}	a parancsfájlok fájlengedélyeit nem sikerült beolvasni: {e}
 @msg	this script's file access can be allowed only once	ennek a parancsfájlnak a fájlhozzáférése csak egyszer engedélyezhető
 @msg	Only the person at the keyboard can allow a script's file access	Parancsfájl fájlhozzáférését csak a billentyűzetnél ülő személy engedélyezheti
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Egy parancsfájl legfeljebb 2 048 fájlt kap: az ezek után kiválasztott fájlok kimaradtak
@@ -7570,6 +7579,21 @@ axis	Y Axis	Y tengely
 @msg	time budget	időkeret
 @msg	memory budget (the selection is too large to hand over)	memóriakeret (a kijelölés túl nagy az átadáshoz)
 @msg	output size ({what} is {len} bytes, limit {max})	kimenet mérete ({what}: {len} bájt, korlát {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, {line}. sor, {column}. oszlop)
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	memóriakeret
+@msg	call depth	hívási mélység
+@msg	run(input, params) returned no output object	a run(input, params) nem adott vissza kimeneti objektumot
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	a `runtime` "js" értékhez `script` kell: a bővítmény .js fájljának neve a leíró mellett
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	a `script` a leíró mappájában lévő .js fájl neve legyen: 1-128 bájt, mappa nélkül, `:` nélkül, és nem kezdődhet `.` karakterrel
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	a `source` a parancsfájl szövege, és csak abban a JSON-ban adható meg, amelyet a plugin.install dataBase64 paramétere fogad: a .vcplugin fájl a `script` kulcsban nevezi meg a parancsfájlját
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	egy JavaScript-bővítmény leírója `runtime` "js" értéket ad meg
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	a `runtime` "js" objektumszűrőhöz való (`kind` "filter"), nem `kind` "{kind}" értékhez
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	egy JavaScript-bővítmény nem sorolhatja fel a(z) `{name}` engedélyt: a gazdagép engedélyei közül a `progress` engedélyt sorolhatja fel
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	egy WebAssembly-modul leírója elhagyja a `runtime` kulcsot: a "js" JavaScript-bővítményhez való
+@msg	a JavaScript plug-in makes no command calls	egy JavaScript-bővítmény nem hív parancsokat
+@msg	vc.progress(done, total) takes two numbers	a vc.progress(done, total) két számot vár
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	a vc.log(level, text) egy szintet, 0 (hiba), 1 (figyelmeztetés), 2 (információ) vagy 3 (hibakeresés), és egy karakterláncot vár
 @msg	the plug-in's grant can't be removed from the plug-in store	a bővítmény engedélye nem távolítható el a bővítménytárból
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
 @msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`

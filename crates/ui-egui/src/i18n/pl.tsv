@@ -5082,6 +5082,14 @@ imageTrace	Outline	Kontur
 	The script asks to read and write a folder you choose, with everything in it.	Skrypt prosi o odczyt i zapis wybranego przez Ciebie folderu wraz z całą jego zawartością.
 	Allow Once	Zezwól raz
 	Always Allow This Script	Zawsze zezwalaj temu skryptowi
+	No script has kept file access.	Żaden skrypt nie ma zachowanego dostępu do plików.
+	Read file	Odczyt pliku
+	Read and write file	Odczyt i zapis pliku
+	Read and write folder	Odczyt i zapis folderu
+	Revoke	Odwołaj
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Odwołaj usuwa dostęp zachowany dla każdej wersji skryptu. Dostęp do folderu obejmuje całą jego zawartość.
+@msg	Script file access revoked	Odwołano dostęp skryptu do plików
+@msg	The script file access was already revoked	Dostęp skryptu do plików został już odwołany
 	Deny	Odmów
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Skrypt może zmieniać otwarte dokumenty i zapisywać pliki za pomocą wykonywanych poleceń. Uruchamiaj tylko skrypty, którym ufasz.
 	Do not show this warning again	Nie pokazuj więcej tego ostrzeżenia
@@ -5249,6 +5257,7 @@ liquify-list-end	{0}, {1}	{0} i {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` dla okna dialogowego plików skryptu musi być jedną z wartości: once, always, deny, stop
 @msg	choose a file or folder first, or deny	najpierw wybierz plik lub folder albo odmów
 @msg	the script file permissions could not be saved: {e}	nie można zapisać uprawnień skryptów do plików: {e}
+@msg	the script file permissions could not be read: {e}	nie można odczytać uprawnień skryptów do plików: {e}
 @msg	this script's file access can be allowed only once	na dostęp tego skryptu do plików można zezwolić tylko raz
 @msg	Only the person at the keyboard can allow a script's file access	Na dostęp skryptu do plików może zezwolić tylko osoba przy klawiaturze
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Skrypt otrzymuje najwyżej 2 048 plików: pliki wybrane po nich zostały pominięte
@@ -7438,6 +7447,21 @@ axis	Y Axis	Oś Y
 @msg	time budget	budżet czasu
 @msg	memory budget (the selection is too large to hand over)	budżet pamięci (zaznaczenie jest zbyt duże, aby je przekazać)
 @msg	output size ({what} is {len} bytes, limit {max})	rozmiar wyjścia ({what} ma {len} bajtów, limit {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script} wiersz {line}, kolumna {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	budżet pamięci
+@msg	call depth	głębokość wywołań
+@msg	run(input, params) returned no output object	run(input, params) nie zwróciła obiektu wyjściowego
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" wymaga `script`: nazwy pliku .js wtyczki obok manifestu
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` musi być nazwą pliku .js w folderze manifestu: 1-128 bajtów, bez folderu, bez `:`, nie może zaczynać się od `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` to tekst skryptu, podawany tylko w JSON, który przyjmuje dataBase64 polecenia plugin.install: plik .vcplugin podaje swój skrypt w `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	manifest wtyczki JavaScript podaje `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" jest dla filtra obiektów (`kind` "filter"), nie dla `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	wtyczka JavaScript nie może wymienić uprawnienia `{name}`: spośród uprawnień hosta może wymienić `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	manifest modułu WebAssembly pomija `runtime`: "js" jest dla wtyczki JavaScript
+@msg	a JavaScript plug-in makes no command calls	wtyczka JavaScript nie wywołuje poleceń
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) przyjmuje dwie liczby
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) przyjmuje poziom, 0 (błąd), 1 (ostrzeżenie), 2 (informacja) lub 3 (debugowanie), oraz ciąg znaków
 @msg	the plug-in's grant can't be removed from the plug-in store	nie można usunąć uprawnienia wtyczki z magazynu wtyczek
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	uprawnienie `{shown}` jest zarezerwowane dla późniejszego API wtyczek; ten host go nie przyznaje
 @msg	unknown permission `{shown}`	nieznane uprawnienie `{shown}`

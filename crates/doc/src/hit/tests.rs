@@ -1992,8 +1992,56 @@ fn objects_at_matches_repeated_hits_on_random_documents() {
             let p = Point::new(f64::from(next(120)), f64::from(next(120)));
             let opt = HitOptions { outline: next(5) == 0, path_only: next(5) == 0, clip_outlines: next(2) == 0, ..Default::default() };
             assert_eq!(objects_at(&d, p, opt, None), objects_at_repeated(&d, p, opt, None), "round {round}, {p:?}, {opt:?}");
+            assert_eq!(leaf_chains(leaves_at(&d, p, opt)), leaf_chains(leaves_at_repeated(&d, p, opt)), "leaves: round {round}, {p:?}, {opt:?}");
+            // Isolated in a group of the document, now and then.
+            let groups: Vec<NodeId> =
+                d.layers[0].children().into_iter().flatten().filter(|n| n.is_container() && !n.is_layer()).map(|n| n.id).collect();
+            if let Some(&g) = groups.first().filter(|_| next(3) == 0) {
+                let opt = HitOptions { scope: Some(g), ..opt };
+                assert_eq!(leaf_chains(leaves_at(&d, p, opt)), leaf_chains(leaves_at_repeated(&d, p, opt)), "isolated: round {round}, {p:?}");
+            }
         }
     }
+}
+
+/// A hit's leaf, ancestry, kind, layer count and edited envelope.
+type LeafChain = (NodeId, Vec<NodeId>, HitKind, usize, Option<NodeId>);
+
+/// Each hit's [`LeafChain`], to compare two lists.
+fn leaf_chains(hits: Vec<Hit>) -> Vec<LeafChain> {
+    hits.into_iter().map(|h| (h.leaf, h.ancestry, h.kind, h.layers, h.contents_of)).collect()
+}
+
+/// Select Behind steps through the members of groups one by one, front to back, in one traversal
+/// for a large stack, as the hit test repeated over what is left finds them.
+#[test]
+fn leaves_at_lists_group_members_one_by_one() {
+    let mut d = Document::new(100.0, 100.0);
+    let layer = d.layers[0].id;
+    let square = |d: &mut Document| Node::path(d.alloc_id(), shapes::rectangle(Rect::new(0.0, 0.0, 50.0, 50.0)), Appearance::default_art());
+    let below = square(&mut d);
+    let below_id = below.id;
+    d.insert(Some(layer), usize::MAX, below).unwrap();
+    let members: Vec<Node> = (0..300).map(|_| square(&mut d)).collect();
+    let mut ids: Vec<NodeId> = members.iter().map(|n| n.id).collect();
+    let g = d.alloc_id();
+    d.insert(Some(layer), usize::MAX, Node::group(g, members.into_iter().map(Arc::new).collect())).unwrap();
+    ids.reverse();
+    ids.push(below_id);
+    let p = Point::new(25.0, 25.0);
+    let hits = leaves_at(&d, p, HitOptions::default());
+    assert_eq!(hits.len(), MAX_LEAVES_AT, "the list stops at its limit");
+    assert_eq!(hits.iter().map(|h| h.leaf).collect::<Vec<_>>(), ids[..MAX_LEAVES_AT], "the group's members, topmost first");
+    assert!(hits.iter().all(|h| h.ancestry.contains(&g)));
+    assert_eq!(leaf_chains(hits), leaf_chains(leaves_at_repeated(&d, p, HitOptions::default())));
+    // Hidden past the limit, the object below the group comes after the members that are left.
+    for id in &ids[3..300] {
+        d.node_mut(*id).unwrap().visible = false;
+    }
+    let shown: Vec<NodeId> = leaves_at(&d, p, HitOptions::default()).iter().map(|h| h.leaf).collect();
+    assert_eq!(shown, [ids[0], ids[1], ids[2], below_id]);
+    let isolated = leaves_at(&d, p, HitOptions { scope: Some(g), ..Default::default() });
+    assert!(!isolated.iter().any(|h| h.leaf == below_id), "isolated: only the group's members");
 }
 
 /// [`objects_at_repeated_after`] with each found object looked up in the ordered list itself: the
@@ -2320,6 +2368,40 @@ fn select_behind_keeps_one_art_limit_when_it_falls_back() {
     let (behind, _, arts) = with_art_limit(100, || objects_at(&d, p, HitOptions::default(), None));
     assert!(behind.is_empty());
     assert!(arts <= 34, "root that is not a layer: {arts} instances' art walked");
+}
+
+/// [`leaves_at`] falls back to repeated hit tests at a clip group, after the hits its single
+/// traversal found above it: an instance hit by its art, with the limit of symbol art then used
+/// up, stays in the list.
+#[test]
+fn leaves_at_keeps_the_hits_above_a_clip_group_it_falls_back_at() {
+    let p = Point::new(150.0, 50.0);
+    let mut d = Document::new(600.0, 400.0);
+    clipped_symbol(&mut d, false);
+    // A clip group at the bottom of the layer, its art under (150, 50).
+    let square = |id| Arc::new(Node::path(id, shapes::rectangle(Rect::new(120.0, 20.0, 180.0, 80.0)), Appearance::default_art()));
+    let (mask, art) = (d.alloc_id(), d.alloc_id());
+    let mut clip_group = Node::group(d.alloc_id(), vec![square(mask), square(art)]);
+    clip_group.set_clips(true);
+    let l = d.layers[0].id;
+    d.insert(Some(l), 0, clip_group).unwrap();
+    let (mut shown_mask, shown_art) = half_clipped(&mut d);
+    shown_mask.appearance.effects.push(test_move());
+    let mut shown = Node::group(d.alloc_id(), vec![Arc::new(shown_mask), Arc::new(shown_art)]);
+    shown.set_clips(true);
+    group_symbol(&mut d, "Shown", vec![Arc::new(shown)]);
+    let hit = instance_of(&mut d, "Shown");
+    let hit_id = hit.id;
+    d.insert(Some(l), usize::MAX, Arc::unwrap_or_clone(hit)).unwrap();
+    for _ in 0..32 {
+        let inst = instance_of(&mut d, "Clipped");
+        d.insert(Some(l), usize::MAX, Arc::unwrap_or_clone(inst)).unwrap();
+    }
+    let (hits, _, arts) = with_art_limit(100, || leaves_at(&d, p, HitOptions::default()));
+    let leaves: Vec<NodeId> = hits.iter().map(|h| h.leaf).collect();
+    assert_eq!(leaves.first(), Some(&hit_id), "hit before the fallback: {leaves:?}");
+    assert!(leaves.contains(&art), "the clipped art after it: {leaves:?}");
+    assert!(arts <= 34, "{arts} instances' art walked");
 }
 
 #[test]

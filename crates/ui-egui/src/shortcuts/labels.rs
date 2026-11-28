@@ -53,7 +53,9 @@ pub(crate) fn run_left_by_labels(app: &mut VectorcraftApp, ctx: &egui::Context) 
 /// After the pass's input, once the text it copied has gone out: a Copy or Cut event still in the input while text
 /// is selected in a label, and no text field has the keys, is the labels'. The texts copied so far are noted, so a
 /// copy at the end of the pass beyond them is the labels' ([`CopyAfterLabels`]). The labels' text, or the art copied
-/// in the next pass when they copy nothing, replaces what an earlier Copy or Cut has not written yet.
+/// in the next pass when they copy nothing, replaces what an earlier Copy or Cut has not written yet. Every window
+/// calls it in its own pass, the OS windows of floating panels and documents included: the key stage of each window
+/// leaves its Copy or Cut to the labels while text is selected in a label of any window.
 pub(crate) fn leave_to_labels(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let viewport = ctx.viewport_id();
     let n = copies(ctx);

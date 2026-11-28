@@ -5471,6 +5471,14 @@ imageTrace	Outline	轮廓
 	The script asks to read and write a folder you choose, with everything in it.	脚本请求读写您选择的文件夹及其中的所有内容。
 	Allow Once	允许一次
 	Always Allow This Script	始终允许此脚本
+	No script has kept file access.	没有脚本保留了文件访问权限。
+	Read file	读取文件
+	Read and write file	读取和写入文件
+	Read and write folder	读取和写入文件夹
+	Revoke	收回权限
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	“收回权限”会移除为脚本每个版本保留的访问权限。文件夹的访问权限包括其中的所有内容。
+@msg	Script file access revoked	已收回脚本的文件访问权限
+@msg	The script file access was already revoked	脚本的文件访问权限已被收回
 	Deny	拒绝
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	脚本可以更改打开的文档，并可通过其运行的命令写入文件。请只运行您信任的脚本。
 	Do not show this warning again	不再显示此警告
@@ -5638,6 +5646,7 @@ liquify-list-end	{0}, {1}	{0}和{1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	脚本文件对话框的 `answer` 必须是以下之一：once、always、deny、stop
 @msg	choose a file or folder first, or deny	请先选择文件或文件夹，或拒绝
 @msg	the script file permissions could not be saved: {e}	无法保存脚本的文件权限：{e}
+@msg	the script file permissions could not be read: {e}	无法读取脚本的文件权限：{e}
 @msg	this script's file access can be allowed only once	此脚本的文件访问只能允许一次
 @msg	Only the person at the keyboard can allow a script's file access	只有键盘前的人才能允许脚本访问文件
 @msg	A script is given at most 2,048 files: the files picked after them were left out	脚本最多获得 2,048 个文件：之后选择的文件已被略去
@@ -7417,6 +7426,21 @@ axis	Y Axis	Y 轴
 @msg	time budget	时间预算
 @msg	memory budget (the selection is too large to hand over)	内存预算（所选内容太大，无法传递）
 @msg	output size ({what} is {len} bytes, limit {max})	输出大小（{what} 为 {len} 字节，上限 {max}）
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason}（{id}，{script} 第 {line} 行，第 {column} 列）
+@msg	{reason} ({id}, {script})	{reason}（{id}，{script}）
+@msg	memory budget	内存预算
+@msg	call depth	调用深度
+@msg	run(input, params) returned no output object	run(input, params) 未返回输出对象
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	`runtime` "js" 需要 `script`：清单旁边增效工具 .js 文件的名称
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` 必须是清单所在文件夹中 .js 文件的名称：1-128 字节，不含文件夹，不含 `:`，不以 `.` 开头
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` 是脚本的文本，只在 plugin.install 的 dataBase64 接受的 JSON 中给出：.vcplugin 文件在 `script` 中指定其脚本
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	JavaScript 增效工具的清单指定 `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" 用于对象滤镜（`kind` "filter"），而不是 `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	JavaScript 增效工具不能列出权限 `{name}`：在主机的权限中，它可以列出 `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	WebAssembly 模块的清单省略 `runtime`："js" 用于 JavaScript 增效工具
+@msg	a JavaScript plug-in makes no command calls	JavaScript 增效工具不调用命令
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) 接受两个数字
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) 接受一个级别（0（错误）、1（警告）、2（信息）或 3（调试））和一个字符串
 @msg	the plug-in's grant can't be removed from the plug-in store	无法从增效工具存储中移除该增效工具的授权
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	权限 `{shown}` 保留给以后的增效工具 API；此主机不授予该权限
 @msg	unknown permission `{shown}`	未知权限 `{shown}`
