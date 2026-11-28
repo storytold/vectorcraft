@@ -501,7 +501,7 @@ fn number_cell(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str
         .enabled(enabled)
         .id_salt(key)
         .show(ui);
-    if let Some(Some(value)) = typed.edit.value() {
+    if let Some(Some(value)) = typed.edit.events.landed() {
         f.set(key, *value);
     }
     typed.edit.response.clone()
@@ -515,7 +515,7 @@ fn clamped_number(key: &'static str, label: &'static str, range: (f64, f64), uni
 
 /// A menu over `ids` (id, label) bound to the text field `key`, showing `current`.
 fn id_select(ui: &mut Ui, f: &mut DialogFields, key: &str, label: &'static str, entries: &[Entry<String>], current: String) {
-    if let Some(picked) = Select::new(label, Bind::given(current), entries).id_salt(key).show(ui).value() {
+    if let Some(picked) = Select::new(label, Bind::given(current), entries).id_salt(key).show(ui).events.committed() {
         f.set(key, picked.as_str());
     }
 }
@@ -599,7 +599,7 @@ fn direction_row() -> Param {
         let current = DIRECTIONS.iter().position(|d| *d == parse_field::<Direction>(f, "direction")).unwrap_or(0);
         let entries: Vec<Entry<usize>> = arrows.iter().enumerate().map(|(i, (icon, tip))| Entry::new(i, *tip).icon(IconId::new(icon))).collect();
         let shown = Segmented::new(tl!("Direction"), Bind::given(current), &entries).show(ui);
-        if let Some(dir) = shown.value().and_then(|i| DIRECTIONS.get(*i)) {
+        if let Some(dir) = shown.events.committed().and_then(|i| DIRECTIONS.get(*i)) {
             f.set("direction", id_of(dir));
         }
         shown.response().clone()

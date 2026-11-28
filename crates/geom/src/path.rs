@@ -861,6 +861,28 @@ pub fn curve_bounds(path: &BezPath) -> Rect {
     path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb)).unwrap_or_default()
 }
 
+/// The box of what a stroke along `path` draws before the stroke's own reach, as
+/// [`PathData::drawn_bounds`] measures the path it stands for: the box of its segments, as in
+/// [`curve_bounds`], and with `dots` the point of each closed subpath that has no segment, which a
+/// round or projecting cap draws as a dot. `None` when the path draws nothing.
+pub fn drawn_curve_bounds(path: &BezPath, dots: bool) -> Option<Rect> {
+    let mut bbox = path.segments().map(segment_bounds).reduce(|bb, seg_bb| bb.union(seg_bb));
+    if !dots {
+        return bbox;
+    }
+    let els = path.elements();
+    for (r, closed) in crate::bez::subpaths(path) {
+        if closed
+            && kurbo::segments(els[r.clone()].iter().copied()).next().is_none()
+            && let Some(p) = els[r.start].end_point()
+        {
+            let dot = Rect::from_points(p, p);
+            bbox = Some(bbox.map_or(dot, |bb| bb.union(dot)));
+        }
+    }
+    bbox
+}
+
 /// The box of `seg` as kurbo's `bounding_box` measures it (its start, end and extrema), except
 /// that a segment with a control point whose x or y is not finite or is larger in size than
 /// `f64::MAX / 16` is measured by its control points. The box then holds every point the segment
@@ -916,6 +938,10 @@ mod tests {
         let path = proptest::collection::vec(sub, 0..4).prop_map(PathData::new);
         proptest!(ProptestConfig::with_cases(2000), |(pd in path)| {
             prop_assert_eq!(bits(pd.bounds()), bits(reference(&pd)));
+            // The kurbo path the anchors stand for draws the same box.
+            for dots in [false, true] {
+                prop_assert_eq!(bits(drawn_curve_bounds(&pd.to_bezpath(), dots)), bits(pd.drawn_bounds(dots)));
+            }
         });
         // Two lone anchors: the path has no segment, and the box spans the two points.
         let lone = PathData::new(vec![SubPath::polyline(&[Point::new(5.0, 5.0)], false), SubPath::polyline(&[Point::new(9.0, 1.0)], true)]);

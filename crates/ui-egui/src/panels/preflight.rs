@@ -245,9 +245,11 @@ fn options(app: &mut VectorcraftApp, ui: &mut Ui) -> bool {
     let (mut output, mut ppi, mut active_only, mut force) = (None, None, None, false);
     FieldGroup::new(tl!("Preflight Options").to_owned()).show(ui, |ui, _| {
         Field::new(tl!("Output:").to_owned()).show(ui, |ui, _| {
+            // The output also resets Minimum PPI: keep both until the choice is confirmed.
             output = Select::new(tl!("Output:").to_owned(), Bind::given(current.output), &outputs)
                 .show(ui)
-                .value()
+                .events
+                .committed()
                 .copied()
                 .filter(|i| *i != current.output);
         });

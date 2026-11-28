@@ -9,9 +9,18 @@ use vectorcraft_geom::{Point, Rect};
 
 use crate::{Action, Cursor, Mods, Overlay, PointerEvent, PointerKind, Tool, ToolContext, ToolKey};
 
+/// Private cursor metadata: the original queue entry for a placement request. The frontend
+/// consumes it before opening import options; the engine removes it before direct placement.
+pub const SOURCE_INDEX: &str = "__placeSourceIndex";
+
+/// Whether a cursor placement was a click under the pointer tolerance, rather than a drag.
+pub const CLICK: &str = "__placeCursorClick";
+
 /// One loaded file.
 #[derive(Clone, Debug, PartialEq)]
 struct Entry {
+    /// Its position in the original load, retained when other entries are discarded.
+    source_index: usize,
     /// `file.place` params (the file and its options).
     params: Value,
     name: String,
@@ -93,9 +102,12 @@ impl Tool for PlaceTool {
                 let Some((a, _)) = self.drag.take() else { return vec![] };
                 let (Some(r), Some(e)) = (self.target(a, ev.pos, cx.tol(3.0)), self.entry()) else { return vec![] };
                 let mut p = e.params.clone();
+                p[SOURCE_INDEX] = json!(e.source_index);
+                let clicked = (ev.pos.x - a.x).abs().max((ev.pos.y - a.y).abs()) < cx.tol(3.0);
+                p[CLICK] = json!(clicked);
                 p["rect"] = json!([r.x0, r.y0, r.width(), r.height()]);
                 // A Shift-click (not a drag) asks for the file's import options before placing it.
-                if ev.mods.shift && (ev.pos.x - a.x).abs().max((ev.pos.y - a.y).abs()) < cx.tol(3.0) {
+                if ev.mods.shift && clicked {
                     p["showImportOptions"] = json!(true);
                 }
                 let mut acts = vec![Action::Exec("file.place".into(), p)];
@@ -141,12 +153,13 @@ impl Tool for PlaceTool {
         Cursor::Crosshair
     }
 
-    /// `{count, current, name, width, height, names}`: what the cursor holds (no file data).
+    /// `{count, current, sourceIndex, name, width, height, names}`: what the cursor holds (no file data).
     fn options(&self) -> Value {
         let e = self.entry();
         json!({
             "count": self.entries.len(),
             "current": self.current,
+            "sourceIndex": e.map(|e| e.source_index),
             "name": e.map(|e| &e.name),
             "width": e.map(|e| e.width),
             "height": e.map(|e| e.height),
@@ -163,8 +176,10 @@ impl Tool for PlaceTool {
                     .as_array()
                     .into_iter()
                     .flatten()
-                    .filter_map(|e| {
+                    .enumerate()
+                    .filter_map(|(source_index, e)| {
                         Some(Entry {
+                            source_index,
                             params: e.get("params").filter(|p| p.is_object())?.clone(),
                             name: e["name"].as_str().unwrap_or_default().to_string(),
                             width: e["width"].as_f64().filter(|v| v.is_finite())?,
@@ -277,14 +292,26 @@ mod tests {
         let mut t = loaded(3);
         t.pointer(&c, &ev(PointerKind::Down, 10.0, 10.0));
         let acts = t.pointer(&c, &ev(PointerKind::Up, 11.0, 10.0));
-        assert_eq!(acts, vec![Action::Exec("file.place".into(), json!({"path": "f0.png", "rect": [10.0, 10.0, 40.0, 20.0]}))]);
+        assert_eq!(
+            acts,
+            vec![Action::Exec(
+                "file.place".into(),
+                json!({"path": "f0.png", "__placeSourceIndex": 0, "__placeCursorClick": true, "rect": [10.0, 10.0, 40.0, 20.0]})
+            )]
+        );
         // A drag up and to the left grows the box from the press point, aspect kept.
         t.pointer(&c, &ev(PointerKind::Down, 100.0, 100.0));
         t.pointer(&c, &ev(PointerKind::Drag, 20.0, 90.0));
         let c_marquee_only = ToolContext { measurement_labels: false, ..c };
         assert_eq!(t.overlays(&c_marquee_only), vec![Overlay::Marquee(Rect::new(20.0, 60.0, 100.0, 100.0))]);
         let acts = t.pointer(&c, &ev(PointerKind::Up, 20.0, 90.0));
-        assert_eq!(acts[0], Action::Exec("file.place".into(), json!({"path": "f1.png", "rect": [20.0, 60.0, 80.0, 40.0]})));
+        assert_eq!(
+            acts[0],
+            Action::Exec(
+                "file.place".into(),
+                json!({"path": "f1.png", "__placeSourceIndex": 1, "__placeCursorClick": false, "rect": [20.0, 60.0, 80.0, 40.0]})
+            )
+        );
         assert_eq!(t.options()["count"], 1);
         // Placing the last file returns to the previous tool.
         t.pointer(&c, &ev(PointerKind::Down, 0.0, 0.0));
@@ -302,18 +329,30 @@ mod tests {
         let mut t = loaded(3);
         t.pointer(&c, &ev(PointerKind::Down, 10.0, 10.0).with_mods(shift));
         let acts = t.pointer(&c, &ev(PointerKind::Up, 11.0, 10.0).with_mods(shift));
-        let asked = json!({"path": "f0.png", "rect": [10.0, 10.0, 40.0, 20.0], "showImportOptions": true});
+        let asked = json!({"path": "f0.png", "__placeSourceIndex": 0, "__placeCursorClick": true, "rect": [10.0, 10.0, 40.0, 20.0], "showImportOptions": true});
         assert_eq!(acts, vec![Action::Exec("file.place".into(), asked)]);
         assert_eq!(t.options()["names"], json!(["f1.png", "f2.png"]), "the cursor goes on to the next file");
         // A Shift-drag places at the dragged size, as a drag does.
         t.pointer(&c, &ev(PointerKind::Down, 100.0, 100.0).with_mods(shift));
         t.pointer(&c, &ev(PointerKind::Drag, 20.0, 90.0).with_mods(shift));
         let acts = t.pointer(&c, &ev(PointerKind::Up, 20.0, 90.0).with_mods(shift));
-        assert_eq!(acts[0], Action::Exec("file.place".into(), json!({"path": "f1.png", "rect": [20.0, 60.0, 80.0, 40.0]})));
+        assert_eq!(
+            acts[0],
+            Action::Exec(
+                "file.place".into(),
+                json!({"path": "f1.png", "__placeSourceIndex": 1, "__placeCursorClick": false, "rect": [20.0, 60.0, 80.0, 40.0]})
+            )
+        );
         // Shift released before the button: a plain click.
         t.pointer(&c, &ev(PointerKind::Down, 0.0, 0.0).with_mods(shift));
         let acts = t.pointer(&c, &ev(PointerKind::Up, 0.0, 0.0));
-        assert_eq!(acts[0], Action::Exec("file.place".into(), json!({"path": "f2.png", "rect": [0.0, 0.0, 40.0, 20.0]})));
+        assert_eq!(
+            acts[0],
+            Action::Exec(
+                "file.place".into(),
+                json!({"path": "f2.png", "__placeSourceIndex": 2, "__placeCursorClick": true, "rect": [0.0, 0.0, 40.0, 20.0]})
+            )
+        );
         assert_eq!(acts.last(), Some(&Action::SwitchTool("pen".into())));
         // An empty cursor places nothing on a Shift-click.
         t.pointer(&c, &ev(PointerKind::Down, 0.0, 0.0).with_mods(shift));
@@ -358,5 +397,30 @@ mod tests {
         assert_eq!(t.options()["names"], json!(["f1.png", "f2.png"]));
         t.key(&c, ToolKey::Escape, Mods::default());
         assert_eq!(t.key(&c, ToolKey::Escape, Mods::default()), vec![Action::SwitchTool("pen".into())]);
+    }
+
+    #[test]
+    fn source_indices_survive_removal_in_cursor_requests() {
+        let (d, _) = doc_with_rect();
+        let (s, p) = (Default::default(), paint());
+        let c = cx(&d, &s, &p);
+        let mut t = loaded(3);
+        t.key(&c, ToolKey::Right, Mods::default());
+        assert_eq!(t.options()["sourceIndex"], 1);
+        t.key(&c, ToolKey::Escape, Mods::default());
+        assert_eq!((t.options()["current"].clone(), t.options()["sourceIndex"].clone()), (json!(1), json!(2)));
+        t.pointer(&c, &ev(PointerKind::Down, 0.0, 0.0));
+        let acts = t.pointer(&c, &ev(PointerKind::Up, 0.0, 0.0));
+        assert_eq!(
+            acts,
+            vec![Action::Exec(
+                "file.place".into(),
+                json!({"path": "f2.png", "__placeSourceIndex": 2, "__placeCursorClick": true, "rect": [0.0, 0.0, 40.0, 20.0]})
+            )]
+        );
+        assert_eq!(t.options()["sourceIndex"], 0);
+        assert!(t.check_option("sourceIndex", &json!(0)).is_err(), "the source identity is read only");
+        t.key(&c, ToolKey::Escape, Mods::default());
+        assert_eq!(t.options()["sourceIndex"], Value::Null);
     }
 }

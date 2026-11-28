@@ -467,13 +467,20 @@ impl Session {
         (!self.menu.new_masks_unclipped, self.menu.new_masks_inverted)
     }
 
-    /// The Transparency panel's values for the selection, or for the object whose mask is being
-    /// edited (`transparency.info` without ids).
+    /// The Transparency panel's values for the selection or for the object whose mask is being
+    /// edited. A selected dynamic symbol part supplies its opacity and blend mode.
     pub fn transparency_info(&self) -> TransparencyInfo {
         match (self.active(), transparency_targets(self, &Value::Null)) {
             (Some(st), Ok(ids)) => {
                 let points = self.mesh_points_picked();
-                TransparencyInfo::of(&st.doc, ids).with_mesh_points(&st.doc, points)
+                let mut info = TransparencyInfo::of(&st.doc, ids).with_mesh_points(&st.doc, points);
+                if st.doc.mask_edit.is_none()
+                    && let Some(part) = st.selected_symbol_part()
+                {
+                    info.opacity = Some((f64::from(part.opacity) * 10_000.0).round() / 100.0);
+                    info.blend = Some(part.blend);
+                }
+                info
             }
             _ => TransparencyInfo::default(),
         }
