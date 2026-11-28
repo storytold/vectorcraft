@@ -326,9 +326,10 @@ fn raster_metadata_uses_encoded_header_not_rgb_fallback() {
         &base,
         "var r = app.activeDocument.rasterItems, t = [];\
          for (var i = 0; i < r.length; i++) t.push([r[i].imageColorSpace, r[i].channels, r[i].bitsPerChannel, r[i].transparent, r[i].colorizedGrayscale]);\
-         vc.log(t); vc.log(r[0].boundingBox); vc.log(r[1].imageColorSpace === ImageColorSpace.RGB); var m = r[1].matrix; vc.log([m.typename, m.mValueA, m.mValueD]);",
+         vc.log(t); vc.log(r[1].boundingBox); vc.log(r[0].imageColorSpace === ImageColorSpace.RGB); var m = r[0].matrix; vc.log([m.typename, m.mValueA, m.mValueD]);",
     );
-    assert_eq!(out[0], json!([["ImageColorSpace.Grayscale", 1, 8, false, false], ["ImageColorSpace.RGB", 4, 8, true, false]]));
+    // The collection lists the images topmost first, as `pageItems` does: the color image placed last comes first.
+    assert_eq!(out[0], json!([["ImageColorSpace.RGB", 4, 8, true, false], ["ImageColorSpace.Grayscale", 1, 8, false, false]]));
     assert_eq!(out[1], json!([0, 4, 6, 0]));
     assert_eq!(out[2], json!(true));
     let m = out[3].as_array().unwrap();
@@ -577,9 +578,9 @@ fn a_stale_placed_item_is_refused_as_the_relative_object_of_move() {
         "var d = app.activeDocument, p = d.placedItems[0], x = null, m = '';\
          for (var i = 0; i < d.pageItems.length; i++) { if (d.pageItems[i].typename == 'PathItem') x = d.pageItems[i]; }\
          p.embed(); try { x.move(p, ElementPlacement.PLACEAFTER); } catch (e) { m = e.message; } vc.log(m);\
-         x.move(d.rasterItems[0], ElementPlacement.PLACEAFTER); vc.log(d.pageItems[0].typename);",
+         x.move(d.rasterItems[0], ElementPlacement.PLACEAFTER); vc.log([d.pageItems[0].typename, d.pageItems[1].typename]);",
     );
-    assert_eq!(out, vec![json!("Stale page item"), json!("PathItem")]);
+    assert_eq!(out, vec![json!("Stale page item"), json!(["RasterItem", "PathItem"])]);
     assert!(s.active().unwrap().doc.node(NodeId(rect)).is_some());
     let _ = std::fs::remove_dir_all(base);
 }

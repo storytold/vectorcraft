@@ -1811,12 +1811,16 @@ fn item_visible(h: &Host, a: &[Data]) -> Answer {
     bounds(h, a, true)
 }
 
-/// `controlBounds`: the visible bounds and the Bézier handles of the item's paths.
+/// `controlBounds`: the visible bounds and the Bézier handles of the item's paths, zeros for an
+/// object with nothing in it.
 fn item_control(h: &Host, a: &[Data]) -> Answer {
     let item = this_item(h, a)?;
     let (r, f) = item_rect(h, item, true)?;
     let handles = with_doc(h, item.doc, |_, st| st.doc.node(item.id).and_then(handle_bounds));
-    Ok(f.bounds(h.dom.coords.get(), handles.map_or(r, |b| r.union(b))))
+    match r.into_iter().chain(handles).reduce(|a, b| a.union(b)) {
+        Some(r) => Ok(f.bounds(h.dom.coords.get(), r)),
+        None => Ok(Data::Array(vec![num(0.0), num(0.0), num(0.0), num(0.0)])),
+    }
 }
 
 /// The bounds of the anchors and handles of `n`'s paths: a path's own, and those of the shown

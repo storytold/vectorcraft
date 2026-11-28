@@ -140,7 +140,7 @@ fn page_item_control_bounds_take_in_the_handles() {
     let (mut s, _, _) = doc();
     let anchors = json!([{"x": 0, "y": 100, "out": [0, 0]}, {"x": 100, "y": 100, "in": [100, 0]}]);
     s.execute("path.create", &json!({"anchors": anchors})).unwrap();
-    let out = log(&mut s, "var p = app.activeDocument.pageItems, i = p[p.length - 1]; vc.log(i.visibleBounds); vc.log(i.controlBounds);");
+    let out = log(&mut s, "var i = app.activeDocument.pageItems[0]; vc.log(i.visibleBounds); vc.log(i.controlBounds);");
     let b = |v: &Value| -> Vec<f64> { v.as_array().unwrap().iter().map(|n| n.as_f64().unwrap()).collect() };
     let (visible, control) = (b(&out[0]), b(&out[1]));
     assert!(visible[1] < 290.0, "the curve stays well under its handles: {visible:?}");
