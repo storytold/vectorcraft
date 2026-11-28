@@ -351,6 +351,16 @@ impl<T: Send + 'static> Loads<T> {
         out
     }
 
+    /// Tests: waits for the next outcome a worker sends and records it → its job (`None`: the
+    /// channel the outcomes come on was closed).
+    #[cfg(test)]
+    pub(crate) fn record_next(&mut self) -> Option<usize> {
+        let done = self.results.lock().unwrap_or_else(|e| e.into_inner()).recv().ok()?;
+        let i = done.0;
+        self.record(done);
+        Some(i)
+    }
+
     fn record(&mut self, (i, r, took): Done<T>) {
         let r = if took >= self.deadline { Err(self.too_long()) } else { r };
         // An outcome that comes after the job failed past its deadline is dropped.
@@ -488,26 +498,11 @@ mod tests {
         })
     }
 
-    /// Polls `loads` until `done` says so, at most a million times.
-    fn poll_until(loads: &mut Loads<u32>, mut done: impl FnMut(&mut Loads<u32>) -> bool) -> bool {
-        (0..1_000_000).any(|_| {
-            std::thread::yield_now();
-            loads.poll();
-            done(loads)
-        })
-    }
-
-    /// What `rx` receives, looked for 100 million times at most, so a worker that never sends fails the
-    /// test instead of holding it. The test fails at once when every sender is gone.
-    fn recv_soon<V>(rx: &Receiver<V>) -> V {
-        for _ in 0..100_000_000 {
-            match rx.try_recv() {
-                Ok(v) => return v,
-                Err(mpsc::TryRecvError::Disconnected) => panic!("every sender ended without sending"),
-                Err(mpsc::TryRecvError::Empty) => std::thread::yield_now(),
-            }
-        }
-        panic!("nothing was received");
+    /// The channel `loads`' workers send their outcomes on, taken out of `loads` so that the test
+    /// still receives them once `loads` is dropped. A worker sends its outcome after it stopped
+    /// counting its thread as stuck, so receiving it shows that the count went down.
+    fn take_results(loads: &mut Loads<u32>) -> Receiver<Done<u32>> {
+        std::mem::replace(&mut *loads.results.lock().unwrap(), mpsc::channel().1)
     }
 
     /// The outcomes come back in the order of the jobs when they finish in the reverse order.
@@ -527,15 +522,13 @@ mod tests {
         // return, and dropping `loads` does not wait on them while the test clock stands still.
         let release = go;
         for _ in 0..3 {
-            recv_soon(&starts);
+            starts.recv().unwrap();
         }
         // Each job is let go only once the one after it has finished.
         let mut finished = Vec::new();
         for v in (0..3).rev() {
             release[v].send(()).unwrap();
-            let done = recv_soon(&loads.results.lock().unwrap());
-            finished.push(done.0);
-            loads.record(done);
+            finished.extend(loads.record_next());
         }
         assert_eq!(finished, vec![2, 1, 0], "they finished in reverse");
         assert_eq!(loads.wait().into_iter().map(|r| r.unwrap()).collect::<Vec<_>>(), vec![0, 1, 2]);
@@ -561,10 +554,16 @@ mod tests {
         let jobs = vec![held(0, started.clone(), held_until), Job::new(None, || Ok(1))];
         let (ms, clock) = manual();
         let mut loads = Loads::start_with(jobs, 1, Duration::from_secs(10), clock);
-        assert_eq!(recv_soon(&starts), 0);
+        assert_eq!(starts.recv().unwrap(), 0);
         assert!(!loads.poll(), "the first job is still running and the second waits for a worker");
         ms.store(10_000, Ordering::SeqCst);
-        let done = poll_until(&mut loads, |l| l.outcomes.iter().all(Option::is_some));
+        // The first job fails at its deadline. Unless the second job failed with it, for want of a
+        // worker, the worker started in place of the stuck one sends the second job's outcome.
+        loads.poll();
+        if loads.outcomes[1].is_none() {
+            loads.record_next();
+        }
+        let done = loads.poll();
         go.send(()).unwrap();
         assert!(done, "the job after the one that hangs never got its outcome");
         let out = loads.wait();
@@ -582,10 +581,12 @@ mod tests {
         let jobs = vec![held(0, started.clone(), held0), held(1, started, held1), Job::new(None, || Ok(2))];
         let (ms, clock) = manual();
         let mut loads = Loads::start_with(jobs, 1, Duration::from_secs(10), clock);
-        assert_eq!(recv_soon(&starts), 0);
+        assert_eq!(starts.recv().unwrap(), 0);
         ms.store(10_000, Ordering::SeqCst);
         loads.poll();
-        assert_eq!(recv_soon(&starts), 1, "a worker took the place of the stuck one");
+        // The second job fails at once when no worker is left to take it; otherwise one starts it.
+        assert!(loads.outcomes[1].is_none(), "no worker took the place of the stuck one: {:?}", loads.outcomes[1]);
+        assert_eq!(starts.recv(), Ok(1), "a worker took the place of the stuck one");
         ms.store(20_000, Ordering::SeqCst);
         let done = loads.poll();
         go0.send(()).unwrap();
@@ -624,11 +625,18 @@ mod tests {
             .collect();
         let (_, clock) = manual();
         let mut loads = Loads::start_with(jobs, 1, LOAD_DEADLINE, clock);
-        assert!(poll_until(&mut loads, |l| l.outcomes.iter().filter(|o| o.is_some()).count() == 2), "the first two loaded");
+        let loaded = [loads.record_next(), loads.record_next()];
+        assert_eq!(loaded, [Some(0), Some(1)], "the first two loaded");
         let early = ran.load(Ordering::SeqCst);
         assert_eq!(loads.ready(), vec![Ok(0), Ok(1)]);
         assert_eq!(early, 2, "the third job waited for the first outcomes to be taken");
-        assert!(!poll_until(&mut loads, |l| l.outcomes.iter().filter(|o| o.is_some()).count() > 0), "taken but not released");
+        // The worker starts the third job only once the limit passes it.
+        loads.poll();
+        let (may_start, started) = {
+            let s = loads.pool.lock();
+            (s.limit > 2, s.started[2].is_some())
+        };
+        assert!(!may_start && !started, "taken but not released");
         assert_eq!(ran.load(Ordering::SeqCst), 2, "the third job waits until the caller is done with the first outcomes");
         loads.release(2);
         assert_eq!(loads.wait(), vec![Ok(2), Ok(3), Ok(4)]);
@@ -641,13 +649,14 @@ mod tests {
         let jobs: Vec<Job<u32>> = (0..3).map(|v| Job::new(None, move || Ok(v))).collect();
         let (_, clock) = manual();
         let mut loads = Loads::start_with(jobs, 1, LOAD_DEADLINE, clock);
-        assert!(poll_until(&mut loads, |l| l.outcomes.iter().filter(|o| o.is_some()).count() == 2), "the first two loaded");
+        let loaded = [loads.record_next(), loads.record_next()];
+        assert_eq!(loaded, [Some(0), Some(1)], "the first two loaded");
         assert_eq!(loads.ready(), vec![Ok(0), Ok(1)]);
         let (done, rest) = mpsc::channel();
         std::thread::spawn(move || {
             let _ = done.send(loads.wait());
         });
-        assert_eq!(recv_soon(&rest), vec![Ok(2)]);
+        assert_eq!(rest.recv(), Ok(vec![Ok(2)]));
     }
 
     /// When no worker can take the jobs left, because the only one is stuck past its deadline and
@@ -659,7 +668,7 @@ mod tests {
         let jobs = vec![held(0, started, held_until), Job::new(None, || Ok(1))];
         let (ms, clock) = manual();
         let mut loads = Loads::start_with(jobs, 1, Duration::from_secs(10), clock);
-        recv_soon(&starts);
+        starts.recv().unwrap();
         loads.refuse_threads = true;
         ms.store(10_000, Ordering::SeqCst);
         let done = loads.poll();
@@ -687,18 +696,17 @@ mod tests {
         let (go, held_until) = mpsc::channel();
         let (ms, clock) = manual();
         let mut first = make(vec![held(0, started, held_until)], clock);
-        recv_soon(&starts);
+        starts.recv().unwrap();
         ms.store(10_000, Ordering::SeqCst);
         assert!(first.poll(), "the stuck job failed at its deadline");
+        let results = take_results(&mut first);
         drop(first);
         let (_, clock) = manual();
         let out = make(vec![Job::new(None, || Ok(1))], clock.clone()).wait();
         assert!(matches!(&out[0], Err(Error::Failed(m)) if m.contains("no thread")), "{:?}", out[0]);
         go.send(()).unwrap();
-        assert!((0..1_000_000).any(|_| {
-            std::thread::yield_now();
-            stuck.load(Ordering::SeqCst) == 0
-        }));
+        assert_eq!(results.recv().map(|done| done.0), Ok(0), "the stuck job returned");
+        assert_eq!(stuck.load(Ordering::SeqCst), 0, "the thread no longer counts as stuck");
         assert_eq!(make(vec![Job::new(None, || Ok(2))], clock).wait(), vec![Ok(2)]);
     }
 
@@ -713,15 +721,14 @@ mod tests {
         let mut loads = Loads::with(vec![held(0, started, held_until)], 1, Duration::from_secs(10), clock);
         loads.stuck_threads = stuck;
         loads.begin();
-        recv_soon(&starts);
+        starts.recv().unwrap();
         ms.store(10_000, Ordering::SeqCst);
+        let results = take_results(&mut loads);
         drop(loads);
         assert_eq!(stuck.load(Ordering::SeqCst), 1, "the stuck thread counts");
         go.send(()).unwrap();
-        assert!((0..1_000_000).any(|_| {
-            std::thread::yield_now();
-            stuck.load(Ordering::SeqCst) == 0
-        }));
+        assert_eq!(results.recv().map(|done| done.0), Ok(0), "the stuck job returned");
+        assert_eq!(stuck.load(Ordering::SeqCst), 0, "the thread no longer counts as stuck");
     }
 
     /// The launch marker names an item while its job runs, and stops naming it when the job

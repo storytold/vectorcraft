@@ -7,7 +7,7 @@ use craft::behavior::IconId;
 use craft::keymap::CommandRef;
 use craft::ui::bars::{BarItem, BarItems};
 use craft::ui::buttons::{IconButton, PopupMark, ToggleButton};
-use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{Bind, Gap, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::display::Divider;
 use craft::ui::layout_components::Row;
 use craft::ui::menu::{Menu, MenuItem, PanelRow};
@@ -306,7 +306,7 @@ fn bar_items(buttons: impl Iterator<Item = Button>) -> BarItems {
 /// Align panel's Align To says (the key object while there is one), as its own buttons do (#789),
 /// and the selected artboards with the Artboard tool chosen.
 pub(crate) fn align_buttons(_app: &mut VectorcraftApp, ui: &mut Ui) {
-    Row::new().show(ui, |ui, _| {
+    Row::new().wrap(true).show(ui, |ui, _| {
         for (icon, b) in align_icons() {
             command_button(ui, bar_glyph(b).unwrap_or(icon), b);
         }
@@ -325,6 +325,28 @@ pub(crate) fn button_enabled(app: &VectorcraftApp, b: &Button) -> bool {
         // path; or the artboards [`artboards_distribute`] asks for.
         Button::Distribute(..) | Button::Spacing(_) => boards.map_or(n >= 2 || has_anchors(app), |_| artboards_distribute(app)),
     }
+}
+
+/// Why the Align or Distribute button `b` can't run now, as [`crate::menus::why_off`] answers for
+/// its command: `None` while it can, else `Some` with the reason when one is known. While
+/// [`button_enabled`] dims it, the reason is how many artboards it needs with the Artboard tool
+/// chosen, else the engine's for the object command it runs, whose check `button_enabled` repeats;
+/// otherwise the engine's for the command a click runs.
+pub(crate) fn why_off(app: &VectorcraftApp, b: &Button) -> Option<Option<String>> {
+    if button_enabled(app, b) {
+        return crate::menus::why_off(app, b.command_now(app));
+    }
+    if !on_artboards(app) || app.session.active().is_none() {
+        return Some(vectorcraft_engine::find_command(b.command()).and_then(|c| (c.enabled)(&app.session).err()));
+    }
+    Some(Some(
+        match b {
+            Button::Align(..) | Button::AlignCenters => "select an artboard",
+            Button::Distribute(..) | Button::Spacing(_) if app.ui.align_to == AlignTo::Artboard => "select at least two artboards",
+            Button::Distribute(..) | Button::Spacing(_) => "select at least three artboards",
+        }
+        .to_string(),
+    ))
 }
 
 /// The Control bar's Align content: the align buttons, the Align To menu button showing the choice
@@ -498,20 +520,13 @@ pub(crate) fn run_align_to(app: &mut VectorcraftApp, v: AlignTo) -> Result<Value
 /// Spacing with its value and Align To. The buttons are commands, so their state and clicks come
 /// from the command layer ([`button_enabled`], [`run_button`]).
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
-    crate::panels::subheading(tl!("Align Objects:")).show(ui, |ui, _| {
-        Row::new().show(ui, |ui, _| {
-            for (icon, b) in align_icons() {
-                command_button(ui, icon, b);
-            }
-        });
-    });
-    crate::panels::subheading(tl!("Distribute Objects:")).show(ui, |ui, _| {
-        Row::new().show(ui, |ui, _| {
-            for (icon, b) in distribute_icons() {
-                command_button(ui, icon, b);
-            }
-        });
-    });
+    // The reference app set the buttons apart in groups: left / centre / right of Align Objects
+    // around the both-axes button, and the vertical and horizontal halves of Distribute Objects.
+    let align: Vec<_> = align_icons().collect();
+    crate::panels::subheading(tl!("Align Objects:")).show(ui, |ui, _| button_groups(ui, &[&align[..3], &align[3..4], &align[4..]]));
+    Divider::horizontal().show(ui);
+    let distribute: Vec<_> = distribute_icons().collect();
+    crate::panels::subheading(tl!("Distribute Objects:")).show(ui, |ui, _| button_groups(ui, &[&distribute[..3], &distribute[3..]]));
     if part_hidden(app, HIDE_OPTIONS) {
         return;
     }
@@ -524,30 +539,47 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let lengths = crate::canvas::general_lengths(app);
     let min_spacing = spacing_min(app);
     let mut edited = None;
-    crate::panels::subheading(tl!("Distribute Spacing:")).show(ui, |ui, _| {
-        Row::new().show(ui, |ui, _| {
-            command_button(ui, "dc-dist-vspace", Button::Spacing("vertical"));
-            command_button(ui, "dc-dist-hspace", Button::Spacing("horizontal"));
-            // The value is UI state, not a document edit: a landed value is assigned.
-            let field = NumberField::length(tl!("Distribute Spacing"), Bind::given(Some(spacing)), lengths)
-                .step(1.0)
-                .range(min_spacing..=f64::INFINITY)
-                .enabled(sent);
-            edited = field.show(ui).edit.events.landed().cloned().flatten();
+    // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
+    let anchor = key_is_anchor(app);
+    // Distribute Spacing and Align To share a line, a rule between them, as the reference app had them.
+    Row::new().gap(Gap::Section).show(ui, |ui, _| {
+        crate::panels::subheading(tl!("Distribute Spacing:")).show(ui, |ui, _| {
+            Row::new().show(ui, |ui, _| {
+                command_button(ui, "dc-dist-vspace", Button::Spacing("vertical"));
+                command_button(ui, "dc-dist-hspace", Button::Spacing("horizontal"));
+                // The value is UI state, not a document edit: a landed value is assigned.
+                let field = NumberField::length(tl!("Distribute Spacing"), Bind::given(Some(spacing)), lengths)
+                    .step(1.0)
+                    .range(min_spacing..=f64::INFINITY)
+                    .enabled(sent);
+                edited = field.show(ui).edit.events.landed().cloned().flatten();
+            });
+        });
+        Divider::vertical().show(ui);
+        crate::panels::subheading(tl!("Align To:")).show(ui, |ui, _| {
+            Row::new().show(ui, |ui, _| {
+                for (id, v) in ALIGN_TO_COMMANDS {
+                    let (icon, _) = align_to_icon_name(v, anchor);
+                    ToggleButton::command(CommandRef::new(id)).icon(IconId::new(icon)).icon_only().show(ui);
+                }
+            });
         });
     });
     if let Some(v) = edited {
         app.ui.align_spacing = v;
     }
-    crate::panels::subheading(tl!("Align To:")).show(ui, |ui, _| {
-        // With one object selected the buttons align it to the artboard, and Align To shows Artboard.
-        let anchor = key_is_anchor(app);
-        Row::new().show(ui, |ui, _| {
-            for (id, v) in ALIGN_TO_COMMANDS {
-                let (icon, _) = align_to_icon_name(v, anchor);
-                ToggleButton::command(CommandRef::new(id)).icon(IconId::new(icon)).icon_only().show(ui);
-            }
-        });
+}
+
+/// The command buttons of `groups` on one line, a section gap between the groups.
+fn button_groups(ui: &mut Ui, groups: &[&[(&'static str, Button)]]) {
+    Row::new().gap(Gap::Section).show(ui, |ui, _| {
+        for group in groups {
+            Row::new().show(ui, |ui, _| {
+                for (icon, b) in *group {
+                    command_button(ui, icon, *b);
+                }
+            });
+        }
     });
 }
 

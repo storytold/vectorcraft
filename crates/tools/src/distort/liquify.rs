@@ -503,6 +503,15 @@ fn dist_seg(p: Point, a: Point, b: Point) -> f64 {
     p.distance(a + ab * t)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The points [`simplify`] has measured against a chord on this thread.
+    static FLAT_CHECKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The anchors [`simplify`] has moved on this thread: each anchor copied into the result, or
+    /// shifted to close the gap a removed one leaves, counts as one.
+    static ANCHOR_MOVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Remove anchors lying flat between their neighbours (all control points within `tol` of the chord).
 fn simplify(sp: &mut SubPath, tol: f64, region: Rect) {
     if tol <= 0.0 {
@@ -516,6 +525,8 @@ fn simplify(sp: &mut SubPath, tol: f64, region: Rect) {
     let mut out: Vec<Anchor> = Vec::with_capacity(n);
     let mut src = src.into_iter().peekable();
     out.extend(src.next());
+    #[cfg(test)]
+    ANCHOR_MOVES.with(|m| m.set(m.get() + out.len()));
     let last = if sp.closed { n } else { n.saturating_sub(1) };
     let mut i = 1;
     while let Some(k) = src.next() {
@@ -529,10 +540,16 @@ fn simplify(sp: &mut SubPath, tol: f64, region: Rect) {
         let flat = i < last
             && left >= min
             && region.contains(k.p)
-            && [k.p, k.h_in, k.h_out, pa.h_out, pb.h_in].iter().all(|q| dist_seg(*q, pa.p, pb.p) <= tol)
+            && [k.p, k.h_in, k.h_out, pa.h_out, pb.h_in].iter().all(|q| {
+                #[cfg(test)]
+                FLAT_CHECKS.with(|n| n.set(n.get() + 1));
+                dist_seg(*q, pa.p, pb.p) <= tol
+            })
             && (k.p - pa.p).dot(pb.p - k.p) > 0.0;
         i += 1;
         if !flat {
+            #[cfg(test)]
+            ANCHOR_MOVES.with(|m| m.set(m.get() + 1));
             out.push(k);
             continue;
         }
@@ -924,12 +941,17 @@ mod tests {
 
     #[test]
     fn simplify_drops_flat_anchors_and_keeps_the_ends() {
-        let pts: Vec<Point> = (0..200_000).map(|i| Point::new(i as f64, 0.0)).collect();
+        let pts: Vec<Point> = (0..20_000).map(|i| Point::new(i as f64, 0.0)).collect();
         let mut open = SubPath::polyline(&pts, false);
-        let start = std::time::Instant::now();
+        FLAT_CHECKS.with(|n| n.set(0));
+        ANCHOR_MOVES.with(|m| m.set(0));
         simplify(&mut open, 0.5, Rect::new(-1.0, -1.0, 1e6, 1.0));
-        assert!(start.elapsed() < std::time::Duration::from_secs(5), "{:?}", start.elapsed());
-        assert_eq!(open.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), [pts[0], pts[199_999]]);
+        // Each anchor is measured once against the chord between its kept neighbors (its point,
+        // its handles and theirs), and moved at most once.
+        let (checks, moves) = (FLAT_CHECKS.with(|n| n.get()), ANCHOR_MOVES.with(|m| m.get()));
+        assert!(checks <= 5 * pts.len(), "{checks} checks for {} anchors", pts.len());
+        assert!(moves <= pts.len(), "{moves} moves for {} anchors", pts.len());
+        assert_eq!(open.anchors.iter().map(|a| a.p).collect::<Vec<_>>(), [pts[0], pts[19_999]]);
         // A closed square with a flat midpoint on each side keeps its four corners.
         let ring = [(0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (10.0, 5.0), (10.0, 10.0), (5.0, 10.0), (0.0, 10.0), (0.0, 5.0)];
         let mut closed = SubPath::polyline(&ring.map(|(x, y)| Point::new(x, y)), true);

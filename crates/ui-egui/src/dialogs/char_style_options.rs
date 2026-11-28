@@ -11,7 +11,7 @@ use craft::behavior::Mixed;
 use craft::text::ui::character::{AKI_PRESETS, DIACRITIC_PRESETS, TSUME_PRESETS};
 use craft::ui::choice::Checkbox;
 use craft::ui::contract::{Bind, Entry, Outcome as _, Props as _, Show as _, ShowContainer as _};
-use craft::ui::dialog::{DialogResult, FieldRefusal};
+use craft::ui::dialog::{DialogResult, FieldRefusal, StackDialog};
 use craft::ui::layout_components::Row;
 use craft::ui::patterns::form_dialogs::{
     DialogFields, FieldValue, HostedPropertiesDialog, Param, ParamKind, PropertiesDialog, PropertiesTab, PropertyRow, TabLayout,
@@ -437,16 +437,17 @@ fn case_from_attrs(attrs: &Map<String, Value>) -> Option<&'static str> {
 /// and a final `%` in the percent fields or `°` in Character Rotation.
 fn typed_number(key: &str, text: &str) -> Option<f64> {
     let text = text.trim().replace('\u{2212}', "-");
-    let text = vectorcraft_doc::decimal_point(&text);
     let mark = match key {
         "size" | "leading" | "baseline_shift" | "tcyUpDown" | "tcyLeftRight" | "stroke_width" => {
-            return vectorcraft_doc::Unit::Points.parse(&text);
+            return vectorcraft_doc::Unit::Points.parse(&vectorcraft_doc::decimal_point(&text));
         }
         "h_scale" | "v_scale" | "tsume" | "fill_tint" | "stroke_tint" => Some('%'),
         "rotation" => Some('°'),
         _ => None,
     };
-    vectorcraft_doc::parse_number(mark.and_then(|m| text.strip_suffix(m)).unwrap_or(&text))
+    // The suffix comes off before the comma is read, so `1,000%` is refused as `1,000` is.
+    let number = mark.and_then(|m| text.strip_suffix(m)).unwrap_or(&text);
+    vectorcraft_doc::parse_number(&vectorcraft_doc::decimal_point(number))
 }
 
 fn optional_number(d: &Values, key: &str) -> Result<Option<Value>, String> {
@@ -1164,6 +1165,7 @@ pub(crate) use style_dialog;
 pub(crate) struct CharStyleOptions {
     inner: HostedPropertiesDialog,
     opening: Arc<Opening>,
+    document: u64,
 }
 
 impl CharStyleOptions {
@@ -1179,12 +1181,21 @@ impl CharStyleOptions {
 }
 style_dialog!(CharStyleOptions, KIND);
 
+/// The preview and the document activation that owns it, retained until the host reports Cancel.
+#[derive(Default)]
+pub(crate) struct Preview {
+    live: LivePreview,
+    activation: Option<(u64, u64)>,
+    interaction_selection: Option<Arc<vectorcraft_doc::Selection>>,
+}
+
 pub fn open(app: &mut VectorcraftApp, name: &str) -> Result<Value, String> {
     crate::panels::character::end_typing(app);
-    let doc = &app.session.active().ok_or("no document open")?.doc;
+    let state = app.session.active().ok_or("no document open")?;
+    let (document, doc) = (state.uid, &state.doc);
     let def = doc.char_styles.iter().find(|s| s.name == name).ok_or_else(|| format!("no character style `{name}`"))?;
     let opening = Arc::new(Opening::new(name, def.attrs.clone(), &doc.setup, swatch_choices(doc)));
-    let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening };
+    let dialog = CharStyleOptions { inner: hosted(KIND, tl!("Character Style Options"), &opening, name).previews(), opening, document };
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(json!({"dialog": KIND}))
 }
@@ -1208,21 +1219,82 @@ pub fn reset_panel(app: &mut VectorcraftApp) -> Result<Value, String> {
 
 /// The dialog's frame work: previews the values, commits at OK, and rolls the preview back at Cancel.
 pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
+    let refusals = Refusals {
+        busy: "finish the active edit before applying Character Style Options",
+        elsewhere: "switch back to the document where Character Style Options was opened",
+        closed: "the document where Character Style Options was opened has closed",
+    };
+    pump_in_opening_document::<CharStyleOptions>(
+        app,
+        |app| &mut app.char_style_preview,
+        |d| (d.document, d.frame()),
+        CharStyleOptions::hosted_mut,
+        (tl!("Character Style Options"), "charStyle.edit"),
+        &refusals,
+    );
+}
+
+/// Why a style options dialog's OK is refused outside its own preview.
+pub(crate) struct Refusals {
+    /// Another edit is active in the opening document.
+    pub(crate) busy: &'static str,
+    /// Another document is active.
+    pub(crate) elsewhere: &'static str,
+    /// The opening document has closed.
+    pub(crate) closed: &'static str,
+}
+
+/// Runs one frame of the style options dialog `D` that opened on one document: previews and commits `command`
+/// (its undo label and id) only while that document is active and no other edit is active in it, refuses OK
+/// elsewhere with `refusals`, and at Cancel rolls back only the preview the dialog still owns. `preview` is the
+/// app's slot for the dialog's preview, `state` gives the opening document's uid and this frame's state, and
+/// `hosted` gives the hosted dialog that takes OK's answer.
+pub(crate) fn pump_in_opening_document<D: StackDialog>(
+    app: &mut VectorcraftApp,
+    preview: fn(&mut VectorcraftApp) -> &mut Preview,
+    state: fn(&mut D) -> (u64, Frame),
+    hosted: fn(&mut D) -> &mut HostedPropertiesDialog,
+    (label, command): (&str, &str),
+    refusals: &Refusals,
+) {
     let Some(dialogs) = app.dialogs() else { return };
-    let Some(frame) = dialogs.with(|host| host.get_mut::<CharStyleOptions>().map(CharStyleOptions::frame)) else {
-        if matches!(dialogs.with(|host| host.take::<CharStyleOptions>()), Some(DialogResult::Cancel)) {
-            std::mem::take(&mut app.char_style_preview).cancel(app);
+    let active = app.session.active().map(|doc| (doc.uid, app.session.tool_resets()));
+    let interaction_selection = app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+    let owned = preview(app);
+    let owns_interaction = owned.activation == active
+        && owned.interaction_selection.as_ref().zip(interaction_selection.as_ref()).is_some_and(|(owned, current)| Arc::ptr_eq(owned, current));
+    let Some((document, frame)) = dialogs.with(|host| host.get_mut::<D>().map(state)) else {
+        if matches!(dialogs.with(|host| host.take::<D>()), Some(DialogResult::Cancel)) {
+            let owned = std::mem::take(preview(app));
+            if owns_interaction {
+                owned.live.cancel(app);
+            }
         }
         return;
     };
-    let live = std::mem::take(&mut app.char_style_preview);
-    let (live, done) = drive(app, live, tl!("Character Style Options"), "charStyle.edit", &frame);
-    app.char_style_preview = live;
+    let done = if let Some(activation) = active.filter(|(uid, _)| *uid == document) {
+        if interaction_selection.is_some() && !owns_interaction {
+            frame.ok.then(|| Err(refusals.busy.into()))
+        } else {
+            let owned = std::mem::take(preview(app));
+            let live = if owns_interaction { owned.live } else { LivePreview::default() };
+            let (live, answer) = drive(app, live, label, command, &frame);
+            let interaction_selection =
+                app.session.active().and_then(|doc| doc.interaction.as_ref().map(|interaction| interaction.selection.clone()));
+            *preview(app) = Preview { live, activation: Some(activation), interaction_selection };
+            answer
+        }
+    } else if frame.ok {
+        let why = if app.session.documents().iter().any(|doc| doc.uid == document) { refusals.elsewhere } else { refusals.closed };
+        Some(Err(why.into()))
+    } else {
+        None
+    };
     if let Some(done) = done {
         let answer = done.map(drop).map_err(|why| reason(&why));
         dialogs.with(|host| {
-            if let Some(d) = host.get_mut::<CharStyleOptions>() {
-                d.hosted_mut().answer_ok(answer);
+            if let Some(d) = host.get_mut::<D>() {
+                hosted(d).answer_ok(answer);
             }
         });
     }

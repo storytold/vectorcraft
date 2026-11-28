@@ -22,6 +22,9 @@
 //! [`import_pict`] reads QuickDraw pictures (PICT, versions 1 and 2) into the same kind of
 //! document.
 //!
+//! [`painted_layers`] gives the same walk's fills and strokes, layer by layer, to writers of other
+//! formats.
+//!
 //! The app walks its document and maps its drawing operations to the shared writers.
 
 #[cfg(test)]
@@ -109,6 +112,88 @@ pub fn export_regions(doc: &Document, regions: &[Rect], kind: Kind) -> Result<Ve
             encode::write(ops, r, kind, doc.info_title(), &mut warnings).map(|bytes| Output { bytes, warnings })
         })
         .collect()
+}
+
+/// A fill or a stroke of the visible art, in document space ([`painted_layers`]).
+#[derive(Clone, Debug)]
+pub enum Painted {
+    Fill {
+        path: vectorcraft_geom::BezPath,
+        rule: vectorcraft_geom::FillRule,
+        rgb: [u8; 3],
+        /// The solid paint `rgb` comes from (`None`: the one colour of a gradient or pattern).
+        paint: Option<vectorcraft_color::Paint>,
+    },
+    Stroke {
+        path: vectorcraft_geom::BezPath,
+        rgb: [u8; 3],
+        /// The solid paint `rgb` comes from (`None`: the one colour of a gradient or pattern).
+        paint: Option<vectorcraft_color::Paint>,
+        /// Points.
+        width: f64,
+        cap: vectorcraft_doc::LineCap,
+        join: vectorcraft_doc::LineJoin,
+        /// The miter limit, as a multiple of the width.
+        miter: f64,
+        /// A dash pattern that draws dashes (points).
+        dash: Option<vectorcraft_doc::Dash>,
+    },
+}
+
+/// The visible art of a document, layer by layer ([`painted_layers`]).
+#[derive(Clone, Debug, Default)]
+pub struct PaintedLayers {
+    /// Each top-level layer's name (empty when it has none) and its fills and strokes in
+    /// paint order, in the document's order of layers (the bottom layer first).
+    pub layers: Vec<(String, Vec<Painted>)>,
+    /// What was approximated or left out, as the WMF writer reports it.
+    pub warnings: Vec<String>,
+    /// Visible images that could be decoded were left out (one that can't be decoded has its own
+    /// warning).
+    pub images: bool,
+    /// The swatches the paints name: the document's, and those of the documents it places.
+    pub swatches: Vec<vectorcraft_color::Swatch>,
+}
+
+/// The visible art of `doc` over `region` as fills and strokes, one list for each top-level
+/// layer, taken as the WMF writer takes it: live effects applied, type as glyph outlines,
+/// gradients and patterns as one colour, clipping masks not applied, and strokes a pen can't draw
+/// (aligned inside or outside, width profiles, arrowheads) as their filled outlines. Images are
+/// left out. An empty region is an error.
+pub fn painted_layers(doc: &Document, region: Rect) -> Result<PaintedLayers, String> {
+    check_regions(&[region])?;
+    let layers = vectorcraft_effects::WrittenLayers { hidden: false, non_printing: true, hidden_objects: false };
+    let baked = vectorcraft_effects::bake_document_placing_symbols(doc, false, layers);
+    let doc = baked.as_ref().unwrap_or(doc);
+    let (by_layer, mut warnings) = scene::Scene::new(doc, region.abs(), false).run_by_layer();
+    let mut out = PaintedLayers::default();
+    for (layer, ops) in doc.layers.iter().zip(by_layer) {
+        let mut painted = Vec::with_capacity(ops.len());
+        for op in ops {
+            match op {
+                scene::Op::Fill { path, rule, rgb, paint } => painted.push(Painted::Fill { path, rule, rgb, paint }),
+                scene::Op::Stroke { path, pen } => painted.push(Painted::Stroke {
+                    path,
+                    rgb: pen.rgb,
+                    paint: pen.paint,
+                    width: pen.width,
+                    cap: pen.cap,
+                    join: pen.join,
+                    miter: pen.miter,
+                    dash: pen.dash,
+                }),
+                scene::Op::Image { .. } => out.images = true,
+                scene::Op::Clip { .. } | scene::Op::Unclip => {}
+            }
+        }
+        out.layers.push((layer.name.clone().unwrap_or_default(), painted));
+    }
+    // The images are left out, so how a distorted one would have been written does not apply. An
+    // image that can't be decoded keeps its warning: it is missing either way.
+    warnings.retain(|w| w != scene::DISTORTED_IMAGES_NOTE);
+    out.warnings = warnings;
+    out.swatches = doc.swatches_iter().cloned().collect();
+    Ok(out)
 }
 
 /// A metafile read into a document.

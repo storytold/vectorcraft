@@ -1001,8 +1001,9 @@ impl Session {
 
     /// Profile `name`'s document, its file's path and a warning for each color profile the file
     /// carries that can't be used: `None` when it has no file (the shipped profile, the defaults),
-    /// the reason when the request being served may not read it, or its file can't be read, is
-    /// larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft reads.
+    /// the reason when the request being served may not read it, or its file is a link or a folder,
+    /// can't be read, is larger than [`MAX_PROFILE_BYTES`] or isn't a native document VectorCraft
+    /// reads.
     fn read_profile(&self, name: &str) -> std::result::Result<Option<ReadProfile>, String> {
         let Some(path) = self.profile_path(name) else { return Ok(None) };
         let file = path.to_string_lossy().to_string();
@@ -1013,8 +1014,11 @@ impl Session {
         let denied = |_| PROFILE_DENIED.to_string();
         let read = crate::file_access::app_folder_read(|| {
             crate::file_access::check_read(&file).map_err(denied)?;
-            if std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
-                return Ok(None);
+            match std::fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                // A link is refused: the script's gate does not check where it leads.
+                Ok(m) if !m.file_type().is_file() => return Err("not a plain file".to_string()),
+                _ => {}
             }
             crate::file_access::check_read(&file).map_err(denied)?;
             crate::store::read_capped(&path, MAX_PROFILE_BYTES).map(Some)

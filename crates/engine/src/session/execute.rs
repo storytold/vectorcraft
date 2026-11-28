@@ -92,7 +92,7 @@ impl Session {
     fn execute_unwatched(&mut self, id: &str, params: &Value) -> Result<Value> {
         let spec = find_command(id).ok_or_else(|| cmd::params::unknown_command(id))?;
         // A clipboard import is a query that replaces the clipboard, which the end of a run sets too.
-        if self.depth == 0 && self.script_key.is_some() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
+        if self.depth == 0 && self.script_running() && (waits_for_tool_edit(id) || id.starts_with("clipboard.import")) {
             return Err(EngineError::Busy);
         }
         // A step of a batch a script runs is held to the same rule as the script's own commands.
@@ -401,8 +401,18 @@ impl Session {
             // The params' own values win, except a null: it reads as a key left out, so the
             // noted value is the one the command resolved. A noted `defaultsOnly` wins too: the
             // Live Paint Bucket kept the command to the defaults although the params gave `false`.
+            // An object noted for an object the params give (`effect.apply`'s `params`) is merged
+            // by the same rule, so the keys the command filled in stay.
             Value::Object(m) if !note.is_empty() => {
                 for (k, v) in m {
+                    if let (Some(Value::Object(resolved)), Value::Object(given)) = (note.get_mut(k), v) {
+                        for (gk, gv) in given {
+                            if !gv.is_null() || !resolved.contains_key(gk) {
+                                resolved.insert(gk.clone(), gv.clone());
+                            }
+                        }
+                        continue;
+                    }
                     if (!v.is_null() && k != "defaultsOnly") || !note.contains_key(k) {
                         note.insert(k.clone(), v.clone());
                     }
@@ -444,6 +454,7 @@ impl Session {
                     st.doc = doc;
                     st.selection = selection;
                     st.interaction = interaction;
+                    st.effect_step = None;
                     if let Some(history) = history {
                         st.history = history;
                     }

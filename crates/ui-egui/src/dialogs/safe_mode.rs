@@ -5,7 +5,7 @@
 //! dialogs live on the dialog host; [`pump`] reads their answers.
 
 use craft::ui::contract::Bind;
-use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt, StartupStage, dialog_id};
+use craft::ui::dialog::{DialogResult, PromptChoice, StandardPrompt, dialog_id};
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, HostedParamDialog, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 use vectorcraft_plugins::safe_mode::{self, Item};
@@ -135,7 +135,8 @@ fn stopped_prompt(fields: &Value) -> StandardPrompt {
 
 /// The choice's Disable and Continue (`normal` false) or Start Normally: Safe Mode ends and the
 /// plug-ins load, without the stopped ones for Disable and Continue (kept off for later launches
-/// too).
+/// too), then the startup scripts run ([`crate::script_runs::run_at_launch`]), without a disabled
+/// one.
 fn confirm_stopped(app: &mut VectorcraftApp, normal: bool) {
     let items = stopped_items(&app.ui.stopped_plugin.take().unwrap_or(Value::Null));
     // When a disabled plug-in can't be saved for the next launch, that launch asks again. Every
@@ -154,6 +155,8 @@ fn confirm_stopped(app: &mut VectorcraftApp, normal: bool) {
     }
     safe_mode::set_active(None);
     vectorcraft_engine::cmd::plugin::load_prefs_folder(&mut app.session);
+    // The launch's startup scripts waited for Safe Mode to end.
+    crate::script_runs::run_at_launch(app);
 }
 
 /// Help › Safe Mode: the disabled plug-ins, none ticked for Enable on Re-launch. A plug-in disabled
@@ -239,9 +242,10 @@ fn pump_stopped(app: &mut VectorcraftApp, ctx: &egui::Context) {
     let Some(dialogs) = app.dialogs() else { return };
     let answered = dialogs.with(|h| {
         let answered = h.take::<StandardPrompt>();
-        // An empty host has neither an open dialog nor a queued one: otherwise the choice waits.
+        // An empty host has neither an open dialog nor a queued one: otherwise the choice waits. It opens now rather
+        // than through the startup queue, which the host drains only in its next pass: a frame may have no other.
         if answered.is_none() && h.is_empty() {
-            h.enqueue(StartupStage::Warning, stopped_prompt(&fields));
+            h.open(stopped_prompt(&fields));
             ctx.request_repaint();
         }
         answered

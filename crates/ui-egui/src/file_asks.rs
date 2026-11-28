@@ -21,14 +21,16 @@ use crate::VectorcraftApp;
 use crate::dialogs::confirm::{ReplaceFiles, ReplaceFilesPrompt};
 
 type Then = Box<dyn FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String>>;
+/// Whether the part of the app that requested a pick is still waiting for it.
+type PickGuard = Box<dyn FnOnce(&VectorcraftApp) -> bool>;
 /// What proceeding past a replace question runs.
 type Proceed = Box<dyn FnOnce(&mut VectorcraftApp) -> Result<Value, String>>;
 
 /// Whose answer a continuation is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Owner {
-    /// The active document when it was asked: dropped with [`closed`] when it has closed, made
-    /// active before the continuation runs.
+    /// The active document when asked, made active before the continuation runs. Closing or
+    /// reverting it retires the request.
     Document,
     /// Acts on no document (an app preference, a library, a shortcut set): it goes on whatever is open.
     Free,
@@ -37,20 +39,24 @@ pub(crate) enum Owner {
 /// A pick asked for and not yet answered.
 struct Waiting {
     ticket: PickId,
-    owner: Owner,
-    /// The active document's uid when asked (`DocState::uid`); `None` for [`Owner::Free`].
-    doc: Option<u64>,
+    /// The active drawing's UID and Revert counter when asked, if the request is document-owned.
+    doc: Option<(u64, u64)>,
     /// The automation roots in force when asked: the continuation runs under them, not under the
     /// desktop's access of the frame the answer comes in.
     scope: ScopeHandle,
     /// Automation asked ([`VectorcraftApp::automation_asked`]): the continuation runs as its.
     automated: bool,
+    current: Option<PickGuard>,
     then: Then,
 }
 
 /// A replace question on the dialog host, and what proceeding runs.
 struct Replacing {
     dialog: DialogId,
+    /// The automation roots in force when asked, as [`Waiting::scope`].
+    scope: ScopeHandle,
+    /// Automation asked, as [`Waiting::automated`].
+    automated: bool,
     then: Proceed,
 }
 
@@ -73,6 +79,14 @@ impl FileAsks {
     /// A file dialog or a replace question is waiting to answer.
     pub(crate) fn asking(&self) -> bool {
         !self.waiting.is_empty() || !self.replacing.is_empty()
+    }
+
+    /// Whether the newest open replace question goes on confined to automation roots, and whether
+    /// as automation.
+    #[cfg(test)]
+    pub(crate) fn replace_access(&self) -> Option<(bool, bool)> {
+        let r = self.replacing.last()?;
+        Some((r.scope.clone().run(vectorcraft_engine::file_access::current).is_some(), r.automated))
     }
 }
 
@@ -108,7 +122,18 @@ pub(crate) fn ask(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.pick(request), then)
+    start(app, owner, |files| files.pick(request), None, then)
+}
+
+/// Like [`ask`], but drops a reply if its requester is gone, before choosing a document or reporting a picker error.
+pub(crate) fn ask_while(
+    app: &mut VectorcraftApp,
+    request: PickRequest,
+    owner: Owner,
+    current: impl FnOnce(&VectorcraftApp) -> bool + 'static,
+    then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
+) -> Value {
+    start(app, owner, |files| files.pick(request), Some(Box::new(current)), then)
 }
 
 /// Save `bytes` as the file service saves them (`Files::save`: the desktop asks where with `request` and
@@ -121,7 +146,7 @@ pub(crate) fn save(
     owner: Owner,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
-    start(app, owner, |files| files.save(request, bytes), then)
+    start(app, owner, |files| files.save(request, bytes), None, then)
 }
 
 /// Asks the file service with `ask` and files `then` for its answer.
@@ -129,16 +154,17 @@ fn start(
     app: &mut VectorcraftApp,
     owner: Owner,
     ask: impl FnOnce(&dyn Files) -> PickId,
+    current: Option<PickGuard>,
     then: impl FnOnce(&mut VectorcraftApp, Picked) -> Result<Value, String> + 'static,
 ) -> Value {
     let Some(host) = app.ui_ctx.as_ref().and_then(Host::try_of_ctx) else { return Value::Null };
     let ticket = ask(host.files());
     let doc = match owner {
-        Owner::Document => app.session.active().map(|d| d.uid),
+        Owner::Document => app.session.active().map(|d| (d.uid, d.reverts)),
         Owner::Free => None,
     };
     let (scope, automated) = (ScopeHandle::capture(), app.automation_asked());
-    app.file_asks.waiting.push(Waiting { ticket, owner, doc, scope, automated, then: Box::new(then) });
+    app.file_asks.waiting.push(Waiting { ticket, doc, scope, automated, current, then: Box::new(then) });
     json!({ "pending": "fileDialog" })
 }
 
@@ -155,7 +181,8 @@ pub(crate) fn ask_replace(
     app.file_asks.next_question += 1;
     let prompt = StandardPrompt::replace_file(name(path), Some(name(answered))).instance(("vectorcraft.replaceFile", app.file_asks.next_question));
     let dialog = dialogs.with(|host| host.open(prompt));
-    app.file_asks.replacing.push(Replacing { dialog, then: Box::new(then) });
+    let (scope, automated) = (ScopeHandle::capture(), app.automation_asked());
+    app.file_asks.replacing.push(Replacing { dialog, scope, automated, then: Box::new(then) });
     json!({ "pending": "replaceFile" })
 }
 
@@ -236,14 +263,24 @@ pub(crate) fn open_params(picked: &Picked) -> Option<Map<String, Value>> {
     Some(params)
 }
 
-/// Make the document asked for (`doc`, by uid) active before its continuation runs: another may be
-/// active by now, or it may be gone → false when it can't run (the status bar says why).
-fn on_document(app: &mut VectorcraftApp, doc: Option<u64>) -> bool {
-    let Some(uid) = doc else { return true };
-    let Some(i) = app.session.documents().iter().position(|d| d.uid == uid) else {
-        app.status(closed());
+/// Make the original drawing active before running a continuation. The status bar explains why
+/// a closed drawing or a different loaded generation cannot receive the result.
+fn on_document(app: &mut VectorcraftApp, uid: u64, generation: Option<u64>) -> bool {
+    back_to(app, uid, generation, closed(), tl!("The drawing was reverted while its file dialog was open"))
+}
+
+/// Makes drawing `uid` active again, at its revert count `generation` when one is given. When the
+/// drawing is closed, or was reverted since, the status bar shows `closed` or `reverted` and the
+/// answer is false.
+pub(crate) fn back_to(app: &mut VectorcraftApp, uid: u64, generation: Option<u64>, closed: &str, reverted: &str) -> bool {
+    let Some((i, state)) = app.session.documents().iter().enumerate().find(|(_, d)| d.uid == uid) else {
+        app.status(closed);
         return false;
     };
+    if generation.is_some_and(|reverts| state.reverts != reverts) {
+        app.status(reverted);
+        return false;
+    }
     if app.session.active_index() != Some(i)
         && let Err(e) = app.run("document.activate", json!({ "index": i }))
     {
@@ -276,6 +313,9 @@ pub(crate) fn poll(app: &mut VectorcraftApp) {
         }
     }
     for (w, picked) in answered {
+        if w.current.is_some_and(|current| !current(app)) {
+            continue;
+        }
         match &picked {
             Picked::Cancelled => continue,
             Picked::Unavailable(why) => {
@@ -288,7 +328,7 @@ pub(crate) fn poll(app: &mut VectorcraftApp) {
             }
             _ => {}
         }
-        if w.owner == Owner::Document && !on_document(app, w.doc) {
+        if w.doc.is_some_and(|(uid, reverts)| !on_document(app, uid, Some(reverts))) {
             continue;
         }
         let Waiting { scope, automated, then, .. } = w;
@@ -307,7 +347,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
     let files = dialogs.with(|host| {
         for r in previous {
             match host.take_by_id::<StandardPrompt>(r.dialog) {
-                Some(DialogResult::Ok(answer)) if answer.choice == PromptChoice::Proceed => proceed.push(r.then),
+                Some(DialogResult::Ok(answer)) if answer.choice == PromptChoice::Proceed => proceed.push(r),
                 Some(_) => {}
                 None if host.get_by_id::<StandardPrompt>(r.dialog).is_some() => open.push(r),
                 // Neither open nor holding a result: closed from outside.
@@ -317,18 +357,62 @@ pub(crate) fn pump(app: &mut VectorcraftApp, _ctx: &egui::Context) {
         host.take::<ReplaceFilesPrompt>()
     });
     app.file_asks.replacing.extend(open);
-    for then in proceed {
-        let result = then(app);
+    for Replacing { scope, automated, then, .. } in proceed {
+        let result = scope.run(|| as_automated(app, automated, then));
         report(app, result);
     }
     if let Some(DialogResult::Ok(mut answer)) = files
         && answer.choice == PromptChoice::Proceed
         && let Some(r) = answer.take_tag::<ReplaceFiles>()
-        && on_document(app, Some(r.doc))
+        && on_document(app, r.doc, None)
     {
         let all: Vec<String> = r.files.iter().chain(&r.allowed).cloned().collect();
         crate::io::save::allow_replacing(app, &all);
-        let result = app.run(&r.command, r.params);
+        let ReplaceFiles { scope, automated, command, params, .. } = r;
+        let result = scope.run(|| as_automated(app, automated, |app| app.run(&command, params)));
         report(app, result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorcraft_engine::Session;
+
+    #[test]
+    fn an_svg_picker_returns_to_its_opening_tab_only_if_that_drawing_was_not_reverted() {
+        const SVG: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg"><filter id="Shadow"><feOffset dx="2"/></filter></svg>"#;
+        for revert in [true, false] {
+            let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+            let picker = crate::tests::picks::scripted(&mut app);
+            app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+            app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+            let dir = vectorcraft_testkit::TempDir::new("svg-picker-original-drawing");
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            app.run("file.saveAs", json!({"path": dir.join("filters.vectorcraft")})).unwrap();
+            app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 20, "height": 20})).unwrap();
+            let original = app.session.active().unwrap();
+            let version = (original.uid, original.reverts);
+            let pending = app.run("ui.importSvgFilter", json!({})).unwrap();
+            assert_eq!(pending["pending"], json!("fileDialog"));
+            if revert {
+                app.run("file.revert", json!({"confirmed": true})).unwrap();
+                let doc = app.session.active().unwrap();
+                assert_eq!(doc.uid, version.0);
+                assert_ne!(doc.reverts, version.1);
+            }
+            app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+            picker.answer_contents(&[("shadow.svg", SVG)]);
+            poll(&mut app);
+            let docs = app.session.documents();
+            assert!(docs[1].doc.svg_filters.is_empty());
+            if revert {
+                assert!(docs[0].doc.svg_filters.is_empty());
+                assert_eq!(app.session.active_index(), Some(1));
+            } else {
+                assert_eq!(docs[0].doc.svg_filters[0].name, "Shadow");
+                assert_eq!(app.session.active_index(), Some(0));
+            }
+        }
     }
 }

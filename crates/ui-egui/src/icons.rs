@@ -207,6 +207,39 @@ mod tests {
         assert!(appearance.contains("<circle") && !pathfinder.contains("<circle"), "appearance should read as a list, not overlapping squares");
     }
 
+    // Regression test for storytold/vectorcraft#9229: the Stroke panel's three cap icons looked
+    // almost the same. The end-of-path line sat at a different x in Round, and the stroke bar was
+    // as opaque as the line, so the line vanished where it crossed the bar.
+    #[test]
+    fn the_cap_icons_mark_the_path_end_in_one_place_over_a_lighter_stroke() {
+        let svg = |name: &str| {
+            let (_, bytes) = crate::icon_data::ICONS.iter().find(|(n, _)| *n == name).unwrap_or_else(|| panic!("{name} isn't an icon"));
+            String::from_utf8_lossy(bytes).into_owned()
+        };
+        // The end-of-path line is the icon's last shape, a vertical line `M{x} …V…`.
+        let end_line = |icon: &str| -> String {
+            let last = icon.rsplit("<path").next().unwrap_or_default();
+            last.split('"').nth(1).unwrap_or_default().to_string()
+        };
+        let stroke_opacity = |icon: &str| -> f32 {
+            icon.split(r#"fill-opacity=""#).nth(1).and_then(|s| s.split('"').next()).and_then(|v| v.parse().ok()).unwrap_or(1.0)
+        };
+        let icons = [("butt", svg("dc-cap-butt")), ("round", svg("dc-cap-round")), ("square", svg("dc-cap-square"))];
+        let butt_end = end_line(&icons[0].1);
+        assert!(butt_end.starts_with('M') && butt_end.contains('V'), "the butt cap icon ends with a vertical end-of-path line: {butt_end}");
+        for (name, icon) in &icons {
+            assert_eq!(end_line(icon), butt_end, "the {name} cap icon marks the end of the path where the butt cap icon does");
+            assert!(stroke_opacity(icon) < 1.0, "the {name} cap icon's stroke is lighter than its end-of-path line");
+        }
+        // The stroke bar, everything before the end-of-path line, shows each cap differently.
+        let bar = |icon: &str| -> String { icon.rsplit_once("<path").map(|(b, _)| b.to_string()).unwrap_or_default() };
+        for (i, (a, icon_a)) in icons.iter().enumerate() {
+            for (b, icon_b) in &icons[i + 1..] {
+                assert_ne!(bar(icon_a), bar(icon_b), "the {a} and {b} cap icons draw the same stroke");
+            }
+        }
+    }
+
     /// These tools used general-purpose library icons whose picture did not show the tool (a tornado
     /// for Spiral, waves for Warp, a printer for Print Tiling). Each has an icon drawn for
     /// VectorCraft that no other tool uses.

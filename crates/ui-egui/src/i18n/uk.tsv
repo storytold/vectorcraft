@@ -1699,6 +1699,17 @@ file-filter	Templates	Шаблони
 	Graphic Styles	Графічні стилі
 	Graphic Styles Options	Параметри графічних стилів
 	Graphics	Графіка
+	Show Contrast	Показати контраст
+	Contrast For	Контраст для
+	Normal Text	Звичайний текст
+	Large Text	Великий текст
+	Contrast Background	Фон контрасту
+	Behind Selection	За виділенням
+	Current Color	Поточний колір
+	Pass	Відповідає
+	Fail	Не відповідає
+	WCAG 2.2 contrast minimums: normal text AA 4.5:1 (1.4.3) and AAA 7:1 (1.4.6), large text AA 3:1 and AAA 4.5:1, graphics and controls AA 3:1 (1.4.11).	Мінімальний контраст за WCAG 2.2: звичайний текст AA 4.5:1 (1.4.3) і AAA 7:1 (1.4.6), великий текст AA 3:1 і AAA 4.5:1, графіка й елементи керування AA 3:1 (1.4.11).
+	The background is read at the center of the selection.	Фон визначається в центрі виділення.
 	Graphics Processor	Графічний процесор
 	Graphics: {adapter}	Графіка: {adapter}
 	Gravity	Гравітація
@@ -3371,7 +3382,7 @@ digits	Malayalam	Малаялам
 	Select › Same › Fill Color, Stroke Color and Fill & Stroke match only the same tint of a global or spot swatch, not any tint of it.	«Виділення › Те саме › Колір заливки», «Колір обведення» та «Заливка та обведення» знаходять лише той самий відтінок глобального або плашкового зразка, а не будь-який його відтінок.
 	Shows the Home screen when no document is open; off, the window stays empty until you click Home.	Показує початковий екран, коли немає відкритих документів; якщо вимкнено, вікно лишається порожнім, доки ви не натиснете «Додому».
 	Measures objects with their strokes and shape-changing effects for size, position and alignment; shadows, glows and blurs are not measured.	Вимірює об’єкти з обведеннями та ефектами, що змінюють форму, для розміру, положення й вирівнювання; тіні, світіння та розмиття не враховуються.
-	At 100% zoom, one inch of the document takes 96 screen points instead of 72.	За масштабу 100 % один дюйм документа займає 96 екранних пунктів замість 72.
+	At 100% zoom, one inch of the document fills an inch of the display, or 96 screen points where the system reports no usable display size.	За масштабу 100 % один дюйм документа займає один дюйм дисплея або 96 екранних пунктів, якщо система не повідомляє придатний розмір дисплея.
 	Double-clicking a group, path or image with the Selection tool opens it in isolation mode.	Подвійне клацання на групі, контурі або зображенні інструментом «Виділення» відкриває їх у режимі ізоляції.
 	Pattern fills and strokes transform with the art, unless a transform or the Transform panel's menu chooses otherwise.	Заливки й обведення візерунком трансформуються разом із графікою, якщо трансформування або меню панелі «Трансформувати» не задає іншого.
 	Live corner radii scale with the art, unless the scale chooses otherwise.	Радіуси динамічних кутів масштабуються разом із графікою, якщо масштабування не задає іншого.
@@ -4953,6 +4964,14 @@ axis	Both	Обидві
 	The script asks to read and write a folder you choose, with everything in it.	Скрипт просить дозволу читати й записувати вибрану вами папку з усім її вмістом.
 	Allow Once	Дозволити один раз
 	Always Allow This Script	Завжди дозволяти цей скрипт
+	No script has kept file access.	Жоден скрипт не має збереженого доступу до файлів.
+	Read file	Читання файлу
+	Read and write file	Читання й запис файлу
+	Read and write folder	Читання й запис папки
+	Revoke	Відкликати
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	«Відкликати» прибирає доступ, збережений для кожної версії скрипту. Доступ до папки охоплює весь її вміст.
+@msg	Script file access revoked	Доступ скрипту до файлів відкликано
+@msg	The script file access was already revoked	Доступ скрипту до файлів уже було відкликано
 	Deny	Заборонити
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	Скрипт може змінювати відкриті документи й записувати файли за допомогою команд, які виконує. Запускайте лише ті скрипти, яким довіряєте.
 	Do not show this warning again	Більше не показувати це попередження
@@ -5120,6 +5139,7 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	`answer` для файлового діалогу скрипту має бути одним із: once, always, deny, stop
 @msg	choose a file or folder first, or deny	спершу виберіть файл або папку чи відмовте
 @msg	the script file permissions could not be saved: {e}	не вдалося зберегти дозволи скриптів на файли: {e}
+@msg	the script file permissions could not be read: {e}	не вдалося прочитати дозволи скриптів на файли: {e}
 @msg	this script's file access can be allowed only once	доступ цього скрипту до файлів можна дозволити лише один раз
 @msg	Only the person at the keyboard can allow a script's file access	Дозволити скрипту доступ до файлів може лише людина за клавіатурою
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Скрипт отримує щонайбільше 2 048 файлів: файли, вибрані після них, пропущено
@@ -5593,6 +5613,12 @@ liquify-list-end	{0}, {1}	{0} і {1}
 @msg	finish editing the pattern first	спочатку завершіть редагування візерунка
 @msg	nothing encoded	нічого не закодовано
 @msg	nothing selected	нічого не виділено
+@msg	`{key}` must be a color or {_1}	`{key}` має бути кольором або {_1}
+@msg	the selected objects' colors differ: give `color`	кольори виділених об’єктів відрізняються: укажіть `color`
+@msg	the selected objects' colors differ: give `opacity` or `color`	кольори виділених об’єктів відрізняються: укажіть `opacity` або `color`
+@msg	the active fill or stroke has no color: give `color`	активна заливка чи обведення не має кольору: укажіть `color`
+@msg	the active fill or stroke is hidden: give `color`	активна заливка чи обведення приховані: укажіть `color`
+@msg	the active fill or stroke is drawn through an opacity mask: give `color`	активна заливка чи обведення малюються крізь маску непрозорості: укажіть `color`
 @msg	nothing selected is in a group	нічого з виділеного не перебуває в групі
 @msg	nothing to align	нічого вирівнювати
 @msg	nothing to distort	нічого спотворювати
@@ -6920,6 +6946,8 @@ axis	Y Axis	Вісь Y
 	Cancel Plug-in Run	Скасувати запуск модуля
 @msg	{_1} finished, but the document or the plug-in changed meanwhile: run it again	{_1} завершився, але документ або модуль тим часом змінився: запустіть його знову
 @msg	Running “{name}”…	Виконується «{name}»…
+@msg	Plug-in “{name}”: {notice}	Модуль «{name}»: {notice}
+@msg	`notice` must be a string with visible text	`notice` має бути рядком із видимим текстом
 @msg	a live effect runs while the document is drawn, so it can't be `heavy`	динамічний ефект виконується під час відмальовування документа, тому він не може бути `heavy`
 @msg	an exporter always gets an export's budget: leave `budget` out	модуль експорту завжди отримує бюджет експорту: не вказуйте `budget`
 @msg	“{_1}” asks for a heavy budget (each run up to {minutes} minutes and {times} times the usual instructions): a person has to approve it in the desktop app, or pass `allowHeavy: true` in a session started with --allow-plugin-grants	«{_1}» запитує великий обчислювальний бюджет (кожен запуск до {minutes} хвилин і в {times} разів більше інструкцій, ніж зазвичай): його має схвалити людина в настільному застосунку, або передайте `allowHeavy: true` у сеансі, запущеному з --allow-plugin-grants
@@ -7011,7 +7039,7 @@ axis	Y Axis	Вісь Y
 @msg	a list of {min_items} to {max_items} numbers	список із {min_items}-{max_items} чисел
 @msg	a new object needs a `path`	новому об’єкту потрібен `path`
 @msg	a number	число
-@msg	a painted live effect returns only `objects`	малювальний динамічний ефект повертає лише `objects`
+@msg	a painted live effect returns only `objects` and `notice`	малювальний динамічний ефект повертає лише `objects` і `notice`
 @msg	a painted live effect's piece has only `path`, `fillRule`, `fills` and `strokes`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills` і `strokes`
 @msg	a read-only object was left out	пропущено об’єкт лише для читання
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
@@ -7116,6 +7144,8 @@ axis	Y Axis	Вісь Y
 @msg	`api` is {_1}; this host implements plug-in API levels 1 to {API_LEVEL}	`api` дорівнює {_1}; цей хост підтримує рівні API модулів від 1 до {API_LEVEL}
 @msg	`paintOutput` may only be true	`paintOutput` може бути лише true
 @msg	`paintOutput` is only for a live effect (`kind` "effect") at `api` 2	`paintOutput` дозволено лише для динамічного ефекту (`kind` "effect") з `api` 2
+@msg	`place` is only for an importer (`kind` "importer")	`place` дозволено лише для імпортера (`kind` "importer")
+@msg	“{shown}” opens files but doesn't place them: its manifest doesn't set `place`	«{shown}» відкриває файли, але не розміщує їх: його маніфест не задає `place`
 @msg	`grant` must be a list of permission names	`grant` має бути списком назв дозволів
 @msg	`grant` names an unknown permission `{shown}`	`grant` називає невідомий дозвіл `{shown}`
 @msg	a plug-in of kind `{_1}` needs the permission `{_2}`	модулю виду `{_1}` потрібен дозвіл `{_2}`
@@ -7127,6 +7157,35 @@ axis	Y Axis	Вісь Y
 @msg	`inputs` lists `{shown}` twice	в `inputs` `{shown}` указано двічі
 @msg	`inputs` needs `api` 2 or later	для `inputs` потрібен `api` 2 або новіший
 @msg	`inputs` needs the permission `doc.read`	для `inputs` потрібен дозвіл `doc.read`
+@msg	only a filter declares `writes`	`writes` може оголошувати лише фільтр
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	в `writes` указано невідомий вид об’єкта `{shown}`: використовуйте type, image або symbolInstance
+@msg	`writes` lists `{shown}` twice	в `writes` `{shown}` указано двічі
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	в `writes` указано `{shown}`, якого немає в `inputs`
+@msg	`writes` needs `api` {WRITES_API} or later	для `writes` потрібен `api` {WRITES_API} або новіший
+@msg	`writes` needs the permission `doc.write`	для `writes` потрібен дозвіл `doc.write`
+@msg	{_1} is not type, an image or a symbol instance	{_1} не є ні текстом, ні зображенням, ні екземпляром символу
+@msg	the text of type given as `truncated` can't be changed	текст текстового об’єкта, переданого як `truncated`, змінити не можна
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	має бути списком щонайбільше з {MAX_INPUT_RUNS} елементів
+@msg	type needs at least one run	текст повинен мати щонайменше один фрагмент
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} байтів тексту (межа {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} абзаців (межа {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	понад {MAX_INPUT_TEXT_TOTAL} байтів тексту в усьому виводі
+@msg	unknown key '{k}'	невідомий ключ '{k}'
+@msg	must be a list of 6 numbers	має бути списком із 6 чисел
+@msg	a number is out of range (limit ±{MAX_COORD})	число поза діапазоном (межа ±{MAX_COORD})
+@msg	flattens the object to a line or a point	сплющує об’єкт у лінію чи точку
+@msg	an object flattened to a line or a point can't be placed again	об’єкт, сплющений у лінію чи точку, не можна розмістити знову
+@msg	must be a number from 0 to 1	має бути числом від 0 до 1
+@msg	must be the name of a symbol	має бути назвою символу
+@msg	'{shown}' is not a symbol in this document	'{shown}' не є символом цього документа
+@msg	a run must be {{"text", "style", "inline"?}}	фрагмент має мати вигляд {{"text", "style", "inline"?}}
+@msg	`text` holds the character of an inline graphic	`text` містить знак вбудованої в рядок графіки
+@msg	inline graphics can't be added, removed, reordered or changed	вбудовану в рядок графіку не можна додавати, вилучати, переставляти чи змінювати
+@msg	the characters of threaded type can't be changed	знаки пов’язаного тексту змінити не можна
+@msg	the characters of type with ruby can't be changed	знаки тексту з рубі змінити не можна
+@msg	expected {count} paragraph styles, one per paragraph	очікувалося стилів абзаців: {count}, по одному на абзац
+@msg	the document has no Kinsoku set named '{shown}'	у документі немає набору kinsoku з назвою '{shown}'
+@msg	must be 1-{MAX_FAMILY} printable characters	має містити 1-{MAX_FAMILY} друкованих символів
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Читати передані йому об’єкти, а також параметри, монтажні області, шари та зразки документа
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	`context` має перелічувати різні розділи: settings, artboards, layers або swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	`context` дозволено лише для фільтра або динамічного ефекту з `commands`, з `api` 3 або вище та з дозволом `doc.read`
@@ -7137,6 +7196,21 @@ axis	Y Axis	Вісь Y
 @msg	time budget	бюджет часу
 @msg	memory budget (the selection is too large to hand over)	бюджет пам’яті (виділення завелике для передавання)
 @msg	output size ({what} is {len} bytes, limit {max})	розмір виводу ({what}: {len} байтів, межа {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, рядок {line}, стовпець {column})
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	бюджет пам’яті
+@msg	call depth	глибина викликів
+@msg	run(input, params) returned no output object	run(input, params) не повернула об’єкт виводу
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	для `runtime` "js" потрібен `script`: ім’я файлу .js модуля поруч із маніфестом
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	`script` має бути ім’ям файлу .js у теці маніфесту: 1-128 байтів, без теки, без `:`, не починаючись із `.`
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	`source` містить текст скрипту й задається лише в JSON, який приймає dataBase64 команди plugin.install: файл .vcplugin називає свій скрипт у `script`
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	маніфест модуля JavaScript задає `runtime` "js"
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	`runtime` "js" призначено для фільтра об’єктів (`kind` "filter"), а не для `kind` "{kind}"
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	модуль JavaScript не може перелічувати дозвіл `{name}`: із дозволів хоста він може перелічити `progress`
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	маніфест модуля WebAssembly не вказує `runtime`: "js" призначено для модуля JavaScript
+@msg	a JavaScript plug-in makes no command calls	модуль JavaScript не викликає команд
+@msg	vc.progress(done, total) takes two numbers	vc.progress(done, total) приймає два числа
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	vc.log(level, text) приймає рівень, 0 (помилка), 1 (попередження), 2 (інформація) або 3 (налагодження), і рядок
 @msg	the plug-in's grant can't be removed from the plug-in store	дозвіл модуля не вдається вилучити зі сховища модулів
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	дозвіл `{shown}` зарезервовано для пізнішого API модулів; цей хост його не надає
 @msg	unknown permission `{shown}`	невідомий дозвіл `{shown}`
@@ -10436,6 +10510,11 @@ breakText	Glyphs	Гліфи
 	No objects are selected.	Об’єкти не виділено.
 	Open a document to mark its fold lines.	Відкрийте документ, щоб позначити його лінії згину.
 	Remove Fold Line Role	Прибрати тип лінії
+	Fold Angle	Кут згину
+	Set Fold Angle…	Задати кут згину…
+	Set Fold Angle	Задати кут згину
+	Reset Fold Angle	Скинути кут згину
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	виділіть лінію біговки, надрізу або перфорації, яка не закріплена й не прихована
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Замість підказки показує картку з тим, що роблять інструмент панелі та його клавіші; потрібно Показувати підказки.
 	Selects whole objects and groups to move, resize or rotate them.	Виділяє об’єкти й групи цілком, щоб переміщувати, масштабувати або обертати їх.

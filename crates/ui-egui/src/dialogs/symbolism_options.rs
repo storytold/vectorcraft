@@ -9,11 +9,14 @@
 //! `sprayStain` and `sprayStyle` (Symbol Sprayer, each `average` or `userDefined`); `proportional`
 //! and `affectsDensity` (Symbol Sizer).
 
+use std::sync::{Arc, Weak};
+
 use craft::ui::contract::Bind;
-use craft::ui::patterns::form_dialogs::{HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
+use craft::ui::patterns::form_dialogs::{DialogFields, HostedParamDialog, Param, ParamDialog, ParamKind, ParamResult};
 use craft::ui::runtime::env::{Label, LengthUnits};
 use craft::ui::value_drag::SliderScale;
 use serde_json::{Value, json};
+use vectorcraft_doc::{Node, NodeId};
 use vectorcraft_tools::settings::SYMBOLISM;
 
 use super::{form, host, tool_options};
@@ -83,6 +86,7 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Value {
         NUMBERS.iter().chain(&SWITCHES).chain(&SPRAY).chain(&["method"]).filter_map(|key| Some((key.to_string(), o.get(*key)?.clone()))).collect();
     values.insert("tool".into(), json!(tool));
     let density_was = values.get("density").and_then(Value::as_f64).map(|d| d.clamp(1.0, 10.0));
+    let density = DensityTarget { value: density_was, document: app.session.active().map(|doc| (doc.uid, doc.reverts)), sets: selected_sets(app) };
     let fields = form::fields_of(&params, &values);
     let shown = params.clone();
     let ok = move |app: &mut VectorcraftApp, result: &ParamResult| {
@@ -96,12 +100,8 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Value {
         }
         vectorcraft_tools::symbolism::check_options(&tool, &values)?;
         vectorcraft_tools::option_check::check_values(&vectorcraft_tools::symbolism::SymbolismTool::new(&tool), &values)?;
-        if let Some(from) = density_was {
-            let to = result.fields.number("density").unwrap_or(from).clamp(1.0, 10.0);
-            let sets = selected_sets(app);
-            if from != to && !sets.is_empty() {
-                app.run("symbol.setDensity", json!({ "from": from, "to": to, "ids": sets }))?;
-            }
+        if let Some(density) = app.ui_ctx.as_ref().and_then(|ctx| ctx.data(|d| d.get_temp::<DensityTarget>(density_id()))) {
+            density.apply(app, &result.fields)?;
         }
         tool_options::set_options(app, &tool, values)
     };
@@ -109,7 +109,9 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Value {
         let dialog = HostedParamDialog::new(&ctx, KIND, fields, move |f| {
             ParamDialog::new(KIND, tl!("Symbolism Tools Options"), shown.clone()).values(Bind::bound(f))
         });
-        host::open_held(app, dialog, ok)
+        let id = host::open_held(app, dialog, ok)?;
+        ctx.data_mut(|d| d.insert_temp(density_id(), density));
+        Some(id)
     });
     if opened.is_none() {
         app.status(tl!("No window to show the dialog in.").to_string());
@@ -117,15 +119,59 @@ pub fn open(app: &mut VectorcraftApp, tool: &str) -> Value {
     json!({ "dialog": KIND })
 }
 
-/// The selected symbol sets that can be edited (a locked or hidden one keeps its density).
-fn selected_sets(app: &VectorcraftApp) -> Vec<u64> {
+#[derive(Clone)]
+struct DensityTarget {
+    value: Option<f64>,
+    document: Option<(u64, u64)>,
+    sets: Vec<(NodeId, Weak<Node>)>,
+}
+
+fn density_id() -> egui::Id {
+    egui::Id::unique((KIND, "density-target"))
+}
+
+impl DensityTarget {
+    fn apply(&self, app: &mut VectorcraftApp, fields: &DialogFields) -> Result<(), String> {
+        let Some(from) = self.value else { return Ok(()) };
+        let to = fields.number("density").unwrap_or(from).clamp(1.0, 10.0);
+        if from == to || self.sets.is_empty() {
+            return Ok(());
+        }
+        let Some(doc) = app.session.active().filter(|doc| self.document.is_some_and(|(uid, _)| uid == doc.uid)) else {
+            return Err(tl!("Return to the original drawing to change its symbol set density").into());
+        };
+        if self.document.is_none_or(|(_, reverts)| reverts != doc.reverts) {
+            return Err(tl!("Reopen Symbolism Tools Options after reverting the drawing").into());
+        }
+        let sets: Vec<_> = {
+            let editable = doc.doc.editable();
+            self.sets
+                .iter()
+                .filter_map(|(id, original)| {
+                    let same = doc.doc.node_arc(*id).is_some_and(|node| Arc::as_ptr(node) == original.as_ptr());
+                    (same && editable(*id)).then_some(id.0)
+                })
+                .collect()
+        };
+        if !sets.is_empty() {
+            app.run("symbol.setDensity", json!({ "from": from, "to": to, "ids": sets }))?;
+        }
+        Ok(())
+    }
+}
+
+/// The selected editable sets as they exist now. Undo may reuse their IDs for newly created art.
+fn selected_sets(app: &VectorcraftApp) -> Vec<(NodeId, Weak<Node>)> {
     let Some(st) = app.session.active() else { return vec![] };
     let editable = st.doc.editable();
     st.selection
         .objects
         .iter()
-        .filter(|id| st.doc.node(**id).is_some_and(vectorcraft_engine::cmd::is_symbol_set) && editable(**id))
-        .map(|id| id.0)
+        .filter(|id| editable(**id))
+        .filter_map(|id| {
+            let node = st.doc.node_arc(*id)?;
+            vectorcraft_engine::cmd::is_symbol_set(node).then(|| (*id, Arc::downgrade(node)))
+        })
         .collect()
 }
 
@@ -196,6 +242,62 @@ mod tests {
     }
 
     /// A locked symbol set in the selection keeps its spacing, and OK still sets the options.
+    #[test]
+    fn density_draft_waits_for_the_drawing_with_its_selected_symbol_set() {
+        let mut app = app();
+        let first = sprayed(&mut app);
+        let first_width = width(&app, first);
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let second = sprayed(&mut app);
+        let (second_width, second_undo) = (width(&app, second), undo(&app));
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        app.run("document.activate", json!({"index": 1})).unwrap();
+        let error = try_confirm(&mut app, KIND).expect_err("the density draft belongs to the other drawing");
+        assert!(error.contains("original drawing"), "{error}");
+        assert_eq!((width(&app, second), undo(&app)), (second_width, second_undo));
+
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        try_confirm(&mut app, KIND).unwrap();
+        assert!(width(&app, first) < first_width);
+    }
+
+    #[test]
+    fn density_draft_keeps_the_symbol_set_that_was_selected_at_open() {
+        let mut app = app();
+        let first = sprayed(&mut app);
+        let first_width = width(&app, first);
+        app.run("select.set", json!({"ids": []})).unwrap();
+        let second = app.run("symbol.spray", json!({"name": "Dot", "points": [[40, 200], [120, 200]], "radius": 4})).unwrap()["id"].as_u64().unwrap();
+        let second_width = width(&app, second);
+        app.run("select.set", json!({"ids": [first]})).unwrap();
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        app.run("select.set", json!({"ids": [second]})).unwrap();
+        try_confirm(&mut app, KIND).unwrap();
+        assert!(width(&app, first) < first_width);
+        assert_eq!(width(&app, second), second_width);
+    }
+
+    #[test]
+    fn density_draft_does_not_change_a_symbol_set_that_reuses_an_undone_id() {
+        let mut app = app();
+        let original = sprayed(&mut app);
+        open(&mut app, "symbolSprayer");
+        set_of(&mut app, KIND, "density", json!(9)).unwrap();
+        app.run("edit.undo", json!({})).unwrap();
+        assert!(app.session.active().unwrap().doc.node(vectorcraft_doc::NodeId(original)).is_none());
+        let points: Vec<Value> = (0..8).map(|i| json!([50.0 + 35.0 * f64::from(i), 100.0])).collect();
+        let new = app.run("symbol.spray", json!({"name": "Dot", "points": points, "radius": 4})).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(new, original, "Undo restored the allocation counter");
+        let (original_width, steps) = (width(&app, new), undo(&app));
+
+        try_confirm(&mut app, KIND).unwrap();
+        assert_eq!((width(&app, new), undo(&app)), (original_width, steps));
+        assert_eq!(app.session.tool_options_of("symbolSizer")["density"].as_f64(), Some(9.0));
+    }
+
     #[test]
     fn ok_sets_the_options_with_a_locked_symbol_set_selected() {
         let mut app = app();

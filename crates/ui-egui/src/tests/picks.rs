@@ -15,6 +15,7 @@ use craft::ui::runtime::requests::{PathKind, PathRequest};
 use egui::{Pos2, Rect, vec2};
 use serde_json::{Value, json};
 use vectorcraft_engine::Session;
+use vectorcraft_engine::file_access;
 
 use crate::dialogs::confirm::REPLACE_FILES;
 use crate::{Services, VectorcraftApp, file_asks};
@@ -35,6 +36,10 @@ impl Picker {
     /// The newest open pick answers `paths`.
     pub(crate) fn answer(&self, paths: &[&str]) {
         self.files.answer(Picked::Paths(paths.iter().map(PathBuf::from).collect()));
+    }
+    /// The newest open pick answers `files` by name and contents, as the web's picker does.
+    pub(crate) fn answer_contents(&self, files: &[(&str, &[u8])]) {
+        self.files.answer(Picked::Contents(files.iter().map(|(name, bytes)| ((*name).to_string(), bytes.to_vec())).collect()));
     }
     /// The newest open Save pick answers `path`, with the index of the file type picked in the panel.
     pub(crate) fn answer_saved(&self, path: &str, file_type: Option<usize>) {
@@ -392,6 +397,79 @@ fn a_pdf_automation_asked_for_is_not_opened_when_its_save_panel_answers() {
     let urls = opened_urls(&mut app);
     assert_eq!(picker.written(), ["/art/automated.pdf", "/art/mine.pdf"]);
     assert!(matches!(urls.as_slice(), [url] if url.ends_with("/art/mine.pdf")), "{urls:?}");
+}
+
+/// A replace question automation asked while confined to a folder: what Replace allows runs as
+/// automation's, with that folder still the only place it may write, as the answer of a file dialog does.
+#[test]
+fn a_replace_question_goes_on_under_the_access_it_was_asked_with() {
+    let mut app = app();
+    app.ui_ctx = Some(crate::testing::ui_context());
+    let (inside, outside) = (vectorcraft_testkit::TempDir::new("replace-scope-in"), vectorcraft_testkit::TempDir::new("replace-scope-out"));
+    let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    let path = inside.join("Art.svg").to_string_lossy().into_owned();
+    let elsewhere = outside.join("Art.svg").to_string_lossy().into_owned();
+    let seen = Rc::new(RefCell::new(None));
+    let s = seen.clone();
+    file_access::confine(roots.as_ref(), || {
+        file_asks::as_automated(&mut app, true, |app| {
+            file_asks::ask_replace(app, &path, "Art", move |app| {
+                *s.borrow_mut() = Some((file_access::check_write(&elsewhere).is_ok(), app.automation_asked()));
+                Ok(Value::Null)
+            })
+        })
+    });
+    assert_eq!(replace_asked(&app).as_deref(), Some("Art.svg"));
+    answer_replace(&mut app, true);
+    assert_eq!(*seen.borrow(), Some((false, true)), "(may write outside the folder, runs as automation's)");
+}
+
+/// The question whether a save or export may replace files, asked by automation confined to a
+/// folder: OK runs the command again with that folder still the only place it may read.
+#[test]
+fn a_replace_files_question_runs_its_command_under_the_access_it_was_asked_with() {
+    let mut app = app();
+    app.ui_ctx = Some(crate::testing::ui_context());
+    app.run("file.new", json!({"width": 100, "height": 80})).unwrap();
+    let (inside, outside) =
+        (vectorcraft_testkit::TempDir::new("replace-files-scope-in"), vectorcraft_testkit::TempDir::new("replace-files-scope-out"));
+    let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    let elsewhere = outside.join("Other.svg");
+    std::fs::write(&elsewhere, SVG).unwrap();
+    let elsewhere = elsewhere.to_string_lossy().into_owned();
+    let doc = app.session.active().unwrap().uid;
+    let there = [inside.join("Art.svg").to_string_lossy().into_owned()];
+    file_access::confine(roots.as_ref(), || {
+        file_asks::as_automated(&mut app, true, |app| {
+            crate::dialogs::confirm::ask_replace_files(app, doc, &there, &[], "file.open", json!({ "path": elsewhere }));
+        })
+    });
+    assert_eq!(crate::dialogs::confirm::open_replace_files(&app), Some(there.to_vec()));
+    answer_replace(&mut app, true);
+    assert!(app.ui.status.contains("outside the read root"), "the file outside the folder is refused: {}", app.ui.status);
+    assert_eq!(app.session.documents().len(), 1, "nothing else opened");
+}
+
+/// A confirmation automation asked while confined to a folder: OK runs its command as automation's,
+/// with that folder still the only place it may read.
+#[test]
+fn a_confirmation_runs_its_command_under_the_access_it_was_asked_with() {
+    let mut app = app();
+    app.ui_ctx = Some(crate::testing::ui_context());
+    let (inside, outside) = (vectorcraft_testkit::TempDir::new("confirm-scope-in"), vectorcraft_testkit::TempDir::new("confirm-scope-out"));
+    let roots = file_access::AutomationRoots::new(&[inside.as_path()], &[inside.as_path()]).unwrap();
+    let elsewhere = outside.join("Other.svg");
+    std::fs::write(&elsewhere, SVG).unwrap();
+    let elsewhere = elsewhere.to_string_lossy().into_owned();
+    file_access::confine(roots.as_ref(), || {
+        file_asks::as_automated(&mut app, true, |app| {
+            crate::dialogs::confirm::ask(app, "Open it?", "", "file.open", json!({ "path": elsewhere }));
+        })
+    });
+    let id = open_dialogs(&app).last().map(|d| d.id).expect("the question is open");
+    answer_dialog(&mut app, id, &[], true);
+    assert!(app.ui.status.contains("outside the read root"), "the file outside the folder is refused: {}", app.ui.status);
+    assert!(app.session.documents().is_empty(), "nothing opened");
 }
 
 /// A Browse row's answer fills the open dialog's field; an answer after the dialog closed does nothing.
