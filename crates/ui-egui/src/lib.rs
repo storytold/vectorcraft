@@ -317,7 +317,7 @@ pub struct VectorcraftApp {
     /// The Character Style Options dialog's live preview.
     pub(crate) char_style_preview: dialogs::char_style_options::Preview,
     /// The Paragraph Style Options dialog's live preview.
-    pub(crate) para_style_preview: dialogs::preview::LivePreview,
+    pub(crate) para_style_preview: dialogs::char_style_options::Preview,
     /// The Justification dialog, while it is open.
     pub(crate) justification: Option<dialogs::justification::Open>,
     /// The Bullets and Numbering dialog's live preview.
