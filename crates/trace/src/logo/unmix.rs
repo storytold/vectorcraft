@@ -508,17 +508,18 @@ fn between_classes(pix: &[Px], flat: &[Option<usize>], mixed: &HashMap<[u32; 4],
 }
 
 /// For each class with a flat area [`PURE`] or more from it (as when it is named some levels off its
-/// color), the colors of its flat areas, each at least `PURE / 2` from the others: the flat areas that
+/// color), the distinct colors of its flat areas: the flat areas that
 /// stand for it (`flat`) and those whose mix holds it most (`between`, [`between_classes`]). Empty for
 /// a class whose flat areas all come within `PURE` of it.
 fn area_colors(pix: &[Px], classes: &[[f64; 4]], flat: &[Option<usize>], between: &[[Option<usize>; 2]]) -> Vec<Vec<Px>> {
     let mut colors: Vec<Vec<Px>> = vec![Vec::new(); classes.len()];
     let mut off_named = vec![false; classes.len()];
+    let mut kept: HashSet<(usize, [u32; 4])> = HashSet::new();
     for (i, px) in pix.iter().enumerate() {
         let Some(c) = flat.get(i).copied().flatten().or_else(|| between.get(i).and_then(|b| b[0])) else { continue };
         let (Some(cv), Some(seen), Some(off)) = (classes.get(c), colors.get_mut(c), off_named.get_mut(c)) else { continue };
         *off = *off || (0..4).map(|j| (f64::from(px[j]) - cv[j]).powi(2)).sum::<f64>().sqrt() >= PURE;
-        if !seen.iter().any(|q| distance(px, q) < PURE / 2.0) {
+        if kept.insert((c, px.map(f32::to_bits))) {
             seen.push(*px);
         }
     }
@@ -1016,6 +1017,21 @@ mod tests {
             rows.around(i, &mut dist);
             assert_eq!(dist, want, "pixel ({x}, {y})");
         }
+    }
+
+    #[test]
+    fn every_flat_area_color_keeps_its_whole_neighborhood() {
+        // A class named 228, 228, 227 and flat areas of 222 then 223: a pixel of 225 lies within
+        // `PURE` of 223 but not of 222, so it counts as art of the class only when 223 is kept.
+        let level = |v: f32| [v / 255.0, v / 255.0, v / 255.0, 1.0];
+        let classes = vec![[228.0 / 255.0, 228.0 / 255.0, 227.0 / 255.0, 1.0], [0.0, 0.0, 0.0, 1.0]];
+        let pix = vec![level(222.0), level(222.0), level(223.0), level(223.0)];
+        let flat = vec![Some(0); pix.len()];
+        let between = vec![[None; 2]; pix.len()];
+        let colors = area_colors(&pix, &classes, &flat, &between);
+        assert_eq!(colors[0].len(), 2, "{:?}", colors[0]);
+        assert!(near_area_color(&level(225.0), &colors[0]));
+        assert!(!near_area_color(&level(225.0), &colors[0][..1]));
     }
 
     #[test]
