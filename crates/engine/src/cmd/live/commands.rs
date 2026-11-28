@@ -72,7 +72,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Replace Spine",
             ["Object", "Blend"],
             None,
-            "{} use the selected path as the spine of the selected blend (the path is consumed); a blend made without a spine gets this one",
+            "{} use the selected path as the spine of the selected blend (the path is consumed); a compound path gives its first member path and is consumed whole, and a blend made without a spine gets this one",
             has_blend,
             blend_replace_spine
         ),
