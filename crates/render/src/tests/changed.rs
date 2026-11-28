@@ -100,6 +100,42 @@ fn area(c: Changed) -> Rect {
 }
 
 #[test]
+fn removing_the_last_blend_in_trim_view_repaints_the_artboard_edges() {
+    use vectorcraft_color::BlendMode;
+
+    let mut before = Document::new(110.0, 80.0);
+    let layer = before.layers[0].id;
+    for color in [Color::BLACK, Color::WHITE] {
+        let shape = rect(&mut before, Rect::new(-10.0, 18.0, 25.0, 44.0), color);
+        before.insert(Some(layer), usize::MAX, shape).unwrap();
+    }
+    let mut blend = rect(&mut before, Rect::new(70.0, 35.0, 85.0, 50.0), Color::rgb(0.7, 0.4, 0.3));
+    blend.blend = BlendMode::Multiply;
+    let id = before.insert(Some(layer), usize::MAX, blend).unwrap();
+    let mut after = before.clone();
+    after.node_mut(id).unwrap().blend = BlendMode::Normal;
+
+    let opts = RenderOptions { trim: true, ..Default::default() };
+    let mut r = Renderer::new();
+    let first = r.render(&before, W, H, view(), &opts);
+    let change = r.changed(&before, &after, &opts);
+    let last = Renderer::new().render(&after, W, H, view(), &opts);
+    patched(&mut r, &first, &after, change, &last, &opts);
+    assert_eq!(change, Changed::Everything);
+    assert!(matches!(r.changed(&before, &after, &RenderOptions::default()), Changed::Area(_)));
+
+    // An overprinting fill gets its blend while preparing the proof.
+    let mut overprinting = after.clone();
+    overprinting.node_mut(id).unwrap().appearance.fill_mut().unwrap().overprint = true;
+    let proof = RenderOptions { overprint_preview: true, ..opts };
+    let first = r.render(&overprinting, W, H, view(), &proof);
+    let change = r.changed(&overprinting, &after, &proof);
+    let last = Renderer::new().render(&after, W, H, view(), &proof);
+    patched(&mut r, &first, &after, change, &last, &proof);
+    assert_eq!(change, Changed::Everything, "the proofed fill changes the clipping mode");
+}
+
+#[test]
 fn moving_an_object_changes_where_it_was_and_is() {
     let (old, [loose, ..]) = document();
     let mut new = old.clone();

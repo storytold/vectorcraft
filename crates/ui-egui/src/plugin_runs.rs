@@ -23,7 +23,7 @@ use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use serde_json::{Value, json};
 use vectorcraft_engine::EngineError;
 use vectorcraft_engine::cmd::fileio::progress::{self, Progress};
-use vectorcraft_engine::cmd::plugin::FilterRun;
+use vectorcraft_engine::cmd::plugin::{self, FilterRun};
 use vectorcraft_plugins::{permissions, registry};
 
 use crate::VectorcraftApp;
@@ -75,6 +75,11 @@ pub fn start(app: &mut VectorcraftApp, p: Value) -> Result<Value, String> {
     }
     // Bad parameters and a missing document fail here, before anything runs.
     let run = FilterRun::prepare(&app.session, &p).map_err(|e| e.to_string())?;
+    // Typing Real-time Drawing off left out of the document is kept next, so the plug-in is given it.
+    let run = match plugin::keep_unapplied_typing(&mut app.session).map_err(|e| e.to_string())? {
+        true => FilterRun::prepare(&app.session, &p).map_err(|e| e.to_string())?,
+        false => run,
+    };
     let who = format!("“{}”", run.plugin().manifest().name.trim_end_matches('…'));
     let mut params = p;
     params["ids"] = json!(run.inputs().iter().map(|i| i.0).collect::<Vec<_>>());
@@ -141,7 +146,8 @@ fn finish(app: &mut VectorcraftApp, r: Running, done: Option<Done>) {
             return;
         }
     };
-    if !run.current(&app.session) {
+    // Typing started meanwhile with Real-time Drawing off isn't in what the plug-in was given.
+    if !run.current(&app.session) || plugin::unapplied_typing(&app.session) {
         app.status(format!("{} finished, but the document or the plug-in changed meanwhile: run it again", r.who));
         return;
     }

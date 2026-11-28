@@ -37,6 +37,7 @@ const OUTSIDE: &[(&str, &str, &str)] = &[
     ("Folder.prototype.remove", "var d = new Folder(p); d.remove();", "filesWritten"),
     ("Folder.prototype.rename", "var d = new Folder(p); d.rename(q);", "filesWritten"),
     ("Folder.prototype.execute", "var d = new Folder(p); d.execute();", "filesOpened"),
+    ("ExternalObject", "var lib = new ExternalObject(n);", "nativeCode"),
 ];
 
 /// The names the host adds that stay inside the document and the run, by the object that has them.
@@ -50,6 +51,8 @@ const INSIDE: &[(&str, &str)] = &[
     ("UnitValue.prototype.", "as baseUnit baseUnit= constructor convert toString type type= value value="),
     ("localize.", "length"),
     ("toSource.", "length"),
+    ("ExternalObject.", "length prototype search"),
+    ("ExternalObject.prototype.", "constructor terminate"),
     (
         "$.",
         "about appEncoding appEncoding= bp build buildDate colorPicker decimalPoint engineName error fileName flags \
@@ -80,13 +83,13 @@ const INSIDE: &[(&str, &str)] = &[
          DocumentTransparencyGrid documents Documents ElementPlacement GraphicStyle GraphicStyles Layer PageItem PageItems \
          PathItem PathItems PathPoint PathPointSelection PathPoints PointType PolarityValues RulerUnits selection selection= \
          Spot SpotColorKind Spots StrokeCap StrokeJoin Swatch SwatchGroup SwatchGroups Swatches Symbol SymbolItem SymbolItems \
-         SymbolRegistrationPoint Symbols Transformation ZOrderMethod",
+         SymbolRegistrationPoint Symbols Tag Tags Transformation ZOrderMethod",
     ),
     ("Application.", "prototype"),
     (
         "Application.prototype.",
-        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents getIsFileOpen \
-         selection selection= toString typename",
+        "activeDocument activeDocument= beep beep= constructor coordinateSystem coordinateSystem= documents executeMenuCommand \
+         getIsFileOpen selection selection= toString typename",
     ),
     ("DocumentPreset.", "prototype"),
     (
@@ -104,7 +107,7 @@ const INSIDE: &[(&str, &str)] = &[
         "activeLayer activeLayer= artboards artboards= brushes close close= constructor convertCoordinate \
          documentColorSpace gradients gradients= graphicStyles groupItems groupItems= height layers layers= name pageItems \
          parent pathItems patterns patterns= rulerOrigin rulerOrigin= rulerUnits saveAs saveAs= selection selection= spots \
-         swatchGroups swatches symbolItems symbols textFrames textFrames= toString typename views views= width",
+         swatchGroups swatches symbolItems symbols tags textFrames textFrames= toString typename views views= width",
     ),
     ("Layer.", "prototype"),
     ("Layer.prototype.", "constructor name toString typename"),
@@ -116,7 +119,7 @@ const INSIDE: &[(&str, &str)] = &[
         "artworkKnockout artworkKnockout= blendingMode blendingMode= bringInPerspective bringInPerspective= constructor \
          controlBounds duplicate editable geometricBounds height height= hidden hidden= isIsolated isIsolated= layer layer= \
          left left= locked locked= move name name= note note= opacity opacity= parent pixelAligned pixelAligned= position \
-         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags tags= toString top top= transform \
+         position= remove resize resize= rotate rotate= selected selected= sliced sliced= tags toString top top= transform \
          transform= translate translate= typename uRL uRL= uuid uuid= visibilityVariable visibilityVariable= visibleBounds \
          width width= wrapInside wrapInside= wrapOffset wrapOffset= wrapped wrapped= zOrder zOrderPosition",
     ),
@@ -168,6 +171,10 @@ const INSIDE: &[(&str, &str)] = &[
     ("Brush.", "prototype"),
     ("Brush.prototype.", "applyTo constructor name parent typename"),
     ("ColorModel.", "PROCESS REGISTRATION SPOT"),
+    ("Tags.", "prototype"),
+    ("Tags.prototype.", "add constructor getByName index length parent removeAll typename"),
+    ("Tag.", "prototype"),
+    ("Tag.prototype.", "constructor name name= parent remove typename value value="),
     ("CoordinateSystem.", "ARTBOARDCOORDINATESYSTEM DOCUMENTCOORDINATESYSTEM"),
     ("DocumentArtboardLayout.", "Column GridByCol GridByRow RLGridByCol RLGridByRow RLRow Row"),
     ("DocumentColorSpace.", "CMYK RGB"),

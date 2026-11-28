@@ -56,6 +56,56 @@ fn assets(app: &mut VectorcraftApp) -> Vec<Value> {
     app.run("assets.list", json!({})).unwrap()["assets"].as_array().unwrap().clone()
 }
 
+/// Draws a row carrying the selected artwork's payload above the Asset Export panel.
+fn art_and_assets(app: &mut VectorcraftApp, ui: &mut egui::Ui) {
+    use craft::ui::contract::{ListDrag, ShowCollection as _};
+    use craft::ui::list::{List, ListRow};
+
+    let st = app.session.active().unwrap();
+    let payload = crate::panel_drag::PanelDrag::Art { document: st.uid, reverts: st.reverts, ids: st.selection.objects.clone() };
+    ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
+        let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+        List::<usize>::new("Artwork")
+            .drag_payload(move |_: &ListDrag<usize>| Some(payload.clone()))
+            .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged artwork"));
+    });
+    super::asset_export::show(app, ui);
+}
+
+#[test]
+fn asset_export_accepts_artwork_only_from_its_document() {
+    let mut app = VectorcraftApp::new(Session::new(), Services::default());
+    let mut rectangle = |x| {
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": x, "y": 10, "width": 30, "height": 20})).unwrap()["id"].as_u64().unwrap()
+    };
+    let first = rectangle(10);
+    let second = rectangle(70);
+    assert_eq!(first, second, "the two documents have different artwork with the same local ID");
+    assert!(app.session.set_active(0));
+    let source = app.session.active().unwrap().uid;
+
+    let mut p = Panel::new(app, art_and_assets);
+    let from = p.rect("Dragged artwork").center();
+    let to = p.rect("No assets").center();
+    p.drag_hold_role("Dragged artwork", craft::ui::contract::Role::LIST_ITEM, to - from);
+    let drag = craft::ui::runtime::drag::active::<crate::panel_drag::PanelDrag>(p.ctx());
+    assert!(matches!(drag.as_deref(), Some(crate::panel_drag::PanelDrag::Art { document, .. }) if *document == source));
+    assert!(craft::ui::runtime::drag::mark(p.ctx()).is_some(), "Asset Export accepts the artwork before switching documents");
+    assert!(p.app().session.set_active(1));
+    p.frame();
+    let drag = craft::ui::runtime::drag::active::<crate::panel_drag::PanelDrag>(p.ctx());
+    assert!(matches!(drag.as_deref(), Some(crate::panel_drag::PanelDrag::Art { document, .. }) if *document == source));
+    assert!(craft::ui::runtime::drag::mark(p.ctx()).is_none(), "Asset Export withdraws the drop indicator when the artwork is foreign");
+    p.release();
+    assert!(assets(&mut p.app()).is_empty(), "the foreign drag must never collect the active document's same-ID artwork");
+
+    p.drag("Dragged artwork", "No assets", egui::Modifiers::NONE);
+    let list = assets(&mut p.app());
+    assert_eq!(list.len(), 1, "dropping artwork from the active document still collects it");
+    assert_eq!(list[0]["nodes"], json!([second]));
+}
+
 /// The document's export settings, which the panel and Export for Screens share.
 fn settings(p: &Panel) -> Value {
     run(p, "document.exportSettings", json!({}))["settings"].clone()

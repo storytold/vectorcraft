@@ -24,7 +24,7 @@ use vectorcraft_geom::{AnchorKind, BezPath, PathData, PathEl, Point};
 use vectorcraft_tools::Mods;
 
 use super::cursor::ViewKey;
-use super::outline::{c32, node_outline, selection_hit_at, too_many_anchors, walk_drawn};
+use super::outline::{ViewHides, c32, linked_crosses, node_outline, selection_hit_at, too_many_anchors, too_many_marks, walk_drawn};
 // PLAN: `BodyKind`, `Win` and `ViewKey::from(CanvasView)` are canvas-w10's (cv.S1, S2, S5); their paths here follow the contract.
 use super::{BodyKind, VectorcraftApp, Win};
 // PLAN: `anchors` takes `tool_points` because the Curvature tool's own points come from `session.overlays`, which only `show` may call (`&mut app`).
@@ -147,9 +147,9 @@ fn hidden(app: &VectorcraftApp) -> bool {
     crate::dialogs::halftone::previewing(app)
 }
 
-/// Whether the selection has too many points to outline: its bounds stand for it.
-fn too_big(st: &DocState) -> bool {
-    too_many_anchors(st.selection.objects.iter().filter_map(|id| st.doc.node(*id)))
+/// Whether the selection has too many points to outline and cross in `app`'s view: its bounds stand for it.
+fn too_big(app: &VectorcraftApp, st: &DocState) -> bool {
+    too_many_marks(st.selection.objects.iter().filter_map(|id| st.doc.node(*id)), ViewHides::of(app))
 }
 
 /// The rectangle of `bounds` as a path.
@@ -166,17 +166,17 @@ fn group(out: &mut Vec<Outlined>, color: Color32) -> &mut Outlined {
     &mut out[at]
 }
 
-/// The outlines of the selection, one [`Outlined`] per layer colour: each selected object's outline (the bounds of
-/// all of them when they have too many points), the spine of each selected blend, and the key object's outline (its
+/// The outlines of the selection, one [`Outlined`] per layer colour: each selected object's outline and the lines
+/// across its linked images and placed documents (the bounds of all of them when they have too many points), the spine of each selected blend, and the key object's outline (its
 /// bounds when it has too many points). Nothing during Halftone Preview.
 pub(super) fn outlines(app: &VectorcraftApp, st: &DocState) -> Vec<Outlined> {
     let mut out: Vec<Outlined> = vec![];
     if hidden(app) {
         return out;
     }
-    let (sel, symbols) = (&st.selection, st.doc.symbol_boxes());
+    let (sel, symbols, hides) = (&st.selection, st.doc.symbol_boxes(), ViewHides::of(app));
     let color_of = |id: NodeId| c32(st.doc.layer_color(id));
-    if too_big(st) {
+    if too_big(app, st) {
         // The cache is warmed by `show`; a test or a miss measures again.
         let bounds = match app.canvas.selection_bounds {
             Some((key, bounds)) if key == (st.uid, st.revision) => bounds,
@@ -188,9 +188,11 @@ pub(super) fn outlines(app: &VectorcraftApp, st: &DocState) -> Vec<Outlined> {
     } else {
         for id in &sel.objects {
             let Some(node) = st.doc.node(*id) else { continue };
-            let path = node_outline(node, &symbols);
-            if !path.elements().is_empty() {
-                group(&mut out, color_of(*id)).paths.push(path);
+            // Linked images and placed documents are also crossed from corner to corner.
+            for path in [node_outline(node, &symbols, hides), linked_crosses(node, hides)] {
+                if !path.elements().is_empty() {
+                    group(&mut out, color_of(*id)).paths.push(path);
+                }
             }
         }
         for (blend, spine) in blend_spines(st) {
@@ -198,7 +200,11 @@ pub(super) fn outlines(app: &VectorcraftApp, st: &DocState) -> Vec<Outlined> {
         }
     }
     if let Some((key, node)) = sel.key.and_then(|key| Some((key, st.doc.node(key)?))) {
-        let path = if too_many_anchors([node]) { node.geometric_bounds_with(&symbols).map(bounds_path) } else { Some(node_outline(node, &symbols)) };
+        let path = if too_many_anchors([node], hides) {
+            node.geometric_bounds_with(&symbols).map(bounds_path)
+        } else {
+            Some(node_outline(node, &symbols, hides))
+        };
         if let Some(path) = path {
             group(&mut out, color_of(key)).key = Some(path);
         }
@@ -266,10 +272,10 @@ pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool: &str, tool_poin
         segment_mark: SegmentMark::Line,
         options: path_options(prefs),
     };
-    if hidden(app) || too_big(st) || (curvature && tool_points) {
+    if hidden(app) || too_big(app, st) || (curvature && tool_points) {
         return out;
     }
-    let sel = &st.selection;
+    let (sel, hides) = (&st.selection, ViewHides::of(app));
     // The selected anchors by path, and the selected segment with its path.
     let mut chosen: Vec<(u64, Vec<KnotRef>)> = vec![];
     let mut segment: Option<(u64, KnotRef)> = None;
@@ -277,7 +283,7 @@ pub(super) fn anchors(app: &VectorcraftApp, st: &DocState, tool: &str, tool_poin
         let Some(node) = st.doc.node(*id) else { continue };
         let partial = sel.partial(*id);
         let color = c32(st.doc.layer_color(*id));
-        walk_drawn(node, &mut |c| {
+        walk_drawn(node, hides, &mut |c| {
             let envelope = vectorcraft_doc::live::envelope_overlay(c).and_then(|(_, grid)| grid);
             let grid = match &c.kind {
                 NodeKind::Mesh(m) => Some(m),
@@ -369,13 +375,14 @@ pub(super) fn hover(app: &VectorcraftApp, st: &DocState, tool: &str, at: Point, 
     if kept {
         return None;
     }
-    outline_of(st, id)
+    outline_of(st, id, ViewHides::of(app))
 }
 
-/// The hover outline of `id` in its layer colour, unless it has too many points.
-fn outline_of(st: &DocState, id: NodeId) -> Option<Hovered> {
-    let node = st.doc.node(id).filter(|n| !too_many_anchors([*n]))?;
-    Some(Hovered { path: node_outline(node, &st.doc.symbol_boxes()), color: c32(st.doc.layer_color(id)) })
+/// The hover outline of `id` in its layer colour, without the members `hides` leaves out, unless it has too many
+/// points.
+fn outline_of(st: &DocState, id: NodeId, hides: ViewHides) -> Option<Hovered> {
+    let node = st.doc.node(id).filter(|n| !too_many_anchors([*n], hides))?;
+    Some(Hovered { path: node_outline(node, &st.doc.symbol_boxes(), hides), color: c32(st.doc.layer_color(id)) })
 }
 
 /// The hover outline the canvas shows at document point `at` with the keys `held`: none while Space lends the view
@@ -405,7 +412,7 @@ pub(super) fn eyedropper_hover(app: &mut VectorcraftApp, at: Point, mods: Mods, 
     }
     let info = app.view_info();
     let id = eyedropper_hover_object(app, at, mods, info)?;
-    outline_of(app.session.active()?, id)
+    outline_of(app.session.active()?, id, ViewHides::of(app))
 }
 
 /// What the Eyedropper's hover object depends on: the point, the keys held, the document as it is, the selection and
@@ -495,7 +502,7 @@ fn eyedropper_hover_object(app: &mut VectorcraftApp, at: Point, mods: Mods, view
 /// The dots of the selection: point type's origin, the centre of each object that shows it, and the key anchor.
 pub(super) fn dots(app: &VectorcraftApp, st: &DocState) -> Dots {
     let mut out = Dots { grow: grow(&app.session.prefs), ..Dots::default() };
-    if hidden(app) || too_big(st) {
+    if hidden(app) || too_big(app, st) {
         return out;
     }
     let symbols = st.doc.symbol_boxes();

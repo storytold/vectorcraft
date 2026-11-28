@@ -1,6 +1,7 @@
 //! Edit → Tracing Presets: New… and Edit… through the preset editor, Delete, and the import with
 //! the question about saved presets of the same names, all through the dialog host.
 
+use craft::host::ScriptedFiles;
 use craft::ui::dialog::dialog_id;
 use craft::ui::patterns::form_dialogs::{FieldValue, HostedParamDialog};
 use serde_json::{Value, json};
@@ -295,6 +296,47 @@ fn import_asks_before_replacing_saved_presets() {
     pass(&mut app, &ctx);
     assert!(asking(&app));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn delayed_import_keeps_the_reopened_tracing_preset_managers_selection() {
+    let (mut app, ctx) = windowed(Default::default());
+    let files = Arc::new(ScriptedFiles::held());
+    let host = app.host.with_files(files.clone());
+    host.clone().install(&ctx);
+    app.host = Arc::new(host);
+    app.run("imageTrace.presets.save", json!({"name": "Poster", "params": {"noise": 7}})).unwrap();
+    app.run("ui.tracingPresetsDialog", json!({})).unwrap();
+    press(&mut app, &ctx, Action::Import);
+    assert_eq!(files.open(), 1);
+
+    let dialogs = app.dialogs().unwrap();
+    assert!(dialogs.with(|host| host.cancel::<Manager>(&ctx)));
+    app.run("ui.tracingPresetsDialog", json!({"selected": "6 Colors"})).unwrap();
+    let contents =
+        br#"{"format": "vctracepresets", "version": 1, "presets": [{"name": "Poster", "params": {"noise": 40}}, {"name": "Ink", "params": {}}]}"#;
+    assert!(files.answer(Picked::Contents(vec![("picked.vctracepresets".into(), contents.to_vec())])).is_some());
+    crate::file_asks::poll(&mut app);
+    pass(&mut app, &ctx);
+    assert_eq!(saved_names(&app), ["Poster", "Ink"], "the requested import still adds new presets");
+    assert_eq!(selected(&app).as_deref(), Some("6 Colors"), "the reopened manager keeps its own selection");
+    let replace = dialog_id(REPLACE_KIND);
+    dialogs.with(|host| {
+        assert!(host.is_open::<ReplacePresets>());
+        assert_eq!(host.stack().parent(replace), None, "the duplicate question does not belong to the reopened manager");
+        host.set_json_field(&ctx, replace, "choice", json!("proceed")).unwrap();
+        assert!(host.confirm_by_id(&ctx, replace));
+    });
+    pass(&mut app, &ctx);
+    assert_eq!(app.session.trace_preset("Poster").unwrap().params.noise, 40, "Replace still updates the saved preset");
+    assert_eq!(selected(&app).as_deref(), Some("6 Colors"), "Replace leaves the reopened manager's selection alone");
+
+    press(&mut app, &ctx, Action::Import);
+    let current_pick = br#"{"format": "vctracepresets", "version": 1, "presets": [{"name": "Graphite", "params": {}}]}"#;
+    assert!(files.answer(Picked::Contents(vec![("current.vctracepresets".into(), current_pick.to_vec())])).is_some());
+    crate::file_asks::poll(&mut app);
+    pass(&mut app, &ctx);
+    assert_eq!(selected(&app).as_deref(), Some("Graphite"), "the current manager selects the preset it imported");
 }
 
 #[test]

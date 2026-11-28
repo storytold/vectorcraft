@@ -30,9 +30,20 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         }
         // Graph tool click: the graph's size.
         "graph" => {
+            let Some(document) = app.session.active().map(|doc| doc.uid) else {
+                app.status("Open a document before drawing a graph");
+                return;
+            };
             let at = click_of(&p).map_or(Point::new(0.0, 0.0), |c| c.at);
             let graph_type = p.get("type").cloned().unwrap_or(json!("column"));
-            let params = [("type", graph_type), ("x", json!(at.x)), ("y", json!(at.y)), ("width", json!(200)), ("height", json!(150))];
+            let params = [
+                ("type", graph_type),
+                ("x", json!(at.x)),
+                ("y", json!(at.y)),
+                ("width", json!(200)),
+                ("height", json!(150)),
+                ("__doc", json!(document)),
+            ];
             let params = params.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
             let r = command::open(app, "graph.create", "Graph", params);
             reported(app, r);
@@ -97,5 +108,52 @@ pub fn open_tool_dialog(app: &mut VectorcraftApp, kind: &str, p: Value) {
         // A click or double-click that would edit type set in fonts that aren't available.
         vectorcraft_tools::text::MISSING_FONT_EDIT => super::confirm::ask_missing_font_edit(app, &p),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use craft::ui::dialog::dialog_id;
+    use vectorcraft_engine::Session;
+
+    use super::*;
+
+    fn confirm_graph(app: &mut VectorcraftApp) {
+        let ctx = app.ui_ctx.clone().unwrap();
+        let host = app.dialogs().unwrap();
+        for _ in 0..2 {
+            host.with(|h| h.confirm_by_id(&ctx, dialog_id("graph.create")));
+            super::super::host::pump(app, &ctx);
+        }
+    }
+
+    #[test]
+    fn graph_size_without_a_document_keeps_the_source_status() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        open_tool_dialog(&mut app, "graph", json!({"x": 40.0, "y": 30.0}));
+
+        assert_eq!(app.ui.status, "Open a document before drawing a graph");
+        assert!(!app.any_dialog_open());
+    }
+
+    #[test]
+    fn graph_size_does_not_draw_in_a_different_document() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        let opening = app.session.doc().unwrap().doc.clone();
+        let click = json!({"x": 40.0, "y": 30.0, "type": "column"});
+        open_tool_dialog(&mut app, "graph", click.clone());
+        app.run("file.new", json!({"width": 400, "height": 300})).unwrap();
+        let other = app.session.doc().unwrap().doc.clone();
+
+        confirm_graph(&mut app);
+
+        assert_eq!(app.session.doc().unwrap().doc, other, "confirmation leaves the other document unchanged");
+        app.run("document.activate", json!({"index": 0})).unwrap();
+        assert_eq!(app.session.doc().unwrap().doc, opening);
+        open_tool_dialog(&mut app, "graph", click);
+        confirm_graph(&mut app);
+        let doc = &app.session.doc().unwrap().doc;
+        assert_eq!(doc.layers[0].children().unwrap().len(), 1);
     }
 }

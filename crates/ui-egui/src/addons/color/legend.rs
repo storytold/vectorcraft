@@ -3,6 +3,7 @@
 //! labels show, and whether only the swatches selected in the Swatches panel are drawn. It
 //! previews on the canvas and runs `addon.color.swatchLegend` on OK.
 
+use craft::ui::contract::Bind;
 use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, Param, ParamDialog, ParamKind};
 use serde_json::{Value, json};
 
@@ -75,7 +76,7 @@ pub(crate) fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
         if fields.list("names").is_some_and(|names| !names.is_empty()) {
             rows.push(Param::new("selectedOnly", tl!("Selected Swatches Only"), ParamKind::bool(false)));
         }
-        ParamDialog::new(COMMAND, tl!("Create Swatch Legend"), rows).previews(true)
+        ParamDialog::new(COMMAND, tl!("Create Swatch Legend"), rows).values(Bind::bound(fields)).previews(true)
     })
 }
 
