@@ -1923,7 +1923,11 @@ impl RecolorDialog {
             GROUP_STORAGE if !value.is_boolean() => return Err(format!("`{GROUP_STORAGE}` must be true or false")),
             _ => {}
         }
-        clear_channel(&mut self.fields);
+        // Visibility and display choices do not replace the color projection being dragged.
+        // Keep its Cancel source while leaving those newer choices in effect.
+        if !matches!(field, "preview" | FIND | "display") {
+            clear_channel(&mut self.fields);
+        }
         self.fields.fields.insert(field.to_owned(), value);
         Ok(())
     }
@@ -3421,6 +3425,50 @@ mod tests {
             assert_eq!(snapshot(&rc.fields()), snapshot(&before));
             assert_eq!(internal_history(&rc), history);
         }
+    }
+
+    #[test]
+    fn preview_updates_keep_held_channel_cancellation() {
+        preview_update_during_held_cancellation(false);
+    }
+
+    #[test]
+    fn preview_updates_keep_held_global_adjust_cancellation() {
+        preview_update_during_held_cancellation(true);
+    }
+
+    fn preview_update_during_held_cancellation(global: bool) {
+        let mut rc = custom_four_color_mapping();
+        let document = rc.app().session.active().unwrap().doc.clone();
+        let undo = undo_len(&rc.app());
+        if global {
+            rc.set("tab", json!("edit")).unwrap();
+            rc.set("sliderMode", json!("global")).unwrap();
+        }
+        rc.set("preview", json!(true)).unwrap();
+        rc.settled();
+        let before = rc.fields();
+        let history = internal_history(&rc);
+        let rail = rc.slider(if global { "Saturation" } else { "C" }).expect("the editable channel rail");
+        let from = rail.center();
+        let to = from + egui::vec2(30.0, 0.0);
+        rc.press_at(from).move_to(from.lerp(to, 0.5)).move_to(to);
+        assert_ne!(snapshot(&rc.fields()), snapshot(&before), "the held drag changes the mapping");
+        rc.set("preview", json!(false)).unwrap();
+        real_key(&mut rc, egui::Key::Escape);
+        rc.release(to).frame();
+        assert!(rc.is_open(), "Escape cancels the held control without dismissing Recolor");
+        assert_eq!(rc.field("preview"), Some(json!(false)), "the newer Preview choice survives");
+        assert_eq!(snapshot(&rc.fields()), snapshot(&before), "Cancel restores the exact mapping");
+        assert_eq!(rc.field(COMPS), before.fields.get(COMPS).cloned());
+        assert_eq!(internal_history(&rc), history);
+        assert_eq!(rc.app().session.active().unwrap().doc, document);
+        assert_eq!(undo_len(&rc.app()), undo);
+        rc.click_label("OK").frame().frame();
+        assert!(!rc.is_open());
+        assert_eq!(undo_len(&rc.app()), undo + 1);
+        rc.app().run("edit.undo", json!({})).unwrap();
+        assert_eq!(rc.app().session.active().unwrap().doc, document);
     }
 
     #[test]
