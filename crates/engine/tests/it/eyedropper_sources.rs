@@ -96,11 +96,23 @@ fn alt_reverse_still_respects_locks_and_isolation_and_hidden_sources_are_skipped
                 s.execute("layer.setProps", &json!({"id": if restriction == "layer" { layer } else { source }, "locked": true})).unwrap();
             }
         }
-        let before = json!(s.doc().unwrap().doc);
+        let before_doc = s.doc().unwrap().doc.clone();
         let history = s.doc().unwrap().history.undo.len();
         click(&mut s, Mods { alt: restriction != "hidden", ..Default::default() });
-        assert_eq!(json!(s.doc().unwrap().doc), before);
-        assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        if restriction == "hidden" {
+            // A hidden layer is not a hit. The click is still on the artboard, so the eyedropper
+            // samples the paper onto the selected target and leaves the source alone.
+            let st = s.doc().unwrap();
+            assert_eq!(json!(st.doc.node(source).unwrap()), json!(before_doc.node(source).unwrap()));
+            let vectorcraft_color::Paint::Solid { color, .. } = st.doc.node(target).unwrap().appearance.fill_paint() else {
+                panic!("a miss on the artboard paints the paper onto the selection");
+            };
+            assert_eq!(color.to_hex(), st.doc.setup.paper().to_hex());
+            assert_eq!(st.history.undo.len(), history + 1);
+        } else {
+            assert_eq!(json!(s.doc().unwrap().doc), json!(before_doc));
+            assert_eq!(s.doc().unwrap().history.undo.len(), history);
+        }
         s.select_tool("selection", ViewInfo::default()).unwrap();
         s.pointer(&PointerEvent::new(PointerKind::Down, 40.0, 40.0), ViewInfo::default()).unwrap();
         assert!(!s.doc().unwrap().selection.objects.contains(&source));

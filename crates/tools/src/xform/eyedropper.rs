@@ -10,6 +10,11 @@
 //! blend's steps, an envelope's distorted contents). Clicking an image samples its pixels
 //! (averaged over the options' raster sample size; a CMYK image gives its ink amounts).
 //!
+//! A click that hits no visible art samples the document's paper colour when it is inside an
+//! artboard (`paint.sampleColor`). That includes a gap inside a layer's bounding box. A gradient
+//! stop still waits for an object, Alt has nothing to paint onto, and a click outside every
+//! artboard does nothing.
+//!
 //! With a gradient mesh selected, a click on one of its points gives that point the current solid
 //! fill color, and a click inside one of its patches gives it to the patch's four points
 //! (`object.mesh.setPointColor`).
@@ -569,6 +574,7 @@ impl Tool for EyedropperTool {
                 self.stop = None;
                 vec![Action::SwitchTool(back)]
             }
+            Click::Paper(color) => vec![Action::Exec("paint.sampleColor".into(), json!({ "color": color_json(&color) }))],
             Click::MeshPoints(id, points, color) => {
                 let params = json!({ "id": id.0, "points": points, "color": color_json(&color), "keepModel": true });
                 vec![Action::Exec("object.mesh.setPointColor".into(), params)]
@@ -708,13 +714,15 @@ enum Click {
     /// gradient stop of `stop` (the tool to switch back to and the stop), else to the active fill
     /// or stroke.
     Sample { color: Color, source: NodeId, meshes: Vec<NodeId>, stop: Option<(String, usize)> },
+    /// The document's paper colour, sampled where no visible art was hit inside an artboard.
+    Paper(Color),
 }
 
 impl Click {
     /// The object of the document the click reads from or writes to.
     fn object(&self) -> Option<NodeId> {
         match self {
-            Click::ImageTrace(_) | Click::Back(_) => None,
+            Click::ImageTrace(_) | Click::Back(_) | Click::Paper(_) => None,
             Click::BrushKeyColor(_, id) | Click::MeshPoints(id, ..) | Click::CopyFrom(id, _) | Click::Sample { source: id, .. } => Some(*id),
         }
     }
@@ -765,7 +773,16 @@ impl EyedropperTool {
         } else {
             sample_source(cx, p)
         };
-        let (src, _) = source?;
+        let Some((src, _)) = source else {
+            // A hit-test miss means nothing visible is under the cursor. Sample the artboard
+            // paper there, including a gap inside a layer's bounding box. A gradient stop still
+            // waits for an object, and Alt has nothing to paint onto.
+            let on_art = cx.doc.artboards.iter().any(|a| a.rect.contains(p));
+            if stop.is_some() || mods.alt || !on_art {
+                return None;
+            }
+            return Some(Click::Paper(cx.doc.setup.paper()));
+        };
         let n = cx.doc.node(src)?;
         if mods.alt && stop.is_none() {
             return Some(Click::CopyFrom(src, Some(if mods.shift { "append" } else { "reverse" })));
@@ -821,7 +838,35 @@ mod tests {
         // On the stroke edge → the stroke colour.
         let a = t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 100.0, 150.0).with_mods(shift));
         assert_eq!(a, vec![Action::Exec("paint.sampleColor".into(), json!({"color": color_json(&Color::BLACK)}))]);
-        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)).is_empty());
+        // On the artboard, past every object: the paper colour.
+        let paper = color_json(&d.setup.paper());
+        assert_eq!(
+            t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 400.0, 400.0)),
+            vec![Action::Exec("paint.sampleColor".into(), json!({"color": paper}))]
+        );
+        // Outside every artboard there is nothing to sample.
+        assert!(t.pointer(&cx, &PointerEvent::new(PointerKind::Down, 2000.0, 2000.0)).is_empty());
+    }
+
+    /// A click in the empty gap between two objects on one layer is a hit-test miss, so it
+    /// samples the paper. The layer's bounding box covers that gap and must not count as art.
+    #[test]
+    fn a_gap_between_objects_on_one_layer_samples_the_paper() {
+        use vectorcraft_doc::Appearance;
+        use vectorcraft_geom::shapes;
+        let (mut d, _) = doc_with_rect();
+        let layer = d.layers[0].id;
+        let id = d.alloc_id();
+        d.insert(Some(layer), 1, Node::path(id, shapes::rectangle(Rect::new(300.0, 100.0, 400.0, 200.0)), Appearance::default_art())).unwrap();
+        let at = Point::new(250.0, 150.0);
+        assert!(d.layers[0].geometric_bounds().is_some_and(|b| b.contains(at)));
+        let (s, p) = (Selection::default(), paint());
+        assert!(sample_source(&cx(&d, &s, &p), at).is_none());
+        let paper = color_json(&d.setup.paper());
+        assert_eq!(
+            EyedropperTool::default().pointer(&cx(&d, &s, &p), &PointerEvent::new(PointerKind::Down, at.x, at.y)),
+            vec![Action::Exec("paint.sampleColor".into(), json!({"color": paper}))]
+        );
     }
 
     /// With points of a selected gradient mesh picked, a click on other art samples the color under
@@ -1179,14 +1224,20 @@ mod tests {
         assert_eq!(sampled_hex(&EyedropperTool::default().pointer(&cx, &click)), "#00ff00");
         cx.raster_sample = 3;
         assert_eq!(sampled_hex(&EyedropperTool::default().pointer(&cx, &click)), "#555555", "3 x 3 average");
-        // A template layer and a locked image still supply pixels. Hidden layers do not.
+        // A template layer and a locked image still supply pixels. A hidden layer is not visible,
+        // so the click falls through to the artboard paper.
         d.node_mut(id).unwrap().locked = true;
         if let NodeKind::Layer { template, .. } = &mut d.node_mut(l).unwrap().kind {
             *template = true;
         }
         assert_eq!(sampled_hex(&EyedropperTool::default().pointer(&crate::testutil::cx(&d, &s, &p), &click)), "#00ff00");
+        // A hidden layer is not a hit. The click is still on the artboard, so it samples the paper.
         d.node_mut(l).unwrap().visible = false;
-        assert!(EyedropperTool::default().pointer(&crate::testutil::cx(&d, &s, &p), &click).is_empty());
+        let paper = color_json(&d.setup.paper());
+        assert_eq!(
+            EyedropperTool::default().pointer(&crate::testutil::cx(&d, &s, &p), &click),
+            vec![Action::Exec("paint.sampleColor".into(), json!({"color": paper}))]
+        );
         // Distorted with its left and right swapped, the blue pixel is drawn at the left.
         d.node_mut(l).unwrap().visible = true;
         let q = [(30.0, 0.0), (0.0, 0.0), (0.0, 10.0), (40.0, 10.0)].map(|(x, y)| vectorcraft_geom::Point::new(x, y));
@@ -1887,8 +1938,10 @@ mod tests {
         assert!(matches!(&click(&s, &p, 125.0, 125.0, shift)[0], Action::Exec(c, _) if c == "paint.sampleColor"));
         let alt = Mods { alt: true, ..Default::default() };
         assert!(matches!(&click(&s, &p, 125.0, 125.0, alt)[0], Action::Exec(c, v) if c == "appearance.copyFrom" && v["reverse"] == true));
-        // Off the mesh, or with a fill that is not a solid color, nothing goes to its points.
-        assert!(click(&s, &p, 400.0, 400.0, plain).is_empty());
+        // Off the mesh the click hits no art, so it samples the paper and does not paint the points.
+        // A fill that is not a solid color also leaves the points alone.
+        let paper = color_json(&d.setup.paper());
+        assert_eq!(click(&s, &p, 400.0, 400.0, plain), vec![Action::Exec("paint.sampleColor".into(), json!({"color": paper}))]);
         p.fill = Paint::None;
         assert!(matches!(&click(&s, &p, 125.0, 125.0, plain)[0], Action::Exec(c, _) if c == "appearance.copyFrom"));
     }
