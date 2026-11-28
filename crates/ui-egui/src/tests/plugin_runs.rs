@@ -681,7 +681,7 @@ fn on_the_web_a_command_dialog_runs_its_command_in_a_worker() {
     );
     let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, TRIANGLE)).unwrap());
     app.run("plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]})).unwrap();
-    assert!(dialogs::plugin::open_command(&mut app, &format!("plugin.{id}.same")));
+    assert!(dialogs::plugin::open_command(&mut app, &format!("plugin.{id}.same"), &serde_json::Value::Null));
     pump(&mut app);
     assert!(!app.session.in_interaction(), "nothing previewed");
     app.session.begin_interaction("Move").unwrap();
@@ -711,7 +711,7 @@ fn on_the_web_a_command_dialog_automation_confirms_runs_on_the_page() {
     );
     let data = vectorcraft_format::base64_encode(&wat::parse_str(tpl::returning(&manifest, TRIANGLE)).unwrap());
     app.run("plugin.install", json!({"dataBase64": data, "grant": ["doc.read", "doc.write"]})).unwrap();
-    assert!(dialogs::plugin::open_command(&mut app, &format!("plugin.{id}.same")));
+    assert!(dialogs::plugin::open_command(&mut app, &format!("plugin.{id}.same"), &serde_json::Value::Null));
     pump(&mut app);
     app.ui.answering_control = true;
     answer_open(&mut app, true);

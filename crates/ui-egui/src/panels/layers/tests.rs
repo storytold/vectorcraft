@@ -931,6 +931,62 @@ fn full_layers_are_the_layers_with_all_their_art_selected() {
     }
 }
 
+/// A row's menu ends with a Plug-ins submenu while a plug-in lists commands in the Layers panel's
+/// context menu (`menu.context`): a submenu named after the plug-in holding those commands, each
+/// enabled while its `when` holds for the rows the menu acts on. A pick runs the command on that
+/// row's object, whatever the selection, as one undo step.
+#[test]
+fn row_menus_list_plugin_commands() {
+    use craft::keymap::CommandRef;
+    use craft::layers::ui::panel::MenuTarget;
+    use craft::ui::menu::MenuRow;
+    use vectorcraft_plugins::wat::{Given, when_given};
+    let (mut app, layer, [a, b]) = two_rects();
+    let id = "test.layers.context";
+    let manifest = format!(
+        r#"{{"id":"{id}","name":"Row Tools","api":2,"version":"1","kind":"filter","commands":[
+        {{"id":"one","label":"One","menu":{{"context":[{{"menu":"layers","when":"oneObject"}}]}}}},
+        {{"id":"canvas","label":"Canvas","menu":{{"context":[{{"menu":"canvas"}}]}}}}]}}"#
+    );
+    let triangle = r#"{"objects":[{"path":{"subpaths":[{"closed":true,"anchors":[{"p":[0,0]},{"p":[5,0]},{"p":[5,5]}]}]}}]}"#;
+    let module = wat::parse_str(when_given(&manifest, Given::Input, r#""name":"Target""#, triangle)).unwrap();
+    app.run("plugin.install", json!({"dataBase64": vectorcraft_format::base64_encode(&module)})).unwrap();
+    app.run("layer.setProps", json!({"ids": [a.0], "name": "Target"})).unwrap();
+    app.run("select.set", json!({"ids": [b.0]})).unwrap();
+    // The Plug-ins submenu of the menu on `row`: (plug-in, [(label, command, params, enabled)]).
+    type Entries = Vec<(String, String, serde_json::Value, bool)>;
+    let plugins = |app: &VectorcraftApp, row: NodeId| -> Vec<(String, Entries)> {
+        let tree = DocLayers::new(app, app.session.active().unwrap());
+        let menu = controls::row_menu(&tree, &MenuTarget::new(Some(layer_key(row))));
+        let groups = menu.iter().find_map(|r| match r {
+            MenuRow::Submenu(label, groups) if label.as_str() == tl!("Plug-ins") => Some(groups.clone()),
+            _ => None,
+        });
+        let entry = |r: &MenuRow<String>| {
+            let MenuRow::Entry(e) = r else { panic!("a plug-in's submenu holds entries only") };
+            let c = CommandRef::parse_key(e.value().expect("an entry runs a command")).expect("a command key");
+            (e.label().as_str().to_string(), c.id.to_string(), c.params.clone(), e.is_enabled())
+        };
+        let group = |r: &MenuRow<String>| {
+            let MenuRow::Submenu(name, entries) = r else { panic!("a plug-in's group is a submenu") };
+            (name.as_str().to_string(), entries.iter().map(entry).collect())
+        };
+        groups.unwrap_or_default().iter().map(group).collect()
+    };
+    let one = vectorcraft_engine::cmd::plugin::command_id(id, "one");
+    assert_eq!(plugins(&app, a), vec![("Row Tools".to_string(), vec![("One".to_string(), one.clone(), json!({"ids": [a.0]}), true)])]);
+    assert!(!plugins(&app, layer)[0].1[0].3, "a layer row is not one object");
+
+    let undo = undo_len(&app);
+    feed(&mut app, vec![LayersEvent::menu(MenuTarget::new(Some(layer_key(a))), CommandRef::with_params(&one, json!({"ids": [a.0]})).key())]);
+    let st = app.session.active().unwrap();
+    assert_eq!((undo_len(&app), st.history.undo.last().map(|s| s.label.as_str())), (undo + 1, Some("One")));
+    assert!(st.doc.node(a).is_none() && st.doc.node(b).is_some(), "the plug-in was given the row's object, not the selection");
+
+    app.run("plugin.remove", json!({"id": id})).unwrap();
+    assert!(plugins(&app, b).is_empty(), "removed: no Plug-ins submenu");
+}
+
 /// A target circle's appearance held across File › Revert and dropped on another row's circle
 /// leaves the restored objects with the same IDs as they were; a drag started after the revert
 /// still moves the appearance.
