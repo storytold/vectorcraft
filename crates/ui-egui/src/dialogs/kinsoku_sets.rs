@@ -55,7 +55,8 @@ fn categories() -> [(&'static str, &'static str); 4] {
 /// What OK files for the pump: the document the dialog opened on, the names of its sets then, and the sets.
 #[derive(Clone)]
 struct Request {
-    doc: Option<u64>,
+    doc: u64,
+    reverts: u64,
     opened: Vec<String>,
     sets: Value,
 }
@@ -63,8 +64,9 @@ struct Request {
 /// The Kinsoku Shori Settings dialog on the host.
 pub(crate) struct KinsokuDialog {
     id: DialogId,
-    /// The uid of the document the dialog opened on, which OK sets the sets of.
-    doc: Option<u64>,
+    /// The drawing and its saved-content generation when the dialog opened.
+    doc: u64,
+    reverts: u64,
     /// The names of that document's sets when the dialog opened: OK keeps the sets the document gained
     /// since, after the dialog's own, and New's suggestion skips these names.
     opened: Vec<String>,
@@ -84,7 +86,7 @@ pub(crate) struct KinsokuDialog {
 /// Open Kinsoku Shori Settings on the active document's custom sets, the first one picked.
 pub fn open(app: &mut VectorcraftApp) -> Result<Value, String> {
     let st = app.session.active().ok_or("no document open")?;
-    let dialog = KinsokuDialog::new(st.uid, st.doc.kinsoku_sets.iter());
+    let dialog = KinsokuDialog::new(st.uid, st.reverts, st.doc.kinsoku_sets.iter());
     app.dialogs().ok_or("no window")?.with(|host| host.open(dialog));
     Ok(Value::Null)
 }
@@ -176,10 +178,11 @@ fn text_of(field: &str, value: &Value) -> Result<String, String> {
 }
 
 impl KinsokuDialog {
-    fn new<'a>(doc: u64, document_sets: impl Iterator<Item = &'a KinsokuSet> + Clone) -> Self {
+    fn new<'a>(doc: u64, reverts: u64, document_sets: impl Iterator<Item = &'a KinsokuSet> + Clone) -> Self {
         let mut d = KinsokuDialog {
             id: dialog_id(COMMAND),
-            doc: Some(doc),
+            doc,
+            reverts,
             opened: document_sets.clone().map(|k| k.name.clone()).collect(),
             sets: Value::Array(document_sets.map(listed).collect()),
             selected: 0,
@@ -340,7 +343,7 @@ impl KinsokuDialog {
         }
         self.commit();
         self.problem = None;
-        self.held.file(Request { doc: self.doc, opened: self.opened.clone(), sets: self.sets.clone() });
+        self.held.file(Request { doc: self.doc, reverts: self.reverts, opened: self.opened.clone(), sets: self.sets.clone() });
     }
 
     /// The answer OK filed, once.
@@ -373,7 +376,7 @@ impl KinsokuDialog {
         let entries = bases(&list);
         Row::new().show(ui, |ui, _| {
             Text::new(tl!("Based on:")).show(ui);
-            if let Some(base) = Select::new(tl!("Based on:"), Bind::given(self.base.clone()), &entries).show(ui).value().cloned() {
+            if let Some(base) = Select::new(tl!("Based on:"), Bind::given(self.base.clone()), &entries).show(ui).events.committed().cloned() {
                 self.base = base;
                 self.edited();
             }
@@ -399,7 +402,7 @@ impl KinsokuDialog {
         Row::new().show(ui, |ui, _| {
             Text::new(tl!("Unicode")).show(ui);
             TextField::new(tl!("Unicode"), Bind::bound(&mut self.code)).show(ui);
-            if let Some(into) = Select::new(tl!("Add to"), Bind::given(self.into.clone()), &targets).show(ui).value().cloned() {
+            if let Some(into) = Select::new(tl!("Add to"), Bind::given(self.into.clone()), &targets).show(ui).events.committed().cloned() {
                 self.into = into;
             }
             add = Button::new(tl!("Add")).enabled(code_char(&self.code).is_some()).show(ui).clicked();
@@ -517,7 +520,7 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
     let Some(host) = app.dialogs() else { return };
     let Some(request) = host.with(|h| h.get_mut::<KinsokuDialog>().and_then(KinsokuDialog::take_ok)) else { return };
     let answer = apply(app, &request);
-    let gone = answer.is_err() && !app.session.documents().iter().any(|d| Some(d.uid) == request.doc);
+    let gone = answer.is_err() && !app.session.documents().iter().any(|d| d.uid == request.doc);
     // The command ran outside the host's lock, which a dialog's own methods take.
     host.with(|h| {
         if let Some(d) = h.get_mut::<KinsokuDialog>() {
@@ -530,8 +533,12 @@ pub(crate) fn pump(app: &mut VectorcraftApp, ctx: &Context) {
 }
 
 fn apply(app: &mut VectorcraftApp, request: &Request) -> Result<(), String> {
-    if app.session.active().map(|st| st.uid) != request.doc {
-        let index = app.session.documents().iter().position(|d| Some(d.uid) == request.doc).ok_or("that document is no longer open")?;
+    let (index, document) =
+        app.session.documents().iter().enumerate().find(|(_, st)| st.uid == request.doc).ok_or("that document is no longer open")?;
+    if document.reverts != request.reverts {
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+    }
+    if app.session.active().is_none_or(|st| st.uid != request.doc) {
         app.run("document.activate", json!({ "index": index }))?;
     }
     // A `sets` that is not a list of sets goes to the command as it is, which refuses it.

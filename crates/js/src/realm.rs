@@ -617,6 +617,23 @@ impl Realm {
         }
     }
 
+    /// Adds the global `ExternalObject`. `new ExternalObject("lib:AdobeXMPScript")` defines the
+    /// globals `XMPMeta`, `XMPFile` and `XMPConst`; any other library name throws. `XMPFile` reads
+    /// and writes files through the host functions `xmpOpen` and `xmpWrite` of
+    /// [`Realm::define_file_classes`], which the host adds first; without `File` and `Folder`,
+    /// `XMPFile` throws. An `XMPFile` is open only in the run that opened it: each
+    /// [`Realm::reset_folder_current`] begins a new run for it, and [`Realm::run`] and
+    /// [`Realm::start`] do not. A successful close or a new file run releases its packet buffers.
+    /// Registered namespace storage counts toward the realm's heap limit.
+    /// After a successful installation, another call fails with an internal
+    /// error and preserves `ExternalObject` and registered namespaces. A failed installation can be retried.
+    pub fn define_external_object(&mut self) -> Result<(), RunError> {
+        match crate::xmp_classes::install(&mut self.interp) {
+            Ok(()) => Ok(()),
+            Err(e) => self.outcome(Err(e)).map(drop),
+        }
+    }
+
     /// Adds the host classes `classes` ([`crate::HostClass`]), each a global constructor whose
     /// prototype holds its members, and the global objects `instances`, each made from the
     /// [`crate::host_ref`] given. Prototypes and constructors are frozen; the instances cannot be

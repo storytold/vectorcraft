@@ -48,6 +48,73 @@ fn cancel(app: &VectorcraftApp) {
 }
 
 #[test]
+fn canceled_keyboard_choices_do_not_change_unicode_add_or_the_next_new_set() {
+    use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
+
+    fn draw(app: &mut VectorcraftApp, ui: &mut Ui) {
+        if let Some(dialogs) = app.dialogs() {
+            dialogs.with(|host| host.run(ui));
+        }
+        crate::dialogs::host::pump(app, ui.ctx());
+    }
+
+    fn code(panel: &mut Panel, text: &str) {
+        panel.click_role("Unicode", Role::TEXT_INPUT);
+        panel.key(egui::Key::A, egui::Modifiers::COMMAND);
+        panel.type_text(text);
+        panel.key(egui::Key::Tab, egui::Modifiers::NONE);
+        panel.click_role("Add", Role::BUTTON);
+    }
+
+    for cancel in [true, false] {
+        let mut app = app();
+        app.run(COMMAND, json!({"sets": [{"name": "Draft", "cannotStart": "", "cannotEnd": ""}]})).unwrap();
+        let original = app.session.active().unwrap().doc.clone();
+        let undo = steps(&app);
+        let mut panel = Panel::new(app, draw);
+        panel.room(egui::vec2(900.0, 1000.0));
+        open(&mut panel.app()).unwrap();
+        panel.frame();
+        panel.click_role("Add to", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        assert_eq!(dialog(&panel.app(), |dialog| dialog.into.clone()), "cannotStart");
+        code(&mut panel, "U+3001");
+        assert_eq!(dialog(&panel.app(), |dialog| (dialog.cats[0].clone(), dialog.cats[1].clone())), ("、".into(), "".into()));
+        // A deliberate accepted category change directs the next Add to Cannot End Line.
+        panel.click_role("Add to", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        code(&mut panel, "U+3002");
+        assert_eq!(dialog(&panel.app(), |dialog| (dialog.cats[0].clone(), dialog.cats[1].clone())), ("、".into(), "。".into()));
+
+        panel.click_role("Based on:", Role::COMBO_BOX);
+        panel.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+        panel.key(egui::Key::Escape, egui::Modifiers::NONE);
+        assert_eq!(dialog(&panel.app(), |dialog| dialog.base.clone()), "hard");
+        panel.click("New…");
+        panel.key(egui::Key::Enter, egui::Modifiers::NONE);
+        assert_eq!(picked(&panel.app()), "Kinsoku Set 1");
+        assert_eq!(dialog(&panel.app(), |dialog| dialog.cats[0].clone()), category_text(&built_in("hard").unwrap(), "cannotStart"));
+        assert_eq!(panel.app().session.active().unwrap().doc, original, "editing the dialog changes no document yet");
+        panel.click(if cancel { "Cancel" } else { "OK" });
+        assert!(!is_open(&panel.app()));
+        if cancel {
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+            assert_eq!(steps(&panel.app()), undo);
+        } else {
+            let sets = doc_sets(&panel.app());
+            assert_eq!((sets[0].name.as_str(), &sets[0].cannot_start, &sets[0].cannot_end), ("Draft", &vec!['、'], &vec!['。']));
+            assert_eq!(sets.len(), 2);
+            assert_eq!(steps(&panel.app()), undo + 1);
+            panel.app().run("edit.undo", json!({})).unwrap();
+            assert_eq!(panel.app().session.active().unwrap().doc, original);
+        }
+    }
+}
+
+#[test]
 fn empty_kinsoku_list_shows_none_in_the_preset_picker() {
     let mut fixture = craft::ui::testing::Fixture::new(|ui| crate::dialogs::host::window_dialogs(ui.ctx()).with(|host| host.run(ui)));
     fixture.room(egui::vec2(800.0, 600.0));
@@ -224,6 +291,47 @@ fn ok_sets_the_document_the_dialog_opened_on() {
     pump(&mut app);
     assert!(!is_open(&app));
     assert!(app.session.documents().iter().all(|d| d.doc.kinsoku_sets.is_empty()));
+}
+
+#[test]
+fn old_ok_keeps_restored_kinsoku_rules_and_the_current_tab() {
+    let mut app = app();
+    app.run("type.kinsokuSets.set", json!({"sets": [{"name": "Custom", "cannotStart": "ゝ"}]})).unwrap();
+    let file = std::env::temp_dir().join(format!("vectorcraft-kinsoku-revert-{}.vectorcraft", std::process::id()));
+    app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|err| err.to_string())));
+    app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|err| err.to_string())));
+    app.run("file.saveAs", json!({"path": file.to_string_lossy()})).unwrap();
+    let st = app.session.active().unwrap();
+    let (uid, reverts) = (st.uid, st.reverts);
+
+    app.run("type.kinsokuSets.set", json!({"sets": [{"name": "Custom", "cannotStart": "ゞ"}]})).unwrap();
+    open(&mut app).unwrap();
+    set(&app, "cannotStart", json!("ー"));
+    app.run("file.revert", json!({"confirmed": true})).unwrap();
+    let _ = std::fs::remove_file(file);
+    let st = app.session.active().unwrap();
+    assert_eq!((st.uid, st.reverts), (uid, reverts + 1));
+    assert_eq!(doc_sets(&app)[0].cannot_start, ['ゝ']);
+    let undo = steps(&app);
+    app.run("file.new", json!({"width": 200, "height": 200})).unwrap();
+    let other = app.session.active().unwrap().uid;
+    assert_ne!(uid, other);
+
+    pump(&mut app);
+    let restored = app.session.documents().iter().find(|st| st.uid == uid).unwrap();
+    assert_eq!(restored.doc.kinsoku_sets[0].cannot_start, ['ゝ'], "an old OK must keep the saved line-breaking rule");
+    assert_eq!(restored.history.undo.len(), undo);
+    assert_eq!(app.session.active().unwrap().uid, other, "a stale OK does not activate the original tab");
+    assert!(is_open(&app));
+    dialog(&app, |d| assert_eq!(d.problem.as_deref(), Some("The document was reverted. Reopen this dialog to continue.")));
+    cancel(&app);
+
+    assert!(app.session.set_active(0));
+    open(&mut app).unwrap();
+    set(&app, "cannotStart", json!("ー"));
+    pump(&mut app);
+    assert!(!is_open(&app));
+    assert_eq!(doc_sets(&app)[0].cannot_start, ['ー'], "a fresh draft can edit the restored rule");
 }
 
 /// OK keeps a set the document gained while the dialog was open, after the dialog's sets, and a

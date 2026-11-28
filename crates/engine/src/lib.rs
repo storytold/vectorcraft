@@ -30,10 +30,10 @@ pub use cmd::clipboard::{Clipboard, SourceLayer};
 pub use cmd::create::constrain_click;
 pub use cmd::distortcmds::{perspective_click, width_point_pair};
 pub use cmd::flare::flare_settings;
-pub use cmd::gradient::StopOwner;
+pub use cmd::gradient::{GradientEditPaints, StopOwner};
 pub use cmd::graph::{GraphTypeSubject, calculated_axes as graph_calculated_axes, graph_type_subject};
 pub use cmd::params::{check_keys, check_params};
-pub use cmd::pathops::auto_simplify_level;
+pub use cmd::pathops::{auto_simplify_level, can_outline_stroke};
 pub use cmd::rasterfx::{export_pdf, flatten_raster_effects};
 pub use cmd::select::{path_fingerprint, storable_selection, stored_path_params, stored_path_step};
 pub use cmd::textwrap::TEXT_WRAP_OFFSET_RANGE;
@@ -121,6 +121,10 @@ pub struct Session {
     /// lent from: a follow-up in another document, after a tool switch (also one back to the same
     /// tool) or after the tool starts afresh is not lent. None when the press was not lent.
     pub(crate) press_lent: Option<(Option<u64>, &'static str, &'static str)>,
+    /// The uid of the document in which a Cmd press with the Selection tool armed Select Behind
+    /// ([`Session::behind_armed`]): Cmd has been held since. None once Cmd is let go, the tool
+    /// changes or another document becomes active.
+    pub(crate) behind_armed: Option<Option<u64>>,
     /// The selection tool a Cmd press would borrow at the pointer, as [`Session::hover_tool_at`]
     /// or [`Session::cursor`] last found it with Cmd held (None inside when it found none), with
     /// the document state, active tool and keys it was found for. None when it was last asked
@@ -222,6 +226,9 @@ pub struct Session {
     /// The Startup Scripts folder, whose scripts `script.startup.run` runs; `None`: no folder
     /// ([`Session::attach_startup_scripts_dir`]).
     startup_scripts_dir: Option<std::path::PathBuf>,
+    /// How listings of the Scripts and Startup Scripts folders measure their time
+    /// ([`Session::set_script_listing_clock`]).
+    script_listing_clock: script::folder::Clock,
     /// The folder of File Info's metadata templates; `None`: no folder
     /// ([`Session::attach_metadata_templates_dir`]).
     metadata_templates_dir: Option<std::path::PathBuf>,

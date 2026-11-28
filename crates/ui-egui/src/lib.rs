@@ -273,6 +273,8 @@ pub struct VectorcraftApp {
     pub(crate) missing_font_edit_token: Option<u64>,
     /// The hosted dialogs whose OK the app answers, one record each.
     pub(crate) held: dialogs::host::Held,
+    /// The document whose settings the open Document Setup dialog edits.
+    pub(crate) document_setup_source: Option<(u64, u64)>,
     /// The undo step each value gesture in progress edits under: a scrub or a slider drag is one
     /// step however many values it sets.
     pub(crate) edit_scopes: HashMap<GestureId, UndoScope>,
@@ -286,6 +288,10 @@ pub struct VectorcraftApp {
     pub(crate) three_d: panels::three_d::Model,
     /// The open export option dialogs and what runs after each.
     pub(crate) export_dialogs: dialogs::export_host::ExportDialogs,
+    /// The document and selection used by each open slice dialog.
+    pub(crate) slice_dialogs: dialogs::slices::SliceDialogs,
+    /// The drawing and loaded contents the open Package dialog saves and collects.
+    pub(crate) package_document: Option<(u64, u64)>,
     /// Save for Web's renders and colour table.
     pub(crate) web_export: dialogs::save_for_web::WebExport,
     /// The Flattener Preview panel's model.
@@ -309,13 +315,13 @@ pub struct VectorcraftApp {
     /// Check Spelling's walk through the documents' type, while its dialog is open.
     pub(crate) spelling: Option<dialogs::check_spelling::SpellingWalk>,
     /// The Character Style Options dialog's live preview.
-    pub(crate) char_style_preview: dialogs::preview::LivePreview,
+    pub(crate) char_style_preview: dialogs::char_style_options::Preview,
     /// The Paragraph Style Options dialog's live preview.
-    pub(crate) para_style_preview: dialogs::preview::LivePreview,
+    pub(crate) para_style_preview: dialogs::char_style_options::Preview,
     /// The Justification dialog, while it is open.
     pub(crate) justification: Option<dialogs::justification::Open>,
     /// The Bullets and Numbering dialog's live preview.
-    pub(crate) bullets_preview: dialogs::preview::LivePreview,
+    pub(crate) bullets_preview: Option<dialogs::bullets_numbering::Preview>,
     /// The paste that waits for the answer to its colour profile question.
     pub(crate) pending_paste: Option<dialogs::profile_mismatch::PasteAsk>,
     /// The missing links' questions, while they are asked.
@@ -353,6 +359,10 @@ pub struct VectorcraftApp {
     /// leaves this `None`).
     #[cfg(test)]
     pub(crate) now_override: Option<f64>,
+    /// The instant `now_override`'s zero stands for, so [`Self::instant`] reads the same test clock
+    /// as an [`craft::ui::runtime::motion::Instant`].
+    #[cfg(test)]
+    pub(crate) clock_origin: craft::ui::runtime::motion::Instant,
     /// An error the next tool choice returns before the engine sees it ([`Self::try_select_tool`]),
     /// so tests can drive a failed switch (production has no such field).
     #[cfg(test)]

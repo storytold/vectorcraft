@@ -76,6 +76,9 @@ pub(crate) const REFLECT: &str = "reflect";
 // The roots of the document model: https://ai-scripting.docsforadobe.dev/jsobjref/Application/
 pub(crate) const DOM_ROOTS: [&str; 4] = ["app", "activeDocument", "documents", "selection"];
 
+// Document methods that write the file they are given: https://ai-scripting.docsforadobe.dev/jsobjref/Document/
+pub(crate) const DOM_FILE_WRITES: &[&str] = &["exportVariables"];
+
 // Application methods that page doesn't list, named in public forum posts:
 // https://community.adobe.com/t5/illustrator-discussions/changes-in-cs6/td-p/4173362 (executeMenuCommand,
 // doScript, loadAction, unloadAction) and
@@ -89,8 +92,9 @@ pub(crate) const APP_METHODS: &[&str] = &["executeMenuCommand", "doScript", "loa
 /// Text an action set written out at run time holds.
 pub(crate) const ACTION_TEXT: &str = "/actionCount";
 
-/// Constructors of the language (ECMA-262 3rd edition, section 15) and of E4X (ECMA-357 2nd edition,
-/// section 13), and the platform's own: `new` of these is no document-model type.
+/// Constructors of the language (ECMA-262 3rd edition, section 15, and the collections and binary
+/// data of the 6th edition, sections 22.2 to 24.2) and of E4X (ECMA-357 2nd edition, section 13), and
+/// the platform's own: `new` of these is no document-model type.
 pub(crate) const CONSTRUCTORS: &[&str] = &[
     "Object",
     "Function",
@@ -107,6 +111,21 @@ pub(crate) const CONSTRUCTORS: &[&str] = &[
     "SyntaxError",
     "TypeError",
     "URIError",
+    "Map",
+    "Set",
+    "WeakMap",
+    "WeakSet",
+    "ArrayBuffer",
+    "DataView",
+    "Int8Array",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "Int16Array",
+    "Uint16Array",
+    "Int32Array",
+    "Uint32Array",
+    "Float32Array",
+    "Float64Array",
     "Namespace",
     "QName",
     "XML",

@@ -1790,6 +1790,22 @@ fn compound_path_takes_its_last_paths_paint() {
 }
 
 #[test]
+fn a_compound_path_whose_last_path_has_the_gradient_is_one_gradient_filled_compound_path() {
+    // GUARDS: a gradient instance wraps only the last path of a compound path (a sunburst's rays), the paths before it
+    // keep the default fill. Read as a drawn look whose paths paint apart, each ray but the last became a plain black
+    // path and only the last one took the gradient.
+    let defs = "%AI5_BeginGradient: (Lin)\n(Lin) 0 2 Bd\n[\n<00FF>\n0\n%_0 0 0 0 1 0 0 2 1 6 50 0 Bs\n%_0 0 0 0 0 0 1 2 1 6 50 100 Bs\nBD\n%AI5_EndGradient\n";
+    let instance = "Bb\n1 (Lin) 0 0 0 1 1 0 0 1 0 0 1 Bg\n10 0 10 10 100 50 Xm\nf\n0 BB\n";
+    let rays: String = (0..3).map(|i| format!("0 g\n{}f\n", rect_path(f64::from(i) * 30.0, 0.0, f64::from(i) * 30.0 + 20.0, 20.0))).collect();
+    let art_ = format!("0 Ae\n*u\n0 Ae\nu\n{rays}{}{instance}U\n9 () XW\n*U\n", rect_path(100.0, 0.0, 120.0, 20.0));
+    let a = art(&read_ok(&format!("{defs}{}", layer(&art_))).doc);
+    assert_eq!(a.len(), 1, "{a:#?}");
+    let NodeKind::Compound { children, .. } = &a[0].kind else { panic!("{:#?}", a[0].kind) };
+    assert_eq!(children.len(), 4, "every ray is a subpath of the compound path");
+    assert!(matches!(fill(&a[0]), Paint::Gradient(_)), "{:?}", fill(&a[0]));
+}
+
+#[test]
 fn a_group_whose_state_has_no_transparency_takes_the_current_one() {
     // GUARDS: a group's own state block keeps the last `Xy`, as the PDF part draws it; a drawn look's group stays opaque.
     let art_ = format!(
@@ -9026,7 +9042,7 @@ fn an_envelope_without_distort_appearance_maps_from_the_geometric_box() {
 
 /// An envelope maps from the geometric box when its file saves that box's size, saves no size,
 /// saves a size that isn't a number or saves a size far from both boxes; contents without a stroke
-/// have one box, and contents with no height have no margins.
+/// have one box.
 #[test]
 fn an_envelope_not_saved_with_its_stroke_maps_from_the_geometric_box() {
     use vectorcraft_doc::live::{EnvelopeKind, EnvelopeMap};
@@ -9067,13 +9083,52 @@ fn an_envelope_not_saved_with_its_stroke_maps_from_the_geometric_box() {
     let thin = format!("{RED}0 1 1 0 1 0 0 XA\n0.2 w\n{}b\n", rect_path(40.0, 20.0, 160.0, 80.0));
     let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &thin, 2, &plain)));
     assert_eq!(live_envelope(&art(&r.doc)[0]).4.bounds_margin, [0.0; 4]);
-    // A stroked straight line: 120 × 0 without its stroke, and 120 × 10 as saved.
-    let keys = format!("{ENVELOPE_KEYS}10 /Real (AIDeformArtHeightKey) ,\n120 /Real (AIDeformArtWidthKey) ,\n");
-    let line = format!("{RED}0 1 1 0 1 0 0 XA\n10 w\n40 20 m\n160 20 L\nS\n");
-    let r = read_ok(&layer(&envelope_of(&straight_mesh(1, 1, (120.0, 60.0)), &keys, &line, 2, &plain)));
-    for n in art(&r.doc) {
-        if let NodeKind::Envelope { options, .. } = &n.kind {
-            assert_eq!(options.bounds_margin, [0.0; 4]);
+}
+
+/// A stroked straight line, 120 × 0 without its stroke, whose file saves its size with the stroke
+/// (120 × 10) maps from that box: the margins across the line are shares of its length. Lines
+/// along either axis, in a mesh envelope and in a top object envelope.
+#[test]
+fn a_stroked_straight_line_saved_with_its_stroke_maps_from_the_stroked_box() {
+    use vectorcraft_doc::live::{EnvelopeKind, EnvelopeMap};
+    for vertical in [false, true] {
+        let (w, h) = if vertical { (10.0, 120.0) } else { (120.0, 10.0) };
+        let outer = Rect::from_center_size((100.0, 50.0), (w, h));
+        let at = move |(i, j): (usize, usize)| (outer.x0 + i as f64 * w, outer.y0 + j as f64 * h);
+        let third = move |p: (usize, usize), q: (usize, usize)| {
+            let ((x, y), (u, v)) = (at(p), at(q));
+            (x + (u - x) / 3.0, y + (v - y) / 3.0)
+        };
+        let mesh = mesh_text(1, 1, &at, &third, None);
+        let flat = EnvelopeKind::Mesh {
+            rows: 1,
+            cols: 1,
+            points: vec![
+                Point::new(outer.x0, outer.y0),
+                Point::new(outer.x1, outer.y0),
+                Point::new(outer.x0, outer.y1),
+                Point::new(outer.x1, outer.y1),
+            ],
+            handles: vec![],
+        };
+        let drawn = drawn_box(&flat, outer, outer);
+        let keys = format!("{ENVELOPE_KEYS}{h} /Real (AIDeformArtHeightKey) ,\n{w} /Real (AIDeformArtWidthKey) ,\n");
+        let line = if vertical { "100 -10 m\n100 110 L\n" } else { "40 50 m\n160 50 L\n" };
+        let line = format!("{RED}0 1 1 0 1 0 0 XA\n10 w\n{line}S\n");
+        for kind in [2, 3] {
+            let r = read_ok(&layer(&envelope_of(&mesh, &keys, &line, kind, &drawn)));
+            let a = art(&r.doc);
+            assert_eq!(a.len(), 1, "{vertical} {kind}: {a:#?}");
+            assert!(r.warnings.is_empty(), "{vertical} {kind}: {:?}", r.warnings);
+            let (.., options) = live_envelope(&a[0]);
+            let across = 5.0_f32 / 120.0;
+            let want = if vertical { [0.0, 0.0, across, across] } else { [across, across, 0.0, 0.0] };
+            assert!(options.bounds_margin.iter().zip(want).all(|(m, w)| (m - w).abs() < 1e-6), "{vertical} {kind}: {:?}", options.bounds_margin);
+            let src = EnvelopeMap::of(&a[0]).unwrap().src();
+            assert!(
+                (src.x0 - outer.x0).abs() + (src.y0 - outer.y0).abs() + (src.x1 - outer.x1).abs() + (src.y1 - outer.y1).abs() < 1e-3,
+                "{vertical} {kind}: {src:?}"
+            );
         }
     }
 }

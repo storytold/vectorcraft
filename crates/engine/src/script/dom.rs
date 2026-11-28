@@ -18,7 +18,8 @@
 //! `pathItems[0]`. A collection read with a name, `pageItems["name"]`, gives the object `getByName`
 //! gives, and a script may name the application's members without `app.`, as
 //! <https://ai-scripting.docsforadobe.dev/scriptingJavascript/objectReferences/> describes; here
-//! that holds for `activeDocument`, `documents` and `selection`.
+//! that holds for `activeDocument`, `documents` and `selection`. `documents[0]` is the active
+//! document, as the same page says.
 //!
 //! VectorCraft's own rules:
 //! - A document's selection lists the selected objects topmost first, as `pageItems` does, whatever
@@ -29,8 +30,8 @@
 //! - Assigning `activeDocument` or `selection` without `app.` assigns `app.activeDocument` or the
 //!   active document's selection. A top-level `var selection = ...` does the same and does
 //!   not make a variable of the script. Assigning `documents` keeps its value.
-//! - Collections list documents in tab order. The objectReferences page says `documents[0]` is
-//!   always the active document; VectorCraft does not follow that yet.
+//! - After `documents[0]`, documents are listed from the one active most recently to the one
+//!   active longest ago. A change a script makes to a document in the back does not move it.
 //! - `pageItems` lists every object, with the objects inside groups and compound paths after the
 //!   group or compound path, and leaves out layers and ruler guides. An index out of range gives
 //!   `undefined`; `index` and `getByName` throw `Not found` when nothing matches.
@@ -67,6 +68,20 @@ use super::{HISTORY_LOST, Host, Link, Savepoint, command, command_value, current
 use crate::{DocState, Document, NodeId, NodeKind, Session};
 
 mod tags;
+mod variables;
+
+pub use variables::{MAX_HANDLES, STALE_DATASET, STALE_VARIABLE};
+
+/// What [`after_command`] compares with, taken before each command a script runs
+/// ([`variables::before_command`]).
+pub(super) fn before_command(h: &Host, id: &str) -> Option<(u64, Vec<crate::doc::DataSet>)> {
+    variables::before_command(h, id)
+}
+
+/// After each command a script runs ([`variables::after_command`]).
+pub(super) fn after_command(h: &Host, before: Option<(u64, Vec<crate::doc::DataSet>)>) {
+    variables::after_command(h, before);
+}
 
 /// The error for a member read or called with no document open.
 pub const NO_ACTIVE_DOCUMENT: &str = "No active document";
@@ -117,7 +132,8 @@ const ARTBOARD_COORDS: &str = "CoordinateSystem.ARTBOARDCOORDINATESYSTEM";
 /// What the object model keeps for one run: its coordinate system, the lists of page items and the
 /// answers of which objects are on a locked artboard for the last [`ITEM_LISTS`] documents read,
 /// each kept while its document is unchanged, whether a call's own savepoint ([`atomically`]) is
-/// open, and the settings of each `DocumentPreset` the run made.
+/// open, the settings of each `DocumentPreset` the run made, and the `Variable` and `Dataset`
+/// objects it gave out.
 #[derive(Default)]
 pub(super) struct State {
     coords: Cell<Coords>,
@@ -125,6 +141,7 @@ pub(super) struct State {
     locked: RefCell<Vec<LockedList>>,
     saving: Cell<bool>,
     presets: RefCell<Vec<Vec<(String, Data)>>>,
+    vars: variables::Handles,
 }
 
 impl State {
@@ -367,12 +384,27 @@ fn doc_of(h: &Host, d: &Data, class: &str) -> std::result::Result<Doc, HostError
     }
 }
 
+fn node_handle(h: &Host, st: &DocState, id: NodeId) -> [f64; 5] {
+    let [high, low] = id_parts(id);
+    [float(h.run), float(st.uid), high, low, float(st.reverts)]
+}
+
+fn node_of(h: &Host, handle: &[f64]) -> Option<(Doc, NodeId)> {
+    let &[run, uid, high, low, reverts] = handle else { return None };
+    let doc = find_doc(h, run, uid)?;
+    if h.session.borrow().documents().get(doc.index)?.reverts != whole(reverts)? {
+        return None;
+    }
+    Some((doc, id_of(high, low)?))
+}
+
 /// The page item `d` names, which must still be in its document.
 fn item_of(h: &Host, d: &Data) -> std::result::Result<Item, HostError> {
     let Some(handle) = handle_of(d, "PageItem") else { return Err(HostError::Type("this is not a page item".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a page item".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
-    let id = id_of(*high, *low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    if handle.len() != 5 {
+        return Err(HostError::Type("this is not a page item".into()));
+    }
+    let (doc, id) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     let s = h.session.borrow();
     let st = &s.documents()[doc.index];
     if st.doc.node(id).is_none_or(|n| typename(n).is_none()) {
@@ -409,8 +441,8 @@ fn doc_ref(h: &Host, uid: u64) -> Data {
 fn item_ref(h: &Host, st: &DocState, id: NodeId) -> Data {
     match st.doc.node(id) {
         Some(n) => match typename(n) {
-            Some(t) => host_ref(t, &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
-            None => host_ref("Layer", &[float(h.run), float(st.uid), id_parts(id)[0], id_parts(id)[1]]),
+            Some(t) => host_ref(t, &node_handle(h, st, id)),
+            None => host_ref("Layer", &node_handle(h, st, id)),
         },
         None => Data::Null,
     }
@@ -651,11 +683,11 @@ fn on_doc<T>(
     keep_selection: bool,
     f: impl FnOnce(&Host) -> std::result::Result<T, HostError>,
 ) -> std::result::Result<T, HostError> {
-    let (index, active, before, layer) = {
+    let (index, active, before, layer, activated) = {
         let s = h.session.borrow();
         let index = s.documents().iter().position(|d| d.uid == uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
         let st = &s.documents()[index];
-        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()))
+        (index, s.active_index(), st.selection.clone(), (st.active_layer, st.highlighted_rows()), st.activated)
     };
     let switch = active != Some(index);
     if switch {
@@ -681,6 +713,13 @@ fn on_doc<T>(
         Some(a) if switch => command(h, "document.activate", &json!({"index": a})).map(drop),
         _ => Ok(()),
     };
+    // The switch for the change does not move the document up in `documents`.
+    if switch
+        && back.is_ok()
+        && let Some(st) = h.session.borrow_mut().document_mut(uid)
+    {
+        st.activated = activated;
+    }
     let v = r?;
     restored?;
     back?;
@@ -840,12 +879,17 @@ fn app_ref(_: &Host, _: &[Data]) -> Answer {
     Ok(host_ref("Application", &[]))
 }
 
+/// The open documents in the order `documents` lists them ([`Session::front_order`]).
+fn front_docs(s: &Session) -> impl Iterator<Item = &DocState> {
+    s.front_order().into_iter().map(|i| &s.documents()[i])
+}
+
 /// `documents[i]`, and `documents["name"]` as `getByName` reads it.
 fn docs_at(h: &Host, a: &[Data]) -> Answer {
     let s = h.session.borrow();
     let at = match arg(a, 1) {
-        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| s.documents().get(i)),
-        Data::String(name) => match s.documents().iter().find(|d| d.title() == *name) {
+        Data::Number(n) => whole(*n).and_then(|i| usize::try_from(i).ok()).and_then(|i| front_docs(&s).nth(i)),
+        Data::String(name) => match front_docs(&s).find(|d| d.title() == *name) {
             None if !probing(a) => return Err(HostError::Error(NOT_FOUND.into())),
             found => found,
         },
@@ -857,7 +901,7 @@ fn docs_at(h: &Host, a: &[Data]) -> Answer {
 fn docs_by_name(h: &Host, a: &[Data]) -> Answer {
     let Data::String(name) = arg(a, 1) else { return Err(HostError::Type("give a name, as a string".into())) };
     let s = h.session.borrow();
-    let st = s.documents().iter().find(|d| d.title() == *name).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
+    let st = front_docs(&s).find(|d| d.title() == *name).ok_or_else(|| HostError::Error(NOT_FOUND.into()))?;
     Ok(doc_ref(h, st.uid))
 }
 
@@ -1180,8 +1224,58 @@ fn preset_of(h: &Host, d: &Data) -> Option<usize> {
     (i < h.dom.presets.borrow().len()).then_some(i)
 }
 
-/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`, and
-/// a value is checked when `addDocument` uses it.
+/// The enumeration whose values the `DocumentPreset` setting `key` takes, when it takes one.
+fn preset_enum(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "artboardLayout" => "DocumentArtboardLayout",
+        "colorMode" => "DocumentColorSpace",
+        "previewMode" => "DocumentPreviewMode",
+        "rasterResolution" => "DocumentRasterResolution",
+        "transparencyGrid" => "DocumentTransparencyGrid",
+        "units" => "RulerUnits",
+        _ => return None,
+    })
+}
+
+/// Checks that `value` is of the kind the `DocumentPreset` setting `key` holds: a value of its
+/// enumeration, a finite number, a title of at most [`MAX_TEXT_BYTES`] bytes, `true` or `false` for
+/// `documentBleedLink`, or four finite numbers for `documentBleedOffsetRect`. `undefined` unsets any
+/// setting, and the three settings `addDocument` does not apply yet also take `null`.
+fn check_preset_value(key: &str, value: &Data) -> std::result::Result<(), HostError> {
+    let wrong = |kind: &str| Err(HostError::Type(format!("DocumentPreset.{key} must be {kind}")));
+    match value {
+        Data::Undefined => return Ok(()),
+        Data::Null if matches!(key, "documentBleedLink" | "documentBleedOffsetRect" | "transparencyGrid") => return Ok(()),
+        _ => {}
+    }
+    if let Some(name) = preset_enum(key) {
+        let member = ENUMS.iter().find(|(n, _)| *n == name).map_or(&[][..], |(_, m)| *m);
+        return match value {
+            Data::String(s) if s.strip_prefix(name).and_then(|r| r.strip_prefix('.')).is_some_and(|m| member.contains(&m)) => Ok(()),
+            _ => wrong(&format!("a {name} value")),
+        };
+    }
+    match key {
+        "title" => match value {
+            Data::String(t) if t.len() > MAX_TEXT_BYTES => Err(HostError::Range("the title is too long".into())),
+            Data::String(_) => Ok(()),
+            _ => wrong("a string"),
+        },
+        "documentBleedLink" => match value {
+            Data::Bool(_) => Ok(()),
+            _ => wrong("true or false"),
+        },
+        "documentBleedOffsetRect" => match value {
+            Data::Array(r) if r.len() == 4 && r.iter().all(|n| matches!(n, Data::Number(n) if n.is_finite())) => Ok(()),
+            _ => wrong("an array of four finite numbers"),
+        },
+        _ => number(value, &format!("DocumentPreset.{key}")).map(|_| ()),
+    }
+}
+
+/// The getter and setter of the `DocumentPreset` setting `key`: an unset one reads `undefined`. The
+/// setter checks the kind and size of a value ([`check_preset_value`]) and keeps the old value when
+/// it throws; `addDocument` checks the ranges.
 fn preset_field(link: &Link, key: &'static str) -> HostMember {
     let not_preset = || HostError::Type("this is not a DocumentPreset".into());
     let l = link.clone();
@@ -1201,6 +1295,7 @@ fn preset_field(link: &Link, key: &'static str) -> HostMember {
         let value = arg(&a, 1).clone();
         h.charge_call(16 + data_size(&value))?;
         let i = preset_of(&h, arg(&a, 0)).ok_or_else(not_preset)?;
+        check_preset_value(key, &value)?;
         let mut presets = h.dom.presets.borrow_mut();
         let fields = &mut presets[i];
         match fields.iter_mut().find(|(k, _)| k == key) {
@@ -1894,17 +1989,16 @@ fn destination(h: &Host, item: Item, target: &Data, how: &Data) -> std::result::
     let how = placement_of(how)?;
     let beside = matches!(how, Placement::Above | Placement::Below);
     let handle = handle_of(target, "PageItem").or_else(|| handle_of(target, "Layer"));
-    let Some(&[run, uid, high, low]) = handle.as_deref() else {
+    let Some(handle) = handle.filter(|parts| parts.len() == 5) else {
         if handle_of(target, "Document").is_some() {
             return Err(HostError::Error("a document as the relative object is not available yet".into()));
         }
         return Err(HostError::Type("the relative object must be a page item or a layer".into()));
     };
-    let doc = find_doc(h, run, uid).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
+    let (doc, target) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     if doc.uid != item.doc.uid {
         return Err(HostError::Error(CROSS_DOCUMENT.into()));
     }
-    let target = id_of(high, low).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     with_doc(h, doc, |_, st| {
         let d = &st.doc;
         let t = d.node(target).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
@@ -2070,9 +2164,9 @@ fn item_z_order(h: &Host, a: &[Data]) -> Answer {
 
 fn layer_name(h: &Host, a: &[Data]) -> Answer {
     let Some(handle) = handle_of(arg(a, 0), "Layer") else { return Err(HostError::Type("this is not a Layer".into())) };
-    let [run, uid, high, low] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
-    let doc = find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
-    let id = id_of(*high, *low).unwrap_or(NodeId(u64::MAX));
+    let [run, uid, _, _, _] = handle.as_slice() else { return Err(HostError::Type("this is not a Layer".into())) };
+    find_doc(h, *run, *uid).ok_or_else(|| HostError::Error(STALE_DOCUMENT.into()))?;
+    let (doc, id) = node_of(h, &handle).ok_or_else(|| HostError::Error(STALE_ITEM.into()))?;
     with_doc(h, doc, |_, st| st.doc.node(id).map(|n| text(n.name.clone().unwrap_or_default())).ok_or_else(|| HostError::Error(STALE_ITEM.into())))
 }
 
@@ -2152,6 +2246,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         let items = members.iter().map(|m| (m.to_string(), HostItem::Value(text(format!("{name}.{m}"))))).collect();
         realm.define_host_object(name, items)?;
     }
+    variables::define_enums(realm)?;
     let l = link;
     let mut application = named(vec![
         ("typename", typename_of("Application")),
@@ -2213,6 +2308,7 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             .into_iter()
             .map(|m| later(l, "Document", m)),
     );
+    document.extend(variables::document_members(l));
     document.push(("tags".into(), get(l, tags::doc_tags)));
     classes.push(class("Document", None, document, None));
     classes.push(class(
@@ -2265,7 +2361,6 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
             "sliced",
             "uRL",
             "uuid",
-            "visibilityVariable",
             "wrapInside",
             "wrapOffset",
             "wrapped",
@@ -2278,8 +2373,10 @@ pub(super) fn install(realm: &mut Realm, link: &Link) -> std::result::Result<(),
         .into_iter()
         .map(|m| later(l, "PageItem", m)),
     );
+    page_item.extend(variables::page_item_members(l));
     classes.push(class("PageItem", None, page_item, None));
-    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), Vec::new(), None)));
+    classes.extend(ITEM_CLASSES.iter().map(|c| class(c, Some("PageItem"), variables::item_members(l, c), None)));
+    classes.extend(variables::classes(l));
     classes.push(class(
         "Layer",
         None,

@@ -357,6 +357,38 @@ fn the_last_filter_is_off_once_its_plugin_is_removed_or_replaced() {
     assert!(!menus::enabled(app, APPLY_LAST), "installed again in the batch after it ran");
 }
 
+/// A batch that runs a filter and then retries its stored module that didn't load, which installs
+/// another module with its id, leaves Apply Last Filter off.
+#[test]
+fn a_retry_that_replaces_the_filter_after_it_ran_in_a_batch_forgets_it() {
+    let mut h = window(app());
+    let app = h.state_mut();
+    let id = "test.ui.last.retried";
+    let store = std::env::temp_dir().join(format!("vectorcraft-ui-last-filter-retry-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&store);
+    std::fs::create_dir_all(&store).unwrap();
+    app.session.attach_plugin_store(store.clone());
+    let wasm = filter(id, "Retried", N);
+    install(app, &wasm);
+    // The module the store keeps for it.
+    let stored = std::fs::read_dir(&store).unwrap().filter_map(Result::ok).map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "wasm"));
+    let file = stored.expect("the store keeps the module").display().to_string();
+    std::fs::write(&file, b"\0asm?").unwrap();
+    app.session.load_stored_plugins();
+    std::fs::write(&file, filter(id, "Other", N)).unwrap();
+
+    let steps = json!([
+        {"command": "plugin.run", "params": {"id": id, "params": {"n": 7}}},
+        {"command": "plugin.retry", "params": {"file": file}},
+    ]);
+    let r = app.run("command.batch", json!({"commands": steps})).unwrap();
+    assert_eq!(app.last_filters.last_id(), Some(id), "{r}");
+    assert_eq!(vectorcraft_plugins::registry::get(id).map(|p| p.manifest().name.clone()).as_deref(), Some("Other"), "the retry installed it");
+    assert!(!menus::enabled(app, APPLY_LAST) && !menus::enabled(app, LAST), "replaced by the retry after it ran: {r}");
+    vectorcraft_plugins::registry::remove(id);
+    let _ = std::fs::remove_dir_all(&store);
+}
+
 /// A filter that runs in the background becomes the last filter only when its result is applied:
 /// starting it or canceling it doesn't. Apply Last Filter starts it in the background as its menu
 /// item does. With no document open both items are off.

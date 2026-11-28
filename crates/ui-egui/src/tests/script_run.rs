@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use vectorcraft_engine::Session;
 use vectorcraft_engine::cmd::scripts::TOO_LARGE;
 use vectorcraft_engine::script::MAX_SOURCE_BYTES;
+use vectorcraft_engine::script::folder::Clock;
 
 use super::script_dialogs::{cancel, confirm, frame, is_open, key, open_id, pump, set};
 use crate::dialogs::script_run::{
@@ -15,8 +16,11 @@ use crate::dialogs::script_run::{
 use crate::tests::picks::{Picker, scripted};
 use crate::{VectorcraftApp, menus, script_runs};
 
+/// An app with a document, whose folder listings take no time.
 fn app() -> VectorcraftApp {
-    let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), crate::Services::default()));
+    let mut session = Session::new();
+    session.set_script_listing_clock(Clock::Fixed(std::time::Duration::ZERO));
+    let mut app = crate::testing::windowed(VectorcraftApp::new(session, crate::Services::default()));
     app.run("file.new", json!({})).unwrap();
     app
 }
@@ -68,6 +72,30 @@ fn allow_once(app: &mut VectorcraftApp) {
     let paths = picked(app);
     script_run::forget::<ScriptFiles>(app);
     script_run::settle_files(app, DialogResult::Ok(FilesAnswer { answer: "once", paths, left_out: false, automated: false }));
+}
+
+#[test]
+fn a_script_file_reply_does_not_populate_a_reopened_dialog() {
+    let mut app = app();
+    let picker = scripted(&mut app);
+    app.session.prefs.show_external_script_warning = false;
+    menus::run_ui_command(&mut app, "ui.runScript", &json!({"source": "File.openDialog('Choose');"})).unwrap().unwrap();
+    script_runs::poll(&mut app);
+    script_run::with_host(&app, |host, _| host.get_mut::<ScriptFiles>().unwrap().choose = true).unwrap();
+    pump(&mut app);
+    assert_eq!(picker.requests().len(), 1);
+
+    script_run::forget::<ScriptFiles>(&app);
+    script_run::open_picker(&app, app.session.script_picker().unwrap());
+    let old_path = std::env::temp_dir().join("original-script-picker.txt");
+    picker.answer(&[&old_path.to_string_lossy()]);
+    let ctx = app.ui_ctx.clone().unwrap();
+    crate::tests::picks::poll(&mut app, &ctx);
+
+    assert!(picked(&app).is_empty(), "the old file chooser must not populate the new open dialog");
+    set(&app, PICKER_KIND, "answer", json!("deny")).unwrap();
+    assert!(confirm(&mut app, PICKER_KIND));
+    finish(&mut app);
 }
 
 #[test]

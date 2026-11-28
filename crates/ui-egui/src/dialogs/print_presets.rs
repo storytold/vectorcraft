@@ -48,7 +48,7 @@ fn stored(app: &VectorcraftApp, name: &str) -> Value {
 fn detail(app: &VectorcraftApp, name: &str) -> Vec<Detail> {
     let builtin = name == DEFAULT_PRESET;
     let title = if builtin { tl!(DEFAULT_PRESET).to_string() } else { name.to_string() };
-    let mut out = vec![Detail::Title(title), Detail::Note(crate::i18n::fmt(tl!("Differences from {preset}:"), &[("preset", DEFAULT_PRESET)]))];
+    let mut out = vec![Detail::Title(title), Detail::Note(crate::i18n::fmt(tl!("Differences from {preset}:"), &[("preset", tl!(DEFAULT_PRESET))]))];
     let settings = app.session.prefs.print_presets.iter().find(|p| p.name == name).map(|p| &p.settings);
     let mut changed = settings.map(|s| changes(s, &Default::default())).unwrap_or_default();
     changed.sort_by_key(|c| section_of(c["option"].as_str().unwrap_or_default()).0);

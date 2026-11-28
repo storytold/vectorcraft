@@ -408,22 +408,24 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui) {
     };
     let dragged_doc = Arc::clone(&thumbs.doc);
     let document = st.uid;
+    let reverts = st.reverts;
     let shown_app: &VectorcraftApp = app;
-    let out = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
-        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, &drag.grabbed, dragged_rows(drag))))
+    let browser = SwatchesPanel::new(&data, Bind::bound(&mut model.state), Srgba::rgb(0.0, 0.0, 0.0))
+        .drag_payload(move |drag: &ListDrag<SwatchKey>| Some(dnd::drag_of(&dragged_doc, document, &drag.grabbed, dragged_rows(drag))))
         .thumb(thumbs, thumb)
         .row_icons(|key| match key {
             SwatchKey::Swatch(name) => row_icons(shown_app, name),
             _ => vec![],
         })
         .row_items(|key| row_items(shown_app, key))
-        .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document))
-        .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document))
+        .takes_drop::<PanelDrag>(DropPlace::Between, |drag, _| dnd::accepts(drag, document, reverts))
+        .takes_drop::<PanelDrag>(DropPlace::Onto, |drag, _| dnd::accepts(drag, document, reverts))
         .select(SelectMode::Multi)
         .search(model.show_find)
         .reveal(focus.map(SwatchKey::Swatch))
-        .footer(None)
-        .show(ui);
+        .footer(None);
+    // A list drag is keyed by its browser ID. Each document has its own browser.
+    let out = ui.push_id(("swatch-rows", document), |ui| browser.show(ui)).inner;
     app.ui.swatches_panel = model;
     let shown = shown_keys(&data);
     if let Some((at, _, alt)) = out.used
@@ -766,7 +768,8 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
     let opts = actions::editable(app, &sel);
     let group = actions::selected_group(app, &sel).filter(|_| opts.is_none());
     let icon = |id: &'static str| IconSpec::svg(IconId::new(id));
-    let rows_drag = |d: &PanelDrag| matches!(d, PanelDrag::Paint { rows: Some(_), .. });
+    let document = app.session.active().map(|state| state.uid);
+    let rows_drag = move |d: &PanelDrag| matches!(d, PanelDrag::Paint { rows: Some(rows), .. } if Some(rows.document) == document);
     let edit = if group.is_some() {
         FooterAction::new(icon("palette"), tl!("Edit or Apply Color Group"))
     } else {
@@ -775,7 +778,7 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
     // Libraries, Show Swatch Kinds and the edit action sit at the start edge; Delete at the end edge, then New Swatch
     // and New Color Group before it.
     let actions = [
-        FooterAction::new(icon("library"), SwatchLibraries::MENU).pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
+        FooterAction::new(icon("library"), tl!(SwatchLibraries::MENU)).pressed(library_panel::any_open::<SwatchLibraries>(&app.ui)),
         FooterAction::new(icon("dc-swatch-kinds"), tl!("Show Swatch Kinds")).pressed(kind != Kind::All),
         edit,
         FooterAction::new(icon("trash-2"), tl!("Delete Swatch"))
@@ -817,10 +820,7 @@ fn footer(app: &mut VectorcraftApp, ui: &mut Ui) {
             }
         }
     });
-    popup(ui, tl!("Swatch Libraries"), out.responses.get(LIBRARIES), |ui| {
-        ui.set_min_width(200.0);
-        library_panel::library_menu::<SwatchLibraries>(app, ui);
-    });
+    popup(ui, tl!("Swatch Libraries"), out.responses.get(LIBRARIES), |ui| library_panel::library_menu::<SwatchLibraries>(app, ui));
 }
 
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {

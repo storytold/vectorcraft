@@ -44,8 +44,7 @@ const WRAPPED: &[(&str, &str)] = &[
 /// every preference, Forget Import Matches forgets every saved match, Begin Undo Group and End
 /// Undo Group begin and end a group, the six Save … Preset commands save a new preset (Save
 /// Gradient Preset the selection's gradient), Delete Gradient Preset deletes the saved preset the
-/// selection's gradient matches, Pixel Snapping Options…
-/// opens its dialog, the three Asset Export commands open the Asset Export panel (#4864), New
+/// selection's gradient matches, the three Asset Export commands open the Asset Export panel (#4864), New
 /// Symbol makes a symbol of the selection, Gradient Vector gives the selection the default
 /// gradient, Define Perspective Grid makes the document's grid, Select Slice deselects the
 /// slices, and Find Next goes on from the last Find and Replace search or opens its dialog, as
@@ -65,7 +64,6 @@ const PICK_RUNS: &[&str] = &[
     "perspective.presets.save",
     "gradient.presets.save",
     "gradient.presets.delete",
-    "view.snapToPixel.options",
     "assets.export",
     "assets.export3D",
     "assets.settings.set",
@@ -1057,7 +1055,7 @@ mod tests {
     fn a_pick_opens_the_dialog_its_menu_item_opens() {
         type Opened = fn(&VectorcraftApp) -> bool;
         let any: Opened = |app| app.any_dialog_open();
-        let expected: [(&str, Opened); 5] = [
+        let expected: [(&str, Opened); 6] = [
             ("object.path.cleanUp", any),
             ("object.mesh.create", any),
             ("type.smartPunctuation", |app| {
@@ -1067,6 +1065,10 @@ mod tests {
             }),
             ("edit.findReplace", |app| app.dialogs().is_some_and(|d| d.with(|h| h.is_open::<craft::text::ui::find::FindReplaceDialog>()))),
             ("object.path.smooth", crate::dialogs::smooth_slider::showing),
+            ("view.snapToPixel.options", |app| {
+                app.dialogs()
+                    .is_some_and(|d| d.with(|h| h.open_dialogs().iter().any(|d| d.key.as_deref() == Some(crate::dialogs::pixel_snap_options::KIND))))
+            }),
         ];
         for (id, opened) in expected {
             assert!(items().iter().any(|(_, item)| item == id), "{id} is in the palette");

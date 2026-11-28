@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 
 use vectorcraft_doc::live::Hooks;
 use vectorcraft_doc::{Appearance, AppearanceItem, Document, Effect, ImageObject, Node, NodeId, NodeKind};
-use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, Shape, shapes};
+use vectorcraft_geom::{Affine, BezPath, FillRule, PathData, Point, Rect, shapes};
 
 use crate::{Budget, GeomContext, OutlineHook, apply_one, is_geometry, merged_params};
 
@@ -659,7 +659,7 @@ fn push_painted(doc: Option<&Document>, c: &Node, out: &mut Vec<(BezPath, FillRu
     for item in c.appearance.items.iter().filter(|i| crate::paints(i)) {
         let fx = item.effects();
         let shape = if crate::has_geometry(fx) && !g.elements().is_empty() {
-            crate::apply_geometry_bez(fx, &g, g.bounding_box(), &ctx.item(item))
+            crate::apply_geometry_bez(fx, &g, vectorcraft_geom::path::anchored_curve_bounds(&g).unwrap_or_default(), &ctx.item(item))
         } else {
             g.clone()
         };
@@ -2691,7 +2691,7 @@ fn transform_item_leaf(leaf: &mut Node, max: Budget, used: &mut Budget, doc: Opt
     let Some((path, rule)) = leaf_geometry(leaf) else { return };
     let original = leaf.clone();
     let ctx = GeomContext::of(&original);
-    let bounds = path.to_bezpath().bounding_box();
+    let bounds = path.bounds().unwrap_or_default();
     // A path of the leaf's geometry painted by `items` alone, without the leaf's transparency and
     // object effects (the group keeps them).
     let piece = |items: Vec<AppearanceItem>| {

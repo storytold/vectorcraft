@@ -9,6 +9,78 @@ use super::*;
 use crate::tests::panel_harness::Panel;
 use crate::tests::synthetic::key_frame;
 
+/// Two selected groups offer Ungroup and not Isolate Group. The same holds when a path is
+/// selected ahead of a group, and when a group that holds another group is selected with other art.
+#[test]
+fn two_groups_offer_ungroup_without_isolate_group() {
+    let mut app = new_app();
+    let (first, second) = (group_at(&mut app, 20.0), group_at(&mut app, 160.0));
+    // The later group is first in the selection, so a check of only the first node still sees a group.
+    app.run("select.set", json!({"ids": [second, first]})).unwrap();
+
+    let mut panel = Panel::new(app, quick_action_buttons);
+    assert!(panel.shows("Ungroup") && !panel.shows("Isolate Group"));
+    assert!(!panel.shows("Unite"), "groups are not a vector selection");
+    // A path selected ahead of a group that itself holds a group.
+    let inner = group_at(&mut panel.app(), 300.0);
+    let beside = rect(&mut panel.app(), 380.0, 20.0, 30.0, 30.0);
+    panel.app().run("select.set", json!({"ids": [inner, beside]})).unwrap();
+    let outer = panel.app().run("object.group", json!({})).unwrap()["id"].clone();
+    let ahead = rect(&mut panel.app(), 20.0, 120.0, 24.0, 24.0);
+    panel.app().run("select.set", json!({"ids": [ahead, outer]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Ungroup") && !panel.shows("Isolate Group"), "path then nested group");
+    assert!(panel.shows("Group") && panel.shows("Make Clipping Mask"));
+    assert!(!panel.shows("Unite"), "a group in the selection");
+}
+
+/// One selected group offers Ungroup and Isolate Group, including a group that holds another group.
+#[test]
+fn one_group_offers_ungroup_and_isolate_group() {
+    let mut app = new_app();
+    let inner = group_at(&mut app, 20.0);
+    let beside = rect(&mut app, 120.0, 20.0, 30.0, 30.0);
+    app.run("select.set", json!({"ids": [inner, beside]})).unwrap();
+    let outer = app.run("object.group", json!({})).unwrap()["id"].clone();
+    app.run("select.set", json!({"ids": [outer]})).unwrap();
+
+    let panel = Panel::new(app, quick_action_buttons);
+    assert!(panel.shows("Ungroup") && panel.shows("Isolate Group"));
+    assert!(!panel.shows("Unite") && !panel.shows("Make Clipping Mask"), "one group");
+}
+
+/// Several paths, or a compound path with another path, offer Group, Make Clipping Mask and Unite.
+/// Unite joins them in one undo step. A path selected with type does not offer Unite.
+#[test]
+fn several_paths_offer_group_clipping_mask_and_unite() {
+    let mut app = new_app();
+    let (a, b) = (rect(&mut app, 20.0, 20.0, 40.0, 40.0), rect(&mut app, 80.0, 20.0, 40.0, 40.0));
+    app.run("select.set", json!({"ids": [a, b]})).unwrap();
+
+    let mut panel = Panel::new(app, quick_action_buttons);
+    assert!(panel.shows("Group") && panel.shows("Make Clipping Mask") && panel.shows("Unite"));
+    let before = panel.app().session.active().unwrap().selection.objects.len();
+    let depth = undo_depth(&panel.app());
+    panel.click("Unite");
+    let after = panel.app().session.active().unwrap().selection.objects.len();
+    assert!(after < before, "Unite joins the paths");
+    assert_eq!(undo_depth(&panel.app()), depth + 1, "one undo step");
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert_eq!(panel.app().session.active().unwrap().selection.objects.len(), before, "Undo restores the paths");
+    // A compound path and another path.
+    panel.app().run("select.set", json!({"ids": [a.clone(), b.clone()]})).unwrap();
+    let compound = panel.app().run("object.compoundPath.make", json!({})).unwrap()["id"].clone();
+    let c = rect(&mut panel.app(), 160.0, 20.0, 40.0, 40.0);
+    panel.app().run("select.set", json!({"ids": [compound, c]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Group") && panel.shows("Make Clipping Mask") && panel.shows("Unite"), "compound path");
+    // Type with a path is not a vector-only selection.
+    let text = panel.app().run("text.create", json!({"x": 50, "y": 200, "text": "Hi"})).unwrap()["id"].clone();
+    panel.app().run("select.set", json!({"ids": [c, text]})).unwrap();
+    panel.frame();
+    assert!(panel.shows("Group") && !panel.shows("Unite"), "path and type");
+}
+
 /// One selected clip group has Edit Clipping Path and Edit Contents at the top of the panel,
 /// above the Transform section and before every other section, and they select its clipping path
 /// or its clipped art; one that clips nothing has Edit Clipping Path alone. A plain group, or a
@@ -1300,6 +1372,32 @@ fn one_effect_has_a_delete_icon_in_appearance() {
     assert!(!panel.shows(&name), "two objects");
 }
 
+#[test]
+fn properties_remove_effect_requires_the_whole_symbol_instance() {
+    let mut app = new_app();
+    let left = rect(&mut app, 20.0, 20.0, 20.0, 20.0);
+    let right = rect(&mut app, 60.0, 20.0, 20.0, 20.0);
+    let instance = app.run("symbol.new", json!({"type": "dynamic", "ids": [left, right]})).unwrap()["id"].clone();
+    let node = vectorcraft_doc::NodeId(instance.as_u64().unwrap());
+    app.run("effect.apply", json!({"ids": [instance], "effect": "stylize.dropShadow"})).unwrap();
+    app.run("symbol.instance.selectPart", json!({"id": instance, "path": [0]})).unwrap();
+    let mut panel = Panel::new(app, show);
+    let effects = |panel: &Panel| panel.app().session.active().unwrap().doc.node(node).unwrap().appearance.effects.len();
+    let depth = undo_depth(&panel.app());
+
+    assert_eq!(effects(&panel), 1);
+    panel.click("Remove Effect");
+    assert_eq!((effects(&panel), undo_depth(&panel.app())), (1, depth), "a part cannot remove the whole instance’s effect");
+    assert!(!panel.enabled("Remove Effect"));
+    assert!(panel.shows("Appearance panel"), "Appearance remains available for inspection");
+
+    panel.app().run("select.set", json!({"ids": [instance]})).unwrap();
+    panel.frame();
+    assert!(panel.enabled("Remove Effect"));
+    panel.click("Remove Effect");
+    assert_eq!((effects(&panel), undo_depth(&panel.app())), (0, depth + 1));
+}
+
 /// A rectangle at 100, 100, 100 × 60 pt, selected, with `then` run on it, and the Transform
 /// panel's reference point on the top-left square.
 fn reference_setup(then: &[(&str, Value)]) -> VectorcraftApp {
@@ -1801,4 +1899,48 @@ fn type_quick_actions_show_text_commands_and_create_outlines() {
     assert!(crate::panel_docking::visible(&panel.app(), retype), "Retype shows the Retype panel");
     panel.click("Retype");
     assert!(crate::panel_docking::visible(&panel.app(), retype), "a second click leaves it shown");
+}
+
+#[test]
+fn canceled_property_corner_kind_keeps_the_selected_anchors_and_undo() {
+    use craft::ui::contract::Role;
+    use vectorcraft_doc::{LiveCorners, NodeId};
+    use vectorcraft_geom::shapes::CornerKind;
+
+    let mut app = new_app();
+    let id = app.run("shape.star", json!({"cx": 200, "cy": 150, "radius1": 80, "radius2": 40})).unwrap()["id"].as_u64().unwrap();
+    app.select_tool("directSelection");
+    app.run("select.anchors", json!({"id": id, "anchors": [[0, 2]], "mode": "set"})).unwrap();
+    let mut panel = Panel::new(app, show);
+    panel.room(egui::vec2(420.0, 920.0));
+    panel.type_into("Corner Radius", "6");
+    let original = panel.app().session.active().unwrap().doc.clone();
+    let original_corners = LiveCorners::of(original.node(NodeId(id)).unwrap()).unwrap();
+    assert_eq!(original_corners.radius(2), 6.0);
+    assert_eq!(original_corners.kind(2), CornerKind::Round);
+    let undo = undo_depth(&panel.app());
+
+    panel.click_role("Corner", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    assert!(panel.app().session.active().unwrap().doc == original, "highlighting a kind leaves the star as it was");
+    panel.key(Key::Escape, Modifiers::NONE);
+    assert!(panel.app().session.active().unwrap().doc == original);
+    assert_eq!(undo_depth(&panel.app()), undo);
+
+    panel.click_role("Corner", Role::COMBO_BOX);
+    panel.key(Key::ArrowDown, Modifiers::NONE);
+    panel.key(Key::Enter, Modifiers::NONE);
+    {
+        let app = panel.app();
+        let doc = &app.session.active().unwrap().doc;
+        let corners = LiveCorners::of(doc.node(NodeId(id)).unwrap()).unwrap();
+        assert_eq!(corners.kind(2), CornerKind::ALL[1]);
+        for corner in [0, 1, 3, 4, 5, 6, 7, 8, 9] {
+            assert_eq!(corners.kind(corner), original_corners.kind(corner));
+        }
+        assert_eq!(corners.radius(2), 6.0);
+        assert_eq!(undo_depth(&app), undo + 1);
+    }
+    panel.app().run("edit.undo", json!({})).unwrap();
+    assert!(panel.app().session.active().unwrap().doc == original);
 }

@@ -8473,6 +8473,7 @@ breakText	Glyphs	Glifos
 	Place Brush Art	Colocar ilustración del pincel
 	Replace Brush Art	Reemplazar ilustración del pincel
 	Replace Pattern Art	Reemplazar ilustración del motivo
+	Place Pattern Art	Colocar ilustración del motivo
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Algunos trazos usan este pincel. ¿Aplicar la nueva ilustración a esos trazos, o dejarlos como están y añadir una copia del pincel con la nueva ilustración?
 	Apply to Strokes	Aplicar a los trazos
 	Leave Strokes	Dejar los trazos
