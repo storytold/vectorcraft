@@ -172,6 +172,104 @@ fn a_saved_toolbar_without_enclosing_lasso_keeps_its_layout() {
     assert!(slot.is_some_and(|s| s.contains(&id)), "Reset Toolbar adds it");
 }
 
+/// The Polygonal Lasso Tool is in the Lasso tool's flyout in both toolbars, after the Enclosing
+/// Lasso, once in the All Tools drawer (under Select) and in Keyboard Shortcuts' list, with no
+/// shortcut; its button's tip names it; Reset Toolbar keeps it there.
+#[test]
+fn polygonal_lasso_is_in_the_lasso_flyout() {
+    let mut app = app();
+    let id = vectorcraft_tools::addons::polygonal_lasso::ID;
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    for advanced in [false, true] {
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        let s = slots(&app);
+        let slot = slot_of(&app, "lasso").map(|i| s[i].clone()).expect("a Lasso slot");
+        let lasso = slot.iter().position(|t| *t == "lasso").expect("the Lasso");
+        assert_eq!(slot.get(lasso + 1..lasso + 3), Some(&[enclosing, id][..]), "advanced: {advanced}");
+        assert_eq!(s.iter().filter(|ids| ids.contains(&id)).count(), 1, "advanced: {advanced}");
+    }
+    assert_eq!(heading(id), "Select");
+    assert_eq!(sections().iter().flat_map(|(_, tools)| tools.iter()).filter(|t| t.id == id).count(), 1, "listed once in the drawer");
+    // Keyboard Shortcuts lists the window's commands once it has drawn a frame.
+    let ctx = ctx();
+    settle(&mut app, &ctx, 0.0);
+    let rows = app.run("shortcuts.list", json!({"query": id})).unwrap();
+    let rows: Vec<_> = rows.as_array().unwrap().iter().filter(|r| r["id"] == format!("tool:{id}")).collect();
+    assert_eq!(rows.len(), 1, "listed once in Keyboard Shortcuts");
+    assert_eq!((&rows[0]["group"], &rows[0]["shortcut"]), (&json!("Tools"), &Value::Null));
+    let info = vectorcraft_tools::tool_info(id).expect("catalogued");
+    assert_eq!((info.label, info.shortcut), ("Polygonal Lasso Tool", None));
+    assert_eq!(crate::toolbar::tip(&ctx, info), "Polygonal Lasso Tool");
+    app.run("tool.select", json!({"tool": id})).unwrap();
+    assert_eq!(app.session.tool_id(), id);
+    let shown = slot_of(&app, id).map(|i| crate::toolbar::shown_tool(&app, &slots(&app)[i]));
+    assert_eq!(shown, Some(id), "the slot's button shows the tool once chosen");
+    app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+    assert!(slot_of(&app, id).is_none(), "it can be taken out");
+    app.run("toolbar.addTool", json!({"tool": id})).unwrap();
+    assert!(slot_of(&app, id).is_some(), "the drawer adds it back");
+    app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+    app.run("toolbar.reset", json!({})).unwrap();
+    let after_reset = slot_of(&app, "lasso").map(|i| slots(&app)[i].contains(&id));
+    assert_eq!(after_reset, Some(true), "Reset Toolbar puts it back");
+}
+
+/// A toolbar edited and saved before the Polygonal Lasso Tool joined the Lasso group keeps its
+/// saved layout, in both toolbars: the tool stays in the drawer until Reset Toolbar or a drag adds
+/// it, and a toolbar that already had it in a slot of its own keeps it there, once.
+#[test]
+fn a_saved_toolbar_without_polygonal_lasso_keeps_its_layout() {
+    let id = vectorcraft_tools::addons::polygonal_lasso::ID;
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    let category = |slots: &[&[&str]]| ToolbarCategory {
+        name: Some("Select".into()),
+        slots: slots.iter().map(|s| s.iter().map(|t| t.to_string()).collect()).collect(),
+    };
+    for advanced in [false, true] {
+        let edits = |saved: Vec<ToolbarCategory>| {
+            if advanced { ToolbarEdits { basic: None, advanced: Some(saved) } } else { ToolbarEdits { basic: Some(saved), advanced: None } }
+        };
+        let mut app = app();
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        app.ui.toolbar_edits = edits(vec![category(&[&["lasso", enclosing]])]);
+        app.ui = std::mem::take(&mut app.ui).sanitized();
+        assert_eq!(slots(&app), [["lasso", enclosing]], "advanced: {advanced}");
+        assert!(slot_of(&app, id).is_none(), "advanced: {advanced}");
+        app.run("toolbar.reset", json!({})).unwrap();
+        let slot = slot_of(&app, "lasso").map(|i| slots(&app)[i].clone());
+        assert!(slot.is_some_and(|s| s.contains(&id)), "Reset Toolbar adds it; advanced: {advanced}");
+        app.ui.toolbar_edits = edits(vec![category(&[&["lasso", enclosing], &[id]])]);
+        app.ui = std::mem::take(&mut app.ui).sanitized();
+        assert_eq!(slots(&app), [vec!["lasso", enclosing], vec![id]], "advanced: {advanced}");
+    }
+}
+
+/// The Lasso group torn off the Tools panel shows the Polygonal Lasso Tool after the Enclosing
+/// Lasso, in both toolbars, and shows it again after Reset Toolbar puts it back.
+#[test]
+fn a_torn_off_lasso_group_shows_polygonal_lasso() {
+    let id = vectorcraft_tools::addons::polygonal_lasso::ID;
+    let enclosing = vectorcraft_tools::addons::enclosing_lasso::ID;
+    for advanced in [false, true] {
+        let mut app = app();
+        if advanced {
+            app.run("window.toolbarAdvanced", json!({})).unwrap();
+        }
+        app.run("window.floatTools", json!({"tool": "lasso", "floating": true})).unwrap();
+        let lasso = |app: &VectorcraftApp| crate::toolbar::strips(app, None).into_iter().find(|g| g.first() == Some(&"lasso"));
+        let after_lasso = |app: &VectorcraftApp| lasso(app).and_then(|g| g.get(1..3).map(|s| s.to_vec()));
+        assert_eq!(after_lasso(&app), Some(vec![enclosing, id]), "advanced: {advanced}");
+        app.run("toolbar.removeTool", json!({"tool": id})).unwrap();
+        assert!(lasso(&app).is_some_and(|g| !g.contains(&id)), "advanced: {advanced}");
+        app.run("toolbar.reset", json!({})).unwrap();
+        assert_eq!(after_lasso(&app), Some(vec![enclosing, id]), "advanced: {advanced}");
+    }
+}
+
 /// The Smart Pen Tool is in the Pen tool's flyout in both toolbars, after the Pen family's own
 /// tools, once in the All Tools drawer (under Draw) and in Keyboard Shortcuts' list, with no
 /// shortcut; its button's tip names it; Reset Toolbar keeps it there.
@@ -277,7 +375,7 @@ fn the_commands_add_move_remove_and_reset_tools() {
     // Before the first slot, moved out of its group.
     app.run("toolbar.addTool", json!({"tool": "magicWand", "slot": 0})).unwrap();
     assert_eq!(&slots(&app)[..3], [&["magicWand"][..], &["selection"], &["directSelection", "groupSelection"]]);
-    assert_eq!(slots(&app)[3], ["lasso", "enclosingLasso"]);
+    assert_eq!(slots(&app)[3], ["lasso", "enclosingLasso", "polygonalLasso"]);
     // After a slot, and into a group (last), moved out of the Rectangle group.
     app.run("toolbar.addTool", json!({"tool": "slice", "slot": 1, "place": "after"})).unwrap();
     assert_eq!(slots(&app)[2], ["slice"]);
@@ -522,15 +620,14 @@ fn a_saved_toolbar_without_trim_at_crossings_keeps_its_layout() {
 }
 
 /// The add-ons' tools are in neither toolbar as they ship (the Trim at Crossings Tool, in the
-/// Scissors tool's group, the Enclosing Lasso Tool, in the Lasso tool's group, and the Smart Pen
-/// Tool, in the Pen tool's group, aside): the drawer lists them under their add-on's heading, and
-/// they can be added from there.
+/// Scissors tool's group, the Enclosing Lasso and Polygonal Lasso tools, in the Lasso tool's
+/// group, and the Smart Pen Tool, in the Pen tool's group, aside): the drawer lists them under
+/// their add-on's heading, and they can be added from there.
 #[test]
 fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     let mut app = app();
     let contour = vectorcraft_tools::addons::contour::ID;
     let box3d = vectorcraft_tools::addons::box3d::ID;
-    let polygonal = vectorcraft_tools::addons::polygonal_lasso::ID;
     let addon: Vec<&str> = vectorcraft_tools::addons::GROUPS.iter().flat_map(|g| g.iter().map(|t| t.id)).collect();
     assert_eq!(
         addon,
@@ -544,8 +641,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
             "sharedEdge",
             "tangentCircle",
             contour,
-            box3d,
-            polygonal
+            box3d
         ]
     );
     for advanced in [false, true] {
@@ -560,8 +656,7 @@ fn addon_tools_are_in_the_drawer_not_the_toolbars() {
     assert_eq!(listed("extendPath"), Some(("Path Precision Tools", addon[..8].to_vec())));
     assert_eq!(listed(contour), Some(("Contour", vec![contour])));
     assert_eq!(listed(box3d), Some(("3D Box", vec![box3d])));
-    assert_eq!(listed(polygonal), Some(("Polygonal Lasso", vec![polygonal])));
-    for tool in ["extendPath", contour, box3d, polygonal] {
+    for tool in ["extendPath", contour, box3d] {
         app.run("toolbar.addTool", json!({"tool": tool})).unwrap();
         assert!(slot_of(&app, tool).is_some(), "{tool}");
     }
