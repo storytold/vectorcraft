@@ -8,10 +8,10 @@ AddType text/javascript .js
 </IfModule>
 
 <IfModule mod_headers.c>
-  <FilesMatch "\.(wasm|js|ttf)$">
+  <FilesMatch "^vectorcraft-web-.*\.(wasm|js)$|\.ttf$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
-  <FilesMatch "^index\.html$">
+  <FilesMatch "^(index\.html|vectorcraft-plugin-worker.*)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
 </IfModule>

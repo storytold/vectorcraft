@@ -2205,3 +2205,29 @@ fn a_3d_effect_that_builds_nothing_draws_the_item_as_without_it() {
         }
     }
 }
+
+/// Geometry effects work from the object's bounds, lone anchors included, as the selection's box
+/// and Expand Appearance measure them: a Transform effect that scales a 10 pt line with a lone
+/// anchor at (100, 50) by 200% scales it about (50, 25), the center of the box that holds the
+/// anchor, and a path of one anchor stays where it is.
+#[test]
+fn geometry_effects_work_from_bounds_that_hold_lone_anchors() {
+    use vectorcraft_geom::{PathData, PathEl, SubPath};
+    let scale = Effect { id: "distort.transform".into(), params: json!({"scaleH": 200, "scaleV": 200}), visible: true };
+    let line = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false);
+    let lone = SubPath::polyline(&[Point::new(100.0, 50.0)], false);
+    let d = Document::new(200.0, 200.0);
+    for (path, first) in [(PathData::new(vec![line, lone.clone()]), Point::new(-50.0, -25.0)), (PathData::single(lone), Point::new(100.0, 50.0))] {
+        let mut n = Node::path(vectorcraft_doc::NodeId(1), path.clone(), Appearance::basic(Paint::None, Paint::solid(Color::BLACK), 1.0));
+        n.appearance.effects.push(scale.clone());
+        let bp = super::bounds::node_bezpath(&n).unwrap_or_default();
+        let want = crate::effects::apply_geometry(std::slice::from_ref(&scale), &path, path.bounds().unwrap_or_default()).to_bezpath();
+        let drawn = super::bounds::effected_path(&d, &n, &bp);
+        let (carried, _) = super::bounds::effected_path_carrying(&d, &n, &bp);
+        for g in [&drawn, &carried] {
+            assert_eq!(g, &want, "{path:?}");
+            let Some(PathEl::MoveTo(p)) = g.elements().first() else { panic!("{g:?} starts with no point") };
+            assert!((p.x - first.x).abs() < 1e-9 && (p.y - first.y).abs() < 1e-9, "{path:?} starts at {p:?}, not {first:?}");
+        }
+    }
+}

@@ -55,6 +55,22 @@ impl AiArtboard {
     }
 }
 
+/// The pages the art may be compared with in the document's space, art space being moved there by
+/// `to_doc` (none before the art starts): each of `artboards` (else `first`, the first artboard),
+/// then `art_box`, the art's bounding box. A page that is an earlier one to half a point is left out.
+fn pages_of(to_doc: Option<Affine>, artboards: &[AiArtboard], first: Option<Rect>, art_box: Option<Rect>) -> Vec<Rect> {
+    let Some(to_doc) = to_doc else { return vec![] };
+    let boards: Vec<Rect> = if artboards.is_empty() { first.into_iter().collect() } else { artboards.iter().map(|b| b.rect).collect() };
+    let mut pages: Vec<Rect> = vec![];
+    for page in boards.into_iter().chain(art_box).map(|r| to_doc.transform_rect_bbox(r)) {
+        let same = |p: &Rect| [p.x0 - page.x0, p.y0 - page.y0, p.x1 - page.x1, p.y1 - page.y1].iter().all(|d| d.abs() <= 0.5);
+        if !pages.iter().any(same) {
+            pages.push(page);
+        }
+    }
+    pages
+}
+
 /// The number of entry `key` in `o` when it is written as one finite number of the type `ty`
 /// (`/Int`, `/Real`, `/Bool`; a whole number unless `/Real`), else `None`.
 fn typed(o: &Obj, key: &str, ty: &str) -> Option<f64> {
@@ -923,10 +939,21 @@ impl<'a> Reader<'a> {
         self.artboards.first().map(|b| b.rect).or(self.cropmarks).or_else(|| self.sized_board())
     }
 
-    /// The page the art is compared with in the document's space, once the art has started.
-    pub(super) fn page_in_doc(&self) -> Option<Rect> {
-        let board = self.first_board().or_else(|| self.bbox_board())?;
-        Some(self.to_doc?.transform_rect_bbox(board))
+    /// Every page the art may be compared with, in the document's space, once the art has started:
+    /// each artboard (else the first artboard [`Self::first_board`] gives), since a page of a file's
+    /// PDF part can show any of them, and the art's bounding box ([`Self::bbox_board`]), which a page
+    /// cropped to the art and the page of the legacy format show ([`pages_of`]). Worked out again
+    /// only when the artboards, the art's box or the move into the document have changed.
+    pub(super) fn pages_in_doc(&mut self) -> Arc<[Rect]> {
+        let sources = (self.to_doc, self.artboards.len(), self.first_board(), self.bbox_board());
+        if let Some((from, pages)) = &self.page_cache
+            && *from == sources
+        {
+            return pages.clone();
+        }
+        let pages: Arc<[Rect]> = pages_of(sources.0, &self.artboards, sources.2, sources.3).into();
+        self.page_cache = Some((sources, pages.clone()));
+        pages
     }
 
     /// The page of a file that says nothing of its artboard (the legacy format as other apps write
@@ -1239,8 +1266,8 @@ impl<'a> Reader<'a> {
         }
         let to_doc = self.ensure_space();
         let artboard = self.first_board();
-        // Before the artboards are taken below: the page is the first artboard's.
-        let page = self.page_in_doc();
+        // Before the artboards are taken below: the pages are the artboards' and the art's box.
+        let pages = self.pages_in_doc();
         self.check_symbols();
         self.order_symbols();
         drop_commented_copies(&mut self.doc.layers, &self.hidden_ids);
@@ -1441,13 +1468,14 @@ impl<'a> Reader<'a> {
             placeholders: self.placeholders,
             placed_elsewhere: self.placed_elsewhere,
             placed_pages: self.placed_pages,
+            placed_eps: self.placed_eps,
             envelopes_drawn: self.envelopes_drawn,
             warped_type: super::super::envelope::WarpedType {
                 looks: self.warped_type,
                 envelopes: self.typed_envelopes,
                 checks: self.envelope_checks,
                 spent: self.envelope_spent,
-                page,
+                pages: pages.to_vec(),
                 alone: None,
                 type_clips: self.type_clips,
             },

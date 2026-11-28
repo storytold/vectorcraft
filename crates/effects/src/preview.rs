@@ -435,7 +435,7 @@ fn reshapes(n: &Node) -> bool {
 fn path_art(n: &Node) -> Option<Node> {
     let (path, rule) = leaf_geometry(n)?;
     let ctx = GeomContext::of(n);
-    let g = apply_geometry_with(&n.appearance.effects, &path, path.to_bezpath().bounding_box(), &ctx);
+    let g = apply_geometry_with(&n.appearance.effects, &path, path.bounds().unwrap_or_default(), &ctx);
     let piece = |geometry: PathData, items: Vec<AppearanceItem>| {
         let mut ap: Appearance = (*n.appearance).clone();
         ap.items = items;
@@ -454,7 +454,7 @@ fn path_art(n: &Node) -> Option<Node> {
     if own.is_empty() || plain.iter().any(|i| paints(i)) {
         pieces.push(piece(g.clone(), plain.into_iter().cloned().collect()));
     }
-    let bounds = g.to_bezpath().bounding_box();
+    let bounds = g.bounds().unwrap_or_default();
     for item in own {
         let geometry = apply_geometry_with(item.effects(), &g, bounds, &ctx.item(item));
         pieces.push(piece(geometry, vec![item.clone()]));

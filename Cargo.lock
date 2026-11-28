@@ -8720,6 +8720,7 @@ dependencies = [
  "vectorcraft-color",
  "vectorcraft-doc",
  "vectorcraft-effects",
+ "vectorcraft-eps",
  "vectorcraft-geom 0.24.1",
  "vectorcraft-metafile",
  "vectorcraft-pathops 0.24.1",
@@ -8874,6 +8875,16 @@ dependencies = [
  "vectorcraft-pdf",
  "vectorcraft-testkit",
  "vectorcraft-text",
+]
+
+[[package]]
+name = "vectorcraft-plugin-worker"
+version = "0.24.1"
+dependencies = [
+ "js-sys",
+ "vectorcraft-plugins",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

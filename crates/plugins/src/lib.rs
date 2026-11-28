@@ -32,7 +32,8 @@
 //! them well: labels, units, groups, help and conditions ([`dialog`]). What a plug-in may do is
 //! the set of [`permissions`] its manifest lists, which the user approves when it is installed. A
 //! filter or a live effect may also add menu commands of its own ([`Command`]), which the host
-//! runs through `vc_run` with the command's id in `_context`.
+//! runs through `vc_run` with the command's id in `_context`. The web build checks modules and
+//! runs filters in a worker of its own ([`worker`]).
 //!
 //! An object filter may also be written in JavaScript ([`js`]): its manifest gives
 //! `"runtime": "js"` and names a `.js` file, which runs in a fresh `vectorcraft-js` realm for each
@@ -57,11 +58,12 @@ mod runtime;
 pub mod safe_mode;
 pub mod storage;
 pub mod wat;
+pub mod worker;
 
 pub use dialog::ParamUi;
 pub use host::{LogLevel, LogLine, Report};
 pub use manifest::{Budget, Command, ContextSection, InputKind, Kind, Manifest, MenuPlace, Param, ParamSpec, Runtime};
-pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, heavy_terms};
+pub use runtime::{ABI_VERSION, HEAVY_FUEL, HEAVY_WALL_TIME_MS, LARGE_FUEL, Limits, Plugin, RunJob, Step, heavy_terms, keep_modules};
 #[doc(hidden)]
 pub use runtime::{BYTES_COPIED_PER_FUEL, FUEL_SLICE};
 

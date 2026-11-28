@@ -18,6 +18,10 @@
 //! the drag makes it select only the objects entirely inside it, whole.
 //! In isolation mode both pick only the isolated object and what is inside it: anchors, segments,
 //! paths and groups outside it stay put.
+//! An object inside a selected group counts as selected whole: a click on its fill keeps the group
+//! selected, a drag from its fill or one of its anchors moves the group whole, and a click on an
+//! anchor or a segment selects that anchor or segment alone. With Group Selection a click there
+//! adds the next group up, if any.
 //! Both move objects selected as a whole as the Selection tool does, snapping alike. When the
 //! selection also holds direct-selected anchors or segments, a drag from an object moves those
 //! anchors and the objects selected whole, as an anchor drag does, and while Alt is held it
@@ -53,7 +57,7 @@
 //! moves its anchors.
 
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde_json::{Value, json};
 use vectorcraft_doc::hit::{Hit, HitKind, compound_part_at, hit_test, selected_hidden_at, symbol_part_at, symbol_part_outline_in_view};
@@ -559,12 +563,14 @@ fn line_end_leave(cx: &ToolContext, grab: Point) -> Option<Leave> {
 /// objects behind it (#3405).
 fn hit_anchor(cx: &ToolContext, p: Point, tol: f64) -> Option<(NodeId, usize, usize, Point)> {
     let mut owners = anchor_owners(cx, |n| matches!(n.kind, NodeKind::Path { .. }) || is_area_type(n) || is_path_type(n));
-    owners.sort_by_key(|id| !cx.selection.contains(*id));
+    // The members of a selected group count as selected.
+    let selected = in_selection_all(cx);
+    owners.sort_by_key(|id| !selected.contains(id));
 
     // 1. Check selected objects first. Selected objects are NEVER occluded (#1508).
     let mut unselected_idx = owners.len();
     for (i, &id) in owners.iter().enumerate() {
-        if !cx.selection.contains(id) {
+        if !selected.contains(&id) {
             unselected_idx = i;
             break;
         }
@@ -624,9 +630,22 @@ pub fn over_selected_part(cx: &ToolContext, p: Point) -> bool {
     if spines.iter().any(|(_, path)| path.anchors().any(|(_, _, a)| a.p.distance(p) <= tol)) || spine_segment_in(&spines, p, seg_tol).is_some() {
         return true;
     }
-    // The editable paths' control bounds are listed once per document state and selection; a
-    // hover measures only the paths whose bounds it is near.
-    let boxes = crate::select::selected_part_boxes(cx, || {
+    selected_part_boxes(cx).iter().any(|&(id, b)| {
+        b.inflate(tol, tol).contains(p)
+            && cx.doc.node(id).and_then(editable_path).is_some_and(|pd| {
+                #[cfg(test)]
+                MEASURED_PARTS.set(MEASURED_PARTS.get() + 1);
+                nearest_anchor(&pd, p, tol, None).is_some()
+            })
+    })
+}
+
+/// The editable paths of the selected objects and inside them (a selected group's members), with
+/// their control bounds, topmost first across the whole document: the order [`hit_anchor`] tries
+/// them in. The list is made once per document state and selection; a hover measures only the
+/// paths whose bounds it is near.
+fn selected_part_boxes(cx: &ToolContext) -> std::sync::Arc<[(NodeId, vectorcraft_geom::Rect)]> {
+    crate::select::selected_part_boxes(cx, || {
         let editable = cx.doc.editable();
         let mut v = vec![];
         for root in cx.selection.objects.iter().filter_map(|&id| cx.doc.node(id)) {
@@ -638,15 +657,21 @@ pub fn over_selected_part(cx: &ToolContext, p: Point) -> bool {
                 }
             });
         }
+        // The paint order of every node, a Shaper Group's original shapes included (isolation can
+        // select them); the topmost path comes first.
+        fn walk_all(n: &Node, order: &mut std::collections::HashMap<NodeId, usize>) {
+            let i = order.len();
+            order.insert(n.id, i);
+            for c in n.children().into_iter().flatten() {
+                walk_all(c, order);
+            }
+        }
+        let mut order = std::collections::HashMap::new();
+        for l in &cx.doc.layers {
+            walk_all(l, &mut order);
+        }
+        v.sort_by_key(|(id, _)| std::cmp::Reverse(order.get(id).copied()));
         v.into()
-    });
-    boxes.iter().any(|&(id, b)| {
-        b.inflate(tol, tol).contains(p)
-            && cx.doc.node(id).and_then(editable_path).is_some_and(|pd| {
-                #[cfg(test)]
-                MEASURED_PARTS.set(MEASURED_PARTS.get() + 1);
-                nearest_anchor(&pd, p, tol, None).is_some()
-            })
     })
 }
 
@@ -823,13 +848,37 @@ struct SegmentHit {
 fn next_group(cx: &ToolContext, ancestry: &[NodeId]) -> Option<NodeId> {
     // Skip the layer and its sublayers: they are not objects.
     let layers = ancestry.iter().take_while(|id| cx.doc.node(**id).is_some_and(Node::is_layer)).count().max(1);
-    ancestry
+    let chain: Vec<NodeId> = ancestry
         .iter()
         .skip(layers)
         .rev()
         .copied()
         .take_while(|id| in_scope(cx.doc, cx.isolation, *id) && !cx.doc.node(*id).is_some_and(Node::is_layer))
-        .find(|id| !cx.selection.contains(*id))
+        .collect();
+    // The groups inside a selected group are selected with it: the next one is above the outermost
+    // selected one.
+    let outermost = chain.iter().rposition(|id| cx.selection.contains(*id));
+    chain.get(outermost.map_or(0, |i| i + 1)).copied()
+}
+
+/// Is `id` selected as an object: itself, or inside a selected group or other selected object? A
+/// press on a member of a selected group keeps the group selected, and a drag moves the group
+/// whole, as for a path that is itself selected.
+fn in_selection(cx: &ToolContext, id: NodeId) -> bool {
+    !cx.selection.objects.is_empty()
+        && (cx.selection.contains(id) || cx.doc.ancestry(id).is_some_and(|a| a.iter().any(|x| cx.selection.contains(*x))))
+}
+
+/// The selected objects and the objects inside them that Direct Selection may pick: the objects
+/// among those [`walk_pickable`] visits that [`in_selection`] accepts.
+fn in_selection_all(cx: &ToolContext) -> HashSet<NodeId> {
+    let mut set = HashSet::new();
+    for root in cx.selection.objects.iter().filter_map(|&id| cx.doc.node(id)) {
+        walk_pickable_from(root, &mut |n| {
+            set.insert(n.id);
+        });
+    }
+    set
 }
 
 /// Is an object of instance `id`'s art selected ([`vectorcraft_doc::Selection::symbol_part`]),
@@ -1332,7 +1381,7 @@ impl DirectSelectionTool {
         // anchors on mouse over finds them: walking every path on each hover is too slow.
         let hit = hit_test(cx.doc, p, cx.selection_hit_options());
         if let Some((id, _)) = hovered_anchor_with_hit(cx, p, hit.as_ref()) {
-            return Some(if cx.selection.contains(id) { Cursor::DirectAnchorSelected } else { Cursor::DirectAnchor });
+            return Some(if in_selection(cx, id) { Cursor::DirectAnchorSelected } else { Cursor::DirectAnchor });
         }
         if hit_frame_edge(cx, p, tol).is_some() {
             return None;
@@ -1344,7 +1393,7 @@ impl DirectSelectionTool {
             return None;
         }
         let h = hit?;
-        let whole = cx.selection.contains(h.leaf) && cx.selection.partial(h.leaf).is_none();
+        let whole = in_selection(cx, h.leaf) && cx.selection.partial(h.leaf).is_none();
         let curved = matches!(h.kind, HitKind::Stroke | HitKind::Outline) && segment_at(cx, h.leaf, p).is_some_and(|s| s.curved);
         (!whole && curved).then_some(Cursor::ReshapeSegment)
     }
@@ -1360,7 +1409,11 @@ fn hovered_anchor(cx: &ToolContext, p: Point) -> Option<(NodeId, Point)> {
 fn hovered_anchor_with_hit(cx: &ToolContext, p: Point, hit: Option<&Hit>) -> Option<(NodeId, Point)> {
     let tol = cx.point_tol();
     let under = hit.map(|h| cx.doc.node(h.leaf).and_then(|n| compound_part_at(n, p, tol)).unwrap_or(h.leaf));
-    cx.selection.objects.iter().copied().filter(|id| in_scope(cx.doc, cx.isolation, *id)).chain(under).find_map(|id| {
+    // The paths inside a selected group come before an object above them, as a press takes them
+    // ([`hit_anchor`]).
+    let selected = if cx.selection.objects.is_empty() { None } else { Some(selected_part_boxes(cx)) };
+    let near = selected.iter().flat_map(|boxes| boxes.iter()).filter(|(_, b)| b.inflate(tol, tol).contains(p)).map(|&(id, _)| id);
+    near.filter(|id| in_scope(cx.doc, cx.isolation, *id)).chain(under).find_map(|id| {
         let path = cx.doc.node(id).and_then(editable_path)?;
         nearest_anchor(&path, p, tol, None).map(|(.., a)| (id, a))
     })
@@ -1481,7 +1534,9 @@ impl DirectSelectionTool {
             h.ancestry.push(part);
             h.leaf = part;
         }
-        let target = if cx.selection.contains(h.leaf) { next_group(cx, &h.ancestry).unwrap_or(h.leaf) } else { h.leaf };
+        // On an object selected itself or inside a selected group, a click adds the next group up,
+        // and keeps the selection when the outermost group is selected already.
+        let inside = in_selection(cx, h.leaf);
         let mut deselect = None;
         let mut out = vec![];
         if ev.mods.shift {
@@ -1490,15 +1545,13 @@ impl DirectSelectionTool {
             if cx.selection.contains(h.leaf) {
                 deselect = Some(h.leaf);
             } else {
-                out.push(Action::Exec("select.toggle".into(), json!({"id": target.0})));
+                out.push(Action::Exec("select.toggle".into(), json!({"id": h.leaf.0})));
             }
-        } else if !cx.selection.contains(target) {
-            if cx.selection.contains(h.leaf) {
-                // A completed click climbs the group; a drag moves only the selected art.
-                self.click_group = Some(target);
-            } else {
-                out.push(Action::Exec("select.set".into(), json!({"ids": [target.0]})));
-            }
+        } else if !inside {
+            out.push(Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]})));
+        } else if let Some(target) = next_group(cx, &h.ancestry) {
+            // A completed click climbs the group; a drag moves only the selected art.
+            self.click_group = Some(target);
         }
         self.state = Self::move_object(cx, &h, p, deselect);
         out
@@ -1539,15 +1592,16 @@ impl DirectSelectionTool {
         // already selected whole, an Alt-click adds the next enclosing group on release.
         if ev.mods.alt {
             self.state = State::MoveObject { start: p, grab: Some(grab), hold: grab, edge: false, began: false, deselect: None };
-            let whole = cx.selection.contains(id) && cx.selection.partial(id).is_none();
+            let whole = in_selection(cx, id) && cx.selection.partial(id).is_none();
             if whole && !ev.mods.shift {
                 self.click_group = cx.doc.ancestry(id).and_then(|a| next_group(cx, &a));
             }
             return if whole { vec![] } else { vec![Action::Exec("select.set".into(), json!({"ids": [id.0]}))] };
         }
-        // A path with all its anchors selected is stored whole (no partial entry).
+        // A path with all its anchors selected is stored whole (no partial entry), and so is each
+        // path inside a selected group.
         let already =
-            cx.selection.contains(id) && !cx.selection.segments.contains_key(&id) && cx.selection.partial(id).is_none_or(|s| s.contains(&(si, ai)));
+            in_selection(cx, id) && !cx.selection.segments.contains_key(&id) && cx.selection.partial(id).is_none_or(|s| s.contains(&(si, ai)));
         // Paths all selected whole move as objects, held by this anchor, so Alt can turn
         // the copy on and off during the drag as with the Selection tool.
         self.state = if already && cx.selection.anchors.is_empty() {
@@ -1625,7 +1679,7 @@ impl DirectSelectionTool {
         // A segment pick keeps its endpoints available for movement without selecting
         // the anchors themselves. Dragging reshapes a curve, else moves it. Alt picks
         // the whole path (and Alt-drag copies it), as with Group Selection.
-        let whole = cx.selection.contains(h.leaf) && cx.selection.partial(h.leaf).is_none() && !part_picked(cx, h.leaf);
+        let whole = in_selection(cx, h.leaf) && cx.selection.partial(h.leaf).is_none() && !part_picked(cx, h.leaf);
         if !ev.mods.alt
             && matches!(h.kind, HitKind::Stroke | HitKind::Outline)
             && let Some(s) = segment_at(cx, h.leaf, p)
@@ -1661,7 +1715,8 @@ impl DirectSelectionTool {
             return vec![Action::Exec("select.toggle".into(), json!({"id": h.leaf.0}))];
         }
         self.frame.clear();
-        if !cx.selection.contains(h.leaf) || cx.selection.partial(h.leaf).is_some() || part_picked(cx, h.leaf) {
+        // A press inside a selected group keeps the group: a drag moves it whole.
+        if !whole {
             return vec![Action::Exec("select.set".into(), json!({"ids": [h.leaf.0]}))];
         }
         vec![]
@@ -1869,7 +1924,9 @@ impl DirectSelectionTool {
             (true, ..) => vec![Action::Commit],
             (false, Some(id), _, _) => vec![Action::Exec("select.toggle".into(), json!({"id": id.0}))],
             (false, None, Some((id, si, ai)), _) => {
-                if has_multiple_selected_anchors(cx) {
+                // The key anchor is on a path selected itself (`select.key`); a click on an anchor of
+                // a path inside a selected group selects that anchor alone.
+                if cx.selection.contains(id) && has_multiple_selected_anchors(cx) {
                     if cx.selection.key_anchor == Some((id, (si, ai))) {
                         vec![Action::Exec("select.key".into(), json!({}))]
                     } else {

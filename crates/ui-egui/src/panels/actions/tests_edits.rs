@@ -925,6 +925,8 @@ fn insert_menu_item_refuses_what_no_menu_item_runs_and_changes_nothing() {
 /// artboard to both.
 #[test]
 fn every_listed_menu_item_runs_from_the_menu_what_its_step_holds() {
+    // The View menu's proof items change the whole process's proof view.
+    let _view = crate::testing::DefaultProofView::new();
     for item in crate::menus::insertable_items(false, &crate::menus::Listed::default()) {
         let (mut app, _) = app_with_three_moves();
         app.run(INSERT_MENU_ITEM, json!({"set": 0, "action": 0, "command": item.command, "params": item.params})).unwrap();

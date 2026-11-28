@@ -609,11 +609,11 @@ fn reorder(app: &mut VectorcraftApp, edit: EditEvent<ReorderMove<StyleKey>>) {
 }
 
 /// The object whose look a dropped payload carries: the first of the art dragged from this document, or the
-/// Appearance panel's object.
+/// Appearance panel's object from this document.
 fn dropped_object(drag: &PanelDrag, uid: u64, reverts: u64) -> Option<NodeId> {
     match drag {
         PanelDrag::Art { .. } => drag.artwork_for(uid, reverts)?.first().copied(),
-        PanelDrag::Appearance(id) => Some(*id),
+        PanelDrag::Appearance { document, source } if *document == uid => Some(*source),
         _ => None,
     }
 }
@@ -1429,7 +1429,7 @@ mod tests {
         let n = names(&app);
         let st = app.session.active().unwrap();
         let (document, reverts) = (st.uid, st.reverts);
-        for payload in [PanelDrag::Art { document, reverts, ids: vec![oval] }, PanelDrag::Appearance(oval)] {
+        for payload in [PanelDrag::Art { document, reverts, ids: vec![oval] }, PanelDrag::Appearance { document, source: oval }] {
             drop_on(&mut app, Some("Red"), dropped_object(&payload, document, reverts), None, true);
             let d = doc(&app);
             assert_eq!(d.graphic_style("Red").unwrap().appearance.fill_paint(), green);
@@ -1493,6 +1493,56 @@ mod tests {
 
         p.drag("Dragged artwork", "Drop Target", egui::Modifiers::NONE);
         assert_eq!(names(&p.app()).len(), before.len() + 1, "a same-document drop still makes a style");
+    }
+
+    #[test]
+    fn graphic_styles_rejects_a_foreign_appearance_after_next_document() {
+        use crate::tests::panel_harness::Panel as PanelHarness;
+        use craft::ui::contract::ShowCollection as _;
+        use craft::ui::list::{List, ListRow};
+        use craft::ui::runtime::drag;
+
+        fn with_appearance(app: &mut VectorcraftApp, ui: &mut Ui) {
+            let st = app.session.active().unwrap();
+            let source = st.selection.objects.first().copied();
+            let document = st.uid;
+            ui.allocate_ui(egui::vec2(ui.available_width(), 80.0), |ui| {
+                let keys = craft::behavior::keyed(&[0_usize], |key: &usize| *key);
+                List::<usize>::new("Appearance source")
+                    .drag_payload(move |_: &ListDrag<usize>| source.map(|source| PanelDrag::Appearance { document, source }))
+                    .show_items(ui, &keys, &mut |_, _| ListRow::new("Dragged appearance"));
+            });
+            show(app, ui);
+        }
+
+        let mut app = app();
+        app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+        let first = app.session.active().unwrap();
+        let (source_document, source_object) = (first.uid, first.selection.objects[0]);
+        app.run("file.new", json!({"width": 100, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 20, "y": 20, "width": 50, "height": 50})).unwrap();
+        app.run("graphicStyle.new", json!({"name": "Drop Target"})).unwrap();
+        let second = app.session.active().unwrap();
+        assert_eq!(source_object, second.selection.objects[0], "both documents have distinct objects with the same local ID");
+        let target_document = second.uid;
+        let before = names(&app);
+        assert!(app.session.set_active(0));
+
+        let mut p = PanelHarness::new(app, with_appearance);
+        let from = p.rect("Dragged appearance").center();
+        let to = p.rect("Drop Target").center();
+        p.drag_hold_role("Dragged appearance", craft::ui::contract::Role::LIST_ITEM, to - from);
+        assert!(drag::mark(p.ctx()).is_some());
+        p.key(egui::Key::F6, egui::Modifiers::COMMAND);
+        assert_eq!(p.app().session.active().unwrap().uid, target_document, "Next Document switches tabs during the drag");
+        let carried = drag::active::<PanelDrag>(p.ctx());
+        assert_eq!(carried.as_deref(), Some(&PanelDrag::Appearance { document: source_document, source: source_object }));
+        assert!(drag::mark(p.ctx()).is_none(), "the target withdraws its drop indicator for the foreign appearance");
+        p.release();
+        assert_eq!(names(&p.app()), before, "the foreign drop creates no style from the current document's same-ID object");
+
+        p.drag("Dragged appearance", "Drop Target", egui::Modifiers::NONE);
+        assert_eq!(names(&p.app()).len(), before.len() + 1, "a same-document appearance still makes a style");
     }
 
     /// A style dropped on another with Alt takes that style's look; on itself it does nothing.
