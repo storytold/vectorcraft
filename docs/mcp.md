@@ -5815,6 +5815,11 @@ See [Revolve](revolve.md) for the scope and limitations.
 {"name":"run_command","arguments":{"command":"effect.expandAppearance","params":{}}}
 ```
 
+Approving an existing 3D effect's options without changing its values preserves the exact stored effect,
+document revision and Undo history, with Preview on or off. `effect.setParams` returns an empty `ids` array when
+only its 3D parameters are being set and they equal the current values after validation, including omitted defaults and equivalent JSON number
+representations. A changed option still saves in one step; invalid parameters are still refused.
+
 ## 3D lighting presets
 
 `effect.lightingPreset {index: int, preset: "standard" | "diffuse" | "topLeft" | "right", item?, ids?, target?}`
@@ -17347,6 +17352,7 @@ the error text. The interactive fallback applies only to ordinary File > Save, n
 
 | Date | Change |
 |---|---|
+| 2026-11-27 | Existing 3D effect options: unchanged validated parameters preserve the stored effect, document revision and Undo, including defaults and equivalent numeric JSON. |
 | 2026-11-27 | Shape Control bar: canceled numeric edits restore future-tool settings and coupled radii along with selected artwork; retired edits cannot overwrite a different tool. Native scrub, keyboard, next-shape and Undo cases covered. Scores and estimates unchanged. |
 | 2026-11-27 | Anchor Inspector: Cancel restores Corner radius/kind and Shared Edge diameter/coincidence tool values; accepted settings leave document history unchanged. Native numeric and menu cases covered. Scores and estimates unchanged. |
 | 2026-11-18 | Production Preflight: output and artboard scope, four check summaries, clickable canvas ids, effective PPI and explicit unchecked resolution coverage. |
