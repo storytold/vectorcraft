@@ -8560,6 +8560,7 @@ dependencies = [
  "raw-window-handle",
  "rustix 1.1.6",
  "serde_json",
+ "sha2 0.10.9",
  "socket2",
  "tempfile",
  "vectorcraft-engine",

@@ -6,9 +6,9 @@
 //! exclusions for adapters that failed to present this window. eframe still owns the device.
 //!
 //! A failed or hung startup is retried without its exact adapter. Each restart adds that full
-//! adapter key, so it cannot keep retrying the same device. A locked, bounded start record also
+//! adapter key's SHA256 fingerprint, so it cannot keep retrying the same device. A locked, bounded start record also
 //! catches driver crashes that end the process before Rust can handle them. Crash history is
-//! scoped to the app version and the complete shared preference, not an adapter's display label.
+//! scoped to fingerprints of the app version and complete shared preference, not an adapter's display label.
 //! The existing first-frame watchdog and platform-specific listing recovery remain app policy.
 //!
 use std::io::{Read as _, Seek as _, Write as _};
@@ -22,10 +22,12 @@ use eframe::egui_wgpu::NativeAdapterSelectorMethod;
 #[cfg(any(windows, test))]
 use eframe::wgpu::DeviceType;
 use eframe::wgpu::{self, Backend, Backends, PowerPreference};
+use sha2::{Digest, Sha256};
 
-/// Exact adapter keys left out after a failure in this restart chain. New starts write a JSON
-/// array of structured keys; old comma-separated keys are read only when they identify one
-/// candidate unambiguously. This is internal recovery state, not a saved user preference.
+/// Complete-key SHA256 fingerprints left out after a failure in this restart chain. New starts
+/// write a JSON array of fingerprint strings. Old structured full-key arrays remain readable;
+/// old comma-separated labels apply only when unambiguous. This is internal recovery state,
+/// not a saved user preference.
 pub const SKIP_ENV: &str = "VECTORCRAFT_GPU_SKIP";
 
 /// The file in the log folder that records each start of the window until its first frame
@@ -237,11 +239,61 @@ fn is_internal_panel(connector: &str) -> bool {
 /// Canonical full identity, not `AdapterKey`'s deliberately abbreviated human display label.
 #[cfg(test)]
 fn key(candidate: &Candidate) -> String {
-    key_json(&AdapterKey::of(candidate))
+    adapter_fingerprint(&AdapterKey::of(candidate))
 }
 
-fn key_json(key: &AdapterKey) -> String {
-    serde_json::json!(key).to_string()
+/// Fixed-order, domain-separated canonical arrays cover every identity field. Display labels
+/// are not identity; only bounded fingerprints and human labels enter the recovery file.
+fn fingerprint(value: serde_json::Value) -> String {
+    format!("sha256:{:x}", Sha256::digest(value.to_string().as_bytes()))
+}
+
+fn adapter_fingerprint(key: &AdapterKey) -> String {
+    fingerprint(serde_json::json!(["adapter-v1", key.name, key.backend, key.vendor, key.device, key.pci_bus_id, key.driver]))
+}
+
+fn preference_fingerprint(preference: &Preference) -> String {
+    fingerprint(match preference {
+        Preference::Auto => serde_json::json!(["preference-v1", "auto"]),
+        Preference::LowPower => serde_json::json!(["preference-v1", "lowPower"]),
+        Preference::Software => serde_json::json!(["preference-v1", "software"]),
+        Preference::Adapter(key) => serde_json::json!(["preference-v1", "adapter", adapter_fingerprint(key)]),
+    })
+}
+
+fn version_fingerprint(version: &str) -> String {
+    fingerprint(serde_json::json!(["version-v1", version]))
+}
+
+fn is_fingerprint(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)))
+}
+
+fn recorded_name(name: &str) -> String {
+    let name = name.trim();
+    let mut end = name.len().min(128);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    name[..end].to_string()
+}
+
+/// The SDK must see all duplicates before exclusions: removing the corrected adapter must not
+/// resurrect its stale sibling. The same policy eligibility is exposed to Preferences.
+fn eligible_inventory(candidates: &[Candidate]) -> Vec<Candidate> {
+    let mut eligible = vec![false; candidates.len()];
+    for index in craft_gpu_device::ranked(candidates, &Preference::Auto) {
+        eligible[index] = true;
+    }
+    candidates
+        .iter()
+        .zip(eligible)
+        .map(|(candidate, eligible)| {
+            let mut candidate = candidate.clone();
+            candidate.usable &= eligible;
+            candidate
+        })
+        .collect()
 }
 
 /// The old restart format lacked bus and driver identity. It may exclude an adapter only when
@@ -256,10 +308,14 @@ fn legacy_key(candidate: &Candidate) -> String {
 
 fn excluded(candidates: &[Candidate], index: usize, skip: &[String]) -> bool {
     let Some(candidate) = candidates.get(index) else { return true };
+    let actual = AdapterKey::of(candidate);
+    let fingerprint = adapter_fingerprint(&actual);
     skip.iter().any(|token| {
-        if let Ok(saved) = serde_json::from_str::<AdapterKey>(token) {
+        if is_fingerprint(token) {
+            *token == fingerprint
+        } else if let Ok(saved) = serde_json::from_str::<AdapterKey>(token) {
             // Crash identity is exact, unlike the SDK's tolerant saved-choice matching.
-            saved == AdapterKey::of(candidate)
+            saved == actual
         } else {
             *token == legacy_key(candidate) && candidates.iter().filter(|c| legacy_key(c) == *token).count() == 1
         }
@@ -322,8 +378,9 @@ fn selection_inputs(
     skip: &[String],
     crashed: &[String],
 ) -> SelectionInputs {
+    let eligible = eligible_inventory(candidates);
     let inputs = |left_out: &[String]| {
-        let indices: Vec<usize> = (0..candidates.len()).filter(|&i| candidates[i].usable && !excluded(candidates, i, left_out)).collect();
+        let indices: Vec<usize> = (0..candidates.len()).filter(|&i| eligible[i].usable && !excluded(candidates, i, left_out)).collect();
         let filtered: Vec<Candidate> = indices.iter().map(|&i| candidates[i].clone()).collect();
         let preference = effective_preference(&filtered, saved, debug.0, displays, compositor, debug.1);
         (indices, filtered, preference)
@@ -352,7 +409,7 @@ fn parse_skip(v: &str) -> Vec<String> {
                 if let Some(old) = v.as_str() {
                     return Some(old.to_string());
                 }
-                serde_json::from_value::<AdapterKey>(v).ok().map(|key| key_json(&key))
+                serde_json::from_value::<AdapterKey>(v).ok().map(|key| adapter_fingerprint(&key))
             })
             .collect();
     }
@@ -380,14 +437,14 @@ pub fn explicit_choice() -> bool {
 pub enum Crash {
     /// While the adapters were being listed, before one was picked.
     Listing,
-    /// On the adapter with this full key and name.
-    Adapter { key: AdapterKey, name: String },
+    /// On the adapter with this full-key fingerprint and bounded name.
+    Adapter { key: String, name: String },
 }
 
 /// What a start leaves out because earlier starts crashed ([`Startup::track`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LeftOut {
-    /// The full adapter keys that crashed a start.
+    /// Fingerprints of the complete adapter keys that crashed a start.
     pub adapters: Vec<String>,
     /// A start crashed while listing the adapters: list OpenGL's alone. Never on macOS, where wgpu
     /// has no OpenGL adapters to fall back to.
@@ -404,10 +461,10 @@ impl LeftOut {
     }
 }
 
-/// An adapter in [`START_FILE`]: its full [`AdapterKey`] and name.
+/// An adapter in [`START_FILE`]: its full-key fingerprint and bounded human name.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct Recorded {
-    key: AdapterKey,
+    key: String,
     name: String,
 }
 
@@ -423,9 +480,9 @@ struct Starting {
 /// What [`START_FILE`] holds.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct StartRecord {
-    /// App version and full shared preference: crashes count only for the same choice.
+    /// Fingerprints of the app version and complete preference: crashes count only for the same choice.
     version: String,
-    preference: Preference,
+    preference: String,
     /// The start in progress, from before the graphics start until its first frame reaches the
     /// screen or the app ends without crashing.
     starting: Option<Starting>,
@@ -440,7 +497,9 @@ impl StartRecord {
     /// is none or it can't be read), and the crash that start ended in, if it did. A record
     /// written by another version or under another complete `preference` is dropped.
     fn begin(previous: Option<Self>, version: &str, preference: &Preference) -> (Self, Option<Crash>) {
-        let mut record = previous.filter(|r| r.version == version && &r.preference == preference).unwrap_or_default();
+        let version = version_fingerprint(version);
+        let preference = preference_fingerprint(preference);
+        let mut record = previous.filter(|r| r.version == version && r.preference == preference).unwrap_or_default();
         let crash = record.starting.take().map(|s| match s.adapter {
             Some(Recorded { key, name }) => Crash::Adapter { key, name },
             None => Crash::Listing,
@@ -455,8 +514,8 @@ impl StartRecord {
             Some(Crash::Listing) => record.listing_crashed = true,
             _ => {}
         }
-        record.version = version.to_string();
-        record.preference = preference.clone();
+        record.version = version;
+        record.preference = preference;
         record.starting = Some(Starting::default());
         (record, crash)
     }
@@ -469,13 +528,13 @@ impl StartRecord {
         }
         let opengl_only = self.listing_crashed && !cfg!(target_os = "macos");
         let crash = crash.filter(|c| matches!(c, Crash::Adapter { .. }) || opengl_only);
-        LeftOut { adapters: self.crashed.iter().map(|c| key_json(&c.key)).collect(), opengl_only, crash }
+        LeftOut { adapters: self.crashed.iter().map(|c| c.key.clone()).collect(), opengl_only, crash }
     }
 
     /// The adapter this start picked, after a listing that found one of a backend other than
     /// OpenGL when `native`.
     fn picked(&mut self, key: &AdapterKey, name: &str, native: bool) {
-        self.starting = Some(Starting { adapter: Some(Recorded { key: key.clone(), name: name.trim().to_string() }), native });
+        self.starting = Some(Starting { adapter: Some(Recorded { key: adapter_fingerprint(key), name: recorded_name(name) }), native });
     }
 
     /// The listing found no adapter that can show the window: nothing is left to leave out, so the
@@ -505,7 +564,7 @@ impl StartRecord {
     fn to_json(&self) -> String {
         let recorded = |r: &Recorded| serde_json::json!({ "key": r.key, "name": r.name });
         let mut v = serde_json::json!({
-            "schema": 2,
+            "schema": 3,
             "version": self.version,
             "gpuPreference": self.preference,
             "crashed": self.crashed.iter().map(recorded).collect::<Vec<_>>(),
@@ -519,14 +578,27 @@ impl StartRecord {
 
     /// The record in `text`; `None` when it isn't one.
     fn parse(text: &str) -> Option<Self> {
-        let v: serde_json::Value = serde_json::from_str(text).ok()?;
-        // Old string preferences/keys cannot distinguish buses or drivers. Reset that history,
-        // rather than attributing an old crash to a newly selected shared adapter.
-        if v.get("schema")?.as_u64()? != 2 {
+        if text.len() > START_FILE_LIMIT as usize {
             return None;
         }
+        let v: serde_json::Value = serde_json::from_str(text).ok()?;
+        let schema = v.get("schema")?.as_u64()?;
+        // Schema 2 had complete keys, so its bounded records can be migrated exactly. Older
+        // lossy labels cannot distinguish buses/drivers and are deliberately reset.
+        if schema != 2 && schema != 3 {
+            return None;
+        }
+        let identity = |v: &serde_json::Value| -> Option<String> {
+            let value = v.as_str()?;
+            is_fingerprint(value).then(|| value.to_string())
+        };
         let recorded = |v: &serde_json::Value| -> Option<Recorded> {
-            Some(Recorded { key: serde_json::from_value(v.get("key")?.clone()).ok()?, name: v.get("name")?.as_str()?.to_string() })
+            let key = if schema == 2 {
+                adapter_fingerprint(&serde_json::from_value::<AdapterKey>(v.get("key")?.clone()).ok()?)
+            } else {
+                identity(v.get("key")?)?
+            };
+            Some(Recorded { key, name: recorded_name(v.get("name")?.as_str()?) })
         };
         let starting = match v.get("starting") {
             None => None,
@@ -540,8 +612,12 @@ impl StartRecord {
         };
         let crashed = v.get("crashed")?.as_array()?;
         Some(Self {
-            version: v.get("version")?.as_str()?.to_string(),
-            preference: serde_json::from_value(v.get("gpuPreference")?.clone()).ok()?,
+            version: if schema == 2 { version_fingerprint(v.get("version")?.as_str()?) } else { identity(v.get("version")?)? },
+            preference: if schema == 2 {
+                preference_fingerprint(&serde_json::from_value::<Preference>(v.get("gpuPreference")?.clone()).ok()?)
+            } else {
+                identity(v.get("gpuPreference")?)?
+            },
             starting,
             crashed: crashed.iter().take(CRASHED_LIMIT).map(recorded).collect::<Option<_>>()?,
             listing_crashed: v.get("listingCrashed")?.as_bool()?,
@@ -669,7 +745,7 @@ impl Startup {
     /// an adapter of a backend other than OpenGL.
     fn picked(&self, key: &AdapterKey, name: &str, native: bool) {
         // Set once; eframe picks the adapter once.
-        let _ = self.adapter.set(key_json(key));
+        let _ = self.adapter.set(adapter_fingerprint(key));
         self.update(|r| r.picked(key, name, native), false);
     }
 
@@ -791,7 +867,7 @@ pub fn watch_first_frame(startup: Arc<Startup>) {
 }
 
 /// eframe's selector, using the shared policy after app-specific presentation exclusions.
-/// `inventory` is the actual surface-aware list for Preferences; notices are retained on Startup.
+/// `inventory` retains actual keys and surface/shared-policy eligibility for Preferences; notices are retained on Startup.
 pub fn selector(
     preference: Preference,
     env_power: Option<PowerPreference>,
@@ -805,7 +881,7 @@ pub fn selector(
     let skip = skipped();
     Arc::new(move |adapters, surface| {
         let candidates: Vec<Candidate> = adapters.iter().map(|a| Candidate::of(a, surface)).collect();
-        *inventory.lock().unwrap_or_else(PoisonError::into_inner) = candidates.clone();
+        *inventory.lock().unwrap_or_else(PoisonError::into_inner) = eligible_inventory(&candidates);
         let inputs = selection_inputs(&candidates, &preference, (env_power, named.as_deref()), &displays, compositor, &skip, &crashed);
         if inputs.retried {
             log::warn!("every usable graphics adapter crashed an earlier start: trying those again, keeping this restart's exclusions");

@@ -1561,8 +1561,10 @@ fn graphics_candidate(backend: wgpu::Backend, name: &str, bus: &str) -> craft_gp
     }
 }
 
+type GraphicsRowEntry = (Option<String>, String, bool, bool);
+
 /// Inspect the actual native-choice model, including its non-pickable backend headings.
-fn graphics_row(a: &mut VectorcraftApp) -> (String, Vec<(Option<String>, String, bool, bool)>) {
+fn graphics_row(a: &mut VectorcraftApp) -> (String, Vec<GraphicsRowEntry>) {
     with_pages(a, |pages| {
         let rows: Vec<_> = pages.iter().flat_map(|page| &page.groups).flat_map(|group| &group.rows).collect();
         assert!(!rows.iter().any(|row| row.key == "gpuBackend"));

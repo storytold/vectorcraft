@@ -599,7 +599,7 @@ fn a_start_that_never_showed_a_frame_leaves_its_adapter_out_of_the_next() {
     let second = Startup::default();
     let left_out = second.track(&dir, &Preference::Auto, false);
     assert_eq!(left_out.adapters, [key(&c[0])]);
-    assert_eq!(left_out.crash, Some(Crash::Adapter { key: AdapterKey::of(&c[0]), name: c[0].name.clone() }));
+    assert_eq!(left_out.crash, Some(Crash::Adapter { key: key(&c[0]), name: c[0].name.clone() }));
     assert!(!left_out.opengl_only);
     assert_eq!(left_out.backends(Backends::DX12 | Backends::GL), Backends::DX12 | Backends::GL);
     let selected = selected(&c, &Preference::Auto, &[], None, None, &left_out.adapters).unwrap();
@@ -727,8 +727,8 @@ fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
     assert_eq!(crash, None);
     record.picked(&actual, "GPU", true);
     let (record, crash) = StartRecord::begin(Some(record), "0.9.0", &preference);
-    assert_eq!(crash, Some(Crash::Adapter { key: actual.clone(), name: "GPU".into() }));
-    assert_eq!(record.left_out(None, false).adapters, [key_json(&actual)]);
+    assert_eq!(crash, Some(Crash::Adapter { key: adapter_fingerprint(&actual), name: "GPU".into() }));
+    assert_eq!(record.left_out(None, false).adapters, [adapter_fingerprint(&actual)]);
     assert_eq!(StartRecord::parse(&record.to_json()), Some(record.clone()));
     assert!(StartRecord::begin(Some(record.clone()), "0.9.1", &preference).0.crashed.is_empty());
     for other in [
@@ -752,7 +752,7 @@ fn crashes_are_forgotten_in_another_version_or_under_another_preference() {
         }
     }
     assert_eq!(record.crashed.len(), CRASHED_LIMIT);
-    assert_eq!(record.crashed.last().map(|c| c.key.device), Some(19));
+    assert_eq!(record.crashed.last().map(|c| &c.key), Some(&adapter_fingerprint(&AdapterKey { device: 19, ..actual.clone() })));
 }
 
 /// `u32::from_str_radix` accepts a leading `+`; a device id with one is not a PCI id.
@@ -795,7 +795,7 @@ fn crash_and_restart_keys_do_not_cross_backend_bus_or_driver_identity() {
         assert!(!excluded(&all, i, &crashed), "full key {i} is different");
     }
     let full = AdapterKey::of(&original);
-    assert_ne!(key_json(&full), full.to_string(), "Display is only a human label");
+    assert_ne!(adapter_fingerprint(&full), full.to_string(), "Display is only a human label");
     let roundtrip = parse_skip(&encode_skip(&crashed));
     assert_eq!(roundtrip, crashed);
 }
@@ -809,6 +809,89 @@ fn legacy_start_records_reset_without_poisoning_structured_preferences() {
     let (record, crash) = StartRecord::begin(None, "v", &Preference::Auto);
     assert_eq!(crash, None);
     assert!(record.crashed.is_empty());
-    assert_eq!(record.preference, Preference::Auto);
+    assert_eq!(record.preference, preference_fingerprint(&Preference::Auto));
     assert_eq!(StartRecord::parse(&record.to_json()), Some(record));
+}
+
+#[test]
+fn excluding_a_corrected_driver_never_resurrects_its_stale_sibling() {
+    let old = Candidate { driver: "AMD proprietary driver".into(), features: 60, ..ryzen_desktop()[1].clone() };
+    let newer = Candidate { pci_bus_id: "0000:03:00.0".into(), features: 68, ..old.clone() };
+    let dx12 = Candidate { backend: Backend::Dx12, ..newer.clone() };
+    let other_driver = Candidate { driver: "Mesa alternate".into(), ..newer.clone() };
+    let all = [old.clone(), newer.clone(), dx12, other_driver];
+    let policy = eligible_inventory(&all);
+    assert_eq!(policy.iter().map(|c| c.usable).collect::<Vec<_>>(), [false, true, true, true]);
+    assert_ne!(key(&old), key(&newer), "a missing bus and a reported bus are different crash identities");
+    let clean = selection_inputs(&all, &Preference::Auto, (None, None), &[], None, &[], &[]);
+    assert!(clean.indices.contains(&1));
+    assert!(!clean.indices.contains(&0));
+    for (skip, crashed) in [(vec![key(&newer)], vec![]), (vec![], vec![key(&newer)])] {
+        let inputs = selection_inputs(&all, &Preference::Auto, (None, None), &[], None, &skip, &crashed);
+        assert_eq!(inputs.indices, [2, 3], "neither exclusion route resurrects stale Vulkan");
+        assert!(!inputs.retried, "the other backend and independent driver remain available");
+    }
+    let only_duplicates = [old, newer.clone()];
+    let (_, _, retried) = selected_with(&only_duplicates, &Preference::Auto, (None, None), &[], None, &[], &[key(&newer)]);
+    assert!(retried, "historical crash retry still permits the corrected adapter when no alternative remains");
+    assert_eq!(selected(&only_duplicates, &Preference::Auto, &[], None, None, &[key(&newer)]), None, "restart exclusions are never retried");
+}
+
+#[test]
+fn preferences_inventory_marks_shared_unsafe_and_unpresentable_entries_unavailable() {
+    let unsafe_vulkan =
+        Candidate { driver: "Intel Windows".into(), ..pci_gpu("Intel UHD 630", Backend::Vulkan, DeviceType::IntegratedGpu, (0x8086, 0x3e91)) };
+    let dx12 = Candidate { backend: Backend::Dx12, ..unsafe_vulkan.clone() };
+    let valid = ryzen_desktop()[0].clone();
+    let hidden = Candidate { usable: false, ..valid.clone() };
+    for all in [vec![unsafe_vulkan.clone(), valid.clone()], vec![unsafe_vulkan, dx12, valid, hidden]] {
+        let policy = eligible_inventory(&all);
+        assert!(!policy[0].usable, "surface support alone does not make unsafe Intel Vulkan eligible");
+        assert!(policy[1].usable);
+        for (actual, shown) in all.iter().zip(&policy) {
+            assert_eq!(AdapterKey::of(actual), AdapterKey::of(shown), "full identity is retained for missing/disabled choice display");
+            if !actual.usable {
+                assert!(!shown.usable, "shared eligibility never overrides surface rejection");
+            }
+        }
+    }
+}
+
+#[test]
+fn oversized_complete_identities_fit_and_roundtrip_the_recovery_record() {
+    let huge = "\u{0001}é".repeat(30_000);
+    let actual =
+        AdapterKey { name: huge.clone(), backend: "vulkan".into(), vendor: 0x10de, device: 0x2204, pci_bus_id: huge.clone(), driver: huge.clone() };
+    let preference = Preference::Adapter(actual.clone());
+    let (mut record, _) = StartRecord::begin(None, &huge, &preference);
+    for device in 0..CRASHED_LIMIT as u32 {
+        record.picked(&AdapterKey { device, ..actual.clone() }, &huge, true);
+        record = StartRecord::begin(Some(record), &huge, &preference).0;
+    }
+    record.picked(&actual, &huge, true);
+    let text = record.to_json();
+    assert!(text.len() < START_FILE_LIMIT as usize, "the whole record, not just its labels, fits the reader: {}", text.len());
+    assert_eq!(StartRecord::parse(&text), Some(record.clone()));
+    assert_eq!(record.crashed.len(), CRASHED_LIMIT);
+    assert!(record.crashed.iter().all(|r| r.name.len() <= 128));
+    let (restarted, crash) = StartRecord::begin(StartRecord::parse(&text), &huge, &preference);
+    assert!(matches!(crash, Some(Crash::Adapter { ref key, .. }) if *key == adapter_fingerprint(&actual)));
+    assert!(restarted.left_out(None, false).adapters.contains(&adapter_fingerprint(&actual)));
+    let other = Preference::Adapter(AdapterKey { driver: format!("{huge}x"), ..actual.clone() });
+    let (changed, crash) = StartRecord::begin(Some(record), &huge, &other);
+    assert_eq!(crash, None, "a change beyond the bounded human label resets the complete preference scope");
+    assert!(changed.crashed.is_empty());
+
+    let small = AdapterKey::of(&ryzen_desktop()[0]);
+    let schema2 = serde_json::json!({
+        "schema": 2, "version": "v", "gpuPreference": Preference::Adapter(small.clone()),
+        "crashed": [{"key": small, "name": "GPU"}], "listingCrashed": false,
+        "starting": {"adapter": {"key": small, "name": "GPU"}, "native": true}
+    });
+    let migrated = StartRecord::parse(&schema2.to_string()).unwrap();
+    assert_eq!(migrated.preference, preference_fingerprint(&Preference::Adapter(small.clone())));
+    assert_eq!(migrated.crashed[0].key, adapter_fingerprint(&small));
+    assert_eq!(StartRecord::parse(&migrated.to_json()), Some(migrated));
+    let old_skip = serde_json::json!([small]).to_string();
+    assert_eq!(parse_skip(&old_skip), [adapter_fingerprint(&small)], "old structured restart arrays retain their identity");
 }

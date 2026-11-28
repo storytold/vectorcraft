@@ -549,7 +549,7 @@ pub fn validate(key: &str, v: &Value) -> std::result::Result<Value, String> {
                 .map(|(val, _)| json!(val))
                 .ok_or_else(|| format!("`{key}` must be one of {}", opts.iter().map(|o| o.0).collect::<Vec<_>>().join(", ")))
         }
-        PrefKind::GpuPreference => serde_json::from_value::<craft_gpu_device::Preference>(v.clone())
+        PrefKind::GpuPreference => crate::prefs::parse_gpu_preference(v.clone())
             .map(|preference| json!(preference))
             .map_err(|e| format!("`{key}` must be a graphics adapter preference: {e}")),
         PrefKind::Color => {

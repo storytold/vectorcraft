@@ -152,3 +152,52 @@ fn gpu_backend_import_preserves_shared_choices_and_other_import_rules() {
     assert_eq!(file["prefs"]["gpuPreference"], json!(saved));
     assert!(file["prefs"].get("gpuBackend").is_none());
 }
+
+/// Serde defaults alone do not make an AdapterKey meaningful. Hardware need not be present.
+#[test]
+fn gpu_backend_rejects_keys_without_a_backend_or_identity_at_every_preference_boundary() {
+    let malformed = [
+        json!({"kind":"adapter"}),
+        json!({"kind":"adapter","name":"Disconnected"}),
+        json!({"kind":"adapter","name":"Disconnected","backend":""}),
+        json!({"kind":"adapter","name":"Disconnected","backend":"future"}),
+        json!({"kind":"adapter","name":"Disconnected","backend":"noop"}),
+        json!({"kind":"adapter","name":"Disconnected","backend":"Vulkan"}),
+        json!({"kind":"adapter","backend":"vulkan"}),
+        json!({"kind":"adapter","backend":"gl","name":"  "}),
+    ];
+    for value in malformed {
+        let mut session = Session::new();
+        session.execute("prefs.set", &json!({"key":"gpuPreference","value":unavailable_adapter()})).unwrap();
+        let before = session.prefs.to_json();
+        assert!(session.execute("prefs.set", &json!({"values":{"gpuPreference":value,"keyboardIncrement":4}})).is_err());
+        assert_eq!(session.prefs.to_json(), before, "a semantically malformed key must reject the whole strict batch");
+        let restored: Prefs = serde_json::from_value(json!({"gpuPreference":value,"keyboardIncrement":4})).unwrap();
+        assert_eq!(restored.gpu_preference, Preference::Auto);
+        assert_eq!(restored.keyboard_increment, 4.0, "loading a bad key must preserve valid siblings");
+        session.execute("prefs.import", &imported_preferences(json!({"gpuPreference":value,"keyboardIncrement":5}))).unwrap();
+        assert_eq!(session.prefs.gpu_preference, Preference::Auto);
+        assert_eq!(session.prefs.keyboard_increment, 5.0);
+        let before = session.prefs.to_json();
+        assert!(session.execute("prefs.import", &imported_preferences(json!({"gpuPreference":value,"keyboardIncrement":true}))).is_err());
+        assert_eq!(session.prefs.to_json(), before, "normalizing a bad key must not bypass another invalid imported value");
+    }
+    for value in [
+        json!({"kind":"adapter","backend":"vulkan","vendor":4660,"device":22136}),
+        json!({"kind":"adapter","backend":"dx12","vendor":4660}),
+        json!({"kind":"adapter","backend":"metal","name":"Disconnected Metal adapter"}),
+        json!({"kind":"adapter","backend":"gl","name":"Disconnected OpenGL adapter"}),
+        json!({"kind":"adapter","backend":"webgpu","name":"Retained browser adapter"}),
+    ] {
+        // Old keys may omit the optional bus and driver. The SDK's defaulted fields remain so.
+        let expected: Preference = serde_json::from_value(value.clone()).unwrap();
+        let mut session = Session::new();
+        session.execute("prefs.set", &json!({"key":"gpuPreference","value":value})).unwrap();
+        assert_eq!(session.prefs.gpu_preference, expected);
+        let saved: Prefs = serde_json::from_value(session.prefs.to_json()).unwrap();
+        assert_eq!(saved.gpu_preference, expected);
+        session.execute("prefs.import", &imported_preferences(json!({"gpuPreference":value,"keyboardIncrement":6}))).unwrap();
+        assert_eq!(session.prefs.gpu_preference, expected);
+        assert_eq!(session.prefs.keyboard_increment, 6.0);
+    }
+}

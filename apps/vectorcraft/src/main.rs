@@ -669,6 +669,11 @@ fn main() -> std::process::ExitCode {
     // framework decides the frame for that backend, from the platform, `VECTORCRAFT_TITLEBAR` and
     // Preferences › User Interface › System Title Bar.
     let shell_info = if forced_to_x11 { ShellInfo::current().backend(Backend::X11) } else { ShellInfo::current() };
+    // On Wayland with no cursor theme, the system pointer stays and no tool cursor is painted
+    // beside it (#2450, #5311).
+    let wayland = !forced_to_x11 && Backend::from_env() == Backend::Wayland;
+    let caps = cursor_theme::shell_caps(shell_info.caps, wayland, cursor_theme::theme_missing);
+    let shell_info = shell_info.caps(caps);
     let titlebar_pref =
         if engine_pref("systemTitleBar").and_then(|v| v.as_bool()).unwrap_or(false) { TitleBarPref::System } else { TitleBarPref::Integrated };
     let decision = decide_for(Prefix::new("VECTORCRAFT"), shell_info.backend, titlebar_pref);
@@ -727,19 +732,25 @@ fn main() -> std::process::ExitCode {
                 startup.clone(),
                 graphics_adapters.clone(),
             ));
-            // The shared descriptor chooses supported native APIs; saved preferences select an
-            // adapter through the shared selector, never a separate backend mask.
             create.instance_descriptor = craft_gpu_device::native_descriptor();
-            // Explicit diagnostic environment choices retain precedence over saved preferences.
-            if let Some(backends) = eframe::wgpu::Backends::from_env() {
+            // Windows drivers can crash while Vulkan enumerates, before shared selection can
+            // reject an unsafe adapter (#806). Keep ordinary starts on DX12; an explicit saved
+            // Vulkan adapter opts in. Debug environment masks always take precedence.
+            let backend_env = eframe::wgpu::Backends::from_env();
+            if let Some(backends) = backend_env {
                 create.instance_descriptor.backends = backends;
+            } else if cfg!(windows) {
+                create.instance_descriptor.backends = eframe::wgpu::Backends::DX12;
+                if matches!(&gpu_pref, craft_gpu_device::Preference::Adapter(key) if key.backend == "vulkan") {
+                    create.instance_descriptor.backends |= eframe::wgpu::Backends::VULKAN;
+                }
             }
             // Nothing draws or dispatches indirectly (#651). Keep the app's existing validation
             // and Windows recovery policy without duplicating the saved-adapter chooser.
             create.instance_descriptor.flags =
                 (eframe::wgpu::InstanceFlags::from_build_config() - eframe::wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL).with_env();
-            let env_set = std::env::var_os("WGPU_BACKEND").is_some();
-            if cfg!(windows) && !env_set && gpu::windows_opengl(&left_out) {
+            let saved_gl = matches!(&gpu_pref, craft_gpu_device::Preference::Adapter(key) if key.backend == "gl");
+            if cfg!(windows) && backend_env.is_none() && (saved_gl || gpu::windows_opengl(&left_out)) {
                 create.instance_descriptor.backends |= eframe::wgpu::Backends::GL;
             }
             create.instance_descriptor.backends = left_out.backends(create.instance_descriptor.backends);
@@ -794,6 +805,9 @@ fn main() -> std::process::ExitCode {
             eframe::run_native(vectorcraft_ui_egui::os_window::name(), options, app_creator)
         }
     };
+    // The window creator owns a clone; finish still needs the startup state after it returns.
+    #[cfg(feature = "wgpu")]
+    let window_startup = startup.clone();
     let outcome = vectorcraft_engine::guard::catch_panic(|| {
         run(
             options,
@@ -922,14 +936,16 @@ fn main() -> std::process::ExitCode {
                             ),
                         });
                     }
-                    for notice in startup.notices() {
+                    for notice in window_startup.notices() {
                         let message = match notice {
-                            craft_gpu_device::Notice::AdapterMissing(key) => Some(
-                                vectorcraft_ui_egui::tl!(
-                                    "The saved graphics adapter {adapter} is unavailable; VectorCraft is using its automatic choice."
+                            craft_gpu_device::Notice::AdapterMissing(key) if matches!(&gpu_pref, craft_gpu_device::Preference::Adapter(saved) if saved == &key) => {
+                                Some(
+                                    vectorcraft_ui_egui::tl!(
+                                        "The saved graphics adapter {adapter} is unavailable; VectorCraft is using its automatic choice."
+                                    )
+                                    .replace("{adapter}", &key.to_string()),
                                 )
-                                .replace("{adapter}", &key.to_string()),
-                            ),
+                            }
                             craft_gpu_device::Notice::NoSoftwareAdapter => Some(
                                 vectorcraft_ui_egui::tl!("No software graphics adapter is available; VectorCraft is using its automatic choice.")
                                     .to_string(),

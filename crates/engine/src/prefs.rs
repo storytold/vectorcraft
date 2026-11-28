@@ -38,6 +38,25 @@ fn language_tag<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<S
     Ok(tag.or_else(|| vectorcraft_doc::setup::LANGUAGES.first().map(|(_, t, _)| *t)).unwrap_or_default().to_string())
 }
 
+/// Read the shared preference without accepting a defaulted, unidentifiable adapter key.
+/// Availability is deliberately not checked: a disconnected device remains a valid saved choice.
+pub(crate) fn parse_gpu_preference(value: Value) -> Result<craft_gpu_device::Preference, String> {
+    use craft_gpu_device::Preference;
+    let preference: Preference = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    if let Preference::Adapter(key) = &preference {
+        // AdapterKey stores wgpu's canonical rendering-backend names. `noop` is a test backend
+        // with no compatible surfaces, not a window compositor the person can select.
+        if !matches!(key.backend.as_str(), "vulkan" | "metal" | "dx12" | "gl" | "webgpu") {
+            return Err("an adapter needs a recognized rendering backend".into());
+        }
+        // This is the SDK's PCI-identity rule; zero-ID backends distinguish adapters by name.
+        if key.vendor == 0 && key.device == 0 && key.name.trim().is_empty() {
+            return Err("an adapter needs PCI identity or a nonempty name".into());
+        }
+    }
+    Ok(preference)
+}
+
 /// A saved/imported graphics choice: old power strings migrate to the shared policy, and a
 /// malformed choice falls back to Auto without discarding valid sibling preferences. Auto now
 /// ranks high performance; the old `powerSaving` value already meant Automatic. A backend-only
@@ -47,7 +66,7 @@ pub(crate) fn saved_gpu_preference(saved: Value) -> craft_gpu_device::Preference
     match saved.as_str() {
         Some("lowPower") => Preference::LowPower,
         Some("automatic" | "powerSaving" | "highPerformance") => Preference::Auto,
-        _ => serde_json::from_value(saved).unwrap_or_default(),
+        _ => parse_gpu_preference(saved).unwrap_or_default(),
     }
 }
 

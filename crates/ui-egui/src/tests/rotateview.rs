@@ -318,6 +318,26 @@ fn rotate_view_to_selection_squares_the_view_to_the_selected_object() {
     assert!(square_on_screen(&app));
 }
 
+/// The Rotate View compass of a turned view sits clear of the vertical scroll bar, so the bar does not cover it.
+#[test]
+fn the_rotate_view_compass_is_clear_of_the_vertical_scroll_bar() {
+    let mut w = Window::new();
+    w.ctx.enable_accesskit();
+    w.after(0.0, vec![]);
+    let out = w.after(0.0, vec![]);
+    let nodes = out.platform_output.accesskit_update.as_ref().map_or(&[][..], |u| &u.nodes[..]);
+    let bounds = |label: &str| {
+        nodes
+            .iter()
+            .find(|(_, n)| n.label() == Some(label))
+            .and_then(|(_, n)| n.bounds())
+            .map(|b| egui::Rect::from_min_max(egui::pos2(b.x0 as f32, b.y0 as f32), egui::pos2(b.x1 as f32, b.y1 as f32)))
+            .unwrap_or_else(|| panic!("no {label} in the access tree"))
+    };
+    let (compass, bar) = (bounds("Rotation compass"), bounds("Vertical scroll bar"));
+    assert!(compass.right() <= bar.left(), "the compass {compass:?} reaches under the scroll bar {bar:?}");
+}
+
 /// The window, with a 400 × 300 document whose view is turned to 30°, and the Selection tool. Each
 /// frame comes the given number of seconds, zero or more, after the one before it.
 struct Window {
