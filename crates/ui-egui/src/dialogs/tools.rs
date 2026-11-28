@@ -156,4 +156,30 @@ mod tests {
         let doc = &app.session.doc().unwrap().doc;
         assert_eq!(doc.layers[0].children().unwrap().len(), 1);
     }
+
+    #[test]
+    fn graph_size_does_not_draw_after_file_revert() {
+        let mut app = crate::testing::windowed(VectorcraftApp::new(Session::new(), Default::default()));
+        let dir = vectorcraft_testkit::TempDir::new("graph-click-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.new", json!({"width": 300, "height": 200})).unwrap();
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        let click = json!({"x": 40.0, "y": 30.0, "type": "column"});
+        open_tool_dialog(&mut app, "graph", click.clone());
+
+        app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let restored = app.session.doc().unwrap().doc.clone();
+        confirm_graph(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc, restored, "OK must not draw on the restored drawing");
+        assert!(app.any_dialog_open(), "the refused dialog stays open");
+
+        let ctx = app.ui_ctx.clone().unwrap();
+        app.dialogs().unwrap().with(|h| h.cancel_by_id(&ctx, dialog_id("graph.create")));
+        super::super::host::pump(&mut app, &ctx);
+        open_tool_dialog(&mut app, "graph", click);
+        confirm_graph(&mut app);
+        assert_eq!(app.session.doc().unwrap().doc.layers[0].children().unwrap().len(), 1, "a click after the revert draws");
+    }
 }

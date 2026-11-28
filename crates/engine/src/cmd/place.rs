@@ -49,6 +49,9 @@ pub(crate) mod docx;
 mod rtf;
 pub(super) mod text;
 
+#[cfg(test)]
+pub(crate) use doc::PRLS_READ;
+
 use std::sync::Arc;
 
 use serde_json::{Value, json};
