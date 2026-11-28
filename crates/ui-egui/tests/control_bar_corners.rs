@@ -262,15 +262,15 @@ fn corner_radius_respects_anchor_group_and_narrow_control_bar_space() {
     let (mut app, id) = ordinary_corner();
     let mut wide = Frames::new(1800.0);
     let shown = wide.settled(&mut app);
-    assert!(shown.radius_field().is_some() && shown.has_text("Corner Radius:"));
+    assert!(shown.radius_field().is_some() && shown.has_text("Corners"));
     app.run("window.control.options", json!({"group": "anchors", "visible": false})).unwrap();
     let hidden = wide.settled(&mut app);
     assert!(hidden.radius_field().is_none());
-    assert!(!hidden.has_text("Corner Radius:"));
+    assert!(!hidden.has_text("Corners"));
     app.run("window.control.options", json!({"group": "anchors", "visible": true})).unwrap();
-    // The label and the field are one row, so a narrow bar leaves out both or neither.
+    // The Corners link and the field are one row, so a narrow bar leaves out both or neither.
     let narrow = Frames::new(400.0).settled(&mut app);
-    assert_eq!(narrow.radius_field().is_some(), narrow.has_text("Corner Radius:"), "the label and the field leave together");
+    assert_eq!(narrow.radius_field().is_some(), narrow.has_text("Corners"), "the link and the field leave together");
     app.run("select.set", json!({"ids": [id.0]})).unwrap();
     app.select_tool("selection");
     assert!(wide.settled(&mut app).radius_field().is_none(), "ordinary whole-path Selection has no anchor controls");

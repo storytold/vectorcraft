@@ -1620,8 +1620,9 @@ fn fractional_widths_on(app: &VectorcraftApp) -> bool {
 /// line gap, 50%, Auto alignment), Insert Aki Left and Right 0, Tsume 0, the Default character direction,
 /// Kashidas on, the Default digits, Adjust Horizontal and Vertical Diacritic Position 0 and the Em Box
 /// font height reference, whether or not Show East Asian
-/// Options, Show Indic Options and Show Font Height Options are on. Inside an undo group that is
-/// already open, the reset is part of that group's step.
+/// Options, Show Indic Options and Show Font Height Options are on. Area type with Dynamic Text
+/// (Block) on keeps its frame's Line Gap. Inside an undo group that is already open, the reset is
+/// part of that group's step.
 fn reset_panel(app: &mut VectorcraftApp) {
     // Typing in progress stays an undo step of its own.
     end_typing(app);
@@ -1630,7 +1631,8 @@ fn reset_panel(app: &mut VectorcraftApp) {
         app.session.begin_named_undo_group(Some("Reset Panel".into()));
     }
     let d = CharStyle::default();
-    style(app, json!({"tracking": 0, "leading": "auto"}));
+    // Dynamic Text's Line Gap is the frame's, so the reset leaves it as it is.
+    style(app, json!({"tracking": 0, "leading": "auto", "keepLineGap": true}));
     format(
         app,
         json!({

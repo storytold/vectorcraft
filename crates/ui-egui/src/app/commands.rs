@@ -77,7 +77,10 @@ impl VectorcraftApp {
     pub fn run(&mut self, id: &str, params: Value) -> Result<Value, String> {
         self.beacon.command(id);
         let touch_workspace = self.session.prefs.touch_workspace;
+        // A `prefs.reset` that ran straight on the session applies before this command can switch workspaces.
+        crate::prefs_dialog::apply_prefs_resets(self);
         let result = self.run_now(id, params);
+        crate::prefs_dialog::apply_prefs_resets(self);
         if id == "prefs.import" && result.is_ok() {
             crate::prefs_dialog::imported(self, touch_workspace);
         }

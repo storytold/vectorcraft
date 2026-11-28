@@ -701,6 +701,18 @@ fn built_in_tree(english_names: bool, listed: &Listed) -> Vec<(&'static str, Vec
                 c("Snap to Pixel", "view.snapToPixel"),
                 c("Snap to Point", "view.snapToPoint"),
                 c("Snap to Glyph", "view.snapToGlyph"),
+                sub(
+                    "Snapping",
+                    vec![
+                        c("Smart Guides", "view.smartGuides"),
+                        c("Snap to Point", "view.snapToPoint"),
+                        c("Snap to Grid", "view.snapToGrid"),
+                        c("Snap to Pixel", "view.snapToPixel"),
+                        c("Snap to Glyph", "view.snapToGlyph"),
+                        Sep,
+                        c("Pixel Snapping Options…", "view.snapToPixel.options"),
+                    ],
+                ),
                 Sep,
                 c("New View…", "view.saved.new"),
                 c("Edit Views…", "view.saved.edit"),
@@ -890,15 +902,11 @@ fn not_mac() -> Platforms {
 fn app_menu() -> Vec<Node> {
     let settings: Vec<Node> = vectorcraft_engine::cmd::prefscmds::PREF_CATEGORIES
         .iter()
-        .enumerate()
-        .map(|(i, page)| {
-            let mut item =
-                Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings);
-            // Only the first page carries Preferences' shortcut.
-            if i == 0 {
-                item.shortcut = crate::shortcut_editor::default_command_shortcut("edit.preferences").and_then(crate::keymap::stored::parse_vc);
-            }
-            Node::Item(item)
+        // Only the first page carries Preferences' shortcut, which the menus' model gives it from the keymap.
+        .map(|page| {
+            Node::Item(
+                Item::new(CommandRef::with_params("edit.preferences", json!({ "category": page })), format!("{page}…")).role(ItemRole::Settings),
+            )
         })
         .collect();
     let mut language = vec![cp("Automatic", "app.language", json!({ "lang": "auto" })), Sep];

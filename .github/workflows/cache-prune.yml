@@ -1,0 +1,35 @@
+name: Cache prune
+
+# A pass of the cache prune after every CI attempt on main. ci.yml's `cache prune` job prunes while
+# a run's jobs save their entries, but "Re-run failed jobs" re-runs only the failed jobs: a re-run
+# `cache warm` leg saves a new entry, and the prune job, which succeeded in the first attempt, does
+# not run again. The entry it replaced would stay until the next main run, and with it the cache
+# would be over its 10 GB budget, where GitHub evicts entries a run still needs. This runs once
+# after every attempt, re-runs and canceled runs included (craft-common-actions actions/cache-prune).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  cache-prune:
+    name: cache prune
+    # A fork's pull request from a branch named main also matches `branches`.
+    if: github.event.workflow_run.event != 'pull_request'
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      # A failed pass warns; the next run's prune deletes what it missed.
+      - name: Prune replaced cache entries
+        uses: storytold/craft-common-actions/actions/cache-prune@main
+        continue-on-error: true

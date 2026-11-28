@@ -55,8 +55,10 @@ use serde::{Deserializer, Serialize};
 use vectorcraft_brush::stored_art::StoredArt;
 use vectorcraft_doc::{Document, ImageBlob};
 
+#[cfg(all(unix, not(target_arch = "wasm32")))]
+pub use atomic::sync_parent;
 #[cfg(not(target_arch = "wasm32"))]
-pub use atomic::{read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
+pub use atomic::{keep_permissions, read_only_location, sync_file, write_atomic, write_atomic_with, write_new_with};
 use craft_gzip::Gz;
 pub use craft_vectorcraft_format::base64::{decode as base64_decode, decoded_len as base64_decoded_len, encode as base64_encode};
 use craft_vectorcraft_format::stream::{FileHeader, Indent, KeyScan, write_file_json};
@@ -644,6 +646,9 @@ fn load_unpacked(file: unpack::Unpacked<'_>, max_nodes: usize, max_values: usize
     doc.dimensions = dimensions;
     // Untrusted: ruby ranges over the type's text, clamped to it (after the depth limit too).
     doc.fix_ruby();
+    // Untrusted: at most 64 tags an object, each name and value at most 64 KiB, with distinct ids
+    // (after the depth limit too).
+    doc.tidy_tags();
     // Untrusted: the raster effects resolution, within 1 to 2400 ppi (72 when it isn't finite).
     doc.raster_effects_ppi = Some(doc.raster_effects_ppi).filter(|v| v.is_finite()).unwrap_or(72.0).clamp(1.0, 2400.0);
     // Untrusted: the superscript, subscript and small caps proportions of the type, the graph
