@@ -15042,7 +15042,8 @@ options existed keep their old look (appearance applied after the distortion).
 
 An envelope opened from a `.ai` can have margins, written to native files as `boundsMargin` and reported by
 `object.envelope.info` when they are not zero: `[top, bottom, left, right]`, as shares of the content's height and
-width. While `distortAppearance` is on, the content maps from its geometric bounds grown by the margins, and while it
+width. When the content's height or width is shorter than 1e-6 pt (zero included), as on a straight line, the margins
+along that side are shares of the other side. While `distortAppearance` is on, the content maps from its geometric bounds grown by the margins, and while it
 is off, the content maps from its geometric bounds. Leaving Edit Contents measures the margins again when the content's
 strokes reach differently than when Edit Contents began, and always for an envelope whose file opened in Edit Contents.
 New envelopes have no margins, and no command sets them.
