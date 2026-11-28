@@ -11,9 +11,9 @@ permissions: {}
 
 jobs:
   dispatch:
-    # SOURCE PREPARATION: literal off until immutable shared tooling and policy qualification.
+    # Enabled for automated scheduled producer completions on main.
     if: >-
-      false && github.repository == 'storytold/vectorcraft' &&
+      github.repository == 'storytold/vectorcraft' &&
       github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     timeout-minutes: 5
