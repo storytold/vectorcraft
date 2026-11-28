@@ -44,8 +44,12 @@ struct Open {
     preview: LivePreview,
     /// Set Role Swatch: the role the Swatch row was last filled for.
     filled_for: Option<String>,
-    /// The uid of the document whose objects the dialog opened on (`__doc`), for Set Fold Angle.
-    doc: Option<u64>,
+    /// The uid of the document whose objects the dialog opened on (`__doc`), for Set Fold Angle, and its revert count
+    /// then.
+    doc: Option<(u64, u64)>,
+    /// The document checked for File > Revert, with its revert count when the dialog opened: `doc`, or the active
+    /// document for a dialog that previews.
+    reverts_of: Option<(u64, u64)>,
     /// Names this dialog's own open among reopenings of the same command, for its OK and Cancel.
     token: Arc<()>,
 }
@@ -72,7 +76,9 @@ impl Setting {
 /// whose objects the dialog edits).
 pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut params: Map<String, Value>) -> Result<Value, String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
-    if let Some(old) = app.command_dialog.open.take() {
+    if let Some(old) = app.command_dialog.open.take()
+        && !reverted(app, &old)
+    {
         old.preview.cancel(app);
     }
     let fixed = match params.remove("__params") {
@@ -80,9 +86,13 @@ pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut par
         _ => Map::new(),
     };
     let linked = params.remove("__rowGutterLinked").and_then(|v| v.as_f64());
-    let doc = params.remove("__doc").and_then(|v| v.as_u64());
+    let doc = params.remove("__doc").and_then(|v| v.as_u64()).map(|uid| {
+        let reverts = app.session.documents().iter().find(|st| st.uid == uid).map_or(0, |st| st.reverts);
+        (uid, reverts)
+    });
     params.retain(|k, _| !k.starts_with("__"));
     let previews = previews(command, &params);
+    let reverts_of = doc.or_else(|| app.session.active().filter(|_| previews).map(|st| (st.uid, st.reverts)));
     let setting = Setting::of(app);
     let fields = form::fields_of(&command_params(command, &params, setting), &params);
     let token = Arc::new(());
@@ -111,6 +121,7 @@ pub(crate) fn open(app: &mut VectorcraftApp, command: &str, label: &str, mut par
         preview: LivePreview::default(),
         filled_for: None,
         doc,
+        reverts_of,
         token,
     });
     Ok(Value::Null)
@@ -161,7 +172,7 @@ fn step(app: &mut VectorcraftApp, open: &mut Open) {
             }
         });
     }
-    if open.previews {
+    if open.previews && !reverted(app, open) {
         let value = call(&open.command, &open.fixed, open.linked, json);
         // The preview reports a refusal in the status bar itself.
         let _ = open.preview.run(app, previewing, &open.label, &open.command, &value);
@@ -170,10 +181,15 @@ fn step(app: &mut VectorcraftApp, open: &mut Open) {
 
 /// OK: runs the command on the dialog's values (keeping a preview as the one undo step) and closes the dialog; an
 /// error keeps it open with the reason under its rows. A dialog opened on one document's objects (`__doc`, its uid)
-/// closes as Cancel does and runs nothing once another document is the active one.
+/// closes as Cancel does and runs nothing once another document is the active one. That dialog, and a dialog that
+/// previews, stays open and runs nothing once File > Revert replaced the content of the document it opened on.
 fn confirm(app: &mut VectorcraftApp, token: &Arc<()>, fields: &DialogFields) -> Result<Value, String> {
     let open = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token)).ok_or("the dialog is gone")?;
-    if open.doc.is_some() && open.doc != app.session.active().map(|st| st.uid) {
+    if reverted(app, &open) {
+        app.command_dialog.open = Some(open);
+        return Err(tl!("The document was reverted. Reopen this dialog to continue.").into());
+    }
+    if open.doc.is_some_and(|(uid, _)| app.session.active().is_none_or(|st| st.uid != uid)) {
         open.preview.cancel(app);
         return Ok(Value::Null);
     }
@@ -197,9 +213,18 @@ fn confirm(app: &mut VectorcraftApp, token: &Arc<()>, fields: &DialogFields) -> 
 
 /// Cancel: rolls back the preview of the dialog `token` names.
 fn cancel(app: &mut VectorcraftApp, token: &Arc<()>) {
-    if let Some(open) = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token)) {
+    if let Some(open) = app.command_dialog.open.take_if(|o| Arc::ptr_eq(&o.token, token))
+        && !reverted(app, &open)
+    {
         open.preview.cancel(app);
     }
+}
+
+/// Whether the active document is the one the dialog opened on (`__doc`, or the active one for a dialog that
+/// previews), with its content replaced by File > Revert since: a preview shown before belonged to the content
+/// thrown away.
+fn reverted(app: &VectorcraftApp, open: &Open) -> bool {
+    open.reverts_of.is_some_and(|(uid, reverts)| app.session.active().is_some_and(|st| st.uid == uid && st.reverts != reverts))
 }
 
 /// The rows of `command`'s dialog: one per value it opens with that the command takes, in `order(command)` first and
@@ -800,6 +825,46 @@ mod tests {
         assert_eq!(cols(&app), 2, "one Undo takes the whole change back");
     }
 
+    /// Once File > Revert replaced the document's content, Grid Repeat Options neither previews its values on the
+    /// restored repeat nor applies them on OK, which stays open with the reason; a dialog opened after the revert
+    /// applies its values.
+    #[test]
+    fn grid_repeat_options_refuse_values_from_before_file_revert() {
+        let (mut app, id) = prepared("object.repeat.options");
+        let dir = vectorcraft_testkit::TempDir::new("grid-repeat-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
+        set(&mut app, "preview", json!(true));
+        set(&mut app, "cols", json!(3));
+        assert_eq!(cols(&app), 3);
+
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        app.run("select.set", json!({"ids": [id]})).unwrap();
+        assert_eq!(cols(&app), 2, "the restored repeat");
+        set(&mut app, "cols", json!(4));
+        assert_eq!(cols(&app), 2, "no preview on the restored repeat");
+        assert!(!app.session.in_interaction());
+        let undo = app.session.active().unwrap().history.undo.len();
+        let dialog = id_of(&app);
+        answer_ok(&mut app);
+        assert_eq!(cols(&app), 2, "OK leaves the restored repeat as it was");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(
+            app.dialogs().unwrap().with(|h| h.held_state(dialog)),
+            Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+
+        answer_cancel(&mut app);
+        assert_eq!(cols(&app), 2, "Cancel rolls nothing back on the restored repeat");
+        crate::menus::invoke(&mut app, "object.repeat.options", json!({}));
+        set(&mut app, "preview", json!(true));
+        set(&mut app, "cols", json!(5));
+        answer_ok(&mut app);
+        assert_eq!(cols(&app), 5, "a dialog opened after the revert applies its values");
+    }
+
     /// Radial and Mirror Repeat Options have no Preview (their public pages list none): their fields apply on OK
     /// only.
     #[test]
@@ -988,6 +1053,40 @@ mod tests {
         assert_eq!(fold_angle(&mut app, other), Some(90.0), "the other document's line keeps its role's angle");
         assert!(app.session.set_active(0));
         assert_eq!(fold_angle(&mut app, a), Some(90.0), "the first document's line is left as it was");
+    }
+
+    /// Set Fold Angle…'s OK changes nothing once File > Revert replaced the document's content, and the dialog stays
+    /// open with the reason: the line it opened on is gone, even when the restored file has a line with its id.
+    #[test]
+    fn set_fold_angle_s_ok_refuses_the_lines_file_revert_restored() {
+        let (mut app, a, _) = fold_lines();
+        let dir = vectorcraft_testkit::TempDir::new("fold-angle-revert");
+        app.services.read = Some(Box::new(|path| std::fs::read(path).map_err(|e| e.to_string())));
+        app.services.write = Some(Box::new(|path, bytes| std::fs::write(path, bytes).map_err(|e| e.to_string())));
+        app.run("file.saveAs", json!({"path": dir.join("Art.vectorcraft")})).unwrap();
+        app.run("select.set", json!({"ids": [a]})).unwrap();
+        crate::menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+        pump(&mut app);
+        set(&mut app, "angle", json!(30.0));
+
+        app.run("shape.rectangle", json!({"x": 200, "y": 120, "width": 20, "height": 20})).unwrap();
+        app.run("file.revert", json!({"confirmed": true})).unwrap();
+        let undo = app.session.active().unwrap().history.undo.len();
+        let id = id_of(&app);
+        answer_ok(&mut app);
+        assert_eq!(fold_angle(&mut app, a), Some(90.0), "the restored line keeps its role's angle");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+        assert!(matches!(
+            app.dialogs().unwrap().with(|h| h.held_state(id)),
+            Some(craft::ui::dialog::HeldOk::Refused(reason)) if reason.as_str().contains("document was reverted")
+        ));
+
+        answer_cancel(&mut app);
+        crate::menus::invoke(&mut app, SET_FOLD_ANGLE, json!({}));
+        pump(&mut app);
+        set(&mut app, "angle", json!(30.0));
+        answer_ok(&mut app);
+        assert_eq!(fold_angle(&mut app, a), Some(30.0), "a dialog opened after the revert sets the angle");
     }
 
     /// Set Fold Angle…'s Angle row takes -180° to 180°, the range the command takes, and shows every place the angle

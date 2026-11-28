@@ -199,9 +199,10 @@ pub struct CanvasCache {
     pub(crate) palette: Option<(crate::palette::BuildKey, Arc<crate::palette::Built>)>,
 }
 
-/// [`CanvasCache::doc_info`]: (document uid, revision, selection only, the Artboard tool's options)
-/// and the `document.info` result fetched for them.
-pub type DocInfoCache = ((u64, u64, bool, Value), Arc<Value>);
+/// [`CanvasCache::doc_info`]: (document uid, revision, selection only, whether Objects is shown
+/// (and so the paths' area asked for), the Artboard tool's options) and the `document.info` result
+/// fetched for them.
+pub type DocInfoCache = ((u64, u64, bool, bool, Value), Arc<Value>);
 
 /// [`CanvasCache::map_surfaces`]: the surfaces and what they were computed for.
 pub type MapSurfacesCache = (MapSurfacesKey, Arc<Vec<vectorcraft_effects::MapSurface>>);

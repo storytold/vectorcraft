@@ -190,9 +190,11 @@ pub(crate) fn escape(app: &mut VectorcraftApp, ctx: &egui::Context) {
 }
 
 /// In a floating panel's OS window, the keys none of its controls took, which production's palette windows passed
-/// on to the main window: Escape ends one thing as there ([`escape`]), and Enter is the canvas's tool's (in
-/// Presentation Mode it opens nothing).
+/// on to the main window: Escape ends one thing as there ([`escape`]), Enter is the canvas's tool's (in
+/// Presentation Mode it opens nothing), and a Copy or Cut that the window's labels copy nothing for runs on the art
+/// ([`leave_to_labels`]).
 pub(crate) fn palette_window_keys(app: &mut VectorcraftApp, ctx: &egui::Context) {
+    leave_to_labels(app, ctx);
     escape(app, ctx);
     if keys::with_window_intents(ctx, false, |window| window.take(Intent::Submit)) && app.ui.screen_mode != 3 {
         let view = app.view_info();

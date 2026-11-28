@@ -156,7 +156,16 @@ fn body(app: &mut VectorcraftApp, ui: &mut Ui, first: Option<&Node>, n_sel: usiz
 }
 
 fn quick_action_buttons(app: &mut VectorcraftApp, ui: &mut Ui) {
+    // Several images and nothing else: Embed and Unembed… for them, first.
+    let images = crate::place::SeveralImages::selected(app);
     Grid::new(&HALVES).show(ui, |ui, _| {
+        if let Some(images) = &images {
+            for action in images.shown(app) {
+                if Button::new(action.label()).show(ui).clicked() {
+                    images.run(app, action);
+                }
+            }
+        }
         for action in quick_actions(app) {
             Button::command(action.command).label(action.label).show(ui);
         }

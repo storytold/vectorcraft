@@ -34,7 +34,7 @@ const CENTRE: usize = 4;
 const FREE: [&str; 4] = ["transforms", "fileDimensions", "fit", "fill"];
 
 fn params() -> Vec<Param> {
-    let options = PRESERVE.iter().map(|(value, label)| ((*value).to_owned(), Label::from(*label))).collect();
+    let options = PRESERVE.iter().map(|(value, label)| ((*value).to_owned(), Label::from(tl!(label).to_owned()))).collect();
     vec![
         Param::new("preserve", tl!("Preserve:"), ParamKind::choice(options, Some("transforms".into()))),
         reference_param("align", tl!("Alignment:")).enabled_when_in("preserve", FREE),

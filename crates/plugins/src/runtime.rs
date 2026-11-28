@@ -1,12 +1,15 @@
 //! The wasmi host: loading, instantiating and calling a plug-in under resource limits.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use wasmi::{
     Config, CustomFuelCosts, EnforcedLimits, Engine, ExternType, Instance, Memory, Module, Store, StoreLimitsBuilder, TypedFunc, TypedResumableCall,
-    Val, ValType, WasmParams, WasmResults,
+    TypedResumableCallHostTrap, Val, ValType, WasmParams, WasmResults,
 };
 use wasmparser::{CompositeInnerType, Parser, Payload, Validator, WasmFeatures};
 
-use crate::host::{self, Bridge, Deadline, Host, Report, Run};
+use crate::host::{self, Bridge, CallFailure, Deadline, Host, Import, Report, Run};
 use crate::manifest::{MANIFEST_SECTION, MAX_MANIFEST_BYTES, Manifest, Runtime};
 use crate::permissions::Permission;
 use crate::{Error, Kind, Result};
@@ -169,6 +172,15 @@ impl Default for Limits {
     }
 }
 
+/// Do the plug-ins loaded from now on keep their module's bytes ([`Plugin::module_bytes`])?
+static KEEP_MODULES: AtomicBool = AtomicBool::new(false);
+
+/// From now on, each plug-in loaded keeps its module's bytes ([`Plugin::module_bytes`]) when `on`.
+/// The web build turns it on: it runs filters in a worker, which it hands the module to.
+pub fn keep_modules(on: bool) {
+    KEEP_MODULES.store(on, Ordering::Relaxed);
+}
+
 /// A plug-in's code: a WebAssembly module, or a JavaScript file ([`crate::js`]).
 enum Code {
     Wasm { engine: Engine, module: Module },
@@ -179,12 +191,75 @@ enum Code {
 /// every run gets its own store and instance, or for a JavaScript plug-in its own realm.
 pub struct Plugin {
     manifest: Manifest,
+    /// The manifest JSON as `vc_manifest` returned it, or as the module's [`MANIFEST_SECTION`]
+    /// custom section holds it. Empty for a JavaScript plug-in.
+    manifest_text: Vec<u8>,
     code: Code,
+    /// The module's bytes, kept while [`keep_modules`] is on.
+    bytes: Option<Arc<[u8]>>,
     limits: Limits,
     size: usize,
     hash: String,
     source: Option<String>,
     serial: u64,
+}
+
+/// Where a run that [`Plugin::begin_run`] started is: waiting for the answer to a command call it
+/// made with `vc_call`, or ended.
+#[derive(Debug)]
+pub enum Step {
+    /// It called command `command` with `args`, and waits for [`Plugin::resume_run`]'s answer.
+    Call { command: String, args: serde_json::Value },
+    /// It ended: its output JSON, or why it has none, and what it reported through the host imports.
+    Done(Result<Vec<u8>>, Report),
+}
+
+/// A run that [`Plugin::begin_run`] started: what it needs to go on after a command call.
+#[derive(Default)]
+pub struct RunJob {
+    paused: Option<Paused>,
+}
+
+impl RunJob {
+    /// Does it wait for a command call's answer?
+    pub fn waiting(&self) -> bool {
+        self.paused.is_some()
+    }
+}
+
+/// A run paused at a `vc_call` of command `command`.
+struct Paused {
+    live: Live,
+    left: u64,
+    deadline: Deadline,
+    limits: Limits,
+    command: String,
+    call: Box<TypedResumableCallHostTrap<i64>>,
+}
+
+/// What a call does next once the store's fuel pauses are dealt with: it finished, or it waits for
+/// the answer to a command call (the command, its arguments and the paused call).
+enum Driven<R> {
+    Finished(R),
+    Call(String, serde_json::Value, Box<TypedResumableCallHostTrap<R>>),
+}
+
+/// Runs `f`, catching a panic as [`Error::Trap`]: wasmi reports misbehaving modules as errors, so a
+/// panic is a bug in it, and must still not take the document down (native builds; wasm aborts on
+/// panic anyway).
+fn guarded(f: impl FnOnce() -> (Option<Paused>, Step)) -> (Option<Paused>, Step) {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
+        .unwrap_or_else(|_| (None, Step::Done(Err(Error::Trap("the runtime panicked".into())), Report::default())))
+}
+
+/// Is export `name` of `module` a function with these `params` and `results`?
+fn exports_func(module: &Module, name: &str, params: &[ValType], results: &[ValType]) -> Result<()> {
+    let e = match module.get_export(name) {
+        Some(ExternType::Func(f)) if f.params() == params && f.results() == results => return Ok(()),
+        Some(_) => "it has another type",
+        None => "it is missing",
+    };
+    Err(Error::Abi(format!("export `{name}`: {e}")))
 }
 
 impl std::fmt::Debug for Plugin {
@@ -261,8 +336,9 @@ type RunArgs = (i32, i32, i32, i32);
 /// The manifest in the module's [`MANIFEST_SECTION`] custom section, or `None` when it has none.
 /// A module with more than one is refused, and so is a section longer than [`MAX_MANIFEST_BYTES`],
 /// which [`Manifest::parse`] checks before it decodes the bytes. The manifest in the section must
-/// give the ABI version as `abi`, in place of the `vc_abi_version` export.
-fn section_manifest(module: &Module) -> Result<Option<Manifest>> {
+/// give the ABI version as `abi`, in place of the `vc_abi_version` export. Also gives the section's
+/// bytes, the manifest JSON.
+fn section_manifest(module: &Module) -> Result<Option<(Manifest, Vec<u8>)>> {
     let mut sections = module.custom_sections().filter(|s| s.name() == MANIFEST_SECTION);
     let Some(section) = sections.next() else {
         return Ok(None);
@@ -278,7 +354,7 @@ fn section_manifest(module: &Module) -> Result<Option<Manifest>> {
             "the manifest in the `{MANIFEST_SECTION}` custom section must give `abi` as {ABI_VERSION}, the ABI version this host implements"
         )));
     }
-    Ok(Some(manifest))
+    Ok(Some((manifest, section.data().to_vec())))
 }
 
 /// Most tables a module may define: the store an instance runs in holds no more.
@@ -350,16 +426,123 @@ impl Plugin {
     /// `"runtime": "js"` are a JavaScript plug-in ([`crate::js`]): its manifest is checked and its
     /// script parsed, and none of it runs. In Safe Mode nothing is loaded ([`Error::SafeMode`]).
     pub fn load(bytes: &[u8], limits: Limits) -> Result<Plugin> {
+        let (mut p, imports) = Self::compile(bytes, limits)?;
+        if p.read_section(bytes, &imports)? {
+            return Ok(p);
+        }
+        let deadline = Deadline::new(p.limits.wall_time_ms);
+        // The manifest isn't read yet: every host import is linked, what it reports is dropped and
+        // there is no storage to reach.
+        let mut live = p.instantiate(Run::new("", false, false, deadline), &crate::permissions::ALL, &mut Report::default())?;
+        let version: TypedFunc<(), i32> = live.func("vc_abi_version")?;
+        let v = p.call(&mut live, &version, (), p.limits.fuel_base, &deadline)?;
+        if v != ABI_VERSION {
+            return Err(Error::Abi(format!("vc_abi_version returned {v}; this host implements version {ABI_VERSION}")));
+        }
+        let manifest: TypedFunc<(), i64> = live.func("vc_manifest")?;
+        let packed = p.call(&mut live, &manifest, (), p.limits.fuel_base, &deadline)?;
+        let text = live.read_packed(packed, "vc_manifest", MAX_MANIFEST_BYTES).map_err(|e| match e {
+            Error::Limit(_) => Error::Manifest(format!("manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)")),
+            e => e,
+        })?;
+        p.read(text, &imports)?;
+        // The other exports must exist with the right types.
+        live.func::<i32, i32>("vc_alloc")?;
+        live.func::<RunArgs, i64>("vc_run")?;
+        Ok(p)
+    }
+
+    /// [`Plugin::load`] of a module that a load of the same bytes in another place (the web build's
+    /// plug-in worker) has checked, with the manifest JSON that load read ([`Plugin::manifest_text`]).
+    /// Every check that needs none of the module's code to run is made again; the module's start
+    /// function, `vc_abi_version` and `vc_manifest` don't run. A module with a [`MANIFEST_SECTION`]
+    /// custom section loads as [`Plugin::load`] loads it, from that section, and `manifest` is unused.
+    pub fn load_checked(bytes: &[u8], limits: Limits, manifest: &[u8]) -> Result<Plugin> {
+        let (mut p, imports) = Self::compile(bytes, limits)?;
+        if p.read_section(bytes, &imports)? {
+            return Ok(p);
+        }
+        if manifest.len() > MAX_MANIFEST_BYTES {
+            return Err(Error::Manifest(format!("manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)")));
+        }
+        // A JavaScript plug-in has no section to read, and `read_section` has loaded it.
+        let Code::Wasm { module, .. } = &p.code else { return Ok(p) };
+        exports_func(module, "vc_abi_version", &[], &[ValType::I32])?;
+        exports_func(module, "vc_manifest", &[], &[ValType::I64])?;
+        exports_func(module, "vc_alloc", &[ValType::I32], &[ValType::I32])?;
+        exports_func(module, "vc_run", &[ValType::I32; 4], &[ValType::I64])?;
+        if !matches!(module.get_export("memory"), Some(ExternType::Memory(_))) {
+            return Err(Error::Abi("the module must export its linear memory as `memory`".into()));
+        }
+        p.read(manifest.to_vec(), &imports)?;
+        Ok(p)
+    }
+
+    /// Takes manifest JSON `text` as the plug-in's: parses it, checks that it allows each host
+    /// import of `imports`, and gives a heavy filter its larger budget.
+    fn read(&mut self, text: Vec<u8>, imports: &[&Import]) -> Result<()> {
+        let manifest = Manifest::parse(&text)?;
+        self.take(manifest, text, imports)
+    }
+
+    /// Reads the manifest from the module's [`MANIFEST_SECTION`] custom section
+    /// ([`section_manifest`]) and checks the exports and tables a run needs, running none of the
+    /// module's code; `bytes` is the module → false, with nothing read, when it has no such section.
+    /// A JavaScript plug-in, whose manifest [`Plugin::compile`] has read, gives true.
+    fn read_section(&mut self, bytes: &[u8], imports: &[&Import]) -> Result<bool> {
+        let Code::Wasm { module, .. } = &self.code else {
+            return Ok(true);
+        };
+        let module = module.clone();
+        let Some((manifest, text)) = section_manifest(&module)? else {
+            return Ok(false);
+        };
+        self.take(manifest, text, imports)?;
+        check_exports(&module, self.limits.max_memory_bytes)?;
+        check_tables(bytes)?;
+        Ok(true)
+    }
+
+    /// Takes `manifest`, parsed from JSON `text`, as the plug-in's: checks that it allows each host
+    /// import of `imports`, and gives a heavy filter its larger budget. A WebAssembly module's
+    /// manifest must leave `runtime` out.
+    fn take(&mut self, manifest: Manifest, text: Vec<u8>, imports: &[&Import]) -> Result<()> {
+        if manifest.runtime != Runtime::Wasm {
+            return Err(Error::Manifest("a WebAssembly module's manifest leaves `runtime` out: \"js\" is for a JavaScript plug-in".into()));
+        }
+        self.manifest = manifest;
+        host::check_granted(&self.manifest, imports)?;
+        self.heavy_limits();
+        self.manifest_text = text;
+        Ok(())
+    }
+
+    /// The checks of a module that run none of its code: its size, header, WebAssembly proposals and
+    /// host imports, and wasmi's own validation → the plug-in, with its manifest still to be read,
+    /// and the host imports it asks for. In Safe Mode nothing is loaded ([`Error::SafeMode`]).
+    fn compile(bytes: &[u8], limits: Limits) -> Result<(Plugin, Vec<&'static Import>)> {
         crate::safe_mode::check()?;
         if bytes.len() > limits.max_module_bytes {
             return Err(Error::Module(format!("module is {} bytes (limit {})", bytes.len(), limits.max_module_bytes)));
         }
+        let kept = || KEEP_MODULES.load(Ordering::Relaxed).then(|| Arc::from(bytes));
+        // A JavaScript plug-in's manifest is read here; `read_section` then has nothing to read.
         if bytes.trim_ascii_start().starts_with(b"{") {
             let (manifest, script) = crate::js::read_bundle(bytes)?;
             let hash = crate::permissions::sha256_hex(bytes);
-            let mut p = Plugin { manifest, code: Code::Js(script), limits, size: bytes.len(), hash, source: None, serial: 0 };
+            let mut p = Plugin {
+                manifest,
+                manifest_text: Vec::new(),
+                code: Code::Js(script),
+                bytes: kept(),
+                limits,
+                size: bytes.len(),
+                hash,
+                source: None,
+                serial: 0,
+            };
             p.heavy_limits();
-            return Ok(p);
+            return Ok((p, Vec::new()));
         }
         if !bytes.starts_with(b"\0asm") {
             return Err(Error::Module("not a WebAssembly binary (missing \\0asm header)".into()));
@@ -375,58 +558,18 @@ impl Plugin {
         let module = Module::new(&engine, bytes).map_err(|e| Error::Module(e.to_string()))?;
         let imports = host::check_imports(&module)?;
         let hash = crate::permissions::sha256_hex(bytes);
-        let section = section_manifest(&module)?;
-        let mut p = Plugin {
+        let p = Plugin {
             manifest: Manifest::placeholder(),
-            code: Code::Wasm { engine, module: module.clone() },
+            manifest_text: Vec::new(),
+            code: Code::Wasm { engine, module },
+            bytes: kept(),
             limits,
             size: bytes.len(),
             hash,
             source: None,
             serial: 0,
         };
-        let live = match section {
-            Some(manifest) => {
-                p.manifest = manifest;
-                None
-            }
-            None => {
-                let deadline = Deadline::new(p.limits.wall_time_ms);
-                // The manifest isn't read yet: every host import is linked, what it reports is
-                // dropped and there is no storage to reach.
-                let mut live = p.instantiate(Run::new("", false, false, deadline), &crate::permissions::ALL, &mut Report::default())?;
-                let version: TypedFunc<(), i32> = live.func("vc_abi_version")?;
-                let v = p.call(&mut live, &version, (), p.limits.fuel_base, &deadline)?;
-                if v != ABI_VERSION {
-                    return Err(Error::Abi(format!("vc_abi_version returned {v}; this host implements version {ABI_VERSION}")));
-                }
-                let manifest: TypedFunc<(), i64> = live.func("vc_manifest")?;
-                let packed = p.call(&mut live, &manifest, (), p.limits.fuel_base, &deadline)?;
-                let text = live.read_packed(packed, "vc_manifest", MAX_MANIFEST_BYTES).map_err(|e| match e {
-                    Error::Limit(_) => Error::Manifest(format!("manifest is too long (limit {MAX_MANIFEST_BYTES} bytes)")),
-                    e => e,
-                })?;
-                p.manifest = Manifest::parse(&text)?;
-                Some(live)
-            }
-        };
-        if p.manifest.runtime != Runtime::Wasm {
-            return Err(Error::Manifest("a WebAssembly module's manifest leaves `runtime` out: \"js\" is for a JavaScript plug-in".into()));
-        }
-        host::check_granted(&p.manifest, &imports)?;
-        p.heavy_limits();
-        // The other exports must exist with the right types.
-        match live {
-            Some(live) => {
-                live.func::<i32, i32>("vc_alloc")?;
-                live.func::<RunArgs, i64>("vc_run")?;
-            }
-            None => {
-                check_exports(&module, p.limits.max_memory_bytes)?;
-                check_tables(bytes)?;
-            }
-        }
-        Ok(p)
+        Ok((p, imports))
     }
 
     /// A heavy filter's runs get the larger budget the host allows for one, which the host lets the
@@ -453,6 +596,15 @@ impl Plugin {
 
     pub fn manifest(&self) -> &Manifest {
         &self.manifest
+    }
+    /// The manifest JSON as the module's `vc_manifest` returned it or its manifest section holds
+    /// it, for [`Plugin::load_checked`].
+    pub fn manifest_text(&self) -> &[u8] {
+        &self.manifest_text
+    }
+    /// The module's bytes, when it was loaded while [`keep_modules`] was on.
+    pub fn module_bytes(&self) -> Option<&Arc<[u8]>> {
+        self.bytes.as_ref()
     }
     pub fn id(&self) -> &str {
         &self.manifest.id
@@ -531,65 +683,81 @@ impl Plugin {
     /// storage call pays for its bytes ([`host::STORAGE_BYTES_PER_FUEL`]) from the store's fuel and
     /// the rest of the budget as it is made, and one they can't pay for ends the run.
     fn call<P: WasmParams, R: WasmResults>(&self, live: &mut Live, f: &TypedFunc<P, R>, params: P, fuel: u64, deadline: &Deadline) -> Result<R> {
-        self.call_with(live, f, params, fuel, deadline, None)
+        let mut left = fuel;
+        let call = Self::first_slice(live, &mut left, |store| f.call_resumable(store, params))?;
+        match Self::drive(live, &mut left, deadline, call)? {
+            Driven::Finished(r) => Ok(r),
+            Driven::Call(..) => Err(Error::Trap("unexpected host trap".into())),
+        }
     }
 
-    /// [`Plugin::call`], making each command call a `vc_call` pauses it for with `bridge`
-    /// ([`host::Run::pending`]) and resuming it with the code. Each call costs [`host::CALL_FUEL`]
-    /// instructions and one for every 64 bytes of its arguments and result; the deadline and the
-    /// caller's cancellation are checked before and after it.
-    fn call_with<P: WasmParams, R: WasmResults>(
-        &self,
+    /// Starts a call with `start`, on the first slice of the `left` instructions it may use.
+    fn first_slice<R>(
         live: &mut Live,
-        f: &TypedFunc<P, R>,
-        params: P,
-        fuel: u64,
-        deadline: &Deadline,
-        mut bridge: Option<&mut Bridge<'_>>,
-    ) -> Result<R> {
-        let mut left = fuel;
-        let give = left.min(FUEL_SLICE);
-        left -= give;
+        left: &mut u64,
+        start: impl FnOnce(&mut Store<Host>) -> std::result::Result<TypedResumableCall<R>, wasmi::Error>,
+    ) -> Result<TypedResumableCall<R>> {
+        let give = (*left).min(FUEL_SLICE);
+        *left -= give;
         live.store.set_fuel(give).map_err(wasm_err)?;
-        let mut call = slice(live, &mut left, |store| f.call_resumable(store, params))?;
+        slice(live, left, start)
+    }
+
+    /// Goes on with `call` slice by slice ([`Plugin::call`]) until it finishes or pauses for a
+    /// command call that `vc_call` asked for ([`host::Run::pending`]). Each command call costs
+    /// [`host::CALL_FUEL`] instructions and one for every 64 bytes of its arguments, and the deadline
+    /// and the caller's cancellation are checked before it is made ([`Plugin::answer`]).
+    fn drive<R: WasmResults>(live: &mut Live, left: &mut u64, deadline: &Deadline, mut call: TypedResumableCall<R>) -> Result<Driven<R>> {
         loop {
             match call {
-                TypedResumableCall::Finished(r) => return Ok(r),
+                TypedResumableCall::Finished(r) => return Ok(Driven::Finished(r)),
                 TypedResumableCall::HostTrap(inv) => {
                     if inv.host_error().downcast_ref::<host::StorageStop>().is_some() {
                         return Err(stop_reason(&mut live.store));
                     }
-                    let pending = live.store.data_mut().run.pending.take();
-                    let (Some((id, args, size)), Some(bridge)) = (pending, bridge.as_deref_mut()) else {
+                    let Some((id, args, size)) = live.store.data_mut().run.pending.take() else {
                         return Err(Error::Trap("unexpected host trap".into()));
                     };
-                    charge(live, &mut left, host::CALL_FUEL.saturating_add(size as u64 / 64))?;
+                    charge(live, left, host::CALL_FUEL.saturating_add(size as u64 / 64))?;
                     deadline.check()?;
                     vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
-                    let answer = bridge(&id, &args);
-                    let code = live.store.data_mut().run.call_answered(&id, answer);
-                    let returned = live.store.data().run.call_result.as_ref().map_or(0, Vec::len);
-                    charge(live, &mut left, returned as u64 / 64)?;
-                    deadline.check()?;
-                    vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
-                    call = slice(live, &mut left, |store| inv.resume(store, &[Val::I32(code)]))?;
+                    return Ok(Driven::Call(id, args, Box::new(inv)));
                 }
                 TypedResumableCall::OutOfFuel(inv) => {
                     let need = inv.required_fuel();
                     let held = live.store.get_fuel().map_err(wasm_err)?;
-                    let total = held.saturating_add(left);
+                    let total = held.saturating_add(*left);
                     if need > total {
                         return Err(Error::Limit("instruction budget".into()));
                     }
                     deadline.check()?;
                     vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
                     let fill = total.min(FUEL_SLICE.max(need)).max(held);
-                    left -= fill - held;
+                    *left -= fill - held;
                     live.store.set_fuel(fill).map_err(wasm_err)?;
-                    call = slice(live, &mut left, |store| inv.resume(store))?;
+                    call = slice(live, left, |store| inv.resume(store))?;
                 }
             }
         }
+    }
+
+    /// Resumes `call`, which paused for command call `id`, with the host's `answer`: the code
+    /// `vc_call` returns comes from [`host::Run::call_answered`]. The result costs one instruction for
+    /// every 64 bytes, and the deadline and the caller's cancellation are checked again first.
+    fn answer<R: WasmResults>(
+        live: &mut Live,
+        left: &mut u64,
+        deadline: &Deadline,
+        id: &str,
+        answer: std::result::Result<serde_json::Value, CallFailure>,
+        call: Box<TypedResumableCallHostTrap<R>>,
+    ) -> Result<TypedResumableCall<R>> {
+        let code = live.store.data_mut().run.call_answered(id, answer);
+        let returned = live.store.data().run.call_result.as_ref().map_or(0, Vec::len);
+        charge(live, left, returned as u64 / 64)?;
+        deadline.check()?;
+        vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;
+        slice(live, left, |store| call.resume(store, &[Val::I32(code)]))
     }
 
     /// Runs `vc_run` on `input` (the objects JSON) with `params` (the parameters JSON) in a fresh
@@ -621,58 +789,94 @@ impl Plugin {
         self.run_guarded(input, params, limits, Some(bridge))
     }
 
-    fn run_guarded(&self, input: &[u8], params: &[u8], limits: &Limits, bridge: Option<&mut Bridge<'_>>) -> (Result<Vec<u8>>, Report) {
-        let mut report = Report::default();
-        if let Err(e) = crate::safe_mode::check() {
-            return (Err(e), report);
+    fn run_guarded(&self, input: &[u8], params: &[u8], limits: &Limits, mut bridge: Option<&mut Bridge<'_>>) -> (Result<Vec<u8>>, Report) {
+        let (mut job, mut step) = self.begin_run(input, params, limits, bridge.is_some());
+        loop {
+            match step {
+                Step::Done(out, report) => return (out, report),
+                Step::Call { command, args } => {
+                    let Some(bridge) = bridge.as_deref_mut() else {
+                        return (Err(Error::Trap("unexpected host trap".into())), Report::default());
+                    };
+                    // A panic making the call fails the run, as one in the runtime does.
+                    let Ok(answer) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge(&command, &args))) else {
+                        return (Err(Error::Trap("the runtime panicked".into())), Report::default());
+                    };
+                    step = self.resume_run(&mut job, answer);
+                }
+            }
         }
-        // wasmi reports misbehaving modules as errors; a panic would be a bug in it, and must
-        // still not take the document down (native builds; wasm aborts on panic anyway).
-        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(input, params, limits, &mut report, bridge)));
-        (run.map_err(|_| Error::Trap("the runtime panicked".into())).and_then(|r| r), report)
     }
 
-    fn run_inner(&self, input: &[u8], params: &[u8], limits: &Limits, report: &mut Report, bridge: Option<&mut Bridge<'_>>) -> Result<Vec<u8>> {
+    /// Starts [`Plugin::run_reporting`]'s run, which can wait for the answers to its command calls
+    /// in between: with `calls`, each `vc_call` of a command its manifest's `commandAllowlist` names
+    /// ends the step with [`Step::Call`], and [`Plugin::resume_run`] goes on with the answer. The
+    /// run's time budget runs on while it waits. In Safe Mode nothing runs ([`Error::SafeMode`]).
+    pub fn begin_run(&self, input: &[u8], params: &[u8], limits: &Limits, calls: bool) -> (RunJob, Step) {
+        if let Err(e) = crate::safe_mode::check() {
+            return (RunJob::default(), Step::Done(Err(e), Report::default()));
+        }
+        let (paused, step) = guarded(|| self.begin_inner(input, params, limits, calls));
+        (RunJob { paused }, step)
+    }
+
+    /// Goes on with `job`, which waits for the answer to a command call ([`Step::Call`]), with that
+    /// call's `answer` → where the run is next. A failed call fails the run, also when the plug-in
+    /// goes on and returns an output; the error names the command.
+    pub fn resume_run(&self, job: &mut RunJob, answer: std::result::Result<serde_json::Value, CallFailure>) -> Step {
+        let Some(Paused { mut live, mut left, deadline, limits, command, call }) = job.paused.take() else {
+            return Step::Done(Err(Error::Trap("unexpected host trap".into())), Report::default());
+        };
+        let (paused, step) = guarded(|| {
+            let next = Self::answer(&mut live, &mut left, &deadline, &command, answer, call);
+            self.advance(live, left, deadline, limits, next)
+        });
+        job.paused = paused;
+        step
+    }
+
+    fn begin_inner(&self, input: &[u8], params: &[u8], limits: &Limits, calls: bool) -> (Option<Paused>, Step) {
         let total = input.len().checked_add(params.len()).filter(|b| *b <= i32::MAX as usize && *b <= self.limits.max_memory_bytes / 2);
-        total.ok_or_else(|| Error::Limit(SELECTION_TOO_LARGE.into()))?;
+        if total.is_none() {
+            return (None, Step::Done(Err(Error::Limit(SELECTION_TOO_LARGE.into())), Report::default()));
+        }
         let deadline = Deadline::new(limits.wall_time_ms);
         let m = &self.manifest;
         let run = Run::new(&m.id, m.kind != Kind::Effect, true, deadline).with_storage(crate::registry::storage(&m.id));
+        let mut report = Report::default();
         if let Code::Js(script) = &self.code {
             // Its manifest lists no `commands`, so nothing calls it with a bridge.
-            if bridge.is_some() {
-                return Err(Error::Abi("a JavaScript plug-in makes no command calls".into()));
+            if calls {
+                return (None, Step::Done(Err(Error::Abi("a JavaScript plug-in makes no command calls".into())), report));
             }
             let call = crate::js::Call { input, params, limits, max_memory: self.limits.max_memory_bytes, deadline };
-            return crate::js::run(script, m, &call, run, report);
+            let out = crate::js::run(script, m, &call, run, &mut report);
+            return (None, Step::Done(out, report));
         }
-        let mut live = self.instantiate(run, &m.permissions(), report)?;
+        let mut live = match self.instantiate(run, &m.permissions(), &mut report) {
+            Ok(live) => live,
+            Err(e) => return (None, Step::Done(Err(e), report)),
+        };
         // Calls can be made from `vc_run` on, not from the start function.
-        if bridge.is_some() {
+        if calls {
             live.store.data_mut().run.allow_calls(m.command_allowlist.clone());
         }
-        let out = self.run_live(&mut live, input, params, limits, &deadline, bridge);
-        let state = &mut live.store.data_mut().run;
-        *report = std::mem::take(&mut state.report);
-        // A failed call fails the run, whatever the plug-in did after it, unless the run was
-        // canceled.
-        match (state.call_failure.take(), out) {
-            (_, Err(Error::Cancelled)) => Err(Error::Cancelled),
-            (Some(e), _) => Err(e),
-            (None, out) => out,
-        }
+        let mut left = 0;
+        let call = self.start_live(&mut live, &mut left, input, params, limits, &deadline);
+        self.advance(live, left, deadline, limits.clone(), call)
     }
 
-    /// Hands `input` and `params` to the instance `live` and runs `vc_run` → the output JSON bytes.
-    fn run_live(
+    /// Hands `input` and `params` to the instance `live` and starts `vc_run`, on the first slice of
+    /// its instructions; the rest is left in `left`.
+    fn start_live(
         &self,
         live: &mut Live,
+        left: &mut u64,
         input: &[u8],
         params: &[u8],
         limits: &Limits,
         deadline: &Deadline,
-        bridge: Option<&mut Bridge<'_>>,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<TypedResumableCall<i64>> {
         let alloc: TypedFunc<i32, i32> = live.func("vc_alloc")?;
         let run: TypedFunc<RunArgs, i64> = live.func("vc_run")?;
         let place = |live: &mut Live, bytes: &[u8]| -> Result<usize> {
@@ -687,8 +891,43 @@ impl Plugin {
         };
         let iptr = place(live, input)?;
         let pptr = place(live, params)?;
-        let fuel = limits.fuel_base.saturating_add((input.len() as u64).saturating_mul(limits.fuel_per_byte));
-        let packed = self.call_with(live, &run, (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32), fuel, deadline, bridge)?;
+        *left = limits.fuel_base.saturating_add((input.len() as u64).saturating_mul(limits.fuel_per_byte));
+        let args = (iptr as i32, input.len() as i32, pptr as i32, params.len() as i32);
+        Self::first_slice(live, left, |store| run.call_resumable(store, args))
+    }
+
+    /// Takes `vc_run`'s `call` on until it pauses for a command call (kept, with the instance, to
+    /// go on from) or ends, then → its output JSON bytes or why it has none, with its report.
+    fn advance(
+        &self,
+        mut live: Live,
+        mut left: u64,
+        deadline: Deadline,
+        limits: Limits,
+        call: Result<TypedResumableCall<i64>>,
+    ) -> (Option<Paused>, Step) {
+        let out = match call.and_then(|call| Self::drive(&mut live, &mut left, &deadline, call)) {
+            Ok(Driven::Call(command, args, call)) => {
+                let step = Step::Call { command: command.clone(), args };
+                return (Some(Paused { live, left, deadline, limits, command, call }), step);
+            }
+            Ok(Driven::Finished(packed)) => Self::output(&live, packed, &limits, &deadline),
+            Err(e) => Err(e),
+        };
+        let state = &mut live.store.data_mut().run;
+        let report = std::mem::take(&mut state.report);
+        // A failed call fails the run, whatever the plug-in did after it, unless the run was
+        // canceled.
+        let out = match (state.call_failure.take(), out) {
+            (_, Err(Error::Cancelled)) => Err(Error::Cancelled),
+            (Some(e), _) => Err(e),
+            (None, out) => out,
+        };
+        (None, Step::Done(out, report))
+    }
+
+    /// The output block `vc_run` returned (`packed`) → the output JSON bytes.
+    fn output(live: &Live, packed: i64, limits: &Limits, deadline: &Deadline) -> Result<Vec<u8>> {
         // A cancelled run, or one past its time budget, changes nothing, also when the plug-in saw
         // `vc_cancelled` and returned.
         vectorcraft_doc::cancel::check().map_err(|_| Error::Cancelled)?;

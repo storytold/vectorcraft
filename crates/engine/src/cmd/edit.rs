@@ -823,7 +823,7 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     super::symboledit::follow_history(st, editing_symbol.as_ref());
-    leave_isolation_if_gone(st);
+    st.leave_isolation_if_gone();
     super::globaledit::follow_history(st);
     st.drop_stale_variables_highlight();
     if let Some((before, _)) = paints {
@@ -860,22 +860,13 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
     st.sync_new_art();
     super::maskedit::follow_history(st, editing);
     super::symboledit::follow_history(st, editing_symbol.as_ref());
-    leave_isolation_if_gone(st);
+    st.leave_isolation_if_gone();
     super::globaledit::follow_history(st);
     st.drop_stale_variables_highlight();
     if let Some((_, after)) = paints {
         s.paint = after;
     }
     Ok(json!({ "redone": label }))
-}
-
-/// After undo or redo, isolation mode ends when the isolated object is no longer in the document,
-/// such as the clip group Draw Inside made around the isolated object (#3705), rather than naming
-/// an id a later object may take.
-fn leave_isolation_if_gone(st: &mut crate::DocState) {
-    if st.isolation.is_some_and(|i| st.doc.node(i).is_none()) {
-        st.isolation = None;
-    }
 }
 
 /// History panel › Clear History: removes the steps after the current state and the steps before
@@ -960,8 +951,12 @@ fn shared_selection(selection: vectorcraft_doc::Selection, like: Option<&crate::
 /// instance as it is. Copy copies the instance whole ([`copy_cut_targets`]).
 pub(crate) fn selected_roots(s: &Session) -> Result<Vec<NodeId>> {
     refuse_symbol_part(s)?;
-    let st = s.doc()?;
-    Ok(roots_of(&st.doc, st.selection.in_paint_order(&st.doc)))
+    Ok(selection_roots(s.doc()?))
+}
+
+/// [`selected_roots`] of one document's selection.
+pub(crate) fn selection_roots(st: &crate::DocState) -> Vec<NodeId> {
+    roots_of(&st.doc, st.selection.in_paint_order(&st.doc))
 }
 
 /// [`super::brushsym::part_only`] while an object of a dynamic symbol instance's art is selected:
@@ -1592,6 +1587,11 @@ fn paste_clip(s: &mut Session, p: &Value, mode: PasteMode, clip: &Clipboard, cho
         for xf in placements {
             for (k, n) in clip.nodes.iter().enumerate() {
                 let mut c = d.reid(n);
+                // A pasted object never goes in as a clip group's clipping path, so a copied clipping
+                // path comes back as an ordinary path that the path commands work on (#9227).
+                if let NodeKind::Path { clipping, .. } = &mut c.kind {
+                    *clipping = false;
+                }
                 // A pasted symbol set packs from the density recorded for it at Copy.
                 d.carry_set_densities(n, &c, &clip.set_densities);
                 imported.apply(&mut c, d);

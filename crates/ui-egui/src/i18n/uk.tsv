@@ -7043,6 +7043,15 @@ axis	Y Axis	Вісь Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	пропущено об’єкт лише для читання: поверніть його як один {{"id": …}} або в тому вигляді, у якому його передано
 @msg	a string	рядок
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	обведення має лише `paint`, `width`, `join`, `cap` і `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	частина малювального динамічного ефекту має лише `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` і `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	обведення має лише `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` і `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` може бути лише true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` дозволено лише для динамічного ефекту, що оголошує `paintOutput`, з `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` має бути числом від 0 до 1
+@msg	unknown blending mode; `blend` is one of {_1}	невідомий режим накладання; `blend` має одне зі значень {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` має бути масивом щонайбільше з {MAX_LOOK_EFFECTS} записів
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	результат містить щонайбільше {MAX_RESULT_EFFECTS} записів ефектів
+@msg	this host takes no effects here	цей хост тут не приймає ефектів
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	обведення має мати вигляд {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	ефект має мати вигляд {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	ефект на заливці повертає лише `fills`
@@ -8139,6 +8148,7 @@ breakText	Glyphs	Гліфи
 	Place Brush Art	Розмістити малюнок пензля
 	Replace Brush Art	Замінити малюнок пензля
 	Replace Pattern Art	Замінити малюнок візерунка
+	Place Pattern Art	Розмістити малюнок візерунка
 	Strokes use this brush. Apply the new art to those strokes, or leave them as they are and add a copy of the brush with the new art?	Обведення використовують цей пензель. Застосувати новий малюнок до цих обведень чи залишити їх як є і додати копію пензля з новим малюнком?
 	Apply to Strokes	Застосувати до обведень
 	Leave Strokes	Залишити обведення
@@ -8208,6 +8218,8 @@ breakText	Glyphs	Гліфи
 	Tangent Circle	Дотичне коло
 	Tangent Circle Tool	Інструмент «Дотичне коло»
 	No tangent circle here	Тут немає дотичного кола
+	Ask For Circle Radius	Запитувати радіус кола
+	Auto-Update Default	Автоматично оновлювати значення за замовчуванням
 	Circle:	Коло:
 @msg	`ids` names an object twice	`ids` указує об’єкт двічі
 @msg	select two or three paths or compound paths	виділіть два або три контури чи складені контури

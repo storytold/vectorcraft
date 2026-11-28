@@ -673,6 +673,7 @@ pub(crate) mod testutil {
             double_click_isolate: true,
             double_click_adds_anchor: false,
             select_behind: true,
+            behind_armed: false,
             highlight_anchors: true,
             snap_tolerance: 2.0,
             handles_multiple: true,

@@ -431,6 +431,17 @@ impl Node {
         }
     }
 
+    /// The box of what a path, or the paths of a compound path, draw before the strokes' reach
+    /// ([`PathData::drawn_bounds`]): lone anchors of closed subpaths count only with `dots`. Other
+    /// members of a compound path count by their geometric box. `None` when nothing is drawn.
+    fn drawn(&self, symbols: Option<&SymbolBoxes>, dots: bool) -> Option<Rect> {
+        match &self.kind {
+            NodeKind::Path { path, .. } => path.drawn_bounds(dots),
+            NodeKind::Compound { .. } => self.editing_children().iter().fold(None, |acc, c| vectorcraft_geom::union_opt(acc, c.drawn(symbols, dots))),
+            _ => self.geometric(symbols),
+        }
+    }
+
     /// Visual bounds: what the object paints, its strokes included (paths and compound paths
     /// measure theirs along their own shape, see [`Appearance::stroked_bounds`]). An image is
     /// measured by its frame. A symbol instance is measured as in [`Node::geometric_bounds`],
@@ -485,7 +496,9 @@ impl Node {
                 self.geometric(symbols).map(|b| b.inflate(o, o))
             }
             NodeKind::Path { .. } | NodeKind::Compound { .. } => {
-                let b = self.geometric(symbols)?;
+                // A lone anchor is drawn only as the dot of a round or projecting cap on a closed subpath.
+                let dots = self.appearance.painted_strokes().any(|s| matches!(s.cap, crate::LineCap::Round | crate::LineCap::Square));
+                let b = self.drawn(symbols, dots).or_else(|| self.geometric(symbols))?;
                 Some(self.appearance.stroked_bounds(b, || self.stroke_path().unwrap_or_default()))
             }
             NodeKind::SymbolInstance { symbol, xf } => {
