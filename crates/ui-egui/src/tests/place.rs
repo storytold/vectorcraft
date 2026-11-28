@@ -121,6 +121,125 @@ fn dismiss(app: &mut VectorcraftApp) {
     }
 }
 
+#[test]
+fn cancelling_browser_place_releases_the_picked_file_buffers() {
+    let mut app = app();
+    let picker = scripted(&mut app);
+    let ctx = window(&app);
+    let bytes = png(6, 4, 72.0);
+    let undo = app.session.active().unwrap().history.undo.len();
+    for name in ["first.png", "second.png"] {
+        app.run("file.place", json!({})).unwrap();
+        picker.answer_contents(&[(name, &bytes)]);
+        crate::file_asks::poll(&mut app);
+        assert_eq!(dialog_kind(&app).as_deref(), Some(crate::dialogs::place::KIND));
+        assert_eq!(app.place.picked.len(), 1);
+        // Cancelling a replacement file picker leaves the existing Place selection usable.
+        app.run("file.place", json!({})).unwrap();
+        picker.cancel();
+        crate::file_asks::poll(&mut app);
+        assert_eq!(app.place.picked[0].0, name);
+        dismiss(&mut app);
+        crate::place::pump(&mut app, &ctx);
+        assert!(app.place.picked.is_empty(), "a cancelled Place selection no longer owns file bytes");
+        assert!(app.session.active().unwrap().doc.layers[0].children().unwrap().is_empty());
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+}
+
+#[test]
+fn a_finished_replacement_places_only_its_own_browser_file_before_the_next_pump() {
+    for old_ok in [false, true] {
+        let mut app = app();
+        let picker = scripted(&mut app);
+        let ctx = window(&app);
+        let old = png(6, 4, 72.0);
+        let new = png(8, 5, 72.0);
+        app.run("file.place", json!({})).unwrap();
+        picker.answer_contents(&[("same.png", &old)]);
+        crate::file_asks::poll(&mut app);
+        let id = open_dialogs(&app).pop().unwrap().id;
+        let dialogs = app.dialogs().unwrap();
+        dialogs.with(|host| {
+            if old_ok {
+                assert!(host.confirm_by_id(&ctx, id));
+            } else {
+                assert!(host.cancel_by_id(&ctx, id));
+            }
+        });
+        // Both openings finish before the application takes a Place result.
+        app.run("file.place", json!({})).unwrap();
+        picker.answer_contents(&[("same.png", &new)]);
+        crate::file_asks::poll(&mut app);
+        let id = open_dialogs(&app).pop().unwrap().id;
+        dialogs.with(|host| {
+            host.set_json_field(&ctx, id, "link", json!(false)).unwrap();
+            host.set_json_field(&ctx, id, "showImportOptions", json!(false)).unwrap();
+            assert!(host.confirm_by_id(&ctx, id));
+        });
+        crate::place::pump(&mut app, &ctx);
+        assert!(app.place.picked.is_empty());
+        assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
+        let image = selected_image(&app);
+        assert!(matches!(&image.kind, NodeKind::Image(im) if (im.width, im.height) == (8, 5)));
+        let status = app.ui.status.clone();
+        let undo = app.session.active().unwrap().history.undo.len();
+        crate::place::pump(&mut app, &ctx);
+        assert_eq!(app.ui.status, status, "no earlier result remains to report an error");
+        assert_eq!(app.session.active().unwrap().history.undo.len(), undo);
+    }
+}
+
+#[test]
+fn an_old_place_ok_cannot_consume_a_newer_dialogs_browser_bytes() {
+    let mut app = app();
+    let picker = scripted(&mut app);
+    let ctx = window(&app);
+    let bytes = png(6, 4, 72.0);
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("old.png", &bytes)]);
+    crate::file_asks::poll(&mut app);
+    let id = open_dialogs(&app).pop().unwrap().id;
+    assert!(app.dialogs().unwrap().with(|host| host.confirm_by_id(&ctx, id)), "Place closes when its answer is filed");
+    assert_ne!(dialog_kind(&app).as_deref(), Some(crate::dialogs::place::KIND));
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("new.png", &bytes)]);
+    crate::file_asks::poll(&mut app);
+    app.ui.status = "new selection".into();
+    crate::place::pump(&mut app, &ctx);
+    assert_eq!(app.ui.status, "new selection", "the retired OK reports no stale error");
+    assert_eq!(dialog_kind(&app).as_deref(), Some(crate::dialogs::place::KIND));
+    assert_eq!(app.place.picked.len(), 1);
+    assert_eq!(app.place.picked[0].0, "new.png");
+    assert!(app.session.active().unwrap().doc.layers[0].children().unwrap().is_empty());
+    answer(&mut app, &[("link", json!(false)), ("showImportOptions", json!(false))]);
+    assert!(app.place.picked.is_empty());
+    assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1);
+}
+
+#[test]
+fn an_old_place_cancellation_keeps_a_newer_dialogs_browser_bytes() {
+    let mut app = app();
+    let picker = scripted(&mut app);
+    let ctx = window(&app);
+    let bytes = png(6, 4, 72.0);
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("old.png", &bytes)]);
+    crate::file_asks::poll(&mut app);
+    dismiss(&mut app);
+    // Open the replacement before the application pump consumes the previous cancellation.
+    app.run("file.place", json!({})).unwrap();
+    picker.answer_contents(&[("new.png", &bytes)]);
+    crate::file_asks::poll(&mut app);
+    crate::place::pump(&mut app, &ctx);
+    assert_eq!(dialog_kind(&app).as_deref(), Some(crate::dialogs::place::KIND));
+    assert_eq!(app.place.picked.len(), 1, "the replacement owns only its own source bytes");
+    assert_eq!(app.place.picked[0].0, "new.png");
+    answer(&mut app, &[("link", json!(false)), ("showImportOptions", json!(false))]);
+    assert!(app.place.picked.is_empty(), "confirmation transfers the bytes out of the dialog cache");
+    assert_eq!(app.session.active().unwrap().doc.layers[0].children().unwrap().len(), 1, "the newer file still places");
+}
+
 #[derive(Debug)]
 struct Dropped(std::path::PathBuf);
 
@@ -340,6 +459,30 @@ fn a_dropped_png_is_placed_where_it_was_dropped() {
     assert!(matches!(&selected_image(&app).kind, NodeKind::Image(im) if im.link.is_none()));
 }
 
+#[test]
+fn a_mixed_canvas_drop_places_the_artwork_and_opens_the_palette() {
+    let mut app = app();
+    let ctx = window(&app);
+    let rect = laid_out(&mut app, &ctx);
+    let dir = Folder::new("ui-place-image-and-palette");
+    let palette = dir.file("mixed.gpl", b"GIMP Palette\nName: Mixed Drop\n#\n255   0   0\tRed\n");
+    let png = dir.file("artwork.png", &png(20, 10, 72.0));
+    let pos = rect.center() + vec2(60.0, -40.0);
+    let want = app.canvas_view().unwrap().to_doc(pos);
+
+    frame(&mut app, &ctx, vec![egui::Event::PointerMoved(pos)], &[&palette, &png], false);
+
+    let placed = selected_image(&app);
+    let center = placed.geometric_bounds().unwrap().center();
+    assert!((center.x - want.x).abs() < 1e-6 && (center.y - want.y).abs() < 1e-6, "{center:?} vs {want:?}");
+    assert_eq!((app.session.documents().len(), images(&app, 0)), (1, 1));
+    assert!(
+        crate::panels::library_panel::last_open(&app.ui).is_some_and(|library| library.id == format!("loaded/{palette}")),
+        "the same canvas drop must open the palette: {}",
+        app.ui.status
+    );
+}
+
 /// A document dropped where the platform gives no position opens as a new tab, not into the open
 /// document; the pictures dropped with it are placed in the document that was open, before it
 /// opens.
@@ -460,6 +603,59 @@ fn images(app: &VectorcraftApp, i: usize) -> usize {
     let mut n = 0;
     app.session.documents()[i].doc.walk(|node| n += usize::from(matches!(node.kind, NodeKind::Image(_))));
     n
+}
+
+#[test]
+fn a_browser_drop_uses_the_inactive_tiled_canvas_under_the_pointer() {
+    let mut app = app();
+    let inbox = crate::place::PlaceInbox::default();
+    app.services.place_inbox = Some(inbox.clone());
+    let ctx = window(&app);
+    app.run("file.new", json!({"width": 600, "height": 500})).unwrap();
+    app.run("window.arrange.tile", json!({})).unwrap();
+    laid_out(&mut app, &ctx);
+    assert_eq!(app.session.active_index(), Some(1));
+
+    let (w, _) = app.canvas.panes.last.iter().copied().find(|(w, _)| w.0 == 0).unwrap();
+    let view = crate::doc_windows::view(&app, w).unwrap();
+    let pos = view.rect.center() + vec2(19.0, -13.0);
+    assert!(!app.canvas_view().unwrap().rect.contains(pos));
+    let want = view.canvas(app.ui_scaling(), view.rect).to_doc(pos);
+    let name = "pane.png";
+    let spot = app.drop_spot(Some(pos));
+    let (doc, reverts) = (app.session.documents()[0].uid, app.session.documents()[0].reverts);
+    let drop = DropAt { doc, reverts, at: want, embed: true };
+    assert_eq!(app.drop_target(name, spot, true), DropTarget::Place(drop));
+    assert_eq!(app.drop_target("palette.gpl", spot, false), DropTarget::Open);
+
+    inbox.lock().unwrap().push(crate::place::PlaceArrival { name: name.into(), bytes: png(20, 10, 72.0), drop });
+    frame(&mut app, &ctx, vec![], &[], false);
+    assert_eq!((images(&app, 0), images(&app, 1)), (1, 0));
+    let center = selected_image(&app).geometric_bounds().unwrap().center();
+    assert!((center.x - want.x).abs() < 1e-6 && (center.y - want.y).abs() < 1e-6, "{center:?} vs {want:?}");
+}
+
+#[test]
+fn a_browser_drop_cannot_reach_an_inactive_tile_through_a_floating_window() {
+    let mut app = app();
+    let ctx = window(&app);
+    for _ in 0..2 {
+        app.run("file.new", json!({"width": 600, "height": 500})).unwrap();
+    }
+    app.run("window.arrange.tile", json!({})).unwrap();
+    app.run("window.arrange.floatInWindow", json!({"index": 2, "at": [45, 130]})).unwrap();
+    app.run("document.activate", json!({"index": 1})).unwrap();
+    laid_out(&mut app, &ctx);
+    assert_eq!(app.session.active_index(), Some(1));
+
+    let (tile, _) = app.canvas.panes.last.iter().copied().find(|(w, _)| w.0 == 0).unwrap();
+    let tile = crate::doc_windows::view(&app, tile).unwrap().rect;
+    let floating = crate::doc_windows::view(&app, (2, app.ui.floating[0].view)).unwrap().rect;
+    let overlap = tile.intersect(floating);
+    assert!(overlap.is_positive(), "the floating window {floating:?} covers part of the tile {tile:?}");
+    let pos = overlap.center();
+    assert!(!app.canvas_view().unwrap().rect.contains(pos));
+    assert_eq!(app.drop_target("covered.png", app.drop_spot(Some(pos)), false), DropTarget::Open);
 }
 
 /// The web reads dropped files asynchronously (#359): a file that arrives after another document

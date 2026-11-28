@@ -33,6 +33,9 @@ mod live_paint;
 mod lookup;
 mod map;
 
+#[cfg(all(feature = "testing", not(target_arch = "wasm32")))]
+pub mod testing;
+
 use cache::{BACKGROUND_SEGMENTS, CacheKey, RegionCache};
 pub use fill_area::{AreaFinder, EnclosedArea, FillAreaTool, every_layer, fill_area_roots};
 #[cfg(test)]
@@ -260,7 +263,13 @@ struct PendingMerge {
 #[cfg(not(target_arch = "wasm32"))]
 fn spawn_merge(map: Arc<BuilderMap>, touched: Touched, gap: f64, inputs: Vec<MergeInput>) -> Option<Receiver<MergeGeometry>> {
     let (tx, done) = std::sync::mpsc::channel();
+    #[cfg(feature = "testing")]
+    let gate = testing::take();
     let spawned = std::thread::Builder::new().name("vectorcraft-shape-builder-merge".into()).spawn(move || {
+        #[cfg(feature = "testing")]
+        if let Some(gate) = gate {
+            gate.wait();
+        }
         // The tool may have dropped the receiver meanwhile (another tool, another document).
         let _ = tx.send(merge_geometry(&map, &touched, gap, &inputs));
     });

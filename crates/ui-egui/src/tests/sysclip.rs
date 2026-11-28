@@ -398,6 +398,90 @@ fn our_own_copy_pastes_the_lossless_internal_clipboard() {
     assert!(matches!(pasted(&app)[0].kind, NodeKind::Path { .. }));
 }
 
+/// SVG markup of three closed paths, a group of two more and a compound path with a hole: five
+/// objects.
+fn closed_paths_svg() -> String {
+    let mut svg = String::from(r#"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">"#);
+    for x in [10, 20, 30] {
+        svg.push_str(&format!(r##"<path d="M{x} 10h4v4h-4z" fill="#336699"/>"##));
+    }
+    svg.push_str(r#"<g><path d="M200 200h2v2h-2z"/><path d="M204 200h2v2h-2z"/></g>"#);
+    svg.push_str(r#"<path fill-rule="evenodd" d="M210 200h6v6h-6zM212 202h2v2h-2z"/></svg>"#);
+    svg
+}
+
+/// Paste the objects of [`closed_paths_svg`] from another app and select them all → their count.
+fn paste_closed_paths(app: &mut VectorcraftApp, board: &Arc<Mutex<Board>>) -> usize {
+    copy_elsewhere(board, vec![(SVG, closed_paths_svg().into_bytes())]);
+    run(app, "edit.paste", json!({}));
+    run(app, "select.all", json!({}));
+    let objects = count(app);
+    assert_eq!(app.session.active().unwrap().selection.objects.len(), objects);
+    objects
+}
+
+/// A Copy or Cut whose formats can't be written to the system clipboard (another app holds it
+/// open, or refuses the write) stays what every Paste command takes while nothing else is copied,
+/// also when its formats have no text; the clipboard's older text does not replace it, and a paste
+/// into text takes the copy's text, or nothing. A later copy in another app still wins. A later copy is
+/// noticed only when it changes the clipboard's text, so when the clipboard held only a picture,
+/// or could not be read (another app holds it open), Paste takes what the clipboard holds.
+#[test]
+fn a_copy_the_system_clipboard_refused_still_pastes_the_copied_art() {
+    type Fail = fn(&Arc<Mutex<Board>>, bool);
+    // Case, Copy or Cut, how the write fails, On Copy: Include SVG Code, the other app's copy
+    // before it is a picture, Paste takes the copied art.
+    let cases: [(&str, &str, Fail, bool, bool, bool); 5] = [
+        ("refused", "edit.cut", refuse_writes, true, false, true),
+        ("refused, no text", "edit.cut", refuse_writes, false, false, true),
+        ("refused copy", "edit.copy", refuse_writes, true, false, true),
+        ("locked", "edit.cut", lock, true, false, false),
+        ("refused, over a picture", "edit.cut", refuse_writes, true, true, false),
+    ];
+    let pastes =
+        ["edit.paste", "edit.pasteInFront", "edit.pasteInBack", "edit.pasteInPlace", "edit.pasteOnAllArtboards", "edit.pasteWithoutFormatting"];
+    for (case, op, fail, svg_text, over_picture, kept) in cases {
+        let (mut app, board) = app();
+        run(&mut app, "prefs.set", json!({"key": "copyAsSvg", "value": svg_text}));
+        let objects = paste_closed_paths(&mut app, &board);
+        if over_picture {
+            copy_elsewhere(&board, vec![(PNG, blue_png())]);
+        } else {
+            copy_elsewhere(&board, vec![(TEXT, b"Words another app copied".to_vec())]);
+        }
+        fail(&board, true);
+        run(&mut app, op, json!({}));
+        background::wait_all(&mut app);
+        fail(&board, false);
+        assert!(app.ui.status.starts_with("Couldn't copy to the system clipboard"), "{case}: {}", app.ui.status);
+        let left = if op == "edit.cut" { 0 } else { objects };
+        assert_eq!(count(&app), left, "{case}");
+        if !kept {
+            run(&mut app, "edit.paste", json!({}));
+            match &pasted(&app)[0].kind {
+                NodeKind::Image { .. } => assert!(over_picture, "{case}: the picture"),
+                NodeKind::Text(t) => assert_eq!((over_picture, t.plain_text().as_str()), (false, "Words another app copied"), "{case}"),
+                kind => panic!("{case}: not what the clipboard holds: {kind:?}"),
+            }
+            continue;
+        }
+        let text = app.written_clipboard_text();
+        assert_eq!(text.is_some(), svg_text, "{case}: a paste into text takes the copy's text, or nothing: {text:?}");
+        assert!(text.is_none_or(|t| t.contains("<svg")), "{case}: the copy's text");
+        for (i, paste) in pastes.into_iter().enumerate() {
+            run(&mut app, paste, json!({}));
+            let p = pasted(&app);
+            assert_eq!(p.len(), objects, "{case}, {paste}: the copied art, not the other app's copy");
+            assert!(p.iter().all(|n| !matches!(n.kind, NodeKind::Text(_) | NodeKind::Image { .. })), "{case}, {paste}");
+            assert_eq!(count(&app), left + objects * (i + 1), "{case}, {paste}");
+        }
+        copy_elsewhere(&board, vec![(TEXT, b"Newer words".to_vec())]);
+        run(&mut app, "edit.paste", json!({}));
+        let NodeKind::Text(t) = &pasted(&app)[0].kind else { panic!("{case}: not the newer copy") };
+        assert_eq!(t.plain_text(), "Newer words", "{case}");
+    }
+}
+
 /// Copy returns before the system clipboard's formats are made: the background worker makes them
 /// (here after another Copy's) and they are written when it is done. A paste meanwhile takes what
 /// was copied, and neither the status bar nor `ui.inspect` shows the work.
@@ -652,6 +736,62 @@ fn the_menus_paste_into_a_field_waits_for_the_formats() {
     assert_eq!(app.background.jobs.len(), 1, "the save is still running");
     drop(hold);
     background::wait_all(&mut app);
+}
+
+/// The Edit menu's Paste into a text field after a Copy whose formats have no text (On Copy:
+/// Include SVG Code off) and could not be written: the field takes nothing, not the text another
+/// app left on the clipboard, and the copied art is not pasted onto the canvas.
+#[test]
+fn the_menus_paste_into_a_field_after_a_refused_textless_copy_takes_nothing() {
+    let (mut app, board) = app();
+    run(&mut app, "prefs.set", json!({"key": "copyAsSvg", "value": false}));
+    let rect = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20}))["id"].clone();
+    run(&mut app, "select.set", json!({"ids": [rect]}));
+    copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
+    refuse_writes(&board, true);
+    run(&mut app, "edit.copy", json!({}));
+    background::wait_all(&mut app);
+    refuse_writes(&board, false);
+    let objects = count(&app);
+    // A text field with the keyboard; in the second frame Paste is chosen from the menu.
+    let (ctx, id, mut field) = (crate::testing::ui_context(), egui::Id::unique("field"), String::new());
+    for paste in [false, true] {
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            if paste {
+                craft::ui::runtime::commands::fire(ui.ctx(), "edit.paste", craft::ui::runtime::commands::FireSource::Menu);
+                for fired in &craft::ui::runtime::frame::take_output(ui.ctx()).fired {
+                    crate::shortcuts::run_fired(&mut app, ui.ctx(), fired);
+                }
+            }
+            ui.add(egui::TextEdit::singleline(&mut field).id(id)).request_focus();
+        });
+        out.textures_delta.clear();
+    }
+    assert_eq!(field, "", "the field takes nothing");
+    assert_eq!(count(&app), objects, "nothing is pasted onto the canvas");
+}
+
+/// A Copy whose formats could not be written stops being what Paste takes once different text is
+/// seen on the clipboard: when another app later puts the older text back, Paste takes that text,
+/// not the copied art.
+#[test]
+fn a_refused_copy_stays_replaced_when_the_older_text_comes_back() {
+    let (mut app, board) = app();
+    let rect = run(&mut app, "shape.rectangle", json!({"x": 10, "y": 10, "width": 40, "height": 20}))["id"].clone();
+    run(&mut app, "select.set", json!({"ids": [rect]}));
+    copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
+    refuse_writes(&board, true);
+    run(&mut app, "edit.copy", json!({}));
+    background::wait_all(&mut app);
+    refuse_writes(&board, false);
+
+    copy_elsewhere(&board, vec![(TEXT, b"New".to_vec())]);
+    assert_eq!(app.written_clipboard_text().as_deref(), Some("New"));
+    copy_elsewhere(&board, vec![(TEXT, b"Old".to_vec())]);
+    assert_eq!(app.written_clipboard_text().as_deref(), Some("Old"), "a paste into text");
+    run(&mut app, "edit.paste", json!({}));
+    let NodeKind::Text(t) = &pasted(&app)[0].kind else { panic!("the copied art, not the clipboard's text") };
+    assert_eq!(t.plain_text(), "Old");
 }
 
 /// A paste chord into type being edited, before the formats are written: the formats are written

@@ -213,6 +213,85 @@ fn effect_dialog_refuses_a_color_it_cannot_draw() {
     }
 }
 
+/// Drop Shadow's, Inner Glow's and Outer Glow's Mode is a blend-mode menu of every mode the effect draws, opening on the
+/// effect's default, in the dialog and in the Appearance panel's editor (the same rows over the stored values, where a
+/// mode in another spelling shows as its menu entry). Picking Multiply in a glow's dialog stores `multiply`, and a mode
+/// the menu lacks is refused as it is set.
+#[test]
+fn shadow_and_glow_dialogs_pick_mode_from_a_blend_mode_menu() {
+    use craft::ui::patterns::form_dialogs::{DialogFields, FieldValue, ParamKind};
+    let modes: Vec<String> = vectorcraft_doc::color::BlendMode::ALL.into_iter().map(vectorcraft_effects::blend_mode_id).collect();
+    for (effect, default) in [("stylize.dropShadow", "multiply"), ("stylize.innerGlow", "screen"), ("stylize.outerGlow", "screen")] {
+        let mut app = app();
+        for editing in [false, true] {
+            let cx = super::effect_params::EffectCx::new(&app, effect, editing);
+            let rows = super::effect_params::effect_params(&cx, &DialogFields::new());
+            let row = rows.iter().find(|p| p.key == "mode").unwrap_or_else(|| panic!("{effect}: a Mode row"));
+            let ParamKind::Blend { modes: listed, default: shown, .. } = &row.kind else { panic!("{effect}: Mode is {:?}", row.kind) };
+            let listed: Vec<String> = listed.iter().map(|(entry, _)| entry.key.clone()).collect();
+            assert_eq!(listed, modes, "{effect}");
+            assert_eq!(shown.as_deref(), Some(default), "{effect}");
+            let stored = serde_json::Map::from_iter([("mode".to_string(), json!("Color Burn"))]);
+            let fields = super::form::fields_of(&rows, &stored);
+            assert_eq!(fields.get("mode"), Some(&FieldValue::from("colorBurn")), "{effect}");
+        }
+        let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+        app.run("select.all", json!({})).unwrap();
+        app.run("effect.dialog", json!({"effect": effect})).unwrap();
+        settle(&mut app);
+        assert_eq!(fields(&app)["mode"], json!(default), "{effect}");
+        let (dialog, ctx) = (top(&app).0, app.ui_ctx.clone().expect("a window app"));
+        let refused = app.dialogs().expect("a window app").with(|h| h.set_json_field(&ctx, dialog, "mode", json!("multipy")));
+        assert!(refused.is_err(), "{effect}: a mode the menu lacks");
+        let want = if default == "multiply" { "colorBurn" } else { "multiply" };
+        let mode = if default == "multiply" { "Color Burn" } else { "Multiply" };
+        let params = match effect {
+            "stylize.dropShadow" => json!({"field": "mode", "value": mode}),
+            "stylize.innerGlow" => json!({"dialog": dialog.value(), "fields": [{"field": "mode", "value": mode}]}),
+            _ => json!({"dialog": dialog.value().to_string(), "fields": [{"field": "mode", "value": mode}]}),
+        };
+        crate::tests_synthetic::control(&mut app, &ctx, "ui.dialog.set", params);
+        assert_eq!(fields(&app)["mode"], json!(want));
+        frame(&mut app, vec![]);
+        assert!(confirm(&mut app), "{effect}");
+        let n = app.session.doc().unwrap().doc.node(vectorcraft_doc::NodeId(id)).unwrap().clone();
+        assert_eq!(n.appearance.effects[0].params["mode"], json!(want), "{effect}");
+    }
+}
+
+/// Confirming an untouched legacy mode keeps the file's value and does not add an undo step.
+/// Choosing a different mode updates the stored value.
+#[test]
+fn unchanged_effect_dialog_preserves_legacy_blend_modes() {
+    let mut app = app();
+    let id = app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 50})).unwrap()["id"].as_u64().unwrap();
+    let effect = "stylize.dropShadow";
+    app.run("effect.apply", json!({"ids": [id], "effect": effect, "item": null})).unwrap();
+    for (old_mode, shown_mode) in [(Value::Null, "multiply"), (json!("multipy"), "normal")] {
+        app.session.replay("effect.setParams", &json!({"ids": [id], "index": 0, "item": null, "params": {"mode": old_mode}})).unwrap();
+        let before = app.session.doc().unwrap().history.undo.len();
+        app.run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
+        settle(&mut app);
+        assert_eq!(fields(&app)["mode"], json!(shown_mode));
+        assert!(confirm(&mut app));
+        let state = app.session.doc().unwrap();
+        let n = state.doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        assert_eq!(n.appearance.effects[0].params.get("mode"), Some(&old_mode));
+        assert_eq!(state.history.undo.len(), before);
+
+        app.run("effect.dialog", json!({"effect": effect, "index": 0, "item": null})).unwrap();
+        settle(&mut app);
+        let ctx = app.ui_ctx.clone().expect("a window app");
+        crate::tests_synthetic::control(&mut app, &ctx, "ui.dialog.set", json!({"field": "mode", "value": "Screen"}));
+        frame(&mut app, vec![]);
+        assert!(confirm(&mut app));
+        let state = app.session.doc().unwrap();
+        let n = state.doc.node(vectorcraft_doc::NodeId(id)).unwrap();
+        assert_eq!(n.appearance.effects[0].params["mode"], json!("screen"));
+        assert_eq!(state.history.undo.len(), before + 1);
+    }
+}
+
 /// After File › Document Color Mode, a Drop Shadow's, an Outer Glow's and a Shift to Color's dialog open on the
 /// converted color, and OK without editing it keeps the color.
 #[test]

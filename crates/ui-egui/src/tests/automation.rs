@@ -1105,10 +1105,17 @@ fn a_screenshot_reply_hides_paths_like_any_reply() {
 
 /// `ui.screenshot` is answered from the app's own frames: once the request settles, a kept pass sends
 /// the window's screenshot command, and the image the window gives back is written where the request
-/// asked.
+/// asked. The settle delay and the capture's deadline count on the app's clock, which the test steps
+/// one frame at a time, so a slow machine does not reach the deadline.
 #[test]
 fn a_screenshot_is_issued_by_the_apps_frames_and_written() {
+    use craft::automation::screenshot::DEADLINE;
     let (mut app, tx, base) = confined("screenshot-frames");
+    // The app's clock starts past the wall clock by twice the deadline: a capture timed on the wall
+    // clock anywhere on its path is answered as expired, or never comes due.
+    let start = 2.0 * DEADLINE.as_secs_f64();
+    let frame = 1.0 / 60.0;
+    app.now_override = Some(start);
     let ctx = app.ui_ctx.clone().unwrap();
     let size = egui::vec2(800.0, 600.0);
     let raw = || {
@@ -1121,11 +1128,13 @@ fn a_screenshot_is_issued_by_the_apps_frames_and_written() {
     let path = base.join("out/shot.png");
     let (req, reply) = ControlRequest::new("ui.screenshot", json!({"path": s(path.clone()), "focus": false}));
     tx.send(req).unwrap();
-    // The settle delay runs on the wall clock: frames come until it is over, as an idle window's do. The
-    // request's own deadline (`craft::automation::screenshot::DEADLINE`) answers it with an error when no
-    // frame issues it in time, so the loop ends on the reply.
+    // Frames come until the settle delay is over, as an idle window's do, each a frame's time later on
+    // the app's clock. The capture's deadline is never reached on that clock while it is issued in time.
     let callback = loop {
+        let now = app.now_override.unwrap_or(start);
+        assert!(now - start < DEADLINE.as_secs_f64(), "no frame issued the screenshot before its deadline");
         let out = crate::testing::app_frame(&mut app, &ctx, raw());
+        app.now_override = Some(now + frame);
         let sent = out.viewport_output.get(&egui::ViewportId::ROOT).and_then(|root| {
             root.commands.iter().find_map(|c| if let egui::ViewportCommand::Screenshot(callback) = c { Some(callback.clone()) } else { None })
         });
