@@ -7687,6 +7687,52 @@ fn a_tall_arch_over_a_thin_shapes_side_keeps_the_shape() {
     }
 }
 
+/// A stroke across a closed shape keeps the side the outline flows on from: the outline runs on
+/// into the stroke the way the stroke leaves it, and the stroke joins it again where it lands if it
+/// meets it flowing the same way. So the same cut keeps the small piece or the big one, by how the
+/// stroke leaves and meets the outline, not by size, whichever way it is drawn. Meeting it against
+/// its flow, the stroke can't join: nothing is cut, the shape opens where the stroke starts and ends
+/// where it is lifted.
+#[test]
+fn a_stroke_across_a_shape_keeps_the_side_the_outline_flows_on_from() {
+    // Down through a wide rectangle from its top edge at x = 60 to its bottom edge at x = 80; `lean`
+    // is how the stroke leaves the top (x per 8 down) and `land` how it meets the bottom.
+    let cut = |lean: f64, land: f64| {
+        vec![json!([60, 0]), json!([60.0 + lean, 8]), json!([64, 30]), json!([75, 50]), json!([66, 70]), json!([80.0 - land, 92]), json!([80, 100])]
+    };
+    for reversed in [false, true] {
+        for (lean, land, small) in [(4.0, -4.0, true), (-4.0, 4.0, false)] {
+            let mut s = session();
+            let id = rect(&mut s, 0.0, 0.0, 300.0, 100.0);
+            let mut pts = cut(lean, land);
+            if reversed {
+                pts.reverse();
+            }
+            s.execute("path.freehand", &json!({"points": pts, "redraw": {"id": id.0, "within": 4}})).unwrap();
+            assert_eq!(paths(&s).len(), 1, "no new path");
+            let sp = &path(&s, id).subpaths[0];
+            assert!(sp.closed, "lean {lean}, reversed {reversed}: cut cleanly");
+            let b = kurbo::Shape::bounding_box(&path(&s, id).to_bezpath());
+            if small {
+                assert!(b.x0 < 1.0 && b.x1 < 100.0, "lean {lean}, reversed {reversed}: the small left piece stays: {b:?}");
+            } else {
+                assert!(b.x0 > 50.0 && b.x1 > 299.0, "lean {lean}, reversed {reversed}: the big right piece stays: {b:?}");
+            }
+        }
+    }
+    // Leaving the top towards the right and meeting the bottom heading right too: against the flow.
+    let mut s = session();
+    let id = rect(&mut s, 0.0, 0.0, 300.0, 100.0);
+    s.execute("path.freehand", &json!({"points": cut(4.0, 4.0), "redraw": {"id": id.0, "within": 4}})).unwrap();
+    assert_eq!(paths(&s).len(), 1, "no new path");
+    let sp = &path(&s, id).subpaths[0];
+    assert!(!sp.closed, "the shape opened");
+    for corner in [(0.0, 0.0), (300.0, 0.0), (300.0, 100.0), (0.0, 100.0)] {
+        assert!(sp.anchors.iter().any(|a| near(a.p, Point::new(corner.0, corner.1))), "nothing cut: {corner:?} kept: {sp:?}");
+    }
+    assert!(ends_at(sp, Point::new(60.0, 0.0), Point::new(80.0, 100.0), 0.5), "from where the stroke starts to where it is lifted: {sp:?}");
+}
+
 /// A stroke that comes back near the path, within Edit selected paths within but not on it, joins
 /// it again: the shape stays one closed path, and the stroke's end bends onto it, so no anchor
 /// lies off the stroke's way back.

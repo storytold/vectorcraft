@@ -205,7 +205,8 @@ fn bend_ends(stroke: &mut Vec<Point>, a: Option<Point>, b: Option<Point>, reach:
 /// so that it arrives there heading the stroke's way. An open subpath is cut there and keeps the
 /// part behind the stroke: the part the stroke heads along is dropped. The subpath's index and its
 /// new shape; None when the stroke doesn't start on `pd`. `runs_up`, when given, says which part of
-/// an open subpath the stroke heads along: the part towards its last anchor when true.
+/// an open subpath the stroke heads along: the part towards its last anchor when true; on a closed
+/// one, true runs the outline forward into the stroke ([`flow_at`]).
 fn redraw_extend(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64, runs_up: Option<bool>) -> Option<(usize, SubPath)> {
     let first = *pts.first()?;
     let (si, _, _, _, d) = pd.nearest(first)?;
@@ -226,7 +227,7 @@ fn redraw_extend(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64, ru
     let dir = heading(pts, within.max(tol.unwrap_or(0.0) * 2.0))?;
     let cos = forward_at(&sp, k).map_or(0.0, |f| f.dot(dir) / (f.hypot() * dir.hypot()).max(1e-12));
     let flipped = if sp.closed {
-        cos < 0.0
+        runs_up.map_or(cos < 0.0, |up| !up)
     } else if k == 0 || k == last {
         k == 0
     } else if let Some(up) = runs_up {
@@ -285,6 +286,34 @@ fn redraw_loop(mut sp: SubPath, k: usize, pts: &[Point], tol: Option<f64>, withi
     anchors.extend_from_slice(&sp.anchors.get_range(k + 1..)?);
     sp.anchors = anchors.into();
     Some(sp)
+}
+
+/// The way closed subpath `sp` flows through anchor `k` into or out of a stroke heading `dir` there:
+/// true when forward (towards the next anchor). The outline runs on into the stroke, or the stroke
+/// on into the outline, with no hairpin turn, so it flows forward when `dir` heads along the side
+/// of `k` towards the next anchor more than along the side towards the one before. None when it
+/// heads along both alike, as straight across a smooth outline.
+fn flow_at(sp: &SubPath, k: usize, dir: kurbo::Vec2) -> Option<bool> {
+    let n = sp.anchors.len();
+    let fwd = forward_at(sp, k)?;
+    // Backward: the way the outline leaves `k` towards the anchor before it.
+    let a = sp.anchors.get(k)?;
+    let prev = sp.anchors.get((k + n - 1) % n)?;
+    let toward = if a.h_in != a.p {
+        a.h_in
+    } else if prev.h_out != prev.p && prev.h_out != a.p {
+        prev.h_out
+    } else {
+        prev.p
+    };
+    let back = toward - a.p;
+    if back.hypot() <= 1e-9 {
+        return None;
+    }
+    let unit = |v: kurbo::Vec2| v / v.hypot().max(1e-12);
+    let (d, f, b) = (unit(dir), unit(fwd), unit(back));
+    let (along_f, along_b) = (d.dot(f), d.dot(b));
+    if (along_f - along_b).abs() < 1e-9 { None } else { Some(along_f > along_b) }
 }
 
 /// The area closed subpath `sp` would have with `stroke` (running from anchor `start` to anchor
@@ -425,8 +454,11 @@ fn redraw_across_gap(sp: &SubPath, from: usize, to: usize, pts: &[Point], tol: O
 
 /// Pencil's Edit Selected Paths in the middle of a path: a stroke that starts and ends within
 /// `within` of a subpath of `pd` replaces the section between with the stroke fitted at `tol` (with
-/// no `tol`, unfitted), its ends bent onto the path ([`bend_ends`]). On a closed subpath that is the
-/// way round that leaves the bigger shape. On an open one the way the stroke runs along the path
+/// no `tol`, unfitted), its ends bent onto the path ([`bend_ends`]). On a closed subpath the way the
+/// outline flows decides ([`flow_at`]): it opens where the stroke starts and runs on into it, the
+/// way the stroke leaves it. Where the stroke lands it joins the outline if it meets it flowing
+/// the same way, and the piece behind is cut off; meeting it the other way it can't join, and the
+/// shape stays open, ending where the stroke is lifted. On an open one the way the stroke runs along the path
 /// at its ends decides ([`open_redraw`]): it replaces the part between, keeps the part between and
 /// closes the path, or ends where it is lifted. The subpath's index and its new shape; None when
 /// the stroke doesn't start and end on the same subpath.
@@ -464,12 +496,21 @@ fn redraw_section(pd: &PathData, pts: &[Point], tol: Option<f64>, within: f64) -
     // The stroke goes from `start` to `end` and replaces the run between them; `kept` runs from
     // `end` round to `start`, then the stroke's inner anchors follow.
     let (start, end, reversed) = if sp.closed {
-        // The bigger of the two shapes the stroke could make stays: carving across a shape replaces
-        // the part it cuts off, drawing round outside it the part it goes round. Picking the side
-        // nearer the stroke instead threw away a thin shape under a tall arch over its long side.
-        let forward = redrawn_area(&sp, from, to, pts.iter().copied());
-        let backward = redrawn_area(&sp, to, from, pts.iter().rev().copied());
-        if forward >= backward { (from, to, false) } else { (to, from, true) }
+        // The outline flows on into the stroke where it starts, and on out of it where it lands:
+        // forward keeps the run from `to` forward round to `from` and replaces the rest. An end
+        // that leaves or meets the outline squarely follows the other end; when both do, the
+        // bigger of the two shapes the stroke could make stays.
+        let reach = within.max(tol.unwrap_or(0.0) * 2.0);
+        let leaves = heading(pts, reach).and_then(|d| flow_at(&sp, from, d));
+        let rev: Vec<Point> = pts.iter().rev().copied().collect();
+        let lands = heading(&rev, reach).and_then(|d| flow_at(&sp, to, -d));
+        let forward = match (leaves, lands) {
+            // Meeting the outline against its flow: it can't join, so the shape stays open.
+            (Some(s), Some(e)) if s != e => return redraw_extend(pd, pts, tol, within, Some(s)),
+            (Some(f), _) | (None, Some(f)) => f,
+            (None, None) => redrawn_area(&sp, from, to, pts.iter().copied()) >= redrawn_area(&sp, to, from, pts.iter().rev().copied()),
+        };
+        if forward { (from, to, false) } else { (to, from, true) }
     } else if from < to {
         (from, to, false)
     } else {
