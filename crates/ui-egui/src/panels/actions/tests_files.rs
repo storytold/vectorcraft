@@ -8,6 +8,52 @@ use super::*;
 use crate::dialogs::action_batch::BatchDialog;
 
 #[test]
+fn browser_picks_load_and_replace_action_sets_without_a_file_reader() {
+    let native = json!({
+        "format": "vcactions", "version": 1, "name": "Browser",
+        "actions": [{"name": "Group", "steps": [{"command": "object.group", "params": {}}]}]
+    })
+    .to_string();
+    let mut aia = aia_text("", &[("Group", &[("group", true)])]).into_bytes();
+    // AIA's text encoding is not required to be UTF-8.
+    aia.extend(b"/note (\xFF)\n");
+    for command in [LOAD_SET, REPLACE_SET] {
+        for (name, bytes) in [("Browser.vcactions", native.as_bytes()), ("Browser.aia", aia.as_slice())] {
+            let mut app = app_with_sets();
+            app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+            let picker = crate::tests::picks::scripted(&mut app);
+            app.services.read = None;
+            app.services.read_head = None;
+            let before = saved_sets(&app);
+            let undo = undo_steps(&app);
+            app.run(command, json!({})).unwrap();
+            picker.cancel();
+            crate::file_asks::poll(&mut app);
+            assert_eq!(saved_sets(&app), before, "cancel keeps the sets");
+            for invalid in [vec![0xff], vec![b' '; files::MAX_SET_FILE + 1]] {
+                app.run(command, json!({})).unwrap();
+                picker.answer_contents(&[(name, &invalid)]);
+                crate::file_asks::poll(&mut app);
+                assert_eq!(saved_sets(&app), before, "invalid picked bytes keep the sets");
+                assert!(!app.ui.status.is_empty(), "a rejected file reports why");
+            }
+            app.run(command, json!({})).unwrap();
+            picker.answer_contents(&[(name, bytes)]);
+            crate::file_asks::poll(&mut app);
+            let names = set_names(&app);
+            assert_eq!(names.last().map(String::as_str), Some("Browser"));
+            if command == REPLACE_SET {
+                assert_eq!(names, ["Browser"]);
+            } else {
+                assert!(names.len() > 1, "Load keeps existing sets");
+            }
+            assert_eq!(set_actions(&app, names.len() - 1)[0].steps, [ActionStep::new("object.group", json!({}))]);
+            assert_eq!(undo_steps(&app), undo, "loading actions does not edit the drawing");
+        }
+    }
+}
+
+#[test]
 fn defaults_are_valid_commands() {
     for a in default_sets().actions {
         for step in a.steps {

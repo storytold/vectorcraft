@@ -160,8 +160,8 @@ pub(crate) fn above(saved: Option<usize>, built_ins: usize) -> usize {
     (saved.unwrap_or(0) + built_ins).saturating_sub(1)
 }
 
-/// Ask for a preset file and run `command` on it, then select the first preset it imported in the open manager
-/// `key`. Returns at once: the answer arrives later.
+/// Ask for a preset file and run `command` on it. Select the first imported preset if the manager
+/// that opened the picker is still open.
 pub(crate) fn import(
     app: &mut VectorcraftApp,
     key: &'static str,
@@ -169,14 +169,20 @@ pub(crate) fn import(
     filter: &str,
     exts: &[&str],
 ) -> Result<Option<String>, String> {
-    // PLAN: assumed `file_asks::open_params(&Picked) -> Option<Map<String, Value>>` (fl.A23) also names a picked file
-    // of the web, which the import commands may not read yet.
+    let id = dialog_id(key);
+    let opening = with_manager(app, id, |manager| Arc::clone(&manager.opening));
     let request = PickRequest::open(key).filter(filter, exts);
     file_asks::ask(app, request, Owner::Free, move |app, picked| {
-        let params = file_asks::open_params(&picked).ok_or("cancelled")?;
+        let mut params = file_asks::open_params(&picked).ok_or("cancelled")?;
+        // Preset import commands take the file contents without the browser's suggested name.
+        params.remove("name");
         let imported = app.run(command, Value::Object(params))?;
-        if let Some(first) = imported["imported"].get(0).and_then(Value::as_str) {
-            with_manager(app, dialog_id(key), |manager| manager.selected = first.to_owned());
+        if let (Some(opening), Some(first)) = (opening, imported["imported"].get(0).and_then(Value::as_str)) {
+            with_manager(app, id, |manager| {
+                if Arc::ptr_eq(&opening, &manager.opening) {
+                    manager.selected = first.to_owned();
+                }
+            });
         }
         Ok(imported)
     });
@@ -220,6 +226,8 @@ fn with_manager<R>(app: &VectorcraftApp, id: DialogId, f: impl FnOnce(&mut Prese
 /// A preset manager dialog: draws the rows and the detail it holds and queues the user's events.
 pub(crate) struct PresetManager {
     id: DialogId,
+    /// Distinguishes successive openings that share the same dialog ID.
+    opening: Arc<()>,
     source: &'static Source,
     title: Label,
     rows: Vec<ManagerRow>,
@@ -237,6 +245,7 @@ impl PresetManager {
     fn new(source: &'static Source, rows: Vec<ManagerRow>, selected: String, stored: Value, detail: Vec<Detail>) -> Self {
         let mut manager = PresetManager {
             id: dialog_id(source.key),
+            opening: Arc::new(()),
             source,
             title: Label::from((source.title)()),
             rows: Vec::new(),

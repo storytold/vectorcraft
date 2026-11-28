@@ -5344,6 +5344,8 @@ mark-style	Japanese	Japán
 	VectorCraft didn't quit normally last time. These documents had unsaved changes:	A VectorCraft legutóbb nem szabályosan lépett ki. Ezekben a dokumentumokban mentetlen módosítások voltak:
 	VectorCraft documents: one locked object, updated when the file changes.	VectorCraft-dokumentumok: egyetlen zárolt objektum, amely a fájl változásakor frissül.
 	VectorCraft Generic CMYK (SWOP-like)	VectorCraft általános CMYK (SWOP-szerű)
+	VectorCraft Coated CMYK (FOGRA51)	VectorCraft mázolt CMYK (FOGRA51)
+	VectorCraft Uncoated CMYK (FOGRA52)	VectorCraft mázolatlan CMYK (FOGRA52)
 	VectorCraft Help…	VectorCraft súgó…
 	VectorCraft on getartcraft.com	A VectorCraft a getartcraft.com oldalon
 	VectorCraft on GitHub	A VectorCraft a GitHubon
@@ -5774,6 +5776,14 @@ imageTrace	Outline	Körvonal
 	The script asks to read and write a folder you choose, with everything in it.	A parancsfájl egy Ön által választott mappa és teljes tartalma olvasását és írását kéri.
 	Allow Once	Engedélyezés egyszer
 	Always Allow This Script	A parancsfájl engedélyezése mindig
+	No script has kept file access.	Egy parancsfájlnak sincs megőrzött fájlhozzáférése.
+	Read file	Fájl olvasása
+	Read and write file	Fájl olvasása és írása
+	Read and write folder	Mappa olvasása és írása
+	Revoke	Engedély visszavonása
+	Revoke removes the access kept for every version of the script. A folder's access covers everything in it.	Az Engedély visszavonása a parancsfájl minden verziójához megőrzött hozzáférést eltávolítja. Egy mappához való hozzáférés a teljes tartalmára kiterjed.
+@msg	Script file access revoked	A parancsfájl fájlhozzáférése visszavonva
+@msg	The script file access was already revoked	A parancsfájl fájlhozzáférése már vissza volt vonva
 	Deny	Elutasítás
 	A script can change the open documents and can write files through the commands it runs. Run only scripts you trust.	A parancsfájl módosíthatja a megnyitott dokumentumokat, és a futtatott parancsokkal fájlokat írhat. Csak megbízható parancsfájlokat futtasson.
 	Do not show this warning again	Ne jelenjen meg többé ez a figyelmeztetés
@@ -5951,6 +5961,7 @@ liquify-list-end	{0}, {1}	{0} és {1}
 @msg	`answer` for a script's file dialog must be one of: once, always, deny, stop	a parancsfájl fájlpárbeszédpaneléhez tartozó `answer` értéke a következők egyike kell legyen: once, always, deny, stop
 @msg	choose a file or folder first, or deny	először válasszon fájlt vagy mappát, vagy utasítsa el
 @msg	the script file permissions could not be saved: {e}	a parancsfájlok fájlengedélyeit nem sikerült menteni: {e}
+@msg	the script file permissions could not be read: {e}	a parancsfájlok fájlengedélyeit nem sikerült beolvasni: {e}
 @msg	this script's file access can be allowed only once	ennek a parancsfájlnak a fájlhozzáférése csak egyszer engedélyezhető
 @msg	Only the person at the keyboard can allow a script's file access	Parancsfájl fájlhozzáférését csak a billentyűzetnél ülő személy engedélyezheti
 @msg	A script is given at most 2,048 files: the files picked after them were left out	Egy parancsfájl legfeljebb 2 048 fájlt kap: az ezek után kiválasztott fájlok kimaradtak
@@ -7529,6 +7540,35 @@ axis	Y Axis	Y tengely
 @msg	`inputs` lists `{shown}` twice	az `inputs` kétszer sorolja fel ezt: `{shown}`
 @msg	`inputs` needs `api` 2 or later	az `inputs` használatához `api` 2 vagy újabb szükséges
 @msg	`inputs` needs the permission `doc.read`	az `inputs` használatához a(z) `doc.read` engedély szükséges
+@msg	only a filter declares `writes`	`writes` kulcsot csak szűrő adhat meg
+@msg	`writes` names an unknown object kind `{shown}`: use type, image or symbolInstance	a `writes` ismeretlen objektumfajtát nevez meg: `{shown}`; használja a type, image vagy symbolInstance értéket
+@msg	`writes` lists `{shown}` twice	a `writes` kétszer sorolja fel ezt: `{shown}`
+@msg	`writes` lists `{shown}`, which `inputs` doesn't list	a `writes` felsorolja ezt: `{shown}`, de az `inputs` nem sorolja fel
+@msg	`writes` needs `api` {WRITES_API} or later	a `writes` használatához `api` {WRITES_API} vagy újabb szükséges
+@msg	`writes` needs the permission `doc.write`	a `writes` használatához a(z) `doc.write` engedély szükséges
+@msg	{_1} is not type, an image or a symbol instance	{_1} nem szöveg, nem kép és nem szimbólumpéldány
+@msg	the text of type given as `truncated` can't be changed	a `truncated` jelöléssel átadott szövegobjektum szövege nem módosítható
+@msg	must be a list of at most {MAX_INPUT_RUNS} entries	legfeljebb {MAX_INPUT_RUNS} elemű lista legyen
+@msg	type needs at least one run	a szövegnek legalább egy szakaszra van szüksége
+@msg	{bytes} bytes of text (limit {MAX_INPUT_TEXT})	{bytes} bájt szöveg (korlát: {MAX_INPUT_TEXT})
+@msg	{paragraphs} paragraphs (limit {MAX_INPUT_RUNS})	{paragraphs} bekezdés (korlát: {MAX_INPUT_RUNS})
+@msg	more than {MAX_INPUT_TEXT_TOTAL} bytes of text over the output	több mint {MAX_INPUT_TEXT_TOTAL} bájt szöveg a teljes kimenetben
+@msg	unknown key '{k}'	ismeretlen kulcs: '{k}'
+@msg	must be a list of 6 numbers	6 számból álló lista legyen
+@msg	a number is out of range (limit ±{MAX_COORD})	egy szám a tartományon kívül esik (korlát: ±{MAX_COORD})
+@msg	flattens the object to a line or a point	vonallá vagy ponttá lapítja az objektumot
+@msg	an object flattened to a line or a point can't be placed again	a vonallá vagy ponttá lapított objektum nem helyezhető el újra
+@msg	must be a number from 0 to 1	0 és 1 közötti szám legyen
+@msg	must be the name of a symbol	egy szimbólum neve legyen
+@msg	'{shown}' is not a symbol in this document	'{shown}' nem szimbólum ebben a dokumentumban
+@msg	a run must be {{"text", "style", "inline"?}}	egy szakasz formája {{"text", "style", "inline"?}} legyen
+@msg	`text` holds the character of an inline graphic	a `text` egy szövegközi grafika karakterét tartalmazza
+@msg	inline graphics can't be added, removed, reordered or changed	szövegközi grafikák nem adhatók hozzá, nem távolíthatók el, nem rendezhetők át és nem módosíthatók
+@msg	the characters of threaded type can't be changed	a láncolt szöveg karakterei nem módosíthatók
+@msg	the characters of type with ruby can't be changed	a rubyt tartalmazó szöveg karakterei nem módosíthatók
+@msg	expected {count} paragraph styles, one per paragraph	{count} bekezdésstílus volt várható, bekezdésenként egy
+@msg	the document has no Kinsoku set named '{shown}'	a dokumentumban nincs '{shown}' nevű Kinsoku-készlet
+@msg	must be 1-{MAX_FAMILY} printable characters	1-{MAX_FAMILY} nyomtatható karakter legyen
 	Read the objects it is given, and the document's settings, artboards, layers and swatches	Olvashatja a kapott objektumokat, valamint a dokumentum beállításait, rajztábláit, rétegeit és színmintáit
 @msg	`context` must list distinct sections: settings, artboards, layers or swatches	a `context` csak különböző szakaszokat sorolhat fel: settings, artboards, layers vagy swatches
 @msg	`context` is for a filter, or a live effect with `commands`, at `api` 3 or later with the permission `doc.read`	a `context` szűrőhöz vagy `commands` kulccsal rendelkező élő effektushoz való, `api` 3 vagy újabb mellett, a(z) `doc.read` engedéllyel
@@ -7539,6 +7579,21 @@ axis	Y Axis	Y tengely
 @msg	time budget	időkeret
 @msg	memory budget (the selection is too large to hand over)	memóriakeret (a kijelölés túl nagy az átadáshoz)
 @msg	output size ({what} is {len} bytes, limit {max})	kimenet mérete ({what}: {len} bájt, korlát {max})
+@msg	{reason} ({id}, {script} line {line}, column {column})	{reason} ({id}, {script}, {line}. sor, {column}. oszlop)
+@msg	{reason} ({id}, {script})	{reason} ({id}, {script})
+@msg	memory budget	memóriakeret
+@msg	call depth	hívási mélység
+@msg	run(input, params) returned no output object	a run(input, params) nem adott vissza kimeneti objektumot
+@msg	`runtime` "js" needs `script`: the name of the plug-in's .js file, next to the manifest	a `runtime` "js" értékhez `script` kell: a bővítmény .js fájljának neve a leíró mellett
+@msg	`script` must be the name of a .js file in the manifest's folder: 1-128 bytes, no folder, no `:`, not starting with `.`	a `script` a leíró mappájában lévő .js fájl neve legyen: 1-128 bájt, mappa nélkül, `:` nélkül, és nem kezdődhet `.` karakterrel
+@msg	`source` is the script's text, given only in the JSON that plugin.install's dataBase64 takes: a .vcplugin file names its script in `script`	a `source` a parancsfájl szövege, és csak abban a JSON-ban adható meg, amelyet a plugin.install dataBase64 paramétere fogad: a .vcplugin fájl a `script` kulcsban nevezi meg a parancsfájlját
+@msg	a JavaScript plug-in's manifest gives `runtime` "js"	egy JavaScript-bővítmény leírója `runtime` "js" értéket ad meg
+@msg	`runtime` "js" is for an object filter (`kind` "filter"), not `kind` "{kind}"	a `runtime` "js" objektumszűrőhöz való (`kind` "filter"), nem `kind` "{kind}" értékhez
+@msg	a JavaScript plug-in can't list the permission `{name}`: of the host's permissions it may list `progress`	egy JavaScript-bővítmény nem sorolhatja fel a(z) `{name}` engedélyt: a gazdagép engedélyei közül a `progress` engedélyt sorolhatja fel
+@msg	a WebAssembly module's manifest leaves `runtime` out: "js" is for a JavaScript plug-in	egy WebAssembly-modul leírója elhagyja a `runtime` kulcsot: a "js" JavaScript-bővítményhez való
+@msg	a JavaScript plug-in makes no command calls	egy JavaScript-bővítmény nem hív parancsokat
+@msg	vc.progress(done, total) takes two numbers	a vc.progress(done, total) két számot vár
+@msg	vc.log(level, text) takes a level, 0 (error), 1 (warning), 2 (information) or 3 (debug), and a string	a vc.log(level, text) egy szintet, 0 (hiba), 1 (figyelmeztetés), 2 (információ) vagy 3 (hibakeresés), és egy karakterláncot vár
 @msg	the plug-in's grant can't be removed from the plug-in store	a bővítmény engedélye nem távolítható el a bővítménytárból
 @msg	permission `{shown}` is reserved for a later plug-in API; this host doesn't grant it	a(z) `{shown}` engedély egy későbbi bővítmény-API számára van fenntartva; ez a gazdaprogram nem adja meg
 @msg	unknown permission `{shown}`	ismeretlen engedély: `{shown}`
@@ -10793,6 +10848,11 @@ breakText	Glyphs	Glifák
 	No objects are selected.	Nincs kijelölt objektum.
 	Open a document to mark its fold lines.	Nyiss meg egy dokumentumot a hajtásvonalai megjelöléséhez.
 	Remove Fold Line Role	Vonaltípus eltávolítása
+	Fold Angle	Hajtásszög
+	Set Fold Angle…	Hajtásszög beállítása…
+	Set Fold Angle	Hajtásszög beállítása
+	Reset Fold Angle	Hajtásszög visszaállítása
+@msg	select a crease, partial cut or perforation line that is neither locked nor hidden	jelöljön ki egy bigvonalat, részleges vágóvonalat vagy perforációs vonalat, amely nincs zárolva és nincs elrejtve
 # Tool cards (General › Show Tool Cards): one sentence on what each tool does.
 	Shows a card with what a toolbar tool does and what its keys do instead of its tip; it needs Show Tool Tips.	Az elemleírás helyett kártyán mutatja, mit csinál az eszköztár egy eszköze és a billentyűi; ehhez az Elemleírások megjelenítése szükséges.
 	Selects whole objects and groups to move, resize or rotate them.	Teljes objektumokat és csoportokat jelöl ki áthelyezéshez, átméretezéshez vagy forgatáshoz.
