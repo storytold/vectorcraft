@@ -113,8 +113,8 @@ pub enum Cursor {
     /// The Pencil tool with Alt pressed after the drag starts and Alt key toggles to Smooth Tool off:
     /// releasing the mouse button with Alt still held closes the path. A drag started with Shift or
     /// Alt held draws an open straight line instead. Also while a freehand stroke is drawn back near
-    /// its start, or a stroke continuing a selected path near that path's other end, where
-    /// releasing the mouse button closes the path. A crosshair with a ring.
+    /// its start, or a stroke continuing a selected path near that path's other end, after first
+    /// going farther away, where releasing the mouse button closes the path. A crosshair with a ring.
     PencilClose,
     /// The Pencil tool before a press that draws a straight line (Shift or Alt held). A crosshair with a
     /// short level line.
@@ -127,8 +127,8 @@ pub enum Cursor {
     /// The Paintbrush tool.
     Paintbrush,
     /// The Paintbrush tool with Alt held: releasing the mouse button with Alt still held closes
-    /// the path. Also while a stroke is drawn back near its start, where releasing the mouse button
-    /// closes the path. A crosshair with a ring.
+    /// the path. Also while a stroke is drawn back near its start after first going farther away,
+    /// where releasing the mouse button closes the path. A crosshair with a ring.
     PaintbrushClose,
     /// The Blob Brush tool: a dot at the brush's centre, the tool drawing the tip's outline round
     /// it on the canvas.
