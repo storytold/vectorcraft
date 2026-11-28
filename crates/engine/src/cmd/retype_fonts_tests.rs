@@ -149,6 +149,10 @@ fn of_two_versions_only_the_one_the_name_gives_is_listed() {
     db.add_font(named_copy(true, (FAMILY, "Regular", "Version 2.000", "VersiontestSans-Regular")).unwrap());
     assert_eq!(db.face(FAMILY, "Regular").unwrap().version, "Version 1.000");
     let mut s = session();
+    // Live type in the family puts the font among those compared first. Added last, after the
+    // bundled fonts and however many faces craft-fonts supplies, it can fall past the fonts
+    // Retype compares (`MAX_FACES`).
+    s.execute("text.create", &json!({"x": 40, "y": 300, "text": "live", "size": 40, "font": FAMILY, "style": "Regular"})).unwrap();
     let inter = outlined(&mut s, json!({"x": 40, "y": 100, "text": "Kg", "size": 40, "font": "Inter", "style": "Regular"}));
     s.execute("select.set", &json!({"ids": [inter]})).unwrap();
     let r = query(&mut s, json!({"count": 96}), &db);

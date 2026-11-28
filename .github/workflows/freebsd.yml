@@ -29,7 +29,7 @@ jobs:
     uses: storytold/craft-common-actions/.github/workflows/freebsd.yml@main
     with:
       require-craft-fonts: true
-      craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
+      craft-fonts-ref: c1db6d1a8ed772191241c3d185e2104be84d8691
       run-package-check: true
       # The test builds of this workspace's largest crates (engine, ui-egui) need more than the
       # VM's 12 GB when two compile at once: the build was killed (exit 137) every night with
