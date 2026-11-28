@@ -318,12 +318,7 @@ pub(super) fn ai_native(cmd: &str, doc: &Document, so: &SaveOptions) -> Result<V
 /// The first artboard (else the art) as a PNG fitted into [`PREVIEW_MAX`] pixels (`None`: nothing
 /// to show).
 pub(crate) fn preview_png(doc: &Document) -> Result<Option<Vec<u8>>> {
-    let Some(r) = doc.artboards.first().map(|a| a.rect).or_else(|| vectorcraft_render::encode::art_bounds(doc)) else { return Ok(None) };
-    let scale = f64::from(PREVIEW_MAX) / r.width().max(r.height());
-    if vectorcraft_render::raster_size(r, scale).is_err() {
-        return Ok(None);
-    }
-    vectorcraft_render::Renderer::new().render_region(doc, r, scale, false).to_png().map(Some).map_err(EngineError::Other)
+    vectorcraft_render::encode::first_artboard_png(doc, PREVIEW_MAX).map_err(EngineError::Other)
 }
 
 /// `p` with `compress` from the Use Compression preference when it doesn't say (saves only;

@@ -9092,6 +9092,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vectorcraft-thumbnail-handler"
+version = "0.24.1"
+dependencies = [
+ "png 0.18.1",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "vectorcraft-tools"
 version = "0.24.1"
 dependencies = [
