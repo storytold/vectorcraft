@@ -7340,6 +7340,15 @@ axis	Y Axis	Eixo Y
 @msg	a read-only object was left out: return it, as {{"id": …}} alone or as it was given	um objeto somente leitura foi omitido: retorne-o como {{"id": …}} sozinho ou como foi recebido
 @msg	a string	uma string
 @msg	a stroke has only `paint`, `width`, `join`, `cap` and `miterLimit`	um traçado tem apenas `paint`, `width`, `join`, `cap` e `miterLimit`
+@msg	a painted live effect's piece has only `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` and `effects`	uma peça de um efeito dinâmico de pintura tem apenas `path`, `fillRule`, `fills`, `strokes`, `opacity`, `blend` e `effects`
+@msg	a stroke has only `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` and `effects`	um traçado tem apenas `paint`, `width`, `join`, `cap`, `miterLimit`, `opacity`, `blend` e `effects`
+@msg	`appearanceOutput` may only be true	`appearanceOutput` só pode ser true
+@msg	`appearanceOutput` is only for a live effect that declares `paintOutput`, at `api` 3	`appearanceOutput` é só para um efeito dinâmico que declara `paintOutput`, com `api` 3
+@msg	`opacity` must be a number from 0 to 1	`opacity` deve ser um número de 0 a 1
+@msg	unknown blending mode; `blend` is one of {_1}	modo de mesclagem desconhecido; `blend` é um de {_1}
+@msg	`effects` must be an array of at most {MAX_LOOK_EFFECTS} records	`effects` deve ser uma lista de no máximo {MAX_LOOK_EFFECTS} registros
+@msg	a result carries at most {MAX_RESULT_EFFECTS} effect records	um resultado leva no máximo {MAX_RESULT_EFFECTS} registros de efeito
+@msg	this host takes no effects here	este host não aceita efeitos aqui
 @msg	a stroke must be {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}	um traçado deve ser {{"paint", "width"?, "join"?, "cap"?, "miterLimit"?}}
 @msg	an effect must be {{"id", "params"?, "visible"?}}	um efeito deve ser {{"id", "params"?, "visible"?}}
 @msg	an effect on a fill returns only `fills`	um efeito em um preenchimento retorna apenas `fills`

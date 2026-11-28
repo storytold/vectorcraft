@@ -93,7 +93,9 @@ pub fn offer(app: &mut VectorcraftApp) -> bool {
 }
 
 /// Start a recovery copy of every document that needs one when the interval has passed since the
-/// last (the first call only starts the clock) → how many were started.
+/// last (the first call only starts the clock) → how many were started. While a plug-in run holds
+/// the documents ([`vectorcraft_engine::cmd::plugin::FilterRun::begin_calls`]) the round waits for
+/// it to end, since its edits are undone when it fails or is canceled.
 pub fn tick(app: &mut VectorcraftApp, now: f64) -> usize {
     let prefs = &app.session.prefs;
     let Some(store) = recovery::store(&app.session).filter(|_| prefs.autosave_recovery) else {
@@ -103,6 +105,7 @@ pub fn tick(app: &mut VectorcraftApp, now: f64) -> usize {
     let interval = f64::from(prefs.autosave_interval.max(1)) * 60.0;
     match app.recovery.last {
         Some(t) if now >= t && now - t < interval => return 0,
+        Some(t) if now >= t && app.session.plugin_calls_open() => return 0,
         Some(t) if now >= t => app.recovery.last = Some(now),
         // First call, or a clock that went back: the interval starts now.
         _ => {
@@ -114,8 +117,11 @@ pub fn tick(app: &mut VectorcraftApp, now: f64) -> usize {
 }
 
 /// Start a recovery copy of every document that needs one and `pick` picks (by uid) → how many
-/// were started.
+/// were started. None while a plug-in run holds the documents ([`tick`]).
 fn write(app: &mut VectorcraftApp, store: &Arc<dyn RecoveryStore>, pick: impl Fn(u64) -> bool) -> usize {
+    if app.session.plugin_calls_open() {
+        return 0;
+    }
     recovery::forget_clean(&mut app.session);
     // The folder `store` writes to, named in a failure even when the preference changes meanwhile.
     let place = recovery::folder(&app.session);

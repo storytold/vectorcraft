@@ -9,6 +9,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import re
 import subprocess
 import unittest
 from unittest import mock
@@ -78,15 +79,49 @@ class Deadline(unittest.TestCase):
         before_limit = clear.parse_time("2026-11-28T04:00:00Z") + timedelta(seconds=clear.GIVE_UP_SECONDS - 60)
         after_limit = clear.parse_time("2026-11-28T04:00:00Z") + timedelta(seconds=clear.GIVE_UP_SECONDS + 60)
         self.assertGreater((before_limit - self.began).total_seconds(), clear.GIVE_UP_SECONDS)
-        self.assertFalse(clear.gave_up(late, before_limit, self.began))
-        self.assertTrue(clear.gave_up(late, after_limit, self.began))
+        self.assertFalse(clear.gave_up(late, before_limit))
+        self.assertTrue(clear.gave_up(late, after_limit))
+        self.assertFalse(clear.start_overdue(late, after_limit, self.began))
 
     def test_a_leg_that_never_starts_is_timed_from_the_script_start(self):
         queued = warm_job("queued", started_at="2026-11-28T03:38:00Z")
-        later = self.began + timedelta(seconds=clear.GIVE_UP_SECONDS + 60)
-        self.assertFalse(clear.gave_up(None, self.began + timedelta(minutes=10), self.began))
-        self.assertTrue(clear.gave_up(None, later, self.began))
-        self.assertTrue(clear.gave_up(queued, later, self.began))
+        before_limit = self.began + timedelta(seconds=clear.START_SECONDS - 60)
+        after_limit = self.began + timedelta(seconds=clear.START_SECONDS + 60)
+        self.assertFalse(clear.start_overdue(None, before_limit, self.began))
+        self.assertTrue(clear.start_overdue(None, after_limit, self.began))
+        self.assertTrue(clear.start_overdue(queued, after_limit, self.began))
+        self.assertFalse(clear.gave_up(queued, after_limit))
+
+    def test_a_leg_that_starts_after_the_start_limit_fails(self):
+        at = lambda seconds: warm_job("in_progress", started_at=(self.began + timedelta(seconds=seconds)).isoformat())
+        self.assertTrue(clear.started_late(at(clear.START_SECONDS + 5), self.began))
+        self.assertFalse(clear.started_late(at(clear.START_SECONDS - 10), self.began))
+        self.assertFalse(clear.started_late(warm_job("queued"), self.began))
+        self.assertFalse(clear.started_late(None, self.began))
+
+
+class Workflow(unittest.TestCase):
+    ci = (Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml").read_text()
+
+    def timeout_minutes(self, job):
+        """The first `timeout-minutes` under `job` in ci.yml."""
+        lines = self.ci.splitlines()
+        start = lines.index(f"  {job}:") + 1
+        for line in lines[start:]:
+            if re.match(r"  \S", line):
+                break
+            match = re.match(r"\s+timeout-minutes: (\d+)$", line)
+            if match:
+                return int(match.group(1))
+        self.fail(f"no timeout-minutes under {job}")
+
+    def test_the_job_outlasts_the_start_wait_and_the_save_wait(self):
+        # Five minutes are left for the steps before the script and for the deletion.
+        spare = self.timeout_minutes("cold-cache-clear") * 60 - clear.START_SECONDS - clear.GIVE_UP_SECONDS
+        self.assertGreaterEqual(spare, 5 * 60)
+
+    def test_the_save_wait_outlasts_the_gate(self):
+        self.assertGreater(clear.GIVE_UP_SECONDS, self.timeout_minutes("gate") * 60)
 
 
 class Jobs(unittest.TestCase):
@@ -186,6 +221,22 @@ class AfterDeletion(unittest.TestCase):
     def test_a_save_canceled_after_the_deletion_exits_1(self):
         canceled = warm_job("completed", "cancelled", [("Gate", "completed", "success"), ("Post Setup", "completed", "cancelled")])
         self.assertEqual(self.run_main(canceled), 1)
+
+    def test_a_leg_that_starts_late_and_saves_deletes_nothing(self):
+        # Clock.now() is 04:00, so the leg starts 120 minutes 5 seconds after the script.
+        late = warm_job("in_progress", steps=self.SAVING, started_at="2026-11-28T06:00:05Z")
+        deleted = []
+
+        def run(args, **kwargs):
+            deleted.append(args[-1])
+            return subprocess.CompletedProcess(args, 0, "", "")
+
+        env = {"GITHUB_REPOSITORY": "storytold/vectorcraft", "GITHUB_RUN_ID": "1", "GITHUB_RUN_ATTEMPT": "1"}
+        with mock.patch.object(clear, "gh", lambda url: {"jobs": ME + [late]}), mock.patch.object(clear.subprocess, "run", run), \
+                mock.patch.object(clear.time, "sleep"), mock.patch.object(clear, "datetime", Clock), mock.patch.dict(os.environ, env), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(clear.main(), 1)
+        self.assertEqual(deleted, [])
 
     def test_a_save_that_fails_after_the_deletion_exits_1(self):
         failed = warm_job("completed", "failure", [("Gate", "completed", "success"), ("Post Setup", "completed", "failure")])

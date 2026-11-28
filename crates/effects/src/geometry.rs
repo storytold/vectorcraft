@@ -462,6 +462,7 @@ fn builds_within(id: &str) -> bool {
 fn apply_unchecked(id: &str, p: &Value, path: &PathData, b: Rect, ctx: &GeomContext, max: usize) -> PathData {
     use util::{join, num};
     if let Some(plugin) = vectorcraft_plugins::effect::plugin_id(id) {
+        crate::params::check_returned_effects();
         let paints = vectorcraft_plugins::effect::Paints { appearance: ctx.appearance, item: ctx.item, at: ctx.stage };
         return vectorcraft_plugins::effect::apply(plugin, p, path, b, ctx.rule, paints, ctx.doc).unwrap_or_else(|| path.clone());
     }
