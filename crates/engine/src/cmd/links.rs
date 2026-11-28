@@ -1308,7 +1308,7 @@ fn refill_distorted(
 /// `path` with its anchors and handles mapped through `map` as a distort maps a path's points
 /// (`xform::Projective::apply`): a point on the map's horizon is mapped as if a billionth in front
 /// of it, and one past it to the far side. `None` when a point maps to no finite page point.
-fn warped(path: &PathData, map: &Homography) -> Option<PathData> {
+pub(super) fn warped(path: &PathData, map: &Homography) -> Option<PathData> {
     let [[a, b, c], [d, e, f], [g, h, i]] = map.0;
     let apply = |p: vectorcraft_geom::Point| {
         let w = g * p.x + h * p.y + i;

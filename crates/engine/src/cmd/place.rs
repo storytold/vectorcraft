@@ -57,7 +57,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vectorcraft_color::Paint;
 use vectorcraft_doc::{Appearance, Document, ImageObject, LinkInfo, Node, NodeId, NodeKind, PageBox, Scaling, SliceOptions, SymbolBoxes};
-use vectorcraft_geom::{Affine, Point, Rect, shapes};
+use vectorcraft_geom::{Affine, Homography, Point, Rect, shapes};
 use vectorcraft_pdf::CropTo;
 
 use super::fileio::{self, Format, RasterImage};
@@ -88,7 +88,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Place…",
             ["File"],
             Some("Cmd+Shift+P"),
-            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; so does a PDF/.ai page at path, showing its `crop` box, unless password or textAs: \"outlines\" is given, and an EPS file, a PostScript file or a PostScript .ai at path, showing the art false gives; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark, or without one by dataset.import's rule: an even length, at least half of its two-byte units holding a NUL byte, the byte order that reads a line break, valid UTF-16 with no NUL character; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set) | \"shiftJis\" | \"gb2312\" (read as GBK) | \"chineseBig5\" | \"cyrillic\" (windows-1251, x-mac-cyrillic on mac) | \"gb18030\" | \"greek\" (windows-1253) | \"turkish\" (windows-1254) | \"baltic\" (windows-1257) | \"centralEuropean\" (windows-1250) (the WHATWG Encoding Standard's decoders: a byte-order mark is read as ordinary bytes, a malformed sequence as U+FFFD), platform?: \"windows\" (ANSI is Windows-1252) | \"mac\" (ANSI is Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; no at/rect; refused while an object of a symbol instance's art is selected), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the bounds of the art that shows, with its strokes and effects, as an export measures them: hidden objects and guides left out) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), layers?: false (a PSD or PSB file: true embeds its layers as one group named after the file, read as document.open reads them: an image for each layer and a group for each layer group, with the layer's name, visibility, opacity, blend mode and opacity mask, at the place its merged image would take and clipped to the canvas when layers, hidden ones included, reach past it; never linked: link is then false unless given, and link: true is refused; a file without layers is embedded as its merged image, and so are one whose layers are all left out and one whose layers can't be read, with a warning), hiddenLayers?: false (with layers: true, the hidden layers come in hidden instead of being left out; refused without it), importSlices?: bool (a PSD or PSB file: its slices become user slices, moved and scaled with the placed art, in the same undo step; default true when the file is embedded, false when it is linked, and true with link is refused; slices the file generated automatically are left out), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at), showImportOptions?: true (in the app, a text file without text, a DXF drawing without dxf, a PSD or PSB file embedded without layers (with two layers or more, or with slices) and a PDF with several pages or a password and no page ask for those options first, and an encrypted PDF given page and no password asks for its password; false places them with the options last confirmed, a PDF on page 1 (or page), and asks only an encrypted PDF's password), importer?: \"plugin.<id>\" (an importer plug-in whose manifest sets place, see document.formats: it reads the file, which must have an extension it lists, also one a built-in format reads; without importer, a file no built-in format reads, by its content or its extension, is read by the first such importer by id that lists its extension; it is given the file, at most 128 MiB, with _context.mode \"place\", and its objects, guides left out, are placed as one group named after the file, in the order it returned them, embedded whatever link says), params?: {…} (the importer's own parameters, see plugin.info)} → {ids, name, format, linked, width, height, warnings, image?: the id of the image of a DCS file or PSD/PSB file placed in a clip group, which the Links commands take, slices?: [the ids of the user slices a PSD file brought in]}. A PSD or PSB file that names a clipping path places in a clip group of that path (even-odd), as does its merged image in document.open. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, HP-GL (.plt, .hpgl, .hgl, .hpg), PDF/.ai, EMF/WMF and PICT (.pct, .pic, .pict; clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it), a .ai saved without PDF compatibility (from its editing data, as document.open reads it: the art of the layers that show on artboard `page`, clipped to that artboard unless crop is \"bounding\") and native documents as one group, with the images, symbols, patterns, swatches and brushes they use. A DCS file (an EPS file with one program per printing plate, DCS 1.0 or 2.0) is placed only from its path with link (else an error, as are document.open and links.embed): one linked image of its plates mixed into CMYK, clipped by the clipping path its composite is drawn through, its spot plates added as spot swatches in the process equivalents the file gives (a swatch of the same name is kept, with a warning); print separations and Separations Preview show each plate on its own ink, and plate files of their own are read from its folder. One undo step; selects what it placed (unless on a template layer); never touches the clipboard. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error, and nothing is placed",
+            "{path | name | dataBase64 (a file's path, or its name with its bytes), link?: true (a raster image keeps its file's path; a VectorCraft document at path becomes one locked placed document showing artboard `page`, linked to the file and read again when it changes (links.update; saving it in this app updates it at once), drawn as vectors in every output; so does a PDF/.ai page at path, showing its `crop` box, unless password or textAs: \"outlines\" is given, and an EPS file, a PostScript file or a PostScript .ai at path, showing the art false gives; false: an editable copy of its art, as from dataBase64; other files are embedded), text?: {characterSet?: \"unicode\" (UTF-8, or UTF-16 with a byte-order mark, or without one by dataset.import's rule: an even length, at least half of its two-byte units holding a NUL byte, the byte order that reads a line break, valid UTF-16 with no NUL character; other bytes as the platform's 8-bit set) | \"ansi\" (the platform's 8-bit set) | \"shiftJis\" | \"gb2312\" (read as GBK) | \"chineseBig5\" | \"cyrillic\" (windows-1251, x-mac-cyrillic on mac) | \"gb18030\" | \"greek\" (windows-1253) | \"turkish\" (windows-1254) | \"baltic\" (windows-1257) | \"centralEuropean\" (windows-1250) (the WHATWG Encoding Standard's decoders: a byte-order mark is read as ordinary bytes, a malformed sequence as U+FFFD), platform?: \"windows\" (ANSI is Windows-1252) | \"mac\" (ANSI is Mac Roman), removeLineReturns?: false (each block of lines becomes one paragraph; blank lines end paragraphs), removeParagraphReturns?: false (drop blank lines), replaceSpaces?: n (runs of n ≥ 2 spaces become a tab)} (a .txt file, placed as area type filling rect, the replaced object's bounds, or else the artboard less a 36 pt margin), template?: false (onto a new locked template layer below the current layer), replace?: false (swap the one selected object, keeping its stacking place and transform; an image changed by Perspective Distort or Free Distort keeps its corners, which a raster image or a DCS file's image fills, with its file's clipping path drawn through them, and other files but text are refused; no at/rect; refused while an object of a symbol instance's art is selected), at?: [x, y] centre (default: the first artboard's centre), rect?: [x, y, width, height] fit inside; aspect kept (wins over at), page?: 1 (PDF/.ai page, or a native document's artboard), crop?: \"crop\" (clipped to that page or artboard, default; an SVG, only when given: framed and clipped by its viewBox, else by its art's bounds) | \"bounding\" (the bounds of the art that shows, with its strokes and effects, as an export measures them: hidden objects and guides left out) | \"art\" | \"trim\" | \"bleed\" | \"media\" (a PDF page's boxes), password? (an encrypted PDF), layers?: false (a PSD or PSB file: true embeds its layers as one group named after the file, read as document.open reads them: an image for each layer and a group for each layer group, with the layer's name, visibility, opacity, blend mode and opacity mask, at the place its merged image would take and clipped to the canvas when layers, hidden ones included, reach past it; never linked: link is then false unless given, and link: true is refused; a file without layers is embedded as its merged image, and so are one whose layers are all left out and one whose layers can't be read, with a warning), hiddenLayers?: false (with layers: true, the hidden layers come in hidden instead of being left out; refused without it), importSlices?: bool (a PSD or PSB file: its slices become user slices, moved and scaled with the placed art, in the same undo step; default true when the file is embedded, false when it is linked, and true with link is refused; slices the file generated automatically are left out), dxf?: {…the DXF options of document.open} (a .dxf drawing: fit fills the artboard under at, else the first; fitted or uncentred art lands with its drawing's artboard on that artboard, else it is centred on at), showImportOptions?: true (in the app, a text file without text, a DXF drawing without dxf, a PSD or PSB file embedded without layers (with two layers or more, or with slices) and a PDF with several pages or a password and no page ask for those options first, and an encrypted PDF given page and no password asks for its password; false places them with the options last confirmed, a PDF on page 1 (or page), and asks only an encrypted PDF's password), importer?: \"plugin.<id>\" (an importer plug-in whose manifest sets place, see document.formats: it reads the file, which must have an extension it lists, also one a built-in format reads; without importer, a file no built-in format reads, by its content or its extension, is read by the first such importer by id that lists its extension; it is given the file, at most 128 MiB, with _context.mode \"place\", and its objects, guides left out, are placed as one group named after the file, in the order it returned them, embedded whatever link says), params?: {…} (the importer's own parameters, see plugin.info)} → {ids, name, format, linked, width, height, warnings, image?: the id of the image of a DCS file or PSD/PSB file placed in a clip group, which the Links commands take, slices?: [the ids of the user slices a PSD file brought in]}. A PSD or PSB file that names a clipping path places in a clip group of that path (even-odd), as does its merged image in document.open. Raster images come in at 100% of their physical size (the file's ppi, else 72); SVG, DXF, HP-GL (.plt, .hpgl, .hgl, .hpg), PDF/.ai, EMF/WMF and PICT (.pct, .pic, .pict; clipped to the picture's frame), EPS (clipped to its bounding box; as document.open reads it), a .ai saved without PDF compatibility (from its editing data, as document.open reads it: the art of the layers that show on artboard `page`, clipped to that artboard unless crop is \"bounding\") and native documents as one group, with the images, symbols, patterns, swatches and brushes they use. A DCS file (an EPS file with one program per printing plate, DCS 1.0 or 2.0) is placed only from its path with link (else an error, as are document.open and links.embed): one linked image of its plates mixed into CMYK, clipped by the clipping path its composite is drawn through, its spot plates added as spot swatches in the process equivalents the file gives (a swatch of the same name is kept, with a warning); print separations and Separations Preview show each plate on its own ink, and plate files of their own are read from its folder. One undo step; selects what it placed (unless on a template layer); never touches the clipboard. A PNG, JPEG, GIF or WebP image whose pixels can't be read (a file cut short) is an error, and nothing is placed",
             has_doc,
             place
         ),
@@ -687,6 +687,60 @@ fn replace_measured<'a>(d: &Document, old: &'a Node, new_image: bool) -> &'a Nod
     }
 }
 
+/// What Replace does when the image it measures, `old`, is distorted and the art placed is a
+/// raster image or a DCS file's image (`art`): the transform that puts the new pixels on `old`'s
+/// transform scaled to their size, as Update Links scales it, the corners the new image takes, and
+/// the map from the art's natural box to the page through those corners, which a PSD file's slices
+/// follow. `None` for other art, for an image with no pixels, and for corners the new pixels can't
+/// fill ([`Node::set_image_corners`]).
+fn distorted_replace(old: &Node, art: &Art) -> Option<(Affine, [Point; 4], Homography)> {
+    let NodeKind::Image(im) = &old.kind else { return None };
+    let q = old.image_quad()?;
+    let (pixels, width, height) = match art {
+        Art::Image(img, _) => {
+            let (sx, sy) = pt_per_px(img.ppi);
+            (Affine::scale_non_uniform(sx, sy), img.width, img.height)
+        }
+        Art::Dcs(a) => (a.xf, a.img.width, a.img.height),
+        _ => return None,
+    };
+    if width == 0 || height == 0 || pixels.determinant().abs() <= 1e-12 {
+        return None;
+    }
+    let xf = im.xf * Affine::scale_non_uniform(f64::from(im.width) / f64::from(width), f64::from(im.height) / f64::from(height));
+    let new = ImageObject { key: String::new(), width, height, xf, link: None, placement: Default::default(), pixels: None };
+    let mut probe = Node::new(old.id, NodeKind::Image(Box::new(new)));
+    probe.set_image_corners(q).ok()?;
+    let page = probe.image_map()?.checked_then_after(&Homography::from_affine(pixels.inverse()))?;
+    Some((xf * pixels.inverse(), q, page))
+}
+
+/// Placed raster `node` (an image, or an image in a clip group of its file's clipping path, as
+/// [`build`] makes them) with the image's corners at `q`: the pixels fill them, and the clipping
+/// path is drawn through them as the pixels are. `None` when the corners can't hold the image.
+fn with_corners(mut node: Node, q: [Point; 4]) -> Option<Node> {
+    match &mut node.kind {
+        NodeKind::Image(_) => node.set_image_corners(q).ok()?,
+        NodeKind::Group { children, clip: true } => {
+            let [path, image] = &mut children[..] else { return None };
+            let image = Arc::make_mut(image);
+            let NodeKind::Image(im) = &image.kind else { return None };
+            if im.xf.determinant().abs() <= 1e-12 {
+                return None;
+            }
+            // The clipping path in the image's pixels, which its transform placed on the page.
+            let to_pixels = im.xf.inverse();
+            image.set_image_corners(q).ok()?;
+            let map = image.image_map()?;
+            let NodeKind::Path { path: p, .. } = &mut Arc::make_mut(path).kind else { return None };
+            p.transform(to_pixels);
+            *p = super::links::warped(p, &map)?;
+        }
+        _ => return None,
+    }
+    Some(node)
+}
+
 /// `rect` fitted with `natural`'s aspect, centred.
 fn fit(natural: Rect, r: Rect) -> Affine {
     let ratio = |a: f64, b: f64| (b > 1e-9).then(|| a / b);
@@ -846,18 +900,22 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
         loaded.natural = Rect::from_origin_size(Point::ORIGIN, size);
     }
     let natural = loaded.natural;
-    // Replace keeps the transform of the image it measures (`replace_measured`), which a
-    // distortion's corners do not follow. Type, and any other object it measures, is placed by the
-    // bounds of what it replaces, so a distorted image there is not refused.
+    // Replace keeps the transform of the image it measures (`replace_measured`). When that image
+    // is distorted, a raster placed in its place takes its corners ([`distorted_replace`]); other
+    // art is refused. Type, and any other object it measures, is placed by the bounds of what it
+    // replaces, so a distorted image there is not refused.
+    let mut distorted = None;
     if let Some(o) = old_node
         && !is_text
     {
         let image = replace_measured(&st.doc, o, matches!(loaded.art, Art::Image(..)));
         if image.is_distorted_image() {
-            return Err(super::xform::distorted_image_error(PLACE, image.id));
+            let fit = distorted_replace(image, &loaded.art).ok_or_else(|| super::xform::distorted_image_error(PLACE, image.id))?;
+            distorted = Some((image.id, fit));
         }
     }
     let m = match (old_node, rect) {
+        (Some(_), _) if let Some((_, (m, ..))) = distorted => m,
         (Some(o), _) => replace_xf(&st.doc, o, natural, !is_text, matches!(loaded.art, Art::Image(..))),
         (None, Some(r)) => fit(natural, r),
         // Its artboard's bottom-left corner on the target's.
@@ -876,13 +934,19 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
     if let Art::Dcs(a) = &loaded.art {
         warnings.extend(dcs::swatch_notes(&st.doc, &a.spots));
     }
-    // A PSD file's slices move and scale with its art; one that would leave the canvas is left out.
+    // A PSD file's slices move and scale with its art, through a distorted image's corners when
+    // it takes them; one that would leave the canvas is left out.
     let read_count = read_slices.len();
     let slices: Slices = read_slices
         .into_iter()
         .filter_map(|(r, o)| {
-            let corners = [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x0, r.y1), Point::new(r.x1, r.y1)].map(|c| m * c);
-            let placed = corners.iter().skip(1).fold(Rect::from_points(corners[0], corners[0]), |acc, c| acc.union_pt(*c));
+            let placed = match distorted {
+                Some((_, (_, _, page))) => page.map_rect_bbox(r)?,
+                None => {
+                    let corners = [Point::new(r.x0, r.y0), Point::new(r.x1, r.y0), Point::new(r.x0, r.y1), Point::new(r.x1, r.y1)].map(|c| m * c);
+                    corners.iter().skip(1).fold(Rect::from_points(corners[0], corners[0]), |acc, c| acc.union_pt(*c))
+                }
+            };
             super::slices::slice_rect_ok(placed).then_some((placed, o))
         })
         .collect();
@@ -892,7 +956,10 @@ fn apply(s: &mut Session, read: PlaceRead) -> Result<Value> {
         n => warnings.push(format!("{n} slices would lie outside the canvas and were left out")),
     }
     let (id, size, slice_ids) = s.edit("Place", |d, sel| {
-        let node = transformed(build(d, loaded, link), m);
+        let mut node = transformed(build(d, loaded, link), m);
+        if let Some((old_image, (_, q, _))) = distorted {
+            node = with_corners(node, q).ok_or_else(|| super::xform::distorted_image_error(PLACE, old_image))?;
+        }
         let size = node.geometric_bounds_with(&d.symbol_boxes()).unwrap_or_default();
         let (into, index) = match old {
             Some(old) => {

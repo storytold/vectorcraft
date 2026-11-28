@@ -8493,9 +8493,13 @@ the corners where they are records none. Image info (`image.info`) gives a disto
 Info (`links.info`) gives its scale and rotation there.
 
 Crop Image (`object.cropImage`), Image Trace (`imageTrace.make`, `imageTrace.makeAndExpand`), Create Object Mosaic
-(`object.createObjectMosaic`) and Place with Replace (`file.place` with `replace`) of anything but a text file refuse a
-distorted image with an error that names the distortion; Place with Replace does not refuse a clipping group that holds
-a distorted image of a DCS file's plates. Create Gradient Mesh (`object.mesh.create`) converts the other objects it is
+(`object.createObjectMosaic`) and Place with Replace (`file.place` with `replace`) of a file that is not text, a raster
+image or a DCS file refuse a distorted image with an error that names the distortion; Place with Replace does not
+refuse a clipping group that holds a distorted image of a DCS file's plates. Place with Replace of a distorted image by
+a raster image or a DCS file puts the new image's pixels between the old image's corners, in one undo step; the new
+image's transform is the old one scaled to the new pixel size, the clipping path a PSD, PSB or DCS file names is
+drawn through the corners, and each slice a PSD or PSB file brings in covers the box around its part of the pixels
+where the corners put it. Create Gradient Mesh (`object.mesh.create`) converts the other objects it is
 given and lists each distorted image it leaves as it is in `skipped`, with its `id` and the error as `reason`; with
 nothing else to convert, it returns that error. Update Links (`links.update`) and Relink
 (`links.relink`) put the file's pixels between a distorted image's corners, without applying its Placement Options or
