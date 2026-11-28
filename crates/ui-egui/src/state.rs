@@ -915,6 +915,9 @@ pub struct UiState {
     /// The SVG Options chosen last (`svg` object of the export/save commands; null: never used).
     #[serde(default, skip_serializing_if = "Value::is_null")]
     pub svg_options: Value,
+    /// Last resolution accepted by raster export options, in pixels per inch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raster_export_ppi: Option<f64>,
     /// File → Place: Link is on (the Place dialog remembers it).
     #[serde(default = "yes")]
     pub place_link: bool,
@@ -1544,6 +1547,7 @@ impl Default for UiState {
             color_wheel: Default::default(),
             swatches_show_recent_colors: true,
             svg_options: Value::Null,
+            raster_export_ppi: None,
             place_link: true,
             place_import_options: true,
             text_import: Value::Null,

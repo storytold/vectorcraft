@@ -33,6 +33,13 @@ use crate::{VectorcraftApp, io};
 pub(super) const RESOLUTIONS: [f64; 3] = [72.0, 150.0, 300.0];
 /// Their labels, then `Other` (any resolution).
 pub(super) const RESOLUTION_LABELS: [&str; 4] = ["Screen (72 ppi)", "Medium (150 ppi)", "High (300 ppi)", "Other"];
+/// The resolution range accepted by the custom field and remembered between exports.
+const PPI_RANGE: std::ops::RangeInclusive<f64> = 1.0..=4608.0;
+
+fn valid_ppi(ppi: f64) -> bool {
+    ppi.is_finite() && PPI_RANGE.contains(&ppi)
+}
+
 /// Background param values.
 const BACKGROUNDS: [&str; 3] = ["transparent", "white", "black"];
 /// Their labels, then `Other` (a colour).
@@ -76,7 +83,7 @@ pub(crate) fn open_with(app: &mut VectorcraftApp, f: &Format, mut params: Value,
     });
     if let Some(o) = params.as_object_mut() {
         let mut initial = defaults(app, f);
-        initial.insert("ppi".into(), json!(72));
+        initial.insert("ppi".into(), app.ui.raster_export_ppi.filter(|ppi| valid_ppi(*ppi)).map_or_else(|| json!(72), |ppi| json!(ppi)));
         for (key, value) in initial {
             if o.get(&key).is_none_or(Value::is_null) {
                 o.insert(key, value);
@@ -226,7 +233,7 @@ fn resolution_row() -> Param {
             picked = Select::new(tl!("Resolution:"), Bind::given(preset.unwrap_or(other)), &entries).show(ui).value().copied();
             if preset.is_none() {
                 let field = NumberField::new(tl!("Resolution:"), Bind::given(Some(ppi)))
-                    .range(1.0..=4608.0)
+                    .range(PPI_RANGE)
                     .step(1.0)
                     .unit_kind(UnitKind::PixelsPerInch)
                     .show(ui);
@@ -387,6 +394,7 @@ fn integers(params: &mut Value) {
 
 /// Write the file(s) with the chosen options.
 pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFields) -> Result<After, String> {
+    let ppi = fields.number("ppi").filter(|ppi| valid_ppi(*ppi));
     let format = fields.text("format").unwrap_or_default().to_string();
     let path = fields.text("path").unwrap_or_default().to_string();
     let id = fileio::format(&format).map_or("png", |f| f.id);
@@ -395,5 +403,11 @@ pub(super) fn confirm(app: &mut VectorcraftApp, open: &Open, fields: &DialogFiel
     if format == "psd" {
         psd_options::drop_unused(&mut params);
     }
-    io::export(app, Some(&format), Some(path), &super::export_as::exported(open.selection, params)).map(|_| None)
+    let result = io::export(app, Some(&format), Some(path), &super::export_as::exported(open.selection, params))?;
+    if result.get("cancelled").and_then(Value::as_bool) != Some(true)
+        && let Some(ppi) = ppi
+    {
+        app.ui.raster_export_ppi = Some(ppi);
+    }
+    Ok(None)
 }
