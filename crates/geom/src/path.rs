@@ -424,7 +424,7 @@ impl SubPath {
             }
             // With its handles on its anchors, the line is at t²(3 - 2t) of the way along at t; with
             // them at its thirds, that far along is where it is at that same parameter.
-            t = (t * t * (3.0 - 2.0 * t)).clamp(0.05, 0.95);
+            t = t * t * (3.0 - 2.0 * t);
         }
         let v = dv / (3.0 * t * (1.0 - t));
         if let Some(a) = self.anchors.get_mut(seg % n) {
@@ -932,7 +932,7 @@ mod tests {
     /// line, toward the middle, not straight out of its anchors, and the grabbed point follows.
     #[test]
     fn bending_a_straight_segment_pulls_its_handles_from_along_the_line() {
-        for t in [0.5, 0.3] {
+        for t in [0.5, 0.3, 0.1] {
             let mut sp = SubPath::polyline(&[Point::new(0.0, 0.0), Point::new(300.0, 0.0)], false);
             let grabbed = sp.segment(0).eval(t);
             let dv = kurbo::Vec2::new(0.0, 60.0);
