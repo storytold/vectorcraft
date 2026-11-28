@@ -4256,6 +4256,21 @@ fn installs_from_two_processes_into_one_store_keep_each_module_with_its_grant() 
     run(&mut s, "plugin.remove", json!({"id": id}));
 }
 
+/// A turn on a plug-in store that ends frees the store while a copy of the lock file's handle is
+/// open, as a child process that is starting holds one: another process can take a turn.
+#[test]
+fn an_ended_store_turn_frees_the_store_while_a_copy_of_its_handle_is_open() {
+    let folder = crate::tests_links::Folder::new("plugin-store-turn-copied");
+    let s = other_process(folder.0.clone());
+    let turn = s.plugin_store_turn().unwrap();
+    let copy = turn.lock_file().map(|file| file.try_clone().unwrap());
+    assert!(copy.is_some(), "the turn is held");
+    drop(turn);
+    let other = std::fs::File::options().read(true).write(true).open(folder.0.join(crate::store::DISABLED_LOCK)).unwrap();
+    assert!(other.try_lock().is_ok(), "an ended turn frees the store");
+    drop(copy);
+}
+
 /// Grants written for two plug-ins into one `Plug-ins` folder by two processes are both kept: the
 /// second write reads `grants.json` only once the first has written it.
 #[test]

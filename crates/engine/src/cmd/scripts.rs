@@ -295,6 +295,18 @@ impl Session {
         self.script_data_dir.as_deref().filter(|_| !cfg!(target_arch = "wasm32"))
     }
 
+    /// Have listings of the Scripts and Startup Scripts folders measure their time with `clock`
+    /// instead of the real time ([`script::folder::Clock::Wall`], the default).
+    pub fn set_script_listing_clock(&mut self, clock: script::folder::Clock) {
+        self.script_listing_clock = clock;
+    }
+
+    /// How listings of the Scripts and Startup Scripts folders measure their time
+    /// ([`Session::set_script_listing_clock`]).
+    pub fn script_listing_clock(&self) -> script::folder::Clock {
+        self.script_listing_clock
+    }
+
     /// The Scripts folder ([`Session::attach_scripts_dir`]); none on the web, which has no folders.
     pub fn scripts_dir(&self) -> Option<&std::path::Path> {
         self.scripts_dir.as_deref().filter(|_| !cfg!(target_arch = "wasm32"))
@@ -581,7 +593,7 @@ fn startup_run(s: &mut Session, p: &Value) -> Result<Value> {
     let folder = root.to_string_lossy().into_owned();
     // The folder is the app's: a refusal names it as the request may see it.
     crate::file_access::check_read(&folder).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), &folder))?;
-    let listing = script::startup::list(&root);
+    let listing = script::startup::list(&root, s.script_listing_clock);
     let name_of = |path: &std::path::Path| path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let (disabled, scripts): (Vec<_>, Vec<_>) =
         listing.scripts.into_iter().partition(|path| vectorcraft_plugins::safe_mode::skipped(&startup_item(path)));
@@ -647,7 +659,7 @@ fn list_installed(s: &mut Session, _: &Value) -> Result<Value> {
     let folder = root.to_string_lossy();
     // The Scripts folder is the app's: a refusal names it as the request may see it.
     crate::file_access::check_read(&folder).map_err(|e| super::fileio::naming_in_error(EngineError::Other(e), &folder))?;
-    let listing = script::folder::list(root);
+    let listing = script::folder::list(root, s.script_listing_clock);
     let scripts: Vec<Value> = listing
         .scripts()
         .into_iter()

@@ -25,7 +25,7 @@ use std::collections::BTreeSet;
 use craft::behavior::IconId;
 use craft::behavior::dock::{Action, DockEdge, DockPlacement, Target};
 use craft::ui::buttons::IconButton;
-use craft::ui::contract::{PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
+use craft::ui::contract::{Bind, PopupKind, Props as _, Show as _, ShowContainer as _, Trigger};
 use craft::ui::dialog::DialogResult;
 use craft::ui::display::Divider;
 use craft::ui::menu::{Menu, MenuItem};
@@ -477,8 +477,8 @@ fn shown_again(app: &mut VectorcraftApp, id: u32, hidden: bool) {
 fn open_new(app: &mut VectorcraftApp) -> Result<(), String> {
     let ctx = app.ui_ctx.clone().ok_or("no window")?;
     let fields = DialogFields::from_pairs([("name", blank_name(&app.ui))]);
-    let dialog = HostedParamDialog::new(&ctx, NEW_KEY, fields, |_| {
-        ParamDialog::new(NEW_KEY, tl!("New Toolbar"), vec![Param::new("name", tl!("Name:"), ParamKind::text(""))])
+    let dialog = HostedParamDialog::new(&ctx, NEW_KEY, fields, |fields| {
+        ParamDialog::new(NEW_KEY, tl!("New Toolbar"), vec![Param::new("name", tl!("Name:"), ParamKind::text(""))]).values(Bind::bound(fields))
     });
     crate::dialogs::host::open_held(app, dialog, |app, answer: &ParamResult| {
         let name = match answer.fields.get("name") {
@@ -690,6 +690,55 @@ mod tests {
 
     fn app() -> VectorcraftApp {
         VectorcraftApp::new(Session::new(), Default::default())
+    }
+
+    #[test]
+    fn the_new_toolbar_dialog_creates_and_retries_the_typed_name() {
+        use crate::tests::panel_harness::Panel;
+        use crate::tests::picks::open_dialogs;
+        use egui::{Key, Modifiers};
+
+        fn type_name(panel: &mut Panel, name: &str) {
+            panel.click("Name");
+            panel.key(Key::A, Modifiers::COMMAND);
+            panel.type_text(name);
+            panel.key(Key::Tab, Modifiers::NONE);
+        }
+
+        let mut panel = Panel::new(crate::testing::windowed(app()), crate::tests::picks::dialogs);
+        panel.room(egui::vec2(800.0, 600.0));
+        panel.app().run(NEW_KEY, json!({})).unwrap();
+        panel.frame();
+        let suggested = blank_name(&panel.app().ui);
+        assert_eq!(panel.value("Name").as_deref(), Some(suggested.as_str()), "the dialog opens with the suggested name");
+        type_name(&mut panel, "Drawing tools");
+        panel.click("OK");
+        panel.frame();
+        assert!(find(&panel.app().ui, "Drawing tools").is_some(), "the typed name replaces the suggestion");
+        assert_eq!(panel.app().ui.custom_toolbars.len(), 1);
+        assert!(open_dialogs(&panel.app()).is_empty());
+
+        panel.app().run(NEW_KEY, json!({})).unwrap();
+        type_name(&mut panel, "drawing TOOLS");
+        panel.click("OK");
+        panel.frame();
+        assert_eq!(panel.app().ui.custom_toolbars.len(), 1, "a duplicate name creates nothing");
+        assert_eq!(open_dialogs(&panel.app()).len(), 1, "refusal keeps the editable dialog");
+        assert_eq!(panel.value("Name").as_deref(), Some("drawing TOOLS"));
+        type_name(&mut panel, "Retried tools");
+        panel.click("OK");
+        panel.frame();
+        assert!(find(&panel.app().ui, "Retried tools").is_some(), "a corrected name can be retried");
+        assert_eq!(panel.app().ui.custom_toolbars.len(), 2);
+        assert!(open_dialogs(&panel.app()).is_empty());
+
+        panel.app().run(NEW_KEY, json!({})).unwrap();
+        type_name(&mut panel, "Discarded tools");
+        panel.click("Cancel");
+        panel.frame();
+        assert!(find(&panel.app().ui, "Discarded tools").is_none());
+        assert_eq!(panel.app().ui.custom_toolbars.len(), 2);
+        assert!(open_dialogs(&panel.app()).is_empty());
     }
 
     /// The items of Window › Toolbars: (label, command id, params).

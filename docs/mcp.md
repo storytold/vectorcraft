@@ -960,6 +960,8 @@ row under the topmost visible one is not stored, also when that row shows throug
 mark loses it when the graph is drawn again. A mark whose row
 already has the paint counts as written, so its paint replaces the one another mark of the series left on the graph.
 When one of these commands writes several paths of a series, the frontmost of them sets what the graph stores.
+`paint.setFill` and `paint.setStroke` with `opacity` store the opacity and blend mode of the row they write when it is
+the topmost visible row of its kind, also when that row already had the opacity.
 
 `appearance.addFill`, `appearance.addStroke`, `appearance.setItem`, `appearance.removeItem`,
 `appearance.duplicateItem`, `appearance.moveItem`, `appearance.clear`, `appearance.reduceToBasic`,
@@ -2788,8 +2790,12 @@ other files through `$`:
   `file.newPresets`, or `Basic CMYK` and `Basic RGB` for no profile), starting from the first preset
   `file.newPresets` lists for that profile, and the settings of a `new DocumentPreset()`
   (https://ai-scripting.docsforadobe.dev/jsobjref/DocumentPreset/) in place of the preset's. A `DocumentPreset`
-  starts with the defaults that page gives. Its `documentBleedLink`, `documentBleedOffsetRect` and
-  `transparencyGrid` can be assigned, but `addDocument` throws an error that says they are not available yet when
+  starts with the defaults that page gives. Assigning one of its settings checks the value's kind: a value of the
+  setting's enumeration, a finite number, a `title` string, `true` or `false` for `documentBleedLink`, or an array
+  of four finite numbers for `documentBleedOffsetRect`. Any setting takes `undefined`, which unsets it. A value of
+  another kind throws a `TypeError`, a `title` longer than 4096 bytes throws a `RangeError`, and the setting keeps
+  its old value. `addDocument` checks the ranges of the values. `documentBleedLink`, `documentBleedOffsetRect` and
+  `transparencyGrid` also take `null` and can be assigned, but `addDocument` throws an error that says they are not available yet when
   the preset it is given holds one of them with a value other than `null`, and makes no document. A
   `presetSettings` that is not a `DocumentPreset` (a plain object such as `{width: 500}` included) throws a
   `TypeError`. A script's `file.new` reads the profile's file in the profiles folder as the person's does, under the
@@ -2853,9 +2859,9 @@ other files through `$`:
   take a number or a Boolean as the text `String(value)` gives. `String(object)` gives
   `[PathItem Logo]` for a page item named `Logo` (`[PathItem ]` with no name), `[Document <name>]`,
   `[Layer <name>]`, `[Application]` and `[PageItems]` (VectorCraft's own rule).
-  Documents are listed in tab order; the same page says `documents[0]` is always the active document, and
-  VectorCraft does not follow that yet. VectorCraft's own rules: page items are listed with the
-  objects inside groups and compound paths after their group and without layers and ruler guides. A document's
+  `documents[0]` is always the active document, as the same page says. VectorCraft's own rules: the other
+  documents follow from the one active most recently to the one active longest ago, and a change a script
+  makes to a document in the back does not move it in the list; page items are listed with the objects inside groups and compound paths after their group and without layers and ruler guides. A document's
   `selection`, and `app.selection` while a document is open, is an empty list when nothing is selected. Script coordinates
   are points with Y up from the bottom-left corner of the first artboard, or, with
   `CoordinateSystem.ARTBOARDCOORDINATESYSTEM`, Y down from the top-left corner of the active artboard. `typename`
@@ -3458,6 +3464,7 @@ rules for these objects:
   Pending packets count once toward that limit. Library installation checks its members before
   publishing `ExternalObject`, in both ES5 and ES2015 realms. Serialization consumes fuel even
   when its escaped output exceeds the packet limit. Packet-info scans and metadata size accounting during edits also consume fuel.
+  Property getters charge fuel before copying the selected text and locale or scanning whole-array language options.
   The sidecar-write host binding accepts packets up to VectorCraft's 8 MiB packet limit.
 - A packet over 8 MiB, one that is not well-formed XML, one with a document type declaration or an undefined entity,
   one with text beside its `rdf:Description` elements or their properties, and one nested more than 64 elements deep
@@ -7744,10 +7751,11 @@ macOS, Ctrl elsewhere), drags with the selection tool chosen last (`select_tool`
 Curvature and anchor tools until one is chosen; the release gives the tool back as it was, so the Pen goes on drawing
 the path it had begun while that stays selected. With Direct Selection or Group Selection, `mods.cmd` drags with the
 Selection tool (with Direct Selection and `mods.alt` held too, with Group Selection). With the Selection tool, it drags
-with Direct Selection or Group Selection, whichever was chosen last (Direct Selection until one is), except where the
-press lands on a selected object, or on a group holding a selected member, with another object under the pointer, away
-from its anchors, direction handles, mesh points, blend spine and the bounding box's handles and rotate zones, while
-`ctrlClickSelectsBehind` is on: there the Selection tool keeps the press and selects the object behind. A double-click
+with Direct Selection or Group Selection, whichever was chosen last (Direct Selection until one is). That first press
+arms Select Behind while `ctrlClickSelectsBehind` is on: until an event comes without `mods.cmd`, a press that lands on
+a selected object, or on an object inside one, with another object under the pointer, away from its anchors, direction
+handles, mesh points, blend spine and the bounding box's handles and rotate zones, stays with the Selection tool and
+selects the next object under the pointer (members of groups one by one, back to the topmost after the last). A double-click
 or triple-click made with Cmd still held after Cmd-clicks goes to the tool the clicks went to, and one that follows a
 Cmd-click selecting behind keeps what that click selected, without isolating or editing. Its reply's `tool` is the tool
 given back.
@@ -9035,9 +9043,10 @@ The Selection & Anchor Display and General preferences apply to `pointer_gesture
   handle or segment for Direct Selection, the Anchor Point, Add and Delete Anchor Point and Scissors tools, and the
   Pen with Alt. A handle shorter than that leaves its anchor to be picked when pressed nearer the anchor.
 - `objectSelectionByPathOnly`: a click inside a filled path or compound path doesn't select it, one on its path does.
-- `ctrlClickSelectsBehind` (on by default): a Selection tool click with `mods: {cmd: true}` (Command on macOS, Ctrl
-  elsewhere) selects the object under the selected one there, the next such click the one under that, then the
-  topmost again. Cmd held to borrow the selection tool from another tool clicks as usual.
+- `ctrlClickSelectsBehind` (on by default): after a first Selection tool click with `mods: {cmd: true}` (Command on
+  macOS, Ctrl elsewhere), which Direct Selection or Group Selection takes, each further such click with Cmd held
+  selects the object under the selected one there, members of groups one by one, the next such click the one under
+  that, then the topmost again. Cmd held to borrow the selection tool from another tool clicks as usual.
 - `doubleClickToIsolate` (on by default): a `doubleclick` with the Selection tool isolates a group, a compound path or a
   single path, image, mesh or placed file (not type, blends, envelopes, repeats or symbol instances); off, it no longer does.
 - `usePreciseCursors`: the Pen, Eyedropper, Slice and Blend tools' pointers are a crosshair.
@@ -10679,7 +10688,8 @@ nothing that could be read, at the failed write. Once a paste has read the chang
 does not restore the copy. While a
 text field or the Type tool has the keyboard, the app waits for them. Windows carries every format both ways and pastes a bitmap from PNG, else
 from the device-independent bitmap screenshots copy (`CF_DIBV5`, then `CF_DIB`; alpha kept, opaque when it is zero
-throughout, at most 32768 px a side); macOS and Linux carry one format (the text, else the PNG) and paste text and
+throughout, at most 32768 px a side); macOS copies every format too (the text, else the PNG as TIFF, with the SVG,
+PDF and PNG on the same pasteboard item, #6310); Linux carries one format (the text, else the PNG); both paste text and
 bitmaps (macOS the pasteboard's PNG, else TIFF, as screenshots copy them). A Paste from the menus or the keys decodes
 a bitmap (a copied image file too) on the thread that reads placed files, with "Pasting" in the status bar and the
 busy spinner, and pastes it once it is decoded, in the document it was given in: Windows' device-independent bitmap and
@@ -11986,8 +11996,32 @@ rectangles, ellipses, clipping paths and other objects the reader doesn't read y
 outline arrowheads are left out, and lenses, canvases and containers are not applied. The objects a clipping path clips come in without it. The
 `warnings` of `document.open` name each of these kinds the file had, and say when damaged parts or parts past the
 import limits were left out. Files in big-endian byte order and files with 16-bit coordinates are refused with a
-message. VectorCraft doesn't write `.cmx` files. After a file opens with warnings, an export or Save As to its own path
-needs `acknowledgeLoss: true`.
+message. After a file opens with warnings, an export or Save As to its own path needs `acknowledgeLoss: true`.
+
+## CMX export
+
+`document.export {format: "cmx"}` (and Export As, `.cmx`) writes one `.cmx` exchange file with 32-bit coordinates in
+0.1 µm units, in the layouts the CMX import reads, through `craft-cdr`'s `write_cmx`. The file has a page for the
+chosen artboard (`artboard`, default the first), or with `useArtboards: true` a page for each chosen artboard
+(`artboards` or `range`, default all), in one file; `useArtboards: false` writes the bounds of the visible art. Each
+page has a layer, with its name, for each top-level layer that has visible art over that page, holding that art as
+curves in paint order. A fill and a stroke of one path are one curve. Colors keep their model: CMYK in whole
+percents, RGB and gray in 8-bit values, a spot swatch's color as a named library color at its tint in whole percents
+with the swatch's look, and Registration; Lab colors are written as RGB. Strokes keep their width, caps, joins and
+dashes, and dash and gap lengths are rounded to whole stroke widths, the unit the file stores them in. Type is written
+as its glyph outlines, gradients and patterns as one color, and strokes the file can't hold (aligned inside or
+outside, width profiles, arrowheads) as their filled outlines. Clipping masks are not applied, and art that crosses
+the edge of a page is written whole, including the part past the edge. Layer and spot color names are written up to
+4,096 characters, and a name longer than 256 characters opens again shortened, as the CMX import reads it. Placed
+images, transparency, blend modes and raster effects are left out. A fill that uses the nonzero rule is written
+even-odd; the warnings say so when the shape crosses itself, or when parts of it that turn the same way overlap. A
+path of more than 7,281 points is written as a group of curves (one part longer than that is cut into open pieces, so
+a fill of it, and its stroke where the pieces meet, draw differently). Dash offsets and dashes aligned to corners and
+path ends are written as plain dashes from the start of each path. The file holds no miter limit, so mitered
+corners open again with VectorCraft's default limit of 10. A spot color at a low tint opens again with its
+ink's color changed (at 0% as white), a spot swatch without a name opens as a process color, and one whose color is
+not known is written as black at its tint. The `warnings` name each of these losses the document had. A coordinate
+past the 32-bit range, and a file larger than the CMX import reads, are refused with a message.
 
 ## Printing
 
@@ -12467,12 +12501,16 @@ glyph.
 `object.expand` outlines type with this command, so Fill and Stroke expand those paths' gradients, patterns and strokes.
 
 `type.retype` (Type › Retype) turns outlined glyphs back into point text. By default a shape must be exactly a glyph of
-an available font. With `tolerance` (0 to 0.05), a shape of at most 8 contours that is no glyph exactly becomes the
-glyph it is closest to when its leftover distance from that glyph, relative to the shape's outline spread (the root
+an available font. With `tolerance` (0 to 0.05), a shape of at most 8 contours that is no glyph exactly becomes a
+glyph it is close to when its leftover distance from that glyph, relative to the shape's outline spread (the root
 mean square distance of its sampled outline points from their center), is at most the
 tolerance: an outline simplified, a curve split in two, or contours in another order, start or direction. The tolerance
-and this measure are VectorCraft's own. A near-matched glyph may differ from its line by the tolerance in size, turn
-and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
+and this measure are VectorCraft's own. When glyphs of several fonts match, exactly or nearly, each shape is set in
+the font, of those it matches, that the most selected shapes match, and among fonts that as many shapes match, in the
+one whose glyphs fit those shapes closest in all, even when another font has a glyph closer to that one shape. A shape
+that has no match in the font most shapes match is set in the first of its own fonts in that order, so one selection
+can become type in several fonts. A near-matched glyph may
+differ from its line by the tolerance in size, turn and place; an exact glyph keeps the exact limits unless the line's first glyph, whose size and turn the line takes, is
 a near match. The line also splits before a near-matched glyph, or a glyph of a line whose first glyph is one, that
 the type would draw further from its shape than the tolerance by the same measure (its own leftover distance together
 with the change of size and turn) or with its center further away than its origin may be. Each entry of `fonts` in the result has a `score`, from 1 when every glyph of the line is exact down to 0
@@ -14123,6 +14161,8 @@ the Paragraph Styles panel, or Paragraph Style Options… in its menu, does the 
 `paraStyle.edit {name, to, attrs}`, which takes the same arguments as `charStyle.edit` and replaces the style's
 name and attributes in one undo step; the paragraphs that use the style keep their local overrides. OK with no field
 changed records no undo step, and Preview updates the paragraphs while the dialog is open (Cancel restores them).
+The dialog previews and saves changes only in the document where it opened. If another edit is active in
+that document, preview pauses and OK reports an error until that edit ends. Cancel rolls back only the dialog's own preview.
 The `paraStyleOptions` dialog exposes `name`, `section` (`general`, `basic`, `tabs`, `composition`, `hyphenation`,
 `justification` or `eastAsian`) and `preview`, and these fields:
 
@@ -14780,7 +14820,9 @@ The Fill Area tool (`fillArea`, in the Live Paint Bucket's group) adds a new clo
 and leaves the paths around it as they are. Nothing needs to be selected: the visible, unlocked paths on every layer
 bound areas, filled or not, open paths included, and the overlap of two filled shapes is an area of its own. A path
 that a clipping mask clips bounds areas only where every mask around it shows it, so a click where a mask hides the art
-finds no area there. While the
+finds no area there. When a clipped path has too many segments or crossings for its crossings with a mask to be
+found, no part of it bounds an area, and an area it crosses or comes within the gap plus 0.05 pt of is not filled
+when every mask around it reaches that area. While the
 pointer hovers an area, the tool outlines it in red and the pointer shows the bucket with paint; elsewhere the pointer
 shows the empty bucket, and a click there does nothing. The new path appears on the press and is kept on the release;
 Escape or a canceled touch before the release takes it back. In a document of more than 128 path segments the tool looks
@@ -15921,7 +15963,10 @@ Commands:
   bounding box as `object.setBounds` measures it, rotated with rotated objects) and no `center`, that point of the box
   keeps its place, as with the Transform panel's W and H; with `center`, the shape's center moves to it; otherwise the shape's center stays. Snapping to the pixel
   grid and an attachment to a path apply after that, as they do for the Transform panel's W and H, and can move the
-  point. A `reference` outside 0 to 8 is an error. With no change it makes no step. → `{id, shape}` (its numbers now, so `{id}` alone reads them;
+  point. A `reference` outside 0 to 8 is an error. A new center, size or rotation moves, scales or turns the object as
+  a transform does: a linked opacity mask and placed gradients go with it, pattern tiles go with it when `patterns` (or
+  General › Transform Pattern Tiles) is on, and strokes and effects scale when `strokes` (or Scale Strokes & Effects)
+  is on. With no change it makes no step. → `{id, shape}` (its numbers now, so `{id}` alone reads them;
   `null` when snapping to the pixel grid left a plain path).
 - `addon.pathtools.shape.convert {ids?}` makes the selected plain closed paths that are rectangles, ellipses or
   polygons with equal sides and corners (stretched along their own axes at most) parametric shapes with the same

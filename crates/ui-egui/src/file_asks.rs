@@ -266,12 +266,19 @@ pub(crate) fn open_params(picked: &Picked) -> Option<Map<String, Value>> {
 /// Make the original drawing active before running a continuation. The status bar explains why
 /// a closed drawing or a different loaded generation cannot receive the result.
 fn on_document(app: &mut VectorcraftApp, uid: u64, generation: Option<u64>) -> bool {
+    back_to(app, uid, generation, closed(), tl!("The drawing was reverted while its file dialog was open"))
+}
+
+/// Makes drawing `uid` active again, at its revert count `generation` when one is given. When the
+/// drawing is closed, or was reverted since, the status bar shows `closed` or `reverted` and the
+/// answer is false.
+pub(crate) fn back_to(app: &mut VectorcraftApp, uid: u64, generation: Option<u64>, closed: &str, reverted: &str) -> bool {
     let Some((i, state)) = app.session.documents().iter().enumerate().find(|(_, d)| d.uid == uid) else {
-        app.status(closed());
+        app.status(closed);
         return false;
     };
     if generation.is_some_and(|reverts| state.reverts != reverts) {
-        app.status(tl!("The drawing was reverted while its file dialog was open"));
+        app.status(reverted);
         return false;
     }
     if app.session.active_index() != Some(i)

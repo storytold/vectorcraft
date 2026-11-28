@@ -228,14 +228,13 @@ fn mask_row(
 /// The Transparency panel: blend mode and opacity of the selection, or of the Appearance panel's active fill/stroke (whose object-only controls are greyed out), the opacity mask and the knockout options.
 pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     // While editing a mask the panel shows the masked object (the selection is its mask art).
-    let editing = app.session.active().is_some_and(|d| d.doc.mask_edit.is_some());
+    let (editing, symbol_part) = app.session.active().map_or((false, false), |d| (d.doc.mask_edit.is_some(), d.selection.symbol_part.is_some()));
     let (info, n) = state(app);
     let has = n.is_some();
     let (isolate, knockout_shape) = (info.isolate.unwrap_or(false), info.knockout_shape.unwrap_or(false));
-    // Opacity and blend of the Appearance panel's active item (not while a mask is edited: the
-    // panel then shows the masked object), else of the targets, blank where they differ; with no
-    // target, the defaults for new art.
-    let item = (!editing).then(|| app.session.appearance_item()).flatten().and_then(|_| current_transparency(app));
+    // The masked object's or selected symbol part's values take precedence over an Appearance item.
+    // Mixed target values show blank, and an empty selection shows the defaults for new art.
+    let item = (!editing && !symbol_part).then(|| app.session.appearance_item()).flatten().and_then(|_| current_transparency(app));
     let object = object_controls(app, editing);
     let (op, blend) = match item {
         Some((o, b)) => (Some(o), Some(b)),
@@ -434,6 +433,7 @@ pub(crate) fn run(app: &mut VectorcraftApp, id: &str, _params: &Value) -> Option
 mod tests {
     use super::*;
     use crate::tests::panel_harness::Panel;
+    use craft::ui::contract::Role;
     use vectorcraft_engine::Session;
 
     fn run_cmd(app: &mut VectorcraftApp, id: &str, p: serde_json::Value) -> serde_json::Value {
@@ -444,6 +444,52 @@ mod tests {
         let mut app = VectorcraftApp::new(Session::new(), Default::default());
         run_cmd(&mut app, "file.new", json!({"width": 100, "height": 100}));
         app
+    }
+
+    #[test]
+    fn transparency_shows_each_selected_symbol_parts_values() {
+        let mut app = new_app();
+        let rectangle = |app: &mut VectorcraftApp, x| run_cmd(app, "shape.rectangle", json!({"x": x, "y": 10, "width": 20, "height": 20}));
+        let left = rectangle(&mut app, 10)["id"].clone();
+        let right = rectangle(&mut app, 50)["id"].clone();
+        let instance = run_cmd(&mut app, "symbol.new", json!({"name": "Pair", "ids": [left, right], "type": "dynamic"}))["id"].clone();
+        run_cmd(
+            &mut app,
+            "transparency.set",
+            json!({"id": instance, "opacity": 75, "blend": "screen", "isolate": true, "knockout": "on", "knockoutShape": true}),
+        );
+        run_cmd(&mut app, "symbol.instance.setAppearance", json!({"id": instance, "path": [0], "opacity": 50, "blend": "multiply"}));
+        run_cmd(&mut app, "paint.setFill", json!({"id": instance, "color": "#123456"}));
+        run_cmd(&mut app, "select.set", json!({"ids": [instance]}));
+
+        let object_options = |app: &VectorcraftApp| {
+            let info = app.session.transparency_info();
+            (info.ids, info.isolate, info.knockout, info.knockout_shape)
+        };
+        let object = (vec![NodeId(instance.as_u64().unwrap())], Some(true), Some(Knockout::On), Some(true));
+        assert_eq!(object_options(&app), object);
+
+        let mut panel = Panel::new(app, show);
+        let values = |panel: &Panel| (panel.value_role("Opacity", Role::SPIN_BUTTON), panel.value_role("Blend Mode", Role::COMBO_BOX));
+        let whole = (Some("75%".to_owned()), Some("Screen".to_owned()));
+        assert_eq!(values(&panel), whole);
+
+        panel.app().run("symbol.instance.selectPart", json!({"id": instance, "path": [0]})).unwrap();
+        panel.frame();
+        assert_eq!(values(&panel), (Some("50%".into()), Some("Multiply".into())));
+        assert_eq!(object_options(&panel.app()), object);
+        panel.app().run("appearance.setActiveItem", json!({"index": 0})).unwrap();
+        panel.frame();
+        assert_eq!(values(&panel), (Some("50%".into()), Some("Multiply".into())));
+
+        panel.app().run("symbol.instance.selectPart", json!({"id": instance, "path": [1]})).unwrap();
+        panel.frame();
+        assert_eq!(values(&panel), (Some("100%".into()), Some("Normal".into())));
+        assert_eq!(object_options(&panel.app()), object);
+
+        panel.app().run("select.set", json!({"ids": [instance]})).unwrap();
+        panel.frame();
+        assert_eq!(values(&panel), whole);
     }
 
     #[test]

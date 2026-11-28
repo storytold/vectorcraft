@@ -764,3 +764,58 @@ fn the_cmyk_document_warning_says_whether_rgb_images_are_converted() {
     assert!(w.contains("1 RGB colour") && w.contains("converted to CMYK") && w.contains("rich blacks"), "{w}");
     assert!(w.contains("1 RGB image") && w.contains("written in RGB"), "{w}");
 }
+
+/// The CMYK document warning counts an RGB image by what is written: an image left out of the
+/// file is not counted, and one whose pixels can't be read for the conversion, and that is written
+/// as it is, is counted as written in RGB even with a CMYK destination.
+#[test]
+fn the_cmyk_document_warning_counts_only_rgb_images_that_are_written() {
+    let warning = |d: &Document, settings: Value| {
+        let r = pdf(d, settings);
+        let w: Vec<_> = r.warnings.iter().filter(|w| w.contains("this CMYK document")).cloned().collect();
+        assert!(w.len() <= 1, "{w:?}");
+        (w.into_iter().next(), String::from_utf8_lossy(&r.bytes).into_owned())
+    };
+    let to_cmyk = json!({"output": {"conversion": "destination", "destination": GENERIC_CMYK}});
+    let jpeg_doc = |bytes: Vec<u8>| {
+        let mut d = image_doc(vec![]);
+        d.images.insert("img".into(), ImageBlob::new("image/jpeg", bytes));
+        d.color_mode = ColorMode::Cmyk;
+        d
+    };
+    let mut jpeg = vec![];
+    let img = image::RgbImage::from_fn(4, 4, |x, y| image::Rgb([200, 30 * x as u8, 40 * y as u8]));
+    image::DynamicImage::ImageRgb8(img).write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+    // The start and length of the first segment with marker `m`.
+    let segment = |b: &[u8], m: u8| {
+        let p = b.windows(2).position(|w| w == [0xFF, m])?;
+        Some((p, 2 + usize::from(u16::from_be_bytes([*b.get(p + 2)?, *b.get(p + 3)?]))))
+    };
+
+    // Images that can't be read are left out, with or without a conversion: nothing to count.
+    // One whose bytes are no image at all, and a color JPEG cut off before its scan.
+    let mut unread = image_doc(vec![1, 2, 3]);
+    unread.color_mode = ColorMode::Cmyk;
+    let (sos, _) = segment(&jpeg, 0xDA).unwrap();
+    let cut = jpeg_doc([&jpeg[..sos], &[0xFF, 0xD9]].concat());
+    for (d, settings) in [(&unread, json!({})), (&unread, to_cmyk.clone()), (&cut, json!({})), (&cut, to_cmyk.clone())] {
+        let (w, text) = warning(d, settings.clone());
+        assert!(!text.contains("/Subtype/Image"), "{settings}: an image was written");
+        assert_eq!(w, None, "{settings}");
+    }
+
+    // A color JPEG without its Huffman tables: its pixels can't be decoded for the conversion,
+    // so its JPEG data is written as it is, in RGB.
+    let mut untabled = jpeg.clone();
+    while let Some((p, len)) = segment(&untabled, 0xC4) {
+        untabled.drain(p..p + len);
+    }
+    let (w, text) = warning(&jpeg_doc(untabled), to_cmyk);
+    assert!(
+        text.contains("/Subtype/Image") && text.contains("/DCTDecode") && !text.contains("/ColorSpace/DeviceCMYK"),
+        "the JPEG was not written as it is"
+    );
+    let w = w.unwrap();
+    assert!(w.contains("1 RGB image") && w.contains("written in RGB"), "{w}");
+    assert!(!w.contains("converted to CMYK"), "{w}");
+}

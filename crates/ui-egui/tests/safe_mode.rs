@@ -232,6 +232,7 @@ fn startup_scripts_wait_for_the_choice_and_disable_and_continue_leaves_out_the_o
     std::fs::write(launch_dir.join("launch-1-dead.json"), item.to_string()).unwrap();
     let stopped = ui::begin_launch(Some(&launch_dir), false);
     let mut session = Session::new();
+    session.set_script_listing_clock(vectorcraft_engine::script::folder::Clock::Fixed(std::time::Duration::ZERO));
     session.attach_startup_scripts_dir(scripts);
     session.prefs.run_startup_scripts = true;
     let mut app = VectorcraftApp::new(session, Services::default());
