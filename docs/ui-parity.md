@@ -75,7 +75,7 @@ Artboard Options forwards the active Artboard tool's Scale Artwork with Artboard
 
 | Date | Change | Summary |
 |---|---|---|
-| 2026-11-28 | minor | Headless (RFC-0052) section under the summary: all areas unknown, with marking rules, until rows cite command ids |
+| 2026-11-28 | minor | Headless (RFC-0052) column on the Summary table: 12 unknown, with marking rules |
 | 2026-11-24 | minor | G12: History row context menus use shared Craft List and Menu controls after rebasing onto the panel migration. App-specific actions retain the chosen snapshot across pending edits and dismiss on document switches; keyboard context requests and focus restoration use the shared runtime. Regression cases retained (#8845); scores and estimates unchanged. |
 | 2026-11-21 | minor | G12/M14: History row context menus retain the chosen snapshot while the menu is open and pending edits settle; jumps settle typing before counting undo/redo, and discarded states report that they are unavailable. Shift+F10 opens the focused row menu, Escape restores row focus, and switching documents dismisses the popup. History checklist, area and milestone evidence updated (#8845); scores and estimates unchanged. |
 | 2026-11-20 | minor | G12: Asset Export tiles have item context menus for Export, Remove, Rename, Select Artwork on Canvas and collecting selected artwork; right-click selects an unselected tile and preserves an existing multi-selection. Headless regressions: panels::tests_asset_export. Scores and estimates unchanged. |
@@ -166,31 +166,29 @@ forbids launching or measuring Illustrator, so there has been **no side-by-side 
 
 ## Summary
 
-| Area | % | Remaining (h) | Kind |
-|---|---:|---:|---|
-| Pen, Curvature and anchor tools | 85% | 6–10 | estimated |
-| Direct Selection, handles and anchors | 85% | 5–8 | estimated |
-| Smart guides and snapping | 70% | 8–12 | estimated |
-| Transform handles, bounding box, Free Transform | 80% | 5–8 | estimated |
-| Nudging, numeric entry, precision, units | 85% | 3–5 | estimated |
-| Modifier keys and temporary tools | 80% | 5–8 | estimated |
-| Keyboard shortcuts (default set) | 70% | 6–10 | estimated; optional Switch Selection Tools is user-bindable with no default key (#7645), so default-set coverage is unchanged |
-| Cursors | 75% | 3–5 | estimated |
-| Panels, Control bar, Properties, context menus | 70% | 15–25 | estimated |
-| Look and feel (layout, theme, metrics) | 80% | 5–10 | measured once against public screenshots on 2026-10-02; panels added since not re-measured |
-| Accessibility (screen reader, keyboard-only canvas) | 20% | 15–25 | estimated: AccessKit on by default for egui widgets; canvas and custom panels not described, never tested with a screen reader |
-| **UI/UX overall** | **~55%** | **~70–110** (overlaps the feature areas) | estimated |
+| Area | % | Remaining (h) | Kind | Headless |
+|---|---:|---:|---| --- |
+| Pen, Curvature and anchor tools | 85% | 6–10 | estimated | unknown |
+| Direct Selection, handles and anchors | 85% | 5–8 | estimated | unknown |
+| Smart guides and snapping | 70% | 8–12 | estimated | unknown |
+| Transform handles, bounding box, Free Transform | 80% | 5–8 | estimated | unknown |
+| Nudging, numeric entry, precision, units | 85% | 3–5 | estimated | unknown |
+| Modifier keys and temporary tools | 80% | 5–8 | estimated | unknown |
+| Keyboard shortcuts (default set) | 70% | 6–10 | estimated; optional Switch Selection Tools is user-bindable with no default key (#7645), so default-set coverage is unchanged | unknown |
+| Cursors | 75% | 3–5 | estimated | unknown |
+| Panels, Control bar, Properties, context menus | 70% | 15–25 | estimated | unknown |
+| Look and feel (layout, theme, metrics) | 80% | 5–10 | measured once against public screenshots on 2026-10-02; panels added since not re-measured | unknown |
+| Accessibility (screen reader, keyboard-only canvas) | 20% | 15–25 | estimated: AccessKit on by default for egui widgets; canvas and custom panels not described, never tested with a screen reader | unknown |
+| **UI/UX overall** | **~55%** | **~70–110** (overlaps the feature areas) | estimated | unknown |
 
 The overall figure is lower than the rows because what users notice first (small differences across many
 tools, never checked side by side) isn't captured row by row.
 
 ## Headless (RFC-0052)
 
-**Headless ([RFC-0052](https://github.com/storytold/craft-contrib/blob/main/rfcs/0052-headless-reach.md)): 0 yes, 0 no (window 0, os 0, engine-gap 0), 0 partial, all unknown.**
+**Headless ([RFC-0052](https://github.com/storytold/craft-contrib/blob/main/rfcs/0052-headless-reach.md)): 0 yes, 0 no (window 0, os 0, engine-gap 0), 0 partial, 12 unknown.**
 
-This page is a scored behaviour list and an area summary, not a command checklist with ids, so no area can be marked `yes` yet. [RFC-0052](https://github.com/storytold/craft-contrib/blob/main/rfcs/0052-headless-reach.md) fills `yes` only from the engine command registry that `vectorcraft-cli` and the MCP server load, and only once a row cites a command id (LightCraft's `cmd:<id>` check is the model). Desktop-only command ids do not count, including the generated desktop-only list in `crates/mcp/src/ui_catalog.rs`.
-
-When a row cites a command id, a checked row that isn't fully reachable says `no (<reach>)` or `partial (<reach>)`, where the reach is `window` (needs the desktop window, a dialog or the pointer), `os` (needs an OS or online service the engine doesn't wrap) or `engine-gap` (could be a command, isn't one yet). A `partial` row's notes say which part a headless client can do. Until then every area stays `unknown`.
+The Summary table has a Headless column. Every area, including the overall row, is `unknown` until it is checked. A checked area may be marked `no (<reach>)` or `partial (<reach>)` by hand, where the reach is `window` (needs the desktop window, a dialog or the pointer), `os` (needs an OS or online service the engine doesn't wrap) or `engine-gap` (could be a command, isn't one yet). A `partial` row's notes say which part a headless client can do. `yes` only when the area cites a command id from the engine registry that `vectorcraft-cli` and the MCP server load (LightCraft's `cmd:<id>` check is the model). Some rows already cite command ids such as `toolbar.show`, `tool.select` and `guide.add`; those are not enough for `yes` until they are registry ids, and desktop-only ids (including the generated list in `crates/mcp/src/ui_catalog.rs`) do not count. Update the counts in this line when you mark rows.
 
 ## Pen, Curvature and anchor tools
 
