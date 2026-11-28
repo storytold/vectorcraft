@@ -2052,6 +2052,35 @@ fn a_swatch_picked_for_a_row_links_the_art_to_it_without_a_library() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// In a CMYK document, a row picked from an RGB spot swatch keeps the swatch and its tint when the
+/// Color Picker is opened on it again and closed with OK and no edit: the picker does not convert
+/// the swatch's color to CMYK.
+#[test]
+fn reopening_the_picker_on_a_swatch_row_keeps_the_swatch() {
+    use egui::accesskit::Role;
+
+    let mut app = VectorcraftApp::new(Session::new(), Default::default());
+    app.run("file.new", json!({"width": 400, "height": 200, "colorMode": "cmyk"})).unwrap();
+    app.run("swatch.new", json!({"name": "Ink", "color": "#ff0000", "spot": true})).unwrap();
+    art(&mut app, &["cmyk 0 100 0 0"]);
+    let mut h = assign_harness(app, json!({}));
+    let mut rows = field(h.state(), "rows");
+    rows[0]["to"] = json!(ColorKey::of(&Color::rgb(1.0, 0.0, 0.0)).to_string());
+    rows[0]["swatch"] = json!({"name": "Ink", "library": "document"});
+    rows[0]["tint"] = json!(40.0);
+    set(h.state_mut(), "rows", rows.clone());
+    h.run_steps(2);
+    row_context_menu(&mut h, 0);
+    h.get_by_label("   Pick from Swatches").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("colorPicker"));
+    h.get_by_role_and_label(Role::Button, "OK").click();
+    h.run_steps(3);
+    assert_eq!(h.state().ui.dialog.as_ref().map(|d| d.kind.as_str()), Some("recolor"));
+    let row = field(h.state(), "rows")[0].clone();
+    assert_eq!((&row["swatch"], &row["tint"]), (&rows[0]["swatch"], &rows[0]["tint"]), "{row}");
+}
+
 /// Whether the dialog's button `name` is disabled.
 fn disabled(h: &egui_kittest::Harness<'_, VectorcraftApp>, name: &str) -> bool {
     h.get_by_role_and_label(egui::accesskit::Role::Button, name).accesskit_node().is_disabled()

@@ -342,6 +342,13 @@ pub(super) fn over_recolor(parent: &Dialog, color: Color, row: usize, swatches: 
     let mut d = Dialog::new(KIND, fields);
     d.fields.insert(super::PARENT.into(), serde_json::to_value(parent).unwrap_or_default());
     store(&mut d, &Picked::of(color));
+    // A row picked from a global or spot swatch keeps that swatch, in its own color model, while
+    // OK leaves its color as it is.
+    let row_swatch = parent.fields.get("rows").and_then(|r| r.get(row)).and_then(|r| r.get("swatch"));
+    if let Some(w) = row_swatch.filter(|w| w.get("name").is_some_and(Value::is_string)) {
+        let picked = json!({"name": w["name"], "library": w["library"], "color": color_json(&color), "keep": true});
+        d.fields.insert(PICKED_SWATCH.into(), picked);
+    }
     d.fields.insert(crate::screen_color::PICKER_ID.into(), json!(crate::screen_color::picker_id()));
     d
 }
