@@ -1,8 +1,9 @@
 name: VectorCraft unsigned nightly
 
-# Enabled for supervised manual runs by the reviewed manual actor only; no schedule yet.
-# A later explicit opt-in may add a cadence (and turn on nightly-dispatch.yml with it).
+# Automated daily nightly builds at 06:30 UTC, plus supervised manual runs by reviewed manual actors.
 on:
+  schedule:
+    - cron: '30 6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -22,9 +23,9 @@ jobs:
       actions: read
       attestations: write
       id-token: write
-    uses: storytold/craft-common-actions/.github/workflows/nightly-unsigned.yml@be00e5ccd18b68e950c8a08532f2230e7c3d0cba
+    uses: storytold/craft-common-actions/.github/workflows/nightly-unsigned.yml@bf94b15b708089b95c4e2d1c978e66ecf1f2f4f3
     with:
-      tooling-revision: be00e5ccd18b68e950c8a08532f2230e7c3d0cba
+      tooling-revision: bf94b15b708089b95c4e2d1c978e66ecf1f2f4f3
       app-name: vectorcraft
       manual-actors: '["bflatastic","dylanmtaylor","echelon","FredApps","skylartaylor"]'
       craft-fonts-ref: b076417b5880bd4154bd22f00695b1d28c6bea83
