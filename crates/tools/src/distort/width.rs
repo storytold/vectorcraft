@@ -357,6 +357,59 @@ impl WidthTool {
             }
         }
     }
+    /// One pointer move on a single width point's side. A plain drag scales both sides together
+    /// from the ratio it began with; Alt, held at any time, frees the side under the pointer while
+    /// the other holds the width it had when Alt went down, and letting Alt go evens the point again
+    /// at the pointer's width.
+    fn side_drag(d: &mut Drag, p: Point, alt: bool) {
+        // The pointer along the left normal: + on the left side, - on the right.
+        let off = (p - d.spot.p).dot(d.spot.n);
+        let mag = off.abs();
+        let side_now = off >= 0.0;
+        // Crossing the path hands the drag to the other side; the ratio counts from
+        // there, so the change is smooth.
+        if side_now != d.side {
+            // Keep the previous baseline when both widths are zero (the pointer is
+            // back on the path), so a crossing still leaves a ratio to scale.
+            let now = (d.left.max(0.0), d.right.max(0.0));
+            if now.0 > 0.0 || now.1 > 0.0 {
+                d.base = now;
+            }
+            d.side = side_now;
+        }
+        if alt {
+            // Alt: the side under the pointer follows it, the other holds the width
+            // it had when Alt went down. Both sides are captured, so crossing the
+            // path hands the drag over without swapping their widths.
+            let (l0, r0) = *d.held.get_or_insert((d.left, d.right));
+            if d.side {
+                (d.left, d.right) = (mag, r0);
+            } else {
+                (d.right, d.left) = (mag, l0);
+            }
+        } else {
+            // Letting Alt go makes the point even again, at the pointer's width.
+            if d.held.take().is_some() {
+                d.base = (mag, mag);
+            }
+            // The side under the pointer follows it; the other keeps their ratio.
+            let (base, other) = if d.side { (d.base.0, d.base.1) } else { (d.base.1, d.base.0) };
+            let other = if base > 1e-9 {
+                (other * mag / base).max(0.0)
+            } else if other > 1e-9 {
+                // A side of no width has no ratio to scale from: the other keeps its width.
+                other
+            } else {
+                // Neither side had a width, so there is no ratio: the drag stays even.
+                mag
+            };
+            if d.side {
+                (d.left, d.right) = (mag, other);
+            } else {
+                (d.right, d.left) = (mag, other);
+            }
+        }
+    }
 }
 
 impl Tool for WidthTool {
@@ -485,55 +538,7 @@ impl Tool for WidthTool {
                 let Some(d) = &mut self.drag else { return vec![] };
                 d.moved = true;
                 match d.mode {
-                    Mode::Width(_) if d.group.is_none() => {
-                        // The pointer along the left normal: + on the left side, - on the right.
-                        let off = (p - d.spot.p).dot(d.spot.n);
-                        let mag = off.abs();
-                        let side_now = off >= 0.0;
-                        // Crossing the path hands the drag to the other side; the ratio counts from
-                        // there, so the change is smooth.
-                        if side_now != d.side {
-                            // Keep the previous baseline when both widths are zero (the pointer is
-                            // back on the path), so a crossing still leaves a ratio to scale.
-                            let now = (d.left.max(0.0), d.right.max(0.0));
-                            if now.0 > 0.0 || now.1 > 0.0 {
-                                d.base = now;
-                            }
-                            d.side = side_now;
-                        }
-                        if ev.mods.alt {
-                            // Alt: the side under the pointer follows it, the other holds the width
-                            // it had when Alt went down. Both sides are captured, so crossing the
-                            // path hands the drag over without swapping their widths.
-                            let (l0, r0) = *d.held.get_or_insert((d.left, d.right));
-                            if d.side {
-                                (d.left, d.right) = (mag, r0);
-                            } else {
-                                (d.right, d.left) = (mag, l0);
-                            }
-                        } else {
-                            // Letting Alt go makes the point even again, at the pointer's width.
-                            if d.held.take().is_some() {
-                                d.base = (mag, mag);
-                            }
-                            // The side under the pointer follows it; the other keeps their ratio.
-                            let (base, other) = if d.side { (d.base.0, d.base.1) } else { (d.base.1, d.base.0) };
-                            let other = if base > 1e-9 {
-                                (other * mag / base).max(0.0)
-                            } else if other > 1e-9 {
-                                // A side of no width has no ratio to scale from: the other keeps its width.
-                                other
-                            } else {
-                                // Neither side had a width, so there is no ratio: the drag stays even.
-                                mag
-                            };
-                            if d.side {
-                                (d.left, d.right) = (mag, other);
-                            } else {
-                                (d.right, d.left) = (mag, other);
-                            }
-                        }
-                    }
+                    Mode::Width(_) if d.group.is_none() => Self::side_drag(d, p, ev.mods.alt),
                     Mode::Width(side) => {
                         let off = (p - d.spot.p).dot(d.spot.n);
                         match side {
